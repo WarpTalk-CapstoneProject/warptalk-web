@@ -80,6 +80,7 @@ import type {
   VoiceOptionDto,
   VoiceCloneStateDto,
 } from "@/types/realtime";
+import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
@@ -94,6 +95,9 @@ import {
 } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
+import { isExternalBridge } from "@/lib/meeting/meeting-types";
+import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL, INBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
+import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -143,6 +147,8 @@ import {
 import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
+import { meetingService } from "@/services/meeting.service";
+import { getErrorMessage } from "@/lib/api/errors";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
@@ -206,6 +212,56 @@ export function PersistentMeetingSession({
   const [wasConnectable, setWasConnectable] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
+
+  // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
+  // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+
+  // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
+  // meant for the far side has to leave through the virtual microphone Meet is listening to
+  // rather than through the host's headphones. Resolving the device is a device-list read, not
+  // the wizard's tone probe: a device that is present but not carrying is something the wizard
+  // diagnoses, and refusing to route because of it would turn a fixable setup problem into no
+  // audio path at all.
+  const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
+  const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
+  const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+
+  // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
+  // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
+  // side hears nothing. So this is a toast, not a state nobody renders.
+  const handleBridgeOutboundError = useCallback((message: string) => {
+    toast.error("The far side is not hearing the translation.", { description: message });
+  }, []);
+
+  useEffect(() => {
+    // Not cleared on the way out: the value is only ever READ through `isBridgeRoom` below, so
+    // clearing it here would be a synchronous setState in an effect body for no observable
+    // difference — a cascading render to reach a state nothing can see.
+    if (!isBridgeRoom) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { outboundDeviceId, inboundDeviceId } = await findBridgeDeviceIds();
+        if (cancelled) return;
+        setBridgeOutboundDeviceId(outboundDeviceId);
+        setBridgeInboundDeviceId(inboundDeviceId);
+        if (!outboundDeviceId) {
+          toast.error("This meeting cannot reach Google Meet yet.", {
+            description: `${OUTBOUND_DEVICE_LABEL} is not installed, so the far side will not hear the translation.`,
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setBridgeOutboundDeviceId(null);
+          setBridgeInboundDeviceId(null);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isBridgeRoom]);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
   // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
   // rejections with a bodyless 503 that reads exactly like an outage. An idle-reaped session
@@ -472,6 +528,88 @@ export function PersistentMeetingSession({
   useEffect(() => {
     isHostRef.current = isHost;
   }, [isHost]);
+
+  // WT-525 — the inbound leg. The far side of the Google Meet call is captured from the virtual
+  // speaker Meet plays into, and published on a SECOND LiveKit connection under the stand-in
+  // identity, so the pipeline attributes their speech to them rather than to the host.
+  //
+  // Gated on `translationStarted`, not merely on being in the room. Before Start Translation
+  // there is no STT/MT/TTS pipeline to consume the track, so connecting early would publish into
+  // a room nothing is listening to and burn LiveKit connection minutes — the quota this project
+  // has already exhausted once (WT-269).
+  //
+  // Host-only because the token is host-only: a participant calling this would take a 403 on
+  // every render, and a 403 here is a settled answer rather than a transient one.
+  const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
+
+  useEffect(() => {
+    const wanted = isBridgeRoom && isHost && translationStarted && Boolean(bridgeInboundDeviceId);
+    if (!wanted) {
+      // Covers Stop Translation and leaving the room. Not awaited: teardown is fire-and-forget by
+      // nature and an effect cleanup cannot await anyway.
+      void bridgeInboundRef.current?.stop();
+      bridgeInboundRef.current = null;
+      return;
+    }
+    if (bridgeInboundRef.current) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data } = await meetingService.bridgeToken(roomId);
+        const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace(
+          "localhost",
+          typeof window !== "undefined" ? window.location.hostname : "localhost",
+        );
+        if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
+
+        const handles = await openBridgeInbound({
+          serverUrl,
+          token: data.token,
+          inboundDeviceId: bridgeInboundDeviceId!,
+          onDisconnected: () => {
+            bridgeInboundRef.current = null;
+            toast.error("The external call was disconnected.", {
+              description: "WarpTalk has stopped hearing the other side of the meeting.",
+            });
+          },
+        });
+
+        // The effect can be torn down while connect() is in flight. Without this the handles
+        // would be unreachable and the second connection would stay in the room, publishing a
+        // device nobody is releasing.
+        if (cancelled) {
+          void handles.stop();
+          return;
+        }
+        bridgeInboundRef.current = handles;
+      } catch (error) {
+        if (cancelled) return;
+        // Said out loud rather than logged: with the outbound leg working, the far side can hear
+        // the user perfectly while the user hears nothing back — which reads as the other person
+        // having gone quiet, not as a broken bridge.
+        toast.error("WarpTalk cannot hear the external call.", {
+          description: getErrorMessage(
+            error,
+            `${INBOUND_DEVICE_LABEL} could not be opened, so the other side will not be translated.`,
+          ),
+        });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBridgeRoom, isHost, translationStarted, bridgeInboundDeviceId, roomId]);
+
+  // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
+  // the capture device, neither of which the room teardown above knows about.
+  useEffect(() => {
+    return () => {
+      void bridgeInboundRef.current?.stop();
+      bridgeInboundRef.current = null;
+    };
+  }, []);
   // Only the actual host may START the room. Workspace admins/owners get host-like
   // UI privileges (isHost) but the backend rejects a start from anyone whose id != room.hostId
   // with 403, so the auto-start below must gate on true host identity — not workspace role.
@@ -1139,8 +1277,28 @@ export function PersistentMeetingSession({
     );
     addedLanguages.forEach((language) => codes.add(language));
     codes.add(normalizeLanguageCode(targetLanguage));
-    return Array.from(codes);
-  }, [room, targetLanguage, addedLanguages]);
+
+    // WT-497: the workspace's language policy applies to the menu, not only to room creation.
+    //
+    // These codes come from the room, and a room's languages were checked against the policy
+    // ON THE DAY IT WAS CREATED (WT-271). Tighten the policy afterwards and every existing room
+    // keeps offering what it was created with — the menu was faithfully reflecting the room and
+    // quietly contradicting the workspace. A recurring series makes it worse: the rule outlives
+    // any single policy change.
+    //
+    // Empty means unrestricted, matching the server's own whitelist check — so an absent or
+    // still-loading settings response must NOT be read as "nothing is allowed", or the picker
+    // would empty itself while the query is in flight.
+    const allowed = workspaceSettings?.allowedTargetLanguages;
+    if (!allowed || allowed.length === 0) return Array.from(codes);
+
+    const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
+    // The language this participant is CURRENTLY on stays, even if the policy now forbids it.
+    // Removing the selected option from its own menu makes the control render blank and gives
+    // them no way to move off it — the policy is enforced by what they can move TO.
+    const current = normalizeLanguageCode(targetLanguage);
+    return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
+  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -2496,6 +2654,8 @@ export function PersistentMeetingSession({
           // against — it muted mismatched speakers for a pipeline that had not been started.
           translationActive={translationStarted}
           localUserId={user?.id}
+          bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          onBridgeOutboundError={handleBridgeOutboundError}
         />
         <TrackProcessorsController
           noiseSuppressionEnabled={noiseSuppressionEnabled}

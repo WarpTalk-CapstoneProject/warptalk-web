@@ -14,6 +14,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import {
   ConnectionState,
+  ParticipantEvent,
   RoomEvent,
   Track,
   type Participant,
@@ -145,9 +146,38 @@ export function LiveKitMeetingStage({
         new Set(speakers.map((speaker) => speaker.identity)),
       );
     };
+    // WT-535: also follow each participant's own isSpeaking flag.
+    //
+    // ActiveSpeakersChanged is a ROOM-level event the SFU emits on its own cadence, and the
+    // comment above used to note — accurately — that the ring therefore clears about a second
+    // after somebody stops. That second is the "kéo dài mờ dần khi dứt lời" in the report.
+    //
+    // IsSpeakingChanged fires per participant off the same audio data but is not batched behind
+    // the room-level cadence, so it turns the ring off as soon as that one person stops rather
+    // than at the next room-wide recalculation. Both feed the same set: whichever arrives first
+    // wins, and neither can leave a stale ring behind because both are re-read from the room.
+    const handleSpeakingChanged = () => {
+      setActiveSpeakerIdentities(
+        new Set(
+          [room.localParticipant, ...room.remoteParticipants.values()]
+            .filter((participant) => participant.isSpeaking)
+            .map((participant) => participant.identity),
+        ),
+      );
+    };
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+    room.on(RoomEvent.ParticipantConnected, handleSpeakingChanged);
+    room.localParticipant.on(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+    for (const participant of room.remoteParticipants.values()) {
+      participant.on(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+    }
     return () => {
       room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+      room.off(RoomEvent.ParticipantConnected, handleSpeakingChanged);
+      room.localParticipant.off(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+      for (const participant of room.remoteParticipants.values()) {
+        participant.off(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+      }
     };
   }, [room]);
 
@@ -259,7 +289,11 @@ export function LiveKitMeetingStage({
           trackRef.participant.sid +
           (trackRef.publication?.trackSid ?? "placeholder")
         }
-        className={`group ${isThumbnail ? THUMBNAIL_SIZING : GRID_TILE_SIZING} overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
+        // WT-535: no `transition-shadow`. A Tailwind ring IS a box-shadow, so transitioning it
+        // made the speaking indicator fade in and out instead of switching. A speech indicator
+        // that eases is an indicator that is wrong for the length of its own easing — it is a
+        // light, and a light is on or off.
+        className={`group ${isThumbnail ? THUMBNAIL_SIZING : GRID_TILE_SIZING} overflow-hidden rounded-xl ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
         onClick={() => onPinParticipant?.(identity)}
       >
         <ParticipantTile
@@ -354,10 +388,17 @@ export function LiveKitMeetingStage({
   }
 
   if (hasParticipants) {
+    // WT-531: a participant can be in `visibleTracks` TWICE — once for their camera and once
+    // for a screen share — because useTracks is asked for both sources. `find` returned the
+    // first match, and Camera is listed first, so pinning somebody who was sharing their screen
+    // put their FACE on the stage and hid the thing everyone was looking at. The screen share is
+    // the reason anyone pins a sharer, so it wins whenever it exists.
+    const featuredCandidates = visibleTracks.filter(
+      (trackRef) => trackRef.participant.identity === featuredIdentity,
+    );
     const featuredTrack =
-      visibleTracks.find(
-        (trackRef) => trackRef.participant.identity === featuredIdentity,
-      ) ??
+      featuredCandidates.find((trackRef) => trackRef.source === Track.Source.ScreenShare) ??
+      featuredCandidates[0] ??
       // No publication for them this tick — render the camera placeholder for the person
       // themselves, which is what a pinned camera-off participant should look like anyway.
       (featuredParticipant

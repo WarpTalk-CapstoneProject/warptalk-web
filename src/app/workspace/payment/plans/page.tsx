@@ -48,6 +48,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
+import { checkoutCurrency } from "@/lib/billing/plan-pricing";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -176,7 +177,10 @@ export default function PaymentPlansPage() {
         userId: user.id,
         workspaceId,
         amount,
-        currency: "vnd",
+        // WT-518: the plan decides its own denomination, here too. This page is a separate
+        // copy that Stripe return URLs still land on, so a fix applied only to the slugged
+        // one would leave a buyer arriving through Stripe charged in the wrong currency.
+        currency: checkoutCurrency(backendPlans.find((p) => p.slug === planSlug)),
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,

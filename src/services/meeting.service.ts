@@ -1,10 +1,22 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
-import type { JoinMeetingResponseDto, RecordingStateDto, TriggerAiRequest } from "@/types/meeting";
+import type { BridgeTokenDto, JoinMeetingResponseDto, RecordingStateDto, TriggerAiRequest } from "@/types/meeting";
 
 export const meetingService = {
   join(translationRoomId: string, displayName?: string) {
     return apiClient.post<JoinMeetingResponseDto>(API.meetings.join(translationRoomId), { displayName });
+  },
+
+  /**
+   * WT-525. A publish-only LiveKit token for the stand-in seat of an EXTERNAL_BRIDGE room, so a
+   * second connection can carry the far side of a Google Meet call into the meeting under an
+   * identity the pipeline attributes to them rather than to the host.
+   *
+   * The server refuses unless the caller hosts the room AND the room is a bridge, so a 403 here
+   * is a real answer, not a transient one — do not retry it.
+   */
+  bridgeToken(translationRoomId: string) {
+    return apiClient.post<BridgeTokenDto>(API.meetings.bridgeToken(translationRoomId));
   },
 
   triggerAi(translationRoomId: string, data: TriggerAiRequest) {
