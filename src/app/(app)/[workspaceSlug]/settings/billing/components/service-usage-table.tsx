@@ -33,8 +33,13 @@ export function ServiceUsageTable({ rows }: { rows: ServiceUsageRow[] }) {
   // spend is one dominant service renders every other bar at one pixel.
   const largest = Math.max(...rows.map((r) => r.credits), 1);
 
+  // Flush, with no negative margin of its own. It used to open with `-mx-4 -my-4` to cancel the
+  // padding of the `Panel` that wrapped it on the preview screen — and Usage renders it straight
+  // into a bordered section with no padding to cancel, so the table was dragged 16px outside the
+  // border on every side and the section's `overflow-clip` sliced the last row in half. A
+  // component cannot know its parent's padding; the parent now says `bodyClassName="p-0"` instead.
   return (
-    <div className="-mx-4 -my-4 overflow-x-auto">
+    <div className="overflow-x-auto">
       <table className="w-full min-w-[520px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-hairline text-[11px] font-medium text-ink-muted">

@@ -22,8 +22,10 @@
 import { useState } from "react";
 
 import { summariseCycleActivity, summariseServiceUsage } from "@/lib/billing/cycle-activity";
+import { summariseCycleBurnUp } from "@/lib/billing/cycle-burnup";
 import { projectCycle } from "@/lib/billing/cycle-projection";
 import type { CreditTransactionDto, PlanDto, SubscriptionDto } from "@/types/billing";
+import { CreditBurnUpChart } from "@/app/(app)/[workspaceSlug]/settings/billing/components/credit-burnup-chart";
 import { CycleSpendChart } from "@/app/(app)/[workspaceSlug]/settings/billing/components/cycle-spend-chart";
 import { Metric, MetricGrid, Panel } from "@/app/(app)/[workspaceSlug]/settings/billing/components/metric-grid";
 import { PlanPanel } from "@/app/(app)/[workspaceSlug]/settings/billing/components/plan-panel";
@@ -54,13 +56,16 @@ const LEDGER: CreditTransactionDto[] = [
   { at: 13, amount: -38_200 },
   { at: 14, amount: -55_900 },
   { at: 15, amount: -12_400 },
-].map(({ at, amount }, index) => ({
+].map(({ at, amount }, index, all) => ({
   id: `tx-${index}`,
   workspaceId: "w",
   userId: "u",
   amount,
   type: amount > 0 ? "top_up" : "consume",
-  balanceAfter: 0,
+  // A running balance, not a hardcoded zero. The burn-up derives its ceiling from `balanceAfter`
+  // — available = spent so far + balance — so a fixture where every row says the workspace has
+  // nothing draws a ceiling on the axis and puts the preview permanently in overage.
+  balanceAfter: all.slice(0, index + 1).reduce((sum, tx) => sum + tx.amount, 0),
   createdAt: new Date(new Date(PERIOD_START).getTime() + at * DAY + 9 * 60 * 60 * 1000).toISOString(),
 }));
 
@@ -127,6 +132,17 @@ export default function BillingPreviewPage() {
       currentPeriodStart: PERIOD_START,
       currentPeriodEnd: PERIOD_END,
       totalCredits: TOTAL_CREDITS,
+    },
+    NOW,
+  );
+
+  const burnUp = summariseCycleBurnUp(
+    {
+      transactions: LEDGER,
+      currentPeriodStart: PERIOD_START,
+      currentPeriodEnd: PERIOD_END,
+      totalCredits: TOTAL_CREDITS,
+      currentCredits: TOTAL_CREDITS - CONSUMED,
     },
     NOW,
   );
@@ -207,6 +223,13 @@ export default function BillingPreviewPage() {
         <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="flex min-w-0 flex-col gap-4">
             <Panel
+              title="Credits spent"
+              description={`Cumulative since Jul 29 · ${burnUp?.spent.toLocaleString()} of ${burnUp?.available.toLocaleString()} available`}
+            >
+              {burnUp ? <CreditBurnUpChart burnUp={burnUp} /> : null}
+            </Panel>
+
+            <Panel
               title="Credit spend"
               description={`Per day since Jul 29 · ${activity?.totalConsumed.toLocaleString()} credits spent`}
             >
@@ -216,6 +239,7 @@ export default function BillingPreviewPage() {
             <Panel
               title="Cost by AI service"
               description="What each service cost, and what it cost per use · last 16 days"
+              bodyClassName="p-0"
             >
               <ServiceUsageTable rows={SERVICE_ROWS} />
             </Panel>
