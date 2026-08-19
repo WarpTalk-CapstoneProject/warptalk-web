@@ -51,6 +51,24 @@ function whole(value: number): string {
 }
 
 /**
+ * A top of scale that divides into four readable gridlines.
+ *
+ * Scaling the peak by a flat factor gives axis labels like "805k" and "402k", which are exact and
+ * unreadable — nobody carries a mental scale in 402,500s. Rounding the STEP up to a familiar
+ * number puts the labels back on a scale a reader already has.
+ */
+function niceAxisMax(peak: number): number {
+  const rawStep = (peak * 1.1) / 4;
+  if (!(rawStep > 0)) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalised = rawStep / magnitude;
+  const step =
+    (normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 4 ? 4 : normalised <= 5 ? 5 : 10) *
+    magnitude;
+  return step * 4;
+}
+
+/**
  * Monotone cubic (Fritsch–Carlson).
  *
  * A cumulative series never goes down, and the usual Catmull-Rom smoothing does not know that:
@@ -141,7 +159,7 @@ export function CreditBurnUpChart({ burnUp }: { burnUp: CycleBurnUp }) {
     );
     // Headroom, so the ceiling is never welded to the top edge and the overage band has room to
     // show above it.
-    const yMax = peak * 1.15;
+    const yMax = niceAxisMax(peak);
 
     const x = (index: number) => PAD.left + (IW * index) / lastIndex;
     const y = (value: number) => PAD.top + IH - (IH * Math.min(value, yMax)) / yMax;
