@@ -80,6 +80,7 @@ import type {
   VoiceOptionDto,
   VoiceCloneStateDto,
 } from "@/types/realtime";
+import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 
@@ -211,6 +212,10 @@ export function PersistentMeetingSession({
   const [wasConnectable, setWasConnectable] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
+
+  // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
+  // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
 
   // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
   // meant for the far side has to leave through the virtual microphone Meet is listening to
@@ -1272,8 +1277,28 @@ export function PersistentMeetingSession({
     );
     addedLanguages.forEach((language) => codes.add(language));
     codes.add(normalizeLanguageCode(targetLanguage));
-    return Array.from(codes);
-  }, [room, targetLanguage, addedLanguages]);
+
+    // WT-497: the workspace's language policy applies to the menu, not only to room creation.
+    //
+    // These codes come from the room, and a room's languages were checked against the policy
+    // ON THE DAY IT WAS CREATED (WT-271). Tighten the policy afterwards and every existing room
+    // keeps offering what it was created with — the menu was faithfully reflecting the room and
+    // quietly contradicting the workspace. A recurring series makes it worse: the rule outlives
+    // any single policy change.
+    //
+    // Empty means unrestricted, matching the server's own whitelist check — so an absent or
+    // still-loading settings response must NOT be read as "nothing is allowed", or the picker
+    // would empty itself while the query is in flight.
+    const allowed = workspaceSettings?.allowedTargetLanguages;
+    if (!allowed || allowed.length === 0) return Array.from(codes);
+
+    const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
+    // The language this participant is CURRENTLY on stays, even if the policy now forbids it.
+    // Removing the selected option from its own menu makes the control render blank and gives
+    // them no way to move off it — the policy is enforced by what they can move TO.
+    const current = normalizeLanguageCode(targetLanguage);
+    return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
+  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(

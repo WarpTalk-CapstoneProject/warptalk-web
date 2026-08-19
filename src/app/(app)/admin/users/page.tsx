@@ -198,7 +198,7 @@ function UsersDirectory() {
       <AdminPageHeader
         eyebrow="Platform directory"
         eyebrowIcon={<UsersIcon size={14} weight="fill" />}
-        title="Users"
+        title="Accounts"
         description="Every account on the platform, independent of workspace membership."
         actions={
           <Button

@@ -358,7 +358,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // as active for anything beneath its href, and every admin page is beneath /admin.
           { icon: Gauge, label: "Overview", href: "/admin", exact: true },
           { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
-          { icon: Users, label: "Users", href: "/admin/users" },
+          // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
+          // "Users" is the same word the workspace sidebar uses for that workspace's members —
+          // two very different populations under one label, in a console where the difference is
+          // the whole point. The route keeps its path; only what a person reads changes.
+          { icon: Users, label: "Accounts", href: "/admin/users" },
         ],
       },
       {
@@ -389,20 +393,35 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       },
     ];
 
-    const backHref = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/home` : "/workspace";
+    // WT-444: "Back to app" pointed at /workspace whenever no workspace was active, and for the
+    // only person who ever sees this button that is a loop. /workspace redirects a system admin
+    // straight back to /admin — unconditionally, by WT-417 — so the button returned the admin to
+    // the console they were trying to leave, with a page flash in between.
+    //
+    // Fall back to any workspace they actually belong to instead. A platform admin with none has
+    // no app to go back to, so the button is not rendered at all rather than made to look
+    // clickable: WT-417's whole point is that such an account is not a workspace user.
+    const fallbackWorkspaceSlug = workspaces.find((w) => w.slug)?.slug;
+    const backHref = activeWorkspaceSlug
+      ? `/${activeWorkspaceSlug}/home`
+      : fallbackWorkspaceSlug
+        ? `/${fallbackWorkspaceSlug}/home`
+        : null;
 
     if (collapsed) {
       return (
         <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
           <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
-            <Link
-              href={backHref}
-              title="Back to app"
-              aria-label="Back to app"
-              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <CaretLeft size={16} weight="bold" />
-            </Link>
+            {backHref && (
+              <Link
+                href={backHref}
+                title="Back to app"
+                aria-label="Back to app"
+                className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <CaretLeft size={16} weight="bold" />
+              </Link>
+            )}
           </div>
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
             {adminSections.flatMap((group, groupIndex) =>
@@ -438,13 +457,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     return (
       <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
         <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
-          <Link
-            href={backHref}
-            className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <CaretLeft size={14} weight="bold" />
-            <span>Back to app</span>
-          </Link>
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <CaretLeft size={14} weight="bold" />
+              <span>Back to app</span>
+            </Link>
+          ) : (
+            // Same height and padding as the link so the header does not jump between an admin
+            // who has a workspace and one who does not.
+            <span className="-ml-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted/50">
+              Platform console
+            </span>
+          )}
         </div>
 
         {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a
