@@ -224,6 +224,9 @@ async function parseWorkbook(file: File): Promise<string[][]> {
  * rather than XLSX because it opens in every spreadsheet app and there is nothing to encode.
  */
 function downloadSampleTemplate() {
+  // i18n-allow: these are glossary ENTRIES, not interface copy. The sample has to demonstrate a
+  // real translation pair, and an English-to-English one would show nothing about what the file
+  // is for — this is the same "genuine language data" exemption the contract exists to allow.
   const rows = [
     ["Term", "Translation", "Field", "Definition", "Note", "Part of speech", "Priority"],
     ["offside", "việt vị", "Football", "Attacker ahead of the last defender", "Common in match commentary", "noun", "1"],
