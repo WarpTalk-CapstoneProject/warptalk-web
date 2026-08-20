@@ -188,38 +188,45 @@ export default function HistoryPage() {
             under a breadcrumb reading "history" was the same word twice, and the sentence under
             it was documentation living in the furniture. See components/workspace/page-chrome,
             which records this as the house rule; this page had simply never been converted. */}
-        {/* The same search affordance Meetings and Members use, not a 360px input box.
-            Every list page had invented its own: a full-width bordered field here, a 300px one on
-            My Meetings, a collapsed dock on Meetings — three answers to one question, and the
-            widest of them spent a third of the row on a control nobody uses until they need it. */}
-        <header className="flex items-center justify-end gap-2 border-b border-border pb-4">
-          <ExpandingSearchDock
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search title, code, host, or language"
-            expandedWidth={320}
-          />
-        </header>
+        {/* ONE toolbar row, the shape Meetings uses: the chips choose on the left, the count and
+            the search sit together on the right.
+            The search dock used to have a header row of its own directly above this one, holding
+            nothing else — a 28px circle alone on a full-width band, with the row that actually
+            reads as the toolbar underneath it. Same control, same behaviour, one row fewer.
 
+            The dock stays OUTSIDE FilterChipGroup: that group is `overflow-x-auto`, which would
+            both clip the dock as it expands and scroll it out of reach on a narrow window. The
+            group gets `min-w-0` so the chips are what scrolls when the row runs out of space. */}
         {/* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
             token in the palette and it was spent on a FILTER — a choice, not an action — so the
             selected chip here shouted while the identical control on Meetings and Documents
             whispered. filter-chip.tsx records this as the one answer for the whole app. */}
-        <FilterChipGroup
-          label="History filters"
-          className="border-b border-border py-3"
-          trailing={`${rooms.length} results`}
-        >
-          {historyFilters.map((item) => (
-            <FilterChip
-              key={item.value}
-              selected={filter === item.value}
-              onClick={() => setFilter(item.value)}
-            >
-              {item.label}
-            </FilterChip>
-          ))}
-        </FilterChipGroup>
+        <div className="flex items-center justify-between gap-3 border-b border-border py-3">
+          <FilterChipGroup label="History filters" className="min-w-0">
+            {historyFilters.map((item) => (
+              <FilterChip
+                key={item.value}
+                selected={filter === item.value}
+                onClick={() => setFilter(item.value)}
+              >
+                {item.label}
+              </FilterChip>
+            ))}
+          </FilterChipGroup>
+
+          <div className="flex shrink-0 items-center gap-3 pl-4">
+            <span className="text-[11px] tabular-nums text-ink-subtle">
+              {rooms.length} results
+            </span>
+            <ExpandingSearchDock
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Search title, code, host, or language"
+              ariaLabel="Search meeting history"
+              expandedWidth={320}
+            />
+          </div>
+        </div>
 
         <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
           {history.isLoading ? <LoadingState /> : history.isError ? <ErrorState onRetry={() => history.refetch()} /> : rooms.length === 0 ? <EmptyState hasQuery={Boolean(query)} /> : (

@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from "react";
 
 import { ChatPanel } from "@/components/rooms/live/chat-panel";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -83,6 +88,42 @@ export function MeetingSidePanel({
   const chatMessages = useTranslationRoomStore((state) => state.chatMessages);
   const [seenChatCount, setSeenChatCount] = useState(chatMessages.length);
 
+  // A TAB IS NOT A REMOUNT.
+  //
+  // The three bodies used to be rendered conditionally, so every click on Transcript or People
+  // destroyed the panel you were leaving and rebuilt it when you came back. That threw away
+  // everything the panel was holding and nothing warned you: the half-typed chat message in the
+  // editor, which messages the reader had opened a translation on, and the scroll offset — the
+  // last of which is why the chat replayed itself from the top on the way back in.
+  //
+  // Inactive tabs now stay mounted and are hidden with `invisible`. NOT `hidden`/display:none:
+  // both panels keep themselves pinned to the newest line while they are away, and a
+  // display:none subtree measures as scrollHeight 0 / clientHeight 0 (checked in the browser,
+  // against 2116/120 for the same box under visibility:hidden) — so that effect would quietly
+  // write scrollTop 0 and hand back a panel scrolled to the top, which is the bug this is
+  // fixing, by another route. visibility:hidden keeps the box and its measurements and only
+  // stops it being painted; it also drops the subtree out of the tab order, so nothing behind
+  // the panel is reachable by keyboard.
+  //
+  // Lazily, though. A tab nobody has opened costs nothing, which is what keeps an untouched
+  // transcript from rendering every line of a two-hour meeting in the background.
+  const [visitedModes, setVisitedModes] = useState<Set<SidePanelMode>>(
+    () => new Set([mode]),
+  );
+
+  function selectMode(next: SidePanelMode) {
+    setVisitedModes((current) =>
+      current.has(next) ? current : new Set(current).add(next),
+    );
+    onModeChange(next);
+  }
+
+  /** Visited at least once — plus whatever is on screen now, which may have been switched to
+   *  from outside this component (persistent-meeting-session jumps to the transcript). */
+  function isMounted(candidate: SidePanelMode) {
+    return candidate === mode || visitedModes.has(candidate);
+  }
+
   useEffect(() => {
     if (mode === "chat") {
       setSeenChatCount(chatMessages.length);
@@ -161,54 +202,79 @@ export function MeetingSidePanel({
           <TabButton
             active={mode === "transcript"}
             label="Transcript"
-            onClick={() => onModeChange("transcript")}
+            onClick={() => selectMode("transcript")}
           />
           <TabButton
             active={mode === "chat"}
             label="Chat"
             badge={unreadChatCount || undefined}
-            onClick={() => onModeChange("chat")}
+            onClick={() => selectMode("chat")}
           />
           <TabButton
             active={mode === "participants"}
             label="People"
             badge={activeCount}
-            onClick={() => onModeChange("participants")}
+            onClick={() => selectMode("participants")}
           />
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
-          {mode === "transcript" ? (
-            <TranscriptPanel
-              segments={segments}
-              roomId={roomId}
-              baseTime={room.startedAt}
-              missedCount={missedCount}
-              // Same value ChatPanel already translates into — this viewer's listen language.
-              readerLanguage={chatTargetLanguage}
-            />
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
+          {isMounted("transcript") ? (
+            <PanelSlot active={mode === "transcript"}>
+              <TranscriptPanel
+                segments={segments}
+                roomId={roomId}
+                baseTime={room.startedAt}
+                missedCount={missedCount}
+                // Same value ChatPanel already translates into — this viewer's listen language.
+                readerLanguage={chatTargetLanguage}
+              />
+            </PanelSlot>
           ) : null}
-          {mode === "chat" ? (
-            <ChatPanel roomId={roomId} targetLanguage={chatTargetLanguage} />
+          {isMounted("chat") ? (
+            <PanelSlot active={mode === "chat"}>
+              <ChatPanel
+                roomId={roomId}
+                targetLanguage={chatTargetLanguage}
+                active={mode === "chat"}
+              />
+            </PanelSlot>
           ) : null}
-          {mode === "participants" ? (
-            <PeoplePanel
-              roomId={roomId}
-              room={room}
-              isHost={isHost}
-              participants={participants}
-              participantsLoading={participantsLoading}
-              participantsError={participantsError}
-              onCopyText={onCopyText}
-              joinLink={joinLink}
-              raisedHandUserIds={raisedHandUserIds}
-              spotlightedUserId={spotlightedUserId}
-              onToggleSpotlight={onToggleSpotlight}
-            />
+          {isMounted("participants") ? (
+            <PanelSlot active={mode === "participants"}>
+              <PeoplePanel
+                roomId={roomId}
+                room={room}
+                isHost={isHost}
+                participants={participants}
+                participantsLoading={participantsLoading}
+                participantsError={participantsError}
+                onCopyText={onCopyText}
+                joinLink={joinLink}
+                raisedHandUserIds={raisedHandUserIds}
+                spotlightedUserId={spotlightedUserId}
+                onToggleSpotlight={onToggleSpotlight}
+              />
+            </PanelSlot>
           ) : null}
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * One tab body, stacked on the others. Inactive slots keep their layout — and therefore their
+ * scroll position and their children's state — and lose only their paint.
+ */
+function PanelSlot({ active, children }: { active: boolean; children: ReactNode }) {
+  return (
+    <div
+      aria-hidden={!active}
+      className={`absolute inset-0 flex min-h-0 flex-col ${active ? "" : "invisible"}`}
+    >
+      {children}
+    </div>
   );
 }
 

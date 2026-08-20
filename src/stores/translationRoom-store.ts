@@ -30,7 +30,24 @@ interface TranslationRoomStoreState {
    * seconds, not milliseconds — the chat showed no sign anything was happening. Asking and
    * being ignored look identical when there is nothing in between.
    */
-  assistantState: "idle" | "thinking" | "timed_out";
+  assistantState: "idle" | "thinking" | "slow";
+  /**
+   * Which tool WarpBot reached for last, so the room can see the step rather than a spinner.
+   *
+   * The backend has always carried the tool name on the result message and threw it away; the
+   * global assistant widget has shown it since it shipped.
+   */
+  assistantToolName: string | null;
+  /**
+   * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
+   *
+   * The deadline is measured from HERE, not from when the question was asked. Measured from the
+   * question, a model that simply thought for longer than the threshold was declared dead while
+   * it was still working, and the notice then sat in the chat after the answer arrived. A
+   * tool-calling loop emits a step every few seconds, so silence for the whole window is the only
+   * thing that can now mean trouble.
+   */
+  assistantActivityAt: number;
   isMuted: boolean;
   // userIds of OTHER participants with a raised hand — TranslationRoomHub.RaiseHand
   // broadcasts via OthersInGroup, so this never includes the caller's own userId; the
@@ -51,7 +68,9 @@ interface TranslationRoomStoreState {
   dismissSuggestion: (segmentId: string) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
-  setAssistantState: (state: "idle" | "thinking" | "timed_out") => void;
+  setAssistantState: (state: "idle" | "thinking" | "slow") => void;
+  /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
+  noteAssistantActivity: (toolName?: string | null) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   setHandRaised: (userId: string, isRaised: boolean) => void;
@@ -65,6 +84,8 @@ const initialState = {
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
+  assistantToolName: null,
+  assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
 };
@@ -279,6 +300,14 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     })),
 
   setAssistantState: (assistantState) => set({ assistantState }),
+  // One call for "WarpBot did something", so no caller can move the state and forget to reset
+  // the deadline it is measured against.
+  noteAssistantActivity: (assistantToolName = null) =>
+    set((state) => ({
+      assistantState: state.assistantState === "idle" ? "thinking" : state.assistantState,
+      assistantToolName: assistantToolName ?? state.assistantToolName,
+      assistantActivityAt: Date.now(),
+    })),
 
   addChatMessage: (message) =>
     set((s) => ({

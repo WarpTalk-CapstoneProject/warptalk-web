@@ -141,7 +141,7 @@ export function MediaDeviceMenuButton({
         aria-controls={open ? menuId : undefined}
         aria-label={label}
         title={label}
-        className={`grid h-11 w-5 place-items-center rounded-r-xl text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink ${
+        className={`grid h-10 w-5 place-items-center rounded-r-xl text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink ${
           open ? "bg-surface-2 text-ink" : ""
         }`}
       >

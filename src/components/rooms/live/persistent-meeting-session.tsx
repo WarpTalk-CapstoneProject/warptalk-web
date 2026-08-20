@@ -57,6 +57,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import {
   markLanguagePickerShown,
   wasLanguagePickerShown,
@@ -64,6 +65,8 @@ import {
 import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
+import { buildParticipantIdentities } from "@/lib/meeting/participant-identity";
+import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identity-context";
 import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
@@ -174,6 +177,16 @@ type LocalMediaControl = {
 
 const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
 
+/**
+ * A room that was created before it had a workspace carries this instead of one. Asking the
+ * members endpoint for it answers 404, so the avatar join is simply skipped and everybody falls
+ * back to initials — which is what a workspace-less room should look like anyway.
+ */
+const EMPTY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
+
+/** One page big enough for any meeting the plans allow, so the roster join never misses a face. */
+const MEETING_MEMBER_PAGE_SIZE = 100;
+
 export function PersistentMeetingSession({
   roomId,
   compact,
@@ -283,7 +296,7 @@ export function PersistentMeetingSession({
   const refreshDubVoice = useRefreshDubVoice(roomId);
   // WT-B. Read by everyone in the room so a guest's switch sits where the host left it; written
   // only by the room host, which is what the server enforces too.
-  const { data: flashModeEnabled = false } = useFlashMode(roomId);
+  const { data: flashMode } = useFlashMode(roomId);
   const setFlashMode = useSetFlashMode(roomId);
   // The caller's OWN microphone, not the room's. No host check anywhere on this one, deliberately:
   // it changes how this person is transcribed and nobody else's audio, and the server agrees — see
@@ -1339,6 +1352,41 @@ export function PersistentMeetingSession({
   const targetLanguageNormalized = normalizeLanguageCode(targetLanguage);
 
   /**
+   * Faces and language flags for everyone in the room, resolved once for every surface.
+   *
+   * The workspace member list is here because it is the only endpoint that carries an avatar:
+   * `GET /translation-rooms/{id}/participants` returns names, roles and languages and no picture
+   * (TranslationRoomParticipantMapper.ToDto), which is why every tile in the meeting was a
+   * monogram. A participant with no member row — an external or a bridge guest — resolves to
+   * initials, which is correct rather than degraded. See lib/meeting/participant-identity.
+   */
+  const workspaceMembersQuery = useWorkspaceMembers(
+    room?.workspaceId && room.workspaceId !== EMPTY_WORKSPACE_ID
+      ? room.workspaceId
+      : undefined,
+    1,
+    MEETING_MEMBER_PAGE_SIZE,
+  );
+  const participantIdentities = useMemo(
+    () =>
+      buildParticipantIdentities({
+        participants,
+        members: workspaceMembersQuery.data?.items ?? [],
+        self: user ?? null,
+        // The local user's own pick is state in this component and reaches `participants` only on
+        // the next roster refetch, so without this your own flag lags your own choice.
+        selfLanguages: { speak: sourceLanguage, listen: targetLanguage },
+      }),
+    [
+      participants,
+      workspaceMembersQuery.data,
+      user,
+      sourceLanguage,
+      targetLanguage,
+    ],
+  );
+
+  /**
    * Persist an in-meeting language pick so it survives a reload.
    *
    * `roomId` is stamped in deliberately: readMeetingJoinState discards the whole blob unless
@@ -2277,12 +2325,20 @@ export function PersistentMeetingSession({
     // exactly like being ignored. The realtime-event contract had it listed as "emitted,
     // never handled" with the note that the panel showed its own optimistic state — it did
     // not, and there was no such state anywhere in the chat panel.
+    // Which tool WarpBot just reached for. The backend has carried the name on this message all
+    // along and dropped it; binding it is what turns a spinner into a step, and it is also the
+    // signal the panel's deadline is measured from — so a long tool-calling loop can no longer
+    // look like a dead worker.
+    chatConnection.on("ChatAssistantToolCallStarted", (payload: { toolName?: string }) => {
+      useTranslationRoomStore.getState().noteAssistantActivity(payload?.toolName ?? null);
+    });
+
     chatConnection.on("ChatAssistantResponsePending", () => {
       // A second, confirming trigger. The chat panel already sets this optimistically the
       // moment somebody sends an @agent mention, because waiting for this round trip leaves
       // the send looking ignored — and when the answer is fast, this signal arrives and is
       // cleared in the same breath, so nothing is ever seen. The panel owns the deadline.
-      useTranslationRoomStore.getState().setAssistantState("thinking");
+      useTranslationRoomStore.getState().noteAssistantActivity();
     });
 
     let cancelled = false;
@@ -2603,6 +2659,9 @@ export function PersistentMeetingSession({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-ink font-sans selection:bg-surface-3">
+      {/* Wrapped here rather than around <main>, so the minimised dock resolves faces from the
+          same map as the full room — the two used to draw the same person differently. */}
+      <MeetingIdentityProvider identities={participantIdentities}>
       <LiveKitRoom
         video={cameraEnabled}
         audio={
@@ -2738,6 +2797,9 @@ export function PersistentMeetingSession({
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
                   // when there is one), so they follow the meeting being live, not translation.
                   enabled={meetingLive && subtitlesEnabled}
+                  // 360x220 has no room for a speaker column and three lines of history. The
+                  // newest sentence, and nothing else.
+                  variant="compact"
                 />
               </div>
             ) : null}
@@ -2827,9 +2889,9 @@ export function PersistentMeetingSession({
         ) : (
         <main
           data-meeting-content
-          className="flex min-h-0 flex-1 gap-3 p-3 pt-0"
+          className="flex min-h-0 flex-1 gap-2.5 p-2.5 pt-0"
         >
-          <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             {/* No border on this frame. It drew a grey outline at radius 24 around a tile that
                 rounds at 16, so the two curves never met and the square backing showed through
                 as four grey wedges at the corners — read as a hairline box bolted onto the
@@ -2876,10 +2938,16 @@ export function PersistentMeetingSession({
               </div>
             </section>
 
+            {/* The caption lane, which is now a lane and not a gap a box sometimes appears in.
+                72px held one centred sentence that came and went; three attributed lines that
+                stay put need roughly twice that, and taking it from the picture is the point —
+                a camera view that fills the window leaves captions and transcript fighting over
+                the strip that is left. Clamped rather than fixed so a laptop screen is not
+                mostly caption. */}
             {subtitlesEnabled ? (
               <div
                 data-meeting-subtitle-lane
-                className="relative flex h-[72px] shrink-0 items-center justify-center overflow-hidden"
+                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
@@ -2920,7 +2988,10 @@ export function PersistentMeetingSession({
                     onChangeDubVoice={handleChangeDubVoice}
                     cloneCapture={cloneCaptureState}
                     voiceCloneHasAudience={voiceCloneHasAudience}
-                    flashModeEnabled={flashModeEnabled}
+                    flashModeEnabled={flashMode.enabled}
+                    // Where that came from, so the sentence under the switch can be true. Without
+                    // it the panel said "Set by the host" about rooms no host had ever touched.
+                    flashModeSource={flashMode.source}
                     // isRoomHost, not isHost, for the same reason /pause and /resume use it: the
                     // endpoint gates on the room's EFFECTIVE host, and a workspace admin — host-
                     // like everywhere else — would be handed a switch that answers 403.
@@ -3050,6 +3121,7 @@ export function PersistentMeetingSession({
           // the room's default listen language) IS the existing pre-modal behavior.
         }}
       /> : null}
+      </MeetingIdentityProvider>
     </div>
   );
 }

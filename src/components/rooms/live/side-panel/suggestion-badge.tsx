@@ -11,6 +11,8 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { motion } from "motion/react";
 import type { AiSuggestionDto } from "@/types/realtime";
+import { AnswerSources } from "@/components/assistant/answer-sources";
+import { parseAnswerSources } from "@/lib/assistant/answer-sources";
 
 const CATEGORY_ICONS = {
   clarification: Question,
@@ -171,6 +173,14 @@ export function SuggestionDetail({
               {suggestion.detail}
             </p>
           ) : null}
+          {/* Above the disclaimer, not below it: a named document is the answer to "where did
+              this come from", and the disclaimer is what is left when there is no answer.
+              A "fact" hint only exists when the meeting had documents attached, so this is
+              exactly the category the reader most needs to be able to check. */}
+          <AnswerSources
+            sources={parseAnswerSources(suggestion.sourcesJson)}
+            tone={isSelf ? "inverted" : "default"}
+          />
           {/* Said once, at the bottom, because an unprompted hint that does not say where it
               came from reads as the product asserting a fact. */}
           <p

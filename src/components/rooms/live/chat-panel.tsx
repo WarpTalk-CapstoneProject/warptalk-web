@@ -1,6 +1,8 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { assistantToolLabel } from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useMeetingChat,
   useSendMeetingChat,
@@ -21,7 +23,9 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
-import { suggestion } from "./mentions";
+import { AnswerSources } from "@/components/assistant/answer-sources";
+import { parseAnswerSources } from "@/lib/assistant/answer-sources";
+import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
 import {
@@ -54,6 +58,18 @@ interface MessageTranslationState {
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
+/** Distance from the bottom, in px, still counted as "reading the newest message". */
+const STICK_TO_BOTTOM_PX = 80;
+
+/**
+ * Where each room's chat reader was, kept outside the component because the component does
+ * not survive a tab switch: MeetingSidePanel renders ChatPanel only while the Chat tab is
+ * selected, so Transcript/People -> Chat is a fresh mount with the container at zero.
+ *
+ * Same treatment TranscriptPanel already got for the same report — see the note there.
+ */
+const chatScrollOffsets = new Map<string, { offset: number; atBottom: boolean }>();
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -72,15 +88,32 @@ export function ChatPanel({
   roomId,
   sourceLanguage = "en",
   targetLanguage,
+  active = true,
 }: {
   roomId: string;
   sourceLanguage?: string;
   /** Viewer's own listen language — messages are translated on-click into this. */
   targetLanguage?: string;
+  /**
+   * Whether Chat is the tab currently on screen.
+   *
+   * The panel stays mounted when it is not, which is what keeps the half-typed message and the
+   * opened translations alive across a tab switch. Everything it draws inside its own box is
+   * hidden with it — but the @ menu is appended to document.body by tippy, so it is not, and
+   * has to be put away by hand.
+   */
+  active?: boolean;
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  // Only so a document chip under a WarpBot answer can link to that document; a room whose
+  // workspace is not in the store simply renders the chip as a label.
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  const assistantToolName = useTranslationRoomStore((state) => state.assistantToolName);
+  const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
@@ -115,6 +148,7 @@ export function ChatPanel({
   const suggestedTargetLanguage = targetLanguage || "en";
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const hasRestoredRef = useRef(false);
   const previousTargetLanguageRef = useRef(targetLanguage);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
@@ -192,10 +226,13 @@ export function ChatPanel({
   // reconnect — which is how the answer arrives when the socket was down while WarpBot
   // replied.
   useEffect(() => {
-    if (assistantState !== "thinking") return;
+    if (assistantState === "idle") return;
     if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
       setAssistantState("idle");
     }
+    // NOT `assistantState !== "thinking"`. That guard is the reported bug: once the wait had been
+    // declared over, the answer arriving could no longer clear the notice, so a slow reply left a
+    // permanent "WarpBot didn't answer" sitting above a WarpBot answer.
   }, [messages, assistantState, setAssistantState]);
 
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
@@ -204,27 +241,73 @@ export function ChatPanel({
   useEffect(() => {
     if (assistantState !== "thinking") return;
     const timer = window.setTimeout(() => {
-      if (
-        useTranslationRoomStore.getState().assistantState === "thinking"
-      ) {
-        useTranslationRoomStore.getState().setAssistantState("timed_out");
+      if (useTranslationRoomStore.getState().assistantState === "thinking") {
+        // "slow", not "timed out". The old state declared WarpBot had failed on nothing but a
+        // clock, while a tool-calling loop was still running — and it was usually wrong, because
+        // the answer then arrived. Saying it is taking a while claims neither failure nor
+        // success, and the answer clears it either way.
+        useTranslationRoomStore.getState().setAssistantState("slow");
       }
     }, 90_000);
     return () => window.clearTimeout(timer);
-  }, [assistantState]);
+    // Re-armed on every sign of life. Keyed on the question alone, a model that merely thought
+    // for longer than the window was declared dead while it was working.
+  }, [assistantState, assistantActivityAt]);
 
+  // WHERE THE READER WAS, NOT A REPLAY OF THE WHOLE THREAD.
+  //
+  // Switching to Transcript or People unmounts this panel, so coming back mounts it again
+  // with the container at scrollTop 0 - and `scroll-smooth` on the container turned the
+  // catch-up assignment into an animation down the entire conversation, every single time
+  // the tab was re-opened. Ending at the newest message was right; getting there by gliding
+  // past every message that came before it was not.
+  //
+  // The restore is now a jump, and it goes back to the offset this room was left at rather
+  // than always to the end, so someone who had scrolled up to read something finds it still
+  // on screen. New messages still glide in, but only for a reader already at the bottom.
   useEffect(() => {
-    if (containerRef.current && shouldAutoScrollRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    const container = containerRef.current;
+    // Nothing to restore against while the history request is still in flight: restoring now
+    // would mark the panel restored and leave the real arrival to animate.
+    if (!container || messages.length === 0) return;
+
+    /** Move without animating - `scroll-smooth` is for new messages, not for restoring. */
+    function jumpTo(top: number) {
+      const previous = container!.style.scrollBehavior;
+      container!.style.scrollBehavior = "auto";
+      container!.scrollTop = top;
+      container!.style.scrollBehavior = previous;
     }
-  }, [messages]);
+
+    if (!hasRestoredRef.current) {
+      hasRestoredRef.current = true;
+      const remembered = chatScrollOffsets.get(roomId);
+      // Anyone who was at the bottom stays at the bottom, including a first visit: the newest
+      // message is what an open chat panel is for.
+      jumpTo(
+        remembered && !remembered.atBottom
+          ? remembered.offset
+          : container.scrollHeight,
+      );
+      shouldAutoScrollRef.current = remembered ? remembered.atBottom : true;
+      return;
+    }
+
+    if (shouldAutoScrollRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages, roomId]);
 
   function handleMessagesScroll() {
     const container = containerRef.current;
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom < 80;
+    shouldAutoScrollRef.current = distanceFromBottom < STICK_TO_BOTTOM_PX;
+    chatScrollOffsets.set(roomId, {
+      offset: container.scrollTop,
+      atBottom: shouldAutoScrollRef.current,
+    });
   }
 
   const editor = useEditor({
@@ -388,6 +471,10 @@ export function ChatPanel({
       },
     );
   }
+
+  useEffect(() => {
+    setMentionMenusVisible(active);
+  }, [active]);
 
   function handleFileButtonClick() {
     fileInputRef.current?.click();
@@ -566,6 +653,13 @@ export function ChatPanel({
                       className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
                     >
                       <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                      {/* Under the answer, inside the same left-aligned block: the chips
+                          belong to what WarpBot just said, and a row hung off the message
+                          container would sit under whoever spoke next. */}
+                      <AnswerSources
+                        sources={parseAnswerSources(message.sourcesJson)}
+                        workspaceSlug={activeWorkspaceSlug}
+                      />
                     </div>
                   ) : (
                     <p
@@ -602,20 +696,21 @@ export function ChatPanel({
             indistinguishable from having been ignored. */}
         {assistantState !== "idle" ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
-            {assistantState === "thinking" ? (
-              <>
-                <span className="flex gap-0.5" aria-hidden>
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
-                </span>
-                <span>WarpBot is thinking…</span>
-              </>
-            ) : (
-              <span className="text-amber-600">
-                WarpBot didn&apos;t answer. Try mentioning it again.
-              </span>
-            )}
+            <span className="flex gap-0.5" aria-hidden>
+              <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
+              <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
+              <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
+            </span>
+            {/* The step, when WarpBot has told us one. A named tool is the difference between
+                "something is happening" and "this might be broken", and it is why the deadline
+                below can be generous rather than suspicious. */}
+            <span>
+              {assistantState === "slow"
+                ? "WarpBot is still working — this one is taking a while."
+                : assistantToolName
+                  ? assistantToolLabel(assistantToolName)
+                  : "WarpBot is thinking…"}
+            </span>
           </div>
         ) : null}
       </div>
