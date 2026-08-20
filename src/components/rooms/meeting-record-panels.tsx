@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Archive,
@@ -146,12 +146,28 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
  * which is exactly how downloading already works — so consent is granted here by the same call,
  * and the caller refetches afterwards so the Artifacts row stops saying "Consent required" too.
  */
+/**
+ * A request to move the recording to a moment, carried as a value rather than a ref.
+ *
+ * `token` is what makes a REPEAT of the same second a new request: clicking the same transcript
+ * line twice must seek twice (the viewer has since scrubbed away), and an effect keyed on seconds
+ * alone would see no change and do nothing.
+ */
+export interface SeekRequest {
+  seconds: number;
+  token: number;
+}
+
 export function MeetingRecordingPlayer({
   artifact,
   onConsentGranted,
+  seek,
 }: {
   artifact: RoomHistoryArtifact | null;
   onConsentGranted?: () => void;
+  /** Move to a moment. Ignored when the caller could not align the two clocks — see
+   *  recording-seek.ts, where an unalignable meeting yields no request at all. */
+  seek?: SeekRequest | null;
 }) {
   // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
   // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
@@ -159,6 +175,28 @@ export function MeetingRecordingPlayer({
   const [loaded, setLoaded] = useState<{ artifactId: string; url: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const sourceUrl = artifact && loaded?.artifactId === artifact.id ? loaded.url : null;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
+  // dropped — the first click on a transcript line is exactly that case, since the player waits
+  // for a press before fetching anything.
+  const pendingSeekRef = useRef<SeekRequest | null>(null);
+
+  // Not setState: this drives an external system (the media element) from React state, which is
+  // what an effect is actually for.
+  useEffect(() => {
+    if (!seek) return;
+    const video = videoRef.current;
+    if (!video || !sourceUrl) {
+      pendingSeekRef.current = seek;
+      return;
+    }
+    video.currentTime = seek.seconds;
+    // Play, because somebody who clicked a line wants to HEAR it. A paused seek looks like
+    // nothing happened on a control they cannot see move.
+    void video.play().catch(() => {
+      // Autoplay refused — the frame has still moved, which is the part that matters.
+    });
+  }, [seek, sourceUrl]);
 
   // Nothing to watch is not an error state, and an empty player frame promising a video that does
   // not exist is worse than no frame at all. The meeting simply was not recorded.
@@ -200,10 +238,18 @@ export function MeetingRecordingPlayer({
           // controls, and nothing else: autoplay on a page someone opened to read a transcript is
           // a room full of unexpected sound.
           <video
+            ref={videoRef}
             src={sourceUrl}
             controls
             preload="metadata"
             className="aspect-video w-full bg-black"
+            onLoadedMetadata={(event) => {
+              const queued = pendingSeekRef.current;
+              if (!queued) return;
+              pendingSeekRef.current = null;
+              event.currentTarget.currentTime = queued.seconds;
+              void event.currentTarget.play().catch(() => {});
+            }}
           />
         ) : (
           <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-surface-2/40">

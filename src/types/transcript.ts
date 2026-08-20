@@ -31,6 +31,9 @@ export interface TranscriptDto {
   createdAt: string;
   updatedAt: string;
   finalizedAt?: string;
+  /** WT-473: the UTC instant startTimeMs values are measured from. Absent means the
+   *  transcript CANNOT be aligned to a recording — never substitute createdAt. */
+  timelineAnchorAt?: string | null;
 }
 
 export interface TranscriptSegmentDto {

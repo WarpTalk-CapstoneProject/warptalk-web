@@ -372,6 +372,8 @@ export interface TranslationRoomArtifactDto {
   /** When the CONTENT last changed — moved by a summary rewrite. Absent on artifacts written
    *  before the column existed; read that as unknown and fall back to createdAt. */
   updatedAt?: string | null;
+  /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
+  recordingStartedAt?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

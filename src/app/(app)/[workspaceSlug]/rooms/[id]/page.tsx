@@ -78,10 +78,12 @@ import {
   ArtifactsPanel,
   MeetingRecordTabButton,
   MeetingRecordingPlayer,
+  type SeekRequest,
   SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
+import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -190,6 +192,7 @@ export default function RoomInformationPage() {
     [segmentsQuery.data],
   );
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
+  const [seek, setSeek] = useState<SeekRequest | null>(null);
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
@@ -214,8 +217,33 @@ export default function RoomInformationPage() {
    * ref map, because the transcript re-renders on every correction and a ref map would go
    * stale exactly when the host is editing.
    */
+  // The two origins WT-473 stored for exactly this. Either missing means the transcript cannot be
+  // aligned to the recording at all, and recording-seek.ts refuses rather than guessing.
+  const seekSources = useMemo(
+    () => ({
+      timelineAnchorAt: transcriptQuery.data?.timelineAnchorAt ?? null,
+      recordingStartedAt:
+        findPlayableRecording(endedRecordQuery.data?.artifacts)?.recordingStartedAt ?? null,
+    }),
+    [transcriptQuery.data?.timelineAnchorAt, endedRecordQuery.data?.artifacts],
+  );
+
+  /** Move the recording to a meeting moment. Silent when the clocks cannot be reconciled. */
+  const requestSeek = useCallback(
+    (atMs: number) => {
+      const seconds = seekTargetSeconds(seekSources, atMs);
+      if (seconds === null) return;
+      // A token, so clicking the SAME line twice seeks twice — the viewer has scrubbed away since.
+      setSeek({ seconds, token: Date.now() });
+    },
+    [seekSources],
+  );
+
   const jumpToTranscriptMoment = useCallback(
     (atMs: number) => {
+      // Both, and the seek first: it is the part with nothing on screen to acknowledge it, so it
+      // must not wait behind a scroll animation.
+      requestSeek(atMs);
       const segment = findSegmentAtMs(transcriptSegments, atMs);
       if (!segment) {
         toast.error("That moment is not in the saved transcript.");
@@ -230,7 +258,7 @@ export default function RoomInformationPage() {
         setHighlightedSegmentId(segment.id);
       });
     },
-    [transcriptSegments],
+    [transcriptSegments, requestSeek],
   );
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
@@ -550,11 +578,15 @@ export default function RoomInformationPage() {
                 artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
                 segments={transcriptSegments}
+                seek={seek}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
+                    onSeekToRecording={
+                      canAlignToRecording(seekSources) ? requestSeek : undefined
+                    }
                     baseTime={
                       transcriptQuery.data?.createdAt ||
                       room.startedAt ||
@@ -739,6 +771,7 @@ function MeetingRecordSection({
   transcriptCount,
   endedRecord,
   segments,
+  seek,
   onRecordChanged,
   onJumpToMoment,
 }: {
@@ -752,6 +785,8 @@ function MeetingRecordSection({
   endedRecord: EndedRoomHistoryItem | null;
   /** The persisted segments, so the summary panel can tell the reader it is behind a correction. */
   segments: TranscriptSegmentDto[];
+  /** Where to move the recording, when a citation or a transcript line asked. */
+  seek: SeekRequest | null;
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
 }) {
@@ -893,10 +928,16 @@ function MeetingRecordSection({
           reader came for down the page for no reason; Artifacts still lists the same file to
           download. Rendered only when a ready recording exists, so a meeting nobody recorded shows
           no empty frame promising one. */}
-      {activeTab === "transcript" ? (
+      {/* On Summary as well as Transcript now. A summary citation is the same gesture as clicking
+          a transcript line, and it cannot move a player the reader cannot see — sending them to
+          another tab to watch what they just clicked is the long way round. Artifacts still gets
+          none: it is a list of files, and the player would push the list the reader came for down
+          the page. */}
+      {activeTab === "transcript" || activeTab === "summary" ? (
         <MeetingRecordingPlayer
           artifact={recording}
           onConsentGranted={onRecordChanged}
+          seek={seek}
         />
       ) : null}
       {activeTab === "transcript" ? transcript : null}
@@ -964,6 +1005,7 @@ function MeetingRecordSection({
  */
 function MeetingTranscriptArtifact({
   segments,
+  onSeekToRecording,
   baseTime,
   roomId,
   currentUserId,
@@ -976,6 +1018,9 @@ function MeetingTranscriptArtifact({
   onSegmentsChanged,
 }: {
   segments: TranscriptSegmentDto[];
+  /** Move the recording to this line. Omitted when the two clocks cannot be reconciled, which is
+   *  how the timestamp stays plain text instead of becoming a button that does nothing. */
+  onSeekToRecording?: (atMs: number) => void;
   baseTime?: string;
   roomId: string;
   currentUserId?: string;
@@ -1168,7 +1213,20 @@ function MeetingTranscriptArtifact({
                           {isSelf ? "You" : segment.speakerName || "Unknown speaker"}
                         </span>
                         <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
-                        {base ? <span>{segmentTime(segment.startTimeMs)}</span> : null}
+                        {base ? (
+                          onSeekToRecording ? (
+                            <button
+                              type="button"
+                              onClick={() => onSeekToRecording(segment.startTimeMs)}
+                              title="Play the recording from here"
+                              className="rounded font-mono underline-offset-2 hover:text-ink hover:underline"
+                            >
+                              {segmentTime(segment.startTimeMs)}
+                            </button>
+                          ) : (
+                            <span>{segmentTime(segment.startTimeMs)}</span>
+                          )
+                        ) : null}
                       </div>
                       {editingSegmentId === segment.id ? (
                         <div className="w-full min-w-0 space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2.5">
