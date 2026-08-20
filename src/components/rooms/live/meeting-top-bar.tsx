@@ -58,7 +58,7 @@ export function MeetingExitControl({
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="Leave meeting"
-          className="grid h-12 w-12 place-items-center rounded-full border border-border/50 bg-surface-1/80 text-destructive shadow-sm outline-none backdrop-blur-xl transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="grid h-11 w-11 place-items-center rounded-full border border-border/50 bg-surface-1/80 text-destructive shadow-sm outline-none backdrop-blur-xl transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           <SignOut className="h-[18px] w-[18px]" weight="bold" />
         </DropdownMenuTrigger>
