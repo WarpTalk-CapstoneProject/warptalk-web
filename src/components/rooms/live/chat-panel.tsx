@@ -1,4 +1,8 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import {
+  assistantToolDoneLabel,
+  assistantToolLabel,
+} from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -707,7 +711,9 @@ export function ChatPanel({
               <ol className="flex flex-col gap-0.5">
                 {assistantSteps.map((step) => (
                   <li key={step.key} className={step.done ? "" : "text-ink"}>
-                    {step.label}
+                    {step.done
+                      ? assistantToolDoneLabel(step.tool)
+                      : assistantToolLabel(step.tool)}
                   </li>
                 ))}
                 {assistantState === "slow" ? (

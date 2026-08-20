@@ -13,10 +13,7 @@ import type {
 // Relative, not "@/...": these stores are imported directly by node-run contract tests, which
 // have no bundler and cannot resolve the alias. The same trap already cost a fix once
 // (normalizeLanguageCode, WT-371).
-import {
-  assistantToolLabel,
-  type AssistantStep,
-} from "../lib/meeting/assistant-tool-labels.ts";
+import type { AssistantStep } from "../lib/meeting/assistant-tool-labels.ts";
 
 interface TranslationRoomStoreState {
   // Current live translationRoom state
@@ -330,7 +327,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
               ...carried.map((step) => ({ ...step, done: true })),
               {
                 key: `${toolName}-${carried.length}`,
-                label: assistantToolLabel(toolName),
+                tool: toolName,
                 done: false,
               },
             ]
