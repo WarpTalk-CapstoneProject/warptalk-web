@@ -62,6 +62,7 @@ const reconnectPolicy: signalR.IRetryPolicy = {
  * Hubs:
  *   /hubs/translation-room     — TranslationRoomHub
  *   /hubs/notification         — NotificationHub
+ *   /hubs/billing              — BillingHub
  *   /api/v1/meetings/chat-hub  — MeetingChatHub
  *   /api/v1/assistant/chat-hub — AssistantHub
  */
@@ -69,6 +70,7 @@ export function createHubConnection(
   hubPath:
     | "/hubs/translation-room"
     | "/hubs/notification"
+    | "/hubs/billing"
     | "/api/v1/meetings/chat-hub"
     | "/api/v1/assistant/chat-hub"
 ): signalR.HubConnection {
