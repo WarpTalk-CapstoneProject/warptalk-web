@@ -22,6 +22,8 @@ import {
   BookBookmark,
   VideoCamera,
   X,
+  Check,
+  CircleNotch,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   Popover,
@@ -29,7 +31,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
-import { assistantToolLabel } from "@/lib/meeting/assistant-tool-labels";
+import {
+  assistantToolLabel,
+  type AssistantStep,
+} from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
@@ -306,7 +311,29 @@ export function GlobalChatbot() {
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
-  const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
+  /**
+   * The tools WarpBot reached for this turn, in order, kept until the next question.
+   *
+   * This used to be one string that every other event cleared: a chunk arriving set it back to
+   * null, and so did each tool finishing. The steps were published correctly by the worker and
+   * relayed correctly by the backend — they were simply overwritten faster than a person could
+   * read them, so the widget looked like it only ever said "Thinking...". Keeping the trail is
+   * the whole point: somebody wants to see that it checked the knowledge base AND searched
+   * documents, not to catch one label mid-flash.
+   */
+  const [steps, setSteps] = useState<AssistantStep[]>([]);
+  /**
+   * The turn has run past the watchdog and is still going.
+   *
+   * It used to append a message saying "WarpBot didn't answer in time" with failed: true, which
+   * is a claim the widget was in no position to make: the deadline is a clock, not a signal from
+   * the worker, and the answer usually arrived seconds later. The claim then STAYED in the
+   * thread, in red, above the answer that disproved it.
+   *
+   * A model thinking for longer than expected is not a failure, so this says only that, and any
+   * chunk, completion or failure clears it.
+   */
+  const [isSlow, setIsSlow] = useState(false);
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
@@ -344,18 +371,7 @@ export function GlobalChatbot() {
     clearResponseTimeout();
     responseTimeoutRef.current = setTimeout(() => {
       responseTimeoutRef.current = null;
-      setIsAiTyping(false);
-      setActiveToolLabel(null);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `timeout-${Date.now()}`,
-          role: "assistant",
-          content:
-            "WarpBot didn't answer in time — the live connection may have dropped. Please send that message again.",
-          failed: true,
-        },
-      ]);
+      setIsSlow(true);
     }, ASSISTANT_RESPONSE_TIMEOUT_MS);
   }, [clearResponseTimeout]);
 
@@ -383,7 +399,8 @@ export function GlobalChatbot() {
     setInputValue("");
     setSelectedContexts([]);
     setIsAiTyping(false);
-    setActiveToolLabel(null);
+    setSteps([]);
+    setIsSlow(false);
     setIsMinimized(false);
     shouldAutoScrollRef.current = true;
   };
@@ -411,7 +428,8 @@ export function GlobalChatbot() {
       setConversationTitle(detail.title?.trim() || "Chat history");
       setConversationId(detail.id);
       setIsAiTyping(false);
-      setActiveToolLabel(null);
+      setSteps([]);
+      setIsSlow(false);
       setInputValue("");
       setSelectedContexts([]);
       setIsMinimized(false);
@@ -542,7 +560,10 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; messageId: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setActiveToolLabel(null);
+        // A new turn starts a new trail; the previous one stays visible above it as part of
+        // the answer it produced.
+        setSteps([]);
+        setIsSlow(false);
         armResponseTimeout();
         upsertAssistantMessage(payload.messageId, (prev) => ({
           id: payload.messageId,
@@ -561,7 +582,10 @@ export function GlobalChatbot() {
       }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
-        setActiveToolLabel(null);
+        setIsSlow(false);
+        // Marked finished, NOT discarded. Once prose starts arriving no tool is still running,
+        // but what it ran is exactly what the reader wants left on screen.
+        setSteps((current) => current.map((step) => ({ ...step, done: true })));
         // Still mid-turn: re-arm rather than clear, so a stream that dies halfway through
         // also surfaces instead of freezing under a half-written answer.
         armResponseTimeout();
@@ -578,7 +602,16 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; toolName: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setActiveToolLabel(assistantToolLabel(payload.toolName));
+        setSteps((current) => [
+          // Anything still marked running when a new tool starts has finished — the worker
+          // emits a completed for each, but the trail must not show two spinners if one is lost.
+          ...current.map((step) => ({ ...step, done: true })),
+          {
+            key: `${payload.toolName}-${current.length}`,
+            label: assistantToolLabel(payload.toolName),
+            done: false,
+          },
+        ]);
         armResponseTimeout();
       },
     );
@@ -599,7 +632,7 @@ export function GlobalChatbot() {
       "AssistantToolCallCompleted",
       (payload: { conversationId: string }) => {
         if (payload.conversationId !== conversationId) return;
-        setActiveToolLabel(null);
+        setSteps((current) => current.map((step) => ({ ...step, done: true })));
         armResponseTimeout();
       },
     );
@@ -614,7 +647,8 @@ export function GlobalChatbot() {
       }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
-        setActiveToolLabel(null);
+        setIsSlow(false);
+        setSteps((current) => current.map((step) => ({ ...step, done: true })));
         clearResponseTimeout();
         // Only the completed event carries them: the worker decides which sources the answer
         // pointed at once the whole answer exists, so there is nothing to show mid-stream.
@@ -636,7 +670,8 @@ export function GlobalChatbot() {
       }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
-        setActiveToolLabel(null);
+        setIsSlow(false);
+        setSteps((current) => current.map((step) => ({ ...step, done: true })));
         clearResponseTimeout();
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
@@ -884,7 +919,7 @@ export function GlobalChatbot() {
     const container = messagesContainerRef.current;
     if (!container || !shouldAutoScrollRef.current) return;
     container.scrollTop = container.scrollHeight;
-  }, [messages, isAiTyping, activeToolLabel, isOpen, isExpanded]);
+  }, [messages, isAiTyping, steps, isOpen, isExpanded]);
 
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
@@ -1189,7 +1224,37 @@ export function GlobalChatbot() {
                       </div>
                     </div>
                   ))}
-                {isAiTyping && (
+                {steps.length > 0 && (
+                  <div className="flex justify-start">
+                    <ol className="flex flex-col gap-1 py-2 pl-4 text-[12px] text-ink-subtle">
+                      {steps.map((step) => (
+                        <li key={step.key} className="flex items-center gap-2">
+                          {step.done ? (
+                            <Check size={11} weight="bold" className="shrink-0 text-emerald-500" />
+                          ) : (
+                            <CircleNotch
+                              size={11}
+                              weight="bold"
+                              className="shrink-0 animate-spin text-ink-subtle"
+                            />
+                          )}
+                          <span className={step.done ? "" : "text-ink-muted"}>{step.label}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {isSlow && (
+                  <p className="py-1 pl-4 text-[12px] text-ink-subtle">
+                    Still working — this one is taking a while.
+                  </p>
+                )}
+
+                {/* Only before the first tool names itself. Once there is a trail it says more
+                    than a spinner can, and showing both puts two answers to one question on
+                    screen. */}
+                {isAiTyping && steps.length === 0 && (
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
                       <div className="scale-75 origin-left flex items-center justify-center">
@@ -1199,7 +1264,7 @@ export function GlobalChatbot() {
                           glow={4}
                         />
                       </div>
-                      <span>{activeToolLabel ?? "Thinking..."}</span>
+                      <span>Thinking...</span>
                     </div>
                   </div>
                 )}

@@ -1,5 +1,4 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import { assistantToolLabel } from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -112,7 +111,7 @@ export function ChatPanel({
   );
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
-  const assistantToolName = useTranslationRoomStore((state) => state.assistantToolName);
+  const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
   const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const answersWhenAskedRef = useRef(0);
@@ -704,13 +703,24 @@ export function ChatPanel({
             {/* The step, when WarpBot has told us one. A named tool is the difference between
                 "something is happening" and "this might be broken", and it is why the deadline
                 below can be generous rather than suspicious. */}
-            <span>
-              {assistantState === "slow"
-                ? "WarpBot is still working — this one is taking a while."
-                : assistantToolName
-                  ? assistantToolLabel(assistantToolName)
+            {assistantSteps.length > 0 ? (
+              <ol className="flex flex-col gap-0.5">
+                {assistantSteps.map((step) => (
+                  <li key={step.key} className={step.done ? "" : "text-ink"}>
+                    {step.label}
+                  </li>
+                ))}
+                {assistantState === "slow" ? (
+                  <li className="text-ink-subtle">Still working — this one is taking a while.</li>
+                ) : null}
+              </ol>
+            ) : (
+              <span>
+                {assistantState === "slow"
+                  ? "WarpBot is still working — this one is taking a while."
                   : "WarpBot is thinking…"}
-            </span>
+              </span>
+            )}
           </div>
         ) : null}
       </div>
