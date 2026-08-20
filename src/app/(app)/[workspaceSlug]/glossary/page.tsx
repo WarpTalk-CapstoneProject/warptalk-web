@@ -35,15 +35,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { BookOpen, FileArrowUp, Plus, Trash, MagnifyingGlass, Translate } from "@phosphor-icons/react";
+import { FileArrowUp, Plus, Trash, MagnifyingGlass } from "@phosphor-icons/react";
 
 import {
   WorkspaceBody,
-  WorkspaceEmptyState,
   WorkspacePage,
   WorkspacePrimaryButton,
   WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -369,8 +369,8 @@ export default function WorkspaceGlossaryPage() {
 
       <WorkspaceBody>
         {glossaries.length === 0 ? (
-          <WorkspaceEmptyState
-            icon={<BookOpen className="h-6 w-6" />}
+          <PagePlaceholder
+            kind="glossary"
             title="No glossary yet"
             description="A glossary fixes how your terms are heard and translated during a meeting — product names, acronyms, and words whose meaning depends on your field. Terms here override the platform-wide glossary. Already have a list? Import a CSV or spreadsheet instead of typing it out."
             action={
@@ -403,8 +403,8 @@ export default function WorkspaceGlossaryPage() {
         ) : !selected ? null : termsQuery.isLoading ? (
           <div className="h-24 animate-pulse rounded-lg bg-surface-2" />
         ) : terms.length === 0 ? (
-          <WorkspaceEmptyState
-            icon={<Translate className="h-6 w-6" />}
+          <PagePlaceholder
+            kind="glossary"
             title={search ? "No term matches that search" : "This glossary has no terms yet"}
             description={
               search

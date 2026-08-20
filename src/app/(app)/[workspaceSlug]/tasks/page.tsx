@@ -30,6 +30,7 @@ import {
   WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
 import { cn } from "@/lib/utils";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { meetingActionItemService } from "@/services/meeting-action-item.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { ActionItemStatus, MeetingActionItemDto } from "@/types/meetingActionItem";
@@ -99,11 +100,19 @@ export default function WorkspaceTasksPage() {
             Loading…
           </div>
         ) : shown.length === 0 ? (
-          <p className="py-8 text-[13px] text-ink-muted">
-            {filter === "OPEN"
-              ? "Nothing open — every task from your meetings is closed."
-              : "No tasks in this state yet."}
-          </p>
+          <PagePlaceholder
+            kind="tasks"
+            title={
+              filter === "OPEN"
+                ? "Nothing open"
+                : "No tasks in this state yet"
+            }
+            description={
+              filter === "OPEN"
+                ? "Every task from your meetings is closed."
+                : "Tasks appear here when their meeting records an action item."
+            }
+          />
         ) : (
           <ul className="divide-y divide-border">
             {shown.map((item) => (

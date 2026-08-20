@@ -22,7 +22,6 @@ import {
   BookBookmark,
   VideoCamera,
   X,
-  Check,
   CircleNotch,
 } from "@phosphor-icons/react/dist/ssr";
 import {
@@ -32,6 +31,7 @@ import {
 } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  assistantToolDoneLabel,
   assistantToolLabel,
   type AssistantStep,
 } from "@/lib/meeting/assistant-tool-labels";
@@ -608,7 +608,7 @@ export function GlobalChatbot() {
           ...current.map((step) => ({ ...step, done: true })),
           {
             key: `${payload.toolName}-${current.length}`,
-            label: assistantToolLabel(payload.toolName),
+            tool: payload.toolName,
             done: false,
           },
         ]);
@@ -648,7 +648,10 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setIsSlow(false);
-        setSteps((current) => current.map((step) => ({ ...step, done: true })));
+        // Cleared, not ticked. A finished turn showing a column of green ticks claims the
+        // steps are still worth watching; the answer is on screen and its source chips say
+        // where it came from. The trail is a progress display, and progress is over.
+        setSteps([]);
         clearResponseTimeout();
         // Only the completed event carries them: the worker decides which sources the answer
         // pointed at once the whole answer exists, so there is nothing to show mid-stream.
@@ -671,7 +674,10 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setIsSlow(false);
-        setSteps((current) => current.map((step) => ({ ...step, done: true })));
+        // Cleared, not ticked. A finished turn showing a column of green ticks claims the
+        // steps are still worth watching; the answer is on screen and its source chips say
+        // where it came from. The trail is a progress display, and progress is over.
+        setSteps([]);
         clearResponseTimeout();
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
@@ -1226,19 +1232,28 @@ export function GlobalChatbot() {
                   ))}
                 {steps.length > 0 && (
                   <div className="flex justify-start">
-                    <ol className="flex flex-col gap-1 py-2 pl-4 text-[12px] text-ink-subtle">
+                    <ol className="flex flex-col gap-1 py-2 pl-4 text-[12px]">
                       {steps.map((step) => (
                         <li key={step.key} className="flex items-center gap-2">
                           {step.done ? (
-                            <Check size={11} weight="bold" className="shrink-0 text-emerald-500" />
+                            // A dot, not a tick. The tick read as a verdict on the answer;
+                            // this is only a step that has gone past.
+                            <span
+                              aria-hidden
+                              className="size-[5px] shrink-0 rounded-full bg-hairline-strong"
+                            />
                           ) : (
                             <CircleNotch
                               size={11}
                               weight="bold"
-                              className="shrink-0 animate-spin text-ink-subtle"
+                              className="shrink-0 animate-spin text-ink-muted"
                             />
                           )}
-                          <span className={step.done ? "" : "text-ink-muted"}>{step.label}</span>
+                          <span className={step.done ? "text-ink-subtle" : "text-ink-muted"}>
+                            {step.done
+                              ? assistantToolDoneLabel(step.tool)
+                              : assistantToolLabel(step.tool)}
+                          </span>
                         </li>
                       ))}
                     </ol>
