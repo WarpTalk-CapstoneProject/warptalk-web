@@ -322,7 +322,8 @@ function SummaryStalenessNotice({
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border bg-surface-2 px-3 py-2">
       <WarningCircle size={14} className="shrink-0 text-ink-muted" />
       <p className="min-w-0 flex-1 text-[12px] text-ink-muted">
-        Bản ghi đã được sửa sau khi tóm tắt này được tạo. Nội dung bên dưới có thể không còn khớp.
+        The transcript was corrected after this summary was written — what is below may no
+        longer match it.
       </p>
       <button
         type="button"
@@ -330,7 +331,7 @@ function SummaryStalenessNotice({
         disabled={busy}
         className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[12px] font-medium text-ink disabled:opacity-60"
       >
-        {busy ? "Đang tạo lại…" : "Tạo lại tóm tắt"}
+        {busy ? "Regenerating…" : "Regenerate summary"}
       </button>
     </div>
   );
