@@ -44,14 +44,25 @@ export function PagePlaceholder({
         className,
       )}
     >
+      {/*
+        No blend mode. The art used to ship flattened onto a (247,247,248) matte with no alpha
+        channel at all, and `mix-blend-multiply` was standing in for the transparency it did not
+        have — which only ever works against pure white, so on this surface the matte stayed
+        visible as a grey square behind every illustration. The PNGs carry real alpha now, so the
+        blend is not merely unnecessary, it would darken whatever sits under them.
+
+        invert + hue-rotate for dark mode: inverting alone flips the purple accent to yellow.
+        Rotating the hue back a half turn restores it while keeping the lightness inverted, so
+        light-grey linework reads on a dark surface and the accent stays the brand's.
+      */}
       <Image
         src={PLACEHOLDER_ASSETS[kind]}
         alt=""
         aria-hidden="true"
-        width={1254}
-        height={1254}
+        width={760}
+        height={760}
         sizes="(max-width: 640px) 280px, 380px"
-        className="-mb-16 -mt-12 h-auto w-[280px] select-none mix-blend-multiply dark:invert dark:mix-blend-screen sm:w-[380px]"
+        className="-mb-16 -mt-12 h-auto w-[280px] select-none dark:hue-rotate-180 dark:invert sm:w-[380px]"
       />
       <p className="relative text-sm font-medium text-ink">{title}</p>
       {description ? (

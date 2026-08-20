@@ -97,13 +97,12 @@ export function AnswerSources({
     <div
       className={`flex flex-wrap items-center gap-1.5 pt-2 ${className ?? ""}`}
     >
-      {/* Named, not just implied by the icons. "Sources" is what makes the row a provenance
-          claim rather than a set of decorative tags. */}
-      <span
-        className={`text-[10px] uppercase tracking-wide ${TONE[tone].label}`}
-      >
-        Sources
-      </span>
+      {/* No "SOURCES" label.
+          It was there to make the row read as a provenance claim rather than decoration, but it
+          took the first slot on every answer and pushed the chips into a second line — so the
+          one thing it was meant to dignify got less room than the word describing it. Each chip
+          already carries a kind icon and links to the thing it names, which says "source" more
+          plainly than the caption did. The chips rank equally and run in one row. */}
       {shown.map((source) => (
         <SourceChip
           key={source.marker}
