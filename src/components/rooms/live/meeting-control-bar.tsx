@@ -13,7 +13,9 @@ import {
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
+import { useLocalMicLevels } from "@/hooks/use-local-mic-levels";
 import {
   NOISE_REDUCTION_MODES,
   noiseReductionDescription,
@@ -301,6 +303,19 @@ export function MeetingControlBar({
   // WT-420: the live capture state, in the same panel as the choice it explains.
   const cloneStatus = describeCloneCapture(cloneCapture);
 
+  /**
+   * The take, as heard by this browser. Sampled here rather than inside each of the two places
+   * that draw it, so the floating card and the Voice section show the SAME strip — two meters of
+   * one microphone that disagree would be worse than either alone — and so only one AudioContext
+   * is ever open. Idle meetings hold none: the hook stops at `enabled: false`.
+   *
+   * The window is the clip the worker actually asked for, so a full strip means a full take.
+   */
+  const cloneLevels = useLocalMicLevels({
+    enabled: cloneStatus.tone === "working",
+    windowSeconds: Math.max(6, Math.round(cloneCapture?.requiredSeconds ?? 18)),
+  });
+
   // What listeners will actually hear, derived in one place — see lib/meeting/voice-selection.ts.
   const voiceSelection = describeVoiceSelection({
     voiceEnabled,
@@ -334,7 +349,7 @@ export function MeetingControlBar({
   return (
     <div
       ref={barRef}
-      className="relative flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl"
+      className="relative flex h-[52px] items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2.5 shadow-sm backdrop-blur-xl"
     >
       {/* The clone capture, OUTSIDE the settings menu.
           The progress block below (inside the Voice section) only exists while that menu is
@@ -346,6 +361,7 @@ export function MeetingControlBar({
           reporting, whatever the menu is doing. */}
       <CloneCaptureCard
         status={cloneStatus}
+        levels={cloneLevels}
         suppressed={isSettingsMenuOpen && settingsSection === "voice"}
         anchorRef={barRef}
       />
@@ -354,7 +370,7 @@ export function MeetingControlBar({
           <button
             type="button"
             onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
-            className={`flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 text-[14px] font-medium transition-colors ${
+            className={`flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-colors ${
               warptalkStarted
                 ? "bg-surface-2 text-ink hover:bg-surface-3"
                 : "bg-primary text-primary-foreground hover:bg-primary/80"
@@ -363,7 +379,7 @@ export function MeetingControlBar({
             {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
             {warptalkStarted ? "Stop Translation" : "Start Translation"}
           </button>
-          <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
         </>
       ) : null}
 
@@ -389,7 +405,7 @@ export function MeetingControlBar({
             onChangeListenLanguage={onChangeListenLanguage}
             highlight={Boolean(warptalkStarted) && (!speakLanguage || !listenLanguage)}
           />
-          <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
         </>
       ) : null}
 
@@ -577,7 +593,7 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
       
       <div className="relative" ref={settingsRef}>
         <MeetControl
@@ -954,15 +970,12 @@ export function MeetingControlBar({
                           </span>
                         ) : null}
                       </div>
-                      {cloneStatus.progress !== null ? (
-                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
-                          <div
-                            className={`h-full rounded-full transition-[width] duration-500 ${
-                              cloneStatus.tone === "done" ? "bg-emerald-500" : "bg-primary"
-                            }`}
-                            style={{ width: `${Math.round(cloneStatus.progress * 100)}%` }}
-                          />
-                        </div>
+                      {cloneStatus.tone === "working" || cloneStatus.progress !== null ? (
+                        <CloneCaptureMeter
+                          levels={cloneLevels}
+                          progress={cloneStatus.progress}
+                          tone={cloneStatus.tone}
+                        />
                       ) : null}
                       <p className="mt-1 text-[11px] leading-snug text-ink-muted">
                         {cloneStatus.detail}
@@ -992,10 +1005,13 @@ export function MeetingControlBar({
  */
 function CloneCaptureCard({
   status,
+  levels,
   suppressed,
   anchorRef,
 }: {
   status: ReturnType<typeof describeCloneCapture>;
+  /** Sampled by the bar, not here, so this card and the Voice section draw one identical take. */
+  levels: number[];
   suppressed: boolean;
   /** The bar. This card is portaled out of it, because the bar's wrapper clips upward. */
   anchorRef: React.RefObject<HTMLDivElement | null>;
@@ -1055,15 +1071,12 @@ function CloneCaptureCard({
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      {status.progress !== null ? (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3">
-          <div
-            className={`h-full rounded-full transition-[width] duration-500 ${
-              status.tone === "done" ? "bg-emerald-500" : "bg-primary"
-            }`}
-            style={{ width: `${Math.round(status.progress * 100)}%` }}
-          />
-        </div>
+      {status.tone === "working" || status.progress !== null ? (
+        <CloneCaptureMeter
+          levels={levels}
+          progress={status.progress}
+          tone={status.tone}
+        />
       ) : null}
       <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">{status.detail}</p>
     </FlyoutSurface>
@@ -1310,7 +1323,7 @@ function LiveKitTrackControls({
           // black squares sitting in a light, rounded bar next to buttons we do style.
           //
           // rounded-l-xl, not rounded-xl: the caret next to it supplies the right-hand corners.
-          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+          className="grid h-10 w-10 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
         />
         <MediaDeviceMenuButton
           // The speaker lives on the microphone caret. To a user "my headset" is one decision,
@@ -1322,7 +1335,7 @@ function LiveKitTrackControls({
       <div className="flex items-center">
         <TrackToggle
           source={Track.Source.Camera}
-          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+          className="grid h-10 w-10 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
         />
         <MediaDeviceMenuButton kinds={["videoinput"]} label="Choose camera" />
       </div>
@@ -1360,7 +1373,7 @@ function MeetControl({
       aria-haspopup={hasPopup ? "menu" : undefined}
       aria-expanded={hasPopup ? Boolean(expanded) : undefined}
       aria-controls={hasPopup && expanded ? controls : undefined}
-      className={`grid h-11 w-11 place-items-center rounded-xl transition-colors ${
+      className={`grid h-10 w-10 place-items-center rounded-xl transition-colors ${
         disabled
           ? "cursor-not-allowed bg-canvas text-ink-tertiary"
           : active
@@ -1511,7 +1524,7 @@ function LanguagePairPicker({
         aria-haspopup="menu"
         aria-expanded={open}
         title="Choose your language"
-        className={`flex h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
+        className={`flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[13px] font-medium transition-colors ${
           highlight
             ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 hover:bg-amber-500/15"
             : "bg-surface-2 text-ink hover:bg-surface-3"
