@@ -38,6 +38,31 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   web_search: "Searching the web…",
 };
 
+/**
+ * The same steps once they are over.
+ *
+ * A finished step kept saying "Searching documents…" with a tick beside it, which is two
+ * contradictory claims on one line — still going, and done. Present continuous is a state, and a
+ * state that has ended needs different words, not a different icon.
+ */
+export const ASSISTANT_TOOL_DONE_LABELS: Record<string, string> = {
+  search_workspace_members: "Searched workspace members",
+  search_terminology: "Searched terminology",
+  list_recent_meetings: "Looked up recent meetings",
+  translate_text: "Translated",
+  semantic_search: "Searched knowledge base",
+  search_documents: "Searched documents",
+  search_facts: "Checked what the workspace knows",
+  get_platform_analytics: "Read platform analytics",
+  get_meeting_summary: "Looked up meeting summary",
+  get_room_detail: "Looked up room details",
+  get_transcript: "Read the transcript",
+  get_document: "Read the document",
+  ask_user: "Asked for details",
+  create_meeting: "Created the meeting",
+  web_search: "Searched the web",
+};
+
 export function assistantToolLabel(toolName: string | null | undefined): string {
   if (!toolName) return "Looking that up…";
   return ASSISTANT_TOOL_LABELS[toolName] ?? "Looking that up…";
@@ -53,6 +78,12 @@ export function assistantToolLabel(toolName: string | null | undefined): string 
 export type AssistantStep = {
   /** Stable across re-renders; the tool name alone repeats when a tool is called twice. */
   key: string;
-  label: string;
+  /** Kept so the row can switch between the running and the finished wording. */
+  tool: string;
   done: boolean;
 };
+
+export function assistantToolDoneLabel(toolName: string | null | undefined): string {
+  if (!toolName) return "Looked that up";
+  return ASSISTANT_TOOL_DONE_LABELS[toolName] ?? "Looked that up";
+}
