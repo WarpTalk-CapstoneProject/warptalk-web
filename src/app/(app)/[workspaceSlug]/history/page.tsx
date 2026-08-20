@@ -40,6 +40,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ARTIFACT_WITHHELD_FALLBACK, isArtifactWithheld } from "@/lib/meeting/artifact-denial";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
@@ -405,7 +406,20 @@ function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
 
 function LoadingState() { return <div className="grid min-h-[420px] place-items-center"><div className="flex items-center gap-2 text-[11px] text-ink-muted"><SpinnerGap size={15} className="animate-spin" />Loading meeting history</div></div>; }
 function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><WarningCircle size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">Meeting history could not be loaded</p><p className="mt-1 text-[11px] text-ink-muted">Check the translation-room service and try again.</p><Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>Retry</Button></div></div>; }
-function EmptyState({ hasQuery }: { hasQuery: boolean }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><Archive size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">{hasQuery ? "No meetings match this search" : "No finished meetings yet"}</p><p className="mt-1 text-[11px] text-ink-muted">{hasQuery ? "Try a different title, code, host, or language." : "Meetings appear here after they end."}</p></div></div>; }
+function EmptyState({ hasQuery }: { hasQuery: boolean }) {
+  return (
+    <PagePlaceholder
+      kind="history"
+      className="min-h-[420px]"
+      title={hasQuery ? "No meetings match this search" : "No finished meetings yet"}
+      description={
+        hasQuery
+          ? "Try a different title, code, host, or language."
+          : "Meetings appear here after they end."
+      }
+    />
+  );
+}
 
 function formatDuration(seconds: number) { if (!seconds) return "—"; const minutes = Math.floor(seconds / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
