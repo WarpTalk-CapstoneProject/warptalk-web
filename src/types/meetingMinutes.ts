@@ -68,6 +68,16 @@ export interface MinutesVote {
 
 export interface MeetingMinutesContent {
   meetingTitle?: string | null;
+  /** The language the meeting was held in — which half of a bilingual record is the original. */
+  primaryLanguage?: string | null;
+  /**
+   * The same sections in the room's other languages, keyed by language code.
+   *
+   * Present only for a room with more than one target language, and PARTIAL by nature: the
+   * summary worker asks the model for {summary, decisions, actionItems}, so a template's other
+   * sections have no translation. A missing language means "not produced", never "empty".
+   */
+  translations?: Record<string, MinutesSection[]> | null;
   location?: string | null;
   /** When the meeting was called to order — the first participant's join. */
   openedAt?: string | null;
@@ -136,10 +146,58 @@ export function parseMinutesContent(raw: string | null | undefined): MeetingMinu
       },
       sections: parsed.sections ?? [],
       votes: parsed.votes ?? [],
+      translations: parsed.translations ?? null,
     };
   } catch {
     return { attendance: { ...EMPTY_ATTENDANCE }, sections: [], votes: [] };
   }
+}
+
+/**
+ * One original line and the translation of it, when a translation can be established.
+ *
+ * MIRRORS MinutesBilingualPairing.PairByCitation in warptalk-backend/translation-room. Two copies
+ * of a rule is a drift risk, taken deliberately: the alternative is a round trip to the server to
+ * lay out a document the client already holds, and both sides are tested against the same cases.
+ *
+ * The rule: pair on `atMs`, NEVER on position. Nothing makes the translated array the same length
+ * or order as the original, and this is a signed document — a line printed beside the wrong
+ * original attributes a decision to something nobody decided. Pairing is all-or-nothing per
+ * section, so a reader never has to work out which lines are claims of correspondence.
+ */
+export function pairByCitation(
+  original: MinutesItem[] | null | undefined,
+  translated: MinutesItem[] | null | undefined,
+): { original: MinutesItem; translated: MinutesItem }[] | null {
+  if (!original?.length || !translated?.length) return null;
+  if (original.some((item) => item.atMs == null)) return null;
+
+  const originalCitations = new Set(original.map((item) => item.atMs));
+  if (originalCitations.size !== original.length) return null;
+
+  const byCitation = new Map<number, MinutesItem>();
+  for (const item of translated) {
+    if (item.atMs == null) continue;
+    // A citation repeated on the translated side cannot identify anything either.
+    if (byCitation.has(item.atMs)) return null;
+    byCitation.set(item.atMs, item);
+  }
+
+  const pairs: { original: MinutesItem; translated: MinutesItem }[] = [];
+  for (const item of original) {
+    const match = byCitation.get(item.atMs!);
+    if (!match) return null;
+    pairs.push({ original: item, translated: match });
+  }
+  return pairs;
+}
+
+/** The translated counterpart of one section, by key, or undefined when there is none. */
+export function counterpartOf(
+  section: MinutesSection,
+  translated: MinutesSection[] | null | undefined,
+): MinutesSection | undefined {
+  return translated?.find((candidate) => candidate.key === section.key);
 }
 
 /** Whether the document is still open to editing. Approved minutes are never edited in place. */

@@ -40,10 +40,14 @@ import { sectionTitle } from "@/lib/meeting/meeting-summary";
 import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import {
+  counterpartOf,
   isEditable,
+  pairByCitation,
   parseMinutesContent,
   type MeetingMinutesContent,
   type MeetingMinutesDto,
+  type MinutesItem,
+  type MinutesSection,
 } from "@/types/meetingMinutes";
 
 function formatTime(value: string | null | undefined): string {
@@ -449,7 +453,12 @@ function Sections({
 
   return (
     <>
-      {content.sections.map((section, sectionIndex) => (
+      {content.sections.map((section, sectionIndex) => {
+        // Once per section, not once per line: the pairing rule scans both arrays, and calling it
+        // inside the item map made it quadratic for no reason.
+        const paired = pairedFor(section, content.translations);
+
+        return (
         <section key={`${section.key}-${sectionIndex}`} className="space-y-2">
           <h4 className="text-[13px] font-semibold text-ink">{sectionTitle(section.key)}</h4>
 
@@ -469,7 +478,14 @@ function Sections({
                 className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
               />
             ) : (
-              <p className="text-[13px] leading-relaxed text-ink">{section.text}</p>
+              <>
+                <p className="text-[13px] leading-relaxed text-ink">{section.text}</p>
+                <Translations
+                  section={section}
+                  translations={content.translations}
+                  pairedLanguage={null}
+                />
+              </>
             )
           ) : (
             <ul className="space-y-1.5">
@@ -500,6 +516,12 @@ function Sections({
                       {item.owner ? (
                         <span className="ml-1.5 text-[12px] text-ink-muted">— {item.owner}</span>
                       ) : null}
+                      {paired && paired.pairs[itemIndex] ? (
+                        <TranslatedLine
+                          language={paired.language}
+                          text={paired.pairs[itemIndex].translated.text}
+                        />
+                      ) : null}
                     </div>
                     {/* The citation stays on the line even while editing: it is what lets a
                         reader check a signed statement, and losing it silently would remove the
@@ -522,8 +544,92 @@ function Sections({
               })}
             </ul>
           )}
+          {section.kind === "items" ? (
+            <Translations
+              section={section}
+              translations={content.translations}
+              pairedLanguage={paired?.language ?? null}
+            />
+          ) : null}
         </section>
-      ))}
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * The first language whose translation of this section pairs line-by-line, if any.
+ *
+ * Deterministic in language order so the same document does not reorder itself between renders.
+ */
+function pairedFor(
+  section: MinutesSection,
+  translations: Record<string, MinutesSection[]> | null | undefined,
+): { language: string; pairs: { original: MinutesItem; translated: MinutesItem }[] } | null {
+  if (!translations) return null;
+
+  for (const language of Object.keys(translations).sort()) {
+    const pairs = pairByCitation(section.items, counterpartOf(section, translations[language])?.items);
+    if (pairs) return { language, pairs };
+  }
+  return null;
+}
+
+/**
+ * A translated line, set smaller and indented under the original.
+ *
+ * The subordination is the point: in a bilingual record it must be unmistakable which text is
+ * what somebody said and which is a rendering of it. A translation typeset identically to the
+ * original is one somebody will later quote as the original.
+ */
+function TranslatedLine({ language, text }: { language: string; text: string }) {
+  return (
+    <p className="ml-4 mt-0.5 text-[12px] italic leading-relaxed text-ink-muted">
+      <span className="mr-1 font-mono text-[10px] not-italic text-ink-subtle">[{language}]</span>
+      {text}
+    </p>
+  );
+}
+
+/** Every language's rendering of one section, paired to the original line where it can be. */
+function Translations({
+  section,
+  translations,
+  pairedLanguage,
+}: {
+  section: MinutesSection;
+  translations: Record<string, MinutesSection[]> | null | undefined;
+  /** Already shown line-by-line above; printing it again as a block would duplicate it. */
+  pairedLanguage: string | null;
+}) {
+  if (!translations) return null;
+
+  return (
+    <>
+      {Object.entries(translations).map(([language, sections]) => {
+        if (language === pairedLanguage) return null;
+        const counterpart = counterpartOf(section, sections);
+        if (!counterpart) return null;
+
+        if (counterpart.kind === "paragraph") {
+          return counterpart.text ? (
+            <TranslatedLine key={language} language={language} text={counterpart.text} />
+          ) : null;
+        }
+
+        const items = counterpart.items ?? [];
+        if (items.length === 0) return null;
+
+        // A block, because nothing here may be claimed to translate any particular line above.
+        return (
+          <div key={language} className="mt-1">
+            {items.map((item: MinutesItem, index: number) => (
+              <TranslatedLine key={index} language={language} text={item.text} />
+            ))}
+          </div>
+        );
+      })}
     </>
   );
 }
