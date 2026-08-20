@@ -19,6 +19,12 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   list_recent_meetings: "Looking up recent meetings…",
   translate_text: "Translating…",
   semantic_search: "Searching knowledge base…",
+  // Registered in warptalk-ai and missing here until now, so the three of them showed the
+  // fallback sentence while every neighbouring tool named itself. search_documents is the one
+  // a person hits most: "find the doc about X" is the commonest thing anybody asks the widget.
+  search_documents: "Searching documents…",
+  search_facts: "Checking what the workspace knows…",
+  get_platform_analytics: "Reading platform analytics…",
   get_meeting_summary: "Looking up meeting summary…",
   get_room_detail: "Looking up room details…",
   get_transcript: "Reading the transcript…",
@@ -36,3 +42,17 @@ export function assistantToolLabel(toolName: string | null | undefined): string 
   if (!toolName) return "Looking that up…";
   return ASSISTANT_TOOL_LABELS[toolName] ?? "Looking that up…";
 }
+
+/**
+ * One tool call as the reader sees it: what it was, and whether it has finished.
+ *
+ * Shared for the same reason the labels are — the widget and the in-meeting chat show the same
+ * trail for the same agent, and a second definition is how one of them ends up rendering a
+ * spinner that never resolves.
+ */
+export type AssistantStep = {
+  /** Stable across re-renders; the tool name alone repeats when a tool is called twice. */
+  key: string;
+  label: string;
+  done: boolean;
+};

@@ -10,6 +10,13 @@ import type {
   TranscriptSegmentDto,
   TranslationTextDto,
 } from "@/types/realtime";
+// Relative, not "@/...": these stores are imported directly by node-run contract tests, which
+// have no bundler and cannot resolve the alias. The same trap already cost a fix once
+// (normalizeLanguageCode, WT-371).
+import {
+  assistantToolLabel,
+  type AssistantStep,
+} from "../lib/meeting/assistant-tool-labels.ts";
 
 interface TranslationRoomStoreState {
   // Current live translationRoom state
@@ -37,7 +44,14 @@ interface TranslationRoomStoreState {
    * The backend has always carried the tool name on the result message and threw it away; the
    * global assistant widget has shown it since it shipped.
    */
-  assistantToolName: string | null;
+  /**
+   * The tools WarpBot has reached for this turn, in order.
+   *
+   * A single latest-tool string was overwritten by each new call, so a loop that checked the
+   * glossary and then searched documents showed one label for a moment and looked like a
+   * spinner. The trail is the evidence somebody asked for: which tools, in what order.
+   */
+  assistantSteps: AssistantStep[];
   /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
@@ -84,7 +98,7 @@ const initialState = {
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
-  assistantToolName: null,
+  assistantSteps: [] as AssistantStep[],
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -302,12 +316,28 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
   setAssistantState: (assistantState) => set({ assistantState }),
   // One call for "WarpBot did something", so no caller can move the state and forget to reset
   // the deadline it is measured against.
-  noteAssistantActivity: (assistantToolName = null) =>
-    set((state) => ({
-      assistantState: state.assistantState === "idle" ? "thinking" : state.assistantState,
-      assistantToolName: assistantToolName ?? state.assistantToolName,
-      assistantActivityAt: Date.now(),
-    })),
+  noteAssistantActivity: (toolName = null) =>
+    set((state) => {
+      // Idle -> thinking is a NEW question, so the previous turn's trail goes with it.
+      const starting = state.assistantState === "idle";
+      const carried = starting ? [] : state.assistantSteps;
+      return {
+        assistantState: starting ? "thinking" : state.assistantState,
+        assistantSteps: toolName
+          ? [
+              // Anything still running has finished — a second tool cannot start inside the
+              // first, and two spinners at once would say otherwise.
+              ...carried.map((step) => ({ ...step, done: true })),
+              {
+                key: `${toolName}-${carried.length}`,
+                label: assistantToolLabel(toolName),
+                done: false,
+              },
+            ]
+          : carried,
+        assistantActivityAt: Date.now(),
+      };
+    }),
 
   addChatMessage: (message) =>
     set((s) => ({
