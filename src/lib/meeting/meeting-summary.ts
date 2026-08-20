@@ -33,6 +33,9 @@ export type MeetingSummarySectionView = {
 const SECTION_TITLES: Record<string, string> = {
   decisions: "Decisions",
   actionItems: "Action items",
+  // Not a summary template section: the minutes drafter adds it for a recurring meeting,
+  // quoting what earlier occurrences left open.
+  carriedOver: "Carried over from the last meeting",
   openQuestions: "Open questions",
   progress: "Progress",
   plans: "Plans",
