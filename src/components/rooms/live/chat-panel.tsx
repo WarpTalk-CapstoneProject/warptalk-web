@@ -21,7 +21,7 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
-import { suggestion } from "./mentions";
+import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
 import {
@@ -54,6 +54,18 @@ interface MessageTranslationState {
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 
+/** Distance from the bottom, in px, still counted as "reading the newest message". */
+const STICK_TO_BOTTOM_PX = 80;
+
+/**
+ * Where each room's chat reader was, kept outside the component because the component does
+ * not survive a tab switch: MeetingSidePanel renders ChatPanel only while the Chat tab is
+ * selected, so Transcript/People -> Chat is a fresh mount with the container at zero.
+ *
+ * Same treatment TranscriptPanel already got for the same report — see the note there.
+ */
+const chatScrollOffsets = new Map<string, { offset: number; atBottom: boolean }>();
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -72,11 +84,21 @@ export function ChatPanel({
   roomId,
   sourceLanguage = "en",
   targetLanguage,
+  active = true,
 }: {
   roomId: string;
   sourceLanguage?: string;
   /** Viewer's own listen language — messages are translated on-click into this. */
   targetLanguage?: string;
+  /**
+   * Whether Chat is the tab currently on screen.
+   *
+   * The panel stays mounted when it is not, which is what keeps the half-typed message and the
+   * opened translations alive across a tab switch. Everything it draws inside its own box is
+   * hidden with it — but the @ menu is appended to document.body by tippy, so it is not, and
+   * has to be put away by hand.
+   */
+  active?: boolean;
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
@@ -115,6 +137,7 @@ export function ChatPanel({
   const suggestedTargetLanguage = targetLanguage || "en";
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const hasRestoredRef = useRef(false);
   const previousTargetLanguageRef = useRef(targetLanguage);
   const { resolvedTheme } = useTheme();
   const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
@@ -213,18 +236,60 @@ export function ChatPanel({
     return () => window.clearTimeout(timer);
   }, [assistantState]);
 
+  // WHERE THE READER WAS, NOT A REPLAY OF THE WHOLE THREAD.
+  //
+  // Switching to Transcript or People unmounts this panel, so coming back mounts it again
+  // with the container at scrollTop 0 - and `scroll-smooth` on the container turned the
+  // catch-up assignment into an animation down the entire conversation, every single time
+  // the tab was re-opened. Ending at the newest message was right; getting there by gliding
+  // past every message that came before it was not.
+  //
+  // The restore is now a jump, and it goes back to the offset this room was left at rather
+  // than always to the end, so someone who had scrolled up to read something finds it still
+  // on screen. New messages still glide in, but only for a reader already at the bottom.
   useEffect(() => {
-    if (containerRef.current && shouldAutoScrollRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    const container = containerRef.current;
+    // Nothing to restore against while the history request is still in flight: restoring now
+    // would mark the panel restored and leave the real arrival to animate.
+    if (!container || messages.length === 0) return;
+
+    /** Move without animating - `scroll-smooth` is for new messages, not for restoring. */
+    function jumpTo(top: number) {
+      const previous = container!.style.scrollBehavior;
+      container!.style.scrollBehavior = "auto";
+      container!.scrollTop = top;
+      container!.style.scrollBehavior = previous;
     }
-  }, [messages]);
+
+    if (!hasRestoredRef.current) {
+      hasRestoredRef.current = true;
+      const remembered = chatScrollOffsets.get(roomId);
+      // Anyone who was at the bottom stays at the bottom, including a first visit: the newest
+      // message is what an open chat panel is for.
+      jumpTo(
+        remembered && !remembered.atBottom
+          ? remembered.offset
+          : container.scrollHeight,
+      );
+      shouldAutoScrollRef.current = remembered ? remembered.atBottom : true;
+      return;
+    }
+
+    if (shouldAutoScrollRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages, roomId]);
 
   function handleMessagesScroll() {
     const container = containerRef.current;
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom < 80;
+    shouldAutoScrollRef.current = distanceFromBottom < STICK_TO_BOTTOM_PX;
+    chatScrollOffsets.set(roomId, {
+      offset: container.scrollTop,
+      atBottom: shouldAutoScrollRef.current,
+    });
   }
 
   const editor = useEditor({
@@ -388,6 +453,10 @@ export function ChatPanel({
       },
     );
   }
+
+  useEffect(() => {
+    setMentionMenusVisible(active);
+  }, [active]);
 
   function handleFileButtonClick() {
     fileInputRef.current?.click();
