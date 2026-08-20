@@ -11,6 +11,7 @@ const [
   endpoints,
   chatPanel,
   voiceProfiles,
+  voiceProfileDialog,
   packageJson,
 ] = await Promise.all([
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
@@ -18,6 +19,7 @@ const [
   read("src/lib/api/endpoints.ts"),
   read("src/components/rooms/live/chat-panel.tsx"),
   read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
+  read("src/components/voice/create-voice-profile-dialog.tsx"),
   read("package.json"),
 ]);
 
@@ -84,15 +86,25 @@ const checks = [
       roomDetailPage.includes("Save correction"),
   ],
   [
+    // The languages are no longer listed on the page at all: they come from
+    // languagesInScope("voiceProfile") in the one registry, which is what makes a hardcoded
+    // list impossible rather than merely absent. Both files are checked so neither can grow
+    // one back.
     "WT-229 voice profiles expose only EN VI and JA",
     !voiceProfiles.includes('{ key: "ko"') &&
-      !voiceProfiles.includes('{ value: "ko-KR"'),
+      !voiceProfiles.includes('{ value: "ko-KR"') &&
+      !voiceProfileDialog.includes('{ key: "ko"') &&
+      !voiceProfileDialog.includes('{ value: "ko-KR"'),
   ],
   [
+    // Recording moved out of the page and into the create dialog when the page was split into
+    // a list column and a settings rail. What WT-230 needs is that somebody can still record
+    // straight into a profile and that the sample is checked before it is sent — so the
+    // assertion follows the form, and the second half keeps the form reachable from the page.
     "WT-230 voice profiles support direct recording and sample quality checks",
-    voiceProfiles.includes("MediaRecorder") &&
-      voiceProfiles.includes("analyzeVoiceSample") &&
-      voiceProfiles.includes("Record sample"),
+    voiceProfileDialog.includes("MediaRecorder") &&
+      voiceProfileDialog.includes("analyzeVoiceSample") &&
+      voiceProfiles.includes("<CreateVoiceProfileDialog"),
   ],
   [
     "new issue regression contract is part of the contract suite",
