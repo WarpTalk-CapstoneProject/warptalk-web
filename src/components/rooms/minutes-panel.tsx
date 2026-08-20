@@ -24,7 +24,6 @@
 import { useMemo, useState } from "react";
 import {
   CheckCircle,
-  Circle,
   CheckSquare,
   Square,
   XSquare,
@@ -498,12 +497,44 @@ function Sections({
               </>
             )
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="relative space-y-0.5 before:absolute before:bottom-3 before:left-[3.5px] before:top-3 before:w-px before:bg-border">
+              {/*
+                A spine, not a column of loose bullets.
+
+                Every line in the minutes is anchored to a moment in the recording, and the dots
+                were already there — one per line, with the timestamp beside it wired to onSeek.
+                What was missing is the thread between them: without it the eye has to find each
+                dot on its own, and the list reads as prose rather than as a timeline somebody can
+                run down to reach a moment. The rule is drawn on the list and the dots sit on it,
+                so alignment cannot drift when a line wraps.
+
+                The dot itself seeks. The timestamp still does too — it is the labelled, obvious
+                control — but the dot is the one under the reader's eye while they are scanning,
+                and making the thing you are already looking at clickable is the whole point.
+              */}
               {(section.items ?? []).map((item, itemIndex) => {
                 const offset = formatOffset(item.atMs);
+                const seekable = Boolean(onSeek) && item.atMs != null;
                 return (
-                  <li key={itemIndex} className="flex items-start gap-2 text-[13px]">
-                    <Circle size={6} weight="fill" className="mt-[7px] shrink-0 text-ink-subtle" />
+                  <li
+                    key={itemIndex}
+                    className="group relative -mx-2 flex items-start gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-2"
+                  >
+                    {seekable ? (
+                      <button
+                        type="button"
+                        onClick={() => onSeek!(item.atMs!)}
+                        aria-label={`Play the recording from ${offset}`}
+                        // z-[1] and a ring the colour of the page: the dot has to sit ON the
+                        // rule rather than have it run visibly through the middle of it.
+                        className="relative z-[1] mt-[6px] size-[7px] shrink-0 rounded-full bg-hairline-strong ring-2 ring-surface-1 transition-colors group-hover:bg-primary"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden
+                        className="relative z-[1] mt-[6px] size-[7px] shrink-0 rounded-full bg-hairline-strong ring-2 ring-surface-1"
+                      />
+                    )}
                     <div className="min-w-0 flex-1">
                       {editing ? (
                         <input
