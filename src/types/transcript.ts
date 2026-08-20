@@ -31,6 +31,9 @@ export interface TranscriptDto {
   createdAt: string;
   updatedAt: string;
   finalizedAt?: string;
+  /** WT-473: the UTC instant startTimeMs values are measured from. Absent means the
+   *  transcript CANNOT be aligned to a recording — never substitute createdAt. */
+  timelineAnchorAt?: string | null;
 }
 
 export interface TranscriptSegmentDto {
@@ -43,6 +46,10 @@ export interface TranscriptSegmentDto {
   startTimeMs: number;
   endTimeMs: number;
   sequenceOrder: number;
+  /** A human has corrected this line. Also what tells the summary it is behind the record. */
+  isCorrected?: boolean;
+  /** When the row last changed — moved by a correction. */
+  updatedAt?: string | null;
 }
 
 export interface TranscriptTranslationDto {
@@ -92,5 +99,4 @@ export interface CreateCorrectionRequest {
   originalText: string;
   correctedText: string;
   correctionType: "stt" | "translation" | "speaker" | "timing";
-  triggeredRetranslation?: boolean;
 }

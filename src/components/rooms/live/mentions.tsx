@@ -111,6 +111,39 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
 
 MentionList.displayName = "MentionList";
 
+/**
+ * Every @ menu currently on screen, and the ones this module put away.
+ *
+ * tippy appends the menu to document.body, so it is NOT inside the chat panel: hiding the panel
+ * does not hide the menu. That did not matter while a tab switch unmounted ChatPanel and took
+ * the editor with it, but the panel now stays alive across tab switches, and an open menu would
+ * be left floating over whichever tab was switched to. Nothing else closes it either —
+ * @tiptap/suggestion has no blur or focus handling at all; its state follows the selection.
+ */
+const liveMentionMenus = new Set<TippyInstance>();
+const menusHiddenByPanel = new Set<TippyInstance>();
+
+/**
+ * Put the @ menu away while the chat panel is not the visible tab, and bring back exactly the
+ * menus that were put away — never one the user dismissed with Escape.
+ */
+export function setMentionMenusVisible(visible: boolean) {
+  if (!visible) {
+    for (const menu of liveMentionMenus) {
+      if (menu.state.isVisible) {
+        menu.hide();
+        menusHiddenByPanel.add(menu);
+      }
+    }
+    return;
+  }
+
+  for (const menu of menusHiddenByPanel) {
+    if (liveMentionMenus.has(menu)) menu.show();
+  }
+  menusHiddenByPanel.clear();
+}
+
 export const suggestion: Omit<
   SuggestionOptions<DomainAgent, MentionCommandAttributes>,
   "editor"
@@ -142,6 +175,7 @@ export const suggestion: Omit<
           trigger: "manual",
           placement: "top-start",
         });
+        for (const menu of popup) liveMentionMenus.add(menu);
       },
       onUpdate(props: SuggestionProps<DomainAgent, MentionCommandAttributes>) {
         component.updateProps(props);
@@ -162,6 +196,10 @@ export const suggestion: Omit<
         return component.ref?.onKeyDown(props) ?? false;
       },
       onExit() {
+        for (const menu of popup ?? []) {
+          liveMentionMenus.delete(menu);
+          menusHiddenByPanel.delete(menu);
+        }
         popup?.[0]?.destroy();
         component.destroy();
       },

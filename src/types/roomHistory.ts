@@ -93,6 +93,10 @@ export interface RoomHistoryArtifact {
   durationSeconds?: number;
   language?: string;
   createdAt?: string;
+  /** When the content last changed. Absent means unknown — compare against createdAt. */
+  updatedAt?: string | null;
+  /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
+  recordingStartedAt?: string | null;
   expiresAt?: string;
   retentionDays?: number;
   consentRequired?: boolean;

@@ -2325,12 +2325,20 @@ export function PersistentMeetingSession({
     // exactly like being ignored. The realtime-event contract had it listed as "emitted,
     // never handled" with the note that the panel showed its own optimistic state — it did
     // not, and there was no such state anywhere in the chat panel.
+    // Which tool WarpBot just reached for. The backend has carried the name on this message all
+    // along and dropped it; binding it is what turns a spinner into a step, and it is also the
+    // signal the panel's deadline is measured from — so a long tool-calling loop can no longer
+    // look like a dead worker.
+    chatConnection.on("ChatAssistantToolCallStarted", (payload: { toolName?: string }) => {
+      useTranslationRoomStore.getState().noteAssistantActivity(payload?.toolName ?? null);
+    });
+
     chatConnection.on("ChatAssistantResponsePending", () => {
       // A second, confirming trigger. The chat panel already sets this optimistically the
       // moment somebody sends an @agent mention, because waiting for this round trip leaves
       // the send looking ignored — and when the answer is fast, this signal arrives and is
       // cleared in the same breath, so nothing is ever seen. The panel owns the deadline.
-      useTranslationRoomStore.getState().setAssistantState("thinking");
+      useTranslationRoomStore.getState().noteAssistantActivity();
     });
 
     let cancelled = false;
