@@ -369,6 +369,9 @@ export interface TranslationRoomArtifactDto {
   /** Inline artifact payload (e.g. the AI meeting-summary JSON). Null for artifact types
    * that only carry a fileUrl (transcript export, recording). */
   content?: string | null;
+  /** When the CONTENT last changed — moved by a summary rewrite. Absent on artifacts written
+   *  before the column existed; read that as unknown and fall back to createdAt. */
+  updatedAt?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

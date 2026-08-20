@@ -55,6 +55,7 @@ export function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHist
     fileUrl: artifact.fileUrl,
     fileSizeBytes: artifact.fileSizeBytes,
     createdAt: artifact.createdAt,
+    updatedAt: artifact.updatedAt ?? null,
     expiresAt: artifact.retentionUntil,
     consentRequired: artifact.consentRequired,
     consentStatus: artifact.consentRequired ? "granted" : "not_required",

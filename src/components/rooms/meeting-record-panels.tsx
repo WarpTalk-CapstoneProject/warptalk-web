@@ -38,6 +38,7 @@ import {
   SUMMARY_TEMPLATES,
   formatCitationTime,
 } from "@/lib/meeting/meeting-summary";
+import { isSummaryStale, type StalenessSegment } from "@/lib/meeting/summary-staleness";
 import { translationRoomService } from "@/services/translation-room.service";
 import type {
   EndedRoomHistoryItem,
@@ -257,12 +258,45 @@ export function useRecentlyEnded(
   return observedNow - ended < windowMs;
 }
 
+/**
+ * "The transcript changed after this was written."
+ *
+ * Not an error state and not styled as one: the summary is not broken, it is simply describing
+ * text that has since been corrected. It offers the one action that resolves it and otherwise
+ * stays out of the way — the reader may well decide a typo fix does not warrant regenerating.
+ */
+function SummaryStalenessNotice({
+  onRegenerate,
+  busy,
+}: {
+  onRegenerate: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border bg-surface-2 px-3 py-2">
+      <WarningCircle size={14} className="shrink-0 text-ink-muted" />
+      <p className="min-w-0 flex-1 text-[12px] text-ink-muted">
+        Bản ghi đã được sửa sau khi tóm tắt này được tạo. Nội dung bên dưới có thể không còn khớp.
+      </p>
+      <button
+        type="button"
+        onClick={onRegenerate}
+        disabled={busy}
+        className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[12px] font-medium text-ink disabled:opacity-60"
+      >
+        {busy ? "Đang tạo lại…" : "Tạo lại tóm tắt"}
+      </button>
+    </div>
+  );
+}
+
 export function SummaryPanel({
   room,
   busyArtifactId,
   onDownload,
   onJumpToMoment,
   onRewrite,
+  segments,
 }: {
   room: EndedRoomHistoryItem;
   busyArtifactId: string | null;
@@ -272,6 +306,9 @@ export function SummaryPanel({
   onJumpToMoment?: (atMs: number) => void;
   /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
   onRewrite?: (templateKey: string) => Promise<void>;
+  /** The transcript's segments, when the surrounding page has them. Supplied only so the panel
+   *  can tell the reader their summary is behind a correction — see SummaryStalenessNotice. */
+  segments?: readonly StalenessSegment[] | null;
 }) {
   const artifact = room.artifacts.find(
     (item) => item.type === "summary_export",
@@ -316,7 +353,10 @@ export function SummaryPanel({
   });
 
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
+  const stale = isSummaryStale(segments, artifact);
   const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
   const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
 
   useEffect(() => {
@@ -414,6 +454,27 @@ export function SummaryPanel({
 
       {hasStructuredContent && summary ? (
         <div className="flex-1 space-y-6 p-6">
+          {/* Above the content, because it is a caveat ON the content. Only shown where the
+              caller supplied segments — the ended page reads the transcript as exported text and
+              has no corrections to compare against. Reuses onRewrite with the CURRENT template:
+              regenerating is the same operation as reshaping, aimed at the same shape. */}
+          {stale && onRewrite ? (
+            <SummaryStalenessNotice
+              busy={regenerating}
+              onRegenerate={async () => {
+                setRegenerating(true);
+                try {
+                  await onRewrite(currentTemplate);
+                } finally {
+                  // Cleared when the REQUEST is accepted, not when the summary lands — that
+                  // arrives asynchronously on the artifact. The notice removes itself once the
+                  // rewritten summary's updatedAt passes the correction, so a button that stayed
+                  // busy until then would be claiming to know something it cannot see.
+                  setRegenerating(false);
+                }
+              }}
+            />
+          ) : null}
           <section>
             <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
               Overview

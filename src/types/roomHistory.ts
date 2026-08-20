@@ -93,6 +93,8 @@ export interface RoomHistoryArtifact {
   durationSeconds?: number;
   language?: string;
   createdAt?: string;
+  /** When the content last changed. Absent means unknown — compare against createdAt. */
+  updatedAt?: string | null;
   expiresAt?: string;
   retentionDays?: number;
   consentRequired?: boolean;

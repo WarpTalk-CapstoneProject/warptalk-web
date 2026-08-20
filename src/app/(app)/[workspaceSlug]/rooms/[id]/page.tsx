@@ -549,6 +549,7 @@ export default function RoomInformationPage() {
                 isHost={isHost}
                 artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
+                segments={transcriptSegments}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
                 transcript={
@@ -737,6 +738,7 @@ function MeetingRecordSection({
   transcript,
   transcriptCount,
   endedRecord,
+  segments,
   onRecordChanged,
   onJumpToMoment,
 }: {
@@ -748,6 +750,8 @@ function MeetingRecordSection({
   transcript: React.ReactNode;
   transcriptCount: number;
   endedRecord: EndedRoomHistoryItem | null;
+  /** The persisted segments, so the summary panel can tell the reader it is behind a correction. */
+  segments: TranscriptSegmentDto[];
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
 }) {
@@ -762,16 +766,24 @@ function MeetingRecordSection({
   const setArtifactAccess = useSetArtifactAccess(roomId);
   const sharing = describeRecordSharing({ artifactAccess, isHost });
 
+  // What "the summary changed" means, as one value. The template alone could not answer it:
+  // regenerating in the SAME shape leaves the template identical, so the old arrival test was
+  // already true when the request was made and the poll stopped before refetching anything.
+  // updatedAt moves on every rewrite (see translation_room_artifacts.updated_at), and the
+  // template is kept in the stamp so a legacy artifact with no updatedAt can still report a reshape.
+  const summaryArtifact = endedRecord?.artifacts.find((item) => item.type === "summary_export");
+  const summaryStamp = `${summaryArtifact?.updatedAt ?? ""}|${endedRecord?.summary?.templateKey ?? ""}`;
+
   // Read inside the polling interval, which closes over the render that started it and
   // would otherwise never see the rewritten summary arrive.
-  const summaryTemplateRef = useRef(endedRecord?.summary?.templateKey);
+  const summaryStampRef = useRef(summaryStamp);
   const rewritePollRef = useRef<number | null>(null);
 
   // In an effect, not during render: writing a ref while rendering is how a component ends
   // up reading a value React has not committed yet.
   useEffect(() => {
-    summaryTemplateRef.current = endedRecord?.summary?.templateKey;
-  }, [endedRecord?.summary?.templateKey]);
+    summaryStampRef.current = summaryStamp;
+  }, [summaryStamp]);
 
   useEffect(
     () => () => {
@@ -891,6 +903,7 @@ function MeetingRecordSection({
       {activeTab === "summary" && endedRecord ? (
         <SummaryPanel
           room={endedRecord}
+          segments={segments}
           busyArtifactId={busyArtifactId}
           onDownload={downloadArtifact}
           // Checking a claim means leaving the summary, so the tab switches with it —
@@ -912,9 +925,14 @@ function MeetingRecordSection({
             if (rewritePollRef.current !== null) {
               window.clearInterval(rewritePollRef.current);
             }
+            const askedAt = summaryStampRef.current;
             const stopAt = Date.now() + 90_000;
             rewritePollRef.current = window.setInterval(() => {
-              const arrived = summaryTemplateRef.current === templateKey;
+              // Any change to the stamp means something landed — a new shape or the same shape
+              // rewritten. An artifact predating updated_at whose shape did not change cannot be
+              // detected this way and falls through to the deadline, which is the honest
+              // degradation rather than a poll that claims success.
+              const arrived = summaryStampRef.current !== askedAt;
               if (arrived || Date.now() > stopAt) {
                 if (rewritePollRef.current !== null) {
                   window.clearInterval(rewritePollRef.current);
@@ -1008,11 +1026,15 @@ function MeetingTranscriptArtifact({
 
     setIsSavingCorrection(true);
     try {
+      // No triggeredRetranslation flag: the server has no such request field, and
+      // TranscriptCorrectionMapper.ToEntity sets it true unconditionally. Re-translation is
+      // automatic — SubmitCorrectionAsync writes the corrected text onto the segment and pushes
+      // translate:requests with is_correction, and the translate worker supersedes the old
+      // translation. Sending `false` here read like a switch that was off; it never was one.
       await transcriptService.correctSegment(transcriptId, segment.id, {
         originalText: segment.originalText,
         correctedText,
         correctionType: "stt",
-        triggeredRetranslation: false,
       });
       onSegmentsChanged?.();
       setEditingSegmentId(null);

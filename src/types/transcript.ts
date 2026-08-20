@@ -43,6 +43,10 @@ export interface TranscriptSegmentDto {
   startTimeMs: number;
   endTimeMs: number;
   sequenceOrder: number;
+  /** A human has corrected this line. Also what tells the summary it is behind the record. */
+  isCorrected?: boolean;
+  /** When the row last changed — moved by a correction. */
+  updatedAt?: string | null;
 }
 
 export interface TranscriptTranslationDto {
@@ -92,5 +96,4 @@ export interface CreateCorrectionRequest {
   originalText: string;
   correctedText: string;
   correctionType: "stt" | "translation" | "speaker" | "timing";
-  triggeredRetranslation?: boolean;
 }
