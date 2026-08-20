@@ -64,7 +64,7 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-} from "@phosphor-icons/react/dist/ssr";
+  CheckSquare,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -302,7 +302,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // Its absence from this list is the whole reason the page was deleted as dead code, and the
     // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
     // can navigate to is indistinguishable from one that was never built.
-    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" }
+    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" },
+    // Work the meetings assigned to you, keyed on the person rather than the meeting. Listed here
+    // for the same reason Glossary is: an endpoint no navigation reaches is indistinguishable
+    // from one that was never built, and this list is the whole point of action items becoming
+    // rows instead of sentences.
+    { icon: CheckSquare, label: "My tasks", href: `/${slug}/tasks`, tourId: "nav-tasks" }
   );
 
   if (isOwnerOrAdmin) {
