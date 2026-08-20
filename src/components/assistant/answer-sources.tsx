@@ -53,16 +53,37 @@ const KIND_ICON: Record<AnswerSourceKind, LucideIcon> = {
 
 const COLLAPSED_COUNT = 3;
 
+/**
+ * Two homes, two grounds. "default" sits on the page surface; "inverted" sits inside a
+ * primary-coloured bubble, where surface tokens read as a grey box pasted onto purple.
+ */
+type SourcesTone = "default" | "inverted";
+
+const TONE: Record<SourcesTone, { label: string; chip: string; hover: string }> = {
+  default: {
+    label: "text-ink-subtle",
+    chip: "border-hairline bg-surface-2 text-ink-subtle",
+    hover: "hover:text-ink",
+  },
+  inverted: {
+    label: "text-white/45",
+    chip: "border-white/25 bg-white/10 text-white/75",
+    hover: "hover:text-white",
+  },
+};
+
 interface AnswerSourcesProps {
   sources: AnswerSource[];
   /** Needed only to link document chips; without it they render as plain labels. */
   workspaceSlug?: string | null;
+  tone?: SourcesTone;
   className?: string;
 }
 
 export function AnswerSources({
   sources,
   workspaceSlug,
+  tone = "default",
   className,
 }: AnswerSourcesProps) {
   const [expanded, setExpanded] = useState(false);
@@ -78,7 +99,9 @@ export function AnswerSources({
     >
       {/* Named, not just implied by the icons. "Sources" is what makes the row a provenance
           claim rather than a set of decorative tags. */}
-      <span className="text-[10px] uppercase tracking-wide text-ink-subtle">
+      <span
+        className={`text-[10px] uppercase tracking-wide ${TONE[tone].label}`}
+      >
         Sources
       </span>
       {shown.map((source) => (
@@ -86,13 +109,14 @@ export function AnswerSources({
           key={source.marker}
           source={source}
           workspaceSlug={workspaceSlug}
+          tone={tone}
         />
       ))}
       {hidden > 0 && (
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-subtle transition-colors hover:text-ink"
+          className={`rounded-full border px-2 py-0.5 text-[11px] transition-colors ${TONE[tone].chip} ${TONE[tone].hover}`}
           aria-label={`Show ${hidden} more source${hidden === 1 ? "" : "s"}`}
         >
           +{hidden}
@@ -105,9 +129,11 @@ export function AnswerSources({
 function SourceChip({
   source,
   workspaceSlug,
+  tone,
 }: {
   source: AnswerSource;
   workspaceSlug?: string | null;
+  tone: SourcesTone;
 }) {
   const Icon = KIND_ICON[source.kind];
   const href = answerSourceHref(source, workspaceSlug);
@@ -125,8 +151,7 @@ function SourceChip({
     </>
   );
 
-  const shell =
-    "inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-subtle";
+  const shell = `inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${TONE[tone].chip}`;
 
   if (!href) {
     return (
@@ -145,7 +170,7 @@ function SourceChip({
         // and it has no business learning which WarpTalk page the reader was on.
         rel="noopener noreferrer"
         title={label}
-        className={`${shell} transition-colors hover:text-ink`}
+        className={`${shell} transition-colors ${TONE[tone].hover}`}
       >
         {body}
       </a>
@@ -156,7 +181,7 @@ function SourceChip({
     <Link
       href={href}
       title={label}
-      className={`${shell} transition-colors hover:text-ink`}
+      className={`${shell} transition-colors ${TONE[tone].hover}`}
     >
       {body}
     </Link>

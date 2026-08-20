@@ -117,6 +117,12 @@ export interface AiSuggestionDto {
   confidence: number;
   language: string;
   createdAt: string;
+  /**
+   * Documents this hint drew on, as the same JSON array the chat assistant publishes — see
+   * lib/assistant/answer-sources. Absent for a hint that came out of the transcript, which is
+   * the normal case.
+   */
+  sourcesJson?: string | null;
 }
 
 export interface ChatMentionDto {

@@ -25,6 +25,11 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   get_document: "Reading the document…",
   ask_user: "Needs a couple of details…",
   create_meeting: "Creating the meeting…",
+  // Not one of warptalk-ai's own tools: OpenAI runs this one server-side, and the worker
+  // publishes the step by hand off the response stream because the dispatch loop a hosted call
+  // never enters is what publishes every other one. From the reader's chair it is the same
+  // thing happening, so it reads the same way.
+  web_search: "Searching the web…",
 };
 
 export function assistantToolLabel(toolName: string | null | undefined): string {

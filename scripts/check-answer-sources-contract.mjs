@@ -10,14 +10,18 @@
  *   failure this repo has hit repeatedly and now guards against by contract rather than by
  *   memory (see check-summary-state-wired.mjs).
  *
- *   Two surfaces is the part that rots. The global widget and the in-meeting chat panel run the
- *   same agent through the same worker, and it is entirely possible to wire the chips into one
- *   and ship. Then WarpBot cites its sources in the sidebar and appears to invent everything it
- *   says in a meeting.
+ *   Three surfaces is the part that rots. The global widget, the in-meeting chat panel and the
+ *   inline suggestion badge all show model output, and it is entirely possible to wire the chips
+ *   into one and ship. Then WarpBot cites its sources in the sidebar and appears to invent
+ *   everything it says in a meeting.
+ *
+ *   The suggestion badge is the surface that needs it most and asks for it least: nobody
+ *   requested the hint, it appears unbidden beside a transcript line, and a "fact" hint is a
+ *   figure the reader has no way to check.
  *
  * THE RULES
- *   1. Both surfaces parse `sourcesJson` and render <AnswerSources/>.
- *   2. Both DTO types carry the field, or the payload is dropped at the type boundary and the
+ *   1. All three surfaces parse `sourcesJson` and render <AnswerSources/>.
+ *   2. Every DTO type carries the field, or the payload is dropped at the type boundary and the
  *      parse silently receives undefined forever.
  *   3. The completed/replay paths carry it — those are the only paths that ever have it, since
  *      the worker resolves citations once the whole answer exists.
@@ -37,6 +41,7 @@ const LIB = "src/lib/assistant/answer-sources.ts";
 const CHIP = "src/components/assistant/answer-sources.tsx";
 const WIDGET = "src/components/layout/global-chatbot.tsx";
 const PANEL = "src/components/rooms/live/chat-panel.tsx";
+const BADGE = "src/components/rooms/live/side-panel/suggestion-badge.tsx";
 const ASSISTANT_TYPES = "src/types/assistant.ts";
 const REALTIME_TYPES = "src/types/realtime.ts";
 
@@ -50,6 +55,7 @@ const panel = read(PANEL);
 for (const [path, source] of [
   [WIDGET, widget],
   [PANEL, panel],
+  [BADGE, read(BADGE)],
 ]) {
   if (!/from\s+"@\/lib\/assistant\/answer-sources"/.test(source)) {
     failures.push(
@@ -72,10 +78,13 @@ if (!/sourcesJson\??:\s*string\s*\|\s*null/.test(read(ASSISTANT_TYPES))) {
       `type is what the widget reads history through.`,
   );
 }
-if (!/sourcesJson\??:\s*string\s*\|\s*null/.test(read(REALTIME_TYPES))) {
+const realtime = read(REALTIME_TYPES);
+// Two separate types in one file, so counting is what proves both carry it.
+if ((realtime.match(/sourcesJson\??:\s*string\s*\|\s*null/g) ?? []).length < 2) {
   failures.push(
-    `${REALTIME_TYPES}: ChatMessageDto has no sourcesJson. Meeting chat messages arrive as this ` +
-      `type over the hub and out of history alike.`,
+    `${REALTIME_TYPES}: ChatMessageDto and AiSuggestionDto must BOTH carry sourcesJson. Meeting ` +
+      `chat messages and inline suggestions arrive as these types over the hub, and a missing ` +
+      `field is dropped silently at the type boundary.`,
   );
 }
 
