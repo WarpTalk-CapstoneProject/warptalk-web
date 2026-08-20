@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import type { FlashModeState } from "@/services/translation-room.service";
 import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
@@ -309,10 +310,12 @@ export function useFlashMode(roomId: string, enabled = true) {
     queryFn: () => translationRoomService.getFlashMode(roomId),
     enabled: enabled && Boolean(roomId),
     refetchInterval: 30_000,
-    // A room that cannot answer is not an error worth showing anybody: the AI side falls back to
-    // the deployment default, and "off" is the honest thing to render.
+    // A room that cannot answer is not an error worth showing anybody. It is NOT rendered as
+    // "off" any more, though: the AI side falls back to the deployment default, so "off" was a
+    // claim about the room that nothing had actually checked — and it became a false one the day
+    // that default turned on. "unknown" renders the same switch position without asserting it.
     retry: false,
-    initialData: false,
+    initialData: { enabled: false, source: "unknown" } satisfies FlashModeState,
   });
 }
 

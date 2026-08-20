@@ -104,6 +104,7 @@ export function MeetingControlBar({
   voiceCloneEnabled,
   voiceCloneHasAudience = false,
   flashModeEnabled = false,
+  flashModeSource = "unknown",
   noiseReductionMode = "off",
   onChangeFlashMode,
   dubVoice,
@@ -204,6 +205,14 @@ export function MeetingControlBar({
    * answers "how fast is the room", and it applies to EVERYBODY in it.
    */
   flashModeEnabled?: boolean;
+  /**
+   * Where flashModeEnabled came from — a host's override, the deployment default, or neither.
+   *
+   * The switch position alone cannot carry this, and the sentence under it was written as though
+   * it could: it said "Set by the host" to every guest, including in rooms no host had ever
+   * touched, which are most of them.
+   */
+  flashModeSource?: "room" | "deployment" | "unknown";
   noiseReductionMode?: NoiseReductionMode;
   /** Omit to render the state read-only — the host owns this setting, a guest only sees it. */
   onChangeFlashMode?: (enabled: boolean) => void;
@@ -934,7 +943,16 @@ export function MeetingControlBar({
                       <span className="block text-[11px] leading-snug text-ink-subtle">
                         {onChangeFlashMode
                           ? "Start translating while people are still speaking. Faster, and still experimental."
-                          : "Set by the host. Translation starts while people are still speaking."}
+                          : flashModeSource === "room"
+                            ? "Set by the host. Translation starts while people are still speaking."
+                            : flashModeSource === "deployment"
+                              // Nobody set this room. Saying "the host" here named a person who
+                              // had made no such choice, and made a default look like a decision.
+                              ? "Following the platform default. Translation starts while people are still speaking."
+                              // No override and no published default. The switch has to sit
+                              // somewhere, so it sits off — but it is not reporting a reading,
+                              // and claiming one is the whole defect this replaces.
+                              : "Not known right now — the room is using whatever the platform defaults to."}
                       </span>
                     </span>
                     <Switch

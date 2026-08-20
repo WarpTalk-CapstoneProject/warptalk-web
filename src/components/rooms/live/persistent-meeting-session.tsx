@@ -296,7 +296,7 @@ export function PersistentMeetingSession({
   const refreshDubVoice = useRefreshDubVoice(roomId);
   // WT-B. Read by everyone in the room so a guest's switch sits where the host left it; written
   // only by the room host, which is what the server enforces too.
-  const { data: flashModeEnabled = false } = useFlashMode(roomId);
+  const { data: flashMode } = useFlashMode(roomId);
   const setFlashMode = useSetFlashMode(roomId);
   // The caller's OWN microphone, not the room's. No host check anywhere on this one, deliberately:
   // it changes how this person is transcribed and nobody else's audio, and the server agrees — see
@@ -2980,7 +2980,10 @@ export function PersistentMeetingSession({
                     onChangeDubVoice={handleChangeDubVoice}
                     cloneCapture={cloneCaptureState}
                     voiceCloneHasAudience={voiceCloneHasAudience}
-                    flashModeEnabled={flashModeEnabled}
+                    flashModeEnabled={flashMode.enabled}
+                    // Where that came from, so the sentence under the switch can be true. Without
+                    // it the panel said "Set by the host" about rooms no host had ever touched.
+                    flashModeSource={flashMode.source}
                     // isRoomHost, not isHost, for the same reason /pause and /resume use it: the
                     // endpoint gates on the room's EFFECTIVE host, and a workspace admin — host-
                     // like everywhere else — would be handed a switch that answers 403.
