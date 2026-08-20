@@ -1,0 +1,587 @@
+"use client";
+
+/**
+ * Biên bản họp, as the secretary works on it and as everyone else reads it.
+ *
+ * WHAT THIS IS NOT
+ *   Not a second view of the AI summary. The summary panel shows what a model wrote; this shows
+ *   a document with a number, a date of record, an attendance roll, and two people's names
+ *   against it. The difference is the whole point of the feature, so the header states who
+ *   drafted it and who is answerable for it — never letting the two collapse into one line.
+ *
+ * WHY THE MACHINE AND THE PERSON ARE PRINTED SEPARATELY
+ *   "Chương trình lập nháp" and "Thư ký chịu trách nhiệm" are different facts. A reader deciding
+ *   whether to trust this document needs to see that a person signed it, and the edit count next
+ *   to that name is their evidence the person actually read it rather than approving it unseen.
+ *
+ * WHY EDITING IS A PLAIN TEXTAREA PER FIELD
+ *   The parts a secretary corrects are short: an agenda, a decision line, an absence reason, a
+ *   closing note. A rich-text surface over a structured document would have to flatten it to
+ *   HTML and parse it back, and every round trip is a chance to lose a citation — which is the
+ *   one thing on a summary line that lets a reader check it.
+ */
+
+import { useMemo, useState } from "react";
+import {
+  CheckCircle,
+  Circle,
+  ClockCounterClockwise,
+  FileText,
+  PencilSimple,
+  Sparkle,
+  Spinner,
+  Warning,
+} from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
+
+import { cn } from "@/lib/utils";
+import { sectionTitle } from "@/lib/meeting/meeting-summary";
+import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import {
+  isEditable,
+  parseMinutesContent,
+  type MeetingMinutesContent,
+  type MeetingMinutesDto,
+} from "@/types/meetingMinutes";
+
+function formatTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "—"
+    : date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatOffset(atMs: number | null | undefined): string | null {
+  if (atMs == null || atMs < 0) return null;
+  const total = Math.floor(atMs / 1000);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Bản nháp",
+  IN_REVIEW: "Thư ký đã ký",
+  APPROVED: "Đã thông qua",
+};
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex gap-2 text-[13px]">
+      <span className="w-36 shrink-0 text-ink-muted">{label}</span>
+      <span className="text-ink">{value}</span>
+    </div>
+  );
+}
+
+export function MinutesPanel({
+  roomId,
+  canManage,
+  onSeek,
+}: {
+  roomId: string;
+  /** Host authority. The host is the secretary and the chair in this product. */
+  canManage: boolean;
+  /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
+  onSeek?: (atMs: number) => void;
+}) {
+  const { data: minutes, isLoading } = useMeetingMinutes(roomId);
+  const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
+
+  const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  const stored = useMemo(() => parseMinutesContent(minutes?.content), [minutes?.content]);
+  // Editing works on a copy so an in-flight refetch cannot overwrite what is being typed; the
+  // copy is dropped the moment editing ends, which is also what discards an abandoned edit.
+  const view = editing && draft ? draft : stored;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted">
+        <Spinner size={14} className="animate-spin" />
+        Đang tải biên bản…
+      </div>
+    );
+  }
+
+  if (!minutes) {
+    return (
+      <div className="p-6">
+        <div className="max-w-lg space-y-3">
+          <h3 className="text-[14px] font-semibold text-ink">Chưa có biên bản</h3>
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            Biên bản được lập từ chính hồ sơ cuộc họp — thành phần tham dự, vắng mặt, giờ khai mạc
+            và bế mạc lấy thẳng từ dữ liệu phòng họp, phần nội dung lấy từ bản tóm tắt. Bạn rà soát
+            và ký; hệ thống không ký thay bạn.
+          </p>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={() =>
+                createDraft.mutate(undefined, {
+                  onError: () =>
+                    toast.error("Chưa lập được biên bản. Cuộc họp đã kết thúc chưa?"),
+                })
+              }
+              disabled={createDraft.isPending}
+              className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+            >
+              {createDraft.isPending ? (
+                <Spinner size={14} className="animate-spin" />
+              ) : (
+                <FileText size={14} />
+              )}
+              Lập biên bản
+            </button>
+          ) : (
+            <p className="text-[12px] text-ink-subtle">Chỉ chủ trì cuộc họp mới lập được biên bản.</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  const editable = isEditable(minutes) && canManage;
+
+  function beginEdit() {
+    setDraft(structuredClone(stored));
+    setEditing(true);
+  }
+
+  /** Leaving edit mode drops the working copy, which is also what discards an abandoned edit. */
+  function stopEditing() {
+    setEditing(false);
+    setDraft(null);
+  }
+
+  function commit() {
+    if (!draft || !minutes) return;
+    save.mutate(
+      { minutesId: minutes.id, content: JSON.stringify(draft) },
+      {
+        onSuccess: () => {
+          stopEditing();
+          toast.success("Đã lưu biên bản.");
+        },
+        onError: () => toast.error("Không lưu được biên bản."),
+      },
+    );
+  }
+
+  return (
+    <div className="space-y-6 p-6">
+      <MinutesHeader minutes={minutes} />
+
+      <section className="space-y-1.5">
+        <Field label="Tên cuộc họp" value={view.meetingTitle || "—"} />
+        <Field label="Địa điểm" value={view.location || "—"} />
+        <Field label="Giờ khai mạc" value={formatTime(view.openedAt)} />
+        <Field label="Giờ bế mạc" value={formatTime(view.closedAt)} />
+        {view.scheduledAt ? (
+          <Field label="Theo lịch" value={formatTime(view.scheduledAt)} />
+        ) : null}
+      </section>
+
+      <Attendance content={view} />
+
+      <EditableBlock
+        title="Chương trình họp"
+        value={view.agenda ?? ""}
+        editing={editing}
+        placeholder="Chưa ghi chương trình họp."
+        onChange={(next) => setDraft((current) => (current ? { ...current, agenda: next } : current))}
+      />
+
+      <Sections content={view} editing={editing} setDraft={setDraft} onSeek={onSeek} />
+
+      <Votes content={view} />
+
+      <EditableBlock
+        title="Ghi chú của thư ký"
+        value={view.notes ?? ""}
+        editing={editing}
+        placeholder="Không có ghi chú thêm."
+        onChange={(next) => setDraft((current) => (current ? { ...current, notes: next } : current))}
+      />
+
+      <Signatures minutes={minutes} />
+
+      {canManage ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          {editing ? (
+            <>
+              <button
+                type="button"
+                onClick={commit}
+                disabled={save.isPending}
+                className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+              >
+                {save.isPending ? "Đang lưu…" : "Lưu"}
+              </button>
+              <button
+                type="button"
+                onClick={stopEditing}
+                className="rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
+              >
+                Huỷ
+              </button>
+            </>
+          ) : null}
+
+          {!editing && editable ? (
+            <button
+              type="button"
+              onClick={beginEdit}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
+            >
+              <PencilSimple size={14} />
+              Sửa
+            </button>
+          ) : null}
+
+          {!editing && editable && minutes.status === "DRAFT" ? (
+            <button
+              type="button"
+              onClick={() =>
+                sign.mutate(minutes.id, {
+                  onSuccess: () => toast.success("Đã ký biên bản."),
+                  onError: () => toast.error("Không ký được biên bản."),
+                })
+              }
+              disabled={sign.isPending}
+              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+            >
+              Thư ký ký
+            </button>
+          ) : null}
+
+          {!editing && editable && minutes.status === "IN_REVIEW" ? (
+            <button
+              type="button"
+              onClick={() =>
+                approve.mutate(minutes.id, {
+                  onSuccess: () => toast.success("Biên bản đã được thông qua."),
+                  onError: () => toast.error("Không thông qua được biên bản."),
+                })
+              }
+              disabled={approve.isPending}
+              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+            >
+              Chủ trì thông qua
+            </button>
+          ) : null}
+
+          {!editing && minutes.status === "APPROVED" ? (
+            <button
+              type="button"
+              onClick={() =>
+                revise.mutate(minutes.id, {
+                  onSuccess: () => toast.success("Đã mở biên bản bổ sung."),
+                  onError: () => toast.error("Không mở được biên bản bổ sung."),
+                })
+              }
+              disabled={revise.isPending}
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
+            >
+              <ClockCounterClockwise size={14} />
+              Lập biên bản bổ sung
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MinutesHeader({ minutes }: { minutes: MeetingMinutesDto }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-4">
+      <span className="font-mono text-[13px] font-semibold text-ink">{minutes.minutesNo}</span>
+      <span
+        className={cn(
+          "rounded-full px-2 py-0.5 text-[11px] font-medium",
+          minutes.status === "APPROVED"
+            ? "bg-semantic-success/10 text-semantic-success"
+            : "bg-surface-2 text-ink-muted",
+        )}
+      >
+        {STATUS_LABEL[minutes.status] ?? minutes.status}
+      </span>
+      {minutes.version > 1 ? (
+        <span className="text-[11px] text-ink-subtle">Bản sửa đổi lần {minutes.version - 1}</span>
+      ) : null}
+      <span className="text-[11px] text-ink-subtle">Ngày lập {formatTime(minutes.createdAt)}</span>
+    </div>
+  );
+}
+
+function Attendance({ content }: { content: MeetingMinutesContent }) {
+  const { attendance } = content;
+
+  return (
+    <section className="space-y-2">
+      <h4 className="text-[13px] font-semibold text-ink">Thành phần tham dự</h4>
+
+      <ul className="space-y-1">
+        {attendance.present.length === 0 ? (
+          <li className="text-[13px] text-ink-subtle">Không ghi nhận ai vào phòng.</li>
+        ) : (
+          attendance.present.map((person) => (
+            <li key={person.participantId} className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span className="text-ink">{person.name}</span>
+              {person.role === "HOST" ? (
+                <span className="text-[11px] text-ink-muted">Chủ trì</span>
+              ) : null}
+              {person.isExternal ? (
+                <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-muted">
+                  Khách ngoài
+                </span>
+              ) : null}
+              {person.speakLanguage ? (
+                <span className="text-[11px] text-ink-subtle">{person.speakLanguage}</span>
+              ) : null}
+              <span className="text-[11px] text-ink-subtle">{formatTime(person.joinedAt)}</span>
+            </li>
+          ))
+        )}
+      </ul>
+
+      {attendance.absent.length > 0 ? (
+        <div className="space-y-1 pt-1">
+          <h4 className="text-[13px] font-semibold text-ink">Vắng mặt</h4>
+          <ul className="space-y-1">
+            {attendance.absent.map((person) => (
+              <li key={person.participantId} className="text-[13px] text-ink">
+                {person.name}
+                {person.reason ? (
+                  <span className="text-ink-muted"> — {person.reason}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* The rule is printed beside the verdict. A bare "đủ/không đủ" would not tell the reader
+          what bar was applied, and quorum is exactly the line somebody later disputes. */}
+      {attendance.quorumMet != null ? (
+        <p className="flex items-center gap-1.5 pt-1 text-[12px] text-ink-muted">
+          {attendance.quorumMet ? (
+            <CheckCircle size={13} className="text-semantic-success" />
+          ) : (
+            <Warning size={13} className="text-status-error" />
+          )}
+          {attendance.presentCount}/{attendance.invitedCount} người được mời có mặt —{" "}
+          {attendance.quorumMet ? "đủ điều kiện tiến hành" : "chưa đủ điều kiện tiến hành"}
+          {attendance.quorumRule ? ` (${attendance.quorumRule.toLowerCase()})` : ""}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+function Sections({
+  content,
+  editing,
+  setDraft,
+  onSeek,
+}: {
+  content: MeetingMinutesContent;
+  editing: boolean;
+  setDraft: React.Dispatch<React.SetStateAction<MeetingMinutesContent | null>>;
+  onSeek?: (atMs: number) => void;
+}) {
+  if (content.sections.length === 0) {
+    return (
+      <section className="space-y-2">
+        <h4 className="text-[13px] font-semibold text-ink">Nội dung</h4>
+        <p className="text-[13px] text-ink-subtle">
+          Bản tóm tắt của cuộc họp này không có nội dung để đưa vào biên bản. Thư ký ghi trực tiếp
+          vào phần ghi chú bên dưới.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      {content.sections.map((section, sectionIndex) => (
+        <section key={`${section.key}-${sectionIndex}`} className="space-y-2">
+          <h4 className="text-[13px] font-semibold text-ink">{sectionTitle(section.key)}</h4>
+
+          {section.kind === "paragraph" ? (
+            editing ? (
+              <textarea
+                value={section.text ?? ""}
+                onChange={(event) =>
+                  setDraft((current) => {
+                    if (!current) return current;
+                    const sections = [...current.sections];
+                    sections[sectionIndex] = { ...sections[sectionIndex], text: event.target.value };
+                    return { ...current, sections };
+                  })
+                }
+                rows={4}
+                className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
+              />
+            ) : (
+              <p className="text-[13px] leading-relaxed text-ink">{section.text}</p>
+            )
+          ) : (
+            <ul className="space-y-1.5">
+              {(section.items ?? []).map((item, itemIndex) => {
+                const offset = formatOffset(item.atMs);
+                return (
+                  <li key={itemIndex} className="flex items-start gap-2 text-[13px]">
+                    <Circle size={6} weight="fill" className="mt-[7px] shrink-0 text-ink-subtle" />
+                    <div className="min-w-0 flex-1">
+                      {editing ? (
+                        <input
+                          value={item.text}
+                          onChange={(event) =>
+                            setDraft((current) => {
+                              if (!current) return current;
+                              const sections = [...current.sections];
+                              const items = [...(sections[sectionIndex].items ?? [])];
+                              items[itemIndex] = { ...items[itemIndex], text: event.target.value };
+                              sections[sectionIndex] = { ...sections[sectionIndex], items };
+                              return { ...current, sections };
+                            })
+                          }
+                          className="w-full rounded border border-border bg-surface-1 px-2 py-1 text-[13px] text-ink"
+                        />
+                      ) : (
+                        <span className="text-ink">{item.text}</span>
+                      )}
+                      {item.owner ? (
+                        <span className="ml-1.5 text-[12px] text-ink-muted">— {item.owner}</span>
+                      ) : null}
+                    </div>
+                    {/* The citation stays on the line even while editing: it is what lets a
+                        reader check a signed statement, and losing it silently would remove the
+                        only thing making the line verifiable. */}
+                    {offset ? (
+                      onSeek && item.atMs != null ? (
+                        <button
+                          type="button"
+                          onClick={() => onSeek(item.atMs!)}
+                          className="shrink-0 font-mono text-[11px] text-ink-subtle hover:text-ink"
+                        >
+                          {offset}
+                        </button>
+                      ) : (
+                        <span className="shrink-0 font-mono text-[11px] text-ink-subtle">{offset}</span>
+                      )
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      ))}
+    </>
+  );
+}
+
+function Votes({ content }: { content: MeetingMinutesContent }) {
+  if (content.votes.length === 0) return null;
+
+  return (
+    <section className="space-y-2">
+      <h4 className="text-[13px] font-semibold text-ink">Biểu quyết</h4>
+      <ul className="space-y-1">
+        {content.votes.map((vote, index) => (
+          <li key={index} className="text-[13px] text-ink">
+            {vote.topic}
+            <span className="ml-2 text-ink-muted">
+              Tán thành {vote.forCount} · Không tán thành {vote.againstCount} · Không ý kiến{" "}
+              {vote.abstainCount}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function Signatures({ minutes }: { minutes: MeetingMinutesDto }) {
+  return (
+    <section className="space-y-1.5 border-t border-border pt-4">
+      {/* Three lines, never two. The machine that produced the draft and the person answerable
+          for the content are different facts, and collapsing them is exactly the claim this
+          product must not make. */}
+      <div className="flex gap-2 text-[13px]">
+        <span className="w-36 shrink-0 text-ink-muted">Chương trình lập nháp</span>
+        <span className="flex items-center gap-1.5 text-ink">
+          <Sparkle size={13} className="text-ink-subtle" />
+          {minutes.draftedByEngine ?? "—"}
+          <span className="text-[11px] text-ink-subtle">{formatTime(minutes.draftedAt)}</span>
+        </span>
+      </div>
+
+      <div className="flex gap-2 text-[13px]">
+        <span className="w-36 shrink-0 text-ink-muted">Thư ký chịu trách nhiệm</span>
+        <span className="text-ink">
+          {minutes.secretaryName ?? "Chưa ký"}
+          {minutes.secretarySignedAt ? (
+            <span className="ml-1.5 text-[11px] text-ink-subtle">
+              {formatTime(minutes.secretarySignedAt)}
+            </span>
+          ) : null}
+          {minutes.secretarySignedAt ? (
+            <span className="ml-1.5 text-[11px] text-ink-subtle">
+              {minutes.editCountVsDraft > 0
+                ? `đã sửa ${minutes.editCountVsDraft} điểm so với bản nháp`
+                : "giữ nguyên bản nháp"}
+            </span>
+          ) : null}
+        </span>
+      </div>
+
+      <div className="flex gap-2 text-[13px]">
+        <span className="w-36 shrink-0 text-ink-muted">Chủ trì thông qua</span>
+        <span className="text-ink">
+          {minutes.chairName ?? "Chưa thông qua"}
+          {minutes.chairApprovedAt ? (
+            <span className="ml-1.5 text-[11px] text-ink-subtle">
+              {formatTime(minutes.chairApprovedAt)}
+            </span>
+          ) : null}
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function EditableBlock({
+  title,
+  value,
+  editing,
+  placeholder,
+  onChange,
+}: {
+  title: string;
+  value: string;
+  editing: boolean;
+  placeholder: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <section className="space-y-2">
+      <h4 className="text-[13px] font-semibold text-ink">{title}</h4>
+      {editing ? (
+        <textarea
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          rows={3}
+          className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
+        />
+      ) : value ? (
+        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{value}</p>
+      ) : (
+        <p className="text-[13px] text-ink-subtle">{placeholder}</p>
+      )}
+    </section>
+  );
+}

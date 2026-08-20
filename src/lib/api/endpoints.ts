@@ -115,6 +115,16 @@ export const API = {
     regenerateSummary: (roomId: string) =>
       `/room-artifacts/rooms/${roomId}/summary/regenerate`,
   },
+  // Biên bản họp. Its own group rather than an artifact route: minutes are not an output a job
+  // produced, they are a record with a lifecycle and a signature.
+  minutes: {
+    byRoom: (roomId: string) => `/rooms/${roomId}/minutes`,
+    draft: (roomId: string) => `/rooms/${roomId}/minutes/draft`,
+    update: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}`,
+    sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
+    approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
+    revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
+  },
   transcripts: {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,

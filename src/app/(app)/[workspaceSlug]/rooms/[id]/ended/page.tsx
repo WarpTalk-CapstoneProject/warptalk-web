@@ -57,14 +57,17 @@ import { useTranslationRoomFeedbackState } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
 import { formatMeetingDuration, resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
 import { translationRoomService } from "@/services/translation-room.service";
+import { useAuthStore } from "@/stores/auth-store";
+import { MinutesPanel } from "@/components/rooms/minutes-panel";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
-type RecordTab = "summary" | "transcript" | "files";
+type RecordTab = "summary" | "minutes" | "transcript" | "files";
 
 export default function RoomEndedPage() {
   const { id: roomId, workspaceSlug } = useParams<{ id: string; workspaceSlug: string }>();
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const user = useAuthStore((state) => state.user);
 
   const [tab, setTab] = useState<RecordTab>("summary");
 
@@ -197,6 +200,12 @@ export default function RoomEndedPage() {
             label="Summary"
           />
           <MeetingRecordTabButton
+            active={tab === "minutes"}
+            onClick={() => setTab("minutes")}
+            icon={FileText}
+            label="Biên bản"
+          />
+          <MeetingRecordTabButton
             active={tab === "transcript"}
             onClick={() => setTab("transcript")}
             icon={ChatCircleText}
@@ -240,6 +249,14 @@ export default function RoomEndedPage() {
             icon={<ArrowClockwise className="h-5 w-5 animate-spin" />}
             title="Still writing this up"
             description="The transcript and the AI summary are produced after a meeting ends — usually within a minute. This page updates on its own."
+          />
+        ) : tab === "minutes" ? (
+          // Deliberately behind the "still writing this up" gate above: the draft is assembled
+          // from the summary artifact, so drawing it up before the finalizer has run would
+          // produce a minutes document with an empty body and consume its number doing it.
+          <MinutesPanel
+            roomId={roomId}
+            canManage={room?.hostId === user?.id || Boolean(room?.isHost)}
           />
         ) : tab === "summary" ? (
           <SummaryPanel
