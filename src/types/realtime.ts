@@ -138,6 +138,11 @@ export interface ChatMessageDto {
   containsWarpbotMention?: boolean;
   mentions?: ChatMentionDto[];
   createdAt: string;
+  /**
+   * Only ever set on a WarpBot answer: the sources it cited, as the JSON array warptalk-ai
+   * published. See lib/assistant/answer-sources for what the list means and why it is a string.
+   */
+  sourcesJson?: string | null;
 }
 
 export interface ChatMessageTranslationDto {

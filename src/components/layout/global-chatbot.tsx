@@ -57,6 +57,11 @@ import {
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { AnswerSources } from "@/components/assistant/answer-sources";
+import {
+  parseAnswerSources,
+  type AnswerSource,
+} from "@/lib/assistant/answer-sources";
 import { Lumidot } from "lumidot";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -97,6 +102,12 @@ interface ChatMessage {
   content: string;
   context?: string;
   failed?: boolean;
+  /**
+   * What this answer cited. Held on the message rather than in a lookup beside it, so it
+   * survives every path a message arrives by — streamed, completed, or replayed out of
+   * history — and cannot end up under the wrong bubble.
+   */
+  sources?: AnswerSource[];
 }
 
 
@@ -284,6 +295,9 @@ export function GlobalChatbot() {
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
   );
@@ -391,6 +405,7 @@ export function GlobalChatbot() {
             role: message.role as ChatRole,
             content: message.content,
             failed: message.status === "failed",
+            sources: parseAnswerSources(message.sourcesJson),
           })),
       );
       setConversationTitle(detail.title?.trim() || "Chat history");
@@ -591,15 +606,23 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantMessageCompleted",
-      (payload: { conversationId: string; id: string; content: string }) => {
+      (payload: {
+        conversationId: string;
+        id: string;
+        content: string;
+        sourcesJson?: string | null;
+      }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setActiveToolLabel(null);
         clearResponseTimeout();
+        // Only the completed event carries them: the worker decides which sources the answer
+        // pointed at once the whole answer exists, so there is nothing to show mid-stream.
         upsertAssistantMessage(payload.id, () => ({
           id: payload.id,
           role: "assistant",
           content: payload.content,
+          sources: parseAnswerSources(payload.sourcesJson),
         }));
       },
     );
@@ -626,11 +649,21 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantFollowUpMessage",
-      (payload: { conversationId: string; id: string; content: string }) => {
+      (payload: {
+        conversationId: string;
+        id: string;
+        content: string;
+        sourcesJson?: string | null;
+      }) => {
         if (payload.conversationId !== conversationId) return;
         setMessages((prev) => [
           ...prev,
-          { id: payload.id, role: "assistant", content: payload.content },
+          {
+            id: payload.id,
+            role: "assistant",
+            content: payload.content,
+            sources: parseAnswerSources(payload.sourcesJson),
+          },
         ]);
       },
     );
@@ -1143,7 +1176,13 @@ export function GlobalChatbot() {
                         }`}
                       >
                         {msg.role === "assistant" && !msg.failed ? (
-                          <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                          <>
+                            <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                            <AnswerSources
+                              sources={msg.sources ?? []}
+                              workspaceSlug={activeWorkspaceSlug}
+                            />
+                          </>
                         ) : (
                           msg.content
                         )}

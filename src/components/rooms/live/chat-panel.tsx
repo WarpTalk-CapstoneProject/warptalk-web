@@ -2,6 +2,7 @@ import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { assistantToolLabel } from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useMeetingChat,
   useSendMeetingChat,
@@ -22,6 +23,8 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { AnswerSources } from "@/components/assistant/answer-sources";
+import { parseAnswerSources } from "@/lib/assistant/answer-sources";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -102,6 +105,11 @@ export function ChatPanel({
   active?: boolean;
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  // Only so a document chip under a WarpBot answer can link to that document; a room whose
+  // workspace is not in the store simply renders the chip as a label.
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   const assistantToolName = useTranslationRoomStore((state) => state.assistantToolName);
@@ -645,6 +653,13 @@ export function ChatPanel({
                       className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
                     >
                       <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                      {/* Under the answer, inside the same left-aligned block: the chips
+                          belong to what WarpBot just said, and a row hung off the message
+                          container would sit under whoever spoke next. */}
+                      <AnswerSources
+                        sources={parseAnswerSources(message.sourcesJson)}
+                        workspaceSlug={activeWorkspaceSlug}
+                      />
                     </div>
                   ) : (
                     <p
