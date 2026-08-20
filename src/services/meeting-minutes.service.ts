@@ -36,4 +36,18 @@ export const meetingMinutesService = {
   revise(roomId: string, minutesId: string) {
     return apiClient.post<MeetingMinutesDto>(API.minutes.revise(roomId, minutesId));
   },
+
+  /**
+   * The .docx, rendered by the server.
+   *
+   * The file is built server-side so an approved document does not become a function of the
+   * reader's browser, and so a document library is not shipped to every visitor to produce
+   * something only the host ever asks for.
+   */
+  async downloadDocx(roomId: string) {
+    const response = await apiClient.get<Blob>(API.minutes.exportDocx(roomId), {
+      responseType: "blob",
+    });
+    return response;
+  },
 };

@@ -26,6 +26,7 @@ import {
   CheckCircle,
   Circle,
   ClockCounterClockwise,
+  DownloadSimple,
   FileText,
   PencilSimple,
   Sparkle,
@@ -37,6 +38,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { sectionTitle } from "@/lib/meeting/meeting-summary";
 import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import {
   isEditable,
   parseMinutesContent,
@@ -89,6 +91,7 @@ export function MinutesPanel({
 
   const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
   const [editing, setEditing] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const stored = useMemo(() => parseMinutesContent(minutes?.content), [minutes?.content]);
   // Editing works on a copy so an in-flight refetch cannot overwrite what is being typed; the
@@ -148,6 +151,28 @@ export function MinutesPanel({
     setEditing(true);
   }
 
+  async function downloadDocx() {
+    setDownloading(true);
+    try {
+      const response = await meetingMinutesService.downloadDocx(roomId);
+      // The server names the file after the minutes number, which is what the recipient files it
+      // under. Falling back to the number here rather than to something generic keeps that true
+      // even if a proxy strips the header.
+      const disposition = String(response.headers?.["content-disposition"] ?? "");
+      const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Không tải được biên bản.");
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   /** Leaving edit mode drops the working copy, which is also what discards an abandoned edit. */
   function stopEditing() {
     setEditing(false);
@@ -205,6 +230,25 @@ export function MinutesPanel({
       />
 
       <Signatures minutes={minutes} />
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+        <button
+          type="button"
+          onClick={downloadDocx}
+          disabled={downloading}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink disabled:opacity-60"
+        >
+          {downloading ? (
+            <Spinner size={14} className="animate-spin" />
+          ) : (
+            <DownloadSimple size={14} />
+          )}
+          Tải bản Word
+        </button>
+        <span className="text-[11px] text-ink-subtle">
+          Mở bằng Word hoặc Google Docs để in hoặc xuất PDF.
+        </span>
+      </div>
 
       {canManage ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
