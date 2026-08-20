@@ -1,4 +1,5 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
+import { assistantToolLabel } from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import {
@@ -103,6 +104,8 @@ export function ChatPanel({
   const messages = useTranslationRoomStore((state) => state.chatMessages);
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  const assistantToolName = useTranslationRoomStore((state) => state.assistantToolName);
+  const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
@@ -215,10 +218,13 @@ export function ChatPanel({
   // reconnect — which is how the answer arrives when the socket was down while WarpBot
   // replied.
   useEffect(() => {
-    if (assistantState !== "thinking") return;
+    if (assistantState === "idle") return;
     if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
       setAssistantState("idle");
     }
+    // NOT `assistantState !== "thinking"`. That guard is the reported bug: once the wait had been
+    // declared over, the answer arriving could no longer clear the notice, so a slow reply left a
+    // permanent "WarpBot didn't answer" sitting above a WarpBot answer.
   }, [messages, assistantState, setAssistantState]);
 
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
@@ -227,14 +233,18 @@ export function ChatPanel({
   useEffect(() => {
     if (assistantState !== "thinking") return;
     const timer = window.setTimeout(() => {
-      if (
-        useTranslationRoomStore.getState().assistantState === "thinking"
-      ) {
-        useTranslationRoomStore.getState().setAssistantState("timed_out");
+      if (useTranslationRoomStore.getState().assistantState === "thinking") {
+        // "slow", not "timed out". The old state declared WarpBot had failed on nothing but a
+        // clock, while a tool-calling loop was still running — and it was usually wrong, because
+        // the answer then arrived. Saying it is taking a while claims neither failure nor
+        // success, and the answer clears it either way.
+        useTranslationRoomStore.getState().setAssistantState("slow");
       }
     }, 90_000);
     return () => window.clearTimeout(timer);
-  }, [assistantState]);
+    // Re-armed on every sign of life. Keyed on the question alone, a model that merely thought
+    // for longer than the window was declared dead while it was working.
+  }, [assistantState, assistantActivityAt]);
 
   // WHERE THE READER WAS, NOT A REPLAY OF THE WHOLE THREAD.
   //
@@ -671,20 +681,21 @@ export function ChatPanel({
             indistinguishable from having been ignored. */}
         {assistantState !== "idle" ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
-            {assistantState === "thinking" ? (
-              <>
-                <span className="flex gap-0.5" aria-hidden>
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
-                </span>
-                <span>WarpBot is thinking…</span>
-              </>
-            ) : (
-              <span className="text-amber-600">
-                WarpBot didn&apos;t answer. Try mentioning it again.
-              </span>
-            )}
+            <span className="flex gap-0.5" aria-hidden>
+              <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
+              <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
+              <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
+            </span>
+            {/* The step, when WarpBot has told us one. A named tool is the difference between
+                "something is happening" and "this might be broken", and it is why the deadline
+                below can be generous rather than suspicious. */}
+            <span>
+              {assistantState === "slow"
+                ? "WarpBot is still working — this one is taking a while."
+                : assistantToolName
+                  ? assistantToolLabel(assistantToolName)
+                  : "WarpBot is thinking…"}
+            </span>
           </div>
         ) : null}
       </div>

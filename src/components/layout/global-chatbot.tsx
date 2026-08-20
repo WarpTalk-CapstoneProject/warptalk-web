@@ -29,6 +29,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
+import { assistantToolLabel } from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
@@ -98,19 +99,6 @@ interface ChatMessage {
   failed?: boolean;
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  search_workspace_members: "Searching workspace members…",
-  search_terminology: "Searching terminology…",
-  list_recent_meetings: "Looking up recent meetings…",
-  translate_text: "Translating…",
-  semantic_search: "Searching knowledge base…",
-  get_meeting_summary: "Looking up meeting summary…",
-  get_room_detail: "Looking up room details…",
-  get_transcript: "Reading the transcript…",
-  get_document: "Reading the document…",
-  ask_user: "Needs a couple of details…",
-  create_meeting: "Creating the meeting…",
-};
 
 interface SlashCommand {
   command: string;
@@ -575,7 +563,7 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; toolName: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setActiveToolLabel(TOOL_LABELS[payload.toolName] ?? "Looking that up…");
+        setActiveToolLabel(assistantToolLabel(payload.toolName));
         armResponseTimeout();
       },
     );
