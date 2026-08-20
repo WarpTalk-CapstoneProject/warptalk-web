@@ -7,9 +7,15 @@ export const SIGNALR_HUBS = {
   TRANSLATION_ROOM: "/hubs/translation-room",
   MEETING_CHAT: "/api/v1/meetings/chat-hub",
   ASSISTANT: "/api/v1/assistant/chat-hub",
+  BILLING: "/hubs/billing",
 } as const;
 
 export const SIGNALR_EVENTS = {
+  // Billing. The Gateway relays every `billing.*` notification under this name as well as under
+  // NewNotification, so a screen that only cares about money can listen for this one instead of
+  // filtering the whole notification firehose.
+  BILLING_NOTIFICATION: "BillingNotification",
+
   // Notifications
   NEW_NOTIFICATION: "NewNotification",
   NOTIFICATION_READ: "NotificationRead",

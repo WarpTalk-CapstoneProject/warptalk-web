@@ -25,10 +25,11 @@
  */
 
 import { Spinner } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import {
   summariseCycleActivity,
@@ -44,14 +45,54 @@ import { ServiceUsageTable } from "../components/service-usage-table";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+/**
+ * How often the page re-reads its own numbers while it is on screen.
+ *
+ * Thirty seconds is chosen against what it is watching: credits move in settlements a few seconds
+ * apart during a live meeting, and not at all between them. Faster buys nothing a reader would
+ * notice on a cumulative chart; slower makes a meeting look like it is not being billed.
+ */
+const POLL_INTERVAL_MS = 30_000;
+
 export default function WorkspaceUsagePage() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceId = activeWorkspaceId || "";
   const role = useWorkspaceRole();
 
-  // Read once, at mount. Reading the clock during render is impure — the chart and the window
-  // length would each see a slightly different "now" and could disagree across midnight.
-  const [now] = useState(() => Date.now());
+  const queryClient = useQueryClient();
+
+  /**
+   * One clock for the whole page, advanced only when the data behind it is refetched.
+   *
+   * Reading `Date.now()` during render is impure — the chart and the window length would each see
+   * a slightly different "now" and could disagree across midnight. But holding the mount value
+   * forever is its own bug: a tab left open overnight keeps drawing yesterday's TODAY line and
+   * files fresh transactions into the wrong day. It moves with the refresh, and only there.
+   */
+  const [now, setNow] = useState(() => Date.now());
+
+  const refresh = useCallback(() => {
+    setNow(Date.now());
+    queryClient.invalidateQueries({ queryKey: ["billing"] });
+  }, [queryClient]);
+
+  /**
+   * Two sources of freshness, because neither one covers this page alone.
+   *
+   * The hub carries subscription, plan, payment and overage events the moment they happen. It
+   * does NOT carry credit consumption — nothing in the billing service publishes that — so the
+   * number this page is actually about would sit still without a timer.
+   */
+  useBillingRealtime(refresh);
+
+  useEffect(() => {
+    // Only while the tab is on screen. A background tab polling billing endpoints every half
+    // minute is load nobody is reading, on a gateway that rate-limits.
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [refresh]);
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
