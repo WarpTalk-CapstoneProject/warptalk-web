@@ -126,6 +126,13 @@ export const API = {
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
     exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
   },
+  // Work a meeting produced. Readable where the meeting is; closeable by the person it was
+  // given to, or the host.
+  actionItems: {
+    forRoom: (roomId: string) => `/rooms/${roomId}/action-items`,
+    mine: (workspaceId: string) => `/workspaces/${workspaceId}/action-items/mine`,
+    status: (itemId: string) => `/action-items/${itemId}/status`,
+  },
   transcripts: {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,

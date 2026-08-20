@@ -25,6 +25,9 @@ import { useMemo, useState } from "react";
 import {
   CheckCircle,
   Circle,
+  CheckSquare,
+  Square,
+  XSquare,
   ClockCounterClockwise,
   DownloadSimple,
   FileText,
@@ -38,6 +41,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { sectionTitle } from "@/lib/meeting/meeting-summary";
 import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
+import type { MeetingActionItemDto } from "@/types/meetingActionItem";
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import {
   counterpartOf,
@@ -222,6 +227,8 @@ export function MinutesPanel({
       />
 
       <Sections content={view} editing={editing} setDraft={setDraft} onSeek={onSeek} />
+
+      <ApprovedWork roomId={roomId} />
 
       <Votes content={view} />
 
@@ -631,6 +638,87 @@ function Translations({
         );
       })}
     </>
+  );
+}
+
+/**
+ * The commitments this meeting produced, as things somebody can tick off.
+ *
+ * Distinct from the "Action items" section above it, and deliberately so: that section is the
+ * RECORD of what was said, frozen with the document. This is the WORK, and it moves. A record that
+ * changed whenever somebody finished a task would stop being a record.
+ *
+ * Empty until the minutes are approved, because a draft's commitments are proposals.
+ */
+function ApprovedWork({ roomId }: { roomId: string }) {
+  const { data: items } = useRoomActionItems(roomId);
+  const updateStatus = useUpdateActionItemStatus(roomId);
+
+  if (!items || items.length === 0) return null;
+
+  function cycle(item: MeetingActionItemDto) {
+    // OPEN → DONE → OPEN. Dropping is its own button: a task decided against is a different
+    // outcome from one completed, and hiding that behind the same control loses the difference.
+    const next = item.status === "OPEN" ? "DONE" : "OPEN";
+    updateStatus.mutate(
+      { itemId: item.id, status: next },
+      { onError: () => toast.error("Không cập nhật được công việc.") },
+    );
+  }
+
+  return (
+    <section className="space-y-2">
+      <h4 className="text-[13px] font-semibold text-ink">Công việc được giao</h4>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li key={item.id} className="flex items-start gap-2 text-[13px]">
+            <button
+              type="button"
+              onClick={() => cycle(item)}
+              aria-label={item.status === "OPEN" ? "Đánh dấu hoàn thành" : "Mở lại"}
+              className="mt-[2px] shrink-0 text-ink-subtle hover:text-ink"
+            >
+              {item.status === "DONE" ? (
+                <CheckSquare size={15} weight="fill" className="text-semantic-success" />
+              ) : item.status === "DROPPED" ? (
+                <XSquare size={15} className="text-ink-subtle" />
+              ) : (
+                <Square size={15} />
+              )}
+            </button>
+
+            <div className="min-w-0 flex-1">
+              <span className={cn("text-ink", item.status !== "OPEN" && "line-through text-ink-muted")}>
+                {item.task}
+              </span>
+              {/* What the meeting SAID, whether or not it resolved to a person. Showing only the
+                  resolved assignee would make an unresolved owner vanish from a line that names one. */}
+              {item.ownerName ? (
+                <span className="ml-1.5 text-[12px] text-ink-muted">— {item.ownerName}</span>
+              ) : null}
+              {item.ownerName && !item.ownerParticipantId ? (
+                <span className="ml-1.5 text-[11px] text-ink-subtle">(chưa khớp được người)</span>
+              ) : null}
+            </div>
+
+            {item.status === "OPEN" ? (
+              <button
+                type="button"
+                onClick={() =>
+                  updateStatus.mutate(
+                    { itemId: item.id, status: "DROPPED" },
+                    { onError: () => toast.error("Không cập nhật được công việc.") },
+                  )
+                }
+                className="shrink-0 text-[11px] text-ink-subtle hover:text-ink"
+              >
+                Bỏ
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
