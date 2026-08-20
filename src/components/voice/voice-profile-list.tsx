@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { DotsThree, Waveform } from "@phosphor-icons/react";
+import { DotsThree } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
 import { VoiceChip, VoiceLine, type VoiceLineTone } from "@/components/voice/voice-line";
 import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
 import {
-  WorkspaceEmptyState,
   WorkspaceListModule,
   WorkspaceRailModule,
 } from "@/components/workspace/page-chrome";
@@ -23,6 +22,7 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { useDeleteVoiceProfile, useDubVoice, useSetDubVoice } from "@/hooks/use-voice-profiles";
 import { getLanguageName } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 /**
  * What has actually become of a recording somebody uploaded.
@@ -116,8 +116,9 @@ export function VoiceProfileList({
         <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">Loading your voices…</p>
       ) : profiles.length === 0 ? (
         <div className="pt-3">
-          <WorkspaceEmptyState
-            icon={<Waveform size={26} weight="duotone" />}
+          <PagePlaceholder
+            kind="voice-profiles"
+            className="min-h-[240px]"
             title="No voices of your own yet"
             description="Record one clear sample and WarpTalk can speak your translations in your own voice. Until then a library voice is used."
             action={

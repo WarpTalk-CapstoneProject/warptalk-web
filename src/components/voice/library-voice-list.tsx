@@ -14,7 +14,6 @@ import {
 import { VoiceChip, VoiceLine } from "@/components/voice/voice-line";
 import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
 import {
-  WorkspaceEmptyState,
   WorkspaceListModule,
   WorkspaceRailModule,
 } from "@/components/workspace/page-chrome";
@@ -22,6 +21,7 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 /**
  * The bare ISO-639-1 code the AI worker keys its catalog by. Voice profiles store locale tags
@@ -126,7 +126,9 @@ export function LibraryVoiceList({
         // A cold catalog is the normal state before the AI worker's first synthesis for this
         // language — say so plainly instead of showing it as a failure.
         <div className="pt-3">
-          <WorkspaceEmptyState
+          <PagePlaceholder
+            kind="voice-profiles"
+            className="min-h-[240px]"
             title={`No voices for ${getLanguageName(language)} yet`}
             description="They appear after the first translation into this language in a meeting."
           />

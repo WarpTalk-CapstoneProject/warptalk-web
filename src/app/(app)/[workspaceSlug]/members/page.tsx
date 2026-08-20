@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  Users,
   UserMinus,
   Funnel,
   Spinner,
@@ -47,6 +46,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { Switch } from "@/components/ui/switch";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import {
   Dialog,
   DialogContent,
@@ -490,23 +490,24 @@ export default function WorkspaceMembersPage() {
             <Spinner className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : filteredMembers.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center border border-dashed border-hairline rounded-lg bg-surface-1/10">
-            <Users className="h-8 w-8 text-ink-muted" />
-            <p className="text-sm font-medium">
-              {filter === "invited"
+          <PagePlaceholder
+            kind="members"
+            className="min-h-[240px]"
+            title={
+              filter === "invited"
                 ? "No pending invitations"
                 : filter === "requested"
                   ? "No join requests"
-                  : "No people found"}
-            </p>
-            <p className="text-xs text-ink-muted">
-              {filter === "invited"
+                  : "No people found"
+            }
+            description={
+              filter === "invited"
                 ? "Use Invite new member to send one."
                 : filter === "requested"
                   ? "Requests to join this workspace will appear here."
-                  : "Try adjusting your search terms or filters."}
-            </p>
-          </div>
+                  : "Try adjusting your search terms or filters."
+            }
+          />
         ) : (
           <div className="min-w-[1000px] divide-y divide-hairline/40">
             {/* Header row */}
