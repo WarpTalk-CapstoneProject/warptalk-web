@@ -21,7 +21,7 @@
 // Relative, with the extension: this module's unit tests run under the plain node test
 // runner, which does not resolve the "@/" alias for real values.
 import { getFlagEmoji } from "../language/language-flag.ts";
-import { getLanguageName, normalizeLanguageCode } from "../language/languages.ts";
+import { getLanguageName } from "../language/languages.ts";
 
 export type ParticipantIdentity = {
   userId: string;
@@ -166,12 +166,16 @@ export function identityFor(
 }
 
 /**
- * The language badge, as a flag and a sentence.
+ * The language badge: a flag, and the name of that language. Nothing else.
  *
- * One person, one language is the shape the meeting bar now writes (WT-434), so the flag shows the
- * language they SPEAK — that is what the people around them are hearing translated. The sentence
- * spells out both sides only when they actually differ, because "Speaks Vietnamese · hears
- * Vietnamese" is noise on the common case and the difference is the whole story on the rare one.
+ * One person, one language is the shape the meeting bar now writes (WT-434), so the badge shows
+ * the language they SPEAK — that is what the people around them are hearing translated, and it
+ * falls back to their listen language only when nobody has told us what they speak.
+ *
+ * It deliberately does NOT narrate both sides. An earlier version said "Speaks Vietnamese · hears
+ * English" whenever a stored profile carried a split, which put a sentence on a badge whose whole
+ * job is to be read at a glance beside a face. The split is still real and still routes correctly;
+ * the place to read it is the People panel, not a flag.
  *
  * Returns an empty flag rather than a placeholder glyph for a language with no region, so a caller
  * can decide between "no badge" and "a badge with no flag" instead of being handed mojibake.
@@ -180,23 +184,8 @@ export function describeParticipantLanguage(
   speakLanguage?: string | null,
   listenLanguage?: string | null,
 ): { flag: string; label: string } | null {
-  const speak = speakLanguage?.trim();
-  const listen = listenLanguage?.trim();
-  if (!speak && !listen) return null;
+  const primary = speakLanguage?.trim() || listenLanguage?.trim();
+  if (!primary) return null;
 
-  const primary = speak || listen!;
-  const flag = getFlagEmoji(primary);
-  const speaksName = speak ? getLanguageName(speak) : null;
-  const hearsName = listen ? getLanguageName(listen) : null;
-
-  const differ =
-    speak && listen && normalizeLanguageCode(speak) !== normalizeLanguageCode(listen);
-
-  const label = differ
-    ? `Speaks ${speaksName} · hears ${hearsName}`
-    : speaksName
-      ? `Speaks ${speaksName}`
-      : `Hears ${hearsName}`;
-
-  return { flag, label };
+  return { flag: getFlagEmoji(primary), label: getLanguageName(primary) };
 }

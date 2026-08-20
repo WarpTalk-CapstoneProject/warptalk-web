@@ -98,17 +98,25 @@ test("initials never come back empty", () => {
   assert.equal(getInitials("  Tu  "), "T");
 });
 
-test("the language badge names one language when both sides agree", () => {
+test("the language badge is a flag and a language name, nothing else", () => {
   const badge = describeParticipantLanguage("vi-VN", "vi-VN");
 
   assert.equal(badge?.flag, "🇻🇳");
-  assert.equal(badge?.label, "Speaks Vietnamese");
+  assert.equal(badge?.label, "Vietnamese");
 });
 
-test("the language badge spells out both sides only when they differ", () => {
+test("a split profile still shows only the language being spoken", () => {
   const badge = describeParticipantLanguage("vi", "en-US");
 
-  assert.equal(badge?.label, "Speaks Vietnamese · hears English");
+  assert.equal(badge?.flag, "🇻🇳");
+  assert.equal(badge?.label, "Vietnamese");
+});
+
+test("the listen language stands in when nobody said what they speak", () => {
+  const badge = describeParticipantLanguage(null, "ja-JP");
+
+  assert.equal(badge?.flag, "🇯🇵");
+  assert.equal(badge?.label, "Japanese");
 });
 
 test("no languages means no badge at all", () => {
