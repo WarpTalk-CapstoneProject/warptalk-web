@@ -301,3 +301,121 @@ export function WorkspaceSection({
     </section>
   );
 }
+
+/**
+ * A page whose content is TWO things: the work on the left, the state of that work on the right.
+ *
+ * WHY A SECOND SHAPE EXISTS AT ALL
+ *     `WorkspaceSection` above stacks equal blocks down one column, which is right when every
+ *     block is the same kind of thing. Voice Profiles is not: browsing and choosing voices is a
+ *     list you scan, while consent and the two voice preferences are settings you set once. Given
+ *     the same full width, the settings read as more list, and each one leaves several hundred
+ *     pixels of dead space between its label and its control.
+ *
+ *     So they are split, and the divider is a single hairline rather than four card borders —
+ *     the same device that separates one row from the next, used one level up.
+ *
+ * WHY CONTAINER QUERIES AND NOT `lg:`
+ *     The main region is not the viewport. With both meeting side panels open it is under 500px
+ *     on a large monitor, so a viewport breakpoint would keep a 320px rail beside a 180px list.
+ *     Everything here measures the container it is actually in.
+ */
+export function WorkspaceSplit({
+  rail,
+  children,
+  className,
+}: {
+  /** `WorkspaceRailModule`s. They stack beside the content, and go three-up above it when narrow. */
+  rail: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("@container/page min-h-0 flex-1 overflow-auto", className)}>
+      <div className="grid items-start @[900px]/page:grid-cols-[minmax(0,1fr)_320px]">
+        {/* Order is reversed below 900px: the rail is short and states what is switched on, so
+            it belongs above the list rather than beneath a catalog of two dozen voices. */}
+        <div className="@container/main order-2 min-w-0 px-4 pb-10 @[900px]/page:order-1 @[900px]/page:border-r @[900px]/page:border-border">
+          {children}
+        </div>
+        <aside className="order-1 @[900px]/page:order-2">
+          {/*
+            Two columns rather than one row of four between 560px and 900px: the modules carry a
+            sentence of explanation each, and four of them across a 700px strip leaves every one
+            of those sentences four words wide. Borders are set per module instead of with
+            `divide-*` because a wrapped grid needs a right edge on the odd column, which
+            `divide-x` — which only skips the last child in DOM order — cannot express.
+          */}
+          <div
+            className="grid [&>*]:border-b [&>*]:border-border @[560px]/page:grid-cols-2 @[560px]/page:[&>*:nth-child(odd)]:border-r @[900px]/page:grid-cols-1 @[900px]/page:[&>*]:border-r-0 @[900px]/page:[&>*:last-child]:border-b-0"
+          >
+            {rail}
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+/** One block in a `WorkspaceSplit` rail: what it is, what it is set to, and the control. */
+export function WorkspaceRailModule({
+  title,
+  badge,
+  description,
+  children,
+}: {
+  title: string;
+  /** A state chip — "Allowed", "Off". Sits opposite the title. */
+  badge?: ReactNode;
+  description?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-2.5 px-4 py-5">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-[13px] font-semibold text-ink">{title}</h2>
+        {badge}
+      </div>
+      {description ? (
+        <p className="text-[11.5px] leading-[1.55] text-ink-subtle">{description}</p>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
+/**
+ * A list under an eyebrow, in the main column of a `WorkspaceSplit`.
+ *
+ * The count lives in the eyebrow rather than in a tile above the list: it is one number about
+ * the rows immediately below it, and a 9px-tall label can carry it for free.
+ */
+export function WorkspaceListModule({
+  title,
+  count,
+  actions,
+  children,
+  footer,
+}: {
+  title: string;
+  count?: number;
+  actions?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  return (
+    <section className="pt-5">
+      <div className="flex min-h-[28px] items-center justify-between gap-3 pb-2">
+        <h2 className="flex items-baseline gap-2 text-[10.5px] font-semibold uppercase tracking-[0.115em] text-ink-subtle">
+          {title}
+          {count === undefined ? null : (
+            <span className="tracking-[0.06em] text-ink-muted tabular-nums">{count}</span>
+          )}
+        </h2>
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      </div>
+      <div className="border-t border-border">{children}</div>
+      {footer}
+    </section>
+  );
+}
