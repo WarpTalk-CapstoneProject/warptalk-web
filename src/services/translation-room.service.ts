@@ -141,6 +141,23 @@ function toPreflight(room: TranslationRoomDto, participantCount = 0): Translatio
   };
 }
 
+/**
+ * What flash mode is actually doing for a room, and why.
+ *
+ * `enabled` used to be the whole answer, and it meant "a per-room override exists and says on".
+ * That is a different question from the one the switch asks — whether the room is streaming —
+ * and the two diverged the moment the deployment default became on: an untouched room read
+ * "off" while streaming, and turning the switch on and off again wrote a real override that
+ * took away the speed it had been wrong about.
+ *
+ * `source` is what lets the panel say WHICH of those it is looking at.
+ */
+export type FlashModeState = {
+  enabled: boolean;
+  /** "room" = a host chose it · "deployment" = following the default · "unknown" = neither is known. */
+  source: "room" | "deployment" | "unknown";
+};
+
 export const translationRoomService = {
   async create(data: CreateTranslationRoomRequest) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.create, toBackendCreateRequest(data));
@@ -372,17 +389,20 @@ export const translationRoomService = {
    * surface rather than swallow: a switch that silently springs back is worse than one that says
    * it is not yours to move.
    */
-  async getFlashMode(id: string) {
-    const { data } = await apiClient.get<{ enabled: boolean }>(API.translationRooms.flashMode(id));
-    return Boolean(data?.enabled);
+  async getFlashMode(id: string): Promise<FlashModeState> {
+    const { data } = await apiClient.get<FlashModeState>(API.translationRooms.flashMode(id));
+    // An older gateway sends only `enabled`. Reading that as "unknown" rather than inventing a
+    // source keeps the copy hedged during a rolling deploy instead of confidently wrong.
+    return { enabled: Boolean(data?.enabled), source: data?.source ?? "unknown" };
   },
 
-  async setFlashMode(id: string, enabled: boolean) {
-    const { data } = await apiClient.put<{ enabled: boolean }>(
+  async setFlashMode(id: string, enabled: boolean): Promise<FlashModeState> {
+    const { data } = await apiClient.put<FlashModeState>(
       API.translationRooms.flashMode(id),
       { enabled },
     );
-    return Boolean(data?.enabled);
+    // Always "room" once this succeeds: setting it IS the act of creating an override.
+    return { enabled: Boolean(data?.enabled), source: data?.source ?? "room" };
   },
 
   /**

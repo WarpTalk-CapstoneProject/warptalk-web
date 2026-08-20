@@ -16,6 +16,8 @@ import {
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
+import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
+import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import {
   SuggestionBadge,
   SuggestionDetail,
@@ -211,6 +213,11 @@ function TranscriptBubble({
   onDismissSuggestion: (segmentId: string) => void;
 }) {
   const speakerName = segment.speakerName || "Speaker";
+  // The face and the language, from the one map the whole meeting resolves against. The NAME
+  // still comes from the segment: resolveTranscriptSpeakerName already guarded it against a
+  // roster that hands back a UUID as somebody's display name, and that guard must not be lost
+  // by preferring the roster copy here.
+  const person = useMeetingIdentity(segment.speakerId, speakerName);
   const translation = resolveSegmentTranslation(segment, readerLanguage);
   // Closed by default. The hint was not asked for, so it announces itself with a badge and
   // waits to be opened rather than pushing the line somebody actually said out of the way.
@@ -222,11 +229,15 @@ function TranscriptBubble({
       initial={{ opacity: 0, y: 8, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-      className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+      className={`flex gap-2 ${isSelf ? "flex-row-reverse" : "flex-row"}`}
     >
-      <div className={`flex max-w-[92%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
+      {/* Who said it, as a face — the panel used to identify every line by a name in 10px grey,
+          which is the smallest type on the screen carrying the one fact you need to follow a
+          multilingual conversation. The flag on the avatar says which language they said it in. */}
+      <ParticipantAvatar identity={person} size="sm" className="mt-4" />
+      <div className={`flex max-w-[85%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
         <div className={`flex min-w-0 items-center gap-1.5 px-1 text-[10px] text-ink-subtle ${isSelf ? "flex-row-reverse" : ""}`}>
-          <span className="min-w-0 truncate font-semibold text-ink-muted">
+          <span className="min-w-0 truncate text-[11px] font-semibold text-ink-muted">
             {isSelf ? "You" : speakerName}
           </span>
           {/* The clock when we have one, the old offset only as a fallback.

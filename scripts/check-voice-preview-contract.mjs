@@ -72,11 +72,21 @@ if (!endpoints) {
   );
 }
 
-/** 4. Both doors. A component nothing renders is the failure this file is modelled on. */
+/**
+ * 4. Both doors. A component nothing renders is the failure this file is modelled on.
+ *
+ * The profile list moved out of the page into its own component when the page was split into
+ * a list column and a settings rail. What is checked is the SURFACE, not the file — so the
+ * assertion follows the list, and a fifth one below re-checks that the page still renders it.
+ */
 const SURFACES = [
   [
-    "src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx",
+    "src/components/voice/voice-profile-list.tsx",
     "the voice profile list — where somebody checks an uploaded recording before trusting it",
+  ],
+  [
+    "src/components/voice/library-voice-list.tsx",
+    "the voice library — where somebody picks the voice they hear other people in",
   ],
   [
     "src/components/voice/my-dub-voice-picker.tsx",
@@ -97,10 +107,32 @@ for (const [path, why] of SURFACES) {
   }
 }
 
+/**
+ * 5. And the page that has to render those surfaces.
+ *
+ * Splitting the page into components moved the preview two files away from the route. Without
+ * this, every assertion above could pass while the page rendered none of them — which is the
+ * exact shape of failure the whole file exists to catch.
+ */
+const PAGE = "src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx";
+const page = read(PAGE);
+if (!page) {
+  failures.push(`${PAGE} is missing — the preview would have no route to live on.`);
+} else {
+  for (const component of ["VoiceProfileList", "LibraryVoiceList", "MyDubVoicePicker"]) {
+    if (!page.includes(`<${component}`)) {
+      failures.push(
+        `${PAGE} no longer renders <${component} />. The component and its preview button would ` +
+          `both still exist, and nobody could reach either.`,
+      );
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error("FAIL voice preview contract\n");
   for (const failure of failures) console.error(`  - ${failure}\n`);
   process.exit(1);
 }
 
-console.log("PASS voice preview button, its service, its endpoint and both surfaces agree");
+console.log("PASS voice preview button, its service, its endpoint, its surfaces and the page agree");

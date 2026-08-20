@@ -28,12 +28,18 @@ export function VoicePreviewButton({
   language,
   label,
   className,
+  variant = "icon",
 }: {
   voiceId: string;
   language: string;
   /** What is being previewed, for the screen-reader label. */
   label?: string;
   className?: string;
+  /**
+   * "icon" in a list, where the row already says which voice it is and a repeated word would
+   * be noise. "inline" where the button stands alone and has to name its own action.
+   */
+  variant?: "icon" | "inline";
 }) {
   const [state, setState] = useState<"idle" | "loading" | "playing">("idle");
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -85,12 +91,25 @@ export function VoicePreviewButton({
   }
 
   const busy = state === "loading";
+  const glyph = busy ? (
+    <SpinnerGap weight="bold" className="h-3.5 w-3.5 animate-spin" />
+  ) : state === "playing" ? (
+    <Pause weight="fill" className="h-3.5 w-3.5" />
+  ) : (
+    <Play weight="fill" className="h-3.5 w-3.5" />
+  );
+
   return (
     <Button
       type="button"
       variant="ghost"
-      size="icon"
-      className={className ?? "h-8 w-8 text-ink-muted hover:text-ink"}
+      size={variant === "icon" ? "icon" : "sm"}
+      className={
+        className ??
+        (variant === "icon"
+          ? "h-7 w-7 text-ink-muted hover:text-ink"
+          : "h-7 gap-1.5 px-2 text-[12px] text-ink-muted hover:text-ink")
+      }
       onClick={play}
       disabled={busy}
       aria-label={
@@ -99,13 +118,8 @@ export function VoicePreviewButton({
           : `Hear ${label ?? "this voice"}`
       }
     >
-      {busy ? (
-        <SpinnerGap weight="bold" className="h-4 w-4 animate-spin" />
-      ) : state === "playing" ? (
-        <Pause weight="fill" className="h-4 w-4" />
-      ) : (
-        <Play weight="fill" className="h-4 w-4" />
-      )}
+      {glyph}
+      {variant === "inline" ? (state === "playing" ? "Stop" : "Hear it") : null}
     </Button>
   );
 }
