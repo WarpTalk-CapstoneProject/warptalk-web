@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import sharp from "sharp";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const assetRoot = path.join(root, "public/assets/illustrations/page-placeholders");
@@ -40,6 +41,21 @@ for (const asset of assets) {
     colourType === 6 || colourType === 4,
     `${asset} has no alpha channel (PNG colour type ${colourType}) — it will render as a ` +
       `rectangle of its export matte, not as artwork`,
+  );
+
+  const { data: rgba, info: rgbaInfo } = await sharp(png)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const cornerAlpha = [
+    rgba[3],
+    rgba[(rgbaInfo.width - 1) * 4 + 3],
+    rgba[(rgbaInfo.height - 1) * rgbaInfo.width * 4 + 3],
+    rgba[(rgbaInfo.width * rgbaInfo.height - 1) * 4 + 3],
+  ];
+  assert.ok(
+    cornerAlpha.every((alpha) => alpha === 0),
+    `${asset} has an alpha channel but its canvas background is still opaque`,
   );
 
   // Size is a design decision, not an accident: displayed at 280–380 CSS px, so 760 covers a
