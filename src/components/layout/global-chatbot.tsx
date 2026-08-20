@@ -22,7 +22,6 @@ import {
   BookBookmark,
   VideoCamera,
   X,
-  CircleNotch,
 } from "@phosphor-icons/react/dist/ssr";
 import {
   Popover,
@@ -1243,11 +1242,16 @@ export function GlobalChatbot() {
                               className="size-[5px] shrink-0 rounded-full bg-hairline-strong"
                             />
                           ) : (
-                            <CircleNotch
-                              size={11}
-                              weight="bold"
-                              className="shrink-0 animate-spin text-ink-muted"
-                            />
+                            // The same Lumidot that means "thinking" one line up. A second
+                            // spinner shape for the same fact — WarpBot is working — reads as a
+                            // different kind of waiting, and there is only one kind here.
+                            <span className="flex size-[11px] shrink-0 origin-center scale-[0.34] items-center justify-center">
+                              <Lumidot
+                                variant={lumidotVariant}
+                                pattern="frame"
+                                glow={4}
+                              />
+                            </span>
                           )}
                           <span className={step.done ? "text-ink-subtle" : "text-ink-muted"}>
                             {step.done

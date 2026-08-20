@@ -699,10 +699,13 @@ export function ChatPanel({
             indistinguishable from having been ignored. */}
         {assistantState !== "idle" ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
-            <span className="flex gap-0.5" aria-hidden>
-              <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
-              <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
-              <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
+            {/* The same Lumidot the widget uses. Two surfaces run one agent, and three bouncing
+                dots here against a Lumidot there said the waiting was a different kind. */}
+            <span
+              aria-hidden
+              className="flex size-[14px] shrink-0 origin-center scale-[0.42] items-center justify-center"
+            >
+              <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
             </span>
             {/* The step, when WarpBot has told us one. A named tool is the difference between
                 "something is happening" and "this might be broken", and it is why the deadline

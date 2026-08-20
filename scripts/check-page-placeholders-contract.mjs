@@ -23,8 +23,31 @@ for (const asset of assets) {
   assert.ok(info?.isFile(), `missing page placeholder asset: ${asset}`);
 
   const png = await readFile(fullPath);
-  assert.equal(png.readUInt32BE(16), 1254, `unexpected width: ${asset}`);
-  assert.equal(png.readUInt32BE(20), 1254, `unexpected height: ${asset}`);
+  assert.equal(png.readUInt32BE(16), 760, `unexpected width: ${asset}`);
+  assert.equal(png.readUInt32BE(20), 760, `unexpected height: ${asset}`);
+
+  // THE BUG THIS FILE NOW CATCHES.
+  //
+  // These shipped once as colour type 2 — RGB, no alpha — flattened onto a (247,247,248)
+  // matte. Nothing failed: they were valid PNGs of the right size, and the component leaned on
+  // `mix-blend-multiply` to hide the matte, which only works against pure white. On this
+  // surface every illustration sat in a visible grey square.
+  //
+  // Byte 25 of a PNG is the IHDR colour type. 6 is RGBA, 4 is greyscale+alpha; anything else
+  // has no alpha channel and cannot sit on a coloured surface without a box around it.
+  const colourType = png.readUInt8(25);
+  assert.ok(
+    colourType === 6 || colourType === 4,
+    `${asset} has no alpha channel (PNG colour type ${colourType}) — it will render as a ` +
+      `rectangle of its export matte, not as artwork`,
+  );
+
+  // Size is a design decision, not an accident: displayed at 280–380 CSS px, so 760 covers a
+  // 2x screen and nothing more. The first version was 1254px and ~1MB each, 8.1MB of repo.
+  assert.ok(
+    info.size < 600 * 1024,
+    `${asset} is ${Math.round(info.size / 1024)}KB — over the 600KB an empty-state drawing needs`,
+  );
 }
 
 const component = await readFile(
@@ -36,9 +59,20 @@ assert.match(component, /import Image from "next\/image"/);
 assert.match(component, /alt=""/);
 assert.match(component, /aria-hidden="true"/);
 assert.match(component, /PLACEHOLDER_ASSETS/);
-assert.match(component, /width=\{1254\}/);
-assert.match(component, /height=\{1254\}/);
+assert.match(component, /width=\{760\}/);
+assert.match(component, /height=\{760\}/);
 assert.doesNotMatch(component, /<h1/);
+
+// The blend mode was a workaround for the missing alpha channel. With real transparency it is
+// not merely redundant — it darkens whatever the illustration is laid over.
+//
+// Checked against the className attributes rather than the whole file: the comment in that
+// component names the class it removed, and explaining a mistake must not count as making it.
+const classNames = [...component.matchAll(/className=\{?"([^"]*)"/g)].map((m) => m[1]);
+assert.ok(
+  classNames.every((value) => !value.includes("mix-blend")),
+  "page-placeholder must not use a blend mode: the PNGs carry real alpha now",
+);
 
 const expectedKinds = [
   "meetings",
