@@ -203,7 +203,7 @@ export default function RoomEndedPage() {
             active={tab === "minutes"}
             onClick={() => setTab("minutes")}
             icon={FileText}
-            label="Biên bản"
+            label="Minutes"
           />
           <MeetingRecordTabButton
             active={tab === "transcript"}

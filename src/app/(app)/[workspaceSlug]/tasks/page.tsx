@@ -63,7 +63,7 @@ export default function WorkspaceTasksPage() {
       await meetingActionItemService.updateStatus(item.id, status);
       await query.refetch();
     } catch {
-      toast.error("Không cập nhật được công việc.");
+      toast.error("Could not update the item.");
     }
   }
 
@@ -73,18 +73,18 @@ export default function WorkspaceTasksPage() {
         filters={
           <>
             <WorkspaceFilterPill
-              label="Đang mở"
+              label="Open"
               selected={filter === "OPEN"}
               onClick={() => setFilter("OPEN")}
               count={openCount}
             />
             <WorkspaceFilterPill
-              label="Đã đóng"
+              label="Closed"
               selected={filter === "DONE"}
               onClick={() => setFilter("DONE")}
             />
             <WorkspaceFilterPill
-              label="Tất cả"
+              label="All"
               selected={filter === "ALL"}
               onClick={() => setFilter("ALL")}
             />
@@ -96,13 +96,13 @@ export default function WorkspaceTasksPage() {
         {query.isLoading ? (
           <div className="flex items-center gap-2 py-8 text-[13px] text-ink-muted">
             <Spinner size={14} className="animate-spin" />
-            Đang tải…
+            Loading…
           </div>
         ) : shown.length === 0 ? (
           <p className="py-8 text-[13px] text-ink-muted">
             {filter === "OPEN"
-              ? "Không có công việc nào đang mở."
-              : "Chưa có công việc nào ở trạng thái này."}
+              ? "Nothing open — every task from your meetings is closed."
+              : "No tasks in this state yet."}
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -111,7 +111,7 @@ export default function WorkspaceTasksPage() {
                 <button
                   type="button"
                   onClick={() => setStatus(item, item.status === "OPEN" ? "DONE" : "OPEN")}
-                  aria-label={item.status === "OPEN" ? "Đánh dấu hoàn thành" : "Mở lại"}
+                  aria-label={item.status === "OPEN" ? "Mark done" : "Reopen"}
                   className="mt-[2px] shrink-0 text-ink-subtle hover:text-ink"
                 >
                   {item.status === "DONE" ? (
@@ -133,12 +133,12 @@ export default function WorkspaceTasksPage() {
                     {item.task}
                   </p>
                   {/* The meeting is what makes a cross-meeting list readable, and it links back
-                      to the biên bản the commitment is recorded in. */}
+                      to the minutes the commitment is recorded in. */}
                   <Link
                     href={`/${workspaceSlug}/rooms/${item.translationRoomId}/ended`}
                     className="text-[11px] text-ink-subtle hover:text-ink"
                   >
-                    {item.roomTitle || "Cuộc họp"}
+                    {item.roomTitle || "Untitled meeting"}
                   </Link>
                 </div>
 
@@ -148,7 +148,7 @@ export default function WorkspaceTasksPage() {
                     onClick={() => setStatus(item, "DROPPED")}
                     className="shrink-0 text-[11px] text-ink-subtle hover:text-ink"
                   >
-                    Bỏ
+                    Drop
                   </button>
                 ) : null}
               </li>
