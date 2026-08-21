@@ -4,6 +4,8 @@
  */
 export const API = {
   auth: {
+    /** Upload/replace the signed-in user's avatar (multipart). */
+    avatar: "/auth/profile/avatar",
     register: "/auth/register",
     registerInvited: "/auth/register-invited",
     login: "/auth/login",

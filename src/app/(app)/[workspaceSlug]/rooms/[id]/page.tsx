@@ -240,6 +240,28 @@ export default function RoomInformationPage() {
     [seekSources],
   );
 
+  /**
+   * What the Transcript tab counts — the entries it actually shows.
+   *
+   * It counted raw saved segments, and the panel below it counts what a person can read: a tab
+   * reading "Transcript (200)" opened onto "Saved · 145 entries". Both numbers were true and
+   * they answer different questions. Rows in the table are not utterances — the same function
+   * that draws the list drops control markers like __MEETING_END__ and merges the consecutive
+   * segments that make up one continuous piece of speech.
+   *
+   * A tab label is a promise about what is behind it, so it counts through the same function
+   * rather than a second, cheaper approximation of it.
+   */
+  const transcriptEntryCount = useMemo(
+    () =>
+      groupSavedTranscriptSegments(
+        [...transcriptSegments].sort(
+          (left, right) => left.sequenceOrder - right.sequenceOrder,
+        ),
+      ).length,
+    [transcriptSegments],
+  );
+
   const jumpToTranscriptMoment = useCallback(
     (atMs: number) => {
       // Both, and the seek first: it is the part with nothing on screen to acknowledge it, so it
@@ -606,7 +628,7 @@ export default function RoomInformationPage() {
                     highlightedSegmentId={highlightedSegmentId}
                   />
                 }
-                transcriptCount={transcriptSegments.length}
+                transcriptCount={transcriptEntryCount}
               />
             ) : null}
 
