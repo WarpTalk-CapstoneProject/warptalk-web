@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
+import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/api/errors";
 import { authService } from "@/services/auth.service";
+import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
 import { Input } from "@/components/ui/input";
 import { Spinner, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -50,6 +53,30 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState(DEFAULT_PROFILE_LANGUAGE);
   const [timezone, setTimezone] = useState(getDefaultProfileTimezone);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const setStoredUser = useAuthStore((state) => state.setUser);
+
+  /**
+   * The server is the one that validates. It checks the magic bytes, not just the Content-Type,
+   * so a renamed file is refused there rather than here — this only reports what it said.
+   *
+   * The auth store is updated from the response so the avatar in the sidebar and the top bar
+   * change with this one, instead of staying stale until the next sign-in.
+   */
+  async function uploadAvatar(file: File) {
+    setAvatarUploading(true);
+    try {
+      const { data } = await authService.uploadAvatar(file);
+      setStoredUser(data);
+      toast.success("Profile picture updated.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not update your profile picture."));
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
   const languageOptions = useMemo(() => {
     const options = getProfileLanguageOptions();
     return options.some((option) => option.value === preferredLanguage)
@@ -200,11 +227,35 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Avatar className="size-8 rounded-full border border-border">
-                  <AvatarImage src={user?.avatarUrl} alt={fullName} />
+                  <AvatarImage src={resolveAvatarUrl(user?.avatarUrl)} alt={fullName} />
                   <AvatarFallback className="rounded-full bg-sky-500 text-white text-xs font-semibold">
                     {getInitials(fullName)}
                   </AvatarFallback>
                 </Avatar>
+                {/* The input is hidden and the button drives it: a bare file input cannot be
+                    styled to match anything else on this page, and its "No file chosen" label
+                    states the obvious in a row that is already showing the picture. */}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void uploadAvatar(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[12px]"
+                  disabled={avatarUploading}
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  {avatarUploading ? "Uploading…" : user?.avatarUrl ? "Change" : "Upload"}
+                </Button>
               </div>
             </div>
 
