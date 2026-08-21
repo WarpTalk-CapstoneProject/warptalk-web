@@ -215,6 +215,28 @@ export default function RoomInformationPage() {
   const membersArray = members?.items ?? [];
 
   /**
+   * Faces for the transcript, by user id.
+   *
+   * The member list is the only place one exists: transcript_segments records who spoke as a user
+   * id, and the participants API carries no avatar at all — the same join the live meeting does in
+   * lib/meeting/participant-identity. Somebody who was in the meeting and is not a member of this
+   * workspace simply is not in here, and falls back to their initials.
+   */
+  const speakerDirectory = useMemo(
+    () =>
+      Object.fromEntries(
+        (members?.items ?? []).map((member) => [
+          member.userId,
+          { fullName: member.fullName, avatarUrl: member.avatarUrl },
+        ]),
+      ),
+    // On members?.items, not on the `?? []` above it: that default is a fresh array every render,
+    // so the memo would rebuild the directory on each one and hand the transcript a new object
+    // to re-render against.
+    [members?.items],
+  );
+
+  /**
    * Scroll the transcript to the moment a summary claim cites, and mark it.
    *
    * Resolved to the segment that was BEING SPOKEN at that moment rather than the nearest
@@ -641,6 +663,7 @@ export default function RoomInformationPage() {
                     canEdit={isHost}
                     onSegmentsChanged={() => void segmentsQuery.refetch()}
                     highlightedSegmentId={highlightedSegmentId}
+                    speakerDirectory={speakerDirectory}
                   />
                 }
                 transcriptCount={transcriptEntryCount}

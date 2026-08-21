@@ -67,6 +67,34 @@ const TRANSLATED: readonly TranslatedLine[] = [
   [6, "ja", "それでは、要約はベトナム語にしましょう。"],
 ];
 
+/**
+ * Who the transcript can put a face to.
+ *
+ * One of the two has a picture and the other does not, deliberately: an avatar is something a
+ * person uploads and most never do, so "initials in the speaker's colour" is the state this
+ * surface is actually in most of the time, and it has to look finished rather than broken.
+ *
+ * A data URI rather than a file, because this page has to render with no backend at all — a
+ * relative avatar path would 404 here and prove nothing about either state.
+ */
+const AVATAR_TUAN =
+  "data:image/svg+xml;utf8,"
+  + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+      // Plain "#", not "%23": encodeURIComponent runs over this string, so a pre-escaped hash
+      // becomes "%2523" and the browser renders a black square instead of a face.
+      + '<rect width="64" height="64" fill="#f0b429"/>'
+      + '<circle cx="32" cy="24" r="12" fill="#ffffff"/>'
+      + '<path d="M8 64c0-14 11-22 24-22s24 8 24 22z" fill="#ffffff"/>'
+      + "</svg>",
+  );
+
+// i18n-allow: two people's names, which is data about them and not copy to translate.
+const SPEAKER_DIRECTORY = {
+  [TUAN]: { fullName: "Trần Mạnh Tuấn", avatarUrl: AVATAR_TUAN },
+  [TU]: { fullName: "Huỳnh Thái Tú", avatarUrl: null },
+};
+
 const segmentId = (index: number) => `segment-${index}`;
 
 // Segment 2 is deliberately left with no Vietnamese translation: a reader who unifies on
@@ -165,6 +193,7 @@ export default function TranscriptPreviewPage() {
             transcriptId="preview-transcript"
             transcriptStatus="finalized"
             canEdit
+            speakerDirectory={SPEAKER_DIRECTORY}
           />
         </div>
       </section>
@@ -186,6 +215,7 @@ export default function TranscriptPreviewPage() {
             transcriptId="preview-transcript"
             transcriptStatus="recording"
             canEdit
+            speakerDirectory={SPEAKER_DIRECTORY}
           />
         </div>
       </section>
@@ -205,6 +235,7 @@ export default function TranscriptPreviewPage() {
             isEnded
             onCopy={() => {}}
             transcriptId="preview-transcript"
+            speakerDirectory={SPEAKER_DIRECTORY}
           />
         </div>
       </section>
