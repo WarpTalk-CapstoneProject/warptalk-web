@@ -156,6 +156,10 @@ export function useTrackProcessors({
 
         await setBrowserSuppression(false);
       } catch (error) {
+        // The full cause, verbatim, where a developer will look. This failure fired on
+        // production for weeks with the only record of WHY discarded right here — the toast
+        // carries a one-line summary, the console carries the truth.
+        console.error("Krisp noise suppression failed to attach or enable:", error);
         // Put the microphone back the way a working fallback needs it BEFORE telling anyone.
         // The report is only honest if it is true by the time it is made.
         try {
