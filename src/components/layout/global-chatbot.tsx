@@ -62,11 +62,15 @@ import {
 } from "@/components/layout/assistant-question-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { AnswerSources } from "@/components/assistant/answer-sources";
+import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import {
   parseAnswerSources,
   type AnswerSource,
 } from "@/lib/assistant/answer-sources";
 import { Lumidot } from "lumidot";
+
+import { ScrollFadeEdge, ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { useTheme } from "next-themes";
@@ -114,6 +118,16 @@ interface ChatMessage {
    * history — and cannot end up under the wrong bubble.
    */
   sources?: AnswerSource[];
+  /**
+   * What WarpBot did to produce this answer, and how long it took.
+   *
+   * Kept on the message for the same reason `sources` is: it belongs to the answer, and holding
+   * it in a lookup beside the thread would put it under the wrong bubble the first time two turns
+   * overlapped. Absent on anything replayed out of history — the server stores no trail, and an
+   * invented duration is a number a person can check and find wrong.
+   */
+  steps?: AssistantStep[];
+  durationMs?: number;
 }
 
 
@@ -323,6 +337,8 @@ export function GlobalChatbot() {
    * documents, not to catch one label mid-flash.
    */
   const [steps, setSteps] = useState<AssistantStep[]>([]);
+  /** When the open turn began, so the folded summary can say how long it took. */
+  const turnStartedAtRef = useRef<number | null>(null);
   /**
    * The turn has run past the watchdog and is still going.
    *
@@ -579,9 +595,10 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; messageId: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        // A new turn starts a new trail; the previous one stays visible above it as part of
-        // the answer it produced.
+        // A new turn starts a new trail; the previous one has been folded into the answer it
+        // produced and stays there.
         setSteps([]);
+        turnStartedAtRef.current = Date.now();
         setIsSlow(false);
         armResponseTimeout();
         upsertAssistantMessage(payload.messageId, (prev) => ({
@@ -667,11 +684,20 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setIsSlow(false);
-        // Cleared, not ticked. A finished turn showing a column of green ticks claims the
-        // steps are still worth watching; the answer is on screen and its source chips say
-        // where it came from. The trail is a progress display, and progress is over.
-        setSteps([]);
         clearResponseTimeout();
+
+        // Folded onto the answer, not deleted.
+        //
+        // This used to clear the trail outright, arguing that a finished turn showing its steps
+        // claims they are still worth watching. Half right: they are not worth WATCHING, and
+        // throwing them away also threw away the only record of which tools an answer came
+        // through — the first thing a person checking a surprising answer reaches for. It is one
+        // folded line now: over, and still there.
+        const finishedSteps = steps.map((step) => ({ ...step, done: true }));
+        const startedAt = turnStartedAtRef.current;
+        turnStartedAtRef.current = null;
+        setSteps([]);
+
         // Only the completed event carries them: the worker decides which sources the answer
         // pointed at once the whole answer exists, so there is nothing to show mid-stream.
         upsertAssistantMessage(payload.id, () => ({
@@ -679,6 +705,8 @@ export function GlobalChatbot() {
           role: "assistant",
           content: payload.content,
           sources: parseAnswerSources(payload.sourcesJson),
+          steps: finishedSteps.length > 0 ? finishedSteps : undefined,
+          durationMs: startedAt ? Date.now() - startedAt : undefined,
         }));
       },
     );
@@ -693,16 +721,19 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
         setIsSlow(false);
-        // Cleared, not ticked. A finished turn showing a column of green ticks claims the
-        // steps are still worth watching; the answer is on screen and its source chips say
-        // where it came from. The trail is a progress display, and progress is over.
-        setSteps([]);
         clearResponseTimeout();
+        // A failure is the case the trail matters MOST: how far it got is the only clue to why.
+        const failedSteps = steps.map((step) => ({ ...step, done: true }));
+        const failedStartedAt = turnStartedAtRef.current;
+        turnStartedAtRef.current = null;
+        setSteps([]);
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
           role: "assistant",
           content: payload.error,
           failed: true,
+          steps: failedSteps.length > 0 ? failedSteps : undefined,
+          durationMs: failedStartedAt ? Date.now() - failedStartedAt : undefined,
         }));
       },
     );
@@ -945,6 +976,14 @@ export function GlobalChatbot() {
     if (!container || !shouldAutoScrollRef.current) return;
     container.scrollTop = container.scrollHeight;
   }, [messages, isAiTyping, steps, isOpen, isExpanded]);
+
+  const { isAway, scrollToLatest } = useScrollToLatest(messagesContainerRef, {
+    // The same slack handleMessagesScroll uses to decide the widget is still following.
+    threshold: AUTOSCROLL_THRESHOLD_PX,
+    // Steps and the typing flag too: a long answer grows the list without adding a message, and
+    // that is exactly when a reader who scrolled up needs to be told the bottom has moved.
+    revision: `${messages.length}:${steps.length}:${isAiTyping}`,
+  });
 
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
@@ -1210,10 +1249,11 @@ export function GlobalChatbot() {
               </div>
 
               {/* Chat Messages */}
+              <div className="relative flex min-h-0 flex-1 flex-col">
               <div
                 ref={messagesContainerRef}
                 onScroll={handleMessagesScroll}
-                className="flex-1 overflow-y-auto px-2 flex flex-col gap-4"
+                className="min-h-0 flex-1 overflow-y-auto px-2 flex flex-col gap-4"
               >
                 {messages.length > 0 &&
                   messages.map((msg) => (
@@ -1242,6 +1282,14 @@ export function GlobalChatbot() {
                               sources={msg.sources ?? []}
                               workspaceSlug={activeWorkspaceSlug}
                             />
+                            {/* Under the answer, folded. Over as a progress display, still there
+                                as the record of which tools it came through. */}
+                            <AssistantWorkTrail
+                              steps={msg.steps ?? []}
+                              running={false}
+                              durationMs={msg.durationMs}
+                              lumidotVariant={lumidotVariant}
+                            />
                           </>
                         ) : (
                           msg.content
@@ -1251,40 +1299,19 @@ export function GlobalChatbot() {
                   ))}
                 {steps.length > 0 && (
                   <div className="flex justify-start">
-                    <ol className="flex flex-col gap-1 py-2 pl-4 text-[12px]">
-                      {steps.map((step) => (
-                        <li key={step.key} className="flex items-center gap-2">
-                          {step.done ? (
-                            // A dot, not a tick. The tick read as a verdict on the answer;
-                            // this is only a step that has gone past.
-                            <span
-                              aria-hidden
-                              className="size-[5px] shrink-0 rounded-full bg-hairline-strong"
-                            />
-                          ) : (
-                            // The same Lumidot that means "thinking" one line up. A second
-                            // spinner shape for the same fact — WarpBot is working — reads as a
-                            // different kind of waiting, and there is only one kind here.
-                            <span className="flex size-[11px] shrink-0 origin-center scale-[0.34] items-center justify-center">
-                              <Lumidot
-                                variant={lumidotVariant}
-                                pattern="frame"
-                                glow={4}
-                              />
-                            </span>
-                          )}
-                          <span className={step.done ? "text-ink-subtle" : "text-ink-muted"}>
-                            {step.done
-                              ? assistantToolDoneLabel(step.tool)
-                              : assistantToolLabel(step.tool)}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
+                    <AssistantWorkTrail
+                      steps={steps}
+                      running
+                      slow={isSlow}
+                      lumidotVariant={lumidotVariant}
+                      className="ml-4 mr-2 flex-1"
+                    />
                   </div>
                 )}
 
-                {isSlow && (
+                {/* Only when there is no trail to say it on. With one on screen this repeated the
+                    same fact in a second place. */}
+                {isSlow && steps.length === 0 && (
                   <p className="py-1 pl-4 text-[12px] text-ink-subtle">
                     Still working — this one is taking a while.
                   </p>
@@ -1326,6 +1353,12 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
+              </div>
+              {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
+                  the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
+                  panels end against the page and read as continuing on their own. */}
+              <ScrollFadeEdge />
+              <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
               </div>
 
               {/* Chat Input Section

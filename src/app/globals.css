@@ -124,6 +124,19 @@
   --hairline-strong: #d1d5db;
   --hairline-tertiary: #9ca3af;
   --radius: 8px;
+
+  /* Speaker colours — see src/lib/transcript/speaker-color.ts.
+     One meeting can hold a dozen voices and a transcript prints them as a wall of identical
+     rows; a person following a long stretch of talking had only a repeated name to go on. These
+     give each speaker a mark that runs the whole height of what they said.
+     Chosen against #ffffff and #f7f8f8, and kept clear of --primary (#5e6ad2), which already
+     means "this line is the one you were sent to". */
+  --speaker-1: #2f6fd0;
+  --speaker-2: #17916c;
+  --speaker-3: #b45d0c;
+  --speaker-4: #a8397a;
+  --speaker-5: #6d4bd8;
+  --speaker-6: #0b7f97;
 }
 
 .dark {
@@ -156,6 +169,60 @@
   --hairline-strong: #34343a;
   --hairline-tertiary: #3e3e44;
   --radius: 8px;
+
+  /* Same six, lifted for #0f1011. The light values are unreadable here and the dark ones are
+     washed out on white, so this is a real second palette rather than the same hex reused. */
+  --speaker-1: #6ba4f0;
+  --speaker-2: #45c79b;
+  --speaker-3: #e0954a;
+  --speaker-4: #e57ab5;
+  --speaker-5: #a693ff;
+  --speaker-6: #4fc0d8;
+}
+
+/* The sweep that runs across WarpBot's steps while it is working.
+   Violet because that is --primary's family, and this is the product's own "we are on it" rather
+   than a generic loading bar. Behind the text and at low opacity: a step a person cannot read
+   while it passes is worse than no movement at all.
+   Honours prefers-reduced-motion — a repeating horizontal sweep is exactly the kind of thing that
+   setting exists for, and the list still says what is happening without it. */
+@keyframes assistant-sweep {
+  0% {
+    transform: translateX(-60%);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(160%);
+    opacity: 0;
+  }
+}
+
+.assistant-sweep {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 45%;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in oklab, var(--primary) 22%, transparent),
+    transparent
+  );
+  animation: assistant-sweep 1.9s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-sweep {
+    animation: none;
+    opacity: 0;
+  }
 }
 
 @layer base {

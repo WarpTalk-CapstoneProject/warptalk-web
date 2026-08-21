@@ -36,6 +36,12 @@ interface TranslationRoomStoreState {
    */
   assistantState: "idle" | "thinking" | "slow";
   /**
+   * When the open turn began and when it ended, so the finished trail can say how long it took
+   * rather than only what it did. Both null before the first question of a session.
+   */
+  assistantStartedAt: number | null;
+  assistantFinishedAt: number | null;
+  /**
    * Which tool WarpBot reached for last, so the room can see the step rather than a spinner.
    *
    * The backend has always carried the tool name on the result message and threw it away; the
@@ -95,6 +101,8 @@ const initialState = {
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
+  assistantStartedAt: null as number | null,
+  assistantFinishedAt: null as number | null,
   assistantSteps: [] as AssistantStep[],
   assistantActivityAt: 0,
   isMuted: false,
@@ -310,7 +318,17 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       chatMessages: mergeChatMessages(s.chatMessages, messages),
     })),
 
-  setAssistantState: (assistantState) => set({ assistantState }),
+  setAssistantState: (assistantState) =>
+    set((state) => ({
+      assistantState,
+      // Stamped on the way to idle, and only from a turn that was actually running: the room sets
+      // idle defensively in several places, and a second stamp would restart the clock on a trail
+      // already folded.
+      assistantFinishedAt:
+        assistantState === "idle" && state.assistantState !== "idle"
+          ? Date.now()
+          : state.assistantFinishedAt,
+    })),
   // One call for "WarpBot did something", so no caller can move the state and forget to reset
   // the deadline it is measured against.
   noteAssistantActivity: (toolName = null) =>
@@ -320,6 +338,8 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       const carried = starting ? [] : state.assistantSteps;
       return {
         assistantState: starting ? "thinking" : state.assistantState,
+        assistantStartedAt: starting ? Date.now() : state.assistantStartedAt,
+        assistantFinishedAt: starting ? null : state.assistantFinishedAt,
         assistantSteps: toolName
           ? [
               // Anything still running has finished — a second tool cannot start inside the

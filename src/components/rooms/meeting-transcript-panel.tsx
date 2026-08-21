@@ -28,7 +28,7 @@ import {
   MessageSquare,
   Pencil,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -43,7 +43,13 @@ import {
   useTranscriptLanguageBackfill,
   useTranslationRefreshAfterCorrection,
 } from "@/hooks/use-transcripts";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import {
+  TranscriptSpeakerAvatar,
+  TranscriptSpeakerStripe,
+} from "@/components/rooms/transcript-speaker-avatar";
+import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import {
@@ -63,6 +69,11 @@ import {
   type ResolvedTranscriptLine,
   type TranscriptLanguageOption,
 } from "@/lib/transcript/transcript-language";
+import {
+  resolveTranscriptSpeaker,
+  speakerColorVar,
+  type TranscriptSpeaker,
+} from "@/lib/transcript/speaker-color";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { transcriptService } from "@/services/transcript.service";
@@ -120,6 +131,7 @@ export function MeetingTranscriptArtifact({
   highlightedSegmentId,
   canEdit,
   onSegmentsChanged,
+  speakerDirectory,
 }: {
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
@@ -144,6 +156,10 @@ export function MeetingTranscriptArtifact({
   canEdit?: boolean;
   /** Refetch after a correction lands, so the line shows what was actually saved. */
   onSegmentsChanged?: () => void;
+  /** Faces, by user id. The workspace member list — the participants API carries no avatar at
+   *  all, so this is the only place one exists. Omit it and every speaker is initials, which is
+   *  what most of them are anyway. */
+  speakerDirectory?: Readonly<Record<string, { fullName?: string | null; avatarUrl?: string | null }>>;
 }) {
   // Memoised on the fetched rows rather than recomputed per render: the language options and
   // the translation index are derived from these, and rebuilding them on every keystroke of a
@@ -187,6 +203,12 @@ export function MeetingTranscriptArtifact({
   // effect that ran while the segments were still in flight.
   const [chosenLanguage, setChosenLanguage] = useState<string | null>(null);
   const [layout, setLayout] = useState<TranscriptLayout>("chat");
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // On `blocks` and `layout` both: switching between the three views rebuilds the list at a
+  // different height, and the reader's distance from the bottom changes without them scrolling.
+  const { isAway, scrollToLatest } = useScrollToLatest(scrollerRef, {
+    revision: `${blocks.length}:${layout}`,
+  });
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
 
   const displayLanguage =
@@ -238,6 +260,11 @@ export function MeetingTranscriptArtifact({
     return {
       segment,
       resolved,
+      speaker: resolveTranscriptSpeaker(
+        segment.speakerParticipantId,
+        segment.speakerName,
+        speakerDirectory,
+      ),
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
       onSeek: onSeekToRecording ? () => onSeekToRecording(segment.startTimeMs) : undefined,
@@ -447,7 +474,11 @@ export function MeetingTranscriptArtifact({
            into this comment either: check-room-surface-contract matches the file's text,
            not its markup, and the word alone fails it. Containing the scroll would stop
            the page at the end of the transcript, which is the trap that ticket removed. */
-        <div className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4">
+        <div className="relative">
+        <div
+          ref={scrollerRef}
+          className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4"
+        >
           {blocks.map((block) => (
             <div key={block.sessionNumber} className={layout === "chat" ? "space-y-2" : "space-y-0.5"}>
               {showSessionLabels ? (
@@ -460,6 +491,11 @@ export function MeetingTranscriptArtifact({
                   groupIntoSpeakerTurns(block.segments).map((turn, index) => (
                     <TranscriptTimelineTurn
                       key={turn.key}
+                      speaker={resolveTranscriptSpeaker(
+                        turn.speakerId,
+                        turn.speakerName,
+                        speakerDirectory,
+                      )}
                       speakerName={turn.speakerName}
                       time={base ? segmentTime(turn.startTimeMs) : null}
                       onSeek={
@@ -495,6 +531,10 @@ export function MeetingTranscriptArtifact({
                   })}
             </div>
           ))}
+        </div>
+        {/* A record of an hour-long meeting is hundreds of rows. Somebody reading the middle of it
+            had no way back to the end but dragging the scrollbar the length of the room. */}
+        <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
         </div>
       )}
     </div>
@@ -796,6 +836,8 @@ function TranscriptLayoutToggle({
 type TranscriptRowBase = {
   segment: GroupedSavedTranscriptSegment;
   resolved: ResolvedTranscriptLine;
+  /** Who said it — carries the colour every layout marks this line with. */
+  speaker: TranscriptSpeaker;
   isSelf: boolean;
   time: string | null;
   onSeek?: () => void;
@@ -815,6 +857,7 @@ type TranscriptRowProps = TranscriptRowBase & { speakerName: string };
 function TranscriptChatRow({
   segment,
   resolved,
+  speaker,
   speakerName,
   isSelf,
   time,
@@ -844,6 +887,10 @@ function TranscriptChatRow({
             isSelf ? "flex-row-reverse" : "",
           )}
         >
+          {/* The face goes with the name rather than beside the bubble: at 18px it belongs to the
+              label, and floating it outside would indent every line of a wall of text by a
+              column that is empty for most people. */}
+          <TranscriptSpeakerAvatar speaker={speaker} />
           <span className="font-semibold text-ink">{speakerName}</span>
           {showLanguage ? (
             <TranscriptLineLanguage
@@ -860,7 +907,7 @@ function TranscriptChatRow({
           <>
             <div
               className={cn(
-                "group/line relative rounded-2xl px-3 py-2",
+                "group/line relative overflow-hidden rounded-2xl px-3 py-2",
                 canCorrect ? "pr-9" : "",
                 isSelf
                   ? "rounded-tr-sm bg-primary"
@@ -868,9 +915,12 @@ function TranscriptChatRow({
                   // incoming bubble stayed pure white and printed muted grey text on it, at a
                   // contrast a person cannot read. Surface-2 is the same subtle card in light mode
                   // and follows the theme in the other.
-                  : "rounded-tl-sm border border-border bg-surface-2",
+                  : "rounded-tl-sm border border-border bg-surface-2 pl-4",
               )}
             >
+              {/* Only on the incoming side. The reader's own bubble is already the one solid
+                  colour on the page, and a second stripe on it would compete with that. */}
+              {isSelf ? null : <TranscriptSpeakerStripe speaker={speaker} />}
               <p className={cn("text-[13px] leading-6", isSelf ? "text-white" : "text-ink")}>
                 {resolved.text}
               </p>
@@ -909,6 +959,7 @@ function TranscriptChatRow({
 function TranscriptDocumentRow({
   segment,
   resolved,
+  speaker,
   speakerName,
   time,
   onSeek,
@@ -925,14 +976,19 @@ function TranscriptDocumentRow({
     <div
       id={`transcript-segment-${segment.id}`}
       className={cn(
-        "group/line grid scroll-mt-4 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-2/60",
+        "group/line relative grid scroll-mt-4 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 rounded-md py-1 pl-3 pr-1.5 transition-colors hover:bg-surface-2/60",
         highlighted ? "bg-primary/10 ring-1 ring-primary/30" : "",
       )}
     >
-      <div className="flex items-baseline gap-2">
+      {/* Consecutive rows by one person stack their stripes into a single unbroken line down the
+          left of the block, which is the whole point: a document draws one row per utterance, so
+          a paragraph somebody spoke is a dozen rows that look like a dozen speakers. */}
+      <TranscriptSpeakerStripe speaker={speaker} className="my-px" />
+      <div className="flex items-center gap-2">
         {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
+        <TranscriptSpeakerAvatar speaker={speaker} />
         <span
-          className="w-[128px] shrink-0 truncate text-[13px] font-semibold text-ink"
+          className="w-[108px] shrink-0 truncate text-[13px] font-semibold text-ink"
           title={speakerName}
         >
           {speakerName}:
@@ -982,12 +1038,14 @@ function TranscriptDocumentRow({
  * the container's own colour so the line appears to pass under it rather than through it.
  */
 function TranscriptTimelineTurn({
+  speaker,
   speakerName,
   time,
   onSeek,
   isFirst,
   rows,
 }: {
+  speaker: TranscriptSpeaker;
   speakerName: string;
   time: string | null;
   onSeek?: () => void;
@@ -1010,18 +1068,22 @@ function TranscriptTimelineTurn({
         <span
           aria-hidden
           className={cn(
-            // Not `bg-border`: at #ebecef on white it is a hairline meant to separate blocks,
-            // and here the line IS the feature. Toned down from the dot rather than up from the
-            // border, and a fixed grey so it reads the same in both themes.
-            "absolute w-px bg-ink-subtle/35",
+            // Was a fixed grey hairline. It is the speaker's colour now and 2px wide, because the
+            // rail beside a turn is the thing a reader follows down a long stretch of talking —
+            // a name at the top has to be read, and this does not.
+            "absolute w-[2px] rounded-full",
             isFirst ? "bottom-0 top-[11px]" : "inset-y-0",
           )}
+          style={{ backgroundColor: speakerColorVar(speaker.id) }}
         />
         <span
           className={cn(
             "relative mt-[8px] size-[7px] shrink-0 rounded-full ring-4 ring-surface-1 transition-colors",
-            highlighted ? "bg-primary" : "bg-ink-subtle",
+            highlighted ? "bg-primary" : "",
           )}
+          // The highlight wins: a cited line is why the reader is here, and the class above it
+          // has to be able to override this.
+          style={highlighted ? undefined : { backgroundColor: speakerColorVar(speaker.id) }}
         />
       </div>
 
@@ -1031,8 +1093,11 @@ function TranscriptTimelineTurn({
           highlighted ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-surface-2/60",
         )}
       >
-        <p className="truncate text-[12.5px] font-semibold text-ink" title={speakerName}>
-          {speakerName}
+        <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink">
+          <TranscriptSpeakerAvatar speaker={speaker} />
+          <span className="truncate" title={speakerName}>
+            {speakerName}
+          </span>
         </p>
         <div className="mt-1 space-y-1.5">
           {rows.map((row) => (
