@@ -227,6 +227,81 @@ export function groupSavedTranscriptSegments(
   return utterances;
 }
 
+/**
+ * A stretch of the meeting one person held, as the timeline draws it: one dot on the rail, the
+ * speaker's name once, and everything they said under it.
+ */
+export type TranscriptSpeakerTurn<T> = {
+  /** Stable across a render — the first line's id, which is unique within a transcript. */
+  key: string;
+  speakerName: string;
+  /** Who spoke, when the transcript knows. Null when only a display name was ever recorded. */
+  speakerId: string | null;
+  startTimeMs: number;
+  lines: T[];
+};
+
+/**
+ * A turn ends when somebody else speaks — or when the same person stops for this long.
+ *
+ * Without the second rule a monologue is one dot: a 40-minute presentation would draw a single
+ * marker on a rail whose entire job is to show the shape of the meeting. 30 seconds is well past
+ * a breath (finalized STT chunks arrive every ~6s while somebody is talking) and short enough
+ * that a real pause becomes a place the eye can land.
+ */
+const MAX_TURN_SILENCE_MS = 30_000;
+
+/**
+ * Groups a transcript into speaker turns for the timeline layout.
+ *
+ * Speaker identity follows the same rule the utterance merge uses — the participant id when
+ * there is one, the display name otherwise — so the two groupings cannot disagree about who was
+ * talking. Input must already be in chronological order.
+ */
+export function groupIntoSpeakerTurns<
+  T extends {
+    id: string;
+    speakerName?: string | null;
+    speakerParticipantId?: string | null;
+    startTimeMs: number;
+    endTimeMs: number;
+  },
+>(segments: readonly T[]): TranscriptSpeakerTurn<T>[] {
+  const turns: TranscriptSpeakerTurn<T>[] = [];
+
+  for (const segment of segments) {
+    const identity = segment.speakerParticipantId ?? segment.speakerName ?? "";
+    const previous = turns[turns.length - 1];
+    const previousLine = previous?.lines[previous.lines.length - 1];
+    const previousIdentity = previousLine
+      ? (previousLine.speakerParticipantId ?? previousLine.speakerName ?? "")
+      : null;
+    // A NEGATIVE gap is not silence: startTimeMs is an offset into the audio ingress track and
+    // resets when that track reconnects (see formatTranscriptClockTime). Splitting on it would
+    // put a turn boundary wherever the meeting dropped and rejoined.
+    const gapMs = previousLine ? segment.startTimeMs - previousLine.endTimeMs : 0;
+    const sameTurn =
+      previous !== undefined
+      && previousIdentity === identity
+      && gapMs <= MAX_TURN_SILENCE_MS;
+
+    if (sameTurn) {
+      previous.lines.push(segment);
+      continue;
+    }
+
+    turns.push({
+      key: segment.id,
+      speakerName: segment.speakerName?.trim() || "Unknown speaker",
+      speakerId: segment.speakerParticipantId ?? null,
+      startTimeMs: segment.startTimeMs,
+      lines: [segment],
+    });
+  }
+
+  return turns;
+}
+
 export type TranslationSessionBlock<T> = {
   /** 1-based, oldest session first — this is the "N" in "Translation N". */
   sessionNumber: number;

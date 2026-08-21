@@ -20,7 +20,10 @@
  *      were in the language the reader asked for.
  *   3. Copy and Download follow the language on screen. A reader who unified the transcript and
  *      then copied it used to get back the interleaving they had just resolved.
- *   4. Both layouts stay reachable — the conversation and the document.
+ *   4. All three layouts stay reachable — the conversation, the document and the timeline.
+ *      The timeline is the only one that shows the meeting's SHAPE: the other two draw one row
+ *      per utterance, so who held the floor and for how long is a fact that exists in the data
+ *      and appears nowhere on screen.
  *   5. The transcript reads are paginated to the end. They used to take one page (200 segments,
  *      500 translations) and present it as the whole meeting, and a longer one was silently
  *      truncated mid-sentence. Reading in one language makes that worse: the dropdown would be
@@ -67,15 +70,25 @@ assert.ok(
   "Copy and Download must assemble the transcript in the language on screen.",
 );
 
-// 4. Both shapes of the record.
+// 4. Every shape of the record.
 for (const [needle, what] of [
   ["<TranscriptLanguageMenu", "the language picker"],
   ["<TranscriptLayoutToggle", "the view toggle"],
   ["<TranscriptChatRow", "the conversation view"],
   ["<TranscriptDocumentRow", "the document view"],
+  ["<TranscriptTimelineTurn", "the timeline view"],
 ]) {
   assert.ok(panel.includes(needle), `The transcript panel must render ${what} (${needle}).`);
 }
+
+// A citation still has somewhere to land in every layout. `jumpToTranscriptMoment` finds a line
+// by `document.getElementById("transcript-segment-" + id)`, so a layout that stops emitting that
+// id silently breaks every summary and minutes citation while looking perfectly fine.
+assert.equal(
+  (panel.match(/id=\{`transcript-segment-\$\{segment\.id\}`\}/g) ?? []).length >= 3,
+  true,
+  "Every layout must anchor its lines with transcript-segment-{id}, or citations land nowhere.",
+);
 
 // 5. The whole meeting, not the first page of it.
 assert.ok(

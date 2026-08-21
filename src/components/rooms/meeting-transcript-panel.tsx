@@ -22,6 +22,7 @@ import {
   Copy,
   Download,
   FileText,
+  GitCommitVertical,
   Languages,
   MessageSquare,
   Pencil,
@@ -41,6 +42,7 @@ import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName } from "@/lib/language/languages";
 import {
+  groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
   type GroupedSavedTranscriptSegment,
@@ -71,8 +73,8 @@ function TranscriptChip({ children, icon }: { children: ReactNode; icon?: ReactN
   );
 }
 
-/** How the transcript is laid out: as the conversation, or as a document. */
-type TranscriptLayout = "chat" | "document";
+/** How the transcript is laid out: as the conversation, as a document, or on a timeline. */
+type TranscriptLayout = "chat" | "document" | "timeline";
 
 /**
  * The saved meeting transcript, rendered as a distinct artifact participants can read
@@ -180,6 +182,49 @@ export function MeetingTranscriptArtifact({
 
   function toggleOriginal(segmentId: string) {
     setRevealedOriginals((current) => ({ ...current, [segmentId]: !current[segmentId] }));
+  }
+
+  /**
+   * Everything one line needs, whichever layout is drawing it.
+   *
+   * Built here rather than inside each layout's own loop: the correction editor, the reveal and
+   * the language chip are the same behaviour in all three, and three copies of that wiring is
+   * three places for them to drift.
+   */
+  function buildRow(segment: GroupedSavedTranscriptSegment): TranscriptRowBase {
+    const resolved = resolveTranscriptLine(segment, translationIndex, displayLanguage);
+    return {
+      segment,
+      resolved,
+      isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
+      time: base ? segmentTime(segment.startTimeMs) : null,
+      onSeek: onSeekToRecording ? () => onSeekToRecording(segment.startTimeMs) : undefined,
+      highlighted: highlightedSegmentId === segment.id,
+      // A chip on every line of a transcript that IS in one language is noise. Shown when the
+      // line is not simply "spoken in the language you asked for", which makes its absence
+      // meaningful: no chip means these are the speaker's own words.
+      showLanguage:
+        displayLanguage === AS_SPOKEN || resolved.isTranslated || resolved.isUntranslated,
+      revealed: Boolean(revealedOriginals[segment.id]),
+      onToggleReveal: () => toggleOriginal(segment.id),
+      canCorrect,
+      isEditing: editingSegmentId === segment.id,
+      onStartEdit: () => {
+        setEditingSegmentId(segment.id);
+        setDraftText(segment.originalText);
+      },
+      editor: (
+        <TranscriptLineEditor
+          value={draftText}
+          onChange={setDraftText}
+          speakerName={segment.speakerName}
+          spokenLanguage={resolved.isTranslated ? resolved.spokenLanguage : null}
+          isSaving={isSavingCorrection}
+          onCancel={() => setEditingSegmentId(null)}
+          onSave={() => void saveCorrection(segment)}
+        />
+      ),
+    };
   }
 
   // Correcting the transcript used to live on a separate Transcripts page, which showed the
@@ -357,61 +402,46 @@ export function MeetingTranscriptArtifact({
               {showSessionLabels ? (
                 <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
               ) : null}
-              {block.segments.map((segment) => {
-                const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
-                const resolved = resolveTranscriptLine(segment, translationIndex, displayLanguage);
-                // A chip on every line of a transcript that IS in one language is noise. Shown
-                // when the line is not simply "spoken in the language you asked for", which
-                // makes its absence meaningful: no chip means these are the speaker's own words.
-                const showLanguage =
-                  displayLanguage === AS_SPOKEN || resolved.isTranslated || resolved.isUntranslated;
-                const row = {
-                  segment,
-                  resolved,
-                  isSelf,
-                  time: base ? segmentTime(segment.startTimeMs) : null,
-                  onSeek: onSeekToRecording
-                    ? () => onSeekToRecording(segment.startTimeMs)
-                    : undefined,
-                  highlighted: highlightedSegmentId === segment.id,
-                  showLanguage,
-                  revealed: Boolean(revealedOriginals[segment.id]),
-                  onToggleReveal: () => toggleOriginal(segment.id),
-                  canCorrect,
-                  isEditing: editingSegmentId === segment.id,
-                  onStartEdit: () => {
-                    setEditingSegmentId(segment.id);
-                    setDraftText(segment.originalText);
-                  },
-                  editor: (
-                    <TranscriptLineEditor
-                      value={draftText}
-                      onChange={setDraftText}
-                      speakerName={segment.speakerName}
-                      spokenLanguage={resolved.isTranslated ? resolved.spokenLanguage : null}
-                      isSaving={isSavingCorrection}
-                      onCancel={() => setEditingSegmentId(null)}
-                      onSave={() => void saveCorrection(segment)}
+              {layout === "timeline"
+                ? // One dot per stretch of the meeting a person held, so the rail shows who had
+                  // the floor and when — the thing neither of the other two layouts can show at
+                  // a glance, because both of them draw one row per utterance.
+                  groupIntoSpeakerTurns(block.segments).map((turn, index) => (
+                    <TranscriptTimelineTurn
+                      key={turn.key}
+                      speakerName={turn.speakerName}
+                      time={base ? segmentTime(turn.startTimeMs) : null}
+                      onSeek={
+                        onSeekToRecording
+                          ? () => onSeekToRecording(turn.startTimeMs)
+                          : undefined
+                      }
+                      // The rail starts AT the first dot rather than above it — a line hanging
+                      // off the top of the transcript reads as content scrolled out of view.
+                      isFirst={index === 0}
+                      rows={turn.lines.map(buildRow)}
                     />
-                  ),
-                };
-
-                return layout === "chat" ? (
-                  <TranscriptChatRow
-                    key={segment.id}
-                    {...row}
-                    speakerName={isSelf ? "You" : segment.speakerName || "Unknown speaker"}
-                  />
-                ) : (
-                  <TranscriptDocumentRow
-                    key={segment.id}
-                    {...row}
-                    // No "You" here. A document names the people in it, and a record that reads
-                    // differently depending on who opened it is not a record.
-                    speakerName={segment.speakerName || "Unknown speaker"}
-                  />
-                );
-              })}
+                  ))
+                : block.segments.map((segment) => {
+                    const row = buildRow(segment);
+                    return layout === "chat" ? (
+                      <TranscriptChatRow
+                        key={segment.id}
+                        {...row}
+                        speakerName={
+                          row.isSelf ? "You" : segment.speakerName || "Unknown speaker"
+                        }
+                      />
+                    ) : (
+                      <TranscriptDocumentRow
+                        key={segment.id}
+                        {...row}
+                        // No "You" here. A document names the people in it, and a record that
+                        // reads differently depending on who opened it is not a record.
+                        speakerName={segment.speakerName || "Unknown speaker"}
+                      />
+                    );
+                  })}
             </div>
           ))}
         </div>
@@ -518,12 +548,18 @@ function TranscriptLanguageItem({
 }
 
 /**
- * Conversation or document.
+ * Conversation, document, or timeline.
  *
  * The bubbles are the meeting as it happened — who answered whom, and how quickly. The document
  * is the meeting as a record: one column of names, one column of what they said, nothing
  * indented by who is reading it. Minutes get written from the second one and nobody was going
  * to transcribe a chat log by hand to get there.
+ *
+ * The timeline is the meeting as a SHAPE. Both of the others draw one row per utterance, so a
+ * long meeting is a wall with no landmarks in it: who had the floor, for how long, and where the
+ * conversation turned are all facts that exist in the data and appear nowhere on screen. A rail
+ * with a dot per speaker turn puts them there, and makes the times something to aim at rather
+ * than something printed beside each line.
  */
 function TranscriptLayoutToggle({
   value,
@@ -535,6 +571,7 @@ function TranscriptLayoutToggle({
   const options: { key: TranscriptLayout; label: string; icon: ReactNode }[] = [
     { key: "chat", label: "Conversation view", icon: <MessageSquare className="size-3.5" /> },
     { key: "document", label: "Document view", icon: <AlignLeft className="size-3.5" /> },
+    { key: "timeline", label: "Timeline view", icon: <GitCommitVertical className="size-3.5" /> },
   ];
 
   return (
@@ -559,11 +596,16 @@ function TranscriptLayoutToggle({
   );
 }
 
-/** Everything a transcript row needs, whichever way it is laid out. */
-type TranscriptRowProps = {
+/**
+ * Everything a transcript line needs, whichever way it is laid out.
+ *
+ * The speaker's name is NOT here: the chat and document layouts print it per line and disagree
+ * about what to call the reader, while the timeline prints it once per turn and not on the lines
+ * at all. It is the one thing the layouts genuinely decide for themselves.
+ */
+type TranscriptRowBase = {
   segment: GroupedSavedTranscriptSegment;
   resolved: ResolvedTranscriptLine;
-  speakerName: string;
   isSelf: boolean;
   time: string | null;
   onSeek?: () => void;
@@ -574,9 +616,11 @@ type TranscriptRowProps = {
   canCorrect: boolean;
   isEditing: boolean;
   onStartEdit: () => void;
-  /** The correction editor, built by the panel so both layouts open the same one. */
+  /** The correction editor, built by the panel so every layout opens the same one. */
   editor: ReactNode;
 };
+
+type TranscriptRowProps = TranscriptRowBase & { speakerName: string };
 
 function TranscriptChatRow({
   segment,
@@ -731,6 +775,127 @@ function TranscriptDocumentRow({
             title="Edit this line"
             onClick={onStartEdit}
             className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink group-hover/line:opacity-100 focus-visible:opacity-100"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One stretch of the meeting a person held, drawn on the rail.
+ *
+ * The rail is a real vertical line, not a border on the content: it has to pass BEHIND the dot
+ * and stop cleanly at the first one, and a border cannot do either. The dot carries a ring in
+ * the container's own colour so the line appears to pass under it rather than through it.
+ */
+function TranscriptTimelineTurn({
+  speakerName,
+  time,
+  onSeek,
+  isFirst,
+  rows,
+}: {
+  speakerName: string;
+  time: string | null;
+  onSeek?: () => void;
+  isFirst: boolean;
+  rows: TranscriptRowBase[];
+}) {
+  // A citation lands on a LINE; the turn it belongs to is what has to look selected, because the
+  // turn is what the reader sees as one thing here.
+  const highlighted = rows.some((row) => row.highlighted);
+
+  return (
+    <div className="grid grid-cols-[58px_16px_minmax(0,1fr)] gap-x-1">
+      {/* Wide enough for "07:16 AM" on one line. At 46px it wrapped the meridiem onto a second
+          row, which put a two-line label beside a one-line name on every single turn. */}
+      <div className="whitespace-nowrap pt-[7px] text-right">
+        {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
+      </div>
+
+      <div className="relative flex justify-center">
+        <span
+          aria-hidden
+          className={cn(
+            // Not `bg-border`: at #ebecef on white it is a hairline meant to separate blocks,
+            // and here the line IS the feature. Toned down from the dot rather than up from the
+            // border, and a fixed grey so it reads the same in both themes.
+            "absolute w-px bg-ink-subtle/35",
+            isFirst ? "bottom-0 top-[11px]" : "inset-y-0",
+          )}
+        />
+        <span
+          className={cn(
+            "relative mt-[8px] size-[7px] shrink-0 rounded-full ring-4 ring-surface-1 transition-colors",
+            highlighted ? "bg-primary" : "bg-ink-subtle",
+          )}
+        />
+      </div>
+
+      <div
+        className={cn(
+          "-mx-2 min-w-0 rounded-md px-2 pb-3.5 pt-0.5 transition-colors",
+          highlighted ? "bg-primary/10 ring-1 ring-primary/30" : "hover:bg-surface-2/60",
+        )}
+      >
+        <p className="truncate text-[12.5px] font-semibold text-ink" title={speakerName}>
+          {speakerName}
+        </p>
+        <div className="mt-1 space-y-1.5">
+          {rows.map((row) => (
+            <TranscriptTimelineLine key={row.segment.id} {...row} />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One utterance inside a turn. No name and no time — the turn above it carries both. */
+function TranscriptTimelineLine({
+  segment,
+  resolved,
+  showLanguage,
+  revealed,
+  onToggleReveal,
+  canCorrect,
+  isEditing,
+  onStartEdit,
+  editor,
+}: TranscriptRowBase) {
+  if (isEditing) {
+    return <div id={`transcript-segment-${segment.id}`}>{editor}</div>;
+  }
+
+  return (
+    <div
+      id={`transcript-segment-${segment.id}`}
+      className="group/line flex scroll-mt-4 items-start gap-2"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] leading-6 text-ink">{resolved.text}</p>
+        {revealed && resolved.isTranslated ? (
+          <TranscriptSpokenOriginal resolved={resolved} />
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        {showLanguage ? (
+          <TranscriptLineLanguage
+            resolved={resolved}
+            revealed={revealed}
+            onToggleReveal={onToggleReveal}
+          />
+        ) : null}
+        {canCorrect ? (
+          <button
+            type="button"
+            aria-label="Edit transcript line"
+            title="Edit this line"
+            onClick={onStartEdit}
+            className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink focus-visible:opacity-100 group-hover/line:opacity-100"
           >
             <Pencil className="size-3.5" />
           </button>
