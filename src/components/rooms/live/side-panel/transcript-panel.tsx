@@ -22,6 +22,8 @@ import {
   SuggestionBadge,
   SuggestionDetail,
 } from "@/components/rooms/live/side-panel/suggestion-badge";
+import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -72,6 +74,13 @@ export function TranscriptPanel({
   const dismissSuggestion = useTranslationRoomStore((state) => state.dismissSuggestion);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
+
+  const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
+    // The distance this panel itself uses to decide it has stopped following. A chip offering to
+    // jump to a bottom the panel is already gliding towards reads as a broken control.
+    threshold: STICK_TO_BOTTOM_PX,
+    revision: segments.length,
+  });
 
   const blocks = useMemo(() => {
     const utterances = groupTranscriptSegments(segments);
@@ -138,10 +147,11 @@ export function TranscriptPanel({
   const showSessionLabels = blocks.length > 1;
 
   return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
     <div
       ref={containerRef}
       onScroll={rememberScroll}
-      className="flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar scroll-smooth"
+      className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3 custom-scrollbar scroll-smooth"
     >
       {/* Said once, at the top, rather than as a divider inside the list: consecutive lines
           from one speaker are merged into a single utterance, so there is no reliable seam to
@@ -172,6 +182,11 @@ export function TranscriptPanel({
           </div>
         ))}
       </AnimatePresence>
+    </div>
+      {/* The panel stops following the moment the reader scrolls up — which is right, and left
+          them stranded in the middle of an hour of talking with the newest line somewhere below
+          and nothing saying so. */}
+      <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
     </div>
   );
 }
