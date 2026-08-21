@@ -114,7 +114,7 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
   // looks like working code, so it is asserted against the pages themselves.
   //
   // Each page is pinned to the viewer it actually uses, rather than to "any of these": the
-  // post-meeting page renders the summary through SummaryPanel (which reads the same parsed shape
+  // meeting's own page renders the summary through SummaryPanel (which reads the same parsed shape
   // and lays it out as summary, decisions and action items), and the archive renders it through
   // readableArtifactBody. Requiring one named component of both would be requiring a mount that
   // neither needs. What they owe the reader is identical, and that is what the second assertion
@@ -124,7 +124,7 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
   // a second view of the Files tab both of these already carry, and nothing linked to it.
   const pages = [
     {
-      path: "src/app/(app)/[workspaceSlug]/rooms/[id]/ended/page.tsx",
+      path: "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
       viewer: "SummaryPanel",
     },
     {

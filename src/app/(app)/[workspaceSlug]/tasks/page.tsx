@@ -144,7 +144,7 @@ export default function WorkspaceTasksPage() {
                   {/* The meeting is what makes a cross-meeting list readable, and it links back
                       to the minutes the commitment is recorded in. */}
                   <Link
-                    href={`/${workspaceSlug}/rooms/${item.translationRoomId}/ended`}
+                    href={`/${workspaceSlug}/rooms/${item.translationRoomId}`}
                     className="text-[11px] text-ink-subtle hover:text-ink"
                   >
                     {item.roomTitle || "Untitled meeting"}
