@@ -80,6 +80,15 @@ import {
   type ParsedGlossaryRow,
 } from "@/components/glossary/glossary-import-dialog";
 
+/**
+ * What a new glossary starts as, on both sides.
+ *
+ * A code from the registry rather than a literal, so it cannot drift out of the option list the
+ * selects are built from — a default that is not one of the choices renders as an empty box that
+ * nonetheless passes validation.
+ */
+const DEFAULT_GLOSSARY_LANGUAGE = "en";
+
 const glossarySchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
@@ -131,7 +140,18 @@ export default function WorkspaceGlossaryPage() {
 
   const glossaryForm = useForm<GlossaryForm>({
     resolver: zodResolver(glossarySchema),
-    defaultValues: { name: "", description: "", sourceLanguage: "", targetLanguage: "" },
+    // English on both sides, prefilled rather than left empty.
+    //
+    // Every glossary this workspace has made is English-sourced, and the pair was being picked
+    // from two empty dropdowns each time — so the commonest answer cost two decisions, and a
+    // half-filled form failed validation on a field nobody had thought about. The selects are
+    // still there and still change it; this only decides what they start on.
+    defaultValues: {
+      name: "",
+      description: "",
+      sourceLanguage: DEFAULT_GLOSSARY_LANGUAGE,
+      targetLanguage: DEFAULT_GLOSSARY_LANGUAGE,
+    },
   });
   const termForm = useForm<TermForm>({
     resolver: zodResolver(termSchema),
@@ -569,6 +589,7 @@ export default function WorkspaceGlossaryPage() {
             />
             <div className="grid grid-cols-2 gap-2">
               <Select
+                value={glossaryForm.watch("sourceLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("sourceLanguage", value ?? "")
                 }
@@ -585,6 +606,7 @@ export default function WorkspaceGlossaryPage() {
                 </SelectContent>
               </Select>
               <Select
+                value={glossaryForm.watch("targetLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("targetLanguage", value ?? "")
                 }
