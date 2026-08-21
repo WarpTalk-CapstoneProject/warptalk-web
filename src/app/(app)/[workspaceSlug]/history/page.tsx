@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  WorkspaceBody,
+  WorkspacePage,
+  WorkspaceToolbar,
+} from "@/components/workspace/page-chrome";
 import { useMemo, useState } from "react";
 import {
   Archive,
@@ -182,28 +187,20 @@ export default function HistoryPage() {
   }
 
   return (
-    <main className="min-h-full bg-surface-1 text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
-        {/* No page title, no eyebrow, no description — the shape Meetings and Members use.
-            The route name is already in the top bar and the sidebar, so a 30px "Meeting history"
-            under a breadcrumb reading "history" was the same word twice, and the sentence under
-            it was documentation living in the furniture. See components/workspace/page-chrome,
-            which records this as the house rule; this page had simply never been converted. */}
-        {/* ONE toolbar row, the shape Meetings uses: the chips choose on the left, the count and
-            the search sit together on the right.
-            The search dock used to have a header row of its own directly above this one, holding
-            nothing else — a 28px circle alone on a full-width band, with the row that actually
-            reads as the toolbar underneath it. Same control, same behaviour, one row fewer.
-
-            The dock stays OUTSIDE FilterChipGroup: that group is `overflow-x-auto`, which would
-            both clip the dock as it expands and scroll it out of reach on a narrow window. The
-            group gets `min-w-0` so the chips are what scrolls when the row runs out of space. */}
-        {/* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
-            token in the palette and it was spent on a FILTER — a choice, not an action — so the
-            selected chip here shouted while the identical control on Meetings and Documents
-            whispered. filter-chip.tsx records this as the one answer for the whole app. */}
-        <div className="flex items-center justify-between gap-3 border-b border-border py-3">
-          <FilterChipGroup label="History filters" className="min-w-0">
+    <WorkspacePage>
+      {/* WorkspaceToolbar, not a bespoke header and a second filter row.
+          This page had its own frame — a max-w-[1480px] container at px-5 py-6 lg:px-8, a
+          header with its own bottom border, and a filter group with another — while Meetings
+          and Members sit in px-4 py-3 with one row. Three paddings and two rules is why the
+          content started further from every edge here than anywhere else in the workspace, and
+          why the first thing on the page sat well below where the eye expects it. */}
+      <WorkspaceToolbar
+        filters={
+          /* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
+             token in the palette and it was spent on a FILTER — a choice, not an action — so the
+             selected chip here shouted while the identical control on Meetings and Documents
+             whispered. filter-chip.tsx records this as the one answer for the whole app. */
+          <FilterChipGroup label="History filters">
             {historyFilters.map((item) => (
               <FilterChip
                 key={item.value}
@@ -214,22 +211,29 @@ export default function HistoryPage() {
               </FilterChip>
             ))}
           </FilterChipGroup>
-
-          <div className="flex shrink-0 items-center gap-3 pl-4">
-            <span className="text-[11px] tabular-nums text-ink-subtle">
+        }
+        actions={
+          <>
+            <span className="shrink-0 text-[12px] text-ink-subtle tabular-nums">
               {rooms.length} results
             </span>
+            {/* The same search affordance Meetings and Members use, not a 360px input box.
+                Every list page had invented its own: a full-width bordered field here, a 300px
+                one on My Meetings, a collapsed dock on Meetings — three answers to one question,
+                and the widest of them spent a third of the row on a control nobody uses until
+                they need it. */}
             <ExpandingSearchDock
               value={query}
               onValueChange={setQuery}
               placeholder="Search title, code, host, or language"
-              ariaLabel="Search meeting history"
               expandedWidth={320}
             />
-          </div>
-        </div>
+          </>
+        }
+      />
 
-        <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
+      <WorkspaceBody>
+        <section className="overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
           {history.isLoading ? <LoadingState /> : history.isError ? <ErrorState onRetry={() => history.refetch()} /> : rooms.length === 0 ? <EmptyState hasQuery={Boolean(query)} /> : (
             <div className="grid min-h-[560px] lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="min-w-0 overflow-x-auto">
@@ -244,8 +248,8 @@ export default function HistoryPage() {
             </div>
           )}
         </section>
-      </div>
-    </main>
+      </WorkspaceBody>
+    </WorkspacePage>
   );
 }
 
