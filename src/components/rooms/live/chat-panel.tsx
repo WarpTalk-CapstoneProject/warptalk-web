@@ -12,6 +12,9 @@ import {
   useSendMeetingChatFile,
   useTranslateMeetingChat,
 } from "@/hooks/use-meeting";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
+import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
@@ -116,6 +119,8 @@ export function ChatPanel({
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
+  const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
+  const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
   const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const answersWhenAskedRef = useRef(0);
@@ -300,6 +305,12 @@ export function ChatPanel({
       container.scrollTop = container.scrollHeight;
     }
   }, [messages, roomId]);
+
+  const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
+    // The same slack handleMessagesScroll uses to decide the panel is still following.
+    threshold: STICK_TO_BOTTOM_PX,
+    revision: messages.length,
+  });
 
   function handleMessagesScroll() {
     const container = containerRef.current;
@@ -524,10 +535,11 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={containerRef}
         onScroll={handleMessagesScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth"
+        className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth"
       >
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
@@ -697,7 +709,7 @@ export function ChatPanel({
         {/* The answer arrives as a WarpBot message in this same shared chat, which everyone
             sees — but a tool-calling loop takes seconds, and with nothing here the wait was
             indistinguishable from having been ignored. */}
-        {assistantState !== "idle" ? (
+        {assistantState !== "idle" && assistantSteps.length === 0 ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
             {/* The same Lumidot the widget uses. Two surfaces run one agent, and three bouncing
                 dots here against a Lumidot there said the waiting was a different kind. */}
@@ -707,31 +719,35 @@ export function ChatPanel({
             >
               <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
             </span>
-            {/* The step, when WarpBot has told us one. A named tool is the difference between
-                "something is happening" and "this might be broken", and it is why the deadline
-                below can be generous rather than suspicious. */}
-            {assistantSteps.length > 0 ? (
-              <ol className="flex flex-col gap-0.5">
-                {assistantSteps.map((step) => (
-                  <li key={step.key} className={step.done ? "" : "text-ink"}>
-                    {step.done
-                      ? assistantToolDoneLabel(step.tool)
-                      : assistantToolLabel(step.tool)}
-                  </li>
-                ))}
-                {assistantState === "slow" ? (
-                  <li className="text-ink-subtle">Still working — this one is taking a while.</li>
-                ) : null}
-              </ol>
-            ) : (
-              <span>
-                {assistantState === "slow"
-                  ? "WarpBot is still working — this one is taking a while."
-                  : "WarpBot is thinking…"}
-              </span>
-            )}
+            <span>
+              {assistantState === "slow"
+                ? "WarpBot is still working — this one is taking a while."
+                : "WarpBot is thinking…"}
+            </span>
           </div>
         ) : null}
+
+        {/* The trail, drawn the way the widget draws it: open while it runs, folded into one line
+            afterwards. It used to vanish the moment the turn ended, which threw away the only
+            record of which tools an answer came through. */}
+        {assistantSteps.length > 0 ? (
+          <AssistantWorkTrail
+            steps={assistantSteps}
+            running={assistantState !== "idle"}
+            slow={assistantState === "slow"}
+            durationMs={
+              assistantFinishedAt && assistantStartedAt
+                ? assistantFinishedAt - assistantStartedAt
+                : null
+            }
+            lumidotVariant={lumidotVariant}
+            className="px-1"
+          />
+        ) : null}
+      </div>
+      {/* Reading back through a meeting's chat stops the panel following, which is right — and
+          left the newest message somewhere below with nothing on screen saying so. */}
+      <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
       </div>
       <div className="p-3 bg-transparent">
         {sendError ? (

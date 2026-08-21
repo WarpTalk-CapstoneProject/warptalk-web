@@ -28,7 +28,7 @@ import {
   MessageSquare,
   Pencil,
 } from "lucide-react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import {
@@ -43,11 +43,13 @@ import {
   useTranscriptLanguageBackfill,
   useTranslationRefreshAfterCorrection,
 } from "@/hooks/use-transcripts";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import {
   TranscriptSpeakerAvatar,
   TranscriptSpeakerStripe,
 } from "@/components/rooms/transcript-speaker-avatar";
+import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import {
@@ -201,6 +203,12 @@ export function MeetingTranscriptArtifact({
   // effect that ran while the segments were still in flight.
   const [chosenLanguage, setChosenLanguage] = useState<string | null>(null);
   const [layout, setLayout] = useState<TranscriptLayout>("chat");
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  // On `blocks` and `layout` both: switching between the three views rebuilds the list at a
+  // different height, and the reader's distance from the bottom changes without them scrolling.
+  const { isAway, scrollToLatest } = useScrollToLatest(scrollerRef, {
+    revision: `${blocks.length}:${layout}`,
+  });
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
 
   const displayLanguage =
@@ -466,7 +474,11 @@ export function MeetingTranscriptArtifact({
            into this comment either: check-room-surface-contract matches the file's text,
            not its markup, and the word alone fails it. Containing the scroll would stop
            the page at the end of the transcript, which is the trap that ticket removed. */
-        <div className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4">
+        <div className="relative">
+        <div
+          ref={scrollerRef}
+          className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4"
+        >
           {blocks.map((block) => (
             <div key={block.sessionNumber} className={layout === "chat" ? "space-y-2" : "space-y-0.5"}>
               {showSessionLabels ? (
@@ -519,6 +531,10 @@ export function MeetingTranscriptArtifact({
                   })}
             </div>
           ))}
+        </div>
+        {/* A record of an hour-long meeting is hundreds of rows. Somebody reading the middle of it
+            had no way back to the end but dragging the scrollbar the length of the room. */}
+        <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
         </div>
       )}
     </div>
