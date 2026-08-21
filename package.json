@@ -151,7 +151,7 @@
     "@livekit/components-react": "^2.9.21",
     "@livekit/components-styles": "^1.2.0",
     "@livekit/egress-sdk": "^0.2.1",
-    "@livekit/krisp-noise-filter": "^0.3.4",
+    "@livekit/krisp-noise-filter": "^0.4.4",
     "@livekit/track-processors": "^0.7.2",
     "@microsoft/signalr": "^10.0.0",
     "@phosphor-icons/react": "^2.1.10",

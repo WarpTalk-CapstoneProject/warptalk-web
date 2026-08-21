@@ -32,6 +32,24 @@ test("a load failure is retryable and says so", () => {
   assert.match(failure.detail, /try again/i);
 });
 
+test("the retryable message carries the cause", () => {
+  // This branch fired on production and there was nothing to read anywhere — not in the toast,
+  // not in the console. A summary that hides the error is how one bug stays a mystery for weeks.
+  const failure = describeNoiseSuppressionFailure(
+    new Error("Failed to fetch dynamically imported module"),
+  );
+
+  assert.match(failure.detail, /Failed to fetch dynamically imported module/);
+});
+
+test("a non-Error cause is not pasted into the toast", () => {
+  // `String({weird: true})` is "[object Object]" — noise, not a cause. Only a real Error's
+  // message is worth showing to a person.
+  const failure = describeNoiseSuppressionFailure({ weird: true });
+
+  assert.doesNotMatch(failure.detail, /object Object/);
+});
+
 test("every message says the microphone is still filtered", () => {
   // None of these is an outage. useTrackProcessors restores the browser's own suppression BEFORE
   // reporting, deliberately, so a message that reads like a failure overstates what happened.
