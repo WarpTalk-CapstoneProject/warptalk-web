@@ -90,4 +90,46 @@ assert.ok(
     + " which has no avatar field on the server at all.",
 );
 
+// 5. THE SURFACES THEMSELVES.
+//
+// The bypass check above looks for a raw <img>, and the real failure mode was quieter than that:
+// a component that draws a monogram in a circle and has NO code path to a picture at all. The
+// room detail page had an `AvatarInitial` that rendered `user.name.charAt(0)` while its own type
+// declared `avatarUrl`, and the meeting chat drew two letters in a square. Neither is an <img>,
+// so neither tripped anything — they just quietly showed a letter to everyone forever.
+//
+// Every surface a person appears on is named here, with what it must reach for.
+// The needles are CALL sites — `<Name`, not `Name`. A component that is defined and never
+// rendered still contains its own name, and an earlier version of this check passed against
+// exactly that: the chat's face component survived with its usage deleted.
+const FACE_SURFACES = [
+  ["src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx", "<PersonAvatar", "the room record's people chips"],
+  ["src/components/rooms/live/chat-panel.tsx", "<ChatSenderAvatar", "a chat message's sender"],
+  ["src/components/rooms/live/side-panel/transcript-panel.tsx", "<ParticipantAvatar", "the live transcript"],
+  ["src/components/rooms/live/live-subtitle-overlay.tsx", "<ParticipantAvatar", "the subtitle lane"],
+  ["src/components/rooms/transcript-speaker-avatar.tsx", "<AvatarImage", "the saved transcript"],
+];
+
+for (const [file, needle, what] of FACE_SURFACES) {
+  assert.ok(
+    read(file).includes(needle),
+    `${what} must show a real face — ${file} no longer reaches for ${needle}. A monogram with no`
+      + " path to a picture is what this contract exists to stop; it is not an <img>, so nothing"
+      + " else will notice.",
+  );
+}
+
+// The room record must take the face from the member list. participant.avatarUrl has never been
+// populated by the server — reaching for it looks right, type-checks, and is always undefined.
+const roomDetail = read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx");
+assert.ok(
+  roomDetail.includes("resolveUserAvatar("),
+  "The room record must resolve faces from the workspace member list, not from the participant DTO.",
+);
+assert.ok(
+  !/avatarUrl: participant\.avatarUrl/.test(roomDetail),
+  "participant.avatarUrl is a phantom — the participants API returns no avatar at all, so this"
+    + " reads as 'this person has no picture' for everybody.",
+);
+
 console.log("Avatar everywhere contract: PASS");

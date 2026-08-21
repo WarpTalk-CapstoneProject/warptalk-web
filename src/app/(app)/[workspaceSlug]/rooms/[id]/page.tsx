@@ -83,6 +83,7 @@ import {
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { MinutesPanel } from "@/components/rooms/minutes-panel";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
@@ -1516,7 +1517,7 @@ function UserChip({
             : "h-7 px-2 pr-2.5 text-[12px]",
         )}
       >
-        <AvatarInitial
+        <PersonAvatar
           user={user}
           className={compact ? "size-4 text-[9px]" : "size-5 text-[10px]"}
         />
@@ -1527,7 +1528,7 @@ function UserChip({
         className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
       >
         <div className="flex items-start gap-3">
-          <AvatarInitial user={user} className="size-10 text-[14px]" />
+          <PersonAvatar user={user} className="size-10 text-[14px]" />
           <div className="min-w-0">
             <p className="truncate text-[14px] font-semibold text-ink">
               {user.name}
@@ -1642,7 +1643,10 @@ function toUserIdentity(
     email: resolveUserEmail(participant.userId, membersArray, currentUser),
     role,
     status: normalizeLabel(participant.status),
-    avatarUrl: participant.avatarUrl,
+    // NOT participant.avatarUrl. The participants API has never returned one — the field on the
+    // web DTO is a phantom that reads as "this person has no picture". The workspace member list
+    // is the only place a face lives, and this page already has it.
+    avatarUrl: resolveUserAvatar(participant.userId, membersArray, currentUser),
     speakLanguage: participant.speakLanguage,
     listenLanguage: participant.listenLanguage,
   };
@@ -1869,7 +1873,17 @@ function InlineChip({
   );
 }
 
-function AvatarInitial({
+/**
+ * A person on the room's record: their face when they have one, their initial when they do not.
+ *
+ * This drew the initial and nothing else — a circle with one letter in it, with no code path that
+ * could ever show a picture. `UserIdentity` has declared `avatarUrl` the whole time, so it looked
+ * from the outside like the data was missing rather than the rendering.
+ *
+ * AvatarImage resolves the stored value against the API origin, which an uploaded avatar needs:
+ * it is a relative path, and the app is served from a different host than the API.
+ */
+function PersonAvatar({
   user,
   className,
 }: {
@@ -1877,14 +1891,18 @@ function AvatarInitial({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center justify-center rounded-full bg-primary/10 font-semibold uppercase text-primary",
-        className,
-      )}
+    <Avatar
+      className={cn("shrink-0 bg-primary/10", className)}
+      title={user.name}
     >
-      {user.name?.charAt(0) || "U"}
-    </span>
+      {/* No <AvatarImage> at all without a URL: base-ui keeps the fallback mounted until an image
+          resolves, and an <img src=""> resolves against the page URL and logs a failed request on
+          every render. */}
+      {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt="" /> : null}
+      <AvatarFallback className="bg-transparent font-semibold uppercase text-primary">
+        {user.name?.charAt(0) || "U"}
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -1916,6 +1934,31 @@ function resolveUserEmail(
       item.userId === userId || item.id === userId || item.email === userId,
   );
   return member?.email ?? undefined;
+}
+
+/**
+ * The picture for a user id, from the only place one exists.
+ *
+ * Same lookup shape as resolveUserName: self first, then the member row. Somebody who was in the
+ * meeting and is not a member of this workspace has no row and no face, which is the correct
+ * answer for them rather than a degraded one.
+ */
+function resolveUserAvatar(
+  userId: string | undefined,
+  membersArray: WorkspaceMemberDto[],
+  currentUser: UserDto | null,
+): string | undefined {
+  if (userId && userId === currentUser?.id) {
+    return currentUser.avatarUrl?.trim() || undefined;
+  }
+
+  const member = userId
+    ? membersArray.find(
+        (item) =>
+          item.userId === userId || item.id === userId || item.email === userId,
+      )
+    : undefined;
+  return member?.avatarUrl?.trim() || undefined;
 }
 
 function resolveUserName(
