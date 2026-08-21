@@ -24,6 +24,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+import { stripComments } from "./lib/strip-comments.mjs";
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
 
@@ -74,10 +76,65 @@ if (!sidebar) {
   );
 }
 
+/**
+ * 5. The download page tells people what the OS is about to do to the file they just clicked.
+ *
+ * Neither artifact opens on a clean machine: macOS refuses an unnotarized app on first launch,
+ * and the Windows installer carries no Authenticode signature at all, so SmartScreen stops it.
+ * Both dialogs name WarpTalk rather than the missing signature, so a page that says nothing
+ * turns an unsigned build into a broken product — which is exactly how v0.3.2 was reported.
+ *
+ * The copy itself is asserted in src/lib/desktop/__tests__/install-notes.test.ts. What is checked
+ * here is that the page still renders it, since a note nothing calls is the same as no note.
+ */
+const NOTES_LIB = "src/lib/desktop/install-notes.ts";
+const notes = read(NOTES_LIB);
+const page = read(PAGE);
+
+if (!notes) {
+  failures.push(
+    `${NOTES_LIB} is missing. Until desktop builds are notarized on macOS and code-signed on ` +
+      `Windows, the download page has to explain both first-launch dialogs.`,
+  );
+}
+
+if (page && !/buildInstallNotes/.test(page)) {
+  failures.push(
+    `${PAGE} no longer calls buildInstallNotes(). The install notes are the difference between ` +
+      `"macOS says WarpTalk is unverified, here is the way through" and a visitor concluding the ` +
+      `download is broken.`,
+  );
+}
+
+/**
+ * 6. No quarantine-stripping shell command, anywhere on the public page.
+ *
+ * `xattr -dr com.apple.quarantine` gets past the macOS prompt in one line, and it is documented in
+ * warptalk-desktop/README.md for the team. It must not appear here: a download page reaches people
+ * who cannot audit what they are pasting, and the command disarms Gatekeeper for the app rather
+ * than approving it once. Open Anyway is one click more and leaves the check on.
+ */
+for (const [label, source] of [
+  [PAGE, page],
+  [NOTES_LIB, notes],
+]) {
+  if (!source) continue;
+  // Comments are blanked first: the comment in install-notes.ts that says never to ship this
+  // command has to name the command, and it is not what a visitor reads.
+  if (/xattr|com\.apple\.quarantine/i.test(stripComments(source))) {
+    failures.push(
+      `${label} mentions xattr / com.apple.quarantine. That belongs in the desktop repo's README ` +
+        `for the team, not on a public page that teaches visitors to disarm Gatekeeper.`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error("FAIL desktop download contract\n");
   for (const failure of failures) console.error(`  - ${failure}\n`);
   process.exit(1);
 }
 
-console.log("PASS desktop download page, its lib, its public route and its entry point agree");
+console.log(
+  "PASS desktop download page, its lib, its install notes, its public route and its entry point agree",
+);

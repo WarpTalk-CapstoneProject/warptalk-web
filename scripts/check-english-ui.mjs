@@ -27,6 +27,7 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { stripComments } from "./lib/strip-comments.mjs";
 import { fileURLToPath } from "node:url";
 
 // fileURLToPath, not .pathname: a URL percent-encodes every space, so a checkout under a
@@ -41,53 +42,6 @@ const SRC = join(ROOT, "src");
  */
 const NON_ENGLISH =
   /[Ạ-ỹăâêôơưĂÂÊÔƠƯàáảãèéẻẽìíỉĩòóỏõùúủũỳýỷỹÀÁẢÃÈÉẺẼÌÍỈĨÒÓỎÕÙÚỦŨỲÝỶỸ぀-ヿ一-鿿가-힯]/;
-
-/** Blanks out comment bodies while preserving line count and column offsets. */
-function stripComments(source) {
-  let out = "";
-  let i = 0;
-  let quote = null;
-  while (i < source.length) {
-    const ch = source[i];
-    const next = source[i + 1];
-    if (quote) {
-      if (ch === "\\") {
-        out += source.slice(i, i + 2);
-        i += 2;
-        continue;
-      }
-      if (ch === quote) quote = null;
-      out += ch;
-      i += 1;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === "`") {
-      quote = ch;
-      out += ch;
-      i += 1;
-      continue;
-    }
-    if (ch === "/" && next === "/") {
-      while (i < source.length && source[i] !== "\n") {
-        out += " ";
-        i += 1;
-      }
-      continue;
-    }
-    if (ch === "/" && next === "*") {
-      while (i < source.length && !(source[i] === "*" && source[i + 1] === "/")) {
-        out += source[i] === "\n" ? "\n" : " ";
-        i += 1;
-      }
-      out += "  ";
-      i += 2;
-      continue;
-    }
-    out += ch;
-    i += 1;
-  }
-  return out;
-}
 
 /**
  * Whether an `i18n-allow` marker governs this line. A marker applies to the contiguous
