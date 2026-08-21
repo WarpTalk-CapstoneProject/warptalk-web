@@ -8,9 +8,11 @@ import {
   Sparkle,
   Warning,
   X,
+  MagnifyingGlass,
 } from "@phosphor-icons/react/dist/ssr";
 import { motion } from "motion/react";
 import type { AiSuggestionDto } from "@/types/realtime";
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
 
@@ -48,6 +50,97 @@ const CATEGORY_MEANINGS: Record<string, string> = {
   correction: "This contradicts something said earlier",
   fact: "From a document attached to this meeting",
 };
+
+/**
+ * The next steps a hint offers, per category.
+ *
+ * A hint that only describes what it noticed leaves the reader to act on it in another window.
+ * "This acronym was never defined" is a fact; "Research this term" is a thing to do — and the
+ * widget can already do it, with web search, the workspace documents and the glossary behind it.
+ *
+ * WHY A LIST AND NOT ONE BUTTON
+ *     A noticed term is worth looking up on the web AND worth checking against what this
+ *     workspace has already written about it, and those are different answers. Naming both is
+ *     what makes the hint a place work starts rather than a notice that work is needed.
+ *
+ * WHY THE WORDING IS PER CATEGORY
+ *     The useful step is not the same for each. A term wants looking up, an unanswered question
+ *     wants asking, a figure wants checking against the documents it should have come from, a
+ *     contradiction wants resolving. One label for all five would have fitted none of them.
+ *
+ * Two at most. This card sits inside a transcript bubble in a side panel, and a row of
+ * choices there competes with the conversation it is commenting on.
+ */
+type SuggestionAction = {
+  label: string;
+  /** Built from the hint, and handed to the widget as a question. */
+  prompt: (subject: string, detail: string) => string;
+};
+
+const GENERIC_ACTIONS: SuggestionAction[] = [
+  {
+    label: "Ask WarpBot",
+    prompt: (subject, detail) =>
+      `About our meeting: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
+  },
+];
+
+const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
+  term: [
+    {
+      label: "Research this term",
+      prompt: (subject) => `Research this term from our meeting and explain it plainly: ${subject}`,
+    },
+    {
+      label: "Find it in our documents",
+      prompt: (subject) =>
+        `Search our workspace documents and glossary for this term and tell me how we use it: ${subject}`,
+    },
+  ],
+  clarification: [
+    {
+      label: "Ask WarpBot this",
+      prompt: (subject, detail) =>
+        `This came up in our meeting and went unanswered: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
+    },
+    {
+      label: "Find who would know",
+      prompt: (subject) =>
+        `Who in this workspace has worked on this, based on our meetings and documents? ${subject}`,
+    },
+  ],
+  fact: [
+    {
+      label: "Check this in the documents",
+      prompt: (subject, detail) =>
+        `Check this against our workspace documents and say whether it matches: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
+    },
+  ],
+  correction: [
+    {
+      label: "Check which is right",
+      prompt: (subject, detail) =>
+        `Two things said in our meeting disagree. Work out which one our documents support: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
+    },
+  ],
+  action: [
+    {
+      label: "Draft this task",
+      prompt: (subject, detail) =>
+        `Turn this into a task with a clear owner and a deadline, and say what is still missing: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
+    },
+  ],
+};
+
+function actionsFor(suggestion: AiSuggestionDto): { label: string; prompt: string }[] {
+  const subject = suggestion.content.trim();
+  const detail = suggestion.detail?.trim() ?? "";
+  const actions = CATEGORY_ACTIONS[suggestion.category] ?? GENERIC_ACTIONS;
+  return actions.slice(0, 2).map((action) => ({
+    label: action.label,
+    prompt: action.prompt(subject, detail),
+  }));
+}
 
 function labelFor(category: string) {
   return CATEGORY_LABELS[category] ?? "Suggestion";
@@ -123,6 +216,7 @@ export function SuggestionDetail({
   onDismiss: () => void;
 }) {
   const hasDetail = Boolean(suggestion.detail?.trim());
+  const askWarpBot = useAssistantWidgetStore((state) => state.askWarpBot);
   // Indexed here too rather than shared through a helper — same reason as in SuggestionBadge:
   // react-hooks/static-components has to see the fixed set, and cannot through a call.
   const Icon =
@@ -181,6 +275,26 @@ export function SuggestionDetail({
             sources={parseAnswerSources(suggestion.sourcesJson)}
             tone={isSelf ? "inverted" : "default"}
           />
+          {/* The action, under the evidence and above the disclaimer: it is only worth offering
+              once the reader has seen what the hint is and where it came from. */}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {actionsFor(suggestion).map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => askWarpBot(action.prompt)}
+                className={`inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors ${
+                  isSelf
+                    ? "bg-white/15 text-white hover:bg-white/25"
+                    : "bg-primary/10 text-primary hover:bg-primary/20"
+                }`}
+              >
+                <MagnifyingGlass className="h-2.5 w-2.5" weight="bold" aria-hidden />
+                {action.label}
+              </button>
+            ))}
+          </div>
+
           {/* Said once, at the bottom, because an unprompted hint that does not say where it
               came from reads as the product asserting a fact. */}
           <p
