@@ -24,6 +24,7 @@ import {
   FileText,
   GitCommitVertical,
   Languages,
+  Loader2,
   MessageSquare,
   Pencil,
 } from "lucide-react";
@@ -38,9 +39,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  useTranscriptLanguageBackfill,
+  useTranslationRefreshAfterCorrection,
+} from "@/hooks/use-transcripts";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName } from "@/lib/language/languages";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import {
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
@@ -54,13 +59,18 @@ import {
   indexTranslationsBySegment,
   resolveTranscriptLine,
   transcriptLanguageOptions,
+  withOfferableLanguages,
   type ResolvedTranscriptLine,
   type TranscriptLanguageOption,
 } from "@/lib/transcript/transcript-language";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { transcriptService } from "@/services/transcript.service";
-import type { TranscriptSegmentDto, TranscriptTranslationDto } from "@/types/transcript";
+import type {
+  TranscriptLanguageCoverage,
+  TranscriptSegmentDto,
+  TranscriptTranslationDto,
+} from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
 /** The room page's InlineChip, in the one shape this panel uses it. */
@@ -153,6 +163,18 @@ export function MeetingTranscriptArtifact({
     () => transcriptLanguageOptions(grouped, translationIndex),
     [grouped, translationIndex],
   );
+  /* Every language the product can translate into, not only the ones this meeting happened to
+     produce — see withOfferableLanguages. A meeting where translation was never started has no
+     entries of its own, and that is exactly the reader who needs the picker most. */
+  const offeredLanguages = useMemo(
+    () =>
+      withOfferableLanguages(
+        languageOptions,
+        languagesInScope("chatTarget").map((language) => language.code),
+        grouped.length,
+      ),
+    [languageOptions, grouped.length],
+  );
 
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
@@ -169,6 +191,26 @@ export function MeetingTranscriptArtifact({
 
   const displayLanguage =
     chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage);
+
+  /* Filling in what the meeting never translated. Inert for as-spoken, and inert without a
+     transcript id — the live tab has neither a saved transcript to work on nor an id to name it
+     by, and it must keep marking the gap rather than pretending it can close it. */
+  const backfill = useTranscriptLanguageBackfill(
+    transcriptId,
+    displayLanguage === AS_SPOKEN ? undefined : displayLanguage,
+  );
+
+  /**
+   * Picking a language is the request.
+   *
+   * "Read it in English" and "translate the rest into English" are not two decisions a reader
+   * wants to make in sequence — the first one already means the second. The server does nothing
+   * when the language is already complete, so this is safe to fire on every pick.
+   */
+  function chooseLanguage(code: string) {
+    setChosenLanguage(code);
+    if (code !== AS_SPOKEN) backfill.request(code);
+  }
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
   // with one part missing. Counted here and said out loud below, rather than left for the reader
   // to discover one line at a time.
@@ -235,6 +277,7 @@ export function MeetingTranscriptArtifact({
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
   const [isSavingCorrection, setIsSavingCorrection] = useState(false);
+  const refreshTranslationsAfterCorrection = useTranslationRefreshAfterCorrection(transcriptId);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
   const isFinalized = transcriptStatus === "finalized";
@@ -251,19 +294,23 @@ export function MeetingTranscriptArtifact({
 
     setIsSavingCorrection(true);
     try {
-      // No triggeredRetranslation flag: the server has no such request field, and
-      // TranscriptCorrectionMapper.ToEntity sets it true unconditionally. Re-translation is
-      // automatic — SubmitCorrectionAsync writes the corrected text onto the segment and pushes
-      // translate:requests with is_correction, and the translate worker supersedes the old
-      // translation. Sending `false` here read like a switch that was off; it never was one.
+      // No triggeredRetranslation flag: the server has no such request field, and it is not the
+      // caller's decision — SubmitCorrectionAsync sets it from whether the line actually had
+      // translations to redo. Sending `false` here read like a switch that was off; it never was
+      // one. (It also used to be set true on every correction while nothing retranslated anything:
+      // the message it pushed went to a stream no worker consumed.)
       await transcriptService.correctSegment(transcriptId, segment.id, {
         originalText: segment.originalText,
         correctedText,
         correctionType: "stt",
       });
       onSegmentsChanged?.();
+      // The line updates now; its translations are redone by warptalk-ai and land seconds later.
+      // Without this the reader sees the corrected sentence beside translations of the one it
+      // replaced, and nothing on the page ever resolves that.
+      refreshTranslationsAfterCorrection();
       setEditingSegmentId(null);
-      toast.success("Transcript correction saved.");
+      toast.success("Correction saved. Its translations are being redone.");
     } catch {
       toast.error("Could not save the transcript correction.");
     } finally {
@@ -325,16 +372,16 @@ export function MeetingTranscriptArtifact({
         </div>
         {totalCount > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            {/* A meeting held in one language has nothing to choose between: "As spoken" and its
-                one language render the same transcript, and a control whose options are
-                indistinguishable is a control that reads as broken. */}
-            {languageOptions.length > 1 ? (
-              <TranscriptLanguageMenu
-                options={languageOptions}
-                value={displayLanguage}
-                onChange={setChosenLanguage}
-              />
-            ) : null}
+            {/* Offered for any transcript with lines in it, including a meeting held entirely in
+                one language: that used to render the same transcript twice over and read as a
+                broken control, but a language with no coverage is now something the reader can
+                ask for rather than a dead entry. */}
+            <TranscriptLanguageMenu
+              options={offeredLanguages}
+              value={displayLanguage}
+              onChange={chooseLanguage}
+              busyLanguage={backfill.coverage?.status === "running" ? backfill.coverage.targetLanguage : null}
+            />
             <TranscriptLayoutToggle value={layout} onChange={setLayout} />
             <div className="mx-0.5 h-4 w-px bg-border" />
             <button
@@ -368,15 +415,19 @@ export function MeetingTranscriptArtifact({
         ) : null}
       </div>
 
-      {/* The honest footnote to "this transcript is in Vietnamese". Without it the reader has
-          to notice, one line at a time, that some of it is not. */}
-      {incompleteCount > 0 ? (
-        <p className="mb-2 text-[12px] leading-relaxed text-muted-foreground">
-          {incompleteCount} of {totalCount} {incompleteCount === 1 ? "entry is" : "entries are"}{" "}
-          not fully in {getLanguageName(displayLanguage)} — marked, with the spoken words one
-          click away.
-        </p>
-      ) : null}
+      {/* What is still not in the chosen language, and what is being done about it. This used to
+          be a footnote and nothing more — an honest one, but a reader told that 113 of 285 lines
+          are not in English has been informed of a problem rather than given a transcript. */}
+      <TranscriptLanguageStatus
+        language={displayLanguage}
+        incompleteCount={incompleteCount}
+        totalCount={totalCount}
+        coverage={backfill.coverage}
+        canBackfill={Boolean(transcriptId)}
+        isStarting={backfill.isStarting}
+        failedToStart={backfill.failedToStart}
+        onRetry={() => backfill.request(displayLanguage)}
+      />
 
       {totalCount === 0 ? (
         <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
@@ -477,21 +528,143 @@ function TranscriptSessionDivider({
 }
 
 /**
+ * The line under the toolbar: how much of the meeting is in the chosen language, and what is
+ * happening to the rest.
+ *
+ * Four states, and they are genuinely different answers rather than four wordings of one:
+ * a backfill is running and the reader can watch it close; it failed and can be retried; the
+ * gap exists and nothing is filling it (the live tab, which has no saved transcript to work on);
+ * or there is nothing to say.
+ *
+ * The counts come from the server when they are there, because the client only knows about the
+ * translations it has fetched, and the whole point of a running backfill is that more are
+ * arriving. `incompleteCount` is the fallback — it also catches a merged utterance with one part
+ * translated, which the server's per-segment count cannot see.
+ */
+function TranscriptLanguageStatus({
+  language,
+  incompleteCount,
+  totalCount,
+  coverage,
+  canBackfill,
+  isStarting,
+  failedToStart,
+  onRetry,
+}: {
+  language: string;
+  incompleteCount: number;
+  totalCount: number;
+  coverage: TranscriptLanguageCoverage | null;
+  canBackfill: boolean;
+  isStarting: boolean;
+  /** The request to start one was refused or never arrived — a different failure from a run
+   *  that started and then broke, and the reader can only act on it by asking again. */
+  failedToStart: boolean;
+  onRetry: () => void;
+}) {
+  if (language === AS_SPOKEN) return null;
+
+  const name = getLanguageName(language);
+  const running = coverage?.status === "running" || isStarting;
+  const failed = coverage?.status === "failed";
+  const missing = coverage?.missing ?? incompleteCount;
+  const total = coverage?.totalSegments ?? totalCount;
+  const done = Math.max(0, total - missing);
+
+  if (running) {
+    return (
+      <div className="mb-2 space-y-1.5">
+        <p className="flex items-center gap-2 text-[12px] leading-relaxed text-muted-foreground">
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+          <span>
+            Translating the rest of this meeting into {name} — {done} of {total} entries ready.
+          </span>
+        </p>
+        {/* The bar and the sentence say the same thing on purpose: the number is what a reader
+            checks, the bar is what tells them at a glance that it is still moving. */}
+        <div
+          className="h-1 w-full overflow-hidden rounded-full bg-surface-2"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={done}
+          aria-label={`Translating into ${name}`}
+        >
+          <div
+            className="h-full rounded-full bg-ink/40 transition-[width] duration-500"
+            style={{ width: `${total > 0 ? Math.round((done / total) * 100) : 0}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if ((failed || failedToStart) && missing > 0) {
+    return (
+      <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-relaxed text-muted-foreground">
+        <span>
+          {missing} {missing === 1 ? "entry" : "entries"} could not be translated into {name}.
+        </span>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
+        >
+          Try again
+        </button>
+      </p>
+    );
+  }
+
+  if (missing <= 0) return null;
+
+  if (!canBackfill) {
+    // The live tab: the transcript is still being written and there is no saved id to work on,
+    // so the honest footnote is all there is. It was the whole feature before backfill existed.
+    return (
+      <p className="mb-2 text-[12px] leading-relaxed text-muted-foreground">
+        {missing} of {total} entries {missing === 1 ? "is" : "are"} not fully in {name} — marked,
+        with the spoken words one click away.
+      </p>
+    );
+  }
+
+  return (
+    <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-relaxed text-muted-foreground">
+      <span>
+        {missing} of {total} entries {missing === 1 ? "is" : "are"} not in {name} yet.
+      </span>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
+      >
+        Translate {missing === 1 ? "it" : "them"}
+      </button>
+    </p>
+  );
+}
+
+/**
  * Which language to read the meeting in.
  *
- * Every entry is a language the transcript has words in, with how much of the meeting is
- * readable in it beside the name. A meeting can be readable end-to-end in a language nobody
- * spoke — that is what the dubbing produced — and partially readable in one where translation
- * was only running for part of it, and the reader can see which before choosing.
+ * Every entry says how much of the meeting is readable in it before the reader commits. A meeting
+ * can be readable end-to-end in a language nobody spoke — that is what the dubbing produced —
+ * partially readable in one where translation was only running for part of it, or not readable in
+ * it at all. The last of those used to be left out of the list; it is offered now, because
+ * choosing it translates the meeting into it rather than returning a page of untranslated lines.
  */
 function TranscriptLanguageMenu({
   options,
   value,
   onChange,
+  busyLanguage,
 }: {
   options: readonly TranscriptLanguageOption[];
   value: string;
   onChange: (value: string) => void;
+  /** The language a backfill is currently filling in, so its row can say so. */
+  busyLanguage?: string | null;
 }) {
   const asSpoken = value === AS_SPOKEN;
 
@@ -518,7 +691,7 @@ function TranscriptLanguageMenu({
             <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
               <TranscriptLanguageItem
                 label={`${getFlagEmoji(option.code)} ${getLanguageName(option.code)}`.trim()}
-                detail={`${option.readableCount} of ${option.totalCount} entries`}
+                detail={languageDetail(option, busyLanguage === option.code)}
                 selected={!asSpoken && option.code === value}
               />
             </DropdownMenuItem>
@@ -527,6 +700,23 @@ function TranscriptLanguageMenu({
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+/**
+ * What one row of the picker says about itself.
+ *
+ * "N of M entries" is the wrong thing to show a language with nothing in it yet — it reads as a
+ * broken option rather than as an offer — and it is the wrong thing to show one that covers the
+ * whole meeting, where the number is just noise beside the name.
+ */
+function languageDetail(option: TranscriptLanguageOption, busy: boolean): string {
+  if (busy) return "Translating the rest now";
+  // completeCount, not readableCount: a merged utterance with half a translation is readable and
+  // is still marked incomplete in the transcript below, and a row promising "the whole meeting"
+  // over that contradicts the line it sits above.
+  if (option.totalCount > 0 && option.completeCount >= option.totalCount) return "The whole meeting";
+  if (option.completeCount === 0) return "Translate the meeting into this";
+  return `${option.completeCount} of ${option.totalCount} entries · translate the rest`;
 }
 
 function TranscriptLanguageItem({

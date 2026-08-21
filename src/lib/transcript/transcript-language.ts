@@ -67,6 +67,13 @@ export type TranscriptLanguageOption = {
   translatedCount: number;
   /** Lines a reader could read in it at all — spoken plus translated. */
   readableCount: number;
+  /**
+   * Lines that are FULLY in it. Lower than `readableCount` when a merged utterance has a
+   * translation for some of the segments it absorbed and not the rest — readable, and still not
+   * the whole line. The picker counts with this one, so it cannot promise "the whole meeting"
+   * over a transcript that then marks a line as incomplete.
+   */
+  completeCount: number;
   /** Lines in the transcript, so a caller can render "128 of 145" without recounting. */
   totalCount: number;
 };
@@ -164,6 +171,7 @@ export function transcriptLanguageOptions(
   const spoken = new Map<string, number>();
   const translated = new Map<string, number>();
   const readable = new Map<string, number>();
+  const complete = new Map<string, number>();
 
   const bump = (counter: Map<string, number>, code: string) =>
     counter.set(code, (counter.get(code) ?? 0) + 1);
@@ -171,10 +179,13 @@ export function transcriptLanguageOptions(
   for (const line of lines) {
     const spokenCode = normalizeLanguageCode(line.originalLanguage ?? "");
     const codes = new Set<string>();
+    const segmentIds = lineSegmentIds(line);
 
     if (spokenCode) {
       bump(spoken, spokenCode);
       codes.add(spokenCode);
+      // A line was said in this language; there is no part of it that could be missing.
+      bump(complete, spokenCode);
     }
 
     for (const code of Object.keys(translationsForLine(line, index))) {
@@ -184,6 +195,14 @@ export function transcriptLanguageOptions(
       if (code === spokenCode) continue;
       bump(translated, code);
       codes.add(code);
+
+      // Counted per segment, exactly as resolveTranscriptLine decides isPartial: a merged
+      // utterance whose second half was never translated is readable and is not complete.
+      const covered = segmentIds.reduce(
+        (count, segmentId) => (index[segmentId]?.[code]?.trim() ? count + 1 : count),
+        0,
+      );
+      if (covered === segmentIds.length) bump(complete, code);
     }
 
     for (const code of codes) bump(readable, code);
@@ -195,6 +214,7 @@ export function transcriptLanguageOptions(
       spokenCount: spoken.get(code) ?? 0,
       translatedCount: translated.get(code) ?? 0,
       readableCount: readable.get(code) ?? 0,
+      completeCount: complete.get(code) ?? 0,
       totalCount: lines.length,
     }))
     .sort(
@@ -203,6 +223,44 @@ export function transcriptLanguageOptions(
         || right.spokenCount - left.spokenCount
         || left.code.localeCompare(right.code),
     );
+}
+
+/**
+ * The picker's list: what the transcript already has, plus what it could be given.
+ *
+ * `transcriptLanguageOptions` is built from the record, and its reason for refusing to offer a
+ * language with no text in it was sound — a dropdown entry whose only effect is to return every
+ * line untranslated reads as a broken page. That reason no longer holds. Choosing a language now
+ * translates the lines missing from it, so an entry with a coverage of zero is an offer rather
+ * than a dead end, and withholding it is what leaves a reader stuck: a meeting where translation
+ * was never started had NO entries at all, which is the case the picker was most needed for.
+ *
+ * Kept separate from `transcriptLanguageOptions` rather than folded into it because
+ * `defaultTranscriptLanguage` reads that list to decide what to open on, and it must keep
+ * deciding from what the meeting actually produced. A catalogue of offers is not evidence that
+ * a meeting was multilingual.
+ */
+export function withOfferableLanguages(
+  options: readonly TranscriptLanguageOption[],
+  offerable: readonly string[],
+  totalCount: number,
+): TranscriptLanguageOption[] {
+  const known = new Set(options.map((option) => option.code));
+  const extra = offerable
+    .map((code) => normalizeLanguageCode(code))
+    .filter((code) => code && !known.has(code))
+    .map((code) => ({
+      code,
+      spokenCount: 0,
+      translatedCount: 0,
+      readableCount: 0,
+      completeCount: 0,
+      totalCount,
+    }));
+
+  // Already-covered languages first, in their existing order; the offers follow, alphabetically,
+  // so the list does not reorder itself as a backfill lands.
+  return [...options, ...extra.sort((left, right) => left.code.localeCompare(right.code))];
 }
 
 /**
