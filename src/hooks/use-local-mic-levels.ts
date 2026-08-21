@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useLocalParticipant } from "@livekit/components-react";
+import { LocalAudioTrack } from "livekit-client";
 
 /**
  * A rolling history of how loud your own microphone has been, one value per time bucket.
@@ -44,14 +45,15 @@ export function useLocalMicLevels({
   windowSeconds?: number;
 }): number[] {
   const { microphoneTrack } = useLocalParticipant();
-  const mediaStreamTrack = microphoneTrack?.track?.mediaStreamTrack ?? null;
-  const active = enabled && Boolean(mediaStreamTrack);
+  const track = microphoneTrack?.track;
+  const localAudioTrack = track instanceof LocalAudioTrack ? track : null;
+  const active = enabled && Boolean(localAudioTrack);
   const [levels, setLevels] = useState<number[]>(EMPTY_LEVELS);
   const peakRef = useRef(0);
   const bucketsRef = useRef<number[]>([]);
 
   useEffect(() => {
-    if (!active || !mediaStreamTrack) return;
+    if (!active || !localAudioTrack) return;
 
     const AudioContextCtor =
       window.AudioContext ||
@@ -61,10 +63,33 @@ export function useLocalMicLevels({
     const audioContext = new AudioContextCtor();
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
-    const source = audioContext.createMediaStreamSource(
-      new MediaStream([mediaStreamTrack]),
-    );
-    source.connect(analyser);
+
+    // Measure the PUBLISHED signal, not the raw capture. With the Krisp processor attached the
+    // audio that leaves this machine is its processedTrack; the raw mediaStreamTrack still
+    // carries the un-suppressed room. The clone clip is cut from what is published, and the mic
+    // check exists precisely to show suppression doing something — a strip drawn from the raw
+    // capture would show the same noise whether or not the filter is running.
+    //
+    // Watched on an interval rather than read once: the processor attaches asynchronously after
+    // the toggle's render, and nothing re-renders when it finishes — there is no event to
+    // subscribe to, so a cheap identity check twice a second is what keeps the strip honest
+    // across attach, detach, and failure-rollback.
+    let source: MediaStreamAudioSourceNode | null = null;
+    let observedTrack: MediaStreamTrack | null = null;
+    const publishedTrack = () =>
+      localAudioTrack.getProcessor()?.processedTrack ?? localAudioTrack.mediaStreamTrack ?? null;
+    const attachSource = () => {
+      const next = publishedTrack();
+      if (next === observedTrack) return;
+      source?.disconnect();
+      source = null;
+      observedTrack = next;
+      if (!next) return;
+      source = audioContext.createMediaStreamSource(new MediaStream([next]));
+      source.connect(analyser);
+    };
+    attachSource();
+    const trackWatch = setInterval(attachSource, 500);
 
     const data = new Uint8Array(analyser.frequencyBinCount);
     let frame = 0;
@@ -97,10 +122,11 @@ export function useLocalMicLevels({
     return () => {
       cancelAnimationFrame(frame);
       clearInterval(timer);
-      source.disconnect();
+      clearInterval(trackWatch);
+      source?.disconnect();
       if (audioContext.state !== "closed") void audioContext.close();
     };
-  }, [active, mediaStreamTrack, buckets, windowSeconds]);
+  }, [active, localAudioTrack, buckets, windowSeconds]);
 
   // Derived, not stored: a hook that is off reports an empty strip without having to write state
   // from inside an effect to say so.

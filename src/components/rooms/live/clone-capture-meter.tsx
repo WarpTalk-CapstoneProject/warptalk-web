@@ -22,16 +22,16 @@
  *   not counting it — and merging them into one drawing would hide exactly that case.
  */
 
-/** Above this a bucket is clean enough to be worth cloning from. Same scale as the pre-join meter. */
-const CLEAR_LEVEL = 0.42;
-/** Below this there is speech but not much of it; the worker's "too quiet" lives down here. */
-const QUIET_LEVEL = 0.16;
+// One scale for every reading of the local microphone — shared with the mic check, so the two
+// strips can never learn to disagree about what "clear" means.
+import { CLEAR_LEVEL, QUIET_LEVEL } from "@/lib/meeting/mic-check";
 
 export function CloneCaptureMeter({
   levels,
   progress,
   tone,
   buckets = 36,
+  ariaLabel,
 }: {
   /** Peak level per time bucket, oldest first. Shorter than `buckets` while the take fills. */
   levels: number[];
@@ -39,6 +39,8 @@ export function CloneCaptureMeter({
   progress: number | null;
   tone: "idle" | "working" | "done" | "blocked";
   buckets?: number;
+  /** What the strip is a picture of — the mic check reuses this drawing for a live level. */
+  ariaLabel?: string;
 }) {
   const done = tone === "done";
   const slots = Array.from({ length: buckets }, (_, index) => levels[index] ?? null);
@@ -50,9 +52,10 @@ export function CloneCaptureMeter({
         className="flex h-8 items-end gap-px"
         role="img"
         aria-label={
-          progress === null
-            ? "Microphone level over the reference clip"
-            : `Reference clip ${Math.round(progress * 100)}% collected`
+          ariaLabel
+            ?? (progress === null
+              ? "Microphone level over the reference clip"
+              : `Reference clip ${Math.round(progress * 100)}% collected`)
         }
       >
         {slots.map((level, index) => (

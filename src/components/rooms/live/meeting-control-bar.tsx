@@ -16,6 +16,7 @@ import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
 import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
 import { useLocalMicLevels } from "@/hooks/use-local-mic-levels";
+import { MicCheck } from "@/components/rooms/live/mic-check";
 import {
   NOISE_REDUCTION_MODES,
   noiseReductionDescription,
@@ -636,6 +637,14 @@ export function MeetingControlBar({
                     active={noiseSuppressionEnabled}
                     value={noiseSuppressionEnabled ? "On" : "Off"}
                     onClick={onToggleNoiseSuppression}
+                  />
+                  {/* Right under the switch it proves. The strip draws the PUBLISHED signal —
+                      after Krisp when it is attached — so flipping the row above visibly moves
+                      the background floor, which is the evidence the switch never had. */}
+                  <MicCheck
+                    enabled={isSettingsMenuOpen && settingsSection === "root"}
+                    suppressionActive={noiseSuppressionEnabled}
+                    microphoneOn={microphoneEnabled}
                   />
                   {/* Deliberately the NEXT row, and deliberately worded differently. The row
                       above filters the microphone other people hear (Krisp, client-side). This one
