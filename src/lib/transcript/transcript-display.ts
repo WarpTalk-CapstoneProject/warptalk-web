@@ -169,10 +169,30 @@ export function findSuggestionForUtterance<T>(
  * Matched on the shape rather than that one literal: any `__ALL_CAPS__` token is a sentinel by
  * construction, and nobody speaks one. A later marker will be filtered without needing to be
  * discovered on screen first.
+ *
+ * Anchored only at the START, because production holds a `__MEETING_END__a` — the sentinel with
+ * one stray character welded onto it, from 156 clean ones. A `$` anchor let that single row
+ * through as a line of dialogue attributed to "System", and it would now also offer "system" as
+ * a language this meeting can be read in. A line that BEGINS with a sentinel is a sentinel
+ * however it ends; the "the __MEETING_END__ marker" case stays speech because the token is not
+ * where the line starts.
  */
 export function isTranscriptControlMarker(text: string | null | undefined): boolean {
-  return /^__[A-Z0-9_]+__$/.test((text ?? "").trim());
+  return /^__[A-Z0-9_]+__/.test((text ?? "").trim());
 }
+
+/**
+ * A saved utterance. `id` is the FIRST segment folded into it — the same partial identity
+ * `GroupedTranscriptSegment` carries on the live side, and for the same reason: anything keyed
+ * by the segment ids the backend emitted has to read `mergedSegmentIds` instead.
+ *
+ * The translations are what made this necessary here. They are stored per segment, so a bubble
+ * that absorbed three chunks of one continuous sentence has three translations to reassemble,
+ * and reading them off `id` alone would have shown the first third of every long utterance.
+ */
+export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
+  mergedSegmentIds: string[];
+};
 
 /**
  * Groups a saved/paginated transcript (from the REST API, not the live SignalR
@@ -184,15 +204,15 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
  */
 export function groupSavedTranscriptSegments(
   segments: SavedTranscriptSegmentDto[],
-): SavedTranscriptSegmentDto[] {
-  const utterances: SavedTranscriptSegmentDto[] = [];
+): GroupedSavedTranscriptSegment[] {
+  const utterances: GroupedSavedTranscriptSegment[] = [];
 
   for (const segment of segments) {
     if (isTranscriptControlMarker(segment.originalText)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
-      utterances.push({ ...segment });
+      utterances.push({ ...segment, mergedSegmentIds: [segment.id] });
       continue;
     }
 
@@ -200,10 +220,86 @@ export function groupSavedTranscriptSegments(
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
+      mergedSegmentIds: [...previous.mergedSegmentIds, segment.id],
     };
   }
 
   return utterances;
+}
+
+/**
+ * A stretch of the meeting one person held, as the timeline draws it: one dot on the rail, the
+ * speaker's name once, and everything they said under it.
+ */
+export type TranscriptSpeakerTurn<T> = {
+  /** Stable across a render — the first line's id, which is unique within a transcript. */
+  key: string;
+  speakerName: string;
+  /** Who spoke, when the transcript knows. Null when only a display name was ever recorded. */
+  speakerId: string | null;
+  startTimeMs: number;
+  lines: T[];
+};
+
+/**
+ * A turn ends when somebody else speaks — or when the same person stops for this long.
+ *
+ * Without the second rule a monologue is one dot: a 40-minute presentation would draw a single
+ * marker on a rail whose entire job is to show the shape of the meeting. 30 seconds is well past
+ * a breath (finalized STT chunks arrive every ~6s while somebody is talking) and short enough
+ * that a real pause becomes a place the eye can land.
+ */
+const MAX_TURN_SILENCE_MS = 30_000;
+
+/**
+ * Groups a transcript into speaker turns for the timeline layout.
+ *
+ * Speaker identity follows the same rule the utterance merge uses — the participant id when
+ * there is one, the display name otherwise — so the two groupings cannot disagree about who was
+ * talking. Input must already be in chronological order.
+ */
+export function groupIntoSpeakerTurns<
+  T extends {
+    id: string;
+    speakerName?: string | null;
+    speakerParticipantId?: string | null;
+    startTimeMs: number;
+    endTimeMs: number;
+  },
+>(segments: readonly T[]): TranscriptSpeakerTurn<T>[] {
+  const turns: TranscriptSpeakerTurn<T>[] = [];
+
+  for (const segment of segments) {
+    const identity = segment.speakerParticipantId ?? segment.speakerName ?? "";
+    const previous = turns[turns.length - 1];
+    const previousLine = previous?.lines[previous.lines.length - 1];
+    const previousIdentity = previousLine
+      ? (previousLine.speakerParticipantId ?? previousLine.speakerName ?? "")
+      : null;
+    // A NEGATIVE gap is not silence: startTimeMs is an offset into the audio ingress track and
+    // resets when that track reconnects (see formatTranscriptClockTime). Splitting on it would
+    // put a turn boundary wherever the meeting dropped and rejoined.
+    const gapMs = previousLine ? segment.startTimeMs - previousLine.endTimeMs : 0;
+    const sameTurn =
+      previous !== undefined
+      && previousIdentity === identity
+      && gapMs <= MAX_TURN_SILENCE_MS;
+
+    if (sameTurn) {
+      previous.lines.push(segment);
+      continue;
+    }
+
+    turns.push({
+      key: segment.id,
+      speakerName: segment.speakerName?.trim() || "Unknown speaker",
+      speakerId: segment.speakerParticipantId ?? null,
+      startTimeMs: segment.startTimeMs,
+      lines: [segment],
+    });
+  }
+
+  return turns;
 }
 
 export type TranslationSessionBlock<T> = {
@@ -417,7 +513,12 @@ function belongsToSameSavedUtterance(
   return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
 }
 
-function appendText(current?: string, incoming?: string): string {
+/**
+ * Exported for transcript-language.ts, which joins a merged utterance's per-language
+ * translations back together and has to do it the same way the original text was joined —
+ * two copies of "how do two halves of a sentence become one" is one copy too many.
+ */
+export function appendText(current?: string, incoming?: string): string {
   const left = current?.trim() || "";
   const right = incoming?.trim() || "";
   if (!left) return right;

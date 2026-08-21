@@ -18,9 +18,9 @@ import {
   CalendarPlus,
   Check,
   ChevronDown,
+  ClipboardList,
   Code,
   Code2,
-  CheckCircle,
   Copy,
   Download,
   FileText,
@@ -82,6 +82,10 @@ import {
   SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
+import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
+import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
+import { MinutesPanel } from "@/components/rooms/minutes-panel";
+import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
 import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
 import {
@@ -96,6 +100,7 @@ import { looksLikeRoomId } from "@/lib/meeting/room-code-guess";
 import {
   useTranscriptByRoom,
   useTranscriptSegments,
+  useTranscriptTranslations,
 } from "@/hooks/use-transcripts";
 import {
   useEndTranslationRoom,
@@ -104,23 +109,16 @@ import {
   useTranslationRoom,
   useTranslationRoomInvitations,
   useTranslationRoomParticipants,
-  useTranslationRoomSessions,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getLanguageName } from "@/lib/language/languages";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
-import { transcriptService } from "@/services/transcript.service";
 import {
   resolveRoomEntryIntent,
   type RoomEntryIntent,
 } from "@/lib/meeting/translation-room-access";
-import {
-  groupSavedTranscriptSegments,
-  groupSegmentsByTranslationSession,
-  type TranslationSessionBlock,
-} from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
 import {
   buildGoogleCalendarUrl,
@@ -135,7 +133,6 @@ import type {
   TranslationRoomDto,
   TranslationRoomInvitationDto,
   TranslationRoomParticipantDto,
-  TranslationRoomSessionDto,
   TranslationRoomStatus,
 } from "@/types/translationRoom";
 import type { WorkspaceMemberDto } from "@/types/workspace";
@@ -184,12 +181,20 @@ export default function RoomInformationPage() {
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
+  // What the meeting was translated into while it ran. Read here rather than inside the
+  // transcript panel so it sits above the `if (!room)` return with the other transcript
+  // reads — see the note on `activeRoomId` below for why the position is not a style choice.
+  const translationsQuery = useTranscriptTranslations(transcriptQuery.data?.id);
   // Memoised because jumpToTranscriptMoment depends on it; `?? []` allocates a fresh
   // array every render, which would rebuild the callback on every keystroke of a
   // transcript correction.
   const transcriptSegments = useMemo(
     () => segmentsQuery.data?.items ?? [],
     [segmentsQuery.data],
+  );
+  const transcriptTranslations = useMemo(
+    () => translationsQuery.data?.items ?? [],
+    [translationsQuery.data],
   );
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [seek, setSeek] = useState<SeekRequest | null>(null);
@@ -250,6 +255,10 @@ export default function RoomInformationPage() {
    *
    * A tab label is a promise about what is behind it, so it counts through the same function
    * rather than a second, cheaper approximation of it.
+   *
+   * The function is imported here even though the panel that draws the list now lives in its own
+   * file: what makes the two numbers agree is that they are produced by the SAME grouping, and a
+   * count passed back up out of the panel would be a second claim rather than the same one.
    */
   const transcriptEntryCount = useMemo(
     () =>
@@ -534,6 +543,12 @@ export default function RoomInformationPage() {
                   />
                 </div>
                 <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
+                  {/* Rating a meeting used to live on `/ended`, which was the only door to it and
+                      is gone. Here it is a control on the meeting itself, offered only once the
+                      meeting is over — there is nothing to rate before that. */}
+                  {isEnded ? (
+                    <MeetingFeedbackMenu roomId={room.id} meetingTitle={room.title} />
+                  ) : null}
                   {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
                       the title. A second StatusChip stood here, so the same room announced
                       "Waiting" twice on one screen in two different visual languages — a grey
@@ -597,6 +612,7 @@ export default function RoomInformationPage() {
               <MeetingRecordSection
                 roomId={room.id}
                 isHost={isHost}
+                isEnded={isEnded}
                 artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
                 segments={transcriptSegments}
@@ -606,6 +622,8 @@ export default function RoomInformationPage() {
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
+                    translations={transcriptTranslations}
+                    preferredLanguage={user?.preferredLanguage}
                     onSeekToRecording={
                       canAlignToRecording(seekSources) ? requestSeek : undefined
                     }
@@ -788,6 +806,7 @@ function RoomEntryButton({
 function MeetingRecordSection({
   roomId,
   isHost,
+  isEnded,
   artifactAccess,
   transcript,
   transcriptCount,
@@ -800,6 +819,12 @@ function MeetingRecordSection({
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
   isHost: boolean;
+  /**
+   * Whether the meeting is over, which is what separates "there is no record" from "the record
+   * is not written yet". The host lands here the moment they press End, and the finalizer takes
+   * about a minute — an empty transcript in that window is a wrong answer, not an empty one.
+   */
+  isEnded: boolean;
   /** WT-480: the room's stored `artifactAccess`. Absent reads as not shared. */
   artifactAccess?: string | null;
   transcript: React.ReactNode;
@@ -812,9 +837,9 @@ function MeetingRecordSection({
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
 }) {
-  const [tab, setTab] = useState<"transcript" | "summary" | "artifacts">(
-    "transcript",
-  );
+  const [tab, setTab] = useState<
+    "transcript" | "summary" | "minutes" | "artifacts"
+  >("transcript");
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
   // WT-492: null when the meeting was not recorded, or the file is not ready yet.
@@ -933,6 +958,17 @@ function MeetingRecordSection({
             icon={Sparkles}
             label="Summary"
           />
+          {/* Minutes came from the deleted `/ended` page, which was the only place they could be
+              read or signed. They belong here for the reason the rest of the record does: the
+              biên bản is a document ABOUT this meeting, drafted from its own summary. It also
+              gains something in the move — the transcript is on this page, so a minute can cite
+              a moment and the reader can go and check it. */}
+          <MeetingRecordTabButton
+            active={activeTab === "minutes"}
+            onClick={() => setTab("minutes")}
+            icon={ClipboardList}
+            label="Minutes"
+          />
           <MeetingRecordTabButton
             active={activeTab === "artifacts"}
             onClick={() => setTab("artifacts")}
@@ -962,7 +998,40 @@ function MeetingRecordSection({
           seek={seek}
         />
       ) : null}
-      {activeTab === "transcript" ? transcript : null}
+      {activeTab === "transcript" ? (
+        // "Still writing this up" came from the deleted `/ended` page, and it has to come with
+        // it: the host now lands HERE the moment they press End, which is the one minute when
+        // the finalizer has not run and there is genuinely nothing to read. Without it the
+        // transcript's own empty state says "No transcript was captured for this meeting" —
+        // a wrong answer, given confidently, at the only moment it is wrong. `useEndedRoomRecord`
+        // already polls while anything is generating, so this clears itself.
+        isEnded && !hasRecord ? (
+          <div className="rounded-[8px] border border-dashed border-border bg-surface-1 px-3.5 py-3">
+            <p className="text-[13px] font-medium text-ink">Still writing this up</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+              The transcript and the AI summary are produced after a meeting ends — usually
+              within a minute. This page updates on its own.
+            </p>
+          </div>
+        ) : (
+          transcript
+        )
+      ) : null}
+      {activeTab === "minutes" ? (
+        // Behind the same record gate the tab row is: the draft is assembled from the summary
+        // artifact, so drawing it up before the finalizer has run would produce a minutes
+        // document with an empty body and consume its number doing it.
+        <MinutesPanel
+          roomId={roomId}
+          canManage={isHost}
+          // The same switch the summary's citations make: the moment being cited is a node in
+          // the transcript, and that node only exists while the transcript tab is rendered.
+          onSeek={(atMs) => {
+            setTab("transcript");
+            onJumpToMoment(atMs);
+          }}
+        />
+      ) : null}
       {activeTab === "summary" && endedRecord ? (
         <SummaryPanel
           room={endedRecord}
@@ -1017,344 +1086,6 @@ function MeetingRecordSection({
       ) : null}
     </section>
   );
-}
-
-/**
- * The saved meeting transcript, rendered as a distinct artifact participants can read
- * and copy after the meeting ends. Data is the persisted TranscriptService segments for
- * this room (already fetched on the page), so it does not depend on any exported file
- * being stored — it always reflects what was actually transcribed.
- */
-function MeetingTranscriptArtifact({
-  segments,
-  onSeekToRecording,
-  baseTime,
-  roomId,
-  currentUserId,
-  isEnded,
-  onCopy,
-  transcriptId,
-  transcriptStatus,
-  highlightedSegmentId,
-  canEdit,
-  onSegmentsChanged,
-}: {
-  segments: TranscriptSegmentDto[];
-  /** Move the recording to this line. Omitted when the two clocks cannot be reconciled, which is
-   *  how the timestamp stays plain text instead of becoming a button that does nothing. */
-  onSeekToRecording?: (atMs: number) => void;
-  baseTime?: string;
-  roomId: string;
-  currentUserId?: string;
-  isEnded: boolean;
-  onCopy: (text: string, label: string) => void;
-  /** Needed to correct or finalize; omit and the section stays read-only. */
-  transcriptId?: string;
-  transcriptStatus?: string;
-  /** Set when a summary citation jumped here; the row is marked so the reader can see
-   *  which line the claim came from rather than landing in an anonymous wall of text. */
-  highlightedSegmentId?: string | null;
-  /** Only the host may rewrite what the room recorded. */
-  canEdit?: boolean;
-  /** Refetch after a correction lands, so the line shows what was actually saved. */
-  onSegmentsChanged?: () => void;
-}) {
-  const ordered = [...segments].sort(
-    (left, right) => left.sequenceOrder - right.sequenceOrder,
-  );
-  const grouped = groupSavedTranscriptSegments(ordered);
-  const sessionsQuery = useTranslationRoomSessions(roomId);
-  const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
-  const showSessionLabels = blocks.length > 1;
-  const totalCount = grouped.length;
-  const base = baseTime ? new Date(baseTime) : null;
-
-  // Correcting the transcript used to live on a separate Transcripts page, which showed the
-  // same segments for the same room under its own queue and its own tabs. The room already
-  // owns everything that page needed — the meeting, the host, the segments — so the editing
-  // moved to where the transcript is read rather than the reading moving to where it was
-  // edited.
-  const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
-  const [draftText, setDraftText] = useState("");
-  const [isSavingCorrection, setIsSavingCorrection] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
-
-  const isFinalized = transcriptStatus === "finalized";
-  const canCorrect = Boolean(canEdit && transcriptId) && !isFinalized;
-
-  async function saveCorrection(segment: TranscriptSegmentDto) {
-    const correctedText = draftText.trim();
-    // Closing without a change is not a correction — posting one would record an edit that
-    // changed nothing and count against the transcript's revision history.
-    if (!transcriptId || !correctedText || correctedText === segment.originalText.trim()) {
-      setEditingSegmentId(null);
-      return;
-    }
-
-    setIsSavingCorrection(true);
-    try {
-      // No triggeredRetranslation flag: the server has no such request field, and
-      // TranscriptCorrectionMapper.ToEntity sets it true unconditionally. Re-translation is
-      // automatic — SubmitCorrectionAsync writes the corrected text onto the segment and pushes
-      // translate:requests with is_correction, and the translate worker supersedes the old
-      // translation. Sending `false` here read like a switch that was off; it never was one.
-      await transcriptService.correctSegment(transcriptId, segment.id, {
-        originalText: segment.originalText,
-        correctedText,
-        correctionType: "stt",
-      });
-      onSegmentsChanged?.();
-      setEditingSegmentId(null);
-      toast.success("Transcript correction saved.");
-    } catch {
-      toast.error("Could not save the transcript correction.");
-    } finally {
-      setIsSavingCorrection(false);
-    }
-  }
-
-  async function finalizeTranscript() {
-    if (!transcriptId) return;
-    setIsFinalizing(true);
-    try {
-      await transcriptService.finalize(transcriptId);
-      onSegmentsChanged?.();
-      toast.success("Transcript finalized.");
-    } catch {
-      toast.error("Could not finalize the transcript.");
-    } finally {
-      setIsFinalizing(false);
-    }
-  }
-
-  function downloadTranscript() {
-    saveBlobDownload(
-      new Blob([assembleTranscriptText(blocks)], { type: "text/plain;charset=utf-8" }),
-      `transcript-${roomId}.txt`,
-    );
-  }
-
-  function segmentTime(startMs: number) {
-    if (!base) return "";
-    const stamp = new Date(base);
-    stamp.setMilliseconds(stamp.getMilliseconds() + startMs);
-    return stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-
-  return (
-    /* The heading and the section frame belong to MeetingRecordSection now — this is the
-       Transcript tab, not a section of its own. The action row stays: copy, download and
-       finalize act on the transcript specifically, not on the record as a whole. */
-    <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <InlineChip icon={<FileText className="size-3.5" />}>
-            {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
-            {totalCount === 1 ? "entry" : "entries"}
-          </InlineChip>
-        </div>
-        {totalCount > 0 ? (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => onCopy(assembleTranscriptText(blocks), "Transcript")}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-            >
-              <Copy className="size-3.5" />
-              Copy
-            </button>
-            <button
-              type="button"
-              onClick={downloadTranscript}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-            >
-              <Download className="size-3.5" />
-              Download
-            </button>
-            {canCorrect ? (
-              <button
-                type="button"
-                onClick={() => void finalizeTranscript()}
-                disabled={isFinalizing}
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
-              >
-                <CheckCircle className="size-3.5" />
-                {isFinalizing ? "Finalizing…" : "Finalize"}
-              </button>
-            ) : null}
-            {/* Said out loud, because after finalizing the pencils simply stop appearing and
-                that on its own reads as the page having broken. */}
-            {isFinalized ? (
-              <InlineChip icon={<CheckCircle className="size-3.5" />}>Finalized</InlineChip>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      {totalCount === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
-          {isEnded
-            ? "No transcript was captured for this meeting."
-            : "The transcript is saved here as the meeting is transcribed."}
-        </div>
-      ) : (
-        /* The transcript is the one thing on this page with no upper bound — an hour of
-           talking is hundreds of entries, and letting it set the page height pushed every
-           section below it, and the page's own scrollbar, out of reach. It scrolls inside
-           its own frame instead. Capped against the viewport rather than a fixed pixel
-           height so it does not swallow a short laptop screen whole.
-
-           Scroll chaining is left at its default, as WT-330(8) requires of every inner
-           scroller here — and requires by name, so do not write the containment utility
-           into this comment either: check-room-surface-contract matches the file's text,
-           not its markup, and the word alone fails it. Containing the scroll would stop
-           the page at the end of the transcript, which is the trap that ticket removed. */
-        <div className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4">
-          {blocks.map((block) => (
-            <div key={block.sessionNumber} className="space-y-2">
-              {showSessionLabels ? (
-                <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
-              ) : null}
-              {block.segments.map((segment) => {
-                const isSelf = Boolean(currentUserId) && segment.speakerParticipantId === currentUserId;
-                return (
-                  <div
-                    key={segment.id}
-                    id={`transcript-segment-${segment.id}`}
-                    className={`flex scroll-mt-4 rounded-md transition-colors ${
-                      isSelf ? "justify-end" : "justify-start"
-                    } ${
-                      highlightedSegmentId === segment.id
-                        ? "bg-primary/10 ring-1 ring-primary/30"
-                        : ""
-                    }`}
-                  >
-                    <div className={`flex max-w-[75%] flex-col gap-1 ${isSelf ? "items-end" : "items-start"}`}>
-                      <div className={`flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground ${isSelf ? "flex-row-reverse" : ""}`}>
-                        <span className="font-semibold text-ink">
-                          {isSelf ? "You" : segment.speakerName || "Unknown speaker"}
-                        </span>
-                        <InlineChip>{segment.originalLanguage?.toUpperCase() || "?"}</InlineChip>
-                        {base ? (
-                          onSeekToRecording ? (
-                            <button
-                              type="button"
-                              onClick={() => onSeekToRecording(segment.startTimeMs)}
-                              title="Play the recording from here"
-                              className="rounded font-mono underline-offset-2 hover:text-ink hover:underline"
-                            >
-                              {segmentTime(segment.startTimeMs)}
-                            </button>
-                          ) : (
-                            <span>{segmentTime(segment.startTimeMs)}</span>
-                          )
-                        ) : null}
-                      </div>
-                      {editingSegmentId === segment.id ? (
-                        <div className="w-full min-w-0 space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2.5">
-                          <textarea
-                            value={draftText}
-                            onChange={(event) => setDraftText(event.target.value)}
-                            aria-label={`Edit transcript line by ${segment.speakerName || "unknown speaker"}`}
-                            className="min-h-24 w-full resize-y rounded-md border border-border bg-canvas px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
-                          />
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setEditingSegmentId(null)}
-                              className="rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isSavingCorrection || !draftText.trim()}
-                              onClick={() => void saveCorrection(segment)}
-                              className="rounded-md bg-ink px-2.5 py-1 text-[12px] font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
-                            >
-                              {isSavingCorrection ? "Saving…" : "Save correction"}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                      <div
-                        className={`group/line relative rounded-2xl px-3 py-2 ${canCorrect ? "pr-9" : ""} ${
-                          isSelf
-                            ? "rounded-tr-sm bg-primary"
-                            : "rounded-tl-sm border border-border bg-white"
-                        }`}
-                      >
-                        <p className={`text-[13px] leading-6 ${isSelf ? "text-white" : "text-ink-subtle"}`}>
-                          {segment.originalText}
-                        </p>
-                        {canCorrect ? (
-                          <button
-                            type="button"
-                            aria-label="Edit transcript line"
-                            title="Edit this line"
-                            onClick={() => {
-                              setEditingSegmentId(segment.id);
-                              setDraftText(segment.originalText);
-                            }}
-                            className={`absolute right-1 top-1 grid size-7 place-items-center rounded-md opacity-60 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100 ${
-                              isSelf ? "text-white hover:bg-white/20" : "hover:bg-surface-2"
-                            }`}
-                          >
-                            <Pencil className="size-3.5" />
-                          </button>
-                        ) : null}
-                      </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TranscriptSessionDivider({
-  sessionNumber,
-  session,
-}: {
-  sessionNumber: number;
-  session: TranslationRoomSessionDto | null;
-}) {
-  const started = session?.startedAt
-    ? new Date(session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
-  const ended = session?.endedAt
-    ? new Date(session.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "now";
-
-  return (
-    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-      <div className="h-px flex-1 bg-border" />
-      <span>
-        Translation {sessionNumber}
-        {started ? ` · ${started}–${ended}` : ""}
-      </span>
-      <div className="h-px flex-1 bg-border" />
-    </div>
-  );
-}
-
-function assembleTranscriptText(blocks: TranslationSessionBlock<TranscriptSegmentDto>[]): string {
-  const showSessionLabels = blocks.length > 1;
-  return blocks
-    .map((block) => {
-      const lines = block.segments.map(
-        (segment) =>
-          `[${segment.speakerName || "Unknown"} (${(segment.originalLanguage || "").toUpperCase()})] ${segment.originalText}`,
-      );
-      if (!showSessionLabels) return lines.join("\n");
-      return [`--- Translation ${block.sessionNumber} ---`, ...lines].join("\n");
-    })
-    .join("\n\n");
 }
 
 type SaveState = "idle" | "saving" | "saved";
