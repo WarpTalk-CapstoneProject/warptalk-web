@@ -67,6 +67,8 @@ import {
   type AnswerSource,
 } from "@/lib/assistant/answer-sources";
 import { Lumidot } from "lumidot";
+
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
@@ -337,6 +339,24 @@ export function GlobalChatbot() {
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
+  /**
+   * A question handed over from somewhere else on the page — today, the "Research this term"
+   * action on a transcript hint.
+   *
+   * It is put in the box rather than sent. The person asked to look something up, not to have
+   * a question asked on their behalf; leaving it editable is the difference between a shortcut
+   * and the widget speaking for them.
+   */
+  const pendingPrompt = useAssistantWidgetStore((state) => state.pendingPrompt);
+  const consumePendingPrompt = useAssistantWidgetStore((state) => state.consumePendingPrompt);
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    const prompt = consumePendingPrompt();
+    if (!prompt) return;
+    setInputValue(prompt);
+    setIsMinimized(false);
+    setIsOpen(true);
+  }, [pendingPrompt, consumePendingPrompt]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState("New chat");
 

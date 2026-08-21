@@ -8,9 +8,11 @@ import {
   Sparkle,
   Warning,
   X,
+  MagnifyingGlass,
 } from "@phosphor-icons/react/dist/ssr";
 import { motion } from "motion/react";
 import type { AiSuggestionDto } from "@/types/realtime";
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
 
@@ -48,6 +50,48 @@ const CATEGORY_MEANINGS: Record<string, string> = {
   correction: "This contradicts something said earlier",
   fact: "From a document attached to this meeting",
 };
+
+/**
+ * The next step a hint offers, per category.
+ *
+ * A hint that only describes what it noticed leaves the reader to act on it in another window.
+ * "This acronym was never defined" is a fact; "Research this term" is a thing to do, and the
+ * widget can already do it — it has web search, the workspace documents and the glossary.
+ *
+ * The wording is per category because the useful next step is not the same: a term wants
+ * looking up, an unanswered question wants asking, a figure wants checking against the
+ * documents it should have come from.
+ */
+const CATEGORY_ACTION_LABELS: Record<string, string> = {
+  term: "Research this term",
+  clarification: "Ask WarpBot this",
+  fact: "Check this in the documents",
+  correction: "Check which is right",
+  action: "Ask WarpBot to draft it",
+};
+
+function actionLabelFor(category: string) {
+  return CATEGORY_ACTION_LABELS[category] ?? "Ask WarpBot";
+}
+
+/**
+ * The question the widget opens with.
+ *
+ * Built from the hint rather than from the raw transcript line: `content` is the model's own
+ * statement of what it noticed, which is already phrased as a subject. Handing the widget the
+ * transcript instead would make it re-derive the thing that was just derived.
+ */
+function promptFor(suggestion: AiSuggestionDto) {
+  const subject = suggestion.content.trim();
+  const detail = suggestion.detail?.trim();
+  if (suggestion.category === "term") {
+    return `Research this term from our meeting and explain it plainly: ${subject}`;
+  }
+  if (suggestion.category === "fact") {
+    return `Check this against our workspace documents: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`;
+  }
+  return `About our meeting: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`;
+}
 
 function labelFor(category: string) {
   return CATEGORY_LABELS[category] ?? "Suggestion";
@@ -123,6 +167,7 @@ export function SuggestionDetail({
   onDismiss: () => void;
 }) {
   const hasDetail = Boolean(suggestion.detail?.trim());
+  const askWarpBot = useAssistantWidgetStore((state) => state.askWarpBot);
   // Indexed here too rather than shared through a helper — same reason as in SuggestionBadge:
   // react-hooks/static-components has to see the fixed set, and cannot through a call.
   const Icon =
@@ -181,6 +226,21 @@ export function SuggestionDetail({
             sources={parseAnswerSources(suggestion.sourcesJson)}
             tone={isSelf ? "inverted" : "default"}
           />
+          {/* The action, under the evidence and above the disclaimer: it is only worth offering
+              once the reader has seen what the hint is and where it came from. */}
+          <button
+            type="button"
+            onClick={() => askWarpBot(promptFor(suggestion))}
+            className={`mt-2 inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-medium transition-colors ${
+              isSelf
+                ? "bg-white/15 text-white hover:bg-white/25"
+                : "bg-primary/10 text-primary hover:bg-primary/20"
+            }`}
+          >
+            <MagnifyingGlass className="h-2.5 w-2.5" weight="bold" aria-hidden />
+            {actionLabelFor(suggestion.category)}
+          </button>
+
           {/* Said once, at the bottom, because an unprompted hint that does not say where it
               came from reads as the product asserting a fact. */}
           <p
