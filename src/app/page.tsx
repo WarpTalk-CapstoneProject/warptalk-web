@@ -1466,7 +1466,7 @@ export default function HomePage() {
                 onClick={handleGetStarted}
                 className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
               >
-                Get Started for Free
+                Get Started
               </button>
             </nav>
           </header>
@@ -1517,7 +1517,7 @@ export default function HomePage() {
                   onClick={handleGetStarted}
                   className="rounded-xl border border-white/55 bg-black px-7 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-white hover:text-black cursor-pointer"
                 >
-                  Get Started for Free
+                  Get Started
                 </button>
                 {/*
                   Both hero CTAs used to lead to /login, and the login screen
