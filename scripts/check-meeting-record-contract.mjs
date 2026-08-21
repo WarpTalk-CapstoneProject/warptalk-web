@@ -47,8 +47,13 @@ assert.ok(notesAt > 0 && recordAt > notesAt, "The record must sit below the desc
 
 // An hour of talking is hundreds of entries. Uncapped, the transcript set the page height
 // and pushed the sections below it — and the page's own scrollbar — out of reach.
+//
+// Asserted against the panel rather than the page: the transcript moved into its own component
+// when it grew a language picker and two layouts. The rule did not move, only the file it is
+// written in.
+const transcriptPanel = read("src/components/rooms/meeting-transcript-panel.tsx");
 assert.match(
-  roomDetail,
+  transcriptPanel,
   /max-h-\[min\(60vh,560px\)\][^"]*overflow-y-auto/,
   "The transcript must scroll inside a bounded frame, not stretch the page.",
 );

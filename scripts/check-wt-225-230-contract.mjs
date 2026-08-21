@@ -7,6 +7,7 @@ const read = (file) => readFile(path.join(root, file), "utf8");
 
 const [
   roomDetailPage,
+  transcriptPanel,
   meetingSession,
   endpoints,
   chatPanel,
@@ -15,6 +16,7 @@ const [
   packageJson,
 ] = await Promise.all([
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
+  read("src/components/rooms/meeting-transcript-panel.tsx"),
   read("src/components/rooms/live/persistent-meeting-session.tsx"),
   read("src/lib/api/endpoints.ts"),
   read("src/components/rooms/live/chat-panel.tsx"),
@@ -30,8 +32,11 @@ const startedHandler = meetingSession.slice(
 
 const checks = [
   [
+    // The transcript moved out of the route file into its own component when it grew a
+    // language picker and a second layout. The grouping is the rule; the file it is called
+    // from is not.
     "WT-225 keeps the intentional same-speaker utterance grouping",
-    roomDetailPage.includes("groupSavedTranscriptSegments("),
+    transcriptPanel.includes("groupSavedTranscriptSegments("),
   ],
   [
     // Was: a canonical /{slug}/transcript route. That route, and the workspace-wide
@@ -82,8 +87,11 @@ const checks = [
   ],
   [
     "WT-228 transcript review exposes editing and finalization actions",
-    roomDetailPage.includes("finalizeTranscript()") &&
-      roomDetailPage.includes("Save correction"),
+    transcriptPanel.includes("finalizeTranscript()") &&
+      transcriptPanel.includes("Save correction") &&
+      // Still reached from the meeting's own page, which is the half that made the deleted
+      // Transcripts route safe to remove.
+      roomDetailPage.includes("<MeetingTranscriptArtifact"),
   ],
   [
     // The languages are no longer listed on the page at all: they come from

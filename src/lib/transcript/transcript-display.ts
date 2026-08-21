@@ -175,6 +175,19 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
 }
 
 /**
+ * A saved utterance. `id` is the FIRST segment folded into it — the same partial identity
+ * `GroupedTranscriptSegment` carries on the live side, and for the same reason: anything keyed
+ * by the segment ids the backend emitted has to read `mergedSegmentIds` instead.
+ *
+ * The translations are what made this necessary here. They are stored per segment, so a bubble
+ * that absorbed three chunks of one continuous sentence has three translations to reassemble,
+ * and reading them off `id` alone would have shown the first third of every long utterance.
+ */
+export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
+  mergedSegmentIds: string[];
+};
+
+/**
  * Groups a saved/paginated transcript (from the REST API, not the live SignalR
  * stream) so consecutive segments from the same speaker render as one continuous
  * block instead of a new line per finalized STT chunk.
@@ -184,15 +197,15 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
  */
 export function groupSavedTranscriptSegments(
   segments: SavedTranscriptSegmentDto[],
-): SavedTranscriptSegmentDto[] {
-  const utterances: SavedTranscriptSegmentDto[] = [];
+): GroupedSavedTranscriptSegment[] {
+  const utterances: GroupedSavedTranscriptSegment[] = [];
 
   for (const segment of segments) {
     if (isTranscriptControlMarker(segment.originalText)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
-      utterances.push({ ...segment });
+      utterances.push({ ...segment, mergedSegmentIds: [segment.id] });
       continue;
     }
 
@@ -200,6 +213,7 @@ export function groupSavedTranscriptSegments(
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
+      mergedSegmentIds: [...previous.mergedSegmentIds, segment.id],
     };
   }
 
@@ -417,7 +431,12 @@ function belongsToSameSavedUtterance(
   return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
 }
 
-function appendText(current?: string, incoming?: string): string {
+/**
+ * Exported for transcript-language.ts, which joins a merged utterance's per-language
+ * translations back together and has to do it the same way the original text was joined —
+ * two copies of "how do two halves of a sentence become one" is one copy too many.
+ */
+export function appendText(current?: string, incoming?: string): string {
   const left = current?.trim() || "";
   const right = incoming?.trim() || "";
   if (!left) return right;
