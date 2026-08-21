@@ -28,6 +28,17 @@
  *      500 translations) and present it as the whole meeting, and a longer one was silently
  *      truncated mid-sentence. Reading in one language makes that worse: the dropdown would be
  *      built from a fraction of the meeting and report coverage for the rest.
+ *   6. Choosing a language means the WHOLE meeting is in it. The live pipeline only ever
+ *      translated into the target selected at that moment, so a meeting that switched languages
+ *      half way through covered neither of them end to end, and one where translation was never
+ *      started covered none — the picker had no entries at all. Every language the product can
+ *      translate into is offered, and picking one asks the server to fill in what is missing.
+ *      Reverting this to "offer only what there is text for" restores a picker that reports the
+ *      gap and cannot close it.
+ *   7. A corrected line's translations are refetched after the correction. Correcting what
+ *      somebody said invalidates every translation of that line; redoing them happens in
+ *      warptalk-ai and lands seconds later, so a page that only refetches segments shows the
+ *      corrected sentence beside translations of the one it replaced and never resolves it.
  */
 
 import assert from "node:assert/strict";
@@ -120,6 +131,54 @@ assert.match(
   display.slice(groupingAt, groupingAt + 1200),
   /mergedSegmentIds: \[\.\.\.previous\.mergedSegmentIds, segment\.id\]/,
   "A merged saved utterance must record every segment id it absorbed.",
+);
+
+// 6. A language with no text in it yet is an offer, not a missing row.
+assert.ok(
+  panel.includes("withOfferableLanguages("),
+  "The picker must be built from every language the product can translate into, not only the"
+    + " ones this meeting happened to produce — a meeting where translation was never started"
+    + " has no entries of its own.",
+);
+assert.ok(
+  /<TranscriptLanguageMenu[\s\S]{0,400}options=\{offeredLanguages\}/.test(panel),
+  "The picker must be handed the offered languages, or the extra entries are computed and"
+    + " thrown away.",
+);
+assert.ok(
+  /function chooseLanguage[\s\S]{0,400}backfill\.request\(/.test(panel),
+  "Picking a language must request the missing translations. 'Read it in English' already means"
+    + " 'translate the rest into English'; making the reader ask twice is the bug.",
+);
+assert.ok(
+  hooks.includes("export function useTranscriptLanguageBackfill"),
+  "The hook that follows a running backfill must exist.",
+);
+assert.ok(
+  /refetchInterval:[\s\S]{0,200}"running"/.test(hooks),
+  "A running backfill must be polled — its results land in the database over Redis, so nothing"
+    + " on this side is awaiting them.",
+);
+assert.ok(
+  /missing < previous[\s\S]{0,200}invalidateQueries/.test(hooks),
+  "Lines that have just been translated must be refetched as they arrive, rather than after the"
+    + " whole run finishes.",
+);
+
+// 7. A correction does not leave stale translations on screen.
+assert.ok(
+  hooks.includes("export function useTranslationRefreshAfterCorrection"),
+  "The hook that refetches a corrected line's translations must exist.",
+);
+assert.ok(
+  /RETRANSLATION_REFRESH_DELAYS_MS\s*=\s*\[[^\]]+\]/.test(hooks),
+  "It must look again after a delay: the retranslation is asynchronous and is not finished when"
+    + " the correction request returns.",
+);
+assert.ok(
+  /async function saveCorrection[\s\S]{0,2000}refreshTranslationsAfterCorrection\(\)/.test(panel),
+  "Saving a correction must trigger that refresh, or the reader keeps the translation of a"
+    + " sentence that was just replaced.",
 );
 
 console.log("Transcript language contract: PASS");
