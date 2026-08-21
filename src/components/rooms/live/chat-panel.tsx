@@ -1,8 +1,4 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import {
-  assistantToolDoneLabel,
-  assistantToolLabel,
-} from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -15,6 +11,8 @@ import {
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
+import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
@@ -88,6 +86,28 @@ function FileTypeIcon({ contentType }: { contentType?: string }) {
   if (contentType === "application/zip" || contentType?.includes("compressed"))
     return <FileArchive className="h-4 w-4" />;
   return <FileText className="h-4 w-4" />;
+}
+
+/**
+ * The face beside a chat message.
+ *
+ * A hook cannot be called inside the message loop, so the lookup lives in its own component —
+ * one per row, which is what a list of messages is anyway.
+ *
+ * The identity comes from the meeting's own join (roster + workspace members), never from the
+ * message: a chat row carries a sender id and a display name and no picture, and the participants
+ * API carries no picture either.
+ */
+function ChatSenderAvatar({
+  userId,
+  displayName,
+}: {
+  userId?: string | null;
+  displayName: string;
+}) {
+  const identity = useMeetingIdentity(userId, displayName);
+  // No flag: the row already prints the message's language beside the name.
+  return <ParticipantAvatar identity={identity} size="sm" showFlag={false} className="mt-0.5" />;
 }
 
 export function ChatPanel({
@@ -582,11 +602,19 @@ export function ChatPanel({
                 transition={{ duration: 0.2 }}
                 className={`flex gap-3 items-start group ${isMine ? "flex-row-reverse" : ""}`}
               >
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}
-                >
-                  {displayName.substring(0, 2).toUpperCase()}
-                </div>
+                {/* WarpBot keeps its badge — it is not a person and has no face to show. Everyone
+                    else gets theirs, from the same identity join the stage and the transcript use;
+                    the chat drew two letters in a square and had no path to a picture at all. */}
+                {isAssistant ? (
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-semibold text-white shadow-sm">
+                    {displayName.substring(0, 2).toUpperCase()}
+                  </div>
+                ) : (
+                  <ChatSenderAvatar
+                    userId={message.senderUserId}
+                    displayName={displayName}
+                  />
+                )}
                 <div
                   className={`flex min-w-0 flex-1 flex-col ${isMine ? "items-end" : "items-start"}`}
                 >
