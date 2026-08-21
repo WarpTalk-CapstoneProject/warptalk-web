@@ -54,6 +54,29 @@ export const authService = {
     return apiClient.get<UserDto>(API.auth.me);
   },
 
+  /**
+
+   * Replace the signed-in user's avatar. Multipart, because it is a file.
+
+   *
+
+   * No explicit Content-Type: the browser has to set it, because it is the only thing that
+
+   * knows the multipart boundary. Naming it by hand produces a body the server cannot parse.
+
+   */
+
+  async uploadAvatar(file: File) {
+
+    const form = new FormData();
+
+    form.append("file", file);
+
+    return apiClient.post<UserDto>(API.auth.avatar, form);
+
+  },
+
+
   updateProfile(data: UpdateProfileRequest) {
     return apiClient.put<UserDto>(API.auth.me, data);
   },
