@@ -82,6 +82,7 @@ import {
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
+import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
 import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
 import {
@@ -251,6 +252,10 @@ export default function RoomInformationPage() {
    *
    * A tab label is a promise about what is behind it, so it counts through the same function
    * rather than a second, cheaper approximation of it.
+   *
+   * The function is imported here even though the panel that draws the list now lives in its own
+   * file: what makes the two numbers agree is that they are produced by the SAME grouping, and a
+   * count passed back up out of the panel would be a second claim rather than the same one.
    */
   const transcriptEntryCount = useMemo(
     () =>
