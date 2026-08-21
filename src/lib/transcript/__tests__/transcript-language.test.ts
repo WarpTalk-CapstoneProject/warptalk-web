@@ -9,6 +9,7 @@ import {
   resolveTranscriptLine,
   transcriptLanguageOptions,
   translationsForLine,
+  withOfferableLanguages,
   type SegmentTranslationIndex,
 } from "../transcript-language.ts";
 import { normalizeLanguageCode } from "../../language/languages.ts";
@@ -85,6 +86,7 @@ test("the languages offered are the ones the record can actually be read in", ()
     spokenCount: 1,
     translatedCount: 1,
     readableCount: 2,
+    completeCount: 2,
     totalCount: 2,
   });
   assert.deepEqual(options[1], {
@@ -92,6 +94,7 @@ test("the languages offered are the ones the record can actually be read in", ()
     spokenCount: 0,
     translatedCount: 2,
     readableCount: 2,
+    completeCount: 2,
     totalCount: 2,
   });
 });
@@ -285,4 +288,85 @@ test("more than one translation session keeps its dividers", () => {
     text,
     "--- Translation 1 ---\nTuan: Xin chao\n\n--- Translation 2 ---\nTuan (JA): Konnichiwa",
   );
+});
+
+
+test("a language the meeting has no text in is still offered, so it can be asked for", () => {
+  // The list used to be exactly what there was text for. That was right while a language with
+  // no coverage could only return a page of untranslated lines — and wrong the moment choosing
+  // one started translating the meeting into it. A meeting where translation was never started
+  // has no entries of its own, and it is the case the picker is most needed for.
+  const options = transcriptLanguageOptions(
+    [line("s1", "Xin chao", "vi"), line("s2", "Cam on", "vi")],
+    {},
+  );
+  assert.deepEqual(
+    options.map((option) => option.code),
+    ["vi"],
+  );
+
+  const offered = withOfferableLanguages(options, ["vi", "en", "ja"], 2);
+
+  assert.deepEqual(
+    offered.map((option) => option.code),
+    ["vi", "en", "ja"],
+  );
+  const english = offered.find((option) => option.code === "en");
+  assert.equal(english?.readableCount, 0);
+  assert.equal(english?.totalCount, 2);
+});
+
+test("what the meeting already covers stays ahead of what it does not", () => {
+  const options = transcriptLanguageOptions(
+    [line("s1", "Xin chao", "vi"), line("s2", "Hello", "en")],
+    {},
+  );
+
+  const offered = withOfferableLanguages(options, ["zz", "ja"], 2);
+
+  // The covered languages keep the order transcriptLanguageOptions chose for them; the offers
+  // follow in a stable one, so a row does not move under the cursor as a backfill lands.
+  assert.deepEqual(offered.slice(2).map((option) => option.code), ["ja", "zz"]);
+  assert.ok(offered.slice(0, 2).every((option) => option.readableCount > 0));
+});
+
+test("a language already covered is not offered twice", () => {
+  const options = transcriptLanguageOptions([line("s1", "Hello", "en")], {});
+
+  const offered = withOfferableLanguages(options, ["en-US", "EN"], 1);
+
+  assert.deepEqual(offered.map((option) => option.code), ["en"]);
+});
+
+test("the picker's list does not change what the transcript opens on", () => {
+  // defaultTranscriptLanguage reads the record, not the catalogue: a meeting held in one
+  // language opens as-spoken, and a list of things it COULD be translated into is not evidence
+  // that it was multilingual.
+  const options = transcriptLanguageOptions([line("s1", "Xin chao", "vi")], {});
+
+  assert.equal(defaultTranscriptLanguage(options, "en"), AS_SPOKEN);
+  assert.equal(withOfferableLanguages(options, ["en", "ja"], 1).length, 3);
+});
+
+
+test("a half-translated merged line is readable in that language and not complete in it", () => {
+  // The picker used to count this line as readable and say "the whole meeting" over a transcript
+  // that then marked it incomplete — two true statements that read as a contradiction.
+  const index = indexTranslationsBySegment([translation("s1", "en", "Hello")]);
+  const options = transcriptLanguageOptions(
+    [line("merged", "Xin chao. Cam on.", "vi", ["s1", "s2"])],
+    index,
+  );
+
+  const english = options.find((option) => option.code === "en");
+  assert.equal(english?.readableCount, 1);
+  assert.equal(english?.completeCount, 0);
+
+  // And it agrees with what the transcript itself will render for that line.
+  const resolved = resolveTranscriptLine(
+    line("merged", "Xin chao. Cam on.", "vi", ["s1", "s2"]),
+    index,
+    "en",
+  );
+  assert.equal(resolved.isPartial, true);
 });

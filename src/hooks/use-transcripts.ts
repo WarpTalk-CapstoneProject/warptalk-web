@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { transcriptService } from "@/services/transcript.service";
 import type {
   CreateCorrectionRequest,
@@ -27,6 +28,9 @@ const PAGE_SIZE = 500;
  * this product runs, and it fails by fetching too much rather than by never stopping.
  */
 const MAX_ROWS = 20_000;
+
+/** How often a running backfill is checked on. Its batches land a few seconds apart. */
+const POLL_INTERVAL_MS = 2500;
 
 /**
  * Every page of a paginated transcript read, as one result.
@@ -106,6 +110,77 @@ export function useTranscriptTranslations(transcriptId?: string) {
       }),
     enabled: !!transcriptId,
   });
+}
+
+/**
+ * Reading a transcript in a language it was never fully translated into.
+ *
+ * A meeting only ever produced the target language that was selected while it was running, so
+ * choosing a language here used to mean "the part of the meeting that happens to exist in it".
+ * This asks the server to translate the rest, then follows the counts until they close.
+ *
+ * The poll is the progress bar: the work is done by warptalk-ai and lands in the database over
+ * Redis, so there is nothing to await — `missing` falling is what "it is working" looks like.
+ * Every time it falls, the translations query is invalidated so the lines that just arrived are
+ * rendered rather than waiting for the run to finish.
+ */
+export function useTranscriptLanguageBackfill(transcriptId?: string, targetLanguage?: string) {
+  const queryClient = useQueryClient();
+  const active = Boolean(transcriptId) && Boolean(targetLanguage);
+  const lastMissing = useRef<number | null>(null);
+
+  const coverage = useQuery({
+    queryKey: [...TRANSCRIPT_KEY, transcriptId, "coverage", targetLanguage],
+    queryFn: async () => {
+      const { data } = await transcriptService.translationCoverage(transcriptId!, targetLanguage!);
+      return data;
+    },
+    enabled: active,
+    // Only while somebody is filling it in. An idle gap is a standing fact about the meeting,
+    // not something that changes on its own, and polling it forever would put every open
+    // transcript tab on a timer for no reason.
+    refetchInterval: (query) => (query.state.data?.status === "running" ? POLL_INTERVAL_MS : false),
+  });
+
+  const missing = coverage.data?.missing ?? null;
+
+  useEffect(() => {
+    if (missing === null) {
+      lastMissing.current = null;
+      return;
+    }
+    const previous = lastMissing.current;
+    lastMissing.current = missing;
+    if (previous !== null && missing < previous) {
+      queryClient.invalidateQueries({
+        queryKey: [...TRANSCRIPT_KEY, transcriptId, "translations"],
+      });
+    }
+  }, [missing, queryClient, transcriptId]);
+
+  const start = useMutation({
+    mutationFn: async ({ language }: { language: string }) => {
+      const { data } = await transcriptService.backfillTranslations(transcriptId!, language);
+      return data;
+    },
+    onSuccess: (data) => {
+      // Seed the poll with what the server just said, so the first frame after a click already
+      // shows the real number instead of a spinner over a stale one.
+      queryClient.setQueryData([...TRANSCRIPT_KEY, transcriptId, "coverage", data.targetLanguage], data);
+    },
+  });
+
+  return {
+    coverage: coverage.data ?? null,
+    isLoading: coverage.isLoading,
+    isStarting: start.isPending,
+    /** Safe to call on every pick: the server does nothing when the language is already complete. */
+    request: (language: string) => {
+      if (!transcriptId || !language) return;
+      start.mutate({ language });
+    },
+    failedToStart: start.isError,
+  };
 }
 
 /** Start transcript mutation */
