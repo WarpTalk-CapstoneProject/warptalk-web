@@ -214,7 +214,15 @@ function savedSegment(text: string, sequenceOrder: number, speakerName = "Demo H
 }
 
 test("recognises a control marker, whatever the marker is called", () => {
-  for (const marker of ["__MEETING_END__", "  __MEETING_END__  ", "__TRANSLATION_STARTED__"]) {
+  // "__MEETING_END__a" is a real row in production: 1 corrupted sentinel among 156 clean ones.
+  // With the old `$` anchor it rendered as a line of dialogue attributed to "System", and it
+  // would now also put "system" in the transcript's language picker.
+  for (const marker of [
+    "__MEETING_END__",
+    "  __MEETING_END__  ",
+    "__TRANSLATION_STARTED__",
+    "__MEETING_END__a",
+  ]) {
     assert.equal(isTranscriptControlMarker(marker), true, marker);
   }
 });

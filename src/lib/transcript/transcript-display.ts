@@ -169,9 +169,16 @@ export function findSuggestionForUtterance<T>(
  * Matched on the shape rather than that one literal: any `__ALL_CAPS__` token is a sentinel by
  * construction, and nobody speaks one. A later marker will be filtered without needing to be
  * discovered on screen first.
+ *
+ * Anchored only at the START, because production holds a `__MEETING_END__a` — the sentinel with
+ * one stray character welded onto it, from 156 clean ones. A `$` anchor let that single row
+ * through as a line of dialogue attributed to "System", and it would now also offer "system" as
+ * a language this meeting can be read in. A line that BEGINS with a sentinel is a sentinel
+ * however it ends; the "the __MEETING_END__ marker" case stays speech because the token is not
+ * where the line starts.
  */
 export function isTranscriptControlMarker(text: string | null | undefined): boolean {
-  return /^__[A-Z0-9_]+__$/.test((text ?? "").trim());
+  return /^__[A-Z0-9_]+__/.test((text ?? "").trim());
 }
 
 /**

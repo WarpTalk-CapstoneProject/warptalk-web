@@ -11,8 +11,15 @@ import type {
 
 const TRANSCRIPT_KEY = ["transcripts"] as const;
 
-/** One request's worth of rows. Small enough to be cheap, large enough that most meetings fit. */
-const PAGE_SIZE = 200;
+/**
+ * One request's worth of rows.
+ *
+ * 500 rather than a smaller page because of what the translations endpoint costs per CALL, not
+ * per row: `GetTranslationsAsync` loads every segment and every current link for the transcript
+ * before it skips and takes, so each page is a full scan. The longest meeting in production is
+ * 751 segments — two requests at this size, eight at 100.
+ */
+const PAGE_SIZE = 500;
 
 /**
  * A ceiling on how much of one transcript we will pull, so a corrupt `totalCount` cannot spin
