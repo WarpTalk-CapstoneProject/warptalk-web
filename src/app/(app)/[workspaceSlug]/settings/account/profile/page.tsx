@@ -6,7 +6,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/errors";
 import { authService } from "@/services/auth.service";
-import { resolveAvatarUrl } from "@/lib/auth/avatar-url";
 import { Input } from "@/components/ui/input";
 import { Spinner, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -227,7 +226,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Avatar className="size-8 rounded-full border border-border">
-                  <AvatarImage src={resolveAvatarUrl(user?.avatarUrl)} alt={fullName} />
+                  <AvatarImage src={user?.avatarUrl ?? undefined} alt={fullName} />
                   <AvatarFallback className="rounded-full bg-sky-500 text-white text-xs font-semibold">
                     {getInitials(fullName)}
                   </AvatarFallback>
