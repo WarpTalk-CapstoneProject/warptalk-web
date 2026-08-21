@@ -67,15 +67,19 @@ const checks = [
   [
     // Was pinned to buildTranscriptReviewPath, i.e. /{slug}/transcript?room={id} — the
     // workspace-wide transcript archive filtered by room. This check therefore pinned the bug:
-    // rooms/[id]/ended (artifact cards with a 5s refresh while they generate, plus the
+    // the room's own record (artifact cards with a 5s refresh while they generate, plus the
     // artifacts/feedback/history links) was fully built and had no route into it from anywhere in
     // the app. buildTranscriptReviewPath had exactly one caller, this one, and is replaced.
     // What WT-228 actually cares about — that ending for everyone lands the host on the ended
     // room's own wrap-up rather than back on the rooms list — is what is pinned now.
-    "WT-228 ending for everyone opens the ended room's wrap-up page",
-    meetingSession.includes("buildMeetingEndedPath(") &&
+    // The wrap-up page it used to open is deleted — the room's own page is the wrap-up now, and
+    // it holds strictly more than that page did (the transcript in any language the meeting was
+    // held in, the minutes, the rating). What WT-228 needs is that ending a meeting lands
+    // everyone on the record and not on a list of rooms, which is what is pinned here.
+    "WT-228 ending for everyone opens the meeting's own record",
+    meetingSession.includes("roomDetailPath(") &&
       meetingSession.includes('action === "end"') &&
-      meetingSession.includes("? buildMeetingEndedPath(activeWorkspaceSlug, roomId)"),
+      meetingSession.includes('? roomDetailPath(activeWorkspaceSlug || "workspace", roomId)'),
   ],
   [
     // The other half of the same navigation: TranslationRoomEnded router.replace'd EVERY client

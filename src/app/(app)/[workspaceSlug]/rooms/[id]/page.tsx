@@ -18,6 +18,7 @@ import {
   CalendarPlus,
   Check,
   ChevronDown,
+  ClipboardList,
   Code,
   Code2,
   Copy,
@@ -81,7 +82,9 @@ import {
   SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
+import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
+import { MinutesPanel } from "@/components/rooms/minutes-panel";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
 import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
@@ -540,6 +543,12 @@ export default function RoomInformationPage() {
                   />
                 </div>
                 <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">
+                  {/* Rating a meeting used to live on `/ended`, which was the only door to it and
+                      is gone. Here it is a control on the meeting itself, offered only once the
+                      meeting is over — there is nothing to rate before that. */}
+                  {isEnded ? (
+                    <MeetingFeedbackMenu roomId={room.id} meetingTitle={room.title} />
+                  ) : null}
                   {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
                       the title. A second StatusChip stood here, so the same room announced
                       "Waiting" twice on one screen in two different visual languages — a grey
@@ -603,6 +612,7 @@ export default function RoomInformationPage() {
               <MeetingRecordSection
                 roomId={room.id}
                 isHost={isHost}
+                isEnded={isEnded}
                 artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
                 segments={transcriptSegments}
@@ -796,6 +806,7 @@ function RoomEntryButton({
 function MeetingRecordSection({
   roomId,
   isHost,
+  isEnded,
   artifactAccess,
   transcript,
   transcriptCount,
@@ -808,6 +819,12 @@ function MeetingRecordSection({
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
   isHost: boolean;
+  /**
+   * Whether the meeting is over, which is what separates "there is no record" from "the record
+   * is not written yet". The host lands here the moment they press End, and the finalizer takes
+   * about a minute — an empty transcript in that window is a wrong answer, not an empty one.
+   */
+  isEnded: boolean;
   /** WT-480: the room's stored `artifactAccess`. Absent reads as not shared. */
   artifactAccess?: string | null;
   transcript: React.ReactNode;
@@ -820,9 +837,9 @@ function MeetingRecordSection({
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
 }) {
-  const [tab, setTab] = useState<"transcript" | "summary" | "artifacts">(
-    "transcript",
-  );
+  const [tab, setTab] = useState<
+    "transcript" | "summary" | "minutes" | "artifacts"
+  >("transcript");
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
   // WT-492: null when the meeting was not recorded, or the file is not ready yet.
@@ -941,6 +958,17 @@ function MeetingRecordSection({
             icon={Sparkles}
             label="Summary"
           />
+          {/* Minutes came from the deleted `/ended` page, which was the only place they could be
+              read or signed. They belong here for the reason the rest of the record does: the
+              biên bản is a document ABOUT this meeting, drafted from its own summary. It also
+              gains something in the move — the transcript is on this page, so a minute can cite
+              a moment and the reader can go and check it. */}
+          <MeetingRecordTabButton
+            active={activeTab === "minutes"}
+            onClick={() => setTab("minutes")}
+            icon={ClipboardList}
+            label="Minutes"
+          />
           <MeetingRecordTabButton
             active={activeTab === "artifacts"}
             onClick={() => setTab("artifacts")}
@@ -970,7 +998,40 @@ function MeetingRecordSection({
           seek={seek}
         />
       ) : null}
-      {activeTab === "transcript" ? transcript : null}
+      {activeTab === "transcript" ? (
+        // "Still writing this up" came from the deleted `/ended` page, and it has to come with
+        // it: the host now lands HERE the moment they press End, which is the one minute when
+        // the finalizer has not run and there is genuinely nothing to read. Without it the
+        // transcript's own empty state says "No transcript was captured for this meeting" —
+        // a wrong answer, given confidently, at the only moment it is wrong. `useEndedRoomRecord`
+        // already polls while anything is generating, so this clears itself.
+        isEnded && !hasRecord ? (
+          <div className="rounded-[8px] border border-dashed border-border bg-surface-1 px-3.5 py-3">
+            <p className="text-[13px] font-medium text-ink">Still writing this up</p>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+              The transcript and the AI summary are produced after a meeting ends — usually
+              within a minute. This page updates on its own.
+            </p>
+          </div>
+        ) : (
+          transcript
+        )
+      ) : null}
+      {activeTab === "minutes" ? (
+        // Behind the same record gate the tab row is: the draft is assembled from the summary
+        // artifact, so drawing it up before the finalizer has run would produce a minutes
+        // document with an empty body and consume its number doing it.
+        <MinutesPanel
+          roomId={roomId}
+          canManage={isHost}
+          // The same switch the summary's citations make: the moment being cited is a node in
+          // the transcript, and that node only exists while the transcript tab is rendered.
+          onSeek={(atMs) => {
+            setTab("transcript");
+            onJumpToMoment(atMs);
+          }}
+        />
+      ) : null}
       {activeTab === "summary" && endedRecord ? (
         <SummaryPanel
           room={endedRecord}

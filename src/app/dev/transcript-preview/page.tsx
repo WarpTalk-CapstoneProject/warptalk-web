@@ -22,8 +22,10 @@
  */
 
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 
+import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import type { TranscriptSegmentDto, TranscriptTranslationDto } from "@/types/transcript";
 
@@ -108,8 +110,44 @@ export default function TranscriptPreviewPage() {
     if (requested === "light" || requested === "dark") setTheme(requested);
   }, [setTheme]);
 
+  // The feedback popover reads its own state from the API, so on a laptop it can only ever show
+  // its error branch. Seeding the cache under the key the hook reads is what makes the FORM —
+  // the thing worth looking at — reachable here: `unrated-room` gets the prompt state, and
+  // `rated-room` gets the read-only one somebody sees after they have already answered.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    queryClient.setQueryData(["translationRoomFeedback", "unrated-room"], {
+      hasSubmitted: false,
+    });
+    queryClient.setQueryData(["translationRoomFeedback", "rated-room"], {
+      hasSubmitted: true,
+      feedback: {
+        id: "feedback-1",
+        translationRoomId: "rated-room",
+        userId: "user-1",
+        overallRating: 4,
+        translationQuality: 5,
+        audioQuality: 3,
+        aiSummaryQuality: 4,
+        comments: "The Japanese dub lagged about a second behind, everything else was fine.",
+        createdAt: "2026-08-21T00:20:00.000Z",
+        updatedAt: "2026-08-21T00:20:00.000Z",
+      },
+    });
+  }, [queryClient]);
+
   return (
     <div className="flex min-h-dvh flex-col gap-8 bg-surface-1 p-6">
+      <section className="flex flex-col gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
+          Rating a meeting — unrated (the prompt) and already rated (read-only)
+        </h2>
+        <div className="flex items-center gap-3 rounded-[14px] border border-border bg-surface-1 p-5">
+          <MeetingFeedbackMenu roomId="unrated-room" meetingTitle="Sprint review — 20 Aug" />
+          <MeetingFeedbackMenu roomId="rated-room" meetingTitle="Sprint review — 20 Aug" />
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
           Ended meeting · host · the reader speaks Vietnamese

@@ -62,7 +62,7 @@ import {
   markLanguagePickerShown,
   wasLanguagePickerShown,
 } from "@/lib/meeting/language-picker-shown";
-import { liveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { liveMeetingPath, roomDetailPath } from "@/lib/workspace/workspace-routes";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
 import { buildParticipantIdentities } from "@/lib/meeting/participant-identity";
@@ -72,7 +72,6 @@ import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
 import { resolveVoicePreference } from "@/lib/voice/voice-preference";
 import { useDubVoice, useSetDubVoice, useVoiceProfiles } from "@/hooks/use-voice-profiles";
-import { buildMeetingEndedPath } from "@/lib/meeting/meeting-navigation";
 import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
@@ -1927,14 +1926,17 @@ export function PersistentMeetingSession({
       if (endedByMeRef.current) return;
       toast.info("This meeting has ended.");
       onMeetingClosed();
-      // WT-449: the same wrap-up page the host lands on, not the rooms list.
+      // WT-449: the same place the host lands, not the rooms list.
       //
-      // Ending a meeting used to send the host to /ended — recording, summary, artifacts and
-      // the feedback dialog — and everybody ELSE to a list of rooms. So the one screen built to
-      // close a meeting out was shown only to the person who least needed asking, and every
-      // other participant's meeting simply vanished mid-sentence. The artifacts on that page
-      // are readable by every participant, and the feedback being collected is theirs.
-      router.replace(buildMeetingEndedPath(activeWorkspaceSlug, roomId));
+      // Ending a meeting used to send the host to a wrap-up page — recording, summary, artifacts
+      // and the feedback prompt — and everybody ELSE to a list of rooms. So the one screen built
+      // to close a meeting out was shown only to the person who least needed asking, and every
+      // other participant's meeting simply vanished mid-sentence. The record is readable by every
+      // participant, and the feedback being collected is theirs.
+      //
+      // That wrap-up page is gone; the room's own page IS the wrap-up now — transcript, summary,
+      // minutes, files and the rating, on the meeting they belong to.
+      router.replace(roomDetailPath(activeWorkspaceSlug || "workspace", roomId));
     });
 
     // The host's Approve in the People panel is a REST call (PATCH .../participants/{id}/admit)
@@ -2420,7 +2422,7 @@ export function PersistentMeetingSession({
       // from, which is the room, not into it.
       router.replace(
         action === "end"
-          ? buildMeetingEndedPath(activeWorkspaceSlug, roomId)
+          ? roomDetailPath(activeWorkspaceSlug || "workspace", roomId)
           : `/${activeWorkspaceSlug || "workspace"}/rooms`,
       );
     } catch (error) {
