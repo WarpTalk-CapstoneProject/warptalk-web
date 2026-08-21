@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { transcriptService } from "@/services/transcript.service";
 import type {
   CreateCorrectionRequest,
@@ -31,6 +31,17 @@ const MAX_ROWS = 20_000;
 
 /** How often a running backfill is checked on. Its batches land a few seconds apart. */
 const POLL_INTERVAL_MS = 2500;
+
+/**
+ * When to look again for the translations of a line that was just corrected.
+ *
+ * Correcting what somebody said invalidates every translation of that line, and redoing them is
+ * asynchronous — the request goes to warptalk-ai and the result comes back through Redis. There is
+ * nothing to await, and no realtime event on this surface, so the choice is between two fixed
+ * looks and a poll that runs forever on a page nobody is correcting. One at a few seconds covers
+ * the ordinary case; the second covers a queue that was busy.
+ */
+const RETRANSLATION_REFRESH_DELAYS_MS = [4000, 12000];
 
 /**
  * Every page of a paginated transcript read, as one result.
@@ -181,6 +192,41 @@ export function useTranscriptLanguageBackfill(transcriptId?: string, targetLangu
     },
     failedToStart: start.isError,
   };
+}
+
+/**
+ * Refetches a transcript's translations after one of its lines is corrected.
+ *
+ * The correction itself updates the segment, and the page already refetches those. Its
+ * translations change a few seconds later and separately, so without this the reader sees the
+ * corrected line beside translations of the sentence it replaced — which is the state that
+ * existed for as long as corrections silently failed to propagate at all.
+ */
+export function useTranslationRefreshAfterCorrection(transcriptId?: string) {
+  const queryClient = useQueryClient();
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+    },
+    [],
+  );
+
+  return useCallback(() => {
+    if (!transcriptId) return;
+
+    const invalidate = () =>
+      queryClient.invalidateQueries({
+        queryKey: [...TRANSCRIPT_KEY, transcriptId, "translations"],
+      });
+
+    invalidate();
+    for (const delay of RETRANSLATION_REFRESH_DELAYS_MS) {
+      timers.current.push(setTimeout(invalidate, delay));
+    }
+  }, [queryClient, transcriptId]);
 }
 
 /** Start transcript mutation */

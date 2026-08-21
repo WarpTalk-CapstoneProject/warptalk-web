@@ -35,6 +35,10 @@
  *      translate into is offered, and picking one asks the server to fill in what is missing.
  *      Reverting this to "offer only what there is text for" restores a picker that reports the
  *      gap and cannot close it.
+ *   7. A corrected line's translations are refetched after the correction. Correcting what
+ *      somebody said invalidates every translation of that line; redoing them happens in
+ *      warptalk-ai and lands seconds later, so a page that only refetches segments shows the
+ *      corrected sentence beside translations of the one it replaced and never resolves it.
  */
 
 import assert from "node:assert/strict";
@@ -159,6 +163,22 @@ assert.ok(
   /missing < previous[\s\S]{0,200}invalidateQueries/.test(hooks),
   "Lines that have just been translated must be refetched as they arrive, rather than after the"
     + " whole run finishes.",
+);
+
+// 7. A correction does not leave stale translations on screen.
+assert.ok(
+  hooks.includes("export function useTranslationRefreshAfterCorrection"),
+  "The hook that refetches a corrected line's translations must exist.",
+);
+assert.ok(
+  /RETRANSLATION_REFRESH_DELAYS_MS\s*=\s*\[[^\]]+\]/.test(hooks),
+  "It must look again after a delay: the retranslation is asynchronous and is not finished when"
+    + " the correction request returns.",
+);
+assert.ok(
+  /async function saveCorrection[\s\S]{0,2000}refreshTranslationsAfterCorrection\(\)/.test(panel),
+  "Saving a correction must trigger that refresh, or the reader keeps the translation of a"
+    + " sentence that was just replaced.",
 );
 
 console.log("Transcript language contract: PASS");

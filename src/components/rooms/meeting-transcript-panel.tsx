@@ -39,7 +39,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useTranscriptLanguageBackfill } from "@/hooks/use-transcripts";
+import {
+  useTranscriptLanguageBackfill,
+  useTranslationRefreshAfterCorrection,
+} from "@/hooks/use-transcripts";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
@@ -274,6 +277,7 @@ export function MeetingTranscriptArtifact({
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
   const [isSavingCorrection, setIsSavingCorrection] = useState(false);
+  const refreshTranslationsAfterCorrection = useTranslationRefreshAfterCorrection(transcriptId);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
   const isFinalized = transcriptStatus === "finalized";
@@ -290,19 +294,23 @@ export function MeetingTranscriptArtifact({
 
     setIsSavingCorrection(true);
     try {
-      // No triggeredRetranslation flag: the server has no such request field, and
-      // TranscriptCorrectionMapper.ToEntity sets it true unconditionally. Re-translation is
-      // automatic — SubmitCorrectionAsync writes the corrected text onto the segment and pushes
-      // translate:requests with is_correction, and the translate worker supersedes the old
-      // translation. Sending `false` here read like a switch that was off; it never was one.
+      // No triggeredRetranslation flag: the server has no such request field, and it is not the
+      // caller's decision — SubmitCorrectionAsync sets it from whether the line actually had
+      // translations to redo. Sending `false` here read like a switch that was off; it never was
+      // one. (It also used to be set true on every correction while nothing retranslated anything:
+      // the message it pushed went to a stream no worker consumed.)
       await transcriptService.correctSegment(transcriptId, segment.id, {
         originalText: segment.originalText,
         correctedText,
         correctionType: "stt",
       });
       onSegmentsChanged?.();
+      // The line updates now; its translations are redone by warptalk-ai and land seconds later.
+      // Without this the reader sees the corrected sentence beside translations of the one it
+      // replaced, and nothing on the page ever resolves that.
+      refreshTranslationsAfterCorrection();
       setEditingSegmentId(null);
-      toast.success("Transcript correction saved.");
+      toast.success("Correction saved. Its translations are being redone.");
     } catch {
       toast.error("Could not save the transcript correction.");
     } finally {
