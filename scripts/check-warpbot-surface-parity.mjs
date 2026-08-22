@@ -157,6 +157,34 @@ assert.match(
   "Nothing accumulates a draft the hub never delivers: the session must subscribe to the chunk event.",
 );
 
+// ── the step a hosted tool only reports at the END ──────────────────────────
+//
+// OpenAI's hosted web search never enters the worker's dispatch loop, so no function call is
+// dispatched for it and the started event fires before the item naming the query is on the wire.
+// In production the event that carries the searched site is the COMPLETED one — and the meeting
+// consumer dropped that type, so a whole web-search turn left no trace: the trail sat on
+// "Reading your question" for the length of the search while the widget listed every source.
+assert.match(
+  session,
+  /"ChatAssistantToolCallCompleted"/,
+  "The session must subscribe to the finished tool call — for a hosted search it is the only event that names what was searched.",
+);
+assert.match(
+  store,
+  /noteAssistantToolFinished:/,
+  "The store must be able to close a step and fill in the target the started event could not carry.",
+);
+// Folded, not appended: the same search drawn twice — once blank, once named — is what
+// re-using the started event would produce.
+assert.match(
+  store,
+  // Anchored on the IMPLEMENTATION, not the interface entry that declares the same name a
+  // few hundred lines earlier — anchoring on the first occurrence measures the distance to
+  // the wrong thing and fails on correct code.
+  /noteAssistantToolFinished: \(toolName[\s\S]{0,3000}?step\.detail \|\| toolDetail/,
+  "A finished tool call must FILL a missing target rather than overwrite one already reported for the same call.",
+);
+
 console.log(
   "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming)",
 );

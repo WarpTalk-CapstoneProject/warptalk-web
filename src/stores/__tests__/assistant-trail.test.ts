@@ -280,3 +280,94 @@ test("the tool's own target is carried through to the sealed trail", () => {
   );
   assert.equal(searched?.detail, "learn.microsoft.com");
 });
+
+// ── a tool that only ever reports finishing ──────────────────────────────────
+//
+// Reported from production: the widget named every site WarpBot searched while the in-meeting
+// chat sat on "Reading your question" for the whole turn, then showed two steps — the seeded
+// one and the one appended at seal. OpenAI's HOSTED web search never enters the worker's
+// dispatch loop, so no function call is dispatched for it. The worker publishes the step by hand
+// off the response stream, and the event carrying the searched target is the COMPLETED one: the
+// started event fires before the item naming the query is on the wire, so it goes out empty.
+// The meeting consumer dropped that type, discarding the room's entire record of the search.
+
+test("a tool that only reports finishing still earns a step", () => {
+  store().beginAssistantTurn();
+
+  store().noteAssistantToolFinished("web_search", "techcrunch.com");
+
+  const steps = store().assistantSteps;
+  assert.deepEqual(
+    steps.map((step) => step.tool),
+    [THINKING_STEP, "web_search"],
+  );
+  assert.equal(steps.at(-1)!.detail, "techcrunch.com");
+  assert.equal(steps.at(-1)!.done, true);
+});
+
+test("finishing folds into the step that was already running", () => {
+  // The started event announced the search with no target; the completed one carries it. Two
+  // steps here would draw the same search twice, once blank and once named.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", null);
+
+  store().noteAssistantToolFinished("web_search", "techcrunch.com");
+
+  const searches = store().assistantSteps.filter((step) => step.tool === "web_search");
+  assert.equal(searches.length, 1, "one search, not two");
+  assert.equal(searches[0].detail, "techcrunch.com");
+  assert.equal(searches[0].done, true);
+});
+
+test("a target already reported is not overwritten by an emptier one", () => {
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  store().noteAssistantToolFinished("web_search", "");
+
+  assert.equal(
+    store().assistantSteps.find((step) => step.tool === "web_search")!.detail,
+    "learn.microsoft.com",
+  );
+});
+
+test("two searches in one turn close the one that just finished", () => {
+  // Last match, not first. Closing the earlier call would leave the running one spinning under
+  // a finished answer and credit the wrong step with the wrong site.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", "first.com");
+  store().noteAssistantToolFinished("web_search", "first.com");
+  store().noteAssistantActivity("web_search", null);
+
+  store().noteAssistantToolFinished("web_search", "second.com");
+
+  const searches = store().assistantSteps.filter((step) => step.tool === "web_search");
+  assert.equal(searches.length, 2);
+  assert.deepEqual(
+    searches.map((step) => step.detail),
+    ["first.com", "second.com"],
+  );
+  assert.ok(searches.every((step) => step.done));
+});
+
+test("a nameless finish changes nothing", () => {
+  store().beginAssistantTurn();
+
+  store().noteAssistantToolFinished(null, "techcrunch.com");
+
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP],
+  );
+});
+
+test("finishing re-arms the deadline", () => {
+  // A long search is the case the 90-second deadline exists for. Every sign of life has to push
+  // it out, or the one turn that genuinely needs the window is the one declared slow.
+  store().beginAssistantTurn();
+  const before = store().assistantActivityAt;
+
+  store().noteAssistantToolFinished("web_search", "techcrunch.com");
+
+  assert.ok(store().assistantActivityAt >= before!);
+});
