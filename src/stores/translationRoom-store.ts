@@ -13,7 +13,7 @@ import type {
 // Relative, not "@/...": these stores are imported directly by node-run contract tests, which
 // have no bundler and cannot resolve the alias. The same trap already cost a fix once
 // (normalizeLanguageCode, WT-371).
-import type { AssistantStep } from "../lib/meeting/assistant-tool-labels.ts";
+import { REASONING_STEP, type AssistantStep } from "../lib/meeting/assistant-tool-labels.ts";
 
 interface TranslationRoomStoreState {
   // Current live translationRoom state
@@ -88,6 +88,13 @@ interface TranslationRoomStoreState {
   setAssistantState: (state: "idle" | "thinking" | "slow") => void;
   /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
   noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
+  /**
+   * WarpBot said, in its own words, what it is doing.
+   *
+   * Separate from noteAssistantActivity because it is a different KIND of step, not another
+   * tool: it carries a heading and a paragraph, and the trail draws those on two lines.
+   */
+  noteAssistantReasoning: (title?: string | null, body?: string | null) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   setHandRaised: (userId: string, isRaised: boolean) => void;
@@ -356,6 +363,32 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
               },
             ]
           : carried,
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
+  noteAssistantReasoning: (title = null, body = null) =>
+    set((state) => {
+      const heading = title?.trim() ?? "";
+      const paragraph = body?.trim() ?? "";
+      if (!heading && !paragraph) return state;
+      const starting = state.assistantState === "idle";
+      const carried = starting ? [] : state.assistantSteps;
+      return {
+        assistantState: starting ? "thinking" : state.assistantState,
+        assistantStartedAt: starting ? Date.now() : state.assistantStartedAt,
+        assistantFinishedAt: starting ? null : state.assistantFinishedAt,
+        assistantSteps: [
+          // The model has moved on from whatever it was doing when it wrote this.
+          ...carried.map((step) => ({ ...step, done: true })),
+          {
+            key: `${REASONING_STEP}-${carried.length}`,
+            tool: REASONING_STEP,
+            done: false,
+            detail: heading || undefined,
+            body: paragraph || undefined,
+          },
+        ],
         assistantActivityAt: Date.now(),
       };
     }),
