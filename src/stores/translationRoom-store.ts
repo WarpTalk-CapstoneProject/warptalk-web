@@ -87,7 +87,7 @@ interface TranslationRoomStoreState {
   addChatMessage: (message: ChatMessageDto) => void;
   setAssistantState: (state: "idle" | "thinking" | "slow") => void;
   /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
-  noteAssistantActivity: (toolName?: string | null) => void;
+  noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   setHandRaised: (userId: string, isRaised: boolean) => void;
@@ -331,7 +331,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     })),
   // One call for "WarpBot did something", so no caller can move the state and forget to reset
   // the deadline it is measured against.
-  noteAssistantActivity: (toolName = null) =>
+  noteAssistantActivity: (toolName = null, toolDetail = null) =>
     set((state) => {
       // Idle -> thinking is a NEW question, so the previous turn's trail goes with it.
       const starting = state.assistantState === "idle";
@@ -349,6 +349,10 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
                 key: `${toolName}-${carried.length}`,
                 tool: toolName,
                 done: false,
+                // What the call is about, straight from the worker. Never derived here: a
+                // target this client guessed at would be a claim about what the agent did,
+                // made by something that cannot know.
+                detail: toolDetail || undefined,
               },
             ]
           : carried,
