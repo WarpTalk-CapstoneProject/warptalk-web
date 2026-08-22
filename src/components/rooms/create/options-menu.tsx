@@ -20,6 +20,8 @@ import {
   validateDailyDraft,
 } from "@/lib/meeting/daily-recurrence";
 import { WEEKDAY_OPTIONS, isoWeekdayOf } from "@/lib/meeting/recurrence";
+import { DateField } from "./date-field";
+import { TimeField } from "./time-field";
 import type { RecurrenceType } from "@/types/translationRoom";
 
 /**
@@ -171,14 +173,11 @@ export function OptionsMenu({
 
               {/* Beside the label, not behind a button that opens somewhere else. */}
               {isDaily && (
-                <input
-                  type="time"
+                <TimeField
                   data-testid="daily-time-input"
-                  aria-label="Time each day"
+                  label="Time each day"
                   value={daily.time}
-                  onChange={(e) => changeTime(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-7 w-[92px] rounded-md border border-border/60 bg-surface-1 px-1.5 text-[12px] tabular-nums text-ink focus:ring-1 focus:ring-ink/20 focus:outline-none"
+                  onChange={changeTime}
                 />
               )}
 
@@ -286,14 +285,12 @@ export function OptionsMenu({
 
                 <label className="flex items-center gap-2">
                   <span className="flex-1 text-[12px] text-ink-muted">Repeat until</span>
-                  <input
-                    type="date"
+                  <DateField
                     data-testid="daily-end-date-input"
+                    label="Repeat until"
                     value={daily.endDate}
                     min={toLocalDateString(now)}
-                    onChange={(e) => onDailyChange({ ...daily, endDate: e.target.value })}
-                    onClick={(e) => e.stopPropagation()}
-                    className="h-7 w-[124px] rounded-md border border-border/60 bg-canvas px-1.5 text-[12px] tabular-nums text-ink focus:ring-1 focus:ring-ink/20 focus:outline-none"
+                    onChange={(endDate) => onDailyChange({ ...daily, endDate })}
                   />
                 </label>
 

@@ -282,24 +282,38 @@ export default function SettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Full name</span>
               </div>
-              <Input
-                id="fullName"
-                placeholder="Your full name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                onBlur={(e) => commitTextField("fullName", e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitTextField("fullName", e.currentTarget.value);
-                    e.currentTarget.blur();
-                  }
-                }}
-                className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px] focus-visible:ring-1 focus-visible:ring-primary"
-              />
-              {profileError === "Full name is required" && (
-                <span className="text-[11px] text-destructive">{profileError}</span>
-              )}
+              {/*
+                WT-550. The message belongs in the input's OWN column, not beside it.
+
+                It used to be a third child of this `justify-between` row, so the instant
+                validation fired the row had three things to spread instead of two and the input
+                was shoved out of its column — the field moved sideways while you were still
+                fixing what it was complaining about. The width lives on this wrapper so the
+                column is the same size whether or not the message is showing.
+              */}
+              <div className="flex w-[160px] shrink-0 flex-col items-end gap-1 md:w-[240px]">
+                <Input
+                  id="fullName"
+                  placeholder="Your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  onBlur={(e) => commitTextField("fullName", e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitTextField("fullName", e.currentTarget.value);
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  aria-invalid={profileError === "Full name is required"}
+                  className="h-8 w-full text-xs bg-surface-2 border-hairline focus-visible:ring-1 focus-visible:ring-primary"
+                />
+                {profileError === "Full name is required" && (
+                  <span className="w-full text-right text-[11px] text-destructive">
+                    {profileError}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Phone Number */}

@@ -4,12 +4,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Calendar as CalendarIcon, Trash } from "@phosphor-icons/react/dist/ssr";
 import { PillButton } from "./pill-button";
+import { TimeField } from "./time-field";
 
 export function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduledAt: Date; onChange: (value: Date) => void; onRemove: () => void }) {
   const [timeStr, setTimeStr] = useState(format(scheduledAt, "HH:mm"));
 
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+  const handleTimeChange = (val: string) => {
     setTimeStr(val);
     const [hours, minutes] = val.split(":").map(Number);
     if (!isNaN(hours) && !isNaN(minutes)) {
@@ -45,11 +45,13 @@ export function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduled
           className="p-0 border-none bg-transparent"
         />
         <div className="flex items-center gap-3 mt-3 pt-3 border-t border-border/40">
-          <input
-            type="time"
+          {/* WT-548: not `<input type="time">`. Its am/pm labels come from the BROWSER's
+              language, so a Vietnamese Chrome rendered "09:00 SA" inside an English dialog. */}
+          <TimeField
+            label="Start time"
             value={timeStr}
             onChange={handleTimeChange}
-            className="w-full h-8 px-2 text-[13px] bg-surface-1 border border-border/50 rounded-md focus:outline-none focus:ring-1 focus:ring-ink/20 text-ink"
+            className="flex-1"
           />
           <button 
             onClick={onRemove}

@@ -8,6 +8,7 @@ import { Spinner } from "@phosphor-icons/react";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
+import { WorkspacePaywall } from "@/components/workspace/workspace-paywall";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -98,7 +99,10 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       activeWorkspaceSlug !== workspaceSlug ||
       activeWorkspaceId !== targetWorkspace.id);
 
-  if (isLoading || isSyncing) {
+  // `workspaceSlug` is nullable and the effect above redirects when it is null — but the redirect
+  // happens after this render, so without the guard the paywall below would be handed an empty
+  // slug and judge a workspace that is not the one being opened.
+  if (isLoading || isSyncing || !workspaceSlug) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -106,5 +110,11 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     );
   }
 
-  return <>{children}</>;
+  // WT-515/WT-554 — no plan, no workspace. Wrapped here rather than per page because a paywall
+  // with a page-shaped hole in it is not a paywall: /rooms could be gated and /documents
+  // forgotten, and the first person to notice would be somebody using the product for free.
+  //
+  // Billing and Settings stay reachable through it, otherwise this is a workspace nobody can pay
+  // for. See lib/billing/workspace-paywall.
+  return <WorkspacePaywall workspaceSlug={workspaceSlug}>{children}</WorkspacePaywall>;
 }
