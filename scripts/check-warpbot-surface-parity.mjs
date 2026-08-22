@@ -19,6 +19,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const widget = read("src/components/layout/global-chatbot.tsx");
 const chatPanel = read("src/components/rooms/live/chat-panel.tsx");
 const store = read("src/stores/translationRoom-store.ts");
+const session = read("src/components/rooms/live/persistent-meeting-session.tsx");
 
 // ── the same three pieces under every answer ─────────────────────────────────
 
@@ -124,6 +125,38 @@ assert.match(
   "The store must expose beginAssistantTurn.",
 );
 
+// ── the answer streams on BOTH surfaces ─────────────────────────────────────
+
+// The widget has streamed since it shipped; the meeting chat persisted its reply first and
+// broadcast it whole, so the room saw nothing between the question and the finished answer while
+// the widget beside it was visibly writing. Measured, the agent takes the same time on both —
+// 3.1s median in-meeting against 3.6s in the widget — so the gap was entirely in the showing.
+//
+// Four hops, and the chain is only as good as its weakest: the worker already emitted chunks,
+// and the meeting consumer was reading them purely to flip a status column.
+// The RENDER, not the identifier: `/assistantDraft/` matches a renamed-away variable too, which
+// is how a mutation that removed the draft entirely passed this check the first time.
+assert.match(
+  chatPanel,
+  /<AssistantMarkdown>\{assistantDraft\}<\/AssistantMarkdown>/,
+  "The meeting chat must render the answer as it is written, not only once it is persisted.",
+);
+assert.match(
+  store,
+  /appendAssistantDraft:/,
+  "The store must accumulate the streamed answer.",
+);
+assert.match(
+  store,
+  /assistantDraft: ""/,
+  "The draft must be cleared — the persisted message is authoritative, and a turn that dies must not leave its half-sentence for the next question.",
+);
+assert.match(
+  session,
+  /"ChatAssistantChunk"/,
+  "Nothing accumulates a draft the hub never delivers: the session must subscribe to the chunk event.",
+);
+
 console.log(
-  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening)",
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming)",
 );

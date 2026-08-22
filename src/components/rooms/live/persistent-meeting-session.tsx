@@ -2340,6 +2340,13 @@ export function PersistentMeetingSession({
       },
     );
 
+    // The answer as it is written. The room used to see nothing between the question and the
+    // finished reply, because a meeting chat message is only persisted once the whole turn is
+    // over — so a long answer read as a stall while the widget beside it was visibly writing.
+    chatConnection.on("ChatAssistantChunk", (payload: { delta?: string }) => {
+      useTranslationRoomStore.getState().appendAssistantDraft(payload?.delta ?? null);
+    });
+
     chatConnection.on(
       "ChatAssistantReasoning",
       (payload: { title?: string; body?: string }) => {
