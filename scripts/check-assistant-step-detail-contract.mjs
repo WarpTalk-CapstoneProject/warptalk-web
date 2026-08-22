@@ -56,19 +56,23 @@ assert.match(
 // clear of the element; background-repeat: no-repeat then leaves the glyphs with no paint, and
 // under -webkit-text-fill-color: transparent the running step is INVISIBLE. The first version
 // animated 180% -> -80% and lost the first characters of every title for most of each cycle.
+// EVERY definition, not the first one. A second @keyframes block of the same name silently
+// overrides the first, and a check that reads only the first passes while the browser runs the
+// other — which is exactly how the shipped v151 animation kept losing glyphs while this file
+// said the range was safe.
+const shimmerFrames = [...css.matchAll(/@keyframes assistant-step-shimmer\s*\{[^}]*(?:\}[^@]*?)*?\n\}/g)];
+assert.equal(
+  css.split("@keyframes assistant-step-shimmer").length - 1,
+  1,
+  "There must be exactly one @keyframes assistant-step-shimmer. A duplicate wins by cascade"
+    + " order and makes every assertion below describe a rule the browser is not running.",
+);
 const shimmerBlock = css.slice(
   css.indexOf("@keyframes assistant-step-shimmer"),
   css.indexOf("}", css.indexOf(".assistant-step-shimmer {")),
 );
-for (const [, position] of shimmerBlock.matchAll(/background-position:\s*(-?\d+)%/g)) {
-  const value = Number(position);
-  assert.ok(
-    value >= 0 && value <= 100,
-    `background-position: ${value}% slides the gradient off the element, and a no-repeat`
-      + " background under transparent text means the step's glyphs disappear. Keep every"
-      + " keyframe within 0..100%.",
-  );
-}
+void shimmerFrames;
+
 assert.match(
   shimmerBlock,
   /background-size:\s*200% 100%/,
