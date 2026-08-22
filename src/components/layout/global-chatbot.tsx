@@ -32,6 +32,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   assistantToolDoneLabel,
   assistantToolLabel,
+  withStepDetail,
+  THINKING_STEP,
+  WRITING_STEP,
   type AssistantStep,
 } from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -597,7 +600,11 @@ export function GlobalChatbot() {
         setIsAiTyping(true);
         // A new turn starts a new trail; the previous one has been folded into the answer it
         // produced and stays there.
-        setSteps([]);
+        //
+        // Seeded with the step that is genuinely running: before the first tool call WarpBot is
+        // reading the question, which on a slow turn is the longest stretch of the whole thing
+        // and used to be drawn as a bare "Thinking..." with no trail at all.
+        setSteps([{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
         turnStartedAtRef.current = Date.now();
         setIsSlow(false);
         armResponseTimeout();
@@ -620,8 +627,15 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         // Marked finished, NOT discarded. Once prose starts arriving no tool is still running,
-        // but what it ran is exactly what the reader wants left on screen.
-        setSteps((current) => current.map((step) => ({ ...step, done: true })));
+        // but what it ran is exactly what the reader wants left on screen — and writing the
+        // answer is itself a step, so the trail names it rather than going quiet for the
+        // longest visible part of the turn.
+        setSteps((current) => {
+          const settled = current.map((step) => ({ ...step, done: true }));
+          return settled.some((step) => step.tool === WRITING_STEP)
+            ? settled
+            : [...settled, { key: WRITING_STEP, tool: WRITING_STEP, done: false }];
+        });
         // Still mid-turn: re-arm rather than clear, so a stream that dies halfway through
         // also surfaces instead of freezing under a half-written answer.
         armResponseTimeout();
@@ -635,7 +649,7 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantToolCallStarted",
-      (payload: { conversationId: string; toolName: string }) => {
+      (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
         setSteps((current) => [
@@ -646,6 +660,7 @@ export function GlobalChatbot() {
             key: `${payload.toolName}-${current.length}`,
             tool: payload.toolName,
             done: false,
+            detail: payload.toolDetail || undefined,
           },
         ]);
         armResponseTimeout();
@@ -666,9 +681,16 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantToolCallCompleted",
-      (payload: { conversationId: string }) => {
+      (payload: { conversationId: string; toolName?: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
-        setSteps((current) => current.map((step) => ({ ...step, done: true })));
+        // The hosted web search publishes its started event before OpenAI has said what it is
+        // searching for, so this is often the first event that can name the target.
+        setSteps((current) =>
+          withStepDetail(current, payload.toolName ?? "", payload.toolDetail).map((step) => ({
+            ...step,
+            done: true,
+          })),
+        );
         armResponseTimeout();
       },
     );

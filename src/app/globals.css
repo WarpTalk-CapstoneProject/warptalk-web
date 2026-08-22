@@ -186,42 +186,51 @@
    while it passes is worse than no movement at all.
    Honours prefers-reduced-motion — a repeating horizontal sweep is exactly the kind of thing that
    setting exists for, and the list still says what is happening without it. */
-@keyframes assistant-sweep {
-  0% {
-    transform: translateX(-60%);
-    opacity: 0;
+/* The shimmer that says a step is the one currently running.
+ *
+ * IT LIVES IN THE TEXT, NOT BEHIND THE LIST.
+ *   This was a band travelling across the whole trail box: a moving highlight behind every row
+ *   at once, finished ones included, claiming "all of this is happening" about a list where
+ *   exactly one thing was. Clipped to the glyphs of the running step, the movement is a
+ *   statement about the line it runs through — which is the only line it was ever true of.
+ *
+ * WHY THE BASE COLOUR IS A TOKEN AND NOT currentColor.
+ *   background-clip: text needs the text itself transparent, and currentColor resolves to
+ *   `color` — which by then IS transparent. A gradient built on currentColor therefore paints
+ *   nothing at all, and the step silently disappears. The base is the same --color-ink-muted the
+ *   row would otherwise use, so a browser that ignores the clip still shows an ordinary step.
+ */
+@keyframes assistant-step-shimmer {
+  from {
+    background-position: 140% 0;
   }
-  25% {
-    opacity: 1;
-  }
-  75% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(160%);
-    opacity: 0;
+  to {
+    background-position: -40% 0;
   }
 }
 
-.assistant-sweep {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 45%;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in oklab, var(--primary) 22%, transparent),
-    transparent
+.assistant-step-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-ink-muted) 0%,
+    var(--color-ink-muted) 40%,
+    color-mix(in oklab, var(--primary) 85%, var(--color-ink-muted)) 50%,
+    var(--color-ink-muted) 60%,
+    var(--color-ink-muted) 100%
   );
-  animation: assistant-sweep 1.9s ease-in-out infinite;
+  background-size: 220% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: assistant-step-shimmer 1.7s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-sweep {
+  .assistant-step-shimmer {
     animation: none;
-    opacity: 0;
+    background-image: none;
+    -webkit-text-fill-color: var(--color-ink-muted);
   }
 }
 
