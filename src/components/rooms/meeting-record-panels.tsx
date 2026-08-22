@@ -344,6 +344,7 @@ export function SummaryPanel({
   onJumpToMoment,
   onRewrite,
   segments,
+  hasTranscript,
 }: {
   room: EndedRoomHistoryItem;
   busyArtifactId: string | null;
@@ -356,6 +357,13 @@ export function SummaryPanel({
   /** The transcript's segments, when the surrounding page has them. Supplied only so the panel
    *  can tell the reader their summary is behind a correction — see SummaryStalenessNotice. */
   segments?: readonly StalenessSegment[] | null;
+  /**
+   * Whether the meeting captured any transcript at all, once the page knows.
+   *
+   * Omitted (or `undefined`) means "not loaded yet", and nothing is concluded from it — an
+   * un-fetched transcript must never be read as a meeting nobody spoke in.
+   */
+  hasTranscript?: boolean;
 }) {
   const artifact = room.artifacts.find(
     (item) => item.type === "summary_export",
@@ -384,6 +392,7 @@ export function SummaryPanel({
     hasStructuredContent,
     insufficientData: summary?.insufficientData,
     recentlyEnded,
+    hasTranscript,
   });
   const isGenerating = summaryState === "generating";
 
@@ -397,6 +406,7 @@ export function SummaryPanel({
     hasSummaryArtifact: Boolean(artifact),
     hasParsedSummary: Boolean(summary),
     insufficientData: summary?.insufficientData,
+    hasTranscript,
   });
 
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
@@ -599,7 +609,9 @@ export function SummaryPanel({
                 ? "Generating summary…"
                 : summaryAbsence === "withheld"
                   ? "Summary not shared with you"
-                  : "No summary output"}
+                  : summaryAbsence === "no-transcript"
+                    ? "Nothing was said to summarise"
+                    : "No summary output"}
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
               {summaryAbsenceMessage(summaryAbsence)}

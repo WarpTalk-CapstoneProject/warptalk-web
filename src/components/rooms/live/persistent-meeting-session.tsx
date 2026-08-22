@@ -2340,6 +2340,23 @@ export function PersistentMeetingSession({
       },
     );
 
+    // The finished tool call, and the target the started event could not carry.
+    //
+    // OpenAI's HOSTED web search never enters the worker's dispatch loop, so no function call is
+    // dispatched for it — the worker publishes the step by hand off the response stream, and in
+    // production the event that names the site searched is the COMPLETED one. The meeting
+    // consumer dropped this type entirely, so a whole web-search turn left no trace: the trail
+    // sat on "Reading your question" for the length of the search while the widget beside it
+    // listed every source.
+    chatConnection.on(
+      "ChatAssistantToolCallCompleted",
+      (payload: { toolName?: string; toolDetail?: string }) => {
+        useTranslationRoomStore
+          .getState()
+          .noteAssistantToolFinished(payload?.toolName ?? null, payload?.toolDetail ?? null);
+      },
+    );
+
     // The answer as it is written. The room used to see nothing between the question and the
     // finished reply, because a meeting chat message is only persisted once the whole turn is
     // over — so a long answer read as a stall while the widget beside it was visibly writing.
