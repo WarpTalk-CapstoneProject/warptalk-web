@@ -13,7 +13,12 @@ import type {
 // Relative, not "@/...": these stores are imported directly by node-run contract tests, which
 // have no bundler and cannot resolve the alias. The same trap already cost a fix once
 // (normalizeLanguageCode, WT-371).
-import { REASONING_STEP, type AssistantStep } from "../lib/meeting/assistant-tool-labels.ts";
+import {
+  REASONING_STEP,
+  THINKING_STEP,
+  WRITING_STEP,
+  type AssistantStep,
+} from "../lib/meeting/assistant-tool-labels.ts";
 
 interface TranslationRoomStoreState {
   // Current live translationRoom state
@@ -56,6 +61,20 @@ interface TranslationRoomStoreState {
    */
   assistantSteps: AssistantStep[];
   /**
+   * The finished trail of each answer that has already landed, keyed by its message id.
+   *
+   * WHY THE LIVE ARRAY IS NOT ENOUGH
+   *   `assistantSteps` is ONE turn — the next question clears it. In the widget every answer
+   *   keeps its own folded trail underneath it, so scrolling back shows which tools each reply
+   *   came through; here the trail sat at the bottom of the panel and belonged to whichever
+   *   question was asked last. Two surfaces running one agent, showing two different amounts of
+   *   its work.
+   *
+   *   Sealed rather than copied live: a trail is attached to the message it produced at the
+   *   moment that message arrives, which is the only point where the pairing is known.
+   */
+  assistantTrails: Record<string, { steps: AssistantStep[]; durationMs: number | null }>;
+  /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
    * The deadline is measured from HERE, not from when the question was asked. Measured from the
@@ -95,6 +114,14 @@ interface TranslationRoomStoreState {
    * tool: it carries a heading and a paragraph, and the trail draws those on two lines.
    */
   noteAssistantReasoning: (title?: string | null, body?: string | null) => void;
+  /**
+   * Attach the turn that just finished to the answer it produced, and clear the live trail.
+   *
+   * Idempotent by message id: the answer can arrive twice — once over the hub and again in a
+   * history backfill after a reconnect — and the second arrival must not overwrite a sealed
+   * trail with the empty array the first one left behind.
+   */
+  sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   setHandRaised: (userId: string, isRaised: boolean) => void;
@@ -111,6 +138,7 @@ const initialState = {
   assistantStartedAt: null as number | null,
   assistantFinishedAt: null as number | null,
   assistantSteps: [] as AssistantStep[],
+  assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -342,7 +370,15 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     set((state) => {
       // Idle -> thinking is a NEW question, so the previous turn's trail goes with it.
       const starting = state.assistantState === "idle";
-      const carried = starting ? [] : state.assistantSteps;
+      // A turn that opens without naming a tool opens on the step that IS running: WarpBot is
+      // reading the question. The widget has seeded this since the trail shipped; here the same
+      // moment drew a bare "WarpBot is thinking…" with no trail behind it, so the longest
+      // stretch of a slow turn was the one stretch that said nothing about itself.
+      const carried = starting
+        ? toolName
+          ? []
+          : [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]
+        : state.assistantSteps;
       return {
         assistantState: starting ? "thinking" : state.assistantState,
         assistantStartedAt: starting ? Date.now() : state.assistantStartedAt,
@@ -390,6 +426,40 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
           },
         ],
         assistantActivityAt: Date.now(),
+      };
+    }),
+
+  sealAssistantTrail: (messageId) =>
+    set((state) => {
+      // Nothing to attach, or this answer already has its trail. Either way, leave it alone:
+      // the same answer arrives twice whenever the hub reconnects mid-turn, and the second
+      // arrival carries an empty live array that would erase what the first one sealed.
+      if (!messageId || state.assistantTrails[messageId]) return state;
+      if (state.assistantSteps.length === 0) return state;
+
+      return {
+        assistantTrails: {
+          ...state.assistantTrails,
+          [messageId]: {
+            // Every step is over — the answer is the last thing a turn produces, so a step
+            // still marked running would spin forever underneath a finished reply.
+            steps: [
+              ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+              // "Wrote the answer", added on arrival rather than observed beginning.
+              //
+              // The widget watches the token stream and can name this step the moment prose
+              // starts; the meeting chat gets no stream — the reply lands as one finished
+              // message — so the only instant this surface can honestly claim it is when the
+              // answer exists. It does exist: we are sealing the trail onto it.
+              { key: WRITING_STEP, tool: WRITING_STEP, done: true },
+            ],
+            durationMs:
+              state.assistantStartedAt !== null ? Date.now() - state.assistantStartedAt : null,
+          },
+        },
+        // The live trail belongs to the turn that just ended, and the next question starts its
+        // own. Left in place, it would render twice: folded under the answer and live below it.
+        assistantSteps: [],
       };
     }),
 

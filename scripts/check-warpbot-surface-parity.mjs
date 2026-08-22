@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+/**
+ * The two WarpBot surfaces must look like one agent.
+ *
+ * The global widget and the in-meeting chat run the SAME worker over the same stream, and they
+ * had drifted into showing its work two different ways: the meeting chat answered in bold violet
+ * where the widget answered in ordinary ink, and it kept one live trail pinned to the bottom of
+ * the panel where the widget folds a trail under every reply. Same agent, two voices.
+ *
+ * Drift like that is invisible to a unit test of either side — each is internally consistent.
+ * What catches it is asserting the two files against each other, which is what this does.
+ */
+
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+
+const widget = read("src/components/layout/global-chatbot.tsx");
+const chatPanel = read("src/components/rooms/live/chat-panel.tsx");
+const store = read("src/stores/translationRoom-store.ts");
+
+// ── the same three pieces under every answer ─────────────────────────────────
+
+for (const [surface, source] of [
+  ["the widget", widget],
+  ["the in-meeting chat", chatPanel],
+]) {
+  assert.match(
+    source,
+    /<AssistantMarkdown>/,
+    `${surface} must render WarpBot's markdown, not the source of it.`,
+  );
+  assert.match(
+    source,
+    /<AnswerSources\b/,
+    `${surface} must show the source chips under an answer.`,
+  );
+  assert.match(
+    source,
+    /<AssistantWorkTrail\b/,
+    `${surface} must show the work trail.`,
+  );
+}
+
+// ── the same colour ──────────────────────────────────────────────────────────
+
+// The meeting chat rendered WarpBot in `font-medium text-primary` — violet and bolder than
+// anything else in the panel — so the same agent read as a system notice there and as a reply in
+// the widget. Ink in both.
+assert.doesNotMatch(
+  chatPanel,
+  /text-\[13px\] font-medium leading-relaxed text-primary/,
+  "WarpBot's answer must not be violet in the meeting chat: the widget renders it in text-ink, and one agent cannot have two voices.",
+);
+
+// ── a trail under EVERY answer, not just the last ────────────────────────────
+
+assert.match(
+  chatPanel,
+  /assistantTrails\[message\.id\]/,
+  "The meeting chat must draw the trail belonging to each message. A single trail at the foot of the panel belongs to whatever was asked last.",
+);
+assert.match(
+  store,
+  /sealAssistantTrail:/,
+  "The store must be able to attach a finished trail to the answer that produced it.",
+);
+assert.match(
+  chatPanel,
+  /sealAssistantTrail\(/,
+  "Sealing must actually be called from the panel — a store action nothing invokes is the trail still vanishing.",
+);
+
+// ── the same lifecycle steps ─────────────────────────────────────────────────
+
+// The widget seeds "reading your question" before the first tool and names "writing the answer"
+// once prose starts. The meeting chat gets no token stream, so it takes both from the two moments
+// it genuinely knows: the turn opening, and the answer arriving.
+for (const step of ["THINKING_STEP", "WRITING_STEP"]) {
+  assert.match(
+    widget,
+    new RegExp(step),
+    `The widget must name the ${step} lifecycle step.`,
+  );
+  assert.match(
+    store,
+    new RegExp(step),
+    `The in-meeting trail must name the ${step} lifecycle step too — the surfaces show one agent.`,
+  );
+}
+
+console.log("WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps)");
