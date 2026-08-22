@@ -139,6 +139,8 @@ export function ChatPanel({
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
+  const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
+  const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
   const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
@@ -255,13 +257,19 @@ export function ChatPanel({
   // replied.
   useEffect(() => {
     if (assistantState === "idle") return;
-    if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
+    const answers = messages.filter(isAssistantMessage);
+    if (answers.length > answersWhenAskedRef.current) {
+      // The trail belongs to the answer, not to the panel. Sealed here because this is the one
+      // place that knows WHICH message the turn just produced — the newest one — and the widget
+      // has kept a folded trail under every past reply since it shipped.
+      const newest = answers[answers.length - 1];
+      if (newest) sealAssistantTrail(newest.id);
       setAssistantState("idle");
     }
     // NOT `assistantState !== "thinking"`. That guard is the reported bug: once the wait had been
     // declared over, the answer arriving could no longer clear the notice, so a slow reply left a
     // permanent "WarpBot didn't answer" sitting above a WarpBot answer.
-  }, [messages, assistantState, setAssistantState]);
+  }, [messages, assistantState, setAssistantState, sealAssistantTrail]);
 
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
   // server's pending signal. A spinner with no end is its own lie, and this one would
@@ -692,8 +700,14 @@ export function ChatPanel({
                     // it — "**transcript hiện tại**" reached the reader as those characters.
                     // Left-aligned unconditionally: a bulleted list right-aligned to match a
                     // chat bubble is unreadable, and WarpBot's messages are never "mine".
+                    // `text-ink`, the same as the widget. This was `font-medium text-primary`
+                    // — violet, bolder than anything else in the panel — so one agent answered
+                    // in two different voices depending on which surface you asked from, and
+                    // the meeting one read as a system notice rather than as a reply.
+                    // Left-aligned unconditionally: a bulleted list right-aligned to match a
+                    // chat bubble is unreadable, and WarpBot's messages are never "mine".
                     <div
-                      className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
+                      className={`mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink`}
                     >
                       <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
                       {/* Under the answer, inside the same left-aligned block: the chips
@@ -703,6 +717,17 @@ export function ChatPanel({
                         sources={parseAnswerSources(message.sourcesJson)}
                         workspaceSlug={activeWorkspaceSlug}
                       />
+                      {/* And under those, the folded trail — the record of which tools this
+                          particular answer came through. The widget has shown one under every
+                          reply since it shipped; here the only trail was a live one at the
+                          bottom of the panel, which belonged to whatever was asked last. */}
+                      {assistantTrails[message.id] ? (
+                        <AssistantWorkTrail
+                          steps={assistantTrails[message.id].steps}
+                          running={false}
+                          durationMs={assistantTrails[message.id].durationMs}
+                        />
+                      ) : null}
                     </div>
                   ) : (
                     <p
