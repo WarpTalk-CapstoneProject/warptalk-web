@@ -414,14 +414,22 @@ export const WorkspaceService = {
   // GlossaryDtos.cs) exactly — a previous version of this file used a different, unused shape
   // (businessDomain/term/preferredTranslation/definition/usageNote/status) that never matched
   // what GlossariesController actually accepts/returns. See docs/global-glossary-plan.md §1.2/§1.3.
+  /**
+   * WT-558: returns the CREATED glossary, because the caller usually needs its id next.
+   *
+   * The endpoint used to answer a bare 201 with no body, so a client that had just made a
+   * glossary had to re-list the workspace and guess which entry was new by name — wrong the
+   * moment two glossaries share one. Adding terms in the same dialog is not buildable on a guess.
+   */
   async createGlossary(request: {
     workspaceId: string;
     name: string;
     description?: string | null;
     sourceLanguage: string;
     targetLanguage: string;
-  }): Promise<void> {
-    await apiClient.post(API.glossaries.base, request);
+  }): Promise<GlossaryDto> {
+    const { data } = await apiClient.post<GlossaryDto>(API.glossaries.base, request);
+    return data;
   },
 
   async getGlossary(id: string): Promise<GlossaryDto> {
