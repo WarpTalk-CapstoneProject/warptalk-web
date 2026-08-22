@@ -109,4 +109,62 @@ assert.match(
   "Members must pass Owner-only Admin granting to the invite dialog.",
 );
 
+/**
+ * A member asking to leave must be answerable (WT-559).
+ *
+ * Everything about this feature was built except the last inch. The backend creates the
+ * request, returns it on the join-request listing and has approve and reject endpoints; the
+ * web has the service calls, the hooks, the handlers and the two buttons — written with
+ * "Approve leave request" titles by somebody who clearly meant them to be seen. The row simply
+ * never arrived, so an Admin was told a request existed and given nothing to click.
+ *
+ * A unit test of the builder cannot catch the half of that which lives in the page, and a test
+ * of the page cannot catch the half in the builder. Both halves are pinned here.
+ */
+const directory = read("src/lib/workspace/member-directory.ts");
+
+assert.match(
+  directory,
+  /LEAVE_REQUESTED/,
+  "The builder must recognise a leave request. It once kept only status === REQUESTED, and a leave request carries LEAVE_REQUESTED, so every one of them was dropped before it could become a row.",
+);
+assert.match(
+  directory,
+  /leaveRequest: WorkspaceInvitationDto \| null/,
+  "A leaving row must carry the request itself — without an id there is nothing for approve to act on.",
+);
+
+for (const [mutation, what] of [
+  ["useApproveLeaveRequest", "approve a leave request"],
+  ["useRejectLeaveRequest", "reject a leave request"],
+]) {
+  assert.ok(
+    members.includes(mutation),
+    `Members must be able to ${what} (${mutation}).`,
+  );
+}
+
+// The order of the branches IS the bug. A member who has asked to leave is still a member, so
+// a `member ?` branch placed first matches them, renders Remove, and the request stays
+// unanswerable — with the approve and reject buttons sitting right below it, unreachable.
+const actionCell = members.slice(
+  members.indexOf('<div className="flex justify-end gap-1">'),
+);
+const leaveBranch = actionCell.indexOf("leaveRequest ? (");
+const memberBranch = actionCell.indexOf("member ? (");
+
+assert.ok(leaveBranch !== -1, "The row actions must have a branch for a pending leave request.");
+assert.ok(memberBranch !== -1, "The row actions must still have a branch for a plain member.");
+assert.ok(
+  leaveBranch < memberBranch,
+  "The leave-request branch must be tested BEFORE the member branch — a leaving member satisfies both, and whichever comes first wins.",
+);
+
+// The request has to be read off the row, not guessed at from the member.
+assert.match(
+  members,
+  /row\.leaveRequest/,
+  "The page must take the pending leave request from the row the builder produced.",
+);
+
 console.log("Members directory contract: PASS");
