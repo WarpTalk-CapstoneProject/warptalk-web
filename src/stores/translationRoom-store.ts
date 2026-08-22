@@ -75,6 +75,18 @@ interface TranslationRoomStoreState {
    */
   assistantTrails: Record<string, { steps: AssistantStep[]; durationMs: number | null }>;
   /**
+   * The answer as WarpBot is writing it, before it exists as a message.
+   *
+   * A meeting chat message is only persisted once the whole turn is over, so the room saw
+   * nothing between the question and the finished reply — a long answer read as a stall while
+   * the widget beside it was visibly writing. The agent takes the same time on both surfaces;
+   * only one of them showed its work.
+   *
+   * A DRAFT, not a message: it has no id, is never persisted, and is dropped the moment the real
+   * one arrives. Anyone who reloads or joins late sees the persisted message and never this.
+   */
+  assistantDraft: string;
+  /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
    * The deadline is measured from HERE, not from when the question was asked. Measured from the
@@ -133,6 +145,11 @@ interface TranslationRoomStoreState {
    * history backfill after a reconnect — and the second arrival must not overwrite a sealed
    * trail with the empty array the first one left behind.
    */
+  /**
+   * Another piece of the answer. Additive — the worker emits the text since the last piece, so
+   * these concatenate rather than replace.
+   */
+  appendAssistantDraft: (delta?: string | null) => void;
   sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
@@ -151,6 +168,7 @@ const initialState = {
   assistantFinishedAt: null as number | null,
   assistantSteps: [] as AssistantStep[],
   assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
+  assistantDraft: "",
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -385,6 +403,9 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       // them onto — a question that failed leaves a trail behind, and appending the next
       // question's steps to it would present one turn's work as another's.
       assistantSteps: [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }],
+      // A turn that died without an answer leaves its half-written draft behind; the next
+      // question must not open under somebody else's unfinished sentence.
+      assistantDraft: "",
       assistantActivityAt: Date.now(),
     })),
 
@@ -453,6 +474,32 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       };
     }),
 
+  appendAssistantDraft: (delta = null) =>
+    set((state) => {
+      if (!delta) return state;
+
+      // The FIRST piece of prose ends the tool phase and starts the writing one — the same
+      // signal the widget takes off its token stream, which this surface only gained when the
+      // meeting chat started streaming. Before that, "wrote the answer" could only be claimed
+      // on arrival, because nothing here could see it begin.
+      const writing = state.assistantSteps.some((step) => step.tool === WRITING_STEP);
+      const steps = writing
+        ? state.assistantSteps
+        : [
+            ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+            { key: `${WRITING_STEP}-${state.assistantSteps.length}`, tool: WRITING_STEP, done: false },
+          ];
+
+      return {
+        assistantSteps: steps,
+        assistantDraft: state.assistantDraft + delta,
+        // Text arriving IS a sign of life, and the panel's deadline is measured from the last
+        // one. Without this a long answer that streams for two minutes without a tool call
+        // would be declared slow while it was visibly writing.
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
   sealAssistantTrail: (messageId) =>
     set((state) => {
       // Nothing to attach, or this answer already has its trail. Either way, leave it alone:
@@ -467,16 +514,16 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
           [messageId]: {
             // Every step is over — the answer is the last thing a turn produces, so a step
             // still marked running would spin forever underneath a finished reply.
-            steps: [
-              ...state.assistantSteps.map((step) => ({ ...step, done: true })),
-              // "Wrote the answer", added on arrival rather than observed beginning.
-              //
-              // The widget watches the token stream and can name this step the moment prose
-              // starts; the meeting chat gets no stream — the reply lands as one finished
-              // message — so the only instant this surface can honestly claim it is when the
-              // answer exists. It does exist: we are sealing the trail onto it.
-              { key: WRITING_STEP, tool: WRITING_STEP, done: true },
-            ],
+            steps: state.assistantSteps.some((step) => step.tool === WRITING_STEP)
+              ? state.assistantSteps.map((step) => ({ ...step, done: true }))
+              : [
+                  ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+                  // "Wrote the answer" when nothing streamed — a turn whose text never arrived
+                  // as chunks still produced an answer, and the trail should say so. Guarded,
+                  // because appendAssistantDraft names this step the moment prose starts and a
+                  // second copy would claim the answer was written twice.
+                  { key: WRITING_STEP, tool: WRITING_STEP, done: true },
+                ],
             durationMs:
               state.assistantStartedAt !== null ? Date.now() - state.assistantStartedAt : null,
           },
@@ -484,6 +531,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
         // The live trail belongs to the turn that just ended, and the next question starts its
         // own. Left in place, it would render twice: folded under the answer and live below it.
         assistantSteps: [],
+        // And the draft is superseded by the message it was a preview of. The persisted one is
+        // authoritative: an aborted tool-calling iteration can emit text that is not in the
+        // final answer, so a client that kept its own accumulation would keep a sentence the
+        // server never saved.
+        assistantDraft: "",
       };
     }),
 

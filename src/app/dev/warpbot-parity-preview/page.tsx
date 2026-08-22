@@ -124,6 +124,28 @@ export default function WarpBotParityPreviewPage() {
           />
         </div>
 
+        {/* The streaming draft, in the shape the finished message takes — same avatar, same ink,
+            same markdown — so the reply does not visibly jump when it lands. */}
+        <div className="rounded-lg border border-hairline bg-canvas p-3">
+          <p className="mb-2 text-[12px] font-semibold text-ink">
+            In-meeting, while the answer is being written
+          </p>
+          <div className="flex items-start gap-3" data-testid="draft-sample">
+            <WarpBotAvatar />
+            <div className="mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink">
+              <AssistantMarkdown>
+                {"**C#** is a programming language from Microsoft, used for web, deskt"}
+              </AssistantMarkdown>
+            </div>
+          </div>
+          <div className="mt-2">
+            <AssistantWorkTrail
+              steps={[...TRAIL.slice(0, 4), { key: "w", tool: WRITING_STEP, done: false }]}
+              running
+            />
+          </div>
+        </div>
+
         {/* Every loading mark in the product, at every size it can appear, in one row. They were
             scale-75 in the widget, scale-[0.42] on the meeting chat's thinking line and unscaled
             in the dialogs — three sizes for one idea. Lined up here so a fourth cannot appear

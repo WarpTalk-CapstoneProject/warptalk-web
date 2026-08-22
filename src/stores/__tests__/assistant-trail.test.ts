@@ -98,6 +98,85 @@ test("the opening step is finished by the first real tool call", () => {
   assert.equal(steps[1].done, false);
 });
 
+// ── the answer, as it is written ─────────────────────────────────────────────
+
+test("the first piece of prose starts the writing step", () => {
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  store().appendAssistantDraft("C# is ");
+
+  const steps = store().assistantSteps;
+  assert.deepEqual(
+    steps.map((step) => step.tool),
+    [THINKING_STEP, "web_search", WRITING_STEP],
+  );
+  assert.equal(steps.at(-1)!.done, false, "it is still being written");
+  assert.equal(steps[1].done, true, "the search is over once prose starts");
+});
+
+test("later pieces do not start a second writing step", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("C# is ");
+  store().appendAssistantDraft("a language ");
+  store().appendAssistantDraft("from Microsoft.");
+
+  assert.equal(
+    store().assistantSteps.filter((step) => step.tool === WRITING_STEP).length,
+    1,
+    "the answer was written once",
+  );
+  assert.equal(store().assistantDraft, "C# is a language from Microsoft.");
+});
+
+test("the pieces concatenate — they are deltas, not replacements", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("one ");
+  store().appendAssistantDraft("two");
+
+  assert.equal(store().assistantDraft, "one two");
+});
+
+test("an empty piece changes nothing", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("");
+  store().appendAssistantDraft(null);
+
+  assert.equal(store().assistantDraft, "");
+  assert.deepEqual(store().assistantSteps.map((s) => s.tool), [THINKING_STEP]);
+});
+
+test("the persisted answer supersedes the draft", () => {
+  // An aborted tool-calling iteration can emit text that is not in the final answer, so a client
+  // that kept its own accumulation would keep a sentence the server never saved.
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("half a sentence");
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(store().assistantDraft, "");
+});
+
+test("a streamed turn is not credited with writing the answer twice", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("the answer");
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(
+    store().assistantTrails["msg-1"].steps.filter((step) => step.tool === WRITING_STEP).length,
+    1,
+  );
+  assert.ok(store().assistantTrails["msg-1"].steps.every((step) => step.done));
+});
+
+test("a new question does not open under the last one's unfinished sentence", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("half a sentence that never landed");
+
+  store().beginAssistantTurn();
+
+  assert.equal(store().assistantDraft, "");
+});
+
 // ── sealing the trail onto the answer ────────────────────────────────────────
 
 test("the finished trail is attached to the answer it produced", () => {

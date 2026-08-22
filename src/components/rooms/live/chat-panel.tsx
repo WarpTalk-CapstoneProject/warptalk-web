@@ -140,6 +140,7 @@ export function ChatPanel({
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
   const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
+  const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
   const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
@@ -331,7 +332,13 @@ export function ChatPanel({
     if (shouldAutoScrollRef.current) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [messages, roomId]);
+    // `assistantDraft` is in here so a streamed answer keeps the reader at the bottom as it
+    // grows. Without it the panel only follows whole MESSAGES, and a long reply would write
+    // itself off the bottom of the screen for anyone watching it arrive.
+    //
+    // It respects shouldAutoScrollRef exactly as a message does, so somebody who has scrolled up
+    // to read something is not dragged back down by WarpBot typing.
+  }, [messages, roomId, assistantDraft]);
 
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The same slack handleMessagesScroll uses to decide the panel is still following.
@@ -763,7 +770,7 @@ export function ChatPanel({
         {/* The answer arrives as a WarpBot message in this same shared chat, which everyone
             sees — but a tool-calling loop takes seconds, and with nothing here the wait was
             indistinguishable from having been ignored. */}
-        {assistantState !== "idle" && assistantSteps.length === 0 ? (
+        {assistantState !== "idle" && assistantSteps.length === 0 && !assistantDraft ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
             {/* The same mark, at the same size, as everywhere else. It used to be scaled to
                 0.42 here and 0.75 in the widget, so one agent's "working" looked like two
@@ -774,6 +781,25 @@ export function ChatPanel({
                 ? "WarpBot is still working — this one is taking a while."
                 : "WarpBot is thinking…"}
             </span>
+          </div>
+        ) : null}
+
+        {/* WarpBot's answer as it is written, in the shape the finished message takes — same
+            avatar, same ink, same markdown — so the reply does not visibly jump from one
+            rendering to another when it lands.
+
+            EVERYONE IN THE ROOM SEES THIS, which is the difference from the widget: a private
+            assistant can stream to one person, and a shared chat streams to all of them. That is
+            the point — the wait was the thing being fixed, and it was everybody's wait.
+
+            No id, never persisted, replaced by the real message the moment it arrives. A late
+            joiner or a reload sees the persisted answer and never this. */}
+        {assistantDraft ? (
+          <div className="flex items-start gap-3" data-testid="assistant-draft">
+            <WarpBotAvatar />
+            <div className="mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink">
+              <AssistantMarkdown>{assistantDraft}</AssistantMarkdown>
+            </div>
           </div>
         ) : null}
 
