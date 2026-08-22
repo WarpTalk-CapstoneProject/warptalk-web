@@ -132,6 +132,15 @@ interface TranslationRoomStoreState {
   /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
   noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
   /**
+   * A tool WarpBot reached for has FINISHED, and what it was aimed at.
+   *
+   * Folded into the step already running for that tool rather than appended: OpenAI's hosted web
+   * search reports its target on the completed event, because the started one fires before the
+   * item naming the query is on the wire. Appending would draw the same search twice — once with
+   * no target and once with it.
+   */
+  noteAssistantToolFinished: (toolName?: string | null, toolDetail?: string | null) => void;
+  /**
    * WarpBot said, in its own words, what it is doing.
    *
    * Separate from noteAssistantActivity because it is a different KIND of step, not another
@@ -444,6 +453,55 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
               },
             ]
           : carried,
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
+  noteAssistantToolFinished: (toolName = null, toolDetail = null) =>
+    set((state) => {
+      if (!toolName) return state;
+
+      // Last match, not first: one turn can search the web more than once, and the call that
+      // just finished is the most recent one bearing that name.
+      const index = [...state.assistantSteps]
+        .map((step, position) => ({ step, position }))
+        .reverse()
+        .find((entry) => entry.step.tool === toolName)?.position;
+
+      // A tool whose start was never announced still deserves its step. The hosted web search is
+      // exactly this: in production the only event it emits is the completed one, so without
+      // this branch a whole web-search turn leaves no trace in the trail at all — which is the
+      // reported defect.
+      if (index === undefined) {
+        return {
+          assistantState: state.assistantState === "idle" ? "thinking" : state.assistantState,
+          assistantStartedAt: state.assistantStartedAt ?? Date.now(),
+          assistantSteps: [
+            ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+            {
+              key: `${toolName}-${state.assistantSteps.length}`,
+              tool: toolName,
+              done: true,
+              detail: toolDetail || undefined,
+            },
+          ],
+          assistantActivityAt: Date.now(),
+        };
+      }
+
+      return {
+        assistantSteps: state.assistantSteps.map((step, position) =>
+          position === index
+            ? {
+                ...step,
+                done: true,
+                // Only ever FILLS a gap. The started event may have had no target yet; if it did
+                // have one, it described this same call and is not overwritten by a later,
+                // possibly emptier, report of the same thing.
+                detail: step.detail || toolDetail || undefined,
+              }
+            : step,
+        ),
         assistantActivityAt: Date.now(),
       };
     }),

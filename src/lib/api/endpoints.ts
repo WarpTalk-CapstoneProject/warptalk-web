@@ -366,6 +366,9 @@ export const API = {
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
+    // WT-560: the portal addresses a workspace by its own slug, so the admin's address bar
+    // names the workspace instead of carrying its primary key.
+    detailBySlug: (slug: string) => `/admin/workspaces/by-slug/${encodeURIComponent(slug)}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
     delete: (id: string) => `/admin/workspaces/${id}/delete`,
