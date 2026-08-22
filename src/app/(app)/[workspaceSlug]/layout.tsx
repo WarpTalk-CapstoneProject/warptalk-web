@@ -9,6 +9,7 @@ import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { WorkspacePaywall } from "@/components/workspace/workspace-paywall";
+import { UsageWarningBanner } from "@/components/billing/usage-warning-banner";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -116,5 +117,15 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   //
   // Billing and Settings stay reachable through it, otherwise this is a workspace nobody can pay
   // for. See lib/billing/workspace-paywall.
-  return <WorkspacePaywall workspaceSlug={workspaceSlug}>{children}</WorkspacePaywall>;
+  return (
+    <WorkspacePaywall workspaceSlug={workspaceSlug}>
+      {/* WT-557 — above the page, inside the paywall.
+          Inside, because a workspace that has not paid at all is shown the paywall and does not
+          also need to be told its credits are low. Above the page rather than on one page,
+          because the meeting that stops mid-sentence is the thing this exists to prevent and the
+          person it happens to was not on the billing screen at the time. */}
+      <UsageWarningBanner workspaceSlug={workspaceSlug} />
+      {children}
+    </WorkspacePaywall>
+  );
 }
