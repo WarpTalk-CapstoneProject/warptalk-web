@@ -105,6 +105,18 @@ interface TranslationRoomStoreState {
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
   setAssistantState: (state: "idle" | "thinking" | "slow") => void;
+  /**
+   * A question has just been put to WarpBot. Opens a fresh trail on the step that is genuinely
+   * running — reading the question — and drops whatever the previous turn left behind.
+   *
+   * SEPARATE FROM setAssistantState("thinking"), which is what the panel used to call on its
+   * own. That set the state to "thinking" BEFORE any activity arrived, so every later
+   * `noteAssistantActivity` saw a non-idle state, took the "already running" branch, and never
+   * seeded anything. The trail therefore began at the first tool call — and for the whole
+   * stretch before it, which on a slow turn is the longest part, the panel showed a bare
+   * spinner where the widget shows "Reading your question".
+   */
+  beginAssistantTurn: () => void;
   /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
   noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
   /**
@@ -364,6 +376,18 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
           ? Date.now()
           : state.assistantFinishedAt,
     })),
+  beginAssistantTurn: () =>
+    set(() => ({
+      assistantState: "thinking" as const,
+      assistantStartedAt: Date.now(),
+      assistantFinishedAt: null,
+      // The previous turn's live steps go, whether or not it ever produced an answer to seal
+      // them onto — a question that failed leaves a trail behind, and appending the next
+      // question's steps to it would present one turn's work as another's.
+      assistantSteps: [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }],
+      assistantActivityAt: Date.now(),
+    })),
+
   // One call for "WarpBot did something", so no caller can move the state and forget to reset
   // the deadline it is measured against.
   noteAssistantActivity: (toolName = null, toolDetail = null) =>

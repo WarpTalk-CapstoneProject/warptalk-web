@@ -25,6 +25,50 @@ beforeEach(() => {
 
 // ── the turn opens on a step, not on a spinner ───────────────────────────────
 
+test("THE REAL SEQUENCE: the panel opens the turn, then the hub events arrive", () => {
+  // This is the order production actually produces, and it is what a seed guarded on
+  // `assistantState === "idle"` could never satisfy: the panel sets the state optimistically the
+  // moment somebody sends an @agent mention — waiting for the round trip leaves the send looking
+  // ignored — so by the time ChatAssistantResponsePending arrives the state is already
+  // "thinking", every later signal takes the "already running" branch, and nothing seeds.
+  //
+  // The visible symptom was the reported one: the trail began at the first tool call, and the
+  // stretch before it (the longest part of a slow turn) showed a bare spinner where the widget
+  // shows "Reading your question".
+  store().beginAssistantTurn(); // panel, on send
+  store().noteAssistantActivity(); // hub: ChatAssistantResponsePending
+  store().noteAssistantActivity("search_terminology", "C#"); // hub: ToolCallStarted
+  store().noteAssistantReasoning("Nothing in the workspace", "No entry for it.");
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP, "search_terminology", REASONING_STEP, "web_search"],
+  );
+});
+
+test("the trail is never empty while the turn is open", () => {
+  // The whole point: something is on screen from the send, not from the first tool call.
+  store().beginAssistantTurn();
+
+  assert.ok(store().assistantSteps.length > 0);
+  assert.equal(store().assistantState, "thinking");
+});
+
+test("a new turn drops a previous turn that never produced an answer", () => {
+  // Nothing sealed it, because no answer arrived. Appending the next question's steps to it
+  // would present one turn's work as another's.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("get_transcript", "Hieu clone");
+
+  store().beginAssistantTurn();
+
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP],
+  );
+});
+
 test("a turn that starts without naming a tool opens on 'reading your question'", () => {
   store().noteAssistantActivity();
 

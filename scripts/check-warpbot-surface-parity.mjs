@@ -90,4 +90,40 @@ for (const step of ["THINKING_STEP", "WRITING_STEP"]) {
   );
 }
 
-console.log("WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps)");
+// ── the turn must OPEN on a step, not on a bare spinner ─────────────────────
+
+// The bug this catches, which shipped once already: the store seeded "reading your question"
+// only when it saw the state go idle -> thinking, but the panel sets "thinking" itself the
+// moment somebody sends an @agent mention (waiting for the round trip leaves the send looking
+// ignored). Every later signal then took the "already running" branch, nothing ever seeded, and
+// the seed was dead code. The trail began at the first tool call and the stretch before it —
+// the longest part of a slow turn — showed a spinner where the widget shows a step.
+//
+// Invisible to a store test, which cannot see which action the panel calls. Hence here.
+assert.match(
+  chatPanel,
+  /beginAssistantTurn\(\)/,
+  "The chat panel must OPEN the turn through beginAssistantTurn, so the trail starts at the send.",
+);
+// Comments stripped first. The prose right above the call SAYS
+// `setAssistantState("thinking")` while explaining why it is no longer used, and a check that
+// reads it as code fails on the correct file — the same trap that made an earlier assertion in
+// this batch pass against broken code, in reverse.
+const chatPanelCode = chatPanel
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
+assert.doesNotMatch(
+  chatPanelCode,
+  /answersWhenAskedRef\.current = [\s\S]{0,200}?setAssistantState\("thinking"\)/,
+  'Opening a turn with setAssistantState("thinking") moves the state without starting a trail — the seed then never fires.',
+);
+assert.match(
+  store,
+  /beginAssistantTurn:/,
+  "The store must expose beginAssistantTurn.",
+);
+
+console.log(
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening)",
+);
