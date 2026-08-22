@@ -116,7 +116,8 @@ export function useCreateRecurringTranslationRoom() {
 export function useCancelTranslationRoomSeries() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (seriesId: string) => translationRoomService.cancelSeries(seriesId),
+    mutationFn: async ({ seriesId, keepOccurrenceId }: { seriesId: string; keepOccurrenceId?: string }) =>
+      translationRoomService.cancelSeries(seriesId, keepOccurrenceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },

@@ -220,9 +220,9 @@ export const translationRoomService = {
    * already ran are left alone. Cancelling a SINGLE occurrence is the ordinary
    * `translationRoomService.cancel(roomId)` and does not touch the series.
    */
-  async cancelSeries(seriesId: string) {
+  async cancelSeries(seriesId: string, keepOccurrenceId?: string) {
     const response = await apiClient.post<CancelSeriesResult>(
-      API.translationRoomSeries.cancel(seriesId),
+      API.translationRoomSeries.cancel(seriesId, keepOccurrenceId),
     );
     return response.data;
   },
@@ -295,8 +295,11 @@ export const translationRoomService = {
    * this is how an uninvited teammate asks to join instead of dead-ending on the detail page.
    */
   async joinById(roomId: string, data: JoinTranslationRoomRequest) {
+    // WT-555: no `translationRoomCode` key at all. It used to send "" to satisfy a shared request
+    // type, and the server's by-code validator — which also ran on this route — answered every
+    // shared meeting link with 400 "The TranslationRoomCode field is required." The route names
+    // the room; the server reads the code off it.
     return apiClient.post<BackendJoinResponse>(`/translation-rooms/${roomId}/join`, {
-      translationRoomCode: "",
       displayName: data.displayName.trim(),
       speakLanguage: data.speakLanguage,
       listenLanguage: data.listenLanguage,

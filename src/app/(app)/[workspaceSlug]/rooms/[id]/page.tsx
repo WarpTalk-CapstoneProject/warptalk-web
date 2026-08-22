@@ -552,8 +552,10 @@ export default function RoomInformationPage() {
                   {room.seriesId ? (
                     <RoomRecurrenceLine
                       seriesId={room.seriesId}
+                      // WT-548: the occurrence being viewed. Stopping the schedule must not
+                      // cancel the meeting whose page the button is on.
+                      occurrenceId={room.id}
                       isHost={canEditRoom}
-                      workspaceSlug={workspaceSlug}
                     />
                   ) : null}
                   <MeetingPropertiesPills
