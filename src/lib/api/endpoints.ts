@@ -109,7 +109,12 @@ export const API = {
   translationRoomSeries: {
     get: (id: string) => `/translation-room-series/${id}`,
     update: (id: string) => `/translation-room-series/${id}`,
-    cancel: (id: string) => `/translation-room-series/${id}/cancel`,
+    cancel: (id: string, keepOccurrenceId?: string) =>
+      // WT-548: `keep` names the occurrence the host is looking at, which the server
+      // leaves scheduled. Without it, stopping the schedule cancels that meeting too.
+      keepOccurrenceId
+        ? `/translation-room-series/${id}/cancel?keep=${encodeURIComponent(keepOccurrenceId)}`
+        : `/translation-room-series/${id}/cancel`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
