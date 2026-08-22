@@ -71,13 +71,12 @@ import {
   parseAnswerSources,
   type AnswerSource,
 } from "@/lib/assistant/answer-sources";
-import { Lumidot } from "lumidot";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 
 import { ScrollFadeEdge, ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
-import { useTheme } from "next-themes";
 import { toast } from "sonner";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
@@ -325,8 +324,6 @@ export function GlobalChatbot() {
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
   );
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -1367,13 +1364,7 @@ export function GlobalChatbot() {
                 {isAiTyping && steps.length === 0 && (
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
-                      <div className="scale-75 origin-left flex items-center justify-center">
-                        <Lumidot
-                          variant={lumidotVariant}
-                          pattern="frame"
-                          glow={4}
-                        />
-                      </div>
+                      <LumidotSpinner />
                       <span>Thinking...</span>
                     </div>
                   </div>

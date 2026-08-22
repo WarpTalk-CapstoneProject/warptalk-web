@@ -14,6 +14,7 @@
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import {
   REASONING_STEP,
   THINKING_STEP,
@@ -21,6 +22,10 @@ import {
   type AssistantStep,
 } from "@/lib/meeting/assistant-tool-labels";
 import type { AnswerSource } from "@/lib/assistant/answer-sources";
+import {
+  LumidotSpinner,
+  LumidotSpinnerPlaceholder,
+} from "@/components/ui/lumidot-spinner";
 
 /** The turn from the production report: asked what C# is, workspace had nothing, web answered. */
 const TRAIL: AssistantStep[] = [
@@ -97,9 +102,7 @@ export default function WarpBotParityPreviewPage() {
             note="was: font-medium text-primary, and no trail at all"
           >
             <div className="flex gap-3 items-start">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-semibold text-white shadow-sm">
-                WA
-              </div>
+              <WarpBotAvatar />
               {/* Exactly the classes chat-panel puts on an assistant message. */}
               <div
                 data-testid="chat-answer"
@@ -119,6 +122,32 @@ export default function WarpBotParityPreviewPage() {
             steps={TRAIL.slice(0, 4).map((step, index) => ({ ...step, done: index < 3 }))}
             running
           />
+        </div>
+
+        {/* Every loading mark in the product, at every size it can appear, in one row. They were
+            scale-75 in the widget, scale-[0.42] on the meeting chat's thinking line and unscaled
+            in the dialogs — three sizes for one idea. Lined up here so a fourth cannot appear
+            unnoticed. */}
+        <div className="rounded-lg border border-hairline bg-canvas p-3">
+          <p className="mb-2 text-[12px] font-semibold text-ink">One mark, one size</p>
+          <div className="flex items-center gap-6">
+            <span className="flex items-center gap-2 text-[13px] text-ink-subtle">
+              <LumidotSpinner />
+              widget loader
+            </span>
+            <span className="flex items-center gap-2 text-[12px] text-ink-muted">
+              <LumidotSpinner />
+              meeting chat
+            </span>
+            <span className="flex items-center gap-2 text-[12px] text-ink-muted">
+              <LumidotSpinner />
+              running step
+            </span>
+            <span className="flex items-center gap-2 text-[12px] text-ink-subtle">
+              <LumidotSpinnerPlaceholder />
+              finished step
+            </span>
+          </div>
         </div>
       </div>
     </main>

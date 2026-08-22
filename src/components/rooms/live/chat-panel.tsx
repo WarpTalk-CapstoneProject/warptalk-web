@@ -11,6 +11,7 @@ import {
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
@@ -46,8 +47,7 @@ import {
   FileArchive,
   Download,
 } from "lucide-react";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -181,8 +181,6 @@ export function ChatPanel({
   const shouldAutoScrollRef = useRef(true);
   const hasRestoredRef = useRef(false);
   const previousTargetLanguageRef = useRef(targetLanguage);
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   function toggleTranslation(messageId: string) {
     const current = translations[messageId];
@@ -576,7 +574,7 @@ export function ChatPanel({
       >
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <LumidotSpinner />
             <span className="ml-2">Loading messages</span>
           </div>
         ) : null}
@@ -619,9 +617,7 @@ export function ChatPanel({
                     else gets theirs, from the same identity join the stage and the transcript use;
                     the chat drew two letters in a square and had no path to a picture at all. */}
                 {isAssistant ? (
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-[11px] font-semibold text-white shadow-sm">
-                    {displayName.substring(0, 2).toUpperCase()}
-                  </div>
+                  <WarpBotAvatar />
                 ) : (
                   <ChatSenderAvatar
                     userId={message.senderUserId}
@@ -769,14 +765,10 @@ export function ChatPanel({
             indistinguishable from having been ignored. */}
         {assistantState !== "idle" && assistantSteps.length === 0 ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
-            {/* The same Lumidot the widget uses. Two surfaces run one agent, and three bouncing
-                dots here against a Lumidot there said the waiting was a different kind. */}
-            <span
-              aria-hidden
-              className="flex size-[14px] shrink-0 origin-center scale-[0.42] items-center justify-center"
-            >
-              <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
-            </span>
+            {/* The same mark, at the same size, as everywhere else. It used to be scaled to
+                0.42 here and 0.75 in the widget, so one agent's "working" looked like two
+                different kinds of working depending on which surface you were on. */}
+            <LumidotSpinner />
             <span>
               {assistantState === "slow"
                 ? "WarpBot is still working — this one is taking a while."

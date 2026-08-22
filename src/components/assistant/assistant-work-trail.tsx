@@ -5,6 +5,10 @@ import { useState } from "react";
 
 import { describeStep, type AssistantStep } from "@/lib/meeting/assistant-tool-labels";
 import { cn } from "@/lib/utils";
+import {
+  LumidotSpinner,
+  LumidotSpinnerPlaceholder,
+} from "@/components/ui/lumidot-spinner";
 
 /**
  * What WarpBot did to answer, while it is doing it and afterwards.
@@ -103,14 +107,11 @@ function StepList({
           <li key={step.key} className="flex flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
               {/* One mark, two states, same footprint — so a step does not shift sideways by a
-                  pixel at the moment it finishes, which reads as the list twitching. */}
-              <span
-                aria-hidden
-                className={cn(
-                  "size-[6px] shrink-0 rounded-full transition-colors",
-                  over ? "bg-hairline-strong" : "assistant-step-pulse bg-primary",
-                )}
-              />
+                  pixel at the moment it finishes, which reads as the list twitching.
+                  The running mark is the product's ONE loading mark, at the one size it comes
+                  in: a bespoke violet dot here meant the step that was working looked like a
+                  different kind of "working" from the loader directly above it. */}
+              {over ? <LumidotSpinnerPlaceholder /> : <LumidotSpinner />}
               <span className="flex min-w-0 items-baseline gap-1.5">
                 <span
                   className={cn(
