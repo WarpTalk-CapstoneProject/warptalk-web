@@ -154,8 +154,21 @@ export function resolveSummaryState(input: {
   insufficientData?: boolean;
   /** Only used to decide whether a *missing* artifact is still plausibly on its way. */
   recentlyEnded?: boolean;
+  /**
+   * Whether the meeting captured any transcript at all, ONCE THAT IS KNOWN.
+   *
+   * `undefined` means the transcript has not loaded yet and nothing may be concluded from it —
+   * an empty list that is merely un-fetched must not be read as a meeting that said nothing.
+   */
+  hasTranscript?: boolean;
 }): SummaryState {
-  const { artifactStatus, hasStructuredContent, insufficientData, recentlyEnded } = input;
+  const {
+    artifactStatus,
+    hasStructuredContent,
+    insufficientData,
+    recentlyEnded,
+    hasTranscript,
+  } = input;
 
   if (hasStructuredContent) return "ready";
   if (artifactStatus === "processing") return "generating";
@@ -165,6 +178,17 @@ export function resolveSummaryState(input: {
   // there was nothing to summarise.
   if (artifactStatus === "ready") return "empty";
   if (insufficientData) return "empty";
+  // A summary is made OUT OF the transcript, and the worker returns before it ever reaches the
+  // model when the meeting produced no substantive speech — so for a meeting with no transcript
+  // nothing is coming, and no amount of waiting will change that. Saying "Generating summary…"
+  // there is a promise nothing in the system intends to keep: it was shown for the full
+  // fifteen-minute window and then silently became "no summary", which reads as a generator
+  // that failed rather than a meeting nobody spoke in.
+  //
+  // Deliberately below the artifact checks: a REGENERATE writes a `processing` artifact, and
+  // while one is running it is genuinely generating, empty transcript or not.
+  if (hasTranscript === false) return "empty";
+
   // No artifact at all. The finalizer runs after the room ends, so shortly after the end
   // "not here yet" is the truthful reading; long after, it genuinely never arrived.
   return recentlyEnded ? "generating" : "empty";

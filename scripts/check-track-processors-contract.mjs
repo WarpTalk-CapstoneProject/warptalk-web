@@ -105,7 +105,10 @@ assert.match(hook, /applyConstraints/);
 // 'wasm-unsafe-eval') left the microphone with NO suppression at all, making the toggle strictly
 // worse than off while the UI claimed browser suppression was still running.
 const krispAttach = hook.indexOf("setProcessor(krisp)");
-const standDownBrowser = hook.indexOf("setBrowserSuppression(false)");
+// Takes the capture track since the OverconstrainedError fix: with Krisp attached,
+// `localAudioTrack.mediaStreamTrack` is the processor's WebAudio output, which supports none
+// of these constraints. See check-krisp-capture-track-contract.mjs.
+const standDownBrowser = hook.indexOf("setBrowserSuppression(captureTrack, false)");
 assert.ok(krispAttach !== -1, "Krisp must still be attached");
 assert.ok(standDownBrowser !== -1, "the browser denoiser must be stood down explicitly");
 assert.ok(
@@ -129,7 +132,7 @@ assert.ok(
 // And the failure path must put the microphone back before anyone is told about it.
 assert.match(
   hook,
-  /catch \(error\) \{[\s\S]*?setBrowserSuppression\(true\)[\s\S]*?onNoiseSuppressionError\?\.\(error\)/,
+  /catch \(error\) \{[\s\S]*?setBrowserSuppression\(captureTrack, true\)[\s\S]*?onNoiseSuppressionError\?\.\(error\)/,
   "a failed Krisp must restore browser suppression BEFORE reporting, or the report is a lie",
 );
 for (const prejoinSurface of [joinPage, setupModal]) {

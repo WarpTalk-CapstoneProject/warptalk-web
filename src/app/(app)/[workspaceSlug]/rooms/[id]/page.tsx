@@ -293,6 +293,27 @@ export default function RoomInformationPage() {
     [transcriptSegments],
   );
 
+  /**
+   * Whether this meeting captured any transcript — `undefined` until that is actually known.
+   *
+   * The summary is made out of the transcript, and the AI worker returns before the model when
+   * the meeting produced no substantive speech. So a meeting with no transcript is not waiting
+   * on a summary; nothing is coming. Reported here rather than guessed at in the panel, because
+   * only this page knows whether the two queries have settled — and an empty list that is merely
+   * un-fetched must never be read as a meeting nobody spoke in.
+   */
+  const hasTranscript = useMemo(() => {
+    if (transcriptQuery.isSuccess && !transcriptQuery.data) return false;
+    if (!transcriptQuery.data?.id) return undefined;
+    if (!segmentsQuery.isSuccess) return undefined;
+    return transcriptEntryCount > 0;
+  }, [
+    transcriptQuery.isSuccess,
+    transcriptQuery.data,
+    segmentsQuery.isSuccess,
+    transcriptEntryCount,
+  ]);
+
   const jumpToTranscriptMoment = useCallback(
     (atMs: number) => {
       // Both, and the seek first: it is the part with nothing on screen to acknowledge it, so it
@@ -641,6 +662,7 @@ export default function RoomInformationPage() {
                 artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
                 segments={transcriptSegments}
+                hasTranscript={hasTranscript}
                 seek={seek}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
@@ -838,6 +860,7 @@ function MeetingRecordSection({
   transcriptCount,
   endedRecord,
   segments,
+  hasTranscript,
   seek,
   onRecordChanged,
   onJumpToMoment,
@@ -855,6 +878,13 @@ function MeetingRecordSection({
   artifactAccess?: string | null;
   transcript: React.ReactNode;
   transcriptCount: number;
+  /**
+   * Whether the meeting captured any transcript, once that is known — `undefined` while the
+   * queries are still settling. Threaded from the page rather than derived from `transcriptCount`
+   * here: a count of zero and a count not yet fetched are the same number, and only the page can
+   * tell them apart.
+   */
+  hasTranscript?: boolean;
   endedRecord: EndedRoomHistoryItem | null;
   /** The persisted segments, so the summary panel can tell the reader it is behind a correction. */
   segments: TranscriptSegmentDto[];
@@ -1062,6 +1092,7 @@ function MeetingRecordSection({
         <SummaryPanel
           room={endedRecord}
           segments={segments}
+          hasTranscript={hasTranscript}
           busyArtifactId={busyArtifactId}
           onDownload={downloadArtifact}
           // Checking a claim means leaving the summary, so the tab switches with it —
