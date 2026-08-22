@@ -22,6 +22,8 @@ export type SummaryAbsence =
   | "insufficient-data"
   /** The artifact is there and readable by somebody — just not by this viewer. */
   | "withheld"
+  /** Nobody spoke, so there was never anything to summarise. */
+  | "no-transcript"
   /** No summary artifact was ever written for this meeting. */
   | "absent";
 
@@ -35,6 +37,8 @@ export type SummaryAbsenceInput = {
   hasParsedSummary: boolean;
   /** The worker ran and said the transcript was too thin. */
   insufficientData?: boolean;
+  /** Whether the meeting captured any transcript, once that is known. `undefined` = not loaded. */
+  hasTranscript?: boolean;
 };
 
 export function describeSummaryAbsence(input: SummaryAbsenceInput): SummaryAbsence {
@@ -51,6 +55,11 @@ export function describeSummaryAbsence(input: SummaryAbsenceInput): SummaryAbsen
   // Either way, "this meeting produced no summary" is a claim we cannot support.
   if (input.hasSummaryArtifact && !input.hasParsedSummary) return "withheld";
 
+  // Below "withheld" on purpose: a meeting with no transcript can still have a summary artifact
+  // somebody else can read — a regeneration, or a summary written before a correction emptied
+  // the transcript — and "not shared with you" is the more specific of the two.
+  if (input.hasTranscript === false) return "no-transcript";
+
   return "absent";
 }
 
@@ -66,6 +75,10 @@ export function summaryAbsenceMessage(absence: SummaryAbsence): string {
       // Names the likely cause and who can change it, rather than the flat denial that sent
       // people looking for a broken generator.
       return "A summary was produced for this meeting, but it is not shared with you. The meeting host controls who can read it.";
+    case "no-transcript":
+      // Says which of the two things is missing. "No summary" alone sends the reader after a
+      // broken generator; the transcript being empty is the whole explanation.
+      return "No transcript was captured for this meeting, so there was nothing to summarise.";
     case "absent":
       return "This meeting ended without a summary artifact.";
   }
