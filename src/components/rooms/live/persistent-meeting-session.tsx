@@ -2331,9 +2331,14 @@ export function PersistentMeetingSession({
     // along and dropped it; binding it is what turns a spinner into a step, and it is also the
     // signal the panel's deadline is measured from — so a long tool-calling loop can no longer
     // look like a dead worker.
-    chatConnection.on("ChatAssistantToolCallStarted", (payload: { toolName?: string }) => {
-      useTranslationRoomStore.getState().noteAssistantActivity(payload?.toolName ?? null);
-    });
+    chatConnection.on(
+      "ChatAssistantToolCallStarted",
+      (payload: { toolName?: string; toolDetail?: string }) => {
+        useTranslationRoomStore
+          .getState()
+          .noteAssistantActivity(payload?.toolName ?? null, payload?.toolDetail ?? null);
+      },
+    );
 
     chatConnection.on("ChatAssistantResponsePending", () => {
       // A second, confirming trigger. The chat panel already sets this optimistically the

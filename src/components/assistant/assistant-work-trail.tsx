@@ -54,11 +54,12 @@ export function AssistantWorkTrail({
 
   if (running) {
     return (
-      <div className={cn("relative overflow-hidden rounded-lg py-1", className)}>
-        {/* The sweep. Purely decorative and behind the text, so it cannot make a step harder to
-            read — the point is peripheral movement that says "still going" without another
-            spinner, next to a list whose last row already has one. */}
-        <span aria-hidden className="assistant-sweep" />
+      <div className={cn("py-1", className)}>
+        {/* The sweep used to be a band travelling across this whole box — a moving highlight
+            behind every row at once, including the ones that had already finished, which said
+            "all of this is happening" about a list where one thing was. It lives in the text of
+            the RUNNING step now (see .assistant-step-shimmer), so the movement points at the
+            line it is a statement about. */}
         <StepList steps={steps} lumidotVariant={lumidotVariant} />
         {slow ? (
           <p className="mt-1 pl-4 text-[12px] text-ink-subtle">
@@ -99,27 +100,47 @@ function StepList({
 }) {
   return (
     <ol className="relative flex flex-col gap-1 pl-4 text-[12px]">
-      {steps.map((step) => (
-        <li key={step.key} className="flex items-center gap-2">
-          {step.done || finished ? (
-            // A dot, not a tick. The tick read as a verdict on the answer; this is only a step
-            // that has gone past.
-            <span aria-hidden className="size-[5px] shrink-0 rounded-full bg-hairline-strong" />
-          ) : (
-            // The same Lumidot that means "thinking" one line up. A second spinner shape for the
-            // same fact — WarpBot is working — reads as a different kind of waiting, and there is
-            // only one kind here.
-            <span className="flex size-[11px] shrink-0 origin-center scale-[0.34] items-center justify-center">
-              <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+      {steps.map((step) => {
+        const over = step.done || finished;
+        return (
+          <li key={step.key} className="flex items-center gap-2">
+            {over ? (
+              // A dot, not a tick. The tick read as a verdict on the answer; this is only a step
+              // that has gone past.
+              <span aria-hidden className="size-[5px] shrink-0 rounded-full bg-hairline-strong" />
+            ) : (
+              // The same Lumidot that means "thinking" one line up. A second spinner shape for the
+              // same fact — WarpBot is working — reads as a different kind of waiting, and there is
+              // only one kind here.
+              <span className="flex size-[11px] shrink-0 origin-center scale-[0.34] items-center justify-center">
+                <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+              </span>
+            )}
+            {/* min-w-0 + truncate on the row rather than the label: the target is the half that
+                can be long, and a step that wraps to three lines pushes the answer being written
+                off the widget. */}
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span
+                className={cn(
+                  "shrink-0",
+                  over ? "text-ink-subtle" : "text-ink-muted assistant-step-shimmer",
+                )}
+              >
+                {over ? assistantToolDoneLabel(step.tool) : assistantToolLabel(step.tool)}
+              </span>
+              {/* The target, in its own weight. Kept visually subordinate to the label because
+                  the label is what is happening and this is only what it is happening to —
+                  and because it is the part that is sometimes absent, which must not read as
+                  something missing. */}
+              {step.detail ? (
+                <span className="truncate text-ink-subtle" title={step.detail}>
+                  · {step.detail}
+                </span>
+              ) : null}
             </span>
-          )}
-          <span className={step.done || finished ? "text-ink-subtle" : "text-ink-muted"}>
-            {step.done || finished
-              ? assistantToolDoneLabel(step.tool)
-              : assistantToolLabel(step.tool)}
-          </span>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ol>
   );
 }
