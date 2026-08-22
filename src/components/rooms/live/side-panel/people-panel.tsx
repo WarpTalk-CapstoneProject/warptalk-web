@@ -37,8 +37,7 @@ import type {
   TranslationRoomParticipantDto,
 } from "@/types/translationRoom";
 import { useParticipants } from "@livekit/components-react";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import {
   PRESENCE_LABELS,
   participantPresence,
@@ -73,8 +72,6 @@ export function PeoplePanel({
   const currentUserId = useAuthStore((state) => state.user?.id);
   const lkParticipants = useParticipants();
   const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   // WT-308: "who is gone" is the same question the badge answers, so it is asked the same
   // way. This used to be a second, private status list; keeping two meant they could
   // disagree, and a roster that hides a status the badge still renders is exactly how the
@@ -169,7 +166,7 @@ export function PeoplePanel({
       <div className="space-y-1">
         {participantsLoading ? (
           <div className="flex items-center gap-2">
-            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <LumidotSpinner />
             <p className="text-[13px] text-ink-subtle">
               Loading participants...
             </p>
