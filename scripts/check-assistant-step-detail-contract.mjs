@@ -48,8 +48,54 @@ assert.ok(
 );
 assert.match(
   trail,
-  /over \? "text-ink-subtle" : "text-ink-muted assistant-step-shimmer"/,
+  /over \? "text-ink-subtle" : "text-ink assistant-step-shimmer"/,
   "Only the RUNNING step may shimmer. A finished step that keeps moving says it is still going.",
+);
+
+// THE POSITION RANGE. With background-size: 200%, a position outside 0..100% slides the image
+// clear of the element; background-repeat: no-repeat then leaves the glyphs with no paint, and
+// under -webkit-text-fill-color: transparent the running step is INVISIBLE. The first version
+// animated 180% -> -80% and lost the first characters of every title for most of each cycle.
+const shimmerBlock = css.slice(
+  css.indexOf("@keyframes assistant-step-shimmer"),
+  css.indexOf("}", css.indexOf(".assistant-step-shimmer {")),
+);
+for (const [, position] of shimmerBlock.matchAll(/background-position:\s*(-?\d+)%/g)) {
+  const value = Number(position);
+  assert.ok(
+    value >= 0 && value <= 100,
+    `background-position: ${value}% slides the gradient off the element, and a no-repeat`
+      + " background under transparent text means the step's glyphs disappear. Keep every"
+      + " keyframe within 0..100%.",
+  );
+}
+assert.match(
+  shimmerBlock,
+  /background-size:\s*200% 100%/,
+  "The 0..100% position range above is only safe at background-size: 200%.",
+);
+
+// THE FADE EDGE ONLY EXISTS WHEN THERE IS SOMETHING BELOW.
+// It rendered unconditionally, so at the bottom — where a reader spends most of their time — a
+// soft band sat over the last lines of the answer, and the newest message was the hardest to
+// read. "There is more below" is false at the bottom.
+const scrollEdge = read("src/components/ui/scroll-to-latest.tsx");
+assert.match(
+  scrollEdge,
+  /visible = true,/,
+  "ScrollFadeEdge must take a visible flag.",
+);
+assert.match(
+  scrollEdge,
+  /visible \? "opacity-100 backdrop-blur-\[3px\]" : "opacity-0"/,
+  "The blur must be DROPPED when hidden, not merely faded: backdrop-filter on a transparent"
+    + " element still repaints the strip under it on every scroll frame.",
+);
+assert.match(
+  read("src/components/layout/global-chatbot.tsx"),
+  /<ScrollFadeEdge visible=\{isAway\} \/>/,
+  "The widget must pass isAway to the fade edge — the component gaining the flag while the one"
+    + " caller keeps the default is the same bug with an option added.",
 );
 
 // 2. THE TARGET IS CARRIED, NOT INVENTED.
@@ -59,12 +105,12 @@ assert.match(
   /detail\?: string/,
   "AssistantStep must carry the target the worker computed.",
 );
-// The CONDITIONAL, not the identifier: a `title={step.detail}` left on a row that no longer
+// The CONDITIONAL, not the identifier: a `title={detail}` left on a row that no longer
 // renders it still contains the word, and the first version of this check passed against
 // exactly that.
 assert.match(
   trail,
-  /\{step\.detail \? \(/,
+  /\{detail \? \(/,
   "The trail must render the target. A field carried across four processes and then not drawn is"
     + " the exact shape of every dropped-field bug this chain has already had.",
 );
@@ -84,7 +130,7 @@ const readIfPresent = (abs) => (fs.existsSync(abs) ? fs.readFileSync(abs, "utf8"
 
 // Skipped rather than failed when the sibling checkouts are absent — CI runs this repo alone,
 // and a check that cannot see the other side must not invent a verdict about it.
-const hops = [
+const toolHops = [
   [path.join(ai, "shared/schemas.py"), "tool_detail", "the worker's result schema"],
   [
     path.join(ai, "ai_assistant_worker/chat_worker.py"),
@@ -120,7 +166,7 @@ const hops = [
 ];
 
 let checkedHops = 0;
-for (const [file, needle, what] of hops) {
+for (const [file, needle, what] of [...toolHops, ...[]]) {
   const text = readIfPresent(file);
   if (text === null) continue;
   checkedHops += 1;
@@ -146,6 +192,61 @@ assert.ok(
     + " that had the tool name dropped for months, so it is the one to pin.",
 );
 
+// 3b. THE MODEL'S OWN ACCOUNT OF THE STEP.
+// A tool step says WHAT ran and never why, and between two calls there is no tool to name at
+// all — the longest silent stretch of a slow turn. These hops carry the sentence that fills it.
+const reasoningHops = [
+  [path.join(ai, "shared/openai_options.py"), "reasoning_summary_options", "the model options"],
+  [
+    path.join(ai, "ai_assistant_worker/chat_worker.py"),
+    "response.reasoning_summary_text.delta",
+    "the worker's stream handler",
+  ],
+  [
+    path.join(backend, "assistant/src/WarpTalk.AssistantService.API/Services/AssistantNotifier.cs"),
+    "AssistantReasoning",
+    "the assistant SignalR payload",
+  ],
+  [
+    path.join(backend, "meeting/src/WarpTalk.MeetingService.API/Services/MeetingChatNotifier.cs"),
+    "ChatAssistantReasoning",
+    "the meeting-chat SignalR payload",
+  ],
+];
+for (const [file, needle, what] of reasoningHops) {
+  const text = readIfPresent(file);
+  if (text === null) continue;
+  checkedHops += 1;
+  assert.ok(
+    text.includes(needle),
+    `${what} does not carry the model's reasoning (${needle} missing). Without it the trail is`
+      + " back to naming tools and saying nothing between them.",
+  );
+}
+assert.ok(
+  read("src/components/layout/global-chatbot.tsx").includes('"AssistantReasoning"'),
+  "The widget must subscribe to AssistantReasoning.",
+);
+assert.ok(
+  read("src/components/rooms/live/persistent-meeting-session.tsx").includes(
+    '"ChatAssistantReasoning"',
+  ),
+  "The in-meeting chat must subscribe to ChatAssistantReasoning.",
+);
+assert.match(
+  labels,
+  /export function describeStep/,
+  "describeStep must decide a step's shape in ONE place — the branch picks the title, whether"
+    + " there is an inline target and whether there is a paragraph, and deciding that per"
+    + " component is how two surfaces draw one event differently.",
+);
+assert.match(
+  trail,
+  /\{body \? \(/,
+  "The trail must render the model's paragraph. Carried across four processes and not drawn is"
+    + " the exact shape of every dropped-field bug this chain has had.",
+);
+
 // 4. READING AND WRITING ARE STEPS.
 for (const marker of ["THINKING_STEP", "WRITING_STEP"]) {
   assert.ok(
@@ -162,5 +263,5 @@ assert.ok(
 );
 
 console.log(
-  `Assistant step detail contract: PASS (${checkedHops}/${hops.length} cross-repo hops checked)`,
+  `Assistant step detail contract: PASS (${checkedHops} cross-repo hops checked)`,
 );

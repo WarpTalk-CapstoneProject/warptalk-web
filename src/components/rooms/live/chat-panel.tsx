@@ -768,7 +768,6 @@ export function ChatPanel({
                 ? assistantFinishedAt - assistantStartedAt
                 : null
             }
-            lumidotVariant={lumidotVariant}
             className="px-1"
           />
         ) : null}

@@ -33,6 +33,7 @@ import {
   assistantToolDoneLabel,
   assistantToolLabel,
   withStepDetail,
+  REASONING_STEP,
   THINKING_STEP,
   WRITING_STEP,
   type AssistantStep,
@@ -661,6 +662,29 @@ export function GlobalChatbot() {
             tool: payload.toolName,
             done: false,
             detail: payload.toolDetail || undefined,
+          },
+        ]);
+        armResponseTimeout();
+      },
+    );
+
+    connection.on(
+      "AssistantReasoning",
+      (payload: { conversationId: string; title?: string; body?: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        const title = payload.title?.trim() ?? "";
+        const body = payload.body?.trim() ?? "";
+        if (!title && !body) return;
+        setIsAiTyping(true);
+        setSteps((current) => [
+          // The model has moved on from whatever it was doing when it wrote this.
+          ...current.map((step) => ({ ...step, done: true })),
+          {
+            key: `${REASONING_STEP}-${current.length}`,
+            tool: REASONING_STEP,
+            done: false,
+            detail: title || undefined,
+            body: body || undefined,
           },
         ]);
         armResponseTimeout();
@@ -1310,7 +1334,6 @@ export function GlobalChatbot() {
                               steps={msg.steps ?? []}
                               running={false}
                               durationMs={msg.durationMs}
-                              lumidotVariant={lumidotVariant}
                             />
                           </>
                         ) : (
@@ -1325,7 +1348,6 @@ export function GlobalChatbot() {
                       steps={steps}
                       running
                       slow={isSlow}
-                      lumidotVariant={lumidotVariant}
                       className="ml-4 mr-2 flex-1"
                     />
                   </div>
@@ -1379,7 +1401,11 @@ export function GlobalChatbot() {
               {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
                   the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
                   panels end against the page and read as continuing on their own. */}
-              <ScrollFadeEdge />
+              {/* Only while the reader is up the page. It used to render unconditionally, so
+                  at the bottom — where every reader spends most of their time — a soft band sat
+                  over the last two lines of the answer they were reading. The edge exists to say
+                  "there is more below"; at the bottom there is not. */}
+              <ScrollFadeEdge visible={isAway} />
               <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
               </div>
 

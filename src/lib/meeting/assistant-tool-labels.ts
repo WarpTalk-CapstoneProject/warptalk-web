@@ -33,9 +33,22 @@
 export const THINKING_STEP = "__thinking__";
 export const WRITING_STEP = "__writing__";
 
+/**
+ * The model narrating its own step, in its own words.
+ *
+ * Not a tool and deliberately not labelled like one: a tool step says WHAT ran and never why,
+ * and between two calls — where the model is deciding what to do next — there is no tool to name
+ * at all. That gap is the longest silent stretch of a slow turn, and this is the only thing that
+ * can fill it honestly, because the sentence comes from the model rather than from a label
+ * somebody wrote in advance about a tool.
+ */
+export const REASONING_STEP = "__reasoning__";
+
 export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   [THINKING_STEP]: "Reading your question",
   [WRITING_STEP]: "Writing the answer",
+  // Only ever shown when the model produced no heading of its own — see describeStep.
+  [REASONING_STEP]: "Thinking it through",
   search_workspace_members: "Searching workspace members",
   search_terminology: "Searching terminology",
   list_recent_meetings: "Looking up recent meetings",
@@ -70,6 +83,7 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
 export const ASSISTANT_TOOL_DONE_LABELS: Record<string, string> = {
   [THINKING_STEP]: "Read your question",
   [WRITING_STEP]: "Wrote the answer",
+  [REASONING_STEP]: "Thought it through",
   search_workspace_members: "Searched workspace members",
   search_terminology: "Searched terminology",
   list_recent_meetings: "Looked up recent meetings",
@@ -113,7 +127,51 @@ export type AssistantStep = {
    * cannot know. Absent whenever the call has no subject worth naming, which is normal.
    */
   detail?: string;
+  /**
+   * The paragraph under the title — only a reasoning step has one.
+   *
+   * Kept apart from `detail` because the two are drawn differently and mean different things: a
+   * detail is a target that sits inline after the label, a body is a sentence that gets its own
+   * indented line. Merging them would put a paragraph where a filename goes.
+   */
+  body?: string;
 };
+
+/** One step as the trail draws it: a title, an optional inline target, an optional paragraph. */
+export type DescribedStep = {
+  title: string;
+  detail?: string;
+  body?: string;
+};
+
+/**
+ * What to draw for a step, decided once.
+ *
+ * Two surfaces render the same trail, and "is this a reasoning step or a tool step" decides
+ * three things at once — which text is the title, whether there is an inline target, whether
+ * there is a paragraph. Deciding that inside each component is how the widget and the
+ * in-meeting panel end up drawing the same event differently.
+ */
+export function describeStep(step: AssistantStep, finished = false): DescribedStep {
+  const over = step.done || finished;
+
+  if (step.tool === REASONING_STEP) {
+    // The model's own heading is the title whenever it wrote one. The fallback is deliberately
+    // generic: promoting the first words of the paragraph would present the model as having
+    // structured something it did not.
+    return {
+      title:
+        step.detail?.trim()
+        || (over ? assistantToolDoneLabel(REASONING_STEP) : assistantToolLabel(REASONING_STEP)),
+      body: step.body?.trim() || undefined,
+    };
+  }
+
+  return {
+    title: over ? assistantToolDoneLabel(step.tool) : assistantToolLabel(step.tool),
+    detail: step.detail?.trim() || undefined,
+  };
+}
 
 export function assistantToolDoneLabel(toolName: string | null | undefined): string {
   if (!toolName) return "Looked that up";
