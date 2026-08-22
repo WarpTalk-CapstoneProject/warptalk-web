@@ -145,6 +145,7 @@ export function ChatPanel({
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
   const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
+  const beginAssistantTurn = useTranslationRoomStore((state) => state.beginAssistantTurn);
   const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
@@ -479,7 +480,11 @@ export function ChatPanel({
       // answer may already have arrived and would be counted as part of the baseline — which
       // is a spinner that never stops.
       answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
-      setAssistantState("thinking");
+      // Opens the trail on "reading your question", exactly as the widget does. This used to be
+      // setAssistantState("thinking"), which moved the state without starting a trail — and
+      // because every later signal then saw a non-idle state, nothing ever seeded one. The
+      // whole stretch before the first tool call showed a bare spinner instead of a step.
+      beginAssistantTurn();
     }
 
     sendMessageAPI(
