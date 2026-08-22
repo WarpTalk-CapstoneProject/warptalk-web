@@ -76,6 +76,8 @@
 }
 
 :root {
+  /* The loading mark's ink — see .lumidot-mark below. */
+  --lumidot-ink: #000000;
   --expo-out: linear(
     0 0%,
     0.1684 2.66%,
@@ -149,6 +151,7 @@
 }
 
 .dark {
+  --lumidot-ink: #ffffff;
   /* Linear Dark Mode */
   --background: #010102;
   --foreground: #f7f8f8;
@@ -1735,4 +1738,24 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--hairline-tertiary);
+}
+
+/* ── The one loading mark ───────────────────────────────────────────────────
+ *
+ * Lumidot paints its dots with INLINE styles from a fixed palette, so the colour used to be
+ * chosen in JS: `resolvedTheme === "dark" ? "white" : "black"`, copy-pasted into five
+ * components. That is a hydration mismatch by construction — next-themes cannot know the theme
+ * on the server, so every page carrying a spinner logged one, and React discards the mismatched
+ * subtree rather than patching it.
+ *
+ * Doing it in CSS removes the branch entirely: the component always renders the same markup, and
+ * the theme decides the colour the way it decides every other colour here. `!important` is
+ * required and is the point — it is beating an inline style, which is the only thing that can
+ * beat one.
+ */
+.lumidot-mark [data-lumidot-dot] {
+  background-color: var(--lumidot-ink) !important;
+  box-shadow:
+    0 0 1.6px var(--lumidot-ink),
+    0 0 4px color-mix(in oklab, var(--lumidot-ink) 38%, transparent) !important;
 }
