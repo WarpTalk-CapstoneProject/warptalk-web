@@ -1,14 +1,9 @@
 "use client";
 
 import { ChevronDown } from "lucide-react";
-import { Lumidot } from "lumidot";
 import { useState } from "react";
 
-import {
-  assistantToolDoneLabel,
-  assistantToolLabel,
-  type AssistantStep,
-} from "@/lib/meeting/assistant-tool-labels";
+import { describeStep, type AssistantStep } from "@/lib/meeting/assistant-tool-labels";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,10 +12,20 @@ import { cn } from "@/lib/utils";
  * TWO STATES, ONE LIST
  *   While the turn is open the steps are the point: they are the difference between "something is
  *   happening" and "this might be broken", and they are why a long answer can be waited out
- *   patiently. Once the answer is on screen they stop being progress and become provenance — worth
- *   having, not worth a column of text above every reply.
+ *   patiently. Once the answer is on screen they stop being progress and become provenance —
+ *   worth having, not worth a column of text above every reply.
  *
  *   So the same list is drawn twice: open while it runs, and folded into one line afterwards.
+ *
+ * THE SHAPE OF A STEP
+ *   A title, and under it — when the model wrote one — the sentence explaining it. That second
+ *   line is the whole difference between a progress indicator and an account of the work: a tool
+ *   label says a search happened, the sentence says what the model was trying to establish.
+ *
+ *   Only the RUNNING title moves. It carries a light that travels through the glyphs
+ *   (.assistant-step-shimmer), which is the same thing every agent surface worth copying does,
+ *   and it replaces a band that used to sweep the entire box — including rows that had already
+ *   finished, about which movement claims something untrue.
  *
  * WHAT THIS REPLACED
  *   The trail was DELETED on completion, under a comment arguing that a finished turn showing its
@@ -34,18 +39,15 @@ export function AssistantWorkTrail({
   running,
   durationMs,
   slow = false,
-  lumidotVariant,
   className,
 }: {
   steps: readonly AssistantStep[];
-  /** The turn is still open — draw the list, and the sweep across it. */
+  /** The turn is still open — draw the list, and let the running title shimmer. */
   running: boolean;
   /** How long the turn took. Set once it is over; drives the summary line. */
   durationMs?: number | null;
   /** Past the deadline, and still going. */
   slow?: boolean;
-  /** Passed through so the marker here is the same Lumidot the surface uses elsewhere. */
-  lumidotVariant?: React.ComponentProps<typeof Lumidot>["variant"];
   className?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -55,14 +57,9 @@ export function AssistantWorkTrail({
   if (running) {
     return (
       <div className={cn("py-1", className)}>
-        {/* The sweep used to be a band travelling across this whole box — a moving highlight
-            behind every row at once, including the ones that had already finished, which said
-            "all of this is happening" about a list where one thing was. It lives in the text of
-            the RUNNING step now (see .assistant-step-shimmer), so the movement points at the
-            line it is a statement about. */}
-        <StepList steps={steps} lumidotVariant={lumidotVariant} />
+        <StepList steps={steps} />
         {slow ? (
-          <p className="mt-1 pl-4 text-[12px] text-ink-subtle">
+          <p className="mt-1.5 pl-[15px] text-[12px] text-ink-subtle">
             Still working — this one is taking a while.
           </p>
         ) : null}
@@ -84,60 +81,65 @@ export function AssistantWorkTrail({
           aria-hidden
         />
       </button>
-      {isOpen ? <StepList steps={steps} lumidotVariant={lumidotVariant} finished /> : null}
+      {isOpen ? <StepList steps={steps} finished /> : null}
     </div>
   );
 }
 
 function StepList({
   steps,
-  lumidotVariant,
   finished = false,
 }: {
   steps: readonly AssistantStep[];
-  lumidotVariant?: React.ComponentProps<typeof Lumidot>["variant"];
   finished?: boolean;
 }) {
   return (
-    <ol className="relative flex flex-col gap-1 pl-4 text-[12px]">
+    <ol className="flex flex-col gap-2 text-[12px]">
       {steps.map((step) => {
         const over = step.done || finished;
+        const { title, detail, body } = describeStep(step, finished);
+
         return (
-          <li key={step.key} className="flex items-center gap-2">
-            {over ? (
-              // A dot, not a tick. The tick read as a verdict on the answer; this is only a step
-              // that has gone past.
-              <span aria-hidden className="size-[5px] shrink-0 rounded-full bg-hairline-strong" />
-            ) : (
-              // The same Lumidot that means "thinking" one line up. A second spinner shape for the
-              // same fact — WarpBot is working — reads as a different kind of waiting, and there is
-              // only one kind here.
-              <span className="flex size-[11px] shrink-0 origin-center scale-[0.34] items-center justify-center">
-                <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
-              </span>
-            )}
-            {/* min-w-0 + truncate on the row rather than the label: the target is the half that
-                can be long, and a step that wraps to three lines pushes the answer being written
-                off the widget. */}
-            <span className="flex min-w-0 items-baseline gap-1.5">
+          <li key={step.key} className="flex flex-col gap-1">
+            <div className="flex min-w-0 items-center gap-2">
+              {/* One mark, two states, same footprint — so a step does not shift sideways by a
+                  pixel at the moment it finishes, which reads as the list twitching. */}
               <span
+                aria-hidden
                 className={cn(
-                  "shrink-0",
-                  over ? "text-ink-subtle" : "text-ink-muted assistant-step-shimmer",
+                  "size-[6px] shrink-0 rounded-full transition-colors",
+                  over ? "bg-hairline-strong" : "assistant-step-pulse bg-primary",
                 )}
-              >
-                {over ? assistantToolDoneLabel(step.tool) : assistantToolLabel(step.tool)}
-              </span>
-              {/* The target, in its own weight. Kept visually subordinate to the label because
-                  the label is what is happening and this is only what it is happening to —
-                  and because it is the part that is sometimes absent, which must not read as
-                  something missing. */}
-              {step.detail ? (
-                <span className="truncate text-ink-subtle" title={step.detail}>
-                  · {step.detail}
+              />
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <span
+                  className={cn(
+                    "shrink-0 font-medium",
+                    over ? "text-ink-subtle" : "text-ink assistant-step-shimmer",
+                  )}
+                >
+                  {title}
                 </span>
-              ) : null}
-            </span>
+                {/* The target, subordinate to the title: the title is what is happening, this is
+                    only what it is happening to — and it is the part that is sometimes absent,
+                    which must not read as something missing. */}
+                {detail ? (
+                  <span className="truncate text-ink-subtle" title={detail}>
+                    · {detail}
+                  </span>
+                ) : null}
+              </span>
+            </div>
+
+            {/* The model's own sentence, indented under its heading behind a rule — the shape a
+                quotation takes, because that is what it is. Never shimmers: the movement marks
+                the step that is running, and repeating it on the body would make a paragraph
+                harder to read for no added meaning. */}
+            {body ? (
+              <p className="ml-[2px] border-l border-hairline pl-3 text-[12px] leading-relaxed text-ink-subtle">
+                {body}
+              </p>
+            ) : null}
           </li>
         );
       })}

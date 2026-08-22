@@ -125,6 +125,15 @@
   --hairline-tertiary: #9ca3af;
   --radius: 8px;
 
+  /* The running step's travelling light — see .assistant-step-shimmer.
+     Two tokens rather than one gradient, because the two themes need opposite treatments of the
+     same idea: the light has to be BRIGHTER than the text it crosses, and on a white card a
+     literally white highlight would erase the letters it is meant to draw attention to. Here the
+     base is muted and the glow is a pale violet-white — light enough to read as a flash, dark
+     enough to stay a word. */
+  --step-shimmer-base: #6b7280;
+  --step-shimmer-glow: #b9b6ee;
+
   /* Speaker colours — see src/lib/transcript/speaker-color.ts.
      One meeting can hold a dozen voices and a transcript prints them as a wall of identical
      rows; a person following a long stretch of talking had only a repeated name to go on. These
@@ -167,6 +176,10 @@
   --surface-4: #191a1b;
   --hairline: #23252a;
   --hairline-strong: #34343a;
+
+  /* On a dark card the light can be what it actually is: white, with the accent in it. */
+  --step-shimmer-base: #8a8f98;
+  --step-shimmer-glow: #f2f0ff;
   --hairline-tertiary: #3e3e44;
   --radius: 8px;
 
@@ -186,51 +199,98 @@
    while it passes is worse than no movement at all.
    Honours prefers-reduced-motion — a repeating horizontal sweep is exactly the kind of thing that
    setting exists for, and the list still says what is happening without it. */
-/* The shimmer that says a step is the one currently running.
+/* The light that says a step is the one currently running.
  *
- * IT LIVES IN THE TEXT, NOT BEHIND THE LIST.
- *   This was a band travelling across the whole trail box: a moving highlight behind every row
- *   at once, finished ones included, claiming "all of this is happening" about a list where
- *   exactly one thing was. Clipped to the glyphs of the running step, the movement is a
- *   statement about the line it runs through — which is the only line it was ever true of.
+ * IT TRAVELS THROUGH THE GLYPHS, NOT BEHIND THE LIST.
+ *   This was a band crossing the whole trail box: a moving highlight behind every row at once,
+ *   finished ones included, claiming "all of this is happening" about a list where exactly one
+ *   thing was. Clipped to the text of the running step, the movement is a statement about the
+ *   line it runs through — the only line it was ever true of.
  *
  * WHY THE BASE COLOUR IS A TOKEN AND NOT currentColor.
  *   background-clip: text needs the text itself transparent, and currentColor resolves to
  *   `color` — which by then IS transparent. A gradient built on currentColor therefore paints
- *   nothing at all, and the step silently disappears. The base is the same --color-ink-muted the
- *   row would otherwise use, so a browser that ignores the clip still shows an ordinary step.
+ *   nothing at all and the step vanishes. The base is an explicit token, so a browser that
+ *   ignores the clip still shows an ordinary step.
+ *
+ * THE POSITION RANGE IS 100%..0% AND NOTHING OUTSIDE IT.
+ *   With background-size: 200%, a percentage position maps to an offset of
+ *   (elementWidth - imageWidth) x percentage = -W x percentage. Inside 0..100% the image
+ *   always covers the element; a percentage OUTSIDE that range slides it clear of the box, and
+ *   with background-repeat: no-repeat the glyphs then have no paint at all — which, under
+ *   -webkit-text-fill-color: transparent, means the word is INVISIBLE.
+ *
+ *   The first version of this used 180% -> -80% and did exactly that: the running step lost its
+ *   first characters for most of every cycle. Caught by looking at it in dev/agent-steps-preview,
+ *   which is why that page exists.
  */
 @keyframes assistant-step-shimmer {
   from {
-    background-position: 140% 0;
+    background-position: 100% 0;
   }
   to {
-    background-position: -40% 0;
+    background-position: 0% 0;
   }
 }
 
 .assistant-step-shimmer {
+  /* A WHITE light with the accent in it, crossing the word left to right.
+   *
+   * Two earlier passes got this wrong in opposite directions. The first put a near-pure
+   * --primary stop between two hard ink stops, which crossed a word as a violet BAR with
+   * visible edges — a highlighter, not light. The second softened it so far toward the ink that
+   * there was nothing to see. What reads as light is a bright core with a short falloff, over a
+   * base dimmer than the core: the word looks lit as the band passes, and the tint says which
+   * product is doing the lighting.
+   */
   background-image: linear-gradient(
-    100deg,
-    var(--color-ink-muted) 0%,
-    var(--color-ink-muted) 40%,
-    color-mix(in oklab, var(--primary) 85%, var(--color-ink-muted)) 50%,
-    var(--color-ink-muted) 60%,
-    var(--color-ink-muted) 100%
+    95deg,
+    var(--step-shimmer-base) 0%,
+    var(--step-shimmer-base) 38%,
+    color-mix(in oklab, var(--step-shimmer-glow) 55%, var(--step-shimmer-base)) 45%,
+    var(--step-shimmer-glow) 50%,
+    color-mix(in oklab, var(--step-shimmer-glow) 55%, var(--step-shimmer-base)) 55%,
+    var(--step-shimmer-base) 62%,
+    var(--step-shimmer-base) 100%
   );
-  background-size: 220% 100%;
+  background-size: 200% 100%;
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: assistant-step-shimmer 1.7s linear infinite;
+  /* Linear rather than eased: an eased sweep slows in the middle of the word, which reads as
+   * the animation snagging. */
+  animation: assistant-step-shimmer 1.9s linear infinite;
+}
+
+/* The running step's mark. Breathes rather than spins: a spinner beside a shimmering title is
+ * two different animations saying the same thing, and the eye reads the mismatch as two separate
+ * events. */
+@keyframes assistant-step-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+.assistant-step-pulse {
+  animation: assistant-step-pulse 1.4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .assistant-step-shimmer {
     animation: none;
     background-image: none;
-    -webkit-text-fill-color: var(--color-ink-muted);
+    -webkit-text-fill-color: var(--step-shimmer-base);
+  }
+
+  .assistant-step-pulse {
+    animation: none;
   }
 }
 
