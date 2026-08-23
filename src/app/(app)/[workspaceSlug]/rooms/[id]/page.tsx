@@ -113,7 +113,7 @@ import {
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
-import { getErrorMessage } from "@/lib/api/errors";
+import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { getLanguageName } from "@/lib/language/languages";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
@@ -182,6 +182,12 @@ export default function RoomInformationPage() {
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
+  // WT-516: the server's own reason, not just "it failed". `FORBIDDEN` here means the record
+  // exists and this viewer may not read it — which the Transcript tab used to render as "No
+  // transcript was captured for this meeting".
+  const transcriptErrorCode = apiErrorCode(
+    transcriptQuery.error ?? segmentsQuery.error,
+  );
   // What the meeting was translated into while it ran. Read here rather than inside the
   // transcript panel so it sits above the `if (!room)` return with the other transcript
   // reads — see the note on `activeRoomId` below for why the position is not a style choice.
@@ -685,6 +691,15 @@ export default function RoomInformationPage() {
                     onCopy={handleCopy}
                     transcriptId={transcriptQuery.data?.id}
                     transcriptStatus={transcriptQuery.data?.status}
+                    // WT-516: the panel cannot tell "refused" from "empty" without this. The
+                    // by-room lookup is where a non-participant is turned away (FORBIDDEN), and
+                    // it is also the query whose failure leaves `transcriptId` undefined — so
+                    // the segments query never runs and the count is zero for a reason that has
+                    // nothing to do with the meeting.
+                    transcriptErrorCode={transcriptErrorCode}
+                    transcriptLoading={
+                      transcriptQuery.isLoading || segmentsQuery.isLoading
+                    }
                     canEdit={isHost}
                     onSegmentsChanged={() => void segmentsQuery.refetch()}
                     highlightedSegmentId={highlightedSegmentId}

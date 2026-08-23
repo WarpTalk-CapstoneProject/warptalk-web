@@ -4,6 +4,8 @@ interface ApiErrorBody {
   error?: string;
   message?: string;
   Message?: string;
+  /** The API's own reason: "FORBIDDEN", "NOT_FOUND", "INVALID_STATE", … */
+  code?: string;
 }
 
 /**
@@ -70,6 +72,31 @@ function transportMessage(error: AxiosError): string | undefined {
  * names an internal number, suggests no action, and is indistinguishable from the product being
  * broken. Nothing a person reads should ever be an axios string.
  */
+/**
+ * The server's own reason for a failure, or the HTTP status when it gave none.
+ *
+ * A caller that needs to BEHAVE differently per failure needs this rather than the message: a
+ * sentence is for a person, and matching on one is how a copy edit silently changes control
+ * flow. `FORBIDDEN` is the case this was added for — the transcript panel rendered "you may not
+ * read this" as "this does not exist" because a refusal was indistinguishable from any other
+ * empty result (WT-516).
+ *
+ * Returns undefined when the value is not a failed request at all, so an absent code and a
+ * successful call are the same thing to the caller.
+ */
+export function apiErrorCode(error: unknown): string | number | undefined {
+  if (!error) return undefined;
+  if (!axios.isAxiosError(error)) return undefined;
+
+  const body = error.response?.data as ApiErrorBody | undefined;
+  const code = typeof body?.code === "string" ? body.code.trim() : "";
+  if (code.length > 0) return code;
+
+  // The status is a weaker answer than the body's code, and a better one than nothing: a
+  // bodyless 403 from a proxy still means refused.
+  return error.response?.status;
+}
+
 export function getErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError<ApiErrorBody>(error)) {
     const body = error.response?.data;
