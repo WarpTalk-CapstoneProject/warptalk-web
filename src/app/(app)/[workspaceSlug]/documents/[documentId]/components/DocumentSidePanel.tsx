@@ -27,6 +27,7 @@ import { Check, Lock, Plus, X } from "@phosphor-icons/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { documentActorName } from "@/lib/documents/document-actor";
 
 interface WorkspaceMemberItem {
   userId: string;
@@ -270,8 +271,10 @@ export function DocumentSidePanel({
   blockUser: (userId: string, userName: string) => Promise<void>;
   removePolicy: (policyId: string) => Promise<void>;
 }) {
-  const uploaderName =
-    membersList.find((member) => member.userId === doc.uploadedBy)?.fullName ?? "Uploader";
+  // WT-551: null when there is nobody to name — an uploader who left the workspace, or one
+  // past the page of members this panel fetched. It used to fall back to the literal word
+  // "Uploader", which this row renders as if it were somebody's name.
+  const uploaderName = documentActorName(membersList, doc.uploadedBy);
 
   const status = doc.status?.toLowerCase() ?? "";
   const allowed = policiesList.filter((p) => p.subjectType === "User" && p.effect === "ALLOW");
@@ -320,7 +323,7 @@ export function DocumentSidePanel({
               label="Ingestion"
               value={<span className="capitalize">{doc.ingestionStatus.toLowerCase()}</span>}
             />
-            <Row label="Uploaded by" value={uploaderName} />
+            <Row label="Uploaded by" value={uploaderName ?? "—"} />
             <Row
               label="Uploaded"
               value={new Date(doc.createdAt).toLocaleDateString()}
