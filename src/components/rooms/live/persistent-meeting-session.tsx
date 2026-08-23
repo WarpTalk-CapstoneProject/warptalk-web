@@ -65,7 +65,10 @@ import {
 import { liveMeetingPath, roomDetailPath } from "@/lib/workspace/workspace-routes";
 import { bottomChromeInset, MIN_DOCK_SIZE } from "@/lib/meeting/mini-dock-position";
 import { mergeParticipants } from "@/lib/meeting/merge-participants";
-import { buildParticipantIdentities } from "@/lib/meeting/participant-identity";
+import {
+  MEETING_MEMBER_PAGE_SIZE,
+  buildParticipantIdentities,
+} from "@/lib/meeting/participant-identity";
 import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identity-context";
 import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
@@ -184,7 +187,6 @@ const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
 const EMPTY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
 
 /** One page big enough for any meeting the plans allow, so the roster join never misses a face. */
-const MEETING_MEMBER_PAGE_SIZE = 100;
 
 export function PersistentMeetingSession({
   roomId,

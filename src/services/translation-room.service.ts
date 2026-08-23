@@ -554,6 +554,25 @@ export const translationRoomService = {
   },
 
   /**
+   * WT-552: add somebody to a meeting that is already running.
+   *
+   * POST to the same path the invitation list is read from. Not `updateSettings` — that endpoint
+   * freezes at IN_PROGRESS on purpose, because languages and approval policy must not change
+   * under people already in the room.
+   *
+   * Returns the number actually invited, which can be LOWER than the list submitted: the server
+   * treats re-inviting somebody as a no-op. That count is the truth for the toast — this client
+   * may not have refetched the invitation list.
+   */
+  async inviteParticipants(id: string, emails: string[]) {
+    const { data } = await apiClient.post<{ invited: number }>(
+      API.translationRooms.invitations(id),
+      { emails },
+    );
+    return data;
+  },
+
+  /**
    * Accept the invitation addressed to the signed-in account's email.
    *
    * Takes no body: the server matches the row from the caller's own email claim, because
