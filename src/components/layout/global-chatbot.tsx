@@ -39,6 +39,7 @@ import {
   type AssistantStep,
 } from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { composerReadiness } from "@/lib/assistant/composer-readiness";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
   useWorkspaceMembers,
@@ -321,6 +322,12 @@ export function GlobalChatbot() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  // WT-541: one answer to "can this send", shared by the button and by sendMessage.
+  const composerState = composerReadiness({
+    text: inputValue,
+    attachmentCount: attachments.length,
+    activeWorkspaceId,
+  });
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
   );
@@ -1102,9 +1109,18 @@ export function GlobalChatbot() {
 
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? inputValue).trim();
-    // WT-474: an attachment on its own is a question ("what is this?"), so a turn carrying only
-    // files is allowed to go. Both shapes still need a workspace.
-    if ((!content && attachments.length === 0) || !activeWorkspaceId) return;
+    // WT-541: the same rule the send button is disabled by. It used to be spelled out here and
+    // only half-spelled on the button, so a turn with no workspace was swallowed by a control
+    // that looked alive.
+    const readiness = composerReadiness({
+      text: content,
+      attachmentCount: attachments.length,
+      activeWorkspaceId,
+    });
+    if (!readiness.canSend) return;
+    // The id travels with the yes, so this handler cannot disagree with the check above about
+    // which workspace the turn belongs to.
+    const sendWorkspaceId = readiness.workspaceId;
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
@@ -1137,7 +1153,7 @@ export function GlobalChatbot() {
     if (!convId) {
       try {
         const conversation =
-          await createConversation.mutateAsync(activeWorkspaceId);
+          await createConversation.mutateAsync(sendWorkspaceId);
         convId = conversation.id;
         setConversationId(convId);
       } catch {
@@ -1651,6 +1667,17 @@ export function GlobalChatbot() {
                     }
                   />
 
+                  {/* WT-541 — said on screen, not only in the send button's tooltip.
+                      The admin portal is outside [workspaceSlug], so an admin who signs in and
+                      goes straight to /admin has no active workspace and every WarpBot turn was
+                      swallowed in silence. A disabled button explains nothing to somebody who
+                      has already typed their question. */}
+                  {composerState.blocker === "no-workspace" ? (
+                    <p className="px-2.5 pb-1.5 text-[11px] leading-4 text-ink-subtle">
+                      {composerState.hint}
+                    </p>
+                  ) : null}
+
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
                     {/* WT-474: the paperclip sits with Skills, at the left of the control row,
                         which is where Claude and Codex put it — the composer's own actions on one
@@ -1759,7 +1786,11 @@ export function GlobalChatbot() {
                         // WT-474: an attachment on its own is a question, so send is live for a
                         // turn carrying only files. Matching the same rule in sendMessage and in
                         // AssistantService — a button the server would accept must not look dead.
-                        disabled={!inputValue.trim() && attachments.length === 0}
+                        //
+                        // WT-541 is the converse, and was the actual bug: a button the server
+                        // CANNOT accept must not look alive. Both now read one rule.
+                        disabled={!composerState.canSend}
+                        title={composerState.hint ?? "Send message"}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
                         <ArrowUp weight="bold" size={13} />
