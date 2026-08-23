@@ -2385,8 +2385,52 @@ export function PersistentMeetingSession({
     const retryDelays = [0, 500, 1500, 3000];
     const wait = (ms: number) =>
       new Promise((resolve) => window.setTimeout(resolve, ms));
-    const joinChatRoom = () =>
-      chatConnection.invoke("JoinMeetingRoom", roomId).catch(() => undefined);
+
+    // THE JOIN IS RETRIED, NOT ONLY THE CONNECTION.
+    //
+    // These were one loop, and it guarded the wrong half: it retried `start()`, and once the
+    // socket was up it called the join EXACTLY ONCE and swallowed whatever came back. The join
+    // is the half that routinely fails on a first entry — the meeting room row is provisioned by
+    // MeetingRoomService.JoinMeetingAsync, which the page calls alongside this, so for the first
+    // second or two the hub answers "Room not ready".
+    //
+    // A connection with no group membership looks identical to a working one: messages send
+    // fine, nothing errors, and every broadcast lands somewhere else. The room simply had no
+    // live chat for the rest of the meeting, silently.
+    //
+    // Longer than the connection's window on purpose (~52s): a user held in the waiting room is
+    // registered as a participant but the room may still be settling, and the cost of waiting is
+    // nothing while the cost of giving up is a dead panel.
+    const joinRetryDelays = [0, 500, 1500, 3000, 5000, 8000, 13000, 21000];
+    const joinChatRoom = async () => {
+      for (const delay of joinRetryDelays) {
+        if (cancelled) return;
+        if (delay) await wait(delay);
+        try {
+          await chatConnection.invoke("JoinMeetingRoom", roomId);
+          return;
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          // Terminal: the caller does not belong to this meeting, and the hub will keep saying
+          // so. Retrying it is a spin, and the honest outcome is no live chat.
+          if (reason.includes("Not a participant")) {
+            console.warn(
+              "Meeting chat: not a participant of this room, so live chat is unavailable.",
+            );
+            return;
+          }
+          // Anything else — "Room not ready" above all — is a race worth waiting out.
+        }
+      }
+      if (!cancelled) {
+        // Reported rather than swallowed. This is the state that hid the defect: the panel
+        // looked connected and received nothing.
+        console.warn(
+          `Meeting chat: could not join the room group for ${roomId} after ${joinRetryDelays.length} attempts; live chat is unavailable.`,
+        );
+      }
+    };
+
     const startAndJoinChat = async () => {
       for (const delay of retryDelays) {
         if (cancelled) return;
