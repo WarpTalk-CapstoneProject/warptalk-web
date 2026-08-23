@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Microphone,
   MicrophoneSlash,
   Star,
   UserMinus,
+  UserPlus,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { HandRaiseBadge } from "@/components/rooms/live/hand-raise-badge";
@@ -43,6 +44,9 @@ import {
   participantPresence,
   type ParticipantPresence,
 } from "@/lib/meeting/room-occupancy";
+import { useWorkspaceMembers } from "@/hooks/use-workspace";
+import { MEETING_MEMBER_PAGE_SIZE } from "@/lib/meeting/participant-identity";
+import { InviteToMeetingDialog } from "./invite-to-meeting-dialog";
 
 export function PeoplePanel({
   roomId,
@@ -101,6 +105,32 @@ export function PeoplePanel({
   );
   const admitAll = useAdmitParticipant(roomId);
   const [admittingAll, setAdmittingAll] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+
+  // WT-552 — the roster carries no email address.
+  //
+  // `GET /translation-rooms/{id}/participants` returns names, roles and languages and nothing to
+  // match an invitation against, so "this person is already in the room" cannot be answered from
+  // the roster alone. The workspace member list is the same source the meeting already uses to
+  // put a face on a participant (see buildParticipantIdentities), and it is the one that carries
+  // the address. Same page size, so both callers share one cached request.
+  //
+  // A participant with no member row — an external or a bridge guest — simply is not matched, and
+  // re-inviting them falls through to the server's own de-duplication. Under-claiming here is the
+  // safe direction: the alternative is telling a host somebody is present when they are not.
+  const membersQuery = useWorkspaceMembers(
+    isHost && room.workspaceId ? room.workspaceId : undefined,
+    1,
+    MEETING_MEMBER_PAGE_SIZE,
+  );
+  const participantEmails = useMemo(() => {
+    const byUserId = new Map(
+      (membersQuery.data?.items ?? []).map((member) => [member.userId, member.email]),
+    );
+    return visibleParticipants
+      .map((participant) => byUserId.get(participant.userId))
+      .filter((email): email is string => Boolean(email));
+  }, [membersQuery.data, visibleParticipants]);
 
   async function handleAdmitAll() {
     setAdmittingAll(true);
@@ -149,7 +179,34 @@ export function PeoplePanel({
             Copy Link
           </button>
         </div>
+        {/* WT-552 — host-only, and next to the link rather than behind a menu.
+            The link works for anybody the host can already reach on chat. This is for the person
+            they cannot: it sends a real invitation, which is what puts the meeting in that
+            person's own room list and bell. Room settings refuse to add an invitee once the room
+            leaves SCHEDULED, so before this there was no way to do it at all. */}
+        {isHost ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowInvite(true)}
+            className="mt-1 w-full bg-surface-2 hover:bg-surface-3 text-ink border-border"
+          >
+            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+            Invite people
+          </Button>
+        ) : null}
       </div>
+
+      {isHost ? (
+        <InviteToMeetingDialog
+          open={showInvite}
+          onOpenChange={setShowInvite}
+          roomId={roomId}
+          participantEmails={participantEmails}
+          joinLink={joinLink}
+          onCopyLink={() => onCopyText(joinLink, "Invite link")}
+        />
+      ) : null}
 
       {isHost && waitingParticipants.length > 1 ? (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2/60 px-3 py-2">
