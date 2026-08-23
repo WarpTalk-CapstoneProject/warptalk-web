@@ -29,6 +29,10 @@ import {
   Pencil,
 } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  describeTranscriptAbsence,
+  transcriptAbsenceMessage,
+} from "@/lib/meeting/transcript-absence";
 import { toast } from "sonner";
 
 import {
@@ -132,6 +136,8 @@ export function MeetingTranscriptArtifact({
   canEdit,
   onSegmentsChanged,
   speakerDirectory,
+  transcriptErrorCode,
+  transcriptLoading,
 }: {
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
@@ -152,6 +158,14 @@ export function MeetingTranscriptArtifact({
   /** Set when a summary citation jumped here; the row is marked so the reader can see
    *  which line the claim came from rather than landing in an anonymous wall of text. */
   highlightedSegmentId?: string | null;
+  /**
+   * WT-516: the server's code when the transcript lookup FAILED — `FORBIDDEN`, `NOT_FOUND`, a
+   * status. Without it this panel cannot tell "you may not read this" from "there is nothing",
+   * and it said the second for both. Omitted means the request did not fail.
+   */
+  transcriptErrorCode?: string | number | null;
+  /** The lookup is still in flight, so no explanation is due yet. */
+  transcriptLoading?: boolean;
   /** Only the host may rewrite what the room recorded. */
   canEdit?: boolean;
   /** Refetch after a correction lands, so the line shows what was actually saved. */
@@ -196,6 +210,12 @@ export function MeetingTranscriptArtifact({
   const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
   const showSessionLabels = blocks.length > 1;
   const totalCount = grouped.length;
+  const absence = describeTranscriptAbsence({
+    lineCount: totalCount,
+    isEnded,
+    isLoading: transcriptLoading,
+    errorCode: transcriptErrorCode,
+  });
   const base = baseTime ? new Date(baseTime) : null;
 
   // Null means "the reader has not chosen", which is not the same as choosing as-spoken — the
@@ -456,11 +476,13 @@ export function MeetingTranscriptArtifact({
         onRetry={() => backfill.request(displayLanguage)}
       />
 
-      {totalCount === 0 ? (
+      {absence ? (
+        // WT-516: "No transcript was captured for this meeting" is a claim about the MEETING,
+        // and it used to be made for every reason this panel had nothing to show — including a
+        // refused read, which is how a member of the workspace was told a meeting was silent
+        // while 82 saved lines sat behind an access check.
         <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
-          {isEnded
-            ? "No transcript was captured for this meeting."
-            : "The transcript is saved here as the meeting is transcribed."}
+          {transcriptAbsenceMessage(absence)}
         </div>
       ) : (
         /* The transcript is the one thing on this page with no upper bound — an hour of
