@@ -756,6 +756,8 @@ export default function WorkspaceGlossaryPage() {
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
           glossaryName={selected.name}
+          sourceLanguage={selected.sourceLanguage}
+          targetLanguage={selected.targetLanguage}
           isImporting={bulkImport.isPending}
           onImport={importTerms}
         />
