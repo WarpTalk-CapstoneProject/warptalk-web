@@ -14,6 +14,7 @@ import {
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,46 +28,23 @@ import {
 import { cn } from "@/lib/utils";
 import type { AssistantPluginCatalogItemDto } from "@/types/assistant";
 
+/**
+ * Rows needed before the catalog is laid out in two columns.
+ *
+ * The two-column marketplace this section is modelled on assumes a catalog deep enough to fill
+ * both columns. One plugin is seeded, so `md:grid-cols-2` spent half the section on an empty
+ * right-hand column that read as a rendering fault rather than as a short catalog. Under this
+ * many rows the section becomes a single full-width list instead — deliberate at any depth, and
+ * it goes back to two columns on its own once the catalog grows.
+ */
+const CATALOG_TWO_COLUMN_MINIMUM = 4;
+
 function pluginActionLabel(plugin: AssistantPluginCatalogItemDto) {
   if (plugin.installationStatus === "disabled") return "Enable";
   if (plugin.installationStatus !== "installed") return "Install";
   if (plugin.connectionStatus === "connected") return "Manage";
   if (plugin.connectionStatus === "expired" || plugin.connectionStatus === "revoked") return "Reconnect";
   return "Connect";
-}
-
-function PluginGlyph({
-  plugin,
-  size = "md",
-}: {
-  plugin: AssistantPluginCatalogItemDto;
-  size?: "sm" | "md" | "lg";
-}) {
-  const initials = plugin.label
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-
-  return (
-    <div
-      className={cn(
-        "grid shrink-0 place-items-center rounded-lg border border-border bg-surface-2 text-ink shadow-sm",
-        size === "sm" && "size-8 text-[10px]",
-        size === "md" && "size-10 text-xs",
-        size === "lg" && "size-14 text-sm",
-      )}
-      title={plugin.label}
-    >
-      {plugin.avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={plugin.avatarUrl} alt="" className="size-full rounded-lg object-cover" />
-      ) : (
-        initials || <PuzzlePiece size={size === "lg" ? 24 : 16} weight="duotone" />
-      )}
-    </div>
-  );
 }
 
 function ConnectionNotice({
@@ -404,11 +382,20 @@ export default function PluginsPage() {
             ) : null}
           </div>
         ) : (
-          <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
+          <div
+            className={cn(
+              "grid gap-x-10 gap-y-3",
+              filteredPlugins.length >= CATALOG_TWO_COLUMN_MINIMUM && "md:grid-cols-2",
+            )}
+          >
             {filteredPlugins.map((plugin) => (
               <div
                 key={plugin.key}
-                className="grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2"
+                className={cn(
+                  "grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2",
+                  filteredPlugins.length < CATALOG_TWO_COLUMN_MINIMUM &&
+                    "rounded-xl border border-border bg-surface-1 px-3 py-3",
+                )}
               >
                 <PluginGlyph plugin={plugin} />
                 <button

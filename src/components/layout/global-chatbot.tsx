@@ -23,7 +23,6 @@ import {
   FileText,
   BookBookmark,
   PlugsConnected,
-  PuzzlePiece,
   VideoCamera,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -74,6 +73,7 @@ import {
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import {
@@ -255,29 +255,6 @@ function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
       <BookBookmark size={15} weight="regular" />
     ),
   };
-}
-
-function AssistantPluginGlyph({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
-  const initials = plugin.label
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-
-  return (
-    <span
-      className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-[7px] border border-border bg-surface-2 text-[10px] font-semibold text-ink"
-      title={plugin.label}
-    >
-      {plugin.avatarUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={plugin.avatarUrl} alt="" className="size-full object-cover" />
-      ) : (
-        initials || <PuzzlePiece size={14} weight="duotone" />
-      )}
-    </span>
-  );
 }
 
 /**
@@ -1835,7 +1812,7 @@ export function GlobalChatbot() {
                                       key={plugin.key}
                                       className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1.5"
                                     >
-                                      <AssistantPluginGlyph plugin={plugin} />
+                                      <PluginGlyph plugin={plugin} size="xs" />
                                       <div className="min-w-0">
                                         <div className="truncate text-[12px] font-medium text-ink">
                                           {plugin.label}
