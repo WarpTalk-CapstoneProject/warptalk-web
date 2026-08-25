@@ -125,6 +125,22 @@ export function useDisconnectAssistantPlugin() {
   });
 }
 
+export function useDisableAssistantPlugin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+    }: {
+      pluginKey: string;
+    }) => {
+      await assistantService.disablePlugin(pluginKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.plugins });
+    },
+  });
+}
+
 export function useSendAssistantMessage() {
   const queryClient = useQueryClient();
   return useMutation({

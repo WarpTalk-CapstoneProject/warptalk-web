@@ -76,4 +76,8 @@ export const assistantService = {
   disconnectPlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.pluginConnection(pluginKey));
   },
+
+  disablePlugin(pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
+  },
 };

@@ -5,9 +5,11 @@ import {
   ArrowSquareOut,
   CheckCircle,
   MagnifyingGlass,
+  Plugs,
   PlugsConnected,
   PuzzlePiece,
   Spinner,
+  Trash,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -17,6 +19,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   useAssistantPlugins,
+  useDisableAssistantPlugin,
+  useDisconnectAssistantPlugin,
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
@@ -104,15 +108,26 @@ function ConnectionNotice({
 function ConnectPluginDialog({
   plugin,
   isConnecting,
+  isDisconnecting,
+  isRemoving,
   onClose,
   onContinue,
+  onDisconnect,
+  onRemove,
 }: {
   plugin: AssistantPluginCatalogItemDto;
   isConnecting: boolean;
+  isDisconnecting: boolean;
+  isRemoving: boolean;
   onClose: () => void;
   onContinue: () => void;
+  onDisconnect: () => void;
+  onRemove: () => void;
 }) {
+  const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
   const isConnected = plugin.connectionStatus === "connected";
+  const isInstalled = plugin.installationStatus === "installed";
+  const isPendingBusy = isDisconnecting || isRemoving;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
@@ -181,6 +196,67 @@ function ConnectPluginDialog({
             Connected as {plugin.connectedAccountEmail ?? "this account"}
           </div>
         ) : null}
+
+        {isInstalled ? (
+          <div className="mt-5 border-t border-border pt-4">
+            {pendingAction ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-1 px-4 py-3">
+                <p className="text-sm leading-6 text-ink-muted">
+                  {pendingAction === "disconnect"
+                    ? `Disconnect ${plugin.label}? WarpBot loses access to it until you connect the account again.`
+                    : `Remove ${plugin.label}? Its tools disappear from WarpBot and any connected account is disconnected.`}
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    disabled={isPendingBusy}
+                    onClick={() => setPendingAction(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={isPendingBusy}
+                    onClick={() => (pendingAction === "disconnect" ? onDisconnect() : onRemove())}
+                  >
+                    {isPendingBusy ? <Spinner className="animate-spin" size={14} /> : null}
+                    {pendingAction === "disconnect" ? "Disconnect" : "Remove"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs text-ink-muted">Manage this plugin for your own account</span>
+                <div className="flex gap-2">
+                  {isConnected ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setPendingAction("disconnect")}
+                    >
+                      <Plugs size={15} />
+                      Disconnect
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPendingAction("remove")}
+                  >
+                    <Trash size={15} />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -190,6 +266,8 @@ export default function PluginsPage() {
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins();
   const installPlugin = useInstallAssistantPlugin();
   const connectUrl = usePluginConnectUrl();
+  const disconnectPlugin = useDisconnectAssistantPlugin();
+  const disablePlugin = useDisableAssistantPlugin();
 
   const [query, setQuery] = useState("");
   const [selectedPlugin, setSelectedPlugin] = useState<AssistantPluginCatalogItemDto | null>(null);
@@ -222,6 +300,23 @@ export default function PluginsPage() {
     const result = await connectUrl.mutateAsync({ pluginKey: plugin.key });
     setBrowserConnect({ plugin, url: result.url });
     window.open(result.url, "_blank", "noopener,noreferrer");
+  }
+
+  async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
+    await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
+    toast.success(`${plugin.label} disconnected`);
+    setSelectedPlugin(null);
+  }
+
+  async function removeSelected(plugin: AssistantPluginCatalogItemDto) {
+    // Disabling the installation leaves the stored provider tokens behind, which is
+    // not what "Remove" reads like to the person clicking it.
+    if (plugin.connectionStatus === "connected") {
+      await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
+    }
+    await disablePlugin.mutateAsync({ pluginKey: plugin.key });
+    toast.success(`${plugin.label} removed`);
+    setSelectedPlugin(null);
   }
 
   return (
@@ -294,6 +389,20 @@ export default function PluginsPage() {
               </Button>
             </CardContent>
           </Card>
+        ) : filteredPlugins.length === 0 ? (
+          <div className="flex flex-col items-start gap-2 py-6">
+            <div className="flex items-center gap-2 text-sm text-ink-muted">
+              <PuzzlePiece size={16} weight="duotone" />
+              {query.trim()
+                ? `No plugins match "${query.trim()}".`
+                : "No plugins are available yet."}
+            </div>
+            {query.trim() ? (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setQuery("")}>
+                Clear search
+              </Button>
+            ) : null}
+          </div>
         ) : (
           <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
             {filteredPlugins.map((plugin) => (
@@ -329,8 +438,12 @@ export default function PluginsPage() {
         <ConnectPluginDialog
           plugin={selectedPlugin}
           isConnecting={connectUrl.isPending}
+          isDisconnecting={disconnectPlugin.isPending}
+          isRemoving={disablePlugin.isPending}
           onClose={() => setSelectedPlugin(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
+          onDisconnect={() => void disconnectSelected(selectedPlugin)}
+          onRemove={() => void removeSelected(selectedPlugin)}
         />
       ) : null}
     </div>

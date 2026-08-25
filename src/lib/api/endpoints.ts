@@ -260,6 +260,8 @@ export const API = {
     installedPlugins: "/assistant/plugins/installed",
     installPlugin: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
+    disablePlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
     pluginConnection: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
     pluginConnectUrl: (pluginKey: string) =>
