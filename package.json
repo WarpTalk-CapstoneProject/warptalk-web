@@ -156,7 +156,9 @@
     "test:one-loading-mark": "node scripts/check-one-loading-mark.mjs",
     "test:admin-workspace-url": "node scripts/check-admin-workspace-url-contract.mjs && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/admin/__tests__/workspace-ref.test.ts",
     "test:krisp-capture-track": "node scripts/check-krisp-capture-track-contract.mjs",
-    "test:room-ceiling-notice": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/room-ceiling-notice.test.ts"
+    "test:room-ceiling-notice": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/room-ceiling-notice.test.ts",
+    "test:plugin-marketplace": "node scripts/check-plugin-marketplace-contract.mjs",
+    "test:plugin-confirmation": "node scripts/check-plugin-confirmation-surfaces.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

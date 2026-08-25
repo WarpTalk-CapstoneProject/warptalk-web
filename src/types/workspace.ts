@@ -66,6 +66,7 @@ export interface WorkspaceSettingsDto {
   requireVerifiedDomainForInternal: boolean;
   aiUsagePolicy?: AiUsagePolicyDto | null;
   isProfanityFilterEnabled: boolean;
+  allowAnyPlugins: boolean;
 }
 
 export interface AiUsagePolicyDto {

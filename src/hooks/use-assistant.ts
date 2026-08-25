@@ -9,6 +9,7 @@ export const ASSISTANT_KEYS = {
   conversations: (workspaceId: string) => ["assistant", "conversations", workspaceId] as const,
   conversation: (id: string) => ["assistant", "conversation", id] as const,
   skills: ["assistant", "skills"] as const,
+  plugins: ["assistant", "plugins"] as const,
 };
 
 export function useAssistantConversations(workspaceId: string | null) {
@@ -64,6 +65,63 @@ export function useAssistantSkills() {
       return data;
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useAssistantPlugins() {
+  return useQuery({
+    queryKey: ASSISTANT_KEYS.plugins,
+    queryFn: async () => {
+      const { data } = await assistantService.listPlugins();
+      return data;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useInstallAssistantPlugin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+    }: {
+      pluginKey: string;
+    }) => {
+      const { data } = await assistantService.installPlugin(pluginKey);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.plugins });
+    },
+  });
+}
+
+export function usePluginConnectUrl() {
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+    }: {
+      pluginKey: string;
+    }) => {
+      const { data } = await assistantService.getPluginConnectUrl(pluginKey);
+      return data;
+    },
+  });
+}
+
+export function useDisconnectAssistantPlugin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+    }: {
+      pluginKey: string;
+    }) => {
+      await assistantService.disconnectPlugin(pluginKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.plugins });
+    },
   });
 }
 

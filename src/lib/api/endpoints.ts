@@ -256,6 +256,14 @@ export const API = {
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+    plugins: "/assistant/plugins",
+    installedPlugins: "/assistant/plugins/installed",
+    installPlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
+    pluginConnection: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    pluginConnectUrl: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to

@@ -40,6 +40,43 @@ export interface AssistantSkillDto {
   description: string;
 }
 
+export type AssistantPluginInstallationStatus =
+  | "not_installed"
+  | "installed"
+  | "disabled";
+
+export type AssistantPluginConnectionStatus =
+  | "not_connected"
+  | "connected"
+  | "expired"
+  | "revoked";
+
+export interface McpToolDescriptorDto {
+  name: string;
+  pluginKey: string;
+  label: string;
+  description: string;
+  effect: "read" | "write";
+  requiredScopes: string[];
+  parameters: Record<string, unknown>;
+}
+
+export interface AssistantPluginCatalogItemDto {
+  key: string;
+  label: string;
+  description: string;
+  avatarUrl?: string | null;
+  requiredScopes: string[];
+  installationStatus: AssistantPluginInstallationStatus;
+  connectionStatus: AssistantPluginConnectionStatus;
+  connectedAccountEmail?: string | null;
+  tools: McpToolDescriptorDto[];
+}
+
+export interface PluginConnectUrlDto {
+  url: string;
+}
+
 /**
  * Ambient "what page is the user looking at" hint sent alongside a chat message.
  * Snapshot must stay a thin, display-only projection (id/title/status) — never raw

@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import type * as signalR from "@microsoft/signalr";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
@@ -11,6 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+  type AssistantQuestion,
+} from "@/components/layout/assistant-question-card";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
 import type { AssistantConversationDto } from "@/types/assistant";
 
@@ -21,11 +28,49 @@ export default function AiChatPage() {
   const sendMessage = useSendAssistantMessage();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
+  const hubConnectionRef = useRef<signalR.HubConnection | null>(null);
 
   const conversations = conversationsQuery.data ?? [];
   const selectedId = activeId ?? conversations[0]?.id ?? null;
   const conversationQuery = useAssistantConversation(selectedId);
   const messages = conversationQuery.data?.messages ?? [];
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const connection = createHubConnection("/api/v1/assistant/chat-hub");
+    hubConnectionRef.current = connection;
+
+    connection.on(
+      "AssistantQuestion",
+      (payload: { conversationId: string; questionsJson: string }) => {
+        if (payload.conversationId !== selectedId) return;
+        const questions = parseAssistantQuestions(payload.questionsJson);
+        if (questions.length) setPendingQuestions(questions);
+      },
+    );
+    connection.on("AssistantMessageCompleted", () => {
+      void conversationQuery.refetch();
+      void conversationsQuery.refetch();
+    });
+    connection.on("AssistantMessageFailed", () => {
+      void conversationQuery.refetch();
+      void conversationsQuery.refetch();
+    });
+
+    connection
+      .start()
+      .then(() => connection.invoke("JoinConversation", selectedId))
+      .catch(() => {
+        // The page still works by polling/refetch after POST; realtime cards are best effort.
+      });
+
+    return () => {
+      void connection.stop();
+      hubConnectionRef.current = null;
+    };
+  }, [selectedId, conversationQuery, conversationsQuery]);
 
   async function handleCreateConversation() {
     if (!workspaceId || createConversation.isPending) return;
@@ -34,9 +79,8 @@ export default function AiChatPage() {
     await conversationsQuery.refetch();
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = draft.trim();
+  async function sendContent(content: string) {
+    content = content.trim();
     if (!content || !workspaceId || sendMessage.isPending) return;
 
     let conversationId = selectedId;
@@ -47,9 +91,15 @@ export default function AiChatPage() {
     }
 
     setDraft("");
+    setPendingQuestions(null);
     await sendMessage.mutateAsync({ conversationId, content });
     await conversationQuery.refetch();
     await conversationsQuery.refetch();
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendContent(draft);
   }
 
   return (
@@ -125,6 +175,15 @@ export default function AiChatPage() {
                 </div>
               ))
             )}
+            {pendingQuestions ? (
+              <div className="max-w-[85%]">
+                <AssistantQuestionCard
+                  questions={pendingQuestions}
+                  disabled={sendMessage.isPending}
+                  onSubmit={(answer) => void sendContent(answer)}
+                />
+              </div>
+            ) : null}
           </div>
 
           <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>

@@ -11,6 +11,10 @@ import {
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+} from "@/components/layout/assistant-question-card";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
@@ -141,6 +145,8 @@ export function ChatPanel({
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
   const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
   const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
+  const assistantQuestionsJson = useTranslationRoomStore((state) => state.assistantQuestionsJson);
+  const setAssistantQuestionsJson = useTranslationRoomStore((state) => state.setAssistantQuestionsJson);
   const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
@@ -421,41 +427,47 @@ export function ChatPanel({
     },
   });
 
-  function sendMessage() {
-    if (!editor) return;
+  function sendMessage(overrideContent?: string) {
+    if (!editor && !overrideContent) return;
 
     // Extract plain text and mentions
-    const json = editor.getJSON();
     let textContent = "";
-    const mentions: ChatMentionDto[] = [];
+    let mentions: ChatMentionDto[] = [];
 
-    // A simple recursive function to extract text and mentions
-    const parseNode = (node: JSONContent) => {
-      if (node.type === "text") {
-        textContent += node.text;
-      } else if (node.type === "mention") {
-        const id = String(node.attrs?.id ?? "");
-        const label = String(node.attrs?.label ?? "");
-        textContent += `@${label}`;
-        mentions.push({
-          id,
-          display: label,
-          type: "agent",
+    if (overrideContent) {
+      textContent = overrideContent;
+      mentions = [{ id: "bot-warpbot", display: "WarpBot", type: "agent" }];
+    } else {
+      const json = editor!.getJSON();
+
+      // A simple recursive function to extract text and mentions
+      const parseNode = (node: JSONContent) => {
+        if (node.type === "text") {
+          textContent += node.text;
+        } else if (node.type === "mention") {
+          const id = String(node.attrs?.id ?? "");
+          const label = String(node.attrs?.label ?? "");
+          textContent += `@${label}`;
+          mentions.push({
+            id,
+            display: label,
+            type: "agent",
+          });
+        } else if (node.type === "hardBreak") {
+          textContent += "\n";
+        }
+
+        if (node.content) {
+          node.content.forEach(parseNode);
+        }
+      };
+
+      if (json.content) {
+        json.content.forEach((block) => {
+          parseNode(block);
+          textContent += "\n";
         });
-      } else if (node.type === "hardBreak") {
-        textContent += "\n";
       }
-
-      if (node.content) {
-        node.content.forEach(parseNode);
-      }
-    };
-
-    if (json.content) {
-      json.content.forEach((block) => {
-        parseNode(block);
-        textContent += "\n";
-      });
     }
 
     const trimmedText = textContent.trim();
@@ -505,7 +517,8 @@ export function ChatPanel({
       {
         onSuccess: (message) => {
           addChatMessage(message);
-          editor.commands.clearContent(true);
+          setAssistantQuestionsJson(null);
+          editor?.commands.clearContent(true);
         },
         onError: (error) => {
           // WT-365: "Try again." was advice that could not work. A 403 here means the server is
@@ -570,6 +583,10 @@ export function ChatPanel({
       setFileError("File could not be downloaded. Try again.");
     }
   }
+
+  const pendingAssistantQuestions = assistantQuestionsJson
+    ? parseAssistantQuestions(assistantQuestionsJson)
+    : [];
 
   return (
     <div className="flex h-full flex-col">
@@ -819,6 +836,19 @@ export function ChatPanel({
             className="px-1"
           />
         ) : null}
+
+        {pendingAssistantQuestions.length > 0 ? (
+          <div className="pl-10">
+            <AssistantQuestionCard
+              questions={pendingAssistantQuestions}
+              disabled={isPending}
+              onSubmit={(answer) => {
+                setAssistantQuestionsJson(null);
+                sendMessage(answer);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
       {/* Reading back through a meeting's chat stops the panel following, which is right — and
           left the newest message somewhere below with nothing on screen saying so. */}
@@ -864,7 +894,7 @@ export function ChatPanel({
           <EditorContent editor={editor} className="min-w-0 flex-1" />
           <button
             type="button"
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={isPending}
             aria-label="Send message"
             title="Send message"

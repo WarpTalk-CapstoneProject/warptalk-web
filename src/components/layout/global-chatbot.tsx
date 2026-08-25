@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   ArrowUp,
+  ArrowSquareOut,
   ClockCounterClockwise,
   ArrowsOutSimple,
+  CheckCircle,
   CornersIn,
   Plus,
   PaperPlaneTilt,
@@ -20,6 +22,8 @@ import {
   Paperclip,
   FileText,
   BookBookmark,
+  PlugsConnected,
+  PuzzlePiece,
   VideoCamera,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -47,9 +51,12 @@ import {
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import {
   useAssistantConversations,
+  useAssistantPlugins,
   useAssistantSkills,
   useCreateAssistantConversation,
+  useInstallAssistantPlugin,
   useLoadAssistantConversation,
+  usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -58,6 +65,7 @@ import type {
   AssistantConversationDto,
   AssistantMentionDto,
   AssistantPageContextDto,
+  AssistantPluginCatalogItemDto,
 } from "@/types/assistant";
 import {
   AssistantQuestionCard,
@@ -248,6 +256,29 @@ function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
   };
 }
 
+function AssistantPluginGlyph({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
+  const initials = plugin.label
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <span
+      className="grid size-7 shrink-0 place-items-center overflow-hidden rounded-[7px] border border-border bg-surface-2 text-[10px] font-semibold text-ink"
+      title={plugin.label}
+    >
+      {plugin.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={plugin.avatarUrl} alt="" className="size-full object-cover" />
+      ) : (
+        initials || <PuzzlePiece size={14} weight="duotone" />
+      )}
+    </span>
+  );
+}
+
 /**
  * How long sendMessage waits for this client to actually be inside the conversation's hub
  * group before POSTing. The hub effect only starts negotiating once conversationId lands in
@@ -381,8 +412,15 @@ export function GlobalChatbot() {
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
   const { data: skills } = useAssistantSkills();
+  const { data: assistantPlugins = [] } = useAssistantPlugins();
+  const installPlugin = useInstallAssistantPlugin();
+  const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  const installedAssistantPlugins = useMemo(
+    () => assistantPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    [assistantPlugins],
+  );
 
   // Only fetch the conversation list while the history menu is actually open.
   const conversationsQuery = useAssistantConversations(
@@ -391,6 +429,27 @@ export function GlobalChatbot() {
   const visibleConversations = (conversationsQuery.data ?? []).filter(
     (conversation) => !conversation.isArchived,
   );
+
+  const handlePluginAction = async (plugin: AssistantPluginCatalogItemDto) => {
+    try {
+      if (plugin.installationStatus !== "installed") {
+        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        toast.success(`${plugin.label} installed`);
+        return;
+      }
+
+      if (plugin.connectionStatus !== "connected") {
+        const result = await connectPlugin.mutateAsync({ pluginKey: plugin.key });
+        window.open(result.url, "_blank", "noopener,noreferrer");
+        toast.message(`Finish connecting ${plugin.label} in your browser.`);
+        return;
+      }
+
+      toast.message(`${plugin.label} is connected.`);
+    } catch {
+      toast.error(`Could not update ${plugin.label}.`);
+    }
+  };
 
   /** Conversation id this client is currently *joined to* on the hub, not merely talking about. */
   const joinedConversationIdRef = useRef<string | null>(null);
@@ -1693,35 +1752,100 @@ export function GlobalChatbot() {
                         align="start"
                         side="top"
                         sideOffset={8}
-                        className="p-1.5 w-[260px] bg-surface-1 border border-border shadow-xl rounded-xl"
+                        className="p-1.5 w-[300px] bg-surface-1 border border-border shadow-xl rounded-xl"
                       >
-                        {skills && skills.length > 0 ? (
-                          // Read-only capability list: skills are the assistant's own
-                          // tools, picked by the model mid-turn — there is nothing for a
-                          // click to do, so these rows no longer pretend to be buttons.
-                          <ul className="flex flex-col">
-                            <li className="px-2.5 pt-1 pb-1.5 text-[11px] text-ink-subtle">
-                              WarpBot uses these automatically when a question needs them.
-                            </li>
-                            {skills.map((skill) => (
-                              <li
-                                key={skill.name}
-                                className="flex cursor-default flex-col gap-0.5 px-2.5 py-1.5"
+                        <div className="flex flex-col gap-2">
+                          <section>
+                            <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
+                              Skills
+                            </div>
+                            {skills && skills.length > 0 ? (
+                              <ul className="flex flex-col">
+                                {skills.map((skill) => (
+                                  <li
+                                    key={skill.name}
+                                    className="flex cursor-default flex-col gap-0.5 rounded-md px-2.5 py-1.5"
+                                  >
+                                    <span className="text-[12px] font-medium text-ink">
+                                      {skill.label}
+                                    </span>
+                                    <span className="text-[11px] text-ink-subtle">
+                                      {skill.description}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
+                                Loading skills…
+                              </div>
+                            )}
+                          </section>
+
+                          <section className="border-t border-border pt-2">
+                            <div className="flex items-center justify-between px-2.5 pb-1.5">
+                              <span className="text-[11px] font-medium text-ink-subtle">
+                                Plugins
+                              </span>
+                              <a
+                                href={
+                                  activeWorkspaceSlug
+                                    ? `/${activeWorkspaceSlug}/settings/plugins`
+                                    : "/workspace"
+                                }
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink"
                               >
-                                <span className="text-[12px] font-medium text-ink">
-                                  {skill.label}
-                                </span>
-                                <span className="text-[11px] text-ink-subtle">
-                                  {skill.description}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                            Loading skills…
-                          </div>
-                        )}
+                                Manage
+                                <ArrowSquareOut size={11} />
+                              </a>
+                            </div>
+                            {installedAssistantPlugins.length > 0 ? (
+                              <ul className="flex flex-col gap-1">
+                                {installedAssistantPlugins.map((plugin) => {
+                                  const connected = plugin.connectionStatus === "connected";
+                                  return (
+                                    <li
+                                      key={plugin.key}
+                                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1.5"
+                                    >
+                                      <AssistantPluginGlyph plugin={plugin} />
+                                      <div className="min-w-0">
+                                        <div className="truncate text-[12px] font-medium text-ink">
+                                          {plugin.label}
+                                        </div>
+                                        <div className="truncate text-[11px] text-ink-subtle">
+                                          {connected
+                                            ? plugin.connectedAccountEmail ?? "Connected"
+                                            : "Connect to use in WarpBot"}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        disabled={installPlugin.isPending || connectPlugin.isPending}
+                                        onClick={() => void handlePluginAction(plugin)}
+                                        className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                                      >
+                                        {connected ? (
+                                          <>
+                                            <CheckCircle size={12} weight="fill" />
+                                            Ready
+                                          </>
+                                        ) : (
+                                          "Connect"
+                                        )}
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <div className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-ink-subtle">
+                                <PlugsConnected size={14} weight="duotone" />
+                                Install plugins from Personal Settings.
+                              </div>
+                            )}
+                          </section>
+                        </div>
                       </PopoverContent>
                     </Popover>
                     </div>
