@@ -63,6 +63,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { StatusPanel } from "./StatusPanel";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 function formatTimeShort(value?: string) {
   if (!value) return "No date";
@@ -822,34 +823,38 @@ export default function MeetingsPageLinear() {
                     />
                   ))
                 ) : (
-                  <div className="px-6 py-12 text-[13px] text-muted-foreground flex flex-col items-center justify-center">
-                    <CalendarIcon
-                      size={32}
-                      weight="light"
-                      className="mb-3 opacity-30"
-                    />
-                    {/* Say WHY it is empty. "No active meetings found." under a day filter is
-                        the empty state claiming the workspace has nothing, when what is true is
-                        that this one day has nothing — and the fix is one click away. */}
-                    <p>
-                      {dayFilter && !isAllView
+                  /* Say WHY it is empty. "No active meetings found." under a day filter is
+                     the empty state claiming the workspace has nothing, when what is true is
+                     that this one day has nothing — and the fix is one click away. */
+                  <PagePlaceholder
+                    kind="meetings"
+                    className="min-h-[300px]"
+                    title={
+                      dayFilter && !isAllView
                         ? `No ${activeTab} meetings on ${new Intl.DateTimeFormat("en-US", {
                             weekday: "long",
                             month: "short",
                             day: "numeric",
-                          }).format(dayFilter)}.`
-                        : `No ${activeTab} meetings found.`}
-                    </p>
-                    {dayFilter && !isAllView ? (
-                      <button
-                        type="button"
-                        onClick={() => setDayFilter(null)}
-                        className="mt-2 text-[12px] font-medium text-primary hover:text-primary-hover"
-                      >
-                        Show every {activeTab} meeting
-                      </button>
-                    ) : null}
-                  </div>
+                          }).format(dayFilter)}`
+                        : `No ${activeTab} meetings found`
+                    }
+                    description={
+                      dayFilter && !isAllView
+                        ? "Clear the day filter to see every meeting in this status."
+                        : "Create a meeting or join one with a code to get started."
+                    }
+                    action={
+                      dayFilter && !isAllView ? (
+                        <button
+                          type="button"
+                          onClick={() => setDayFilter(null)}
+                          className="text-[12px] font-medium text-primary hover:text-primary-hover"
+                        >
+                          Show every {activeTab} meeting
+                        </button>
+                      ) : undefined
+                    }
+                  />
                 )}
               </div>
             )}

@@ -76,8 +76,26 @@ export function useTrackProcessors({
      * or voice isolation — stacking all three distorted the production mic PCM — so the browser's
      * pair is switched off only while Krisp is actually carrying the load.
      */
-    async function setBrowserSuppression(enabled: boolean) {
-      await localAudioTrack.mediaStreamTrack.applyConstraints({
+    /**
+     * THE CAPTURE TRACK, NEVER THE PROCESSED ONE.
+     *
+     * livekit-client's LocalTrack getter is
+     * `get mediaStreamTrack() { return this.processor?.processedTrack ?? this._mediaStreamTrack }`
+     * — so the moment Krisp is attached, that property stops being the microphone and becomes the
+     * processor's OUTPUT, which is a WebAudio destination track. A WebAudio track exposes none of
+     * the device constraints below, and `applyConstraints` on it rejects with
+     * `OverconstrainedError: Cannot satisfy constraints`.
+     *
+     * That threw inside the try that wraps attaching, so it was reported as "Krisp failed to
+     * attach or enable" and rolled straight back out — the filter had in fact attached and
+     * enabled, and the toggle refused to stay on for a reason that had nothing to do with Krisp.
+     *
+     * Introduced by the fix above it: attaching Krisp FIRST is what put a processor in place
+     * before this call, and the ordering is right — so the track is passed in explicitly, read at
+     * a moment when nothing is attached.
+     */
+    async function setBrowserSuppression(captureTrack: MediaStreamTrack, enabled: boolean) {
+      await captureTrack.applyConstraints({
         echoCancellation: true,
         noiseSuppression: enabled,
         voiceIsolation: enabled,
@@ -98,6 +116,16 @@ export function useTrackProcessors({
       //
       // Krisp attaches first now. The browser's pair is only stood down once there is something
       // to stand down for, and is restored if anything fails.
+      // Detached first, whichever way this run is going, so that `mediaStreamTrack` below is the
+      // microphone rather than a previous run's processor output. A processor is stopped on the
+      // way out of every path anyway; doing it here as well is what makes the device track
+      // reachable at all.
+      if (localAudioTrack.getProcessor()) {
+        await localAudioTrack.stopProcessor();
+        krispRef.current = null;
+      }
+      const captureTrack = localAudioTrack.mediaStreamTrack;
+
       if (!noiseSuppressionEnabled) {
         try {
           if (localAudioTrack.getProcessor()) await localAudioTrack.stopProcessor();
@@ -117,7 +145,7 @@ export function useTrackProcessors({
           // words. The lesson was learned on the newer of the two processors and never applied
           // back to the one that had the earlier ticket.
           krispRef.current = null;
-          await setBrowserSuppression(true);
+          await setBrowserSuppression(captureTrack, true);
         }
         return;
       }
@@ -125,7 +153,7 @@ export function useTrackProcessors({
       if (!isKrispNoiseFilterSupported()) {
         // Not an error: some browsers simply cannot run it. The browser's own suppression stays
         // on, which is the best available, and nothing is reported as broken.
-        await setBrowserSuppression(true);
+        await setBrowserSuppression(captureTrack, true);
         return;
       }
 
@@ -154,13 +182,17 @@ export function useTrackProcessors({
           );
         }
 
-        await setBrowserSuppression(false);
+        await setBrowserSuppression(captureTrack, false);
       } catch (error) {
+        // The full cause, verbatim, where a developer will look. This failure fired on
+        // production for weeks with the only record of WHY discarded right here — the toast
+        // carries a one-line summary, the console carries the truth.
+        console.error("Krisp noise suppression failed to attach or enable:", error);
         // Put the microphone back the way a working fallback needs it BEFORE telling anyone.
         // The report is only honest if it is true by the time it is made.
         try {
           if (localAudioTrack.getProcessor()) await localAudioTrack.stopProcessor();
-          await setBrowserSuppression(true);
+          await setBrowserSuppression(captureTrack, true);
         } catch {
           // Nothing further to try; the original failure is the one worth surfacing.
         }

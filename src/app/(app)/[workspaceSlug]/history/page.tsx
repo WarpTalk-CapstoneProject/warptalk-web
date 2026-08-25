@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  WorkspaceBody,
+  WorkspacePage,
+  WorkspaceToolbar,
+} from "@/components/workspace/page-chrome";
 import { useMemo, useState } from "react";
 import {
   Archive,
@@ -40,6 +45,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ARTIFACT_WITHHELD_FALLBACK, isArtifactWithheld } from "@/lib/meeting/artifact-denial";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 type HistoryFilter = "all" | "ended" | "cancelled" | "with_outputs";
 
@@ -181,47 +187,53 @@ export default function HistoryPage() {
   }
 
   return (
-    <main className="min-h-full bg-surface-1 text-ink">
-      <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">
-        {/* No page title, no eyebrow, no description — the shape Meetings and Members use.
-            The route name is already in the top bar and the sidebar, so a 30px "Meeting history"
-            under a breadcrumb reading "history" was the same word twice, and the sentence under
-            it was documentation living in the furniture. See components/workspace/page-chrome,
-            which records this as the house rule; this page had simply never been converted. */}
-        {/* The same search affordance Meetings and Members use, not a 360px input box.
-            Every list page had invented its own: a full-width bordered field here, a 300px one on
-            My Meetings, a collapsed dock on Meetings — three answers to one question, and the
-            widest of them spent a third of the row on a control nobody uses until they need it. */}
-        <header className="flex items-center justify-end gap-2 border-b border-border pb-4">
-          <ExpandingSearchDock
-            value={query}
-            onValueChange={setQuery}
-            placeholder="Search title, code, host, or language"
-            expandedWidth={320}
-          />
-        </header>
+    <WorkspacePage>
+      {/* WorkspaceToolbar, not a bespoke header and a second filter row.
+          This page had its own frame — a max-w-[1480px] container at px-5 py-6 lg:px-8, a
+          header with its own bottom border, and a filter group with another — while Meetings
+          and Members sit in px-4 py-3 with one row. Three paddings and two rules is why the
+          content started further from every edge here than anywhere else in the workspace, and
+          why the first thing on the page sat well below where the eye expects it. */}
+      <WorkspaceToolbar
+        filters={
+          /* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
+             token in the palette and it was spent on a FILTER — a choice, not an action — so the
+             selected chip here shouted while the identical control on Meetings and Documents
+             whispered. filter-chip.tsx records this as the one answer for the whole app. */
+          <FilterChipGroup label="History filters">
+            {historyFilters.map((item) => (
+              <FilterChip
+                key={item.value}
+                selected={filter === item.value}
+                onClick={() => setFilter(item.value)}
+              >
+                {item.label}
+              </FilterChip>
+            ))}
+          </FilterChipGroup>
+        }
+        actions={
+          <>
+            <span className="shrink-0 text-[12px] text-ink-subtle tabular-nums">
+              {rooms.length} results
+            </span>
+            {/* The same search affordance Meetings and Members use, not a 360px input box.
+                Every list page had invented its own: a full-width bordered field here, a 300px
+                one on My Meetings, a collapsed dock on Meetings — three answers to one question,
+                and the widest of them spent a third of the row on a control nobody uses until
+                they need it. */}
+            <ExpandingSearchDock
+              value={query}
+              onValueChange={setQuery}
+              placeholder="Search title, code, host, or language"
+              expandedWidth={320}
+            />
+          </>
+        }
+      />
 
-        {/* FilterChip, not a bespoke 11px tab that fills with bg-ink. That fill is the loudest
-            token in the palette and it was spent on a FILTER — a choice, not an action — so the
-            selected chip here shouted while the identical control on Meetings and Documents
-            whispered. filter-chip.tsx records this as the one answer for the whole app. */}
-        <FilterChipGroup
-          label="History filters"
-          className="border-b border-border py-3"
-          trailing={`${rooms.length} results`}
-        >
-          {historyFilters.map((item) => (
-            <FilterChip
-              key={item.value}
-              selected={filter === item.value}
-              onClick={() => setFilter(item.value)}
-            >
-              {item.label}
-            </FilterChip>
-          ))}
-        </FilterChipGroup>
-
-        <section className="mt-4 overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
+      <WorkspaceBody>
+        <section className="overflow-hidden rounded-lg border border-border bg-surface-1" aria-label="Meeting history results">
           {history.isLoading ? <LoadingState /> : history.isError ? <ErrorState onRetry={() => history.refetch()} /> : rooms.length === 0 ? <EmptyState hasQuery={Boolean(query)} /> : (
             <div className="grid min-h-[560px] lg:grid-cols-[minmax(0,1fr)_360px]">
               <div className="min-w-0 overflow-x-auto">
@@ -236,8 +248,8 @@ export default function HistoryPage() {
             </div>
           )}
         </section>
-      </div>
-    </main>
+      </WorkspaceBody>
+    </WorkspacePage>
   );
 }
 
@@ -398,7 +410,20 @@ function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
 
 function LoadingState() { return <div className="grid min-h-[420px] place-items-center"><div className="flex items-center gap-2 text-[11px] text-ink-muted"><SpinnerGap size={15} className="animate-spin" />Loading meeting history</div></div>; }
 function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><WarningCircle size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">Meeting history could not be loaded</p><p className="mt-1 text-[11px] text-ink-muted">Check the translation-room service and try again.</p><Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>Retry</Button></div></div>; }
-function EmptyState({ hasQuery }: { hasQuery: boolean }) { return <div className="grid min-h-[420px] place-items-center text-center"><div><Archive size={22} className="mx-auto text-ink-muted" /><p className="mt-3 text-[12px] font-medium">{hasQuery ? "No meetings match this search" : "No finished meetings yet"}</p><p className="mt-1 text-[11px] text-ink-muted">{hasQuery ? "Try a different title, code, host, or language." : "Meetings appear here after they end."}</p></div></div>; }
+function EmptyState({ hasQuery }: { hasQuery: boolean }) {
+  return (
+    <PagePlaceholder
+      kind="history"
+      className="min-h-[420px]"
+      title={hasQuery ? "No meetings match this search" : "No finished meetings yet"}
+      description={
+        hasQuery
+          ? "Try a different title, code, host, or language."
+          : "Meetings appear here after they end."
+      }
+    />
+  );
+}
 
 function formatDuration(seconds: number) { if (!seconds) return "—"; const minutes = Math.floor(seconds / 60); return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m`; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }

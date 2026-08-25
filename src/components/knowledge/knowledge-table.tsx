@@ -31,6 +31,7 @@ import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 
 import { AdminFilterTabs, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import type { KnowledgeFilters } from "@/hooks/use-knowledge-filters";
 import { cn } from "@/lib/utils";
 import {
@@ -310,10 +311,11 @@ export function KnowledgeTable({
         ) : isLoading ? (
           <div className="px-5 py-12 text-center text-[13px] text-ink-muted">Loading…</div>
         ) : items.length === 0 ? (
-          <div className="px-5 py-12 text-center">
-            <p className="text-[13px] text-ink">Nothing indexed yet.</p>
-            <p className="mt-1 text-[12px] text-ink-muted">{emptyHint}</p>
-          </div>
+          <PagePlaceholder
+            kind="knowledge"
+            title="Nothing indexed yet"
+            description={emptyHint}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[860px] border-collapse text-left">

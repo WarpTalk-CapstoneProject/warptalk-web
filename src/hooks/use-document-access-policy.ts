@@ -15,10 +15,6 @@ export interface DocumentAccessPolicyHookReturn {
   isExternalAllowed: boolean;
   isLoading: boolean;
   isSubmitting: boolean;
-  showAllowedDropdown: boolean;
-  showBlockedDropdown: boolean;
-  setShowAllowedDropdown: (show: boolean) => void;
-  setShowBlockedDropdown: (show: boolean) => void;
   toggleExternalAccess: (checked: boolean) => Promise<void>;
   allowUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<void>;
   blockUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<void>;
@@ -29,8 +25,6 @@ export function useDocumentAccessPolicy(
   workspaceId: string,
   documentId: string
 ): DocumentAccessPolicyHookReturn {
-  const [showAllowedDropdown, setShowAllowedDropdown] = useState(false);
-  const [showBlockedDropdown, setShowBlockedDropdown] = useState(false);
 
   // Queries
   const policiesQuery = useWorkspaceDocumentAccessPolicies(workspaceId, documentId, 1, 100);
@@ -157,10 +151,6 @@ export function useDocumentAccessPolicy(
     isExternalAllowed,
     isLoading,
     isSubmitting,
-    showAllowedDropdown,
-    showBlockedDropdown,
-    setShowAllowedDropdown,
-    setShowBlockedDropdown,
     toggleExternalAccess,
     allowUser,
     blockUser,

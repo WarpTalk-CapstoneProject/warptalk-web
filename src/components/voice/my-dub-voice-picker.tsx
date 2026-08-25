@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Fingerprint } from "@phosphor-icons/react/dist/ssr";
+import { useMemo } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,19 +13,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
+import { WorkspaceRailModule } from "@/components/workspace/page-chrome";
+import { getLanguageName } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
 import { useDubVoice, useSetDubVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
-import { languagesInScope } from "@/lib/language/languages";
-import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 
 /** Sentinel for the empty choice. Radix Select cannot hold "" as an item value. */
 const LIVE_CLONE = "__live_clone__";
-
-const LANGUAGES = languagesInScope("voiceCatalog").map((language) => ({
-  value: language.code,
-  label: language.name,
-}));
 
 function bareLanguage(language: string) {
   return language.split(/[-_]/)[0]?.toLowerCase() ?? language;
@@ -35,45 +30,52 @@ function bareLanguage(language: string) {
 /**
  * The voice this person is DUBBED IN — how they sound to everybody else.
  *
- * WHY THIS IS NOT THE PICKER NEXT TO IT
- *     LibraryVoicePicker sets the voice you HEAR other people in. This one sets how YOU sound.
- *     Until WT-396 those were the same stored thing, so somebody who uploaded a recording of
- *     their own voice changed neither: the profile was listed as active, and the dub still came
- *     back in a stock catalogue voice because nothing in the pipeline ever read the choice.
+ * WHY THIS IS NOT THE LIST BESIDE IT
+ *     The catalogue on the left sets the voice you HEAR other people in. This one sets how YOU
+ *     sound. Until WT-396 those were the same stored thing, so somebody who uploaded a recording
+ *     of their own voice changed neither: the profile was listed as active, and the dub still
+ *     came back in a stock catalogue voice because nothing in the pipeline read the choice.
  *
- *     The two controls are therefore worded around the direction, not around the word "voice".
- *     "Your voice" and "voices you hear" is the distinction a person can act on; two dropdowns
- *     both labelled "Voice" is the bug in UI form.
+ *     The two are therefore worded around the direction, not around the word "voice". "You are
+ *     dubbed in" and "voices you hear" is a distinction somebody can act on; two controls both
+ *     labelled "Voice" is the bug in UI form.
+ *
+ * WHY THE LANGUAGE IS NOT CHOSEN HERE
+ *     It is the page's language — the one the catalogue on the left is showing. This module had
+ *     its own language dropdown, the catalogue had a second, and the listening default had a
+ *     third, all of them independent, so the page asked the same question three times and could
+ *     hold three different answers to it.
  *
  * WHY "CLONE LIVE" IS AN EXPLICIT OPTION AND THE DEFAULT
- *     Leaving it unset is a real, working choice — the system builds a voice from the first
- *     twenty seconds of what you say in the meeting. Hiding that behind an empty dropdown makes
- *     it look broken; naming it makes "I have not chosen" legible.
+ *     Leaving it unset is a real, working choice — the meeting builds a voice from the first
+ *     seconds of what you say. Hiding that behind an empty dropdown makes it look broken; naming
+ *     it makes "I have not chosen" legible.
  */
-export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) {
-  const [language, setLanguage] = useState(LANGUAGES[0]?.value ?? "en");
+export function MyDubVoicePicker({
+  profiles,
+  language,
+}: {
+  profiles: VoiceProfileDto[];
+  /** Bare ISO-639-1, from the page. Decides which library voices are on offer here. */
+  language: string;
+}) {
   const { data: chosen, isLoading } = useDubVoice();
-  const { data: catalog = [] } = useVoiceCatalog(bareLanguage(language));
+  const { data: catalog = [] } = useVoiceCatalog(language);
   const setDubVoice = useSetDubVoice();
 
-  // Only profiles that actually have a provider voice behind them can be chosen. An uploaded
-  // recording has none until it has been cloned, and offering it would let somebody pick a voice
-  // that cannot be used — the same silent nothing this ticket exists to remove.
+  // Only profiles with a provider voice behind them can be chosen. An uploaded recording has
+  // none until it has been cloned, and offering it would let somebody pick a voice that cannot
+  // be used — the same silent nothing this ticket exists to remove.
   const usableProfiles = useMemo(
     () => profiles.filter((profile) => Boolean(profile.providerVoiceId) && profile.isActive),
     [profiles],
   );
 
-  const pendingProfiles = useMemo(
-    () => profiles.filter((profile) => !profile.providerVoiceId),
-    [profiles],
-  );
-
   const selectedVoiceName = useMemo(() => {
-    if (!chosen || chosen === LIVE_CLONE) return "Clone my voice during the meeting (default)";
-    const ownMatch = profiles.find((p) => p.providerVoiceId === chosen);
+    if (!chosen) return "Clone my voice live in the meeting";
+    const ownMatch = profiles.find((profile) => profile.providerVoiceId === chosen);
     if (ownMatch) return ownMatch.displayName || "My voice";
-    const catalogMatch = catalog.find((v) => v.id === chosen);
+    const catalogMatch = catalog.find((voice) => voice.id === chosen);
     if (catalogMatch) return catalogMatch.name;
     return chosen;
   }, [chosen, profiles, catalog]);
@@ -81,10 +83,10 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
   function choose(value: string) {
     const voiceId = value === LIVE_CLONE ? null : value;
     // The catalogue needs a language to validate against; a voice of your own does not.
-    const fromOwnProfile = usableProfiles.some((p) => p.providerVoiceId === voiceId);
+    const fromOwnProfile = usableProfiles.some((profile) => profile.providerVoiceId === voiceId);
 
     setDubVoice.mutate(
-      { voiceId, language: fromOwnProfile ? null : bareLanguage(language) },
+      { voiceId, language: fromOwnProfile ? null : language },
       {
         onSuccess: () =>
           toast.success(
@@ -97,104 +99,69 @@ export function MyDubVoicePicker({ profiles }: { profiles: VoiceProfileDto[] }) 
   }
 
   return (
-    <section className="mx-4 space-y-3 border-b border-border py-4">
-      <div className="flex items-center gap-2">
-        <Fingerprint size={16} weight="duotone" className="text-ink-muted" />
-        <h2 className="text-sm font-semibold text-ink">Your voice</h2>
-      </div>
-      <p className="text-xs text-ink-muted">
-        How you sound to people listening in another language. This is not the same as the voices
-        you hear other people in, below.
-      </p>
+    <WorkspaceRailModule
+      title="You are dubbed in"
+      description="How you sound to people listening in another language."
+    >
+      <Select
+        value={chosen ?? LIVE_CLONE}
+        onValueChange={(value) => choose(value ?? LIVE_CLONE)}
+        disabled={isLoading || setDubVoice.isPending}
+      >
+        <SelectTrigger className="h-8 w-full text-[12.5px]" aria-label="The voice you are dubbed in">
+          <SelectValue>{selectedVoiceName}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={LIVE_CLONE}>Clone my voice live in the meeting</SelectItem>
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Select value={language} onValueChange={(value) => setLanguage(value ?? language)}>
-          <SelectTrigger className="sm:w-44" aria-label="Language for the voice list">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {LANGUAGES.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          {usableProfiles.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Your voices</SelectLabel>
+              {usableProfiles.map((profile) => (
+                <SelectItem key={profile.id} value={profile.providerVoiceId!}>
+                  {profile.displayName ?? "My voice"}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
 
-        <Select
-          value={chosen ?? LIVE_CLONE}
-          onValueChange={(value) => choose(value ?? LIVE_CLONE)}
-          disabled={isLoading || setDubVoice.isPending}
-        >
-          <SelectTrigger className="flex-1" aria-label="The voice you are dubbed in">
-            <SelectValue>{selectedVoiceName}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={LIVE_CLONE}>
-              Clone my voice during the meeting (default)
-            </SelectItem>
+          {catalog.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Library voices · {getLanguageName(language)}</SelectLabel>
+              {catalog.map((voice) => (
+                <SelectItem key={voice.id} value={voice.id}>
+                  {voice.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+        </SelectContent>
+      </Select>
 
-            {usableProfiles.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Your voice profiles</SelectLabel>
-                {usableProfiles.map((profile) => (
-                  <SelectItem key={profile.id} value={profile.providerVoiceId!}>
-                    {profile.displayName ?? "My voice"}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-
-            {catalog.length > 0 && (
-              <SelectGroup>
-                <SelectLabel>Library voices</SelectLabel>
-                {catalog.map((voice) => (
-                  <SelectItem key={voice.id} value={voice.id}>
-                    {voice.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            )}
-          </SelectContent>
-        </Select>
-
-        {/*
-          Beside the choice rather than inside the list: this is where somebody decides how they
-          will sound, so it is where they should be able to check. Live cloning has nothing to
-          play — the voice does not exist until the meeting builds it.
-        */}
-        {chosen && (
+      {/*
+        Beside the choice rather than inside the list: this is where somebody decides how they
+        will sound, so it is where they should be able to check. Live cloning has nothing to
+        play — the voice does not exist until the meeting builds it.
+      */}
+      {chosen ? (
+        <div className="flex items-center justify-between gap-2">
           <VoicePreviewButton
             voiceId={chosen}
             language={bareLanguage(language)}
             label="the voice you are dubbed in"
-            className="h-9 w-9 shrink-0 self-start text-ink-muted hover:text-ink"
+            variant="inline"
           />
-        )}
-      </div>
-
-      {pendingProfiles.length > 0 && (
-        // Named rather than silently omitted. A profile that is uploaded but not yet usable is
-        // exactly what the original report was about — somebody uploaded a recording, saw it
-        // listed, and reasonably assumed it was in use.
-        <p className="text-[11px] text-ink-subtle">
-          {pendingProfiles.length === 1 ? "One recording is" : `${pendingProfiles.length} recordings are`}{" "}
-          uploaded but not yet turned into a usable voice, so {pendingProfiles.length === 1 ? "it is" : "they are"}{" "}
-          not listed above.
-        </p>
-      )}
-
-      {chosen && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={() => choose(LIVE_CLONE)}
-          disabled={setDubVoice.isPending}
-        >
-          Use my real voice instead
-        </Button>
-      )}
-    </section>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-[12px] text-ink-muted"
+            onClick={() => choose(LIVE_CLONE)}
+            disabled={setDubVoice.isPending}
+          >
+            Clone me live instead
+          </Button>
+        </div>
+      ) : null}
+    </WorkspaceRailModule>
   );
 }

@@ -7,17 +7,21 @@ const read = (file) => readFile(path.join(root, file), "utf8");
 
 const [
   roomDetailPage,
+  transcriptPanel,
   meetingSession,
   endpoints,
   chatPanel,
   voiceProfiles,
+  voiceProfileDialog,
   packageJson,
 ] = await Promise.all([
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
+  read("src/components/rooms/meeting-transcript-panel.tsx"),
   read("src/components/rooms/live/persistent-meeting-session.tsx"),
   read("src/lib/api/endpoints.ts"),
   read("src/components/rooms/live/chat-panel.tsx"),
   read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
+  read("src/components/voice/create-voice-profile-dialog.tsx"),
   read("package.json"),
 ]);
 
@@ -28,8 +32,11 @@ const startedHandler = meetingSession.slice(
 
 const checks = [
   [
+    // The transcript moved out of the route file into its own component when it grew a
+    // language picker and a second layout. The grouping is the rule; the file it is called
+    // from is not.
     "WT-225 keeps the intentional same-speaker utterance grouping",
-    roomDetailPage.includes("groupSavedTranscriptSegments("),
+    transcriptPanel.includes("groupSavedTranscriptSegments("),
   ],
   [
     // Was: a canonical /{slug}/transcript route. That route, and the workspace-wide
@@ -60,15 +67,19 @@ const checks = [
   [
     // Was pinned to buildTranscriptReviewPath, i.e. /{slug}/transcript?room={id} — the
     // workspace-wide transcript archive filtered by room. This check therefore pinned the bug:
-    // rooms/[id]/ended (artifact cards with a 5s refresh while they generate, plus the
+    // the room's own record (artifact cards with a 5s refresh while they generate, plus the
     // artifacts/feedback/history links) was fully built and had no route into it from anywhere in
     // the app. buildTranscriptReviewPath had exactly one caller, this one, and is replaced.
     // What WT-228 actually cares about — that ending for everyone lands the host on the ended
     // room's own wrap-up rather than back on the rooms list — is what is pinned now.
-    "WT-228 ending for everyone opens the ended room's wrap-up page",
-    meetingSession.includes("buildMeetingEndedPath(") &&
+    // The wrap-up page it used to open is deleted — the room's own page is the wrap-up now, and
+    // it holds strictly more than that page did (the transcript in any language the meeting was
+    // held in, the minutes, the rating). What WT-228 needs is that ending a meeting lands
+    // everyone on the record and not on a list of rooms, which is what is pinned here.
+    "WT-228 ending for everyone opens the meeting's own record",
+    meetingSession.includes("roomDetailPath(") &&
       meetingSession.includes('action === "end"') &&
-      meetingSession.includes("? buildMeetingEndedPath(activeWorkspaceSlug, roomId)"),
+      meetingSession.includes('? roomDetailPath(activeWorkspaceSlug || "workspace", roomId)'),
   ],
   [
     // The other half of the same navigation: TranslationRoomEnded router.replace'd EVERY client
@@ -80,19 +91,32 @@ const checks = [
   ],
   [
     "WT-228 transcript review exposes editing and finalization actions",
-    roomDetailPage.includes("finalizeTranscript()") &&
-      roomDetailPage.includes("Save correction"),
+    transcriptPanel.includes("finalizeTranscript()") &&
+      transcriptPanel.includes("Save correction") &&
+      // Still reached from the meeting's own page, which is the half that made the deleted
+      // Transcripts route safe to remove.
+      roomDetailPage.includes("<MeetingTranscriptArtifact"),
   ],
   [
+    // The languages are no longer listed on the page at all: they come from
+    // languagesInScope("voiceProfile") in the one registry, which is what makes a hardcoded
+    // list impossible rather than merely absent. Both files are checked so neither can grow
+    // one back.
     "WT-229 voice profiles expose only EN VI and JA",
     !voiceProfiles.includes('{ key: "ko"') &&
-      !voiceProfiles.includes('{ value: "ko-KR"'),
+      !voiceProfiles.includes('{ value: "ko-KR"') &&
+      !voiceProfileDialog.includes('{ key: "ko"') &&
+      !voiceProfileDialog.includes('{ value: "ko-KR"'),
   ],
   [
+    // Recording moved out of the page and into the create dialog when the page was split into
+    // a list column and a settings rail. What WT-230 needs is that somebody can still record
+    // straight into a profile and that the sample is checked before it is sent — so the
+    // assertion follows the form, and the second half keeps the form reachable from the page.
     "WT-230 voice profiles support direct recording and sample quality checks",
-    voiceProfiles.includes("MediaRecorder") &&
-      voiceProfiles.includes("analyzeVoiceSample") &&
-      voiceProfiles.includes("Record sample"),
+    voiceProfileDialog.includes("MediaRecorder") &&
+      voiceProfileDialog.includes("analyzeVoiceSample") &&
+      voiceProfiles.includes("<CreateVoiceProfileDialog"),
   ],
   [
     "new issue regression contract is part of the contract suite",

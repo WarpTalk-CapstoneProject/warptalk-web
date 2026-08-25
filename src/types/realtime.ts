@@ -117,6 +117,12 @@ export interface AiSuggestionDto {
   confidence: number;
   language: string;
   createdAt: string;
+  /**
+   * Documents this hint drew on, as the same JSON array the chat assistant publishes — see
+   * lib/assistant/answer-sources. Absent for a hint that came out of the transcript, which is
+   * the normal case.
+   */
+  sourcesJson?: string | null;
 }
 
 export interface ChatMentionDto {
@@ -138,6 +144,11 @@ export interface ChatMessageDto {
   containsWarpbotMention?: boolean;
   mentions?: ChatMentionDto[];
   createdAt: string;
+  /**
+   * Only ever set on a WarpBot answer: the sources it cited, as the JSON array warptalk-ai
+   * published. See lib/assistant/answer-sources for what the list means and why it is a string.
+   */
+  sourcesJson?: string | null;
 }
 
 export interface ChatMessageTranslationDto {

@@ -38,6 +38,7 @@ import {
   SUMMARY_TEMPLATES,
   formatCitationTime,
 } from "@/lib/meeting/meeting-summary";
+import { isSummaryStale, type StalenessSegment } from "@/lib/meeting/summary-staleness";
 import { translationRoomService } from "@/services/translation-room.service";
 import type {
   EndedRoomHistoryItem,
@@ -145,12 +146,28 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
  * which is exactly how downloading already works — so consent is granted here by the same call,
  * and the caller refetches afterwards so the Artifacts row stops saying "Consent required" too.
  */
+/**
+ * A request to move the recording to a moment, carried as a value rather than a ref.
+ *
+ * `token` is what makes a REPEAT of the same second a new request: clicking the same transcript
+ * line twice must seek twice (the viewer has since scrubbed away), and an effect keyed on seconds
+ * alone would see no change and do nothing.
+ */
+export interface SeekRequest {
+  seconds: number;
+  token: number;
+}
+
 export function MeetingRecordingPlayer({
   artifact,
   onConsentGranted,
+  seek,
 }: {
   artifact: RoomHistoryArtifact | null;
   onConsentGranted?: () => void;
+  /** Move to a moment. Ignored when the caller could not align the two clocks — see
+   *  recording-seek.ts, where an unalignable meeting yields no request at all. */
+  seek?: SeekRequest | null;
 }) {
   // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
   // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
@@ -158,6 +175,28 @@ export function MeetingRecordingPlayer({
   const [loaded, setLoaded] = useState<{ artifactId: string; url: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const sourceUrl = artifact && loaded?.artifactId === artifact.id ? loaded.url : null;
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
+  // dropped — the first click on a transcript line is exactly that case, since the player waits
+  // for a press before fetching anything.
+  const pendingSeekRef = useRef<SeekRequest | null>(null);
+
+  // Not setState: this drives an external system (the media element) from React state, which is
+  // what an effect is actually for.
+  useEffect(() => {
+    if (!seek) return;
+    const video = videoRef.current;
+    if (!video || !sourceUrl) {
+      pendingSeekRef.current = seek;
+      return;
+    }
+    video.currentTime = seek.seconds;
+    // Play, because somebody who clicked a line wants to HEAR it. A paused seek looks like
+    // nothing happened on a control they cannot see move.
+    void video.play().catch(() => {
+      // Autoplay refused — the frame has still moved, which is the part that matters.
+    });
+  }, [seek, sourceUrl]);
 
   // Nothing to watch is not an error state, and an empty player frame promising a video that does
   // not exist is worse than no frame at all. The meeting simply was not recorded.
@@ -199,10 +238,18 @@ export function MeetingRecordingPlayer({
           // controls, and nothing else: autoplay on a page someone opened to read a transcript is
           // a room full of unexpected sound.
           <video
+            ref={videoRef}
             src={sourceUrl}
             controls
             preload="metadata"
             className="aspect-video w-full bg-black"
+            onLoadedMetadata={(event) => {
+              const queued = pendingSeekRef.current;
+              if (!queued) return;
+              pendingSeekRef.current = null;
+              event.currentTarget.currentTime = queued.seconds;
+              void event.currentTarget.play().catch(() => {});
+            }}
           />
         ) : (
           <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-surface-2/40">
@@ -359,6 +406,39 @@ function SummaryGeneratingText() {
   );
 }
 
+/**
+ * "The transcript changed after this was written."
+ *
+ * Not an error state and not styled as one: the summary is not broken, it is simply describing
+ * text that has since been corrected. It offers the one action that resolves it and otherwise
+ * stays out of the way — the reader may well decide a typo fix does not warrant regenerating.
+ */
+function SummaryStalenessNotice({
+  onRegenerate,
+  busy,
+}: {
+  onRegenerate: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-md border border-border bg-surface-2 px-3 py-2">
+      <WarningCircle size={14} className="shrink-0 text-ink-muted" />
+      <p className="min-w-0 flex-1 text-[12px] text-ink-muted">
+        The transcript was corrected after this summary was written — what is below may no
+        longer match it.
+      </p>
+      <button
+        type="button"
+        onClick={onRegenerate}
+        disabled={busy}
+        className="shrink-0 rounded-md border border-border px-2.5 py-1 text-[12px] font-medium text-ink disabled:opacity-60"
+      >
+        {busy ? "Regenerating…" : "Regenerate summary"}
+      </button>
+    </div>
+  );
+}
+
 export function SummaryPanel({
   room,
   busyArtifactId,
@@ -366,6 +446,8 @@ export function SummaryPanel({
   onJumpToMoment,
   onRewrite,
   forceGenerating = false,
+  segments,
+  hasTranscript,
 }: {
   room: EndedRoomHistoryItem;
   busyArtifactId: string | null;
@@ -377,6 +459,16 @@ export function SummaryPanel({
   onRewrite?: (templateKey: string) => Promise<void>;
   /** Local preview switch for visually checking the AI-writing state without backend timing. */
   forceGenerating?: boolean;
+  /** The transcript's segments, when the surrounding page has them. Supplied only so the panel
+   *  can tell the reader their summary is behind a correction — see SummaryStalenessNotice. */
+  segments?: readonly StalenessSegment[] | null;
+  /**
+   * Whether the meeting captured any transcript at all, once the page knows.
+   *
+   * Omitted (or `undefined`) means "not loaded yet", and nothing is concluded from it — an
+   * un-fetched transcript must never be read as a meeting nobody spoke in.
+   */
+  hasTranscript?: boolean;
 }) {
   const artifact = room.artifacts.find(
     (item) => item.type === "summary_export",
@@ -399,8 +491,9 @@ export function SummaryPanel({
     hasStructuredContent,
     insufficientData: summary?.insufficientData,
     recentlyEnded,
+    hasTranscript,
   });
-  const isGenerating = summaryState === "generating";
+  const isGenerating = forceGenerating || summaryState === "generating";
 
   // "Not shared with you" is not "does not exist". The ROW existing is the fact this panel could
   // not see: room artifacts default to HOST_ONLY and the history projection omits `content` for
@@ -412,8 +505,12 @@ export function SummaryPanel({
     hasSummaryArtifact: Boolean(artifact),
     hasParsedSummary: Boolean(summary),
     insufficientData: summary?.insufficientData,
+    hasTranscript,
   });
 
+  // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
+  const stale = isSummaryStale(segments, artifact);
+  const [regenerating, setRegenerating] = useState(false);
 
   useEffect(() => {
     // A rewrite that never lands must not leave the picker spinning forever — the summary
@@ -512,6 +609,27 @@ export function SummaryPanel({
         <SummaryGeneratingText />
       ) : hasStructuredContent && summary ? (
         <div className="flex-1 space-y-6 p-6">
+          {/* Above the content, because it is a caveat ON the content. Only shown where the
+              caller supplied segments — the ended page reads the transcript as exported text and
+              has no corrections to compare against. Reuses onRewrite with the CURRENT template:
+              regenerating is the same operation as reshaping, aimed at the same shape. */}
+          {stale && onRewrite ? (
+            <SummaryStalenessNotice
+              busy={regenerating}
+              onRegenerate={async () => {
+                setRegenerating(true);
+                try {
+                  await onRewrite(currentTemplate);
+                } finally {
+                  // Cleared when the REQUEST is accepted, not when the summary lands — that
+                  // arrives asynchronously on the artifact. The notice removes itself once the
+                  // rewritten summary's updatedAt passes the correction, so a button that stayed
+                  // busy until then would be claiming to know something it cannot see.
+                  setRegenerating(false);
+                }
+              }}
+            />
+          ) : null}
           <section>
             <h3 className="text-[11px] font-semibold uppercase text-ink-subtle">
               Overview
@@ -589,7 +707,9 @@ export function SummaryPanel({
                 ? "Generating summary…"
                 : summaryAbsence === "withheld"
                   ? "Summary not shared with you"
-                  : "No summary output"}
+                  : summaryAbsence === "no-transcript"
+                    ? "Nothing was said to summarise"
+                    : "No summary output"}
             </h3>
             <p className="mt-2 text-[11px] leading-5 text-ink-muted">
               {summaryAbsenceMessage(summaryAbsence)}

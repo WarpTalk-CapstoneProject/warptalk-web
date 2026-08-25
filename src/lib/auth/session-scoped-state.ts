@@ -4,6 +4,7 @@ import { useActiveMeetingStore } from "../../stores/active-meeting-store.ts";
 import { useMeetingInviteStore } from "../../stores/meeting-invite-store.ts";
 import { useMeetingStartedStore } from "../../stores/meeting-started-store.ts";
 import { useAssistantContextStore } from "../../stores/assistant-context-store.ts";
+import { useAssistantWidgetStore } from "../../stores/assistant-widget-store.ts";
 import { useNotificationStore } from "../../stores/notification-store.ts";
 import { useOnboardingStore } from "../../stores/onboarding-store.ts";
 import { usePresenceStore } from "../../stores/presence-store.ts";
@@ -95,6 +96,7 @@ function resetSessionScopedStores() {
   // button does not merely open a room, it accepts on behalf of whoever is signed in.
   useMeetingInviteStore.getState().dismiss();
   useAssistantContextStore.getState().clearAllContext();
+  useAssistantWidgetStore.getState().reset();
   // "Already seen the tour" and "not now, thanks" are answers one person gave. The next
   // account on this browser has not been shown anything and has dismissed nothing.
   useOnboardingStore.getState().reset();

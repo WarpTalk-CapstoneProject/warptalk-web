@@ -4,11 +4,16 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface DocumentActorProps {
   label: "Uploader" | "Approver";
+  /**
+   * Null when there is nobody to name — the actor left the workspace, or is past the page of
+   * members the caller fetched. Both are normal, and the `!member` branch below is the whole
+   * answer; findDocumentActor returns null rather than undefined, so it is accepted here too.
+   */
   member?: {
     fullName: string;
     email: string;
     avatarUrl?: string | null;
-  };
+  } | null;
   showLabel?: boolean;
 }
 

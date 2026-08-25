@@ -31,19 +31,19 @@
  */
 
 import { useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { BookOpen, FileArrowUp, Plus, Trash, MagnifyingGlass, Translate } from "@phosphor-icons/react";
+import { FileArrowUp, Plus, Trash, MagnifyingGlass } from "@phosphor-icons/react";
 
 import {
   WorkspaceBody,
-  WorkspaceEmptyState,
   WorkspacePage,
   WorkspacePrimaryButton,
   WorkspaceToolbar,
 } from "@/components/workspace/page-chrome";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -74,17 +74,34 @@ import {
   useGlossariesByWorkspace,
   useGlossaryTerms,
 } from "@/hooks/use-workspace";
+// Called directly, not through a hook: the terms go into the glossary that was created a line
+// earlier, and a hook bound to an id can only be bound to one the component already had.
+import { WorkspaceService } from "@/services/workspace.service";
+import { initialTermsSchema, termRowsToImport } from "@/lib/glossary/initial-terms";
+import { InitialTermsField } from "@/components/glossary/initial-terms-field";
 import type { GlossaryDto } from "@/types/workspace";
 import {
   GlossaryImportDialog,
   type ParsedGlossaryRow,
 } from "@/components/glossary/glossary-import-dialog";
 
+/**
+ * What a new glossary starts as, on both sides.
+ *
+ * A code from the registry rather than a literal, so it cannot drift out of the option list the
+ * selects are built from — a default that is not one of the choices renders as an empty box that
+ * nonetheless passes validation.
+ */
+const DEFAULT_GLOSSARY_LANGUAGE = "en";
+
 const glossarySchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
   sourceLanguage: z.string().min(1, "Select the language people speak"),
   targetLanguage: z.string().min(1, "Select the language it is translated into"),
+  // WT-558. The rule for what counts as a usable row lives in lib/glossary/initial-terms, so the
+  // schema and the field that renders the errors cannot disagree about a half-filled row.
+  initialTerms: initialTermsSchema,
 });
 type GlossaryForm = z.infer<typeof glossarySchema>;
 
@@ -131,8 +148,24 @@ export default function WorkspaceGlossaryPage() {
 
   const glossaryForm = useForm<GlossaryForm>({
     resolver: zodResolver(glossarySchema),
-    defaultValues: { name: "", description: "", sourceLanguage: "", targetLanguage: "" },
+    // English on both sides, prefilled rather than left empty.
+    //
+    // Every glossary this workspace has made is English-sourced, and the pair was being picked
+    // from two empty dropdowns each time — so the commonest answer cost two decisions, and a
+    // half-filled form failed validation on a field nobody had thought about. The selects are
+    // still there and still change it; this only decides what they start on.
+    defaultValues: {
+      name: "",
+      description: "",
+      sourceLanguage: DEFAULT_GLOSSARY_LANGUAGE,
+      targetLanguage: DEFAULT_GLOSSARY_LANGUAGE,
+      // One blank row, offered rather than hidden behind "+ Add term". A section that starts
+      // empty reads as optional detail; a row with the cursor in it reads as the next thing to
+      // do, which is what the ticket is asking for.
+      initialTerms: [{ sourceTerm: "", targetTerm: "" }],
+    },
   });
+  const initialTerms = useFieldArray({ control: glossaryForm.control, name: "initialTerms" });
   const termForm = useForm<TermForm>({
     resolver: zodResolver(termSchema),
     defaultValues: {
@@ -213,15 +246,53 @@ export default function WorkspaceGlossaryPage() {
 
   async function submitGlossary(values: GlossaryForm) {
     try {
-      await createGlossary.mutateAsync({
+      const created = await createGlossary.mutateAsync({
         name: values.name,
         description: values.description || null,
         sourceLanguage: values.sourceLanguage,
         targetLanguage: values.targetLanguage,
       });
-      toast.success("Glossary created.");
+
+      /**
+       * WT-558: the terms typed alongside the name, written into the glossary that was just made.
+       *
+       * Two requests rather than one, because the create endpoint takes no terms — and that is
+       * the right seam: a glossary whose terms failed to import is still a glossary, and the
+       * reader is told exactly that instead of being shown a failure that rolled back the name
+       * they had already chosen. Which is why this is not inside the try that reports "could not
+       * create the glossary": by here, it has been created.
+       *
+       * Blank rows are dropped. Half-filled ones never get here — the schema refuses them, so a
+       * word somebody typed cannot be silently discarded.
+       */
+      const rows = termRowsToImport(values.initialTerms);
+
+      let importedCount = 0;
+      if (rows.length > 0) {
+        try {
+          const result = await WorkspaceService.bulkImportTerms(created.id, rows);
+          importedCount = result.imported;
+        } catch (error) {
+          toast.error(
+            getErrorMessage(error, `Glossary created, but its terms could not be added.`),
+          );
+        }
+      }
+
+      toast.success(
+        importedCount > 0
+          ? `Glossary created with ${importedCount} term${importedCount === 1 ? "" : "s"}.`
+          : "Glossary created.",
+      );
       setGlossaryDialogOpen(false);
       glossaryForm.reset();
+
+      // Land on what was just made, rather than leaving the reader on whichever glossary happened
+      // to be selected before. The list is refetched AFTER the import so the term count on the
+      // new entry is the real one — the create mutation's own invalidation fires before the terms
+      // exist and would show 0.
+      setSelectedId(created.id);
+      await glossariesQuery.refetch();
 
       /**
        * Carry on into the import the reader actually asked for.
@@ -237,12 +308,10 @@ export default function WorkspaceGlossaryPage() {
        */
       if (importAfterCreate) {
         setImportAfterCreate(false);
-        const { data } = await glossariesQuery.refetch();
-        const created = data?.[0];
-        if (created) {
-          setSelectedId(created.id);
-          setImportDialogOpen(true);
-        }
+        // WT-558: named directly now. This used to refetch and take `data[0]`, which was only
+        // unambiguous because the path was offered exclusively from the empty state; the create
+        // endpoint returns the row it made, so there is nothing left to infer.
+        setImportDialogOpen(true);
       }
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not create the glossary."));
@@ -369,8 +438,8 @@ export default function WorkspaceGlossaryPage() {
 
       <WorkspaceBody>
         {glossaries.length === 0 ? (
-          <WorkspaceEmptyState
-            icon={<BookOpen className="h-6 w-6" />}
+          <PagePlaceholder
+            kind="glossary"
             title="No glossary yet"
             description="A glossary fixes how your terms are heard and translated during a meeting — product names, acronyms, and words whose meaning depends on your field. Terms here override the platform-wide glossary. Already have a list? Import a CSV or spreadsheet instead of typing it out."
             action={
@@ -403,8 +472,8 @@ export default function WorkspaceGlossaryPage() {
         ) : !selected ? null : termsQuery.isLoading ? (
           <div className="h-24 animate-pulse rounded-lg bg-surface-2" />
         ) : terms.length === 0 ? (
-          <WorkspaceEmptyState
-            icon={<Translate className="h-6 w-6" />}
+          <PagePlaceholder
+            kind="glossary"
             title={search ? "No term matches that search" : "This glossary has no terms yet"}
             description={
               search
@@ -569,6 +638,7 @@ export default function WorkspaceGlossaryPage() {
             />
             <div className="grid grid-cols-2 gap-2">
               <Select
+                value={glossaryForm.watch("sourceLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("sourceLanguage", value ?? "")
                 }
@@ -585,6 +655,7 @@ export default function WorkspaceGlossaryPage() {
                 </SelectContent>
               </Select>
               <Select
+                value={glossaryForm.watch("targetLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("targetLanguage", value ?? "")
                 }
@@ -605,6 +676,21 @@ export default function WorkspaceGlossaryPage() {
             glossaryForm.formState.errors.targetLanguage ? (
               <p className="text-[11px] text-red-600">Choose both languages.</p>
             ) : null}
+
+            {/* WT-558 — the first terms, typed here rather than after the fact.
+                Creating a glossary and putting a word in it used to be two separate errands:
+                create an empty set, find it in the list, open it, then add a term. Everything a
+                person came to do belongs in the action they started. */}
+            <InitialTermsField
+              fields={initialTerms.fields}
+              register={glossaryForm.register}
+              errors={glossaryForm.formState.errors.initialTerms}
+              sourceLanguageName={getLanguageName(glossaryForm.watch("sourceLanguage"))}
+              targetLanguageName={getLanguageName(glossaryForm.watch("targetLanguage"))}
+              onAppend={() => initialTerms.append({ sourceTerm: "", targetTerm: "" })}
+              onRemove={(index) => initialTerms.remove(index)}
+            />
+
             <DialogFooter>
               <WorkspacePrimaryButton type="submit" disabled={createGlossary.isPending}>
                 {createGlossary.isPending ? "Creating…" : "Create glossary"}
@@ -670,6 +756,8 @@ export default function WorkspaceGlossaryPage() {
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
           glossaryName={selected.name}
+          sourceLanguage={selected.sourceLanguage}
+          targetLanguage={selected.targetLanguage}
           isImporting={bulkImport.isPending}
           onImport={importTerms}
         />

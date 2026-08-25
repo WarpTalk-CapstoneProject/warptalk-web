@@ -66,7 +66,7 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-} from "@phosphor-icons/react/dist/ssr";
+  CheckSquare,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -299,6 +299,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   }, [activeWorkspaceName]);
 
   const workspaceNav: NavItem[] = [];
+  if (isOwnerOrAdmin) {
+    // First, not last. Dashboard is the overview of everything under it, and it was sitting at
+    // the bottom under Settings — the one entry that is not a place in the workspace but a
+    // control panel for it. An overview reads as an overview when it comes before the things it
+    // summarises.
+    workspaceNav.push({
+      icon: SquaresFour,
+      label: "Dashboard",
+      href: `/${slug}/dashboard`,
+      tourId: "nav-dashboard",
+    });
+  }
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
     { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
@@ -310,7 +322,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // Its absence from this list is the whole reason the page was deleted as dead code, and the
     // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
     // can navigate to is indistinguishable from one that was never built.
-    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" }
+    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" },
+    // Work the meetings assigned to you, keyed on the person rather than the meeting. Listed here
+    // for the same reason Glossary is: an endpoint no navigation reaches is indistinguishable
+    // from one that was never built, and this list is the whole point of action items becoming
+    // rows instead of sentences.
+    { icon: CheckSquare, label: "My tasks", href: `/${slug}/tasks`, tourId: "nav-tasks" }
   );
 
   if (isOwnerOrAdmin) {
@@ -321,8 +338,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
     // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
     // credit balance belong. It is reached through Settings now, not from the app's main nav.
+    //
+    // Last in the list, and pushed after everything else so it stays last as entries are added.
+    // Settings is where you go to change the workspace, not one of the places in it.
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
-    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard`, tourId: "nav-dashboard" });
   }
 
   /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { VoiceProfileService } from "@/services/voice-profile.service";
+import { VoiceConsentService, VoiceProfileService } from "@/services/voice-profile.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
   CreateVoiceProfileRequest,
@@ -15,6 +15,13 @@ export const VOICE_PROFILE_KEYS = {
     ["voiceProfiles", "list", userId ?? "anonymous"] as const,
   catalog: (language: string) => ["voiceProfiles", "catalog", language] as const,
   dubVoice: () => ["voiceProfiles", "dubVoice"] as const,
+  /**
+   * Permission to clone, which is NOT part of a profile and is deliberately keyed apart from
+   * one. It is granted once for the person, outlives every profile they make or delete, and is
+   * what AuthService is asked about over gRPC before a meeting may build a voice from live
+   * speech. Invalidating the profile list must not refetch it, and vice versa.
+   */
+  consent: () => ["voiceConsent"] as const,
 };
 
 export function useVoiceProfiles() {
@@ -90,5 +97,40 @@ export function useSetPreferredVoice() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: VOICE_PROFILE_KEYS.lists() });
     },
+  });
+}
+
+/**
+ * Whether this person allows a MEETING to build a voice model from their live speech.
+ *
+ * This is the account-level VOICE_CLONE consent, and it is a different permission from the five
+ * confirmations in the create-profile dialog — those are VOICE_PROFILE_UPLOAD, recorded against
+ * the recording somebody uploads. Uploading works without this one; only cloning somebody live,
+ * mid-meeting, needs it. They are stored as separate rows with separate types in
+ * `voice_consents`, and the UI has to say which is which or it reads as being asked twice.
+ */
+export function useVoiceConsent() {
+  return useQuery({
+    queryKey: VOICE_PROFILE_KEYS.consent(),
+    queryFn: () => VoiceConsentService.status(),
+    staleTime: 60_000,
+  });
+}
+
+export function useGrantVoiceConsent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => VoiceConsentService.grant(),
+    // The response IS the new status, so it is written straight in rather than refetched — a
+    // decision this deliberate should not flicker back to its old value while a GET runs.
+    onSuccess: (status) => queryClient.setQueryData(VOICE_PROFILE_KEYS.consent(), status),
+  });
+}
+
+export function useRevokeVoiceConsent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => VoiceConsentService.revoke(),
+    onSuccess: (status) => queryClient.setQueryData(VOICE_PROFILE_KEYS.consent(), status),
   });
 }

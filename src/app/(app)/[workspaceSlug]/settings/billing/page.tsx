@@ -24,7 +24,6 @@
 
 import {
   ArrowClockwise,
-  CreditCard,
   Lock,
   Spinner,
   Wallet,
@@ -45,7 +44,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { WorkspaceEmptyState } from "@/components/workspace/page-chrome";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -395,8 +394,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 function BillingNoSubscriptionState({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <div className="px-4 py-4">
-      <WorkspaceEmptyState
-        icon={<CreditCard className="h-7 w-7" />}
+      <PagePlaceholder
+        kind="billing"
         title="No active subscription"
         description="This workspace has no billing plan yet, so there is no balance or usage to report. Choose a plan to start tracking credits and AI usage."
         action={

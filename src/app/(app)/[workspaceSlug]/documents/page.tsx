@@ -69,6 +69,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { DocumentActor } from "@/components/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import type {
   WorkspaceDocumentDto,
   WorkspaceMemberDto,
@@ -770,6 +771,16 @@ export default function WorkspaceDocumentsPage() {
           <div className="flex h-64 items-center justify-center">
             <Spinner className="h-7 w-7 animate-spin text-primary" />
           </div>
+        ) : filteredDocs.length === 0 ? (
+          <PagePlaceholder
+            kind="documents"
+            title="No documents found"
+            description={
+              canApproveDocuments
+                ? "Use New above to upload a reference document."
+                : "No reference documents have been uploaded to this workspace yet."
+            }
+          />
         ) : viewMode === "list" ? (
           /* List View */
           <section className="mt-0.2 min-h-full overflow-x-auto px-2">

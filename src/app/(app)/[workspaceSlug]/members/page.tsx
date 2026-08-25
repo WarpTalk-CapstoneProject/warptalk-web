@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
-  Users,
   UserMinus,
   Funnel,
   Spinner,
@@ -49,6 +48,7 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { ListDisplayPopover } from "@/components/ui/list-display-popover";
 import { Switch } from "@/components/ui/switch";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import {
   Dialog,
   DialogContent,
@@ -279,11 +279,12 @@ export default function WorkspaceMembersPage() {
     pendingInvitations,
     [],
   ).filter((row) => row.status === "invited").length;
-  const requestedCount = buildMemberDirectory(
-    membersList,
-    [],
-    pendingRequests,
-  ).filter((row) => row.status === "requested").length;
+  // Counted through the same filter the pill applies, so the number and the list it opens can
+  // never disagree — a leave request counts here exactly because it is shown there.
+  const requestedCount = filterMemberDirectory(
+    buildMemberDirectory(membersList, [], pendingRequests),
+    "requested",
+  ).length;
 
   const memberFilterPills: {
     key: DirectoryFilter;
@@ -643,23 +644,24 @@ export default function WorkspaceMembersPage() {
             <Spinner className="h-6 w-6 animate-spin text-primary" />
           </div>
         ) : filteredMembers.length === 0 ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center border border-dashed border-hairline rounded-lg bg-surface-1/10">
-            <Users className="h-8 w-8 text-ink-muted" />
-            <p className="text-sm font-medium">
-              {filter === "invited"
+          <PagePlaceholder
+            kind="members"
+            className="min-h-[240px]"
+            title={
+              filter === "invited"
                 ? "No pending invitations"
                 : filter === "requested"
-                  ? "No join requests"
-                  : "No people found"}
-            </p>
-            <p className="text-xs text-ink-muted">
-              {filter === "invited"
+                  ? "No requests waiting"
+                  : "No people found"
+            }
+            description={
+              filter === "invited"
                 ? "Use Invite new member to send one."
                 : filter === "requested"
-                  ? "Requests to join this workspace will appear here."
-                  : "Try adjusting your search terms or filters."}
-            </p>
-          </div>
+                  ? "Requests to join this workspace, and requests to leave it, will appear here."
+                  : "Try adjusting your search terms or filters."
+            }
+          />
         ) : (
           <div className="min-w-[1000px]">
             {/* Header row */}
@@ -690,8 +692,12 @@ export default function WorkspaceMembersPage() {
               const isSelf = !!member && member.userId === currentUser?.id;
               const memberRole = row.roleName.toLowerCase();
               const isExternal = row.membershipType.toLowerCase() === "external";
+              const leaveRequest = row.leaveRequest;
               const reviewBusy =
-                approveJoinRequest.isPending || rejectJoinRequest.isPending;
+                approveJoinRequest.isPending ||
+                rejectJoinRequest.isPending ||
+                approveLeaveRequest.isPending ||
+                rejectLeaveRequest.isPending;
 
               return (
                 <div
@@ -795,17 +801,24 @@ export default function WorkspaceMembersPage() {
                   </div>
                   )}
 
-                  {/* Where this person stands: joined, invited, or asking to join */}
+                  {/* Where this person stands: joined, invited, asking to join, or asking out */}
                   {visibleDisplayProperties.includes("status") && (
                   <div>
                     <Badge
                       variant="outline"
+                      title={
+                        leaveRequest
+                          ? "This member has asked to leave and is waiting on your answer."
+                          : undefined
+                      }
                       className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
                         row.status === "joined"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
                           : row.status === "invited"
                             ? "bg-amber-500/5 text-amber-500 border-amber-500/20"
-                            : "bg-sky-500/5 text-sky-500 border-sky-500/20"
+                            : row.status === "leaving"
+                              ? "bg-rose-500/5 text-rose-500 border-rose-500/20"
+                              : "bg-sky-500/5 text-sky-500 border-sky-500/20"
                       }`}
                     >
                       {DIRECTORY_STATUS_LABELS[row.status]}
@@ -850,7 +863,39 @@ export default function WorkspaceMembersPage() {
                   {visibleDisplayProperties.includes("actions") && (
                     <div className="flex justify-end gap-1">
                       {isOwnerOrAdmin ? (
-                        member ? (
+                        leaveRequest ? (
+                          <>
+                            <button
+                              onClick={() =>
+                                handleApprove(
+                                  leaveRequest.id,
+                                  leaveRequest.membershipType,
+                                  leaveRequest.status,
+                                )
+                              }
+                              disabled={reviewBusy}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
+                              title="Approve leave request"
+                              aria-label={`Approve the leave request from ${row.name}`}
+                            >
+                              <CheckCircle className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleReject(
+                                  leaveRequest.id,
+                                  leaveRequest.status,
+                                )
+                              }
+                              disabled={reviewBusy}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
+                              title="Reject leave request"
+                              aria-label={`Reject the leave request from ${row.name}`}
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
+                          </>
+                        ) : member ? (
                           <button
                             onClick={() =>
                               setMemberToRemove({

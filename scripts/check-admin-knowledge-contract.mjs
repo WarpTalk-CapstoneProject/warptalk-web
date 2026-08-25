@@ -28,7 +28,7 @@ const [endpoints, service, hooks, table, filters, view, adminDetail, workspacePa
     source("src/components/knowledge/knowledge-table.tsx"),
     source("src/hooks/use-knowledge-filters.ts"),
     source("src/lib/knowledge/knowledge-view.ts"),
-    source("src/app/(app)/admin/workspaces/[workspaceId]/page.tsx"),
+    source("src/app/(app)/admin/workspaces/[workspaceRef]/page.tsx"),
     source("src/app/(app)/[workspaceSlug]/knowledge/page.tsx"),
   ]);
 

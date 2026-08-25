@@ -8,6 +8,7 @@ import {
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
   getLiveCaptionText,
+  groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupTranscriptSegments,
   isTranscriptControlMarker,
@@ -214,7 +215,15 @@ function savedSegment(text: string, sequenceOrder: number, speakerName = "Demo H
 }
 
 test("recognises a control marker, whatever the marker is called", () => {
-  for (const marker of ["__MEETING_END__", "  __MEETING_END__  ", "__TRANSLATION_STARTED__"]) {
+  // "__MEETING_END__a" is a real row in production: 1 corrupted sentinel among 156 clean ones.
+  // With the old `$` anchor it rendered as a line of dialogue attributed to "System", and it
+  // would now also put "system" in the transcript's language picker.
+  for (const marker of [
+    "__MEETING_END__",
+    "  __MEETING_END__  ",
+    "__TRANSLATION_STARTED__",
+    "__MEETING_END__a",
+  ]) {
     assert.equal(isTranscriptControlMarker(marker), true, marker);
   }
 });
@@ -422,4 +431,67 @@ test("one speaker's continuous sentence stays one bubble across several language
   ]);
 
   assert.equal(utterances.length, 1);
+});
+
+function turnLine(
+  id: string,
+  speaker: string,
+  startTimeMs: number,
+  endTimeMs = startTimeMs + 1_000,
+) {
+  return { id, speakerName: speaker, speakerParticipantId: speaker, startTimeMs, endTimeMs };
+}
+
+test("a speaker turn ends when somebody else speaks", () => {
+  const turns = groupIntoSpeakerTurns([
+    turnLine("s1", "Tuan", 0),
+    turnLine("s2", "Tuan", 2_000),
+    turnLine("s3", "Ky", 4_000),
+  ]);
+
+  assert.deepEqual(turns.map((turn) => turn.speakerName), ["Tuan", "Ky"]);
+  assert.deepEqual(turns[0].lines.map((line) => line.id), ["s1", "s2"]);
+  assert.equal(turns[0].key, "s1");
+  assert.equal(turns[0].startTimeMs, 0);
+});
+
+test("a long silence starts a new turn even for the same speaker", () => {
+  // Otherwise a 40-minute presentation is one dot on a rail whose whole job is to show the
+  // shape of the meeting.
+  const turns = groupIntoSpeakerTurns([
+    turnLine("s1", "Tuan", 0),
+    turnLine("s2", "Tuan", 90_000),
+  ]);
+
+  assert.equal(turns.length, 2);
+});
+
+test("a reconnect does not become a turn boundary", () => {
+  // startTimeMs is an offset into the audio ingress track and resets when that track
+  // reconnects, so the gap between two consecutive lines can be negative. That is a dropped
+  // connection, not thirty seconds of silence.
+  const turns = groupIntoSpeakerTurns([
+    turnLine("s1", "Tuan", 600_000),
+    turnLine("s2", "Tuan", 0),
+  ]);
+
+  assert.equal(turns.length, 1);
+});
+
+test("a speaker with no participant id is still one speaker", () => {
+  const turns = groupIntoSpeakerTurns([
+    { id: "s1", speakerName: "Tuan", speakerParticipantId: null, startTimeMs: 0, endTimeMs: 1_000 },
+    { id: "s2", speakerName: "Tuan", speakerParticipantId: null, startTimeMs: 2_000, endTimeMs: 3_000 },
+  ]);
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].speakerId, null);
+});
+
+test("a line with no speaker name at all is attributed to nobody, not to blank", () => {
+  const turns = groupIntoSpeakerTurns([
+    { id: "s1", speakerName: null, speakerParticipantId: null, startTimeMs: 0, endTimeMs: 1_000 },
+  ]);
+
+  assert.equal(turns[0].speakerName, "Unknown speaker");
 });

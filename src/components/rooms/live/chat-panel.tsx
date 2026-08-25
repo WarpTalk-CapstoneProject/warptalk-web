@@ -1,12 +1,19 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useMeetingChat,
   useSendMeetingChat,
   useSendMeetingChatFile,
   useTranslateMeetingChat,
 } from "@/hooks/use-meeting";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
+import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
+import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
+import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
@@ -21,7 +28,9 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
-import { suggestion } from "./mentions";
+import { AnswerSources } from "@/components/assistant/answer-sources";
+import { parseAnswerSources } from "@/lib/assistant/answer-sources";
+import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
 import {
@@ -38,8 +47,7 @@ import {
   FileArchive,
   Download,
 } from "lucide-react";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -53,6 +61,18 @@ interface MessageTranslationState {
 }
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+
+/** Distance from the bottom, in px, still counted as "reading the newest message". */
+const STICK_TO_BOTTOM_PX = 80;
+
+/**
+ * Where each room's chat reader was, kept outside the component because the component does
+ * not survive a tab switch: MeetingSidePanel renders ChatPanel only while the Chat tab is
+ * selected, so Transcript/People -> Chat is a fresh mount with the container at zero.
+ *
+ * Same treatment TranscriptPanel already got for the same report — see the note there.
+ */
+const chatScrollOffsets = new Map<string, { offset: number; atBottom: boolean }>();
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -68,20 +88,65 @@ function FileTypeIcon({ contentType }: { contentType?: string }) {
   return <FileText className="h-4 w-4" />;
 }
 
+/**
+ * The face beside a chat message.
+ *
+ * A hook cannot be called inside the message loop, so the lookup lives in its own component —
+ * one per row, which is what a list of messages is anyway.
+ *
+ * The identity comes from the meeting's own join (roster + workspace members), never from the
+ * message: a chat row carries a sender id and a display name and no picture, and the participants
+ * API carries no picture either.
+ */
+function ChatSenderAvatar({
+  userId,
+  displayName,
+}: {
+  userId?: string | null;
+  displayName: string;
+}) {
+  const identity = useMeetingIdentity(userId, displayName);
+  // No flag: the row already prints the message's language beside the name.
+  return <ParticipantAvatar identity={identity} size="sm" showFlag={false} className="mt-0.5" />;
+}
+
 export function ChatPanel({
   roomId,
   sourceLanguage = "en",
   targetLanguage,
+  active = true,
 }: {
   roomId: string;
   sourceLanguage?: string;
   /** Viewer's own listen language — messages are translated on-click into this. */
   targetLanguage?: string;
+  /**
+   * Whether Chat is the tab currently on screen.
+   *
+   * The panel stays mounted when it is not, which is what keeps the half-typed message and the
+   * opened translations alive across a tab switch. Everything it draws inside its own box is
+   * hidden with it — but the @ menu is appended to document.body by tippy, so it is not, and
+   * has to be put away by hand.
+   */
+  active?: boolean;
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  // Only so a document chip under a WarpBot answer can link to that document; a room whose
+  // workspace is not in the store simply renders the chip as a label.
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
+  const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
+  const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
+  const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
+  const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
+  const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
+  const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
+  const beginAssistantTurn = useTranslationRoomStore((state) => state.beginAssistantTurn);
   const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
@@ -115,9 +180,8 @@ export function ChatPanel({
   const suggestedTargetLanguage = targetLanguage || "en";
   const containerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const hasRestoredRef = useRef(false);
   const previousTargetLanguageRef = useRef(targetLanguage);
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   function toggleTranslation(messageId: string) {
     const current = translations[messageId];
@@ -192,11 +256,20 @@ export function ChatPanel({
   // reconnect — which is how the answer arrives when the socket was down while WarpBot
   // replied.
   useEffect(() => {
-    if (assistantState !== "thinking") return;
-    if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
+    if (assistantState === "idle") return;
+    const answers = messages.filter(isAssistantMessage);
+    if (answers.length > answersWhenAskedRef.current) {
+      // The trail belongs to the answer, not to the panel. Sealed here because this is the one
+      // place that knows WHICH message the turn just produced — the newest one — and the widget
+      // has kept a folded trail under every past reply since it shipped.
+      const newest = answers[answers.length - 1];
+      if (newest) sealAssistantTrail(newest.id);
       setAssistantState("idle");
     }
-  }, [messages, assistantState, setAssistantState]);
+    // NOT `assistantState !== "thinking"`. That guard is the reported bug: once the wait had been
+    // declared over, the answer arriving could no longer clear the notice, so a slow reply left a
+    // permanent "WarpBot didn't answer" sitting above a WarpBot answer.
+  }, [messages, assistantState, setAssistantState, sealAssistantTrail]);
 
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
   // server's pending signal. A spinner with no end is its own lie, and this one would
@@ -204,27 +277,85 @@ export function ChatPanel({
   useEffect(() => {
     if (assistantState !== "thinking") return;
     const timer = window.setTimeout(() => {
-      if (
-        useTranslationRoomStore.getState().assistantState === "thinking"
-      ) {
-        useTranslationRoomStore.getState().setAssistantState("timed_out");
+      if (useTranslationRoomStore.getState().assistantState === "thinking") {
+        // "slow", not "timed out". The old state declared WarpBot had failed on nothing but a
+        // clock, while a tool-calling loop was still running — and it was usually wrong, because
+        // the answer then arrived. Saying it is taking a while claims neither failure nor
+        // success, and the answer clears it either way.
+        useTranslationRoomStore.getState().setAssistantState("slow");
       }
     }, 90_000);
     return () => window.clearTimeout(timer);
-  }, [assistantState]);
+    // Re-armed on every sign of life. Keyed on the question alone, a model that merely thought
+    // for longer than the window was declared dead while it was working.
+  }, [assistantState, assistantActivityAt]);
 
+  // WHERE THE READER WAS, NOT A REPLAY OF THE WHOLE THREAD.
+  //
+  // Switching to Transcript or People unmounts this panel, so coming back mounts it again
+  // with the container at scrollTop 0 - and `scroll-smooth` on the container turned the
+  // catch-up assignment into an animation down the entire conversation, every single time
+  // the tab was re-opened. Ending at the newest message was right; getting there by gliding
+  // past every message that came before it was not.
+  //
+  // The restore is now a jump, and it goes back to the offset this room was left at rather
+  // than always to the end, so someone who had scrolled up to read something finds it still
+  // on screen. New messages still glide in, but only for a reader already at the bottom.
   useEffect(() => {
-    if (containerRef.current && shouldAutoScrollRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    const container = containerRef.current;
+    // Nothing to restore against while the history request is still in flight: restoring now
+    // would mark the panel restored and leave the real arrival to animate.
+    if (!container || messages.length === 0) return;
+
+    /** Move without animating - `scroll-smooth` is for new messages, not for restoring. */
+    function jumpTo(top: number) {
+      const previous = container!.style.scrollBehavior;
+      container!.style.scrollBehavior = "auto";
+      container!.scrollTop = top;
+      container!.style.scrollBehavior = previous;
     }
-  }, [messages]);
+
+    if (!hasRestoredRef.current) {
+      hasRestoredRef.current = true;
+      const remembered = chatScrollOffsets.get(roomId);
+      // Anyone who was at the bottom stays at the bottom, including a first visit: the newest
+      // message is what an open chat panel is for.
+      jumpTo(
+        remembered && !remembered.atBottom
+          ? remembered.offset
+          : container.scrollHeight,
+      );
+      shouldAutoScrollRef.current = remembered ? remembered.atBottom : true;
+      return;
+    }
+
+    if (shouldAutoScrollRef.current) {
+      container.scrollTop = container.scrollHeight;
+    }
+    // `assistantDraft` is in here so a streamed answer keeps the reader at the bottom as it
+    // grows. Without it the panel only follows whole MESSAGES, and a long reply would write
+    // itself off the bottom of the screen for anyone watching it arrive.
+    //
+    // It respects shouldAutoScrollRef exactly as a message does, so somebody who has scrolled up
+    // to read something is not dragged back down by WarpBot typing.
+  }, [messages, roomId, assistantDraft]);
+
+  const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
+    // The same slack handleMessagesScroll uses to decide the panel is still following.
+    threshold: STICK_TO_BOTTOM_PX,
+    revision: messages.length,
+  });
 
   function handleMessagesScroll() {
     const container = containerRef.current;
     if (!container) return;
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
-    shouldAutoScrollRef.current = distanceFromBottom < 80;
+    shouldAutoScrollRef.current = distanceFromBottom < STICK_TO_BOTTOM_PX;
+    chatScrollOffsets.set(roomId, {
+      offset: container.scrollTop,
+      atBottom: shouldAutoScrollRef.current,
+    });
   }
 
   const editor = useEditor({
@@ -354,7 +485,11 @@ export function ChatPanel({
       // answer may already have arrived and would be counted as part of the baseline — which
       // is a spinner that never stops.
       answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
-      setAssistantState("thinking");
+      // Opens the trail on "reading your question", exactly as the widget does. This used to be
+      // setAssistantState("thinking"), which moved the state without starting a trail — and
+      // because every later signal then saw a non-idle state, nothing ever seeded one. The
+      // whole stretch before the first tool call showed a bare spinner instead of a step.
+      beginAssistantTurn();
     }
 
     sendMessageAPI(
@@ -388,6 +523,10 @@ export function ChatPanel({
       },
     );
   }
+
+  useEffect(() => {
+    setMentionMenusVisible(active);
+  }, [active]);
 
   function handleFileButtonClick() {
     fileInputRef.current?.click();
@@ -434,14 +573,15 @@ export function ChatPanel({
 
   return (
     <div className="flex h-full flex-col">
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={containerRef}
         onScroll={handleMessagesScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth"
+        className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar scroll-smooth"
       >
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <LumidotSpinner />
             <span className="ml-2">Loading messages</span>
           </div>
         ) : null}
@@ -480,11 +620,17 @@ export function ChatPanel({
                 transition={{ duration: 0.2 }}
                 className={`flex gap-3 items-start group ${isMine ? "flex-row-reverse" : ""}`}
               >
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}
-                >
-                  {displayName.substring(0, 2).toUpperCase()}
-                </div>
+                {/* WarpBot keeps its badge — it is not a person and has no face to show. Everyone
+                    else gets theirs, from the same identity join the stage and the transcript use;
+                    the chat drew two letters in a square and had no path to a picture at all. */}
+                {isAssistant ? (
+                  <WarpBotAvatar />
+                ) : (
+                  <ChatSenderAvatar
+                    userId={message.senderUserId}
+                    displayName={displayName}
+                  />
+                )}
                 <div
                   className={`flex min-w-0 flex-1 flex-col ${isMine ? "items-end" : "items-start"}`}
                 >
@@ -562,10 +708,34 @@ export function ChatPanel({
                     // it — "**transcript hiện tại**" reached the reader as those characters.
                     // Left-aligned unconditionally: a bulleted list right-aligned to match a
                     // chat bubble is unreadable, and WarpBot's messages are never "mine".
+                    // `text-ink`, the same as the widget. This was `font-medium text-primary`
+                    // — violet, bolder than anything else in the panel — so one agent answered
+                    // in two different voices depending on which surface you asked from, and
+                    // the meeting one read as a system notice rather than as a reply.
+                    // Left-aligned unconditionally: a bulleted list right-aligned to match a
+                    // chat bubble is unreadable, and WarpBot's messages are never "mine".
                     <div
-                      className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
+                      className={`mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink`}
                     >
                       <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                      {/* Under the answer, inside the same left-aligned block: the chips
+                          belong to what WarpBot just said, and a row hung off the message
+                          container would sit under whoever spoke next. */}
+                      <AnswerSources
+                        sources={parseAnswerSources(message.sourcesJson)}
+                        workspaceSlug={activeWorkspaceSlug}
+                      />
+                      {/* And under those, the folded trail — the record of which tools this
+                          particular answer came through. The widget has shown one under every
+                          reply since it shipped; here the only trail was a live one at the
+                          bottom of the panel, which belonged to whatever was asked last. */}
+                      {assistantTrails[message.id] ? (
+                        <AssistantWorkTrail
+                          steps={assistantTrails[message.id].steps}
+                          running={false}
+                          durationMs={assistantTrails[message.id].durationMs}
+                        />
+                      ) : null}
                     </div>
                   ) : (
                     <p
@@ -600,24 +770,59 @@ export function ChatPanel({
         {/* The answer arrives as a WarpBot message in this same shared chat, which everyone
             sees — but a tool-calling loop takes seconds, and with nothing here the wait was
             indistinguishable from having been ignored. */}
-        {assistantState !== "idle" ? (
+        {assistantState !== "idle" && assistantSteps.length === 0 && !assistantDraft ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
-            {assistantState === "thinking" ? (
-              <>
-                <span className="flex gap-0.5" aria-hidden>
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.3s]" />
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted [animation-delay:-0.15s]" />
-                  <span className="size-1 animate-bounce rounded-full bg-ink-muted" />
-                </span>
-                <span>WarpBot is thinking…</span>
-              </>
-            ) : (
-              <span className="text-amber-600">
-                WarpBot didn&apos;t answer. Try mentioning it again.
-              </span>
-            )}
+            {/* The same mark, at the same size, as everywhere else. It used to be scaled to
+                0.42 here and 0.75 in the widget, so one agent's "working" looked like two
+                different kinds of working depending on which surface you were on. */}
+            <LumidotSpinner />
+            <span>
+              {assistantState === "slow"
+                ? "WarpBot is still working — this one is taking a while."
+                : "WarpBot is thinking…"}
+            </span>
           </div>
         ) : null}
+
+        {/* WarpBot's answer as it is written, in the shape the finished message takes — same
+            avatar, same ink, same markdown — so the reply does not visibly jump from one
+            rendering to another when it lands.
+
+            EVERYONE IN THE ROOM SEES THIS, which is the difference from the widget: a private
+            assistant can stream to one person, and a shared chat streams to all of them. That is
+            the point — the wait was the thing being fixed, and it was everybody's wait.
+
+            No id, never persisted, replaced by the real message the moment it arrives. A late
+            joiner or a reload sees the persisted answer and never this. */}
+        {assistantDraft ? (
+          <div className="flex items-start gap-3" data-testid="assistant-draft">
+            <WarpBotAvatar />
+            <div className="mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink">
+              <AssistantMarkdown>{assistantDraft}</AssistantMarkdown>
+            </div>
+          </div>
+        ) : null}
+
+        {/* The trail, drawn the way the widget draws it: open while it runs, folded into one line
+            afterwards. It used to vanish the moment the turn ended, which threw away the only
+            record of which tools an answer came through. */}
+        {assistantSteps.length > 0 ? (
+          <AssistantWorkTrail
+            steps={assistantSteps}
+            running={assistantState !== "idle"}
+            slow={assistantState === "slow"}
+            durationMs={
+              assistantFinishedAt && assistantStartedAt
+                ? assistantFinishedAt - assistantStartedAt
+                : null
+            }
+            className="px-1"
+          />
+        ) : null}
+      </div>
+      {/* Reading back through a meeting's chat stops the panel following, which is right — and
+          left the newest message somewhere below with nothing on screen saying so. */}
+      <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
       </div>
       <div className="p-3 bg-transparent">
         {sendError ? (

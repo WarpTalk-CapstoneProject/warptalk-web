@@ -418,7 +418,7 @@ function WorkspacesDirectory() {
             {items.map((workspace) => (
               <Link
                 key={workspace.id}
-                href={`/admin/workspaces/${workspace.id}`}
+                href={`/admin/workspaces/${workspace.slug}`}
                 className="group grid min-h-[36px] items-center gap-3 rounded-[7px] px-2 py-1 text-[11px] transition-none hover:bg-surface-2 hover:shadow-[inset_3px_0_0_hsl(var(--primary)/0.45)] focus-visible:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                 style={{ gridTemplateColumns: workspaceGridTemplate }}
               >
