@@ -20,6 +20,11 @@ export const VoiceProfileService = {
     const formData = new FormData();
     formData.append("displayName", request.displayName);
     formData.append("language", request.language);
+    formData.append("ownVoiceConfirmed", String(request.ownVoiceConfirmed));
+    formData.append("aiUseConfirmed", String(request.aiUseConfirmed));
+    formData.append("syntheticVoiceAcknowledged", String(request.syntheticVoiceAcknowledged));
+    formData.append("noImpersonationConfirmed", String(request.noImpersonationConfirmed));
+    formData.append("retentionAcknowledged", String(request.retentionAcknowledged));
     if (request.sample) {
       formData.append("sample", request.sample);
     }

@@ -44,30 +44,30 @@ describe("compareLanguageCatalog", () => {
   it("names a language the picker offers that the server will reject", () => {
     // The other direction, and the one a user actually hits: the picker offers it, room creation
     // answers "Source language is not supported."
-    const withoutKorean = SEEDED.filter((language) => language.code !== "ko");
+    const withoutJapanese = SEEDED.filter((language) => language.code !== "ja");
 
-    const { offeredButNotSupported } = compareLanguageCatalog(withoutKorean);
+    const { offeredButNotSupported } = compareLanguageCatalog(withoutJapanese);
 
     assert.deepEqual(
       offeredButNotSupported.map((entry) => entry.code),
-      ["ko"],
+      ["ja"],
     );
   });
 
   it("treats a switched-off language as unsupported, because the user still gets rejected", () => {
-    const koreanOff = SEEDED.map((language) =>
-      language.code === "ko" ? { ...language, isActive: false } : language,
+    const japaneseOff = SEEDED.map((language) =>
+      language.code === "ja" ? { ...language, isActive: false } : language,
     );
 
-    const { offeredButNotSupported, rows } = compareLanguageCatalog(koreanOff);
+    const { offeredButNotSupported, rows } = compareLanguageCatalog(japaneseOff);
 
     assert.deepEqual(
       offeredButNotSupported.map((entry) => entry.code),
-      ["ko"],
+      ["ja"],
     );
     // The row is still listed — present and switched off is a different fix from absent.
     assert.equal(
-      rows.find((row) => row.code === "ko")?.isActive,
+      rows.find((row) => row.code === "ja")?.isActive,
       false,
     );
   });

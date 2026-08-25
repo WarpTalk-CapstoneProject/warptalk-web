@@ -3,12 +3,11 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
-  Plus,
   Question,
   SidebarSimple,
   Spinner,
@@ -23,9 +22,11 @@ import { NotificationSoundToggle } from "@/components/layout/notification-sound-
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+// No WorkspaceTabs here. The tab strip was deliberately removed from the app header (see
+// "fix(layout): remove workspace tabs from app header"); development still carries it, and that
+// removal is kept. The banner below is new and is kept.
 import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
-import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
@@ -35,11 +36,11 @@ import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { useOnboardingStore } from "@/stores/onboarding-store";
-import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
+import { useSessionBootstrap } from "@/hooks/use-session-bootstrap";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 
@@ -158,11 +159,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   } = useUIStore();
   // 160ms against the panel's 420ms width tween — see useRailSwapDelay.
   const railCollapsed = useRailSwapDelay(leftSidebarOpen, 160);
-  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
-  const setActiveWorkspace = useWorkspaceStore((state) => state.setActiveWorkspace);
-  const addWorkspaceTab = useWorkspaceTabsStore((state) => state.addTab);
-  const currentUserId = useAuthStore((state) => state.user?.id);
+  const activeWorkspaceId = useWorkspaceStore(
+    (state) => state.activeWorkspaceId,
+  );
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
+  const setActiveWorkspace = useWorkspaceStore(
+    (state) => state.setActiveWorkspace,
+  );
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const logout = useAuthStore((state) => state.logout);
   const activeMeetingRoomId = useActiveMeetingStore(
@@ -170,9 +175,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   );
   const closeMeeting = useActiveMeetingStore((state) => state.closeMeeting);
   const openTour = useOnboardingStore((state) => state.openTour);
-  const tourSeenAtByUser = useOnboardingStore((state) => state.tourSeenAtByUser);
   const [mounted, setMounted] = useState(false);
-  
+
   // `isError` and `refetch` were not read. The gate below spun on `!activeWorkspaceId`, and a
   // failed workspaces query leaves that null forever — so any failure here painted a spinner
   // with no message, no retry and no way out, indistinguishable from a slow network. It is the
@@ -187,12 +191,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const selectWorkspace = useSelectWorkspace();
 
   const roomId = (() => {
-    const segments = pathname.split('/').filter(Boolean);
-    if (segments.length >= 3 && segments[1] === 'rooms') {
+    const segments = pathname.split("/").filter(Boolean);
+    if (segments.length >= 3 && segments[1] === "rooms") {
       const id = segments[2];
       if (/^[0-9a-fA-F-]{36}$/.test(id)) return id;
     }
-    if (segments.length >= 2 && segments[0] === 'room') {
+    if (segments.length >= 2 && segments[0] === "room") {
       const id = segments[1];
       if (/^[0-9a-fA-F-]{36}$/.test(id)) return id;
     }
@@ -200,16 +204,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   })();
 
   const roomQuery = useTranslationRoom(roomId ?? "");
-  const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
-  const workspaceTabScope = activeWorkspaceSlug || "global";
-  const workspaceTabOptions = useMemo(
-    () => buildTabOptions(activeWorkspaceSlug || "workspace"),
-    [activeWorkspaceSlug]
-  );
-  const currentWorkspaceTab = useMemo(
-    () => resolveCurrentTab(pathname, workspaceTabOptions),
-    [pathname, workspaceTabOptions]
-  );
+  const roomTitle =
+    roomId && roomQuery?.data ? roomQuery.data.title : undefined;
 
   const isOnboardingRoute =
     pathname === "/workspace" ||
@@ -222,6 +218,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
   const isLiveMeetingRoute = isLiveMeetingPath(pathname);
+  const isRestoringSession = useSessionBootstrap(mounted);
 
   // Starts the token's refresh timer for a session that was already in place on load.
   //
@@ -254,23 +251,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // Keyed by user, so signing out and back in does not re-run a tour this person already
     // dismissed — which is exactly what the previous single flag did, because it was cleared
     // on every sign-in for account isolation.
-    if (!currentUserId || !activeWorkspaceSlug) return;
-    if (tourSeenAtByUser[currentUserId] != null) return;
-
-    const timer = setTimeout(() => {
-      if (!useOnboardingStore.getState().hasSeenTour(currentUserId)) openTour();
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [tourSeenAtByUser, currentUserId, activeWorkspaceSlug, openTour]);
+    return undefined;
+  }, []);
 
   useEffect(() => {
-    if (mounted && !isAuthenticated) {
+    if (mounted && !isRestoringSession && !isAuthenticated) {
       router.replace("/login");
     }
-  }, [mounted, isAuthenticated, router]);
+  }, [mounted, isRestoringSession, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!mounted || !isAuthenticated || isOnboardingRoute || isAdminRoute || workspacesLoading) return;
+    if (
+      !mounted ||
+      isRestoringSession ||
+      !isAuthenticated ||
+      isOnboardingRoute ||
+      isAdminRoute ||
+      workspacesLoading
+    )
+      return;
     if (selectWorkspace.isPending) return;
 
     if (!activeWorkspaceId) {
@@ -299,9 +298,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, isSystemAdmin, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [
+    activeWorkspaceId,
+    workspacesData,
+    workspacesLoading,
+    isOnboardingRoute,
+    isAdminRoute,
+    isSystemAdmin,
+    selectWorkspace,
+    setActiveWorkspace,
+    router,
+    mounted,
+    isRestoringSession,
+    isAuthenticated,
+  ]);
 
-  if (!mounted || !isAuthenticated) {
+  if (!mounted || isRestoringSession || !isAuthenticated) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -319,7 +331,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas p-6">
         <div className="max-w-sm space-y-4 text-center">
-          <h1 className="text-base font-semibold text-ink">Could not load your workspaces</h1>
+          <h1 className="text-base font-semibold text-ink">
+            Could not load your workspaces
+          </h1>
           <p className="text-sm leading-relaxed text-ink-muted">
             {getErrorStatus(workspacesError) === null
               ? "The server could not be reached. Check your connection and try again."
@@ -357,11 +371,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  function handleAddCurrentWorkspaceTab() {
-    if (!currentWorkspaceTab) return;
-    addWorkspaceTab(workspaceTabScope, currentWorkspaceTab);
-  }
-
   return (
     <div className="relative h-dvh flex overflow-hidden bg-canvas text-ink">
       <AnimatedWidthPanel
@@ -377,219 +386,224 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Main content box */}
         <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
           {/* Top bar */}
-        <header
-          className={cn(
-            // Three columns since the search sits between the breadcrumb and the icons.
-            // This was two, and adding a third child silently wrapped the icon cluster onto a
-            // second grid row inside a 44px-tall header — the notification bell, theme toggle,
-            // help and the right-panel toggle all vanished. Nothing failed: not typecheck, not
-            // lint, not the build. Only looking at it showed anything was wrong.
-            //
-            // The middle column is capped rather than 1fr so the search does not stretch across
-            // a wide window, and minmax(0,…) on the outer two lets a long breadcrumb truncate
-            // instead of pushing the icons off the edge.
-            "h-[44px] grid grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] items-center gap-3 px-4 shrink-0",
-            !isLiveMeetingRoute && "border-b border-border",
-          )}
-        >
-          <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
-            <button
-              onClick={toggleLeftSidebar}
-              className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
-              title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-              aria-label={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-            >
-              <SidebarSimple size={13} weight="bold" />
-            </button>
-            {(() => {
-              const parts: { label: string; href?: string }[] = [];
-              const segments = pathname.split('/').filter(Boolean);
+          <header
+            className={cn(
+              // Three columns since the search sits between the breadcrumb and the icons.
+              // This was two, and adding a third child silently wrapped the icon cluster onto a
+              // second grid row inside a 44px-tall header — the notification bell, theme toggle,
+              // help and the right-panel toggle all vanished. Nothing failed: not typecheck, not
+              // lint, not the build. Only looking at it showed anything was wrong.
+              //
+              // The middle column is capped rather than 1fr so the search does not stretch across
+              // a wide window, and minmax(0,…) on the outer two lets a long breadcrumb truncate
+              // instead of pushing the icons off the edge.
+              "h-[44px] grid grid-cols-[minmax(0,1fr)_minmax(0,420px)_minmax(0,1fr)] items-center gap-3 px-4 shrink-0",
+              !isLiveMeetingRoute && "border-b border-border",
+            )}
+          >
+            <div className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-muted">
+              <button
+                onClick={toggleLeftSidebar}
+                className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
+                title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                aria-label={
+                  leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"
+                }
+              >
+                <SidebarSimple size={13} weight="bold" />
+              </button>
+              {(() => {
+                const parts: { label: string; href?: string }[] = [];
+                const segments = pathname.split("/").filter(Boolean);
 
-              if (segments.length >= 1) {
-                const firstSeg = segments[0];
-                if (firstSeg === "voice-profiles") {
-                  parts.push({ label: "Voice Profiles" });
-                } else if (firstSeg === "join") {
-                  parts.push({ label: "Join Translation Room" });
-                } else if (firstSeg === "room") {
-                  parts.push({ label: "Meetings", href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
-                  const rId = segments[1];
-                  if (rId) {
-                    parts.push({ label: roomTitle || "Loading..." });
-                  }
-                } else if (segments.length >= 2) {
-                  const slug = firstSeg;
-                  const feature = segments[1];
-
-                  if (feature === "rooms") {
-                    parts.push({ label: "Meetings", href: `/${slug}/rooms` });
-                    const sub = segments[2];
-                    if (sub) {
+                if (segments.length >= 1) {
+                  const firstSeg = segments[0];
+                  if (firstSeg === "voice-profiles") {
+                    parts.push({ label: "Voice Profiles" });
+                  } else if (firstSeg === "join") {
+                    parts.push({ label: "Join" });
+                  } else if (firstSeg === "room") {
+                    parts.push({
+                      label: "Meetings",
+                      href: `/${activeWorkspaceSlug || "workspace"}/rooms`,
+                    });
+                    const rId = segments[1];
+                    if (rId) {
                       parts.push({ label: roomTitle || "Loading..." });
                     }
-                  } else if (feature === "history") {
-                    parts.push({ label: "History" });
-                  } else if (feature === "dashboard") {
-                    parts.push({ label: "Dashboard" });
-                  } else if (feature === "home") {
-                    parts.push({ label: "Home" });
-                  } else if (feature === "members") {
-                    parts.push({ label: "Members" });
-                  } else if (feature === "documents") {
-                    parts.push({ label: "Documents" });
-                  } else if (feature === "settings") {
-                    const sub = segments[2];
-                    if (sub === "account") {
-                      parts.push({ label: "Settings", href: `/${slug}/settings` });
-                      const leaf = segments[3];
-                      if (leaf === "profile") {
-                        parts.push({ label: "Profile" });
-                      } else if (leaf === "preferences") {
-                        parts.push({ label: "Preferences" });
+                  } else if (segments.length >= 2) {
+                    const slug = firstSeg;
+                    const feature = segments[1];
+
+                    if (feature === "rooms") {
+                      parts.push({ label: "Meetings", href: `/${slug}/rooms` });
+                      const sub = segments[2];
+                      if (sub) {
+                        parts.push({ label: roomTitle || "Loading..." });
+                      }
+                    } else if (feature === "history") {
+                      parts.push({ label: "History" });
+                    } else if (feature === "dashboard") {
+                      parts.push({ label: "Dashboard" });
+                    } else if (feature === "home") {
+                      parts.push({ label: "Home" });
+                    } else if (feature === "voice-profiles") {
+                      parts.push({ label: "Voice Profiles" });
+                    } else if (feature === "members") {
+                      parts.push({ label: "Members" });
+                    } else if (feature === "documents") {
+                      parts.push({ label: "Documents" });
+                    } else if (feature === "settings") {
+                      const sub = segments[2];
+                      if (sub === "account") {
+                        parts.push({
+                          label: "Settings",
+                          href: `/${slug}/settings`,
+                        });
+                        const leaf = segments[3];
+                        if (leaf === "profile") {
+                          parts.push({ label: "Profile" });
+                        } else if (leaf === "preferences") {
+                          parts.push({ label: "Preferences" });
+                        } else {
+                          parts.push({ label: leaf || "Account" });
+                        }
                       } else {
-                        parts.push({ label: leaf || "Account" });
+                        parts.push({ label: "Settings" });
+                      }
+                    } else if (feature === "billing") {
+                      parts.push({ label: "Billing" });
+                    } else if (feature === "payment") {
+                      parts.push({ label: "Payment" });
+                      const sub = segments[2];
+                      if (sub) {
+                        parts.push({ label: sub === "plans" ? "Plans" : sub });
                       }
                     } else {
-                      parts.push({ label: "Settings" });
-                    }
-                  } else if (feature === "billing") {
-                    parts.push({ label: "Billing" });
-                  } else if (feature === "payment") {
-                    parts.push({ label: "Payment" });
-                    const sub = segments[2];
-                    if (sub) {
-                      parts.push({ label: sub === "plans" ? "Plans" : sub });
+                      parts.push({ label: feature });
                     }
                   } else {
-                    parts.push({ label: feature });
+                    parts.push({ label: "Workspace" });
                   }
                 } else {
                   parts.push({ label: "Workspace" });
                 }
-              } else {
-                parts.push({ label: "Workspace" });
-              }
 
-              return parts.map((part, index) => {
-                return (
-                  <span key={index} className="flex items-center gap-1.5">
-                    {part.href && index < parts.length - 1 ? (
-                      <Link href={part.href} className="hover:text-ink cursor-pointer transition-colors">
-                        {part.label}
-                      </Link>
-                    ) : (
-                      <span className={index === parts.length - 1 ? "text-ink font-medium max-w-[300px] truncate" : "hover:text-ink cursor-pointer transition-colors capitalize"}>
-                        {part.label}
-                      </span>
-                    )}
-                    {index < parts.length - 1 && <span className="text-ink-muted/40">/</span>}
-                  </span>
-                );
-              });
-            })()}
-            {currentWorkspaceTab ? (
-              <button
-                type="button"
-                onClick={handleAddCurrentWorkspaceTab}
-                className="ml-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border border-transparent text-ink-muted transition-colors hover:border-border hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                title={`Add ${currentWorkspaceTab.title} tab`}
-                aria-label={`Add ${currentWorkspaceTab.title} tab`}
-              >
-                <Plus size={11} weight="bold" />
-              </button>
-            ) : null}
-          </div>
+                return parts.map((part, index) => {
+                  return (
+                    <span key={index} className="flex items-center gap-1.5">
+                      {part.href && index < parts.length - 1 ? (
+                        <Link
+                          href={part.href}
+                          className="hover:text-ink cursor-pointer transition-colors"
+                        >
+                          {part.label}
+                        </Link>
+                      ) : (
+                        <span
+                          className={
+                            index === parts.length - 1
+                              ? "text-ink font-medium max-w-[300px] truncate"
+                              : "hover:text-ink cursor-pointer transition-colors capitalize"
+                          }
+                        >
+                          {part.label}
+                        </span>
+                      )}
+                      {index < parts.length - 1 && (
+                        <span className="text-ink-muted/40">/</span>
+                      )}
+                    </span>
+                  );
+                });
+              })()}
+            </div>
 
-          {/*
+            {/*
             Search sits between the breadcrumb and the icon cluster, which is where it was
             designed to go — the Topbar that owned it was simply never mounted, so the header
             has been running without it. min-w-0 so the breadcrumb, not the search box, is
             what gives up space on a narrow window.
           */}
-          <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-            <HeaderSearch />
-          </div>
-
-          <div className="flex items-center justify-end gap-1.5 text-ink-muted">
-            <NotificationPopover />
-            <NotificationSoundToggle />
-            <ThemeToggleButton />
-            {/* This was a button with no onClick — the only affordance in the header that did
-                nothing at all. It opens the tour now, which is also where the tour's last step
-                points, so somebody who skipped it knows where it went. */}
-            <button
-              type="button"
-              data-tour="help-button"
-              onClick={openTour}
-              title="Show me around"
-              aria-label="Show me around"
-              className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
-            >
-              <Question size={12} weight="bold" />
-            </button>
-            <div className="w-[1px] h-3.5 bg-border mx-1" />
-            <button
-              onClick={toggleRightSidebar}
-              className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
-            >
-              <SidebarSimple size={13} weight="bold" />
-            </button>
-          </div>
-        </header>
-
-        {!isAdminRoute && <WorkspaceTabs />}
-
-        <ProductTour />
-
-        <div className="flex flex-1 min-h-0 overflow-hidden">
-          {/* A non-scrolling frame around the scrolling main column, so anything pinned to the
-              content area — the meeting notices — stays put while the page scrolls under
-              it. `<main>` itself cannot serve: it IS the scroll container. */}
-          <div className="relative flex min-w-0 flex-1 flex-col">
-          <main className="relative min-h-0 flex-1 overflow-y-auto">
-            {children}
-            {activeMeetingRoomId ? (
-              // One wrapper for both presentations, never a ternary between two of them: the
-              // session must stay MOUNTED as the route changes, or navigating out of the room
-              // tears down the LiveKit connection this whole arrangement exists to preserve.
-              // The dock owns the floating position now — it used to be pinned to the
-              // bottom-right, which is exactly where the chat launcher and the toasts live.
-              <MiniMeetingDock floating={!isLiveMeetingRoute}>
-                <PersistentMeetingSession
-                  key={activeMeetingRoomId}
-                  roomId={activeMeetingRoomId}
-                  compact={!isLiveMeetingRoute}
-                  onMeetingClosed={closeMeeting}
-                />
-              </MiniMeetingDock>
-            ) : null}
-          </main>
-
-            {/* Both meeting notices live in ONE stack, and the stack — not either card — owns the
-                corner. They are independent (being invited to Thursday's review does not stop this
-                morning's standup going live), so both can be on screen at once; positioned
-                separately they would have been drawn on top of each other.
-
-                Bottom-RIGHT, moved from bottom-left at the owner's request. The other two things
-                that claim a corner here are the WarpBot launcher and the mini meeting dock, which
-                sit outside and below this main content box, so they no longer collide. The
-                invitation is listed first — it is the one asking a question. */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col items-end gap-2 p-4">
-              <MeetingInviteBanner />
-              <MeetingStartedBanner />
+            <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
+              <HeaderSearch />
             </div>
-          </div>
 
-          {/* Right Sidebar (Context/Properties) */}
-          {!isAdminRoute && !isLiveMeetingRoute && !pathname.startsWith('/rooms/') && (
-            <AnimatedWidthPanel
-              open={rightSidebarOpen}
-              width={260}
-              side="right"
-              className="bg-surface-1"
-            >
-              <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
-              {/* Members, not "Properties".
+            <div className="flex items-center justify-end gap-1.5 text-ink-muted">
+              <NotificationPopover />
+              <NotificationSoundToggle />
+              <ThemeToggleButton />
+              {/* This was a button with no onClick — the only affordance in the header that did
+                  nothing at all. It opens the tour now, which is also where the tour's last step
+                  points, so somebody who skipped it knows where it went. */}
+              <button
+                type="button"
+                data-tour="help-button"
+                onClick={openTour}
+                title="Show me around"
+                aria-label="Show me around"
+                className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+              >
+                <Question size={12} weight="bold" />
+              </button>
+              <div className="w-[1px] h-3.5 bg-border mx-1" />
+              <button
+                onClick={toggleRightSidebar}
+                className="flex size-6 items-center justify-center rounded-[6px] border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
+              >
+                <SidebarSimple size={13} weight="bold" />
+              </button>
+            </div>
+          </header>
+
+          <ProductTour />
+
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            {/* A non-scrolling frame around the scrolling main column, so anything pinned to the
+                content area — the meeting-started banner — stays put while the page scrolls under
+                it. `<main>` itself cannot serve: it IS the scroll container. */}
+            <div className="relative flex min-w-0 flex-1 flex-col">
+              <main className="relative min-h-0 flex-1 overflow-y-auto">
+                {children}
+              {activeMeetingRoomId ? (
+                // One wrapper for both presentations, never a ternary between two of them: the
+                // session must stay MOUNTED as the route changes, or navigating out of the room
+                // tears down the LiveKit connection this whole arrangement exists to preserve.
+                // The dock owns the floating position now — it used to be pinned to the
+                // bottom-right, which is exactly where the chat launcher and the toasts live.
+                <MiniMeetingDock floating={!isLiveMeetingRoute}>
+                  <PersistentMeetingSession
+                    key={activeMeetingRoomId}
+                    roomId={activeMeetingRoomId}
+                    compact={!isLiveMeetingRoute}
+                    onMeetingClosed={closeMeeting}
+                  />
+                </MiniMeetingDock>
+              ) : null}
+              </main>
+
+              {/* Both meeting notices live in ONE stack, and the stack — not either card — owns the
+                  corner. They are independent (being invited to Thursday's review does not stop this
+                  morning's standup going live), so both can be on screen at once; positioned
+                  separately they would have been drawn on top of each other. */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex flex-col items-end gap-2 p-4">
+                <MeetingInviteBanner />
+                <MeetingStartedBanner />
+              </div>
+            </div>
+
+            {/* Right Sidebar (Context/Properties) */}
+            {!isAdminRoute &&
+              !isLiveMeetingRoute &&
+              !pathname.startsWith("/rooms/") && (
+                <AnimatedWidthPanel
+                  open={rightSidebarOpen}
+                  width={260}
+                  side="right"
+                  className="bg-surface-1"
+                >
+                  <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
+                    {/* Members, not "Properties".
                   The panel used to be a header over the sentence "Select an item to view its
                   properties and actions" — and nothing in the app ever published an item for it
                   to describe, so that sentence was the whole feature. 260px had been reserved
@@ -598,21 +612,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   Properties is meant to return here for a selected item; it is not built in this
                   change because there is still no selection to read. Adding a store nothing
                   writes to would be the same placeholder again, one layer deeper. */}
-              <div className="flex items-center px-4 h-[38px] border-b border-border">
-                <span className="text-[12px] font-medium text-ink">Members</span>
-              </div>
-              <div className="flex-1 p-4 overflow-y-auto">
-                <WorkspaceMembersPanel
-                  workspaceId={activeWorkspaceId}
-                  workspaceSlug={activeWorkspaceSlug}
-                />
-              </div>
-            </aside>
-            </AnimatedWidthPanel>
-          )}
+                    <div className="flex items-center px-4 h-[38px] border-b border-border">
+                      <span className="text-[12px] font-medium text-ink">
+                        Members
+                      </span>
+                    </div>
+                    <div className="flex-1 p-4 overflow-y-auto">
+                      <WorkspaceMembersPanel
+                        workspaceId={activeWorkspaceId}
+                        workspaceSlug={activeWorkspaceSlug}
+                      />
+                    </div>
+                  </aside>
+                </AnimatedWidthPanel>
+              )}
+          </div>
         </div>
-        </div>
-        
+
         {/* Global Chatbot outside main content box */}
         <div className="shrink-0 mr-1.5">
           <GlobalChatbot />

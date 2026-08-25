@@ -10,6 +10,7 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { meetingLanguageSet } from "@/lib/language/languages";
 import { isSameDay, meetingsOn } from "@/lib/meeting/meeting-day";
 import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
+import { Beams } from "@/components/visuals/beams";
 import { useUIStore } from "@/stores/ui-store";
 import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
@@ -163,10 +164,23 @@ export function MeetingDayPanel() {
   return (
     <section
       aria-label="Meetings by day"
-      className="rounded-[14px] border border-border bg-surface-1 p-3 shadow-linear sm:p-4"
+      className="relative isolate overflow-hidden rounded-[14px] border border-border bg-black p-3 shadow-linear sm:p-4"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-ink">
+      <Beams
+        beamNumber={12}
+        beamWidth={2.4}
+        beamHeight={22}
+        lightColor="#ffffff"
+        speed={2}
+        noiseIntensity={1.75}
+        scale={0.3}
+        rotation={30}
+        className="pointer-events-none absolute inset-0 -z-20"
+      />
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-black/20" />
+
+      <header className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold text-white">
           {LONG_DATE.format(selectedDate)}
         </h2>
 
@@ -177,6 +191,7 @@ export function MeetingDayPanel() {
           selectedDate={selectedDate}
           onSelectDate={setSelectedDate}
           today={today}
+          tone="inverse"
         />
       </header>
 
@@ -184,26 +199,26 @@ export function MeetingDayPanel() {
           the measure so the panel never changes size: loading, one meeting and five meetings all
           occupy the same box, and switching days can no longer resize the card and shove the
           shortcuts below it around. Past three rows the list scrolls inside instead of growing. */}
-      <div className="mt-3 h-[176px]">
+      <div className="relative z-10 mt-3 h-[176px]">
         {roomList.isPending ? (
           // Placeholder rows rather than a spinner, clipped to the box like the real list.
           <div className="flex h-full flex-col gap-2 overflow-hidden" aria-hidden>
             {[0, 1, 2].map((row) => (
-              <div key={row} className="h-[42px] shrink-0 animate-pulse rounded-xl bg-surface-2" />
+              <div key={row} className="h-[42px] shrink-0 animate-pulse rounded-xl bg-white/10" />
             ))}
           </div>
         ) : dayMeetings.length > 0 ? (
           <DayHourRail meetings={dayMeetings} workspaceSlug={slug} />
         ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 px-4 text-center">
-            <VideoCamera size={22} weight="duotone" className="text-ink-muted" />
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+            <VideoCamera size={22} weight="duotone" className="text-white/70" />
             <div>
-              <p className="text-[13px] font-medium text-ink">
+              <p className="text-[13px] font-medium text-white">
                 {isSameDay(selectedDate, today)
                   ? "No meetings scheduled for today"
                   : "No meetings scheduled for this day"}
               </p>
-              <p className="mt-0.5 text-[12px] text-ink-muted">
+              <p className="mt-0.5 text-[12px] text-white/65">
                 {canCreateMeetings
                   ? "Schedule one, or enjoy the quiet."
                   : "You'll see meetings here once someone invites you."}

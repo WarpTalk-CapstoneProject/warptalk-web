@@ -4,11 +4,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/sonner";
-import { useEffect, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { RealtimeNotificationProvider } from "@/components/providers/realtime-notification-provider";
 import { isSessionEnded } from "@/lib/api/client";
 import { getRetryDelayMs, shouldRetryRequest } from "@/lib/api/retry-policy";
 import { registerSessionQueryClient } from "@/lib/auth/session-scoped-state";
+import { PageTransitionLoader } from "@/components/navigation/page-transition-loader";
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "not-configured.apps.googleusercontent.com";
 
@@ -55,6 +56,9 @@ export function Providers({ children }: { children: ReactNode }) {
           disableTransitionOnChange
         >
           <RealtimeNotificationProvider>
+            <Suspense fallback={null}>
+              <PageTransitionLoader />
+            </Suspense>
             {children}
             <Toaster position="top-right" />
           </RealtimeNotificationProvider>

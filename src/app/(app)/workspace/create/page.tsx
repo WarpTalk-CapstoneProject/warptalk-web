@@ -29,10 +29,19 @@ import {
   isPublicEmailDomain,
   slugPreviewFromName,
 } from "@/lib/workspace/email-domain";
-import { useCreateWorkspace, useSelectWorkspace } from "@/hooks/use-workspace";
+import { getPrimaryInternalWorkspace } from "@/lib/workspace/workspace-membership";
+import { buildCreateWorkspacePayload } from "@/lib/workspace/create-workspace-payload";
+import {
+  useCreateWorkspace,
+  useSelectWorkspace,
+  useWorkspaces,
+} from "@/hooks/use-workspace";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { WorkspaceDto } from "@/types/workspace";
+
+const EMPTY_WORKSPACES: WorkspaceDto[] = [];
 
 const createWorkspaceSchema = z.object({
   name: z
@@ -108,6 +117,15 @@ export default function CreateWorkspaceDemoPage() {
   );
   const createWorkspace = useCreateWorkspace();
   const selectWorkspace = useSelectWorkspace();
+  const { data: workspacesData, isLoading: workspacesLoading } = useWorkspaces(1, 100);
+  const workspaces = workspacesData?.items ?? EMPTY_WORKSPACES;
+  const primaryInternalWorkspace = getPrimaryInternalWorkspace(workspaces);
+  // Membership decides this, not the session. These two used to fall back to the store's
+  // `activeWorkspaceId` / `activeWorkspaceSlug`, which meant merely having a workspace OPEN
+  // barred you from creating one — development removed that gate for good reason. What is left
+  // is the rule that is actually about the account: one internal membership.
+  const hasPrimaryInternalWorkspace = Boolean(primaryInternalWorkspace);
+  const primaryInternalWorkspaceSlug = primaryInternalWorkspace?.slug;
   const [serverError, setServerError] = useState<ServerErrorState | null>(null);
   const mounted = useSyncExternalStore(
     () => () => undefined,
@@ -191,30 +209,47 @@ export default function CreateWorkspaceDemoPage() {
     createWorkspace.isPending ||
     selectWorkspace.isPending ||
     form.formState.isSubmitting;
+  // Development dropped the old gate, which refused a second workspace to anyone who merely had
+  // an ACTIVE one — a session detail, not a rule about the account. That gate deserved to go and
+  // is gone. What replaces it is narrower and is a real rule: one INTERNAL membership per
+  // account. Having a workspace open no longer blocks anything; already belonging to one as an
+  // internal member does.
+  const internalWorkspaceIssue = hasPrimaryInternalWorkspace
+    ? `Your account already has one internal workspace membership in ${primaryInternalWorkspace?.name || "a workspace"}. Open it, or join another workspace by request or invitation instead.`
+    : null;
   // rawDomain, not emailDomain: getDomainFromEmail deliberately returns null for a public
   // domain, so gating on it would keep refusing gmail.com after WT-417 removed the rule.
-  const canCreate = isAuthenticated && !!rawDomain && !accountIssue;
+  const canCreate =
+    isAuthenticated &&
+    !!rawDomain &&
+    !accountIssue &&
+    !internalWorkspaceIssue &&
+    !workspacesLoading;
 
   useEffect(() => {
     if (mounted && !isAuthenticated) router.replace("/login");
   }, [mounted, isAuthenticated, router]);
 
-  /**
-   * No plan, no form. This is what makes the gate real rather than decorative.
-   *
-   * /workspace disables its Create card and the sidebar's Create entry now points at the plan
-   * grid, so nothing in the UI reaches this page without a plan. Someone who types the URL, or
-   * follows an old bookmark, would otherwise walk straight past the gate and found a workspace
-   * with nothing to run it on — the exact state this whole change exists to stop.
-   *
-   * A redirect rather than a disabled form: they are not being refused, they are one screen
-   * early, and the screen they need is the one they get sent to.
-   */
   useEffect(() => {
-    if (mounted && isAuthenticated && !checkoutPlanSlug) {
+    if (!mounted || workspacesLoading || !hasPrimaryInternalWorkspace) return;
+    router.replace(
+      primaryInternalWorkspaceSlug
+        ? `/${primaryInternalWorkspaceSlug}/home`
+        : "/workspace",
+    );
+  }, [
+    mounted,
+    workspacesLoading,
+    hasPrimaryInternalWorkspace,
+    primaryInternalWorkspaceSlug,
+    router,
+  ]);
+
+  useEffect(() => {
+    if (mounted && isAuthenticated && !checkoutPlanSlug && !hasPrimaryInternalWorkspace) {
       router.replace("/workspace/plans");
     }
-  }, [mounted, isAuthenticated, checkoutPlanSlug, router]);
+  }, [mounted, isAuthenticated, checkoutPlanSlug, hasPrimaryInternalWorkspace, router]);
 
   /**
    * The plan being bought, resolved here so the amount charged is the amount quoted.
@@ -272,20 +307,18 @@ export default function CreateWorkspaceDemoPage() {
     setServerError(null);
 
     try {
-      const initialInvitations = initialInvites.map((inv) => ({
-        email: inv.email,
-        ...toRequestFields(inv.access),
-      }));
-
-      const workspace = await createWorkspace.mutateAsync({
-        name: values.name.trim(),
-        logoUrl: values.logoUrl?.trim() || null,
-        ...(wantsVerifiedDomain && allVerifiedDomains.length > 0
-          ? { verifiedDomains: allVerifiedDomains }
-          : {}),
-        requireVerifiedDomainForInternal: wantsVerifiedDomain,
-        ...(initialInvitations.length > 0 ? { initialInvitations } : {}),
+      const payload = buildCreateWorkspacePayload(user?.email, {
+        name: values.name,
+        logoUrl: values.logoUrl,
       });
+      if (!payload) {
+        setServerError({
+          kind: "account",
+          message: "A valid email address is required before creating a workspace.",
+        });
+        return;
+      }
+      const workspace = await createWorkspace.mutateAsync(payload);
 
       const selection = await selectWorkspace.mutateAsync(workspace.id);
       applySelectedWorkspace(selection, setActiveWorkspace);
@@ -352,7 +385,12 @@ export default function CreateWorkspaceDemoPage() {
     }
   }
 
-  if (!mounted || !isAuthenticated) {
+  if (
+    !mounted ||
+    !isAuthenticated ||
+    workspacesLoading ||
+    hasPrimaryInternalWorkspace
+  ) {
     return (
       <div className="flex h-dvh items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -392,9 +430,9 @@ export default function CreateWorkspaceDemoPage() {
           className="flex flex-col gap-5"
         >
           {/* Server/Account Errors */}
-          {(accountIssue || serverError) && (
+          {(accountIssue || internalWorkspaceIssue || serverError) && (
             <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-[12px] text-destructive leading-relaxed">
-              {serverError?.message ?? accountIssue}
+              {serverError?.message ?? internalWorkspaceIssue ?? accountIssue}
             </div>
           )}
 

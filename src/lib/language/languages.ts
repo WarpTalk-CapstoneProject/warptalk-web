@@ -30,8 +30,10 @@
  * name wherever it turns up in stored data — without being offered anywhere.
  */
 export type LanguageScope =
-  /** Selectable as one of a meeting's languages, and on the pre-join screen. */
+  /** Selectable as one of a meeting's languages. */
   | "meeting"
+  /** Selectable on the pre-join screen by participants. */
+  | "participantLanguage"
   /** Selectable when recording a voice profile. */
   | "voiceProfile"
   /** Has a provider voice library worth browsing. */
@@ -59,42 +61,42 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "vi-VN",
     name: "Vietnamese",
     region: "VN",
-    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
+    scopes: ["meeting", "participantLanguage", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "en",
     locale: "en-US",
     name: "English",
     region: "US",
-    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
+    scopes: ["meeting", "participantLanguage", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "ja",
     locale: "ja-JP",
     name: "Japanese",
     region: "JP",
-    scopes: ["meeting", "voiceProfile", "glossary", "chatTarget"],
+    scopes: ["meeting", "participantLanguage", "voiceProfile", "glossary", "chatTarget"],
   },
   {
     code: "ko",
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["participantLanguage", "glossary", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["participantLanguage", "glossary", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["participantLanguage", "glossary", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in
@@ -183,9 +185,22 @@ export function isLanguageAllowedByPolicy(
 
 /** The meeting-scope languages a workspace policy permits. Empty policy ⇒ the whole scope. */
 export function meetingLanguagesForPolicy(allowedTargetLanguages?: string[] | null) {
-  return languagesInScope("meeting").filter((language) =>
-    isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  const baseScope = languagesInScope("meeting");
+  const policyCodes = normalizeLanguagePolicy(allowedTargetLanguages);
+  if (policyCodes.length === 0) return baseScope;
+
+  const inScope = baseScope.filter((language) => policyCodes.includes(language.code));
+  const extraCodes = policyCodes.filter(
+    (code) => !inScope.some((language) => language.code === code),
   );
+  const extras = extraCodes
+    .map((code) => getLanguageByCode(code))
+    .filter(
+      (language): language is SupportedLanguage =>
+        Boolean(language) && language.scopes.includes("participantLanguage"),
+    );
+
+  return [...inScope, ...extras];
 }
 
 /**
@@ -209,9 +224,33 @@ export function meetingLanguagesForRoom(
   allowedTargetLanguages?: string[] | null,
   roomLanguages?: string[] | null,
 ) {
-  return meetingLanguagesForPolicy(allowedTargetLanguages).filter((language) =>
+  const allowed = normalizeLanguagePolicy(allowedTargetLanguages);
+  const room = normalizeLanguagePolicy(roomLanguages);
+
+  if (allowed.length === 0 && room.length === 0) {
+    return languagesInScope("participantLanguage");
+  }
+
+  const baseOptions = meetingLanguagesForPolicy(allowedTargetLanguages);
+  const filtered = baseOptions.filter((language) =>
     isLanguageAllowedByPolicy(language.code, roomLanguages),
   );
+
+  if (filtered.length > 0) return filtered;
+
+  if (room.length > 0) {
+    const roomExtras = room
+      .map((code) => getLanguageByCode(code))
+      .filter(
+        (language): language is SupportedLanguage =>
+          Boolean(language) &&
+          language.scopes.includes("participantLanguage") &&
+          isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+      );
+    if (roomExtras.length > 0) return roomExtras;
+  }
+
+  return filtered;
 }
 
 /**

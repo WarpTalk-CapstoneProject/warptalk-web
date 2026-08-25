@@ -12,10 +12,10 @@
  * a grey wash while Meetings and Members next door open straight onto their content on white. The
  * listing is the page.
  *
- * NO TOOLBAR ROW. It held one Refresh button, and a manual refresh is the wrong control here:
- * the query already refetches on focus and after every edit, so the button's only reliable
- * effect was to push the filters and the table a toolbar's height down the screen while every
- * neighbouring page starts at the top. Removing it removes the gap.
+ * NO TOOLBAR ROW — but Refresh survives. The control itself is worth keeping; the row it used to
+ * sit in was not, because it pushed the filters and the table a toolbar's height down the screen
+ * while every neighbouring page starts at the top. It now rides in `KnowledgeTable`'s own header
+ * via `toolbarActions`, which costs no vertical space, so the page still opens at the top.
  *
  * Owner/Admin can read it. Only the Owner can change it, and the API enforces both
  * independently — this page hiding a control is a courtesy, not the control.
@@ -28,7 +28,7 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
-import { Brain } from "@phosphor-icons/react/dist/ssr";
+import { ArrowClockwise, Brain } from "@phosphor-icons/react/dist/ssr";
 
 import { KnowledgeChunkSheet } from "@/components/knowledge/knowledge-chunk-sheet";
 import { KnowledgeTable } from "@/components/knowledge/knowledge-table";
@@ -36,6 +36,7 @@ import {
   WorkspaceBody,
   WorkspaceEmptyState,
   WorkspacePage,
+  WorkspaceSecondaryButton,
 } from "@/components/workspace/page-chrome";
 import { useKnowledgeFilters } from "@/hooks/use-knowledge-filters";
 import { useWorkspaceKnowledge } from "@/hooks/use-workspace";
@@ -80,7 +81,7 @@ export default function WorkspaceKnowledgePage() {
 
   return (
     <WorkspacePage>
-      <WorkspaceBody className="pt-3">
+      <WorkspaceBody className="px-0 pt-3">
         <KnowledgeTable
           filters={filters}
           data={data}
@@ -90,6 +91,15 @@ export default function WorkspaceKnowledgePage() {
           onRetry={() => refetch()}
           onSelect={(chunk: WorkspaceKnowledgeChunkDto) => setOpenChunkId(chunk.chunkId)}
           emptyHint="Upload a document or finish a meeting so it gets a summary, and what the system keeps will appear here."
+          toolbarActions={
+            <WorkspaceSecondaryButton
+              onClick={() => refetch()}
+              disabled={isFetching}
+              icon={<ArrowClockwise size={13} weight="bold" />}
+            >
+              {isFetching ? "Refreshing..." : "Refresh"}
+            </WorkspaceSecondaryButton>
+          }
         />
       </WorkspaceBody>
 

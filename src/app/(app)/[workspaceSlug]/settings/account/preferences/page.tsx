@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
@@ -35,6 +35,18 @@ const preferencesSchema = z.object({
 });
 
 type PreferencesFormData = z.infer<typeof preferencesSchema>;
+
+const DEFAULT_PREFERENCES: PreferencesFormData = {
+  defaultSpeakLanguage: "en",
+  defaultListenLanguage: "en",
+  voiceCloneEnabled: true,
+  micNoiseSuppression: true,
+  defaultTranslationRoomType: "instant",
+  autoRecordTranslationRooms: false,
+  autoGenerateSummary: false,
+  defaultMaxParticipants: 10,
+  theme: "system",
+};
 
 // Default speak/listen language — meeting languages, so they come from the registry.
 const languages = languagesInScope("meeting").map((language) => ({
@@ -70,15 +82,19 @@ export default function PersonalPreferencesPage() {
 
   const {
     register,
+    control,
     setValue,
-    watch,
     reset,
     formState: { isSubmitting, errors },
   } = useForm<PreferencesFormData>({
     resolver: zodResolver(preferencesSchema),
+    defaultValues: DEFAULT_PREFERENCES,
   });
 
-  const watchAll = watch();
+  const watchAll = useWatch({
+    control,
+    defaultValue: DEFAULT_PREFERENCES,
+  }) as PreferencesFormData;
 
   const savePreference = useCallback(
     (patch: Partial<UpdateUserSettingsRequest>) => updateSettingsMutation.mutateAsync(patch),
@@ -92,18 +108,21 @@ export default function PersonalPreferencesPage() {
   useEffect(() => {
     if (settingsData && !initializedRef.current) {
       const initialValues: PreferencesFormData = {
-        defaultSpeakLanguage: settingsData.defaultSpeakLanguage || "en",
-        defaultListenLanguage: settingsData.defaultListenLanguage || "en",
+        ...DEFAULT_PREFERENCES,
+        defaultSpeakLanguage: settingsData.defaultSpeakLanguage || DEFAULT_PREFERENCES.defaultSpeakLanguage,
+        defaultListenLanguage: settingsData.defaultListenLanguage || DEFAULT_PREFERENCES.defaultListenLanguage,
         // Off, not on, when the server did not say. This is biometric processing, and a
         // fallback that shows a switch ON while the stored value is OFF tells the user their
         // voice is being cloned when it is not (WT-401). AuthService's own default is false.
         voiceCloneEnabled: settingsData.voiceCloneEnabled ?? false,
-        micNoiseSuppression: settingsData.micNoiseSuppression ?? true,
-        defaultTranslationRoomType: settingsData.defaultTranslationRoomType || "instant",
-        autoRecordTranslationRooms: settingsData.autoRecordTranslationRooms ?? false,
-        autoGenerateSummary: settingsData.autoGenerateSummary ?? false,
-        defaultMaxParticipants: settingsData.defaultMaxParticipants ?? 10,
-        theme: settingsData.theme || "system",
+        micNoiseSuppression: settingsData.micNoiseSuppression ?? DEFAULT_PREFERENCES.micNoiseSuppression,
+        defaultTranslationRoomType:
+          settingsData.defaultTranslationRoomType || DEFAULT_PREFERENCES.defaultTranslationRoomType,
+        autoRecordTranslationRooms:
+          settingsData.autoRecordTranslationRooms ?? DEFAULT_PREFERENCES.autoRecordTranslationRooms,
+        autoGenerateSummary: settingsData.autoGenerateSummary ?? DEFAULT_PREFERENCES.autoGenerateSummary,
+        defaultMaxParticipants: settingsData.defaultMaxParticipants ?? DEFAULT_PREFERENCES.defaultMaxParticipants,
+        theme: settingsData.theme || DEFAULT_PREFERENCES.theme,
       };
       reset(initialValues);
       lastQueuedValuesRef.current = Object.fromEntries(

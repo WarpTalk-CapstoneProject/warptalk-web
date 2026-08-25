@@ -511,5 +511,3 @@ export function RealtimeNotificationProvider({
     </RealtimeContext.Provider>
   );
 }
-
-

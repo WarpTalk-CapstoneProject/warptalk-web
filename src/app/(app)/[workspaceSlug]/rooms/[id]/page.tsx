@@ -36,12 +36,11 @@ import {
   Star,
   StopCircle,
   Strikethrough,
-  Repeat,
   Underline as UnderlineIcon,
 } from "lucide-react";
 // Aliased: this file already imports Tiptap's `Link` extension, and the editor's Link and the
 // router's Link are two very different things to have under one name.
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -83,6 +82,7 @@ import {
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
+import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { MinutesPanel } from "@/components/rooms/minutes-panel";
@@ -128,6 +128,7 @@ import {
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
+import { useCanCreateMeetings } from "@/stores/workspace-store";
 import type { UserDto } from "@/types/auth";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 import type {
@@ -137,7 +138,6 @@ import type {
   TranslationRoomStatus,
 } from "@/types/translationRoom";
 import type { WorkspaceMemberDto } from "@/types/workspace";
-import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
 type UserIdentity = {
@@ -167,7 +167,9 @@ export default function RoomInformationPage() {
   const params = useParams<{ workspaceSlug: string; id: string }>();
   const workspaceSlug = params.workspaceSlug;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const roomId = params.id;
+  const previewSummaryLoading = searchParams.get("summaryPreview") === "loading";
   const [copiedText, setCopiedText] = useState<string | null>(null);
   // WT-433: the "Ask to join" button's in-flight state.
   const [askingToJoin, setAskingToJoin] = useState(false);
@@ -178,7 +180,14 @@ export default function RoomInformationPage() {
   const endRoomMutation = useEndTranslationRoom();
   const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
+  const canCreateMeetings = useCanCreateMeetings();
   const user = useAuthStore((state) => state.user);
+  // Read ABOVE the `if (!room)` guard below, and it has to stay there. React counts hooks
+  // per render: while the room query is still loading this component returns early, so a
+  // hook placed after that guard runs on the second render and not the first. React sees
+  // the count grow and throws error #310 ("Rendered more hooks than during the previous
+  // render"), which is a blank error page rather than a degraded one.
+  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
@@ -362,14 +371,6 @@ export default function RoomInformationPage() {
       : null,
   );
 
-  // Read ABOVE the `if (!room)` guard below, and it has to stay there. React counts hooks
-  // per render: while the room query is still loading this component returns early, so a
-  // hook placed after that guard runs on the second render and not the first. React sees
-  // the count grow and throws error #310 ("Rendered more hooks than during the previous
-  // render"), which is a blank error page rather than a degraded one — the whole room
-  // detail route died on every fresh load.
-  const activeRoomId = useActiveMeetingStore((state) => state.activeRoomId);
-
   function handleCopy(text: string, label: string) {
     navigator.clipboard.writeText(text);
     setCopiedText(`${label} copied`);
@@ -501,10 +502,12 @@ export default function RoomInformationPage() {
   // Only the host, and only while the room still has settings worth changing — once it is
   // live or ended, editing it would rewrite a meeting already in progress or already over.
   const canEditRoom =
+    canCreateMeetings &&
     room.hostId === user?.id &&
     (room.status === "scheduled" || room.status === "waiting");
 
   const openRoomEditor = () => {
+    if (!canCreateMeetings) return;
     useUIStore.getState().setEditRoomId(room.id);
     useUIStore.getState().setCreateRoomModalOpen(true);
   };
@@ -525,7 +528,8 @@ export default function RoomInformationPage() {
   );
   const seatedIds = new Set(seatedIdentities.map((identity) => identity.id));
   const notInRoom = participants.filter(
-    (participant) => !seatedIds.has(participant.id),
+    (participant) =>
+      participant.role === "Invitee" && !seatedIds.has(participant.id),
   );
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
@@ -571,11 +575,15 @@ export default function RoomInformationPage() {
                       </button>
                     ) : null}
                   </div>
-                  {/* WT-327: the repeat rule lives on the meeting, because the meeting is the
-                      only thing there is. There is no separate booking page to send anyone to —
-                      the booking has one code and one next date, and this page already shows the
-                      code. Host-only "Stop repeating" sits here for the same reason: deleting the
-                      page it used to live on must not delete the ability. */}
+                  {/* WT-327: an occurrence is an ordinary meeting, and this page treats it as
+                      one — but the person looking at it may have arrived expecting the whole
+                      repeating booking, so the page says which it is.
+
+                      Not a link. This read "see the whole schedule" and pointed at
+                      `/{slug}/series/{seriesId}`, a route that exists nowhere under src/app, so
+                      the one control offering to answer "where are the other dates?" answered
+                      with not-found.tsx. Stating the fact is worth keeping; promising a
+                      destination that 404s is not. Restore the link with the page. */}
                   {room.seriesId ? (
                     <RoomRecurrenceLine
                       seriesId={room.seriesId}
@@ -667,6 +675,7 @@ export default function RoomInformationPage() {
                 isEnded={isEnded}
                 artifactAccess={room.settings?.artifactAccess}
                 endedRecord={endedRecordQuery.data ?? null}
+                previewSummaryLoading={previewSummaryLoading}
                 segments={transcriptSegments}
                 hasTranscript={hasTranscript}
                 seek={seek}
@@ -874,6 +883,7 @@ function MeetingRecordSection({
   transcript,
   transcriptCount,
   endedRecord,
+  previewSummaryLoading,
   segments,
   hasTranscript,
   seek,
@@ -901,6 +911,7 @@ function MeetingRecordSection({
    */
   hasTranscript?: boolean;
   endedRecord: EndedRoomHistoryItem | null;
+  previewSummaryLoading?: boolean;
   /** The persisted segments, so the summary panel can tell the reader it is behind a correction. */
   segments: TranscriptSegmentDto[];
   /** Where to move the recording, when a citation or a transcript line asked. */
@@ -910,7 +921,7 @@ function MeetingRecordSection({
 }) {
   const [tab, setTab] = useState<
     "transcript" | "summary" | "minutes" | "artifacts"
-  >("transcript");
+  >(() => (previewSummaryLoading ? "summary" : "transcript"));
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
   // WT-492: null when the meeting was not recorded, or the file is not ready yet.
@@ -1110,6 +1121,7 @@ function MeetingRecordSection({
           hasTranscript={hasTranscript}
           busyArtifactId={busyArtifactId}
           onDownload={downloadArtifact}
+          forceGenerating={previewSummaryLoading}
           // Checking a claim means leaving the summary, so the tab switches with it —
           // scrolling the transcript while the reader is still looking at the summary
           // would look like the button did nothing.

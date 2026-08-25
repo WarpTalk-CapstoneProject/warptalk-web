@@ -48,3 +48,13 @@ Repeat the same flow for:
 ## Known Risk Covered
 
 This prevents the previous issue where sidebar links pointed to missing routes. Entering a root 404 page from the dashboard and then using browser Back could leave the shared sidebar active-pill state visually out of sync.
+
+## Page Transition Feedback
+
+Internal link clicks now show a lightweight global top progress bar while the next route is resolving. This is meant to make cold local/dev navigations feel acknowledged without changing the target page UI.
+
+Manual checks:
+
+- Click any internal sidebar or topbar navigation item and confirm the loader appears immediately as a long bar at the top of the viewport.
+- Confirm the loader disappears after the URL changes.
+- Confirm hash-only links and external links do not trigger the in-app transition indicator.

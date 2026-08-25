@@ -16,9 +16,9 @@ export interface DocumentAccessPolicyHookReturn {
   isLoading: boolean;
   isSubmitting: boolean;
   toggleExternalAccess: (checked: boolean) => Promise<void>;
-  allowUser: (userId: string, userName?: string) => Promise<void>;
-  blockUser: (userId: string, userName?: string) => Promise<void>;
-  removePolicy: (policyId: string) => Promise<void>;
+  allowUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<void>;
+  blockUser: (userId: string, userName?: string, options?: { silent?: boolean }) => Promise<void>;
+  removePolicy: (policyId: string, options?: { silent?: boolean }) => Promise<void>;
 }
 
 export function useDocumentAccessPolicy(
@@ -78,23 +78,25 @@ export function useDocumentAccessPolicy(
     }
   };
 
-  const removePolicy = async (policyId: string) => {
+  const removePolicy = async (policyId: string, options?: { silent?: boolean }) => {
     try {
       await removePolicyMutation.mutateAsync(policyId);
-      toast.success("Access policy rule removed.");
+      if (!options?.silent) {
+        toast.success("Access policy rule removed.");
+      }
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to remove policy rule.";
       toast.error(errorMsg);
     }
   };
 
-  const allowUser = async (userId: string, userName?: string) => {
+  const allowUser = async (userId: string, userName?: string, options?: { silent?: boolean }) => {
     const existingPolicy = policiesList.find(
       (p) => p.subjectType === "User" && p.subjectId === userId && p.effect === "ALLOW"
     );
 
     if (existingPolicy) {
-      await removePolicy(existingPolicy.id);
+      await removePolicy(existingPolicy.id, options);
     } else {
       try {
         await addPolicyMutation.mutateAsync({
@@ -104,7 +106,9 @@ export function useDocumentAccessPolicy(
           permission: "View",
           effect: "ALLOW",
         });
-        toast.success(`Allowed access for ${userName || "user"}.`);
+        if (!options?.silent) {
+          toast.success(`Allowed access for ${userName || "user"}.`);
+        }
       } catch (err: unknown) {
         const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to allow user access.";
         toast.error(errorMsg);
@@ -112,13 +116,13 @@ export function useDocumentAccessPolicy(
     }
   };
 
-  const blockUser = async (userId: string, userName?: string) => {
+  const blockUser = async (userId: string, userName?: string, options?: { silent?: boolean }) => {
     const existingPolicy = policiesList.find(
       (p) => p.subjectType === "User" && p.subjectId === userId && p.effect === "DENY"
     );
 
     if (existingPolicy) {
-      await removePolicy(existingPolicy.id);
+      await removePolicy(existingPolicy.id, options);
     } else {
       try {
         await addPolicyMutation.mutateAsync({
@@ -128,7 +132,9 @@ export function useDocumentAccessPolicy(
           permission: "View",
           effect: "DENY",
         });
-        toast.success(`Blocked access for ${userName || "user"}.`);
+        if (!options?.silent) {
+          toast.success(`Blocked access for ${userName || "user"}.`);
+        }
       } catch (err: unknown) {
         const errorMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error || "Failed to block user access.";
         toast.error(errorMsg);

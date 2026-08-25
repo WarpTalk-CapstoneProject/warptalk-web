@@ -118,7 +118,7 @@ export default function VoiceProfilesPage() {
               onClick={() => setIsCreateOpen(true)}
               icon={<Plus size={13} weight="bold" />}
             >
-              Create profile
+              Add voice profile
             </WorkspacePrimaryButton>
           </>
         }

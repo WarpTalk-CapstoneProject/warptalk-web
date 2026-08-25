@@ -1,5 +1,12 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import {
+  getMeetingSummarySeedArtifactById,
+  getMeetingSummarySeedArtifacts,
+  getMeetingSummarySeedParticipants,
+  getMeetingSummarySeedRoom,
+  isMeetingSummarySeedRoomId,
+} from "@/lib/meeting/meeting-summary-seed";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import {
   normalizeNoiseReductionMode,
@@ -262,11 +269,19 @@ export const translationRoomService = {
   },
 
   async get(id: string) {
+    const seedRoom = getMeetingSummarySeedRoom(id);
+    if (seedRoom) {
+      return { data: seedRoom };
+    }
     const response = await apiClient.get<BackendRoom>(API.translationRooms.get(id));
     return { ...response, data: normalizeRoom(response.data) };
   },
 
   async participants(id: string) {
+    const seedParticipants = getMeetingSummarySeedParticipants(id);
+    if (seedParticipants) {
+      return { data: seedParticipants };
+    }
     const response = await apiClient.get<BackendParticipant[]>(API.translationRooms.participants(id));
     return { ...response, data: response.data.map(normalizeParticipant) };
   },
@@ -520,10 +535,25 @@ export const translationRoomService = {
   },
 
   async artifacts(id: string) {
+    const seedArtifacts = getMeetingSummarySeedArtifacts(id);
+    if (seedArtifacts) {
+      return { data: seedArtifacts };
+    }
     return apiClient.get<TranslationRoomArtifactDto[]>(API.translationRooms.artifacts(id));
   },
 
   artifactDownload(id: string) {
+    const seedArtifact = getMeetingSummarySeedArtifactById(id);
+    if (seedArtifact) {
+      return Promise.resolve({
+        data: {
+          url: null,
+          content: seedArtifact.content ?? `Seed artifact: ${seedArtifact.title}`,
+          fileName: `${seedArtifact.title.toLowerCase().replace(/\s+/g, "-")}.${seedArtifact.fileFormat ?? "txt"}`,
+          contentType: seedArtifact.fileFormat === "json" ? "application/json" : "text/plain",
+        },
+      });
+    }
     return apiClient.get<{
       url?: string | null;
       content?: string | null;
@@ -533,6 +563,9 @@ export const translationRoomService = {
   },
 
   approveArtifactConsent(id: string) {
+    if (getMeetingSummarySeedArtifactById(id)) {
+      return Promise.resolve();
+    }
     return apiClient.post<void>(API.roomArtifacts.consent(id));
   },
 
@@ -543,6 +576,9 @@ export const translationRoomService = {
    * the artifact, so the caller has to refetch rather than trust the response body.
    */
   regenerateSummary(roomId: string, templateKey: string) {
+    if (isMeetingSummarySeedRoomId(roomId)) {
+      return Promise.resolve({ data: { message: `Seed summary already available as ${templateKey}.` } });
+    }
     return apiClient.post<{ message: string }>(
       API.roomArtifacts.regenerateSummary(roomId),
       { templateKey },

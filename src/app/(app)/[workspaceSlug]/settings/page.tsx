@@ -83,13 +83,9 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   invitationExpiryDays: 7,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
-  // Empty means unrestricted — every meeting-scope language is offered. It used to read
-  // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
-  // that had never set one got a three-language allowlist, and Korean, French and Spanish
-  // showed as BLOCKED in the create-room picker with the reason pointing at "this
-  // workspace's language policy" and at an admin who had never touched it. Worse, the value
-  // is what this form posts, so the first save of any unrelated setting wrote the invented
-  // allowlist to the server for real.
+  // Empty means unrestricted within the meeting-scope registry. The project meeting scope is
+  // intentionally Vietnamese, English and Japanese only; this field narrows that set only
+  // when an admin explicitly chooses a policy.
   allowedTargetLanguages: [],
   verifiedDomains: [],
   allowExternalCollaboration: true,

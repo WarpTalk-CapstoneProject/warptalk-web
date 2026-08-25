@@ -56,7 +56,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import ExcelJS from "exceljs";
+import type { Borders } from "exceljs";
 import { saveAs } from "file-saver";
 import {
   Bot,
@@ -72,6 +72,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { createExcelWorkbook } from "@/lib/export/create-excel-workbook";
 
 export default function AdminBillingPage() {
   const router = useRouter();
@@ -227,7 +228,7 @@ export default function AdminBillingPage() {
     }
     setIsExporting(true);
     try {
-      const workbook = new ExcelJS.Workbook();
+      const workbook = await createExcelWorkbook();
       workbook.creator = "WarpTalk Admin";
 
       // --- Sheet 1: Summary ---
@@ -343,7 +344,7 @@ export default function AdminBillingPage() {
         fgColor: { argb: "FF0F172A" },
       };
       headerRow.alignment = { vertical: "middle", horizontal: "center" };
-      const border: Partial<ExcelJS.Borders> = {
+      const border: Partial<Borders> = {
         top: { style: "thin", color: { argb: "FFCBD5E1" } },
         bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
         left: { style: "thin", color: { argb: "FFCBD5E1" } },

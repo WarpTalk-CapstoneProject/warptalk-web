@@ -3,6 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 import { transcriptService } from "@/services/transcript.service";
+import {
+  getMeetingSummarySeedTranscriptByRoom,
+  getMeetingSummarySeedTranscriptSegments,
+} from "@/lib/meeting/meeting-summary-seed";
 import type {
   CreateCorrectionRequest,
   CreateTranscriptExportRequest,
@@ -91,6 +95,8 @@ export function useTranscriptByRoom(translationRoomId?: string) {
   return useQuery({
     queryKey: [...TRANSCRIPT_KEY, "by-room", translationRoomId],
     queryFn: async () => {
+      const seedTranscript = getMeetingSummarySeedTranscriptByRoom(translationRoomId);
+      if (seedTranscript) return seedTranscript;
       const { data } = await transcriptService.getByRoom(translationRoomId!);
       return data;
     },
@@ -102,11 +108,14 @@ export function useTranscriptByRoom(translationRoomId?: string) {
 export function useTranscriptSegments(transcriptId?: string) {
   return useQuery({
     queryKey: [...TRANSCRIPT_KEY, transcriptId, "segments"],
-    queryFn: () =>
-      collectAllPages(async (skip, take) => {
+    queryFn: async () => {
+      const seedSegments = getMeetingSummarySeedTranscriptSegments(transcriptId);
+      if (seedSegments) return seedSegments;
+      return collectAllPages(async (skip, take) => {
         const { data } = await transcriptService.segments(transcriptId!, { skip, take });
         return data;
-      }),
+      });
+    },
     enabled: !!transcriptId,
   });
 }

@@ -1,8 +1,10 @@
 import { translationRoomService } from "@/services/translation-room.service";
-import { calculateMeetingDurationSeconds } from "@/lib/meeting/meeting-duration";
+import {
+  getMeetingSummarySeedHistoryResponse,
+  isMeetingSummarySeedWorkspaceId,
+} from "@/lib/meeting/meeting-summary-seed";
 import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
 import {
-  resolveArtifactStatus,
   resolveHistoryStatus,
   resolveMeetingDurationSeconds,
   resolveRetention,
@@ -170,6 +172,16 @@ export const roomHistoryService = {
 
     if (options?.state && options.state !== "ready") {
       return { rooms: [], total: 0, page, pageSize };
+    }
+
+    if (isMeetingSummarySeedWorkspaceId(options.workspaceId)) {
+      return getMeetingSummarySeedHistoryResponse({
+        page,
+        pageSize,
+        search: options.search,
+        artifactStatus: options.artifactStatus,
+        status: options.status,
+      });
     }
 
     // pageSize used to be a hardcoded 100 with no page, which is not "no pagination" — it is

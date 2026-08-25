@@ -54,11 +54,12 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import ExcelJS from "exceljs";
+import type { Borders } from "exceljs";
 import { saveAs } from "file-saver";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "@/lib/format/currency";
+import { createExcelWorkbook } from "@/lib/export/create-excel-workbook";
 
 const CURRENT_MONTH = new Date().getMonth() + 1;
 const CURRENT_YEAR = new Date().getFullYear();
@@ -117,7 +118,7 @@ export default function AdminWorkspaceBillingPage({
       .then(() => {
         if (isMounted && workspaceId) {
           connection
-            .invoke("JoinWorkspace", workspaceId)
+            .invoke("SubscribeWorkspace", workspaceId)
             .catch((err) =>
               console.error("Error joining workspace group:", err),
             );
@@ -309,7 +310,7 @@ export default function AdminWorkspaceBillingPage({
   const confirmExportUsage = async () => {
     if (!historyPage?.items || historyPage.items.length === 0) return;
 
-    const workbook = new ExcelJS.Workbook();
+    const workbook = await createExcelWorkbook();
     workbook.creator = "WarpTalk";
     const worksheet = workbook.addWorksheet("Wallet Transactions");
 
@@ -363,7 +364,7 @@ export default function AdminWorkspaceBillingPage({
     };
     headerRow.alignment = { vertical: "middle", horizontal: "center" };
 
-    const borderStyle: Partial<ExcelJS.Borders> = {
+    const borderStyle: Partial<Borders> = {
       top: { style: "thin", color: { argb: "FFCBD5E1" } },
       left: { style: "thin", color: { argb: "FFCBD5E1" } },
       bottom: { style: "thin", color: { argb: "FFCBD5E1" } },

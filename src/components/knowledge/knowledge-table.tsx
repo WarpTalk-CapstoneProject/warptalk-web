@@ -25,6 +25,8 @@ import {
   Warning,
   Clock,
 } from "@phosphor-icons/react/dist/ssr";
+import type { ReactNode } from "react";
+
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 
 import { AdminFilterTabs, AdminPanel } from "@/components/admin/admin-page-chrome";
@@ -154,6 +156,8 @@ interface KnowledgeTableProps {
   onRetry: () => void;
   onSelect?: (chunk: WorkspaceKnowledgeChunkDto) => void;
   emptyHint: string;
+  /** Optional page-level actions rendered beside source filters on workspace pages. */
+  toolbarActions?: ReactNode;
 }
 
 export function KnowledgeTable({
@@ -165,6 +169,7 @@ export function KnowledgeTable({
   onRetry,
   onSelect,
   emptyHint,
+  toolbarActions,
 }: KnowledgeTableProps) {
   const allItems = useMemo(() => orderKnowledgeChunks(data?.items ?? []), [data?.items]);
   
@@ -180,6 +185,15 @@ export function KnowledgeTable({
   }, [allItems, filters.retrievalTab]);
 
   const { factCategory, cursorStack } = filters;
+  const sourceFilters = SOURCE_TABS.map((tab) => (
+    <FilterChip
+      key={tab.value}
+      selected={filters.sourceTab === tab.value}
+      onClick={() => filters.setSourceTab(tab.value)}
+    >
+      {tab.label}
+    </FilterChip>
+  ));
 
   const availableCategories = useMemo(() => {
     const catSet = new Set<string>(FACT_CATEGORIES);
@@ -196,13 +210,26 @@ export function KnowledgeTable({
 
   return (
     <>
-      <AdminFilterTabs
-        tabs={SOURCE_TABS}
-        value={filters.sourceTab}
-        onChange={filters.setSourceTab}
-        label="Filter indexed knowledge by source"
-        trailing={items.length ? `${items.length} on this page` : undefined}
-      />
+      {toolbarActions ? (
+        <section className="flex shrink-0 flex-col gap-2 px-2 pb-1.5 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <FilterChipGroup
+            label="Filter indexed knowledge by source"
+            trailing={items.length ? `${items.length} on this page` : undefined}
+            className="min-w-0 flex-1"
+          >
+            {sourceFilters}
+          </FilterChipGroup>
+          <div className="flex shrink-0 items-center gap-2">{toolbarActions}</div>
+        </section>
+      ) : (
+        <AdminFilterTabs
+          tabs={SOURCE_TABS}
+          value={filters.sourceTab}
+          onChange={filters.setSourceTab}
+          label="Filter indexed knowledge by source"
+          trailing={items.length ? `${items.length} on this page` : undefined}
+        />
+      )}
 
       {/* Quick Tab Filter for Retrieval State */}
       <div className="py-2 flex items-center gap-2 border-b border-border/40 mb-2">
@@ -249,7 +276,10 @@ export function KnowledgeTable({
         </button>
       </div>
 
-      <FilterChipGroup label="Filter facts by category" className="pb-3">
+      <FilterChipGroup
+        label="Filter facts by category"
+        className={toolbarActions ? "px-2 pb-1.5 pt-2" : "py-3"}
+      >
         <FilterChip
           selected={factCategory === null}
           onClick={() => filters.setFactCategory(null)}

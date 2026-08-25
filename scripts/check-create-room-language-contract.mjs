@@ -14,10 +14,13 @@ const registrySource = readFileSync(
   "utf8",
 );
 
-const supportedLocales = [
+const meetingLocales = [
   "en-US",
   "vi-VN",
   "ja-JP",
+];
+
+const nonMeetingLocales = [
   "ko-KR",
   "fr-FR",
   "es-ES",
@@ -37,17 +40,25 @@ assert.match(
   "Create-room language picker must send locale tags, not bare codes.",
 );
 
-for (const locale of supportedLocales) {
+for (const locale of meetingLocales) {
   const [, region] = locale.split("-");
   assert.match(
     registrySource,
     new RegExp(`locale:\\s*"${locale}"[\\s\\S]{0,240}?scopes:\\s*\\[[^\\]]*"meeting"`),
-    `Language registry must offer the backend-supported locale ${locale} as a meeting language.`,
+    `Language registry must offer the project meeting locale ${locale} as a meeting language.`,
   );
   assert.match(
     registrySource,
     new RegExp(`region:\\s*"${region}"`),
     `Language registry must carry the region for ${locale} so its flag resolves.`,
+  );
+}
+
+for (const locale of nonMeetingLocales) {
+  assert.doesNotMatch(
+    registrySource,
+    new RegExp(`locale:\\s*"${locale}"[\\s\\S]{0,240}?scopes:\\s*\\[[^\\]]*"meeting"`),
+    `Create-room language picker must not offer non-project meeting locale ${locale}.`,
   );
 }
 

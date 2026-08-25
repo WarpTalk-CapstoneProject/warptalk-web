@@ -14,27 +14,57 @@ interface DocumentActorProps {
     email: string;
     avatarUrl?: string | null;
   } | null;
+  showLabel?: boolean;
 }
 
-export function DocumentActor({ label, member }: DocumentActorProps) {
+export function DocumentActor({
+  label,
+  member,
+  showLabel = true,
+}: DocumentActorProps) {
   if (!member) {
+    if (!showLabel) {
+      return (
+        <span
+          className="text-[11px] font-medium text-ink-muted"
+          title={`${label} unavailable`}
+        >
+          -
+        </span>
+      );
+    }
+
     return (
-      <span className="text-[10px] text-ink-muted" title={`${label} unavailable`}>
-        {label}: —
+      <span
+        className="text-[10px] text-ink-muted"
+        title={`${label} unavailable`}
+      >
+        {label}: -
       </span>
     );
   }
 
   const name = member.fullName || member.email;
   return (
-    <div className="flex min-w-0 items-center gap-1.5" title={`${label}: ${name}`}>
+    <div
+      className="flex min-w-0 items-center gap-1.5"
+      title={`${label}: ${name}`}
+    >
       <Avatar size="sm">
-        {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt={name} /> : null}
+        {member.avatarUrl ? (
+          <AvatarImage src={member.avatarUrl} alt={name} />
+        ) : null}
         <AvatarFallback>{name.slice(0, 1).toUpperCase()}</AvatarFallback>
       </Avatar>
       <div className="hidden min-w-0 flex-col xl:flex">
-        <span className="text-[9px] uppercase tracking-wide text-ink-muted">{label}</span>
-        <span className="max-w-24 truncate text-[10px] font-medium text-ink">{name}</span>
+        {showLabel ? (
+          <span className="text-[9px] uppercase tracking-wide text-ink-muted">
+            {label}
+          </span>
+        ) : null}
+        <span className="max-w-24 truncate text-[10px] font-medium text-ink">
+          {name}
+        </span>
       </div>
     </div>
   );

@@ -304,6 +304,108 @@ export function useRecentlyEnded(
   return observedNow - ended < windowMs;
 }
 
+function SummaryGeneratingText() {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let context: { revert: () => void } | null = null;
+    let cancelled = false;
+
+    void import("gsap").then(({ gsap }) => {
+      if (cancelled || !rootRef.current) return;
+
+      context = gsap.context(() => {
+        gsap.fromTo(
+          ".summary-generating-bar",
+          { opacity: 0.28 },
+          {
+            opacity: 0.62,
+            duration: 1.2,
+            ease: "sine.inOut",
+            stagger: 0.08,
+            repeat: -1,
+            yoyo: true,
+          },
+        );
+        gsap.fromTo(
+          ".summary-generating-shimmer",
+          { xPercent: -180 },
+          {
+            xPercent: 220,
+            duration: 1.45,
+            ease: "none",
+            stagger: 0.06,
+            repeat: -1,
+          },
+        );
+      }, rootRef);
+    });
+
+    return () => {
+      cancelled = true;
+      context?.revert();
+    };
+  }, []);
+
+  const overviewWidths = [
+    "w-[88%]",
+    "w-[96%]",
+    "w-[72%]",
+  ];
+  const sectionWidths = [
+    "w-[64%]",
+    "w-[78%]",
+    "w-[58%]",
+    "w-[84%]",
+    "w-[70%]",
+    "w-[52%]",
+  ];
+
+  return (
+    <div
+      ref={rootRef}
+      className="flex-1 space-y-7 p-6"
+      role="status"
+      aria-live="polite"
+      aria-label="AI is generating the summary"
+    >
+      <span className="sr-only">AI is generating the summary.</span>
+      <div className="space-y-3" aria-hidden="true">
+        {overviewWidths.map((width, index) => (
+          <div
+            key={`overview-${index}`}
+            className={cn(
+              "summary-generating-bar relative h-3 overflow-hidden rounded-full bg-neutral-500/15 dark:bg-neutral-500/20",
+              width,
+            )}
+          >
+            <span className="summary-generating-shimmer absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-neutral-200/45 to-transparent dark:via-neutral-200/35" />
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2" aria-hidden="true">
+        {sectionWidths.map((width, index) => (
+          <div
+            key={`section-${index}`}
+            className="flex items-center gap-2"
+          >
+            <span className="size-3 shrink-0 rounded-sm border border-neutral-500/15 bg-neutral-500/10" />
+            <span
+              className={cn(
+                "summary-generating-bar relative h-2.5 overflow-hidden rounded-full bg-neutral-500/15 dark:bg-neutral-500/20",
+                width,
+              )}
+            >
+              <span className="summary-generating-shimmer absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent via-neutral-200/40 to-transparent dark:via-neutral-200/30" />
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * "The transcript changed after this was written."
  *
@@ -343,6 +445,7 @@ export function SummaryPanel({
   onDownload,
   onJumpToMoment,
   onRewrite,
+  forceGenerating = false,
   segments,
   hasTranscript,
 }: {
@@ -354,6 +457,8 @@ export function SummaryPanel({
   onJumpToMoment?: (atMs: number) => void;
   /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
   onRewrite?: (templateKey: string) => Promise<void>;
+  /** Local preview switch for visually checking the AI-writing state without backend timing. */
+  forceGenerating?: boolean;
   /** The transcript's segments, when the surrounding page has them. Supplied only so the panel
    *  can tell the reader their summary is behind a correction — see SummaryStalenessNotice. */
   segments?: readonly StalenessSegment[] | null;
@@ -378,15 +483,9 @@ export function SummaryPanel({
   );
   const recentlyEnded = useRecentlyEnded(room.endedAt);
 
-  // WT-369 — resolveSummaryState was written, documented and unit-tested for exactly this, and
-  // then never called from anywhere. Its own doc comment describes the line it was meant to
-  // replace — `isGenerating = !artifact && recentlyEnded` — which was still sitting right here.
-  //
-  // The two are not equivalent. That flag only knows "no artifact yet", so an artifact that
-  // exists but is still `processing` fell straight through to "This meeting ended without a
-  // summary artifact" — printed directly above its own Download button — and a summary that
-  // landed after the wall-clock timer expired got the same false sentence. State belongs to the
-  // artifact, not to a clock.
+  const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
+  const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
   const summaryState = resolveSummaryState({
     artifactStatus: artifact?.status,
     hasStructuredContent,
@@ -394,7 +493,7 @@ export function SummaryPanel({
     recentlyEnded,
     hasTranscript,
   });
-  const isGenerating = summaryState === "generating";
+  const isGenerating = forceGenerating || summaryState === "generating";
 
   // "Not shared with you" is not "does not exist". The ROW existing is the fact this panel could
   // not see: room artifacts default to HOST_ONLY and the history projection omits `content` for
@@ -409,12 +508,9 @@ export function SummaryPanel({
     hasTranscript,
   });
 
-  const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
   // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
   const stale = isSummaryStale(segments, artifact);
-  const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
-  const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
 
   useEffect(() => {
     // A rewrite that never lands must not leave the picker spinning forever — the summary
@@ -509,7 +605,9 @@ export function SummaryPanel({
         </span>
       </div>
 
-      {hasStructuredContent && summary ? (
+      {isGenerating ? (
+        <SummaryGeneratingText />
+      ) : hasStructuredContent && summary ? (
         <div className="flex-1 space-y-6 p-6">
           {/* Above the content, because it is a caveat ON the content. Only shown where the
               caller supplied segments — the ended page reads the transcript as exported text and

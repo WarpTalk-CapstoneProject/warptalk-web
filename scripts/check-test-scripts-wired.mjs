@@ -17,6 +17,16 @@
  *   A test script counts as wired if `test:contracts` runs it, or if any GitHub workflow names it.
  *   Adding a script and forgetting the chain now fails here rather than in six months.
  *
+ * HOW "test:contracts RUNS IT" IS DECIDED
+ *   `test:contracts` used to spell out every suite in one long `npm run … && npm run …` chain, so
+ *   this checked for each name inside that string. It now delegates to scripts/run-contracts.mjs,
+ *   which DISCOVERS suites from package.json instead — a chain that names nothing would make every
+ *   suite in the repo look orphaned here.
+ *
+ *   So the discovery rule itself is the authority, imported from the one module the runner also
+ *   imports. A suite the runner picks up is wired; a suite the runner EXCLUDES still has to be
+ *   named by a workflow, which is where `test:routes` is caught.
+ *
  * ADDING A DELIBERATE EXCEPTION
  *   Put its name in ALLOWED_UNWIRED below with a comment saying why. There is currently no reason
  *   to, which is the intended state.
@@ -25,6 +35,8 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { discoverSuites } from "./contract-suites.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -41,6 +53,9 @@ if (!chain) {
   console.error("FAIL package.json has no test:contracts script to check against.");
   process.exit(1);
 }
+
+/** The suites `test:contracts` actually runs, however it is written. */
+const runByChain = new Set(discoverSuites(pkg.scripts));
 
 const workflowDir = join(root, ".github", "workflows");
 let workflows = "";
@@ -66,6 +81,7 @@ const testScripts = Object.keys(pkg.scripts).filter((name) => name.startsWith("t
 const orphans = testScripts.filter(
   (script) =>
     !ALLOWED_UNWIRED.has(script)
+    && !runByChain.has(script)
     && !isReferenced(chain, script)
     && !isReferenced(workflows, script),
 );

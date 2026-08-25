@@ -59,16 +59,70 @@ test("Korean specifically resolves, in both shapes", () => {
 
 test("scopes decide what a picker offers", () => {
   const meeting = languagesInScope("meeting").map((language) => language.code);
-  assert.deepEqual(meeting, ["vi", "en", "ja", "ko", "fr", "es"]);
+  assert.deepEqual(meeting, ["vi", "en", "ja"]);
 
-  // Chinese is known so stored data renders, but is deliberately not a meeting language.
+  // Other known languages still render cleanly for stored data and non-meeting surfaces, but
+  // they are deliberately not offered when creating/configuring meetings.
   assert.ok(!meeting.includes("zh"));
+  assert.ok(!meeting.includes("ko"));
+  assert.ok(!meeting.includes("fr"));
+  assert.ok(!meeting.includes("es"));
   assert.equal(getLanguageName("zh-CN"), "Chinese");
 
   assert.deepEqual(
     languagesInScope("voiceCatalog").map((language) => language.code),
     ["vi", "en"],
   );
+});
+
+test("a participant may still pick a language a host can no longer declare", () => {
+  // `meeting` narrowed to the three project languages; `participantLanguage` did not, and must
+  // not. Rooms created while Korean, French and Spanish were meeting languages still exist, and
+  // the pre-join picker is how someone joins one in the language it was created for.
+  const participant = languagesInScope("participantLanguage").map((l) => l.code);
+
+  for (const code of ["vi", "en", "ja", "ko", "fr", "es"]) {
+    assert.ok(
+      participant.includes(code),
+      `${code} must stay selectable on the pre-join screen`,
+    );
+  }
+
+  // Never a room language, so never offered to a participant either.
+  assert.ok(!participant.includes("zh"));
+
+  // The wider scope is a superset of the narrower one.
+  for (const code of languagesInScope("meeting").map((l) => l.code)) {
+    assert.ok(participant.includes(code), `${code} is meeting-scope but not joinable`);
+  }
+});
+
+test("a policy naming a grandfathered language still yields a usable picker", () => {
+  // Korean left the meeting scope after workspaces had already pinned policies naming it.
+  // Intersecting the two left an EMPTY picker, and an empty picker means that workspace can
+  // create no meeting at all. An explicit policy entry is a decision, not a suggestion.
+  assert.deepEqual(
+    meetingLanguagesForPolicy(["ko"]).map((language) => language.code),
+    ["ko"],
+  );
+  assert.deepEqual(
+    meetingLanguagesForPolicy(["ko-KR", "fr"]).map((language) => language.code),
+    ["ko", "fr"],
+  );
+
+  // Scope languages first, then the grandfathered extras in policy order.
+  assert.deepEqual(
+    meetingLanguagesForPolicy(["ko", "en"]).map((language) => language.code),
+    ["en", "ko"],
+  );
+
+  // And the fallback that depends on it now has something to return.
+  assert.deepEqual(reconcileMeetingLanguages(["en-US"], ["ko"]), ["ko-KR"]);
+
+  // Chinese has never been a room language, so a policy naming it still permits nothing —
+  // widening for grandfathered languages must not widen for one that was never offered.
+  assert.deepEqual(meetingLanguagesForPolicy(["zh"]), []);
+  assert.deepEqual(meetingLanguagesForPolicy(["kl-KL"]), []);
 });
 
 test("the language route reads as names, with the source not repeated", () => {
@@ -94,7 +148,7 @@ test("an empty workspace policy means unrestricted, not forbidden", () => {
   for (const policy of [[], undefined, null]) {
     assert.deepEqual(
       meetingLanguagesForPolicy(policy).map((language) => language.code),
-      ["vi", "en", "ja", "ko", "fr", "es"],
+      ["vi", "en", "ja"],
     );
     assert.equal(isLanguageAllowedByPolicy("ko", policy), true);
     assert.equal(isLanguageAllowedByPolicy("ko-KR", policy), true);

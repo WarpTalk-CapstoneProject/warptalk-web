@@ -65,7 +65,7 @@ const CONSENT_ITEMS = [
   },
   {
     key: "retentionAcknowledged",
-    label: "I understand I can delete or revoke this voice profile later.",
+    label: "I understand I can delete this voice profile later.",
   },
 ] as const;
 
@@ -272,7 +272,7 @@ export function CreateVoiceProfileDialog({
     >
       <DialogContent className="hide-scrollbar flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Create voice profile</DialogTitle>
+          <DialogTitle>Set up voice profile</DialogTitle>
           <DialogDescription>
             Name it, pick the language it speaks, and give one clear sample of you talking.
           </DialogDescription>
@@ -369,6 +369,7 @@ export function CreateVoiceProfileDialog({
           </div>
 
           <div className="border-b border-border py-2">
+            <p className="text-[12.5px] font-medium text-ink">Voice consent agreement</p>
             <p className="pb-1 text-[11px] leading-[1.55] text-ink-subtle">
               Consent for this recording. Separate from allowing a meeting to clone you live,
               which stays off unless you switch it on yourself.
@@ -394,7 +395,7 @@ export function CreateVoiceProfileDialog({
             <span className="text-[11px] text-ink-subtle">
               {outstandingConsent === 0
                 ? "All five confirmed."
-                : `${outstandingConsent} of 5 left to confirm.`}
+                : `Complete consent to continue. ${outstandingConsent} of 5 left to confirm.`}
             </span>
             <Button
               type="submit"
@@ -402,7 +403,7 @@ export function CreateVoiceProfileDialog({
               className="h-8 text-[12.5px]"
               disabled={createProfile.isPending || !canSave}
             >
-              {createProfile.isPending ? "Saving…" : "Agree & save"}
+              {createProfile.isPending ? "Saving…" : "Agree & save voice profile"}
             </Button>
           </DialogFooter>
         </form>

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import {
+  getWorkspaceEntryPath,
+  normalizeWorkspaceSlug,
+  WORKSPACE_GATEWAY_PATH,
+} from "@/lib/workspace/workspace-slug";
 import { isPlatformAdminToken } from "@/lib/api/token-lifecycle";
 import {
   ACCESS_TOKEN_COOKIE,
@@ -13,6 +17,8 @@ const PUBLIC_ROUTES = [
   "/",
   "/login",
   "/desktop-login",
+  // Someone who cannot sign in yet still needs the installer, so /download stays open.
+  "/download",
   "/register",
   "/forgot-password",
   "/verify-email",
@@ -42,6 +48,13 @@ const DEVELOPMENT_ONLY_PREFIXES = [
   "/test-meeting",
   "/workspace/artifacts",
 ];
+
+function isWorkspaceScopedRoute(pathname: string) {
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length < 2) return false;
+
+  return normalizeWorkspaceSlug(segments[0]) !== null;
+}
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -138,13 +151,19 @@ export function proxy(request: NextRequest) {
     return response;
   };
 
+  if (!hasLiveAccessToken && hasSession && isWorkspaceScopedRoute(pathname)) {
+    const workspaceUrl = new URL(WORKSPACE_GATEWAY_PATH, request.url);
+    workspaceUrl.searchParams.set("redirect", pathname);
+    return withCleanup(NextResponse.redirect(workspaceUrl));
+  }
+
   // Bouncing a signed-in user off the login page requires a *live* token. With a dead one
   // the user gets the login page they asked for — the one place that can repair the
   // session. This is the difference between a redirect and a trap.
   if (hasLiveAccessToken && (isAuthRoute || pathname === "/" || pathname === "/dashboard")) {
     const activeWorkspaceSlug = normalizeWorkspaceSlug(request.cookies.get("active_workspace_slug")?.value);
     if (activeWorkspaceSlug) {
-      return NextResponse.redirect(new URL(`/${activeWorkspaceSlug}/dashboard`, request.url));
+      return NextResponse.redirect(new URL(getWorkspaceEntryPath(activeWorkspaceSlug), request.url));
     }
 
     // WT-376: a platform administrator with no workspace of their own belongs in the admin
