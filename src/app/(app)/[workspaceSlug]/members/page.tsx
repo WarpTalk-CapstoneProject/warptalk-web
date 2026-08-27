@@ -62,6 +62,13 @@ export default function WorkspaceMembersPage() {
   const currentRole = useWorkspaceRole();
   const currentUser = useAuthStore((s) => s.user);
 
+  // Above the queries, not below the early return where these used to live: the invitation
+  // listings are gated on them now, and a value defined after the hook cannot gate it. Plain
+  // consts, so moving them changes no hook order.
+  const isOwner = currentRole === "owner";
+  const isAdmin = currentRole === "admin";
+  const isOwnerOrAdmin = isOwner || isAdmin;
+
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<DirectoryFilter>("all");
@@ -98,6 +105,9 @@ export default function WorkspaceMembersPage() {
     100,
     query,
     "outbound",
+    // WT-521: a Member may not read this, and asking anyway printed a 403 to the console on
+    // every render of a page they are otherwise allowed to open.
+    isOwnerOrAdmin,
   );
   const joinRequestsQuery = useWorkspaceInvitations(
     activeWorkspaceId || "",
@@ -105,6 +115,7 @@ export default function WorkspaceMembersPage() {
     100,
     query,
     "join-request",
+    isOwnerOrAdmin,
   );
   const removeMemberMutation = useRemoveWorkspaceMember(
     activeWorkspaceId || "",
@@ -129,9 +140,6 @@ export default function WorkspaceMembersPage() {
 
   if (!activeWorkspaceId) return null;
 
-  const isOwner = currentRole === "owner";
-  const isAdmin = currentRole === "admin";
-  const isOwnerOrAdmin = isOwner || isAdmin;
   const memberGridClass = "grid-cols-[2.5fr_100px_100px_100px_120px_110px_92px]";
 
   // Only Owners and Admins may see who has been invited or who is asking to get in — the

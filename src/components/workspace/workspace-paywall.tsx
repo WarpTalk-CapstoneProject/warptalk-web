@@ -1,18 +1,25 @@
 "use client";
 
 /**
- * The screen an unpaid workspace gets instead of the product. WT-515.
+ * What an unpaid workspace gets instead of the product. WT-515, WT-570.
  *
  * The decision itself is not here — see `lib/billing/workspace-paywall`, which is where the three
  * ways a paywall can be wrong are written down and tested. This file is only what it looks like,
  * and who is being told.
  *
- * OWNER AND MEMBER GET DIFFERENT SENTENCES, on purpose. The owner is one click from fixing this
- * and should be given that click. A member cannot buy anything, and "Choose a plan" is a button
- * that would only ever fail for them — telling them who to ask is the actionable version.
+ * OWNER AND MEMBER GET DIFFERENT TREATMENT, on purpose, and WT-570 widened the gap.
+ *
+ *   The owner can pay, so they are not shown a screen ABOUT paying — they are put ON the payment
+ *   page and kept there. Creating a workspace stays allowed (it has to be: Subscription.WorkspaceId
+ *   is non-nullable, so the row must exist before checkout can attach to it); what is no longer
+ *   allowed is wandering off unpaid. Every gated route bounces back to /payment/plans, so the only
+ *   ways out of that page are buying a plan or leaving the workspace.
+ *
+ *   A member cannot buy anything. Redirecting them to a plan grid whose every button 403s would be
+ *   a trap, so they still get the sentence that names who to ask.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { CreditCard, Spinner } from "@phosphor-icons/react";
@@ -20,7 +27,7 @@ import axios from "axios";
 
 import { Button } from "@/components/ui/button";
 import { billingService } from "@/services/billing.service";
-import { decidePaywall } from "@/lib/billing/workspace-paywall";
+import { decidePaywall, paywallRedirectPath } from "@/lib/billing/workspace-paywall";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { SubscriptionDto } from "@/types/billing";
 
@@ -71,9 +78,22 @@ export function WorkspacePaywall({
     [pathname, workspaceSlug, workspaceId, subscriptionQuery.isPending, subscriptionQuery.data, subscriptionQuery.error],
   );
 
+  // WT-570 — the buyer is HELD on the payment page rather than shown a screen about it.
+  //
+  // `replace`, not `push`: the gated route must not survive in history, or Back walks straight
+  // into the paywall again and the user ping-pongs. And it is an effect rather than a redirect
+  // during render because navigating while rendering is what produces React's
+  // "Cannot update a component while rendering a different component" warning.
+  const holdOnPaymentPage = decision.kind === "blocked" && canBuy;
+  useEffect(() => {
+    if (holdOnPaymentPage) router.replace(paywallRedirectPath(workspaceSlug));
+  }, [holdOnPaymentPage, router, workspaceSlug]);
+
   if (decision.kind === "open") return <>{children}</>;
 
-  if (decision.kind === "checking") {
+  // The redirect above lands on the next tick; showing the product for that tick is exactly the
+  // leak this gate exists to close, so the spinner covers both waits.
+  if (decision.kind === "checking" || holdOnPaymentPage) {
     return (
       <div className="flex h-dvh w-full items-center justify-center bg-canvas">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
@@ -90,24 +110,14 @@ export function WorkspacePaywall({
         <h1 className="mt-4 text-[22px] font-semibold tracking-tight">
           This workspace has no plan yet
         </h1>
+        {/* Only somebody who cannot buy reaches this screen — WT-570 sends everybody else to the
+            checkout instead — so there is one sentence here, and no button that would 403. */}
         <p className="mt-2 text-[14px] leading-6 text-ink-muted">
-          {canBuy
-            ? // Names the cause without accusing: the overwhelmingly common way to arrive here is
-              // closing the Stripe tab, which does not feel like an action that left anything
-              // half-done.
-              "The checkout for this workspace was never completed, so nothing has been activated on it. Choose a plan to start using it."
-            : "The owner of this workspace has not activated a plan yet. Ask them to finish setting it up, and everything here will open."}
+          The owner of this workspace has not activated a plan yet. Ask them to finish setting it
+          up, and everything here will open.
         </p>
 
         <div className="mt-6 flex flex-col gap-2">
-          {canBuy && (
-            <Button
-              className="h-10 w-full text-[14px]"
-              onClick={() => router.push(`/${workspaceSlug}/settings/billing`)}
-            >
-              Choose a plan
-            </Button>
-          )}
           <Button
             variant="ghost"
             className="h-9 w-full text-[13px] text-ink-muted"

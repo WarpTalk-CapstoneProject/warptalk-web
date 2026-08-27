@@ -3066,6 +3066,10 @@ export function PersistentMeetingSession({
                     availableListenLanguages={availableListenLanguages}
                     speakLanguage={sourceLanguage}
                     availableSpeakLanguages={availableListenLanguages}
+                    // WT-497: the policy itself, not only the room list it already narrowed.
+                    // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
+                    // exactly what availableListenLanguages excluded.
+                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState, type RefObject } from "react";
 
+import { planScrollToLatest } from "@/lib/meeting/scroll-plan";
+
 /**
  * "You have scrolled up, and there is newer content down there."
  *
@@ -64,10 +66,26 @@ export function useScrollToLatest(
   const scrollToLatest = useCallback(() => {
     const element = containerRef.current;
     if (!element) return;
+
     // Smooth on purpose, and the one place in these panels where that is right: this is a
     // deliberate request to travel, so the movement is the feedback that it was heard. Restoring
     // a remembered position is the opposite case and stays a jump.
-    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
+    //
+    // WT-574 — but only the LAST stretch of it. The browser derives a smooth scroll's duration
+    // from its distance, so an hour of transcript animated for two to three seconds, painting
+    // every bubble on the way past. The tail is jumped over first (see lib/meeting/scroll-plan),
+    // which keeps the movement as feedback while making it take the same ~150ms in a five-minute
+    // meeting and a three-hour one.
+    const plan = planScrollToLatest({
+      scrollHeight: element.scrollHeight,
+      scrollTop: element.scrollTop,
+      clientHeight: element.clientHeight,
+    });
+    if (plan.jumpTo !== null) {
+      element.scrollTo({ top: plan.jumpTo, behavior: "auto" });
+    }
+    element.scrollTo({ top: plan.smoothTo, behavior: "smooth" });
+
     // Optimistic: the chip goes now rather than after the animation, so it does not sit under the
     // cursor that just clicked it for another 300ms.
     setIsAway(false);
