@@ -6,7 +6,7 @@ import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
+import { getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   applySingleLanguageChoice,
   describeLanguageChoice,
@@ -100,6 +100,7 @@ export function MeetingControlBar({
   availableListenLanguages,
   speakLanguage,
   availableSpeakLanguages,
+  allowedTargetLanguages,
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
@@ -172,6 +173,13 @@ export function MeetingControlBar({
   speakLanguage?: string;
   /** Languages selectable in the speak-language dropdown — omit or pass a single-item list to hide it. */
   availableSpeakLanguages?: string[];
+  /**
+   * The workspace's Allowed Target Translation Languages. WT-497 — the room's own list is
+   * already narrowed by this upstream; the bar needs the policy itself so the "Other
+   * languages" disclosure cannot re-offer what that narrowing removed. Empty/absent means
+   * unrestricted.
+   */
+  allowedTargetLanguages?: string[] | null;
   /** A real Cartesia voice id this listener explicitly chose, or null/undefined for the automatic default. */
   voicePreference?: string | null;
   /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
@@ -410,6 +418,7 @@ export function MeetingControlBar({
             // offered on either side has to be offerable at all — dropping to one list would
             // silently remove options the moment they ever diverge.
             languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
+            allowedTargetLanguages={allowedTargetLanguages}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
             onLanguagePicked={onLanguagePicked}
             onChangeListenLanguage={onChangeListenLanguage}
@@ -1267,10 +1276,30 @@ function mergeLanguageOptions(
   return merged;
 }
 
-/** Every meeting language this product knows, minus the ones the room already offers. */
-function languagesNotAlreadyOffered(offered: string[] | undefined) {
+/**
+ * The meeting languages the WORKSPACE permits, minus the ones the room already offers.
+ *
+ * WT-497 — this used to be "every meeting language this product knows", and that is the whole
+ * defect. The room's own list was already narrowed by the workspace policy upstream (see
+ * `availableListenLanguages` in persistent-meeting-session), so the main section of the menu
+ * obeyed the Owner's setting — and then this disclosure re-offered everything it had just
+ * excluded. A workspace permitting vi/en/ko still showed French, Japanese and Spanish under
+ * "Other languages", and picking one was accepted.
+ *
+ * `isLanguageAllowedByPolicy` is what keeps an EMPTY policy meaning "unrestricted" rather than
+ * "permit nothing" — the same rule the server's whitelist check uses. An absent or still-loading
+ * settings response must therefore leave this list at its full width rather than emptying it.
+ */
+function languagesNotAlreadyOffered(
+  offered: string[] | undefined,
+  allowedTargetLanguages?: string[] | null,
+) {
   const already = new Set((offered ?? []).map(normalizeLanguageCode));
-  return languagesInScope("meeting").filter((language) => !already.has(language.code));
+  return languagesInScope("meeting").filter(
+    (language) =>
+      !already.has(language.code) &&
+      isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  );
 }
 
 // AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
@@ -1449,6 +1478,7 @@ function LanguagePairPicker({
   speakLanguage,
   listenLanguage,
   languageOptions,
+  allowedTargetLanguages,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
   onLanguagePicked,
@@ -1462,6 +1492,11 @@ function LanguagePairPicker({
    * lists, so taking two would just be a way for them to disagree later.
    */
   languageOptions: string[];
+  /**
+   * The workspace's Allowed Target Translation Languages — the ceiling on the "Other languages"
+   * disclosure below. WT-497. Empty or absent means unrestricted, never "none".
+   */
+  allowedTargetLanguages?: string[] | null;
   /**
    * Still two callbacks, because the wire format is still two fields. Every pick writes both:
    * see the onSelect below.
@@ -1492,9 +1527,11 @@ function LanguagePairPicker({
   // advertise a state the control can no longer produce.
   const shownLanguage = choice.speak || choice.hear;
 
-  // Every meeting language the room does NOT offer, as plain codes so the list below can treat
-  // both halves the same way.
-  const otherLanguages = languagesNotAlreadyOffered(languageOptions).map((language) => language.code);
+  // Every meeting language the room does NOT offer but the workspace still permits, as plain codes
+  // so the list below can treat both halves the same way.
+  const otherLanguages = languagesNotAlreadyOffered(languageOptions, allowedTargetLanguages).map(
+    (language) => language.code,
+  );
 
   // Somebody whose current language is not on the room's list is already off-menu — collapsing
   // the section that contains their own selection would hide the state they are in.
