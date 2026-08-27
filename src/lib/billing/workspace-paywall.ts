@@ -43,11 +43,25 @@ export const NO_SUBSCRIPTION_CODE = "BILLING_SUBSCRIPTION_NOT_FOUND";
 /**
  * Routes that stay open on an unpaid workspace, as path SEGMENTS after the slug.
  *
- * Billing is here for the obvious reason. `payment` is the plan grid the buyer is sent to, and
- * `settings` is broader than strictly necessary — billing lives under it, and gating the parent
- * while opening the child produces a page whose own navigation is a dead end.
+ * ONLY the payment flow. WT-570 narrowed this from `["settings", "payment"]`: the owner's
+ * instruction is that creating a workspace stays allowed and an unpaid one is HELD ON THE PAYMENT
+ * PAGE, and "held" is not true if the whole of Settings — account, profile, preferences,
+ * member-roles — is browsable on the way there. `payment` alone is the smallest set that still
+ * lets the workspace be paid for, because `/payment/plans` IS the checkout: it lists the plans and
+ * opens the Stripe session itself, so nothing on the billing screens is needed to buy.
  */
-const OPEN_SEGMENTS = ["settings", "payment"] as const;
+const OPEN_SEGMENTS = ["payment"] as const;
+
+/**
+ * Where a buyer with no plan is sent, and kept. WT-570.
+ *
+ * Exported rather than written inline at the call site so that the page which must stay open
+ * (OPEN_SEGMENTS) and the page we redirect TO cannot drift apart into a loop: this path's first
+ * segment is `payment`, which the rule above holds exempt.
+ */
+export function paywallRedirectPath(workspaceSlug: string): string {
+  return `/${workspaceSlug}/payment/plans`;
+}
 
 /** True when this path must remain reachable even with no plan. */
 export function isPaywallExemptPath(pathname: string, workspaceSlug: string): boolean {
