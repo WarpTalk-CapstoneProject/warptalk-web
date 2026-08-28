@@ -5,6 +5,7 @@ import {
   Calendar as CalendarIcon,
   CheckCircle,
   DotsThree,
+  FileText,
   Repeat,
   ShieldCheck,
   Translate,
@@ -50,6 +51,8 @@ export function OptionsMenu({
   participantsCanStartTranslation,
   onRequiresApprovalChange,
   onParticipantsCanStartTranslationChange,
+  saveTranscript,
+  onSaveTranscriptChange,
 }: {
   hasScheduledAt?: boolean;
   onAddScheduledAt?: () => void;
@@ -63,6 +66,9 @@ export function OptionsMenu({
   participantsCanStartTranslation?: boolean;
   onRequiresApprovalChange?: (next: boolean) => void;
   onParticipantsCanStartTranslationChange?: (value: boolean) => void;
+  /** WT-587: whether the meeting is written down at all. Omit to hide the row. */
+  saveTranscript?: boolean;
+  onSaveTranscriptChange?: (value: boolean) => void;
 }) {
   const now = new Date();
   const isDaily = !!daily;
@@ -385,6 +391,61 @@ export function OptionsMenu({
                 className="flex shrink-0 cursor-pointer items-center"
               >
                 {participantsCanStartTranslation ? (
+                  <CheckCircle weight="fill" size={16} color="#3b82f6" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* WT-587. The one control in this menu that removes something rather than adjusting it,
+            so it is worded as what is LOST, not as what is switched off.
+
+            Turning it off does not touch captions, translation or the dubbed voice — those never
+            went through the database, and a participant reading subtitles will notice nothing.
+            What disappears is everything that exists AFTER the meeting: the transcript, the AI
+            summary, the minutes, and the meeting's entry in the workspace knowledge base. A row
+            labelled "Save transcript" alone would read as though it governed the subtitles the
+            user can see, which is the exact confusion WT-408 was raised about.
+
+            On by default, and only sent when switched off: an omitted field lets the server keep
+            its own default, and the direction that loses a meeting's record has to be chosen. */}
+        {onSaveTranscriptChange && (
+          <div className="rounded-md">
+            <div className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
+              <button
+                type="button"
+                onClick={() => onSaveTranscriptChange(!saveTranscript)}
+                aria-pressed={!!saveTranscript}
+                className="flex flex-1 cursor-pointer items-start gap-2 text-left text-[13px]"
+              >
+                <FileText weight="duotone" size={16} className="mt-0.5 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block font-medium whitespace-nowrap text-ink">
+                    Save the meeting transcript
+                  </span>
+                  {!saveTranscript && (
+                    <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle">
+                      Subtitles and translation still work. This meeting will have no transcript,
+                      summary or minutes afterwards.
+                    </span>
+                  )}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSaveTranscriptChange(!saveTranscript)}
+                aria-label={
+                  saveTranscript
+                    ? "Do not keep a record of this meeting"
+                    : "Keep a transcript of this meeting"
+                }
+                className="mt-0.5 flex shrink-0 cursor-pointer items-center"
+              >
+                {saveTranscript ? (
                   <CheckCircle weight="fill" size={16} color="#3b82f6" />
                 ) : (
                   <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />

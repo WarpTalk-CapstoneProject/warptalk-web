@@ -92,6 +92,7 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 // Import Refactored Components
 import {
   MeetingExitControl,
+  MeetingEphemeralBadge,
   MeetingStageTimer,
 } from "@/components/rooms/live/meeting-top-bar";
 import {
@@ -2996,6 +2997,11 @@ export function PersistentMeetingSession({
               <MeetingStageTimer
                 createdAt={room.createdAt}
                 endedAt={room.endedAt}
+              />
+              {/* WT-587: whoever booked this room chose whether it leaves a record; the people
+                  in it did not, and had no way to find out. */}
+              <MeetingEphemeralBadge
+                saveTranscript={room.settings?.saveTranscript}
               />
               {/* The minimise button sat here. Removed on the owner's call — the floating
                   window still appears on its own when you navigate away from the room, which
