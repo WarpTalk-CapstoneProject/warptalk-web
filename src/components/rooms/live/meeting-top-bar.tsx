@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SignOut } from "@phosphor-icons/react/dist/ssr";
+import { EyeSlash, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -30,6 +30,34 @@ export function MeetingStageTimer({
   return (
     <div className="absolute left-4 top-4 z-30 rounded-full border border-border/70 bg-surface-1/90 px-2.5 py-1 text-[12px] font-medium text-ink shadow-sm backdrop-blur">
       <MeetingTimer createdAt={createdAt} endedAt={endedAt} />
+    </div>
+  );
+}
+
+/**
+ * WT-587: says, inside the room, that this meeting is not being written down.
+ *
+ * A room's retention is chosen once by whoever booked it and then never mentioned again — the
+ * people who join it did not make that choice and cannot see it anywhere. Rendered only for the
+ * ephemeral case, because a badge on every ordinary meeting would be noise and would train
+ * people to stop reading it, which is exactly when the one that matters gets missed.
+ *
+ * Sits beside the timer rather than in a settings panel for the same reason the timer is there:
+ * it is a fact about the meeting you are currently in.
+ */
+export function MeetingEphemeralBadge({ saveTranscript }: { saveTranscript?: boolean }) {
+  // `undefined` is a server that did not say, or a room predating the setting — both of which
+  // keep their transcript. Only an explicit false is an ephemeral room.
+  if (saveTranscript !== false) return null;
+
+  return (
+    <div
+      data-meeting-ephemeral-badge
+      title="Subtitles and translation work normally. Nothing from this meeting is saved, so there will be no transcript, summary or minutes afterwards."
+      className="absolute left-4 top-14 z-30 flex items-center gap-1.5 rounded-full border border-border/70 bg-surface-1/90 px-2.5 py-1 text-[12px] font-medium text-ink-subtle shadow-sm backdrop-blur"
+    >
+      <EyeSlash weight="duotone" size={14} className="shrink-0" />
+      Not being recorded
     </div>
   );
 }
