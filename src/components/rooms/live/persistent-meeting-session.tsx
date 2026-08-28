@@ -2886,6 +2886,9 @@ export function PersistentMeetingSession({
                   // The lane renders THIS reader's language, not the speaker's. Without it the
                   // dock shows whatever language was spoken, which is what it did.
                   readerLanguage={targetLanguage}
+                  // ...but only once there IS another language. Before Start Translation the
+                  // captions are the transcript and nothing else.
+                  translationActive={translationStarted}
                   // 360x220 has no room for a speaker column and three lines of history. The
                   // newest sentence, and nothing else.
                   variant="compact"
@@ -3044,6 +3047,9 @@ export function PersistentMeetingSession({
                   enabled={meetingLive && subtitlesEnabled}
                   // The lane renders THIS reader's language, not the speaker's.
                   readerLanguage={targetLanguage}
+                  // ...but only once there IS another language. Before Start Translation the
+                  // captions are the transcript and nothing else.
+                  translationActive={translationStarted}
                 />
               </div>
             ) : null}

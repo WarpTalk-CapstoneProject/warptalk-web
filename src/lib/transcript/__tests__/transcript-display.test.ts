@@ -557,6 +557,36 @@ test("somebody else's translation is never shown as this reader's caption", () =
   assert.equal(captionTextForReader(line, "en"), null);
 });
 
+test("before Start Translation the caption is what was said, not an empty lane", () => {
+  // Transcription does not wait for translation: livekit_ingress_worker joins on the first
+  // published microphone and translation_worker is the stage gated behind Start Translation
+  // (`translation_skipped_not_started`). So for the whole pre-Start half of a meeting there are
+  // segments and there will never be a translation of them. Holding those lines emptied the lane
+  // completely — the same class of failure as WT-387, one layer up.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Xin chào");
+  // ...and the hold comes straight back once translation is running.
+  assert.equal(captionTextForReader(line, "en", true), null);
+});
+
+test("a translation already in hand is shown whether or not translation is still running", () => {
+  // Stop Translation does not retroactively unsay what was already translated.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Hello");
+});
+
 test("a reader with no resolved language yet sees the original rather than an empty lane", () => {
   // The first moments of a cold join, before the participant row arrives. A blank caption
   // surface reads as broken, so it is never the answer to "not resolved yet".

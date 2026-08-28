@@ -54,6 +54,12 @@ const LANE_LINES = 3;
  *   caption for this reader yet is simply not shown yet — see captionTextForReader, which is
  *   also what keeps a same-language room captioned normally.
  *
+ *   Only while translation is RUNNING, though. Transcription does not wait for Start
+ *   Translation — the AI bot joins on the first published microphone — so before anybody
+ *   presses it these lines are all there will ever be, and holding them for a translation
+ *   nobody ordered is how the lane ends up blank for the first half of a meeting. Hence
+ *   `translationActive`: off, the caption is what was said.
+ *
  * Fed only by real segments from the AI pipeline over SignalR (TranscriptSegmentReceived /
  * TranslationTextReceived). There is no mock or preview fallback here.
  */
@@ -62,6 +68,7 @@ export function LiveSubtitleOverlay({
   /** "compact" is the minimised dock: one line, no surface of its own, over live video. */
   variant = "lane",
   readerLanguage,
+  translationActive = true,
 }: {
   enabled?: boolean;
   variant?: "lane" | "compact";
@@ -71,6 +78,12 @@ export function LiveSubtitleOverlay({
    * caption surface reads as broken, so it is never the answer to "not resolved yet".
    */
   readerLanguage?: string | null;
+  /**
+   * Whether translation is running in this room right now. False means the captions below are
+   * all there will ever be for these lines, so they are shown as spoken rather than held for a
+   * translation that is not coming — see captionTextForReader.
+   */
+  translationActive?: boolean;
 }) {
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
   const identities = useMeetingIdentities();
@@ -83,13 +96,13 @@ export function LiveSubtitleOverlay({
     const spoken = groupTranscriptSegments(segments)
       .map((utterance) => ({
         utterance,
-        caption: captionTextForReader(utterance, readerLanguage),
+        caption: captionTextForReader(utterance, readerLanguage, translationActive),
       }))
       .filter((line): line is { utterance: GroupedTranscriptSegment; caption: string } =>
         Boolean(line.caption),
       );
     return spoken.slice(-(variant === "compact" ? 1 : LANE_LINES));
-  }, [segments, variant, readerLanguage]);
+  }, [segments, variant, readerLanguage, translationActive]);
 
   const newest = lines[lines.length - 1];
   // Length, not just the id: a live utterance keeps the same segmentId while its text grows, and
