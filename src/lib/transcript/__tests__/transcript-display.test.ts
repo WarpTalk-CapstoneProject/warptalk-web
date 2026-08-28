@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   captionTextForReader,
+  pendingCorrections,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
   confidencePercent,
@@ -594,4 +595,45 @@ test("a reader with no resolved language yet sees the original rather than an em
 
   assert.equal(captionTextForReader(line, null), "Xin chào");
   assert.equal(captionTextForReader(line, ""), "Xin chào");
+});
+
+// ── WT-589: which batch edits are actually corrections ──────────────────────────────────────
+//
+// Every survivor of this filter becomes an immutable transcript_corrections row AND a
+// re-translation of that line into every target language, so a false positive is not a wasted
+// request — it is a revision that changed nothing, multiplied by the length of the meeting.
+
+const line = (id: string, originalText: string) => ({ id, originalText });
+
+test("a line nobody touched is not a correction", () => {
+  const segments = [line("a", "Xin chào"), line("b", "Cảm ơn")];
+
+  assert.deepEqual(pendingCorrections(segments, {}), []);
+});
+
+test("a draft identical to what is stored is not a correction", () => {
+  // Tabbing through a transcript opens every field. Without this, reviewing a meeting and
+  // changing nothing would file a revision for every line in it.
+  const segments = [line("a", "Xin chào")];
+
+  assert.deepEqual(pendingCorrections(segments, { a: "Xin chào" }), []);
+  // ...and whitespace is what a caret leaves behind, not an edit.
+  assert.deepEqual(pendingCorrections(segments, { a: "  Xin chào  " }), []);
+});
+
+test("an emptied line is left alone rather than blanked", () => {
+  // There is no delete on this path. An empty draft is somebody mid-retype or an accidental
+  // clear; writing a blank sentence over the stored one is the wrong answer to both.
+  const segments = [line("a", "Xin chào")];
+
+  assert.deepEqual(pendingCorrections(segments, { a: "" }), []);
+  assert.deepEqual(pendingCorrections(segments, { a: "   " }), []);
+});
+
+test("only the changed lines are posted, and in transcript order", () => {
+  const segments = [line("a", "Xin chào"), line("b", "Cảm ơn"), line("c", "Tạm biệt")];
+
+  const pending = pendingCorrections(segments, { a: "Xin chào bạn", c: "Tạm biệt nhé" });
+
+  assert.deepEqual(pending.map((segment) => segment.id), ["a", "c"]);
 });

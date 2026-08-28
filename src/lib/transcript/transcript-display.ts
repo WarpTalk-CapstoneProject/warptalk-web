@@ -573,6 +573,33 @@ function belongsToSameSavedUtterance(
  * translations back together and has to do it the same way the original text was joined —
  * two copies of "how do two halves of a sentence become one" is one copy too many.
  */
+/**
+ * WT-589: which of a batch edit's drafts are actually corrections worth posting.
+ *
+ * Each one that survives this filter becomes an immutable row in transcript_corrections AND a
+ * re-translation of that line into every target language, so the two exclusions are not tidiness:
+ *
+ *   unchanged  — a line the user tabbed through without touching. Posting it files a revision
+ *                that changed nothing and re-translates a sentence that already has its
+ *                translations, for every line of the meeting at once.
+ *   emptied    — there is no delete on this path. An empty draft is somebody mid-retype, or a
+ *                line they cleared by accident; either way the honest answer is to leave the
+ *                stored sentence alone rather than to write a blank one over it.
+ *
+ * Compared trimmed on both sides, because whitespace is what a caret leaves behind, not an edit.
+ */
+export function pendingCorrections<T extends { id: string; originalText: string }>(
+  segments: readonly T[],
+  drafts: Readonly<Record<string, string>>,
+): T[] {
+  return segments.filter((segment) => {
+    const draft = drafts[segment.id];
+    if (draft === undefined) return false;
+    const trimmed = draft.trim();
+    return trimmed.length > 0 && trimmed !== segment.originalText.trim();
+  });
+}
+
 export function appendText(current?: string, incoming?: string): string {
   const left = current?.trim() || "";
   const right = incoming?.trim() || "";
