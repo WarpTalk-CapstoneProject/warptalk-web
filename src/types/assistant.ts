@@ -59,6 +59,14 @@ export interface McpToolDescriptorDto {
   effect: "read" | "write";
   requiredScopes: string[];
   parameters: Record<string, unknown>;
+  /**
+   * Groups this tool with its siblings for catalog display (e.g. a plugin whose single OAuth
+   * connection covers two distinct products can render one tile per product). Absent when the
+   * plugin's tools are not grouped.
+   */
+  resourceKey?: string | null;
+  resourceLabel?: string | null;
+  resourceAvatarUrl?: string | null;
 }
 
 export interface AssistantPluginCatalogItemDto {
@@ -71,6 +79,8 @@ export interface AssistantPluginCatalogItemDto {
   connectionStatus: AssistantPluginConnectionStatus;
   connectedAccountEmail?: string | null;
   tools: McpToolDescriptorDto[];
+  /** Scopes actually granted at the provider's consent screen — a subset of requiredScopes when the user declined some. */
+  grantedScopes: string[];
 }
 
 export interface PluginConnectUrlDto {
@@ -91,13 +101,17 @@ export interface AssistantPageContextDto {
 }
 
 /**
- * An explicit "@mention" the user attached to this message (a room, document, or member
- * picked from the widget's @ menu) — as opposed to AssistantPageContextDto's ambient,
- * automatic page context. No workspaceId here: the backend scopes every mention to the
+ * An explicit "@mention" the user attached to this message (a room, document, member, or
+ * installed plugin picked from the widget's @ menu) — as opposed to AssistantPageContextDto's
+ * ambient, automatic page context. No workspaceId here: the backend scopes every mention to the
  * conversation's own workspace server-side.
+ *
+ * A "plugin" mention's entityId is the plugin's catalog key, or `${pluginKey}:${resourceKey}`
+ * for a split tile (e.g. "google_workspace:drive") — see PluginDisplayTile.tileId. It names a
+ * capability the user wants used for this turn, not a record to look up.
  */
 export interface AssistantMentionDto {
-  entityType: "room" | "document" | "member";
+  entityType: "room" | "document" | "member" | "plugin";
   entityId: string;
   label?: string;
 }

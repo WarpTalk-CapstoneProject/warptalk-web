@@ -72,6 +72,11 @@ import {
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+  type PluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
@@ -89,6 +94,7 @@ import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { toast } from "sonner";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
+import { toDisplayTiles } from "@/lib/assistant/plugin-tiles";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -370,6 +376,8 @@ export function GlobalChatbot() {
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
+  const [pendingPluginConnection, setPendingPluginConnection] =
+    useState<PluginConnectionAction | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
    * A question handed over from somewhere else on the page — today, the "Research this term"
@@ -396,14 +404,23 @@ export function GlobalChatbot() {
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
   const { data: skills } = useAssistantSkills();
-  const { data: assistantPlugins = [] } = useAssistantPlugins();
+  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } = useAssistantPlugins();
   const installPlugin = useInstallAssistantPlugin();
   const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  // Same per-resource split as the Plugins settings page (see toDisplayTiles), so Drive and
+  // Calendar show as their own rows here too instead of one combined "Google Drive & Calendar".
+  const pluginTiles = useMemo(() => assistantPlugins.flatMap(toDisplayTiles), [assistantPlugins]);
   const installedAssistantPlugins = useMemo(
-    () => assistantPlugins.filter((plugin) => plugin.installationStatus === "installed"),
-    [assistantPlugins],
+    () => pluginTiles.filter((plugin) => plugin.installationStatus === "installed"),
+    [pluginTiles],
+  );
+  // Only a tile that's actually usable can be @mentioned — mentioning a disconnected plugin
+  // would just tell WarpBot to call a tool that fails with connection_required.
+  const mentionablePlugins = useMemo(
+    () => installedAssistantPlugins.filter((plugin) => plugin.connectionStatus === "connected"),
+    [installedAssistantPlugins],
   );
 
   // Only fetch the conversation list while the history menu is actually open.
@@ -432,6 +449,17 @@ export function GlobalChatbot() {
       toast.message(`${plugin.label} is connected.`);
     } catch {
       toast.error(`Could not update ${plugin.label}.`);
+    }
+  };
+
+  const handlePluginConnectionAction = async (pluginKey: string) => {
+    try {
+      const result = await connectPlugin.mutateAsync({ pluginKey });
+      window.open(result.url, "_blank", "noopener,noreferrer");
+      toast.message("Finish connecting this plugin in your browser.");
+      void refetchAssistantPlugins();
+    } catch {
+      toast.error("Could not open the plugin connection flow.");
     }
   };
 
@@ -575,8 +603,28 @@ export function GlobalChatbot() {
       entityType: "document",
       entityId: d.id,
     }));
-    return [...memberOptions, ...roomOptions, ...documentOptions];
-  }, [memberResults, roomResults, documentResults]);
+    // WT-565: an installed, connected plugin is mentionable so the user can point WarpBot at
+    // it directly instead of only reaching it through the Skills popover. entityId is the tile
+    // id (plugin key, or "pluginKey:resourceKey" for a split tile) — see AssistantMentionDto.
+    // Not query-filtered here like the three fetches above: mentionablePlugins is already the
+    // full local list, and filteredOptions below re-filters every option by title anyway.
+    const pluginOptions: AssistantContextOption[] = mentionablePlugins.map((plugin) => ({
+      id: `plugin-${plugin.tileId}`,
+      title: plugin.label,
+      type: "Plugins",
+      icon: (
+        <img
+          src={plugin.avatarUrl ?? undefined}
+          alt=""
+          className="size-4 rounded object-cover"
+        />
+      ),
+      description: plugin.description,
+      entityType: "plugin",
+      entityId: plugin.tileId,
+    }));
+    return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
+  }, [memberResults, roomResults, documentResults, mentionablePlugins]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
@@ -736,9 +784,11 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== conversationId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
+        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
         // A malformed payload leaves the card absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
         if (questions.length) setPendingQuestions(questions);
+        if (pluginConnection) setPendingPluginConnection(pluginConnection);
         armResponseTimeout();
       },
     );
@@ -1440,6 +1490,16 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
+                {pendingPluginConnection ? (
+                  <div className="pl-4">
+                    <PluginConnectionActionCard
+                      action={pendingPluginConnection}
+                      disabled={connectPlugin.isPending}
+                      onDismiss={() => setPendingPluginConnection(null)}
+                      onConnect={handlePluginConnectionAction}
+                    />
+                  </div>
+                ) : null}
               </div>
               {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
                   the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
@@ -1794,7 +1854,7 @@ export function GlobalChatbot() {
                               <a
                                 href={
                                   activeWorkspaceSlug
-                                    ? `/${activeWorkspaceSlug}/settings/plugins`
+                                    ? "/settings/plugins"
                                     : "/workspace"
                                 }
                                 className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink"

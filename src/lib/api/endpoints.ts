@@ -257,7 +257,6 @@ export const API = {
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
     plugins: "/assistant/plugins",
-    installedPlugins: "/assistant/plugins/installed",
     installPlugin: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
     disablePlugin: (pluginKey: string) =>

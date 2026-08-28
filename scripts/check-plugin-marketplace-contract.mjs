@@ -3,6 +3,14 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const page = readFileSync(
+  join(root, "src/components/assistant/plugins/plugins-page.tsx"),
+  "utf8",
+);
+const personalRoute = readFileSync(
+  join(root, "src/app/(app)/settings/plugins/page.tsx"),
+  "utf8",
+);
+const legacyWorkspaceRoute = readFileSync(
   join(root, "src/app/(app)/[workspaceSlug]/settings/plugins/page.tsx"),
   "utf8",
 );
@@ -46,6 +54,14 @@ for (const [label, handler] of [
 
 if (!page.includes("No plugins match")) {
   throw new Error("Plugins page must render an empty state when the search matches nothing.");
+}
+
+if (!personalRoute.includes("@/components/assistant/plugins/plugins-page")) {
+  throw new Error("Personal /settings/plugins route must render the plugins page component.");
+}
+
+if (!legacyWorkspaceRoute.includes('redirect("/settings/plugins")')) {
+  throw new Error("Workspace-shaped plugins route must redirect to the personal plugins route.");
 }
 
 console.log("Plugin marketplace contract passed.");

@@ -15,6 +15,10 @@ import {
   AssistantQuestionCard,
   parseAssistantQuestions,
 } from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
@@ -52,6 +56,7 @@ import {
   Download,
 } from "lucide-react";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
+import { usePluginConnectUrl } from "@/hooks/use-assistant";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -163,6 +168,7 @@ export function ChatPanel({
   const user = useAuthStore((state) => state.user);
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
+  const connectPlugin = usePluginConnectUrl();
   const { mutate: sendFileAPI, isPending: isUploadingFile } =
     useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
@@ -587,6 +593,19 @@ export function ChatPanel({
   const pendingAssistantQuestions = assistantQuestionsJson
     ? parseAssistantQuestions(assistantQuestionsJson)
     : [];
+  const pendingPluginConnection = assistantQuestionsJson
+    ? parsePluginConnectionAction(assistantQuestionsJson)
+    : null;
+
+  async function handlePluginConnectionAction(pluginKey: string) {
+    try {
+      setSendError(null);
+      const result = await connectPlugin.mutateAsync({ pluginKey });
+      window.open(result.url, "_blank", "noopener,noreferrer");
+    } catch {
+      setSendError("Could not open the plugin connection flow. Try again.");
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -846,6 +865,16 @@ export function ChatPanel({
                 setAssistantQuestionsJson(null);
                 sendMessage(answer);
               }}
+            />
+          </div>
+        ) : null}
+        {pendingPluginConnection ? (
+          <div className="pl-10">
+            <PluginConnectionActionCard
+              action={pendingPluginConnection}
+              disabled={connectPlugin.isPending}
+              onDismiss={() => setAssistantQuestionsJson(null)}
+              onConnect={handlePluginConnectionAction}
             />
           </div>
         ) : null}
