@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  captionTextForReader,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
   confidencePercent,
@@ -494,4 +495,103 @@ test("a line with no speaker name at all is attributed to nobody, not to blank",
   ]);
 
   assert.equal(turns[0].speakerName, "Unknown speaker");
+});
+
+// ── the caption lane's own language rule ────────────────────────────────────────────────────
+//
+// Reversed on 2026-08-20 by the product owner. The lane rendered originalText unconditionally,
+// so a reader listening in English watched Vietnamese captions scroll past while their English
+// sat one tab away in the transcript panel.
+//
+// The subtle half is that resolveSegmentTranslation returns null for two OPPOSITE situations,
+// and the lane has to tell them apart: "there was nothing to translate" must still be
+// captioned, "the translation has not arrived yet" must not.
+
+test("a reader sees the caption in their own language, not the speaker's", () => {
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en"), "Hello");
+});
+
+test("a speaker already in the reader's language is captioned, not held back", () => {
+  // THE CASE THAT WOULD EMPTY THE LANE. No translation is ever produced for a matched pair —
+  // the pipeline drops it as same_language_targets_dropped — so requiring one would leave a
+  // room where everybody shares a language with no captions at all, and would stop anyone ever
+  // seeing their own words.
+  const line = segment({
+    originalLanguage: "en",
+    originalText: "Hello everyone",
+    translations: {},
+  });
+
+  assert.equal(captionTextForReader(line, "en"), "Hello everyone");
+  assert.equal(captionTextForReader(line, "en-US"), "Hello everyone");
+});
+
+test("a line whose translation has not arrived yet is held rather than shown in the wrong language", () => {
+  // The transcript segment lands before its translation does. Showing the original in the gap is
+  // the defect being fixed, not a smaller version of it: the line would go up in the wrong
+  // language and then change under the reader.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en"), null);
+});
+
+test("somebody else's translation is never shown as this reader's caption", () => {
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { ja: "こんにちは" },
+  });
+
+  assert.equal(captionTextForReader(line, "en"), null);
+});
+
+test("before Start Translation the caption is what was said, not an empty lane", () => {
+  // Transcription does not wait for translation: livekit_ingress_worker joins on the first
+  // published microphone and translation_worker is the stage gated behind Start Translation
+  // (`translation_skipped_not_started`). So for the whole pre-Start half of a meeting there are
+  // segments and there will never be a translation of them. Holding those lines emptied the lane
+  // completely — the same class of failure as WT-387, one layer up.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Xin chào");
+  // ...and the hold comes straight back once translation is running.
+  assert.equal(captionTextForReader(line, "en", true), null);
+});
+
+test("a translation already in hand is shown whether or not translation is still running", () => {
+  // Stop Translation does not retroactively unsay what was already translated.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Hello");
+});
+
+test("a reader with no resolved language yet sees the original rather than an empty lane", () => {
+  // The first moments of a cold join, before the participant row arrives. A blank caption
+  // surface reads as broken, so it is never the answer to "not resolved yet".
+  const line = segment({ originalLanguage: "vi", originalText: "Xin chào", translations: {} });
+
+  assert.equal(captionTextForReader(line, null), "Xin chào");
+  assert.equal(captionTextForReader(line, ""), "Xin chào");
 });

@@ -4,7 +4,10 @@ import { useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { identityFor } from "@/lib/meeting/participant-identity";
-import { groupTranscriptSegments } from "@/lib/transcript/transcript-display";
+import {
+  captionTextForReader,
+  groupTranscriptSegments,
+} from "@/lib/transcript/transcript-display";
 import type { GroupedTranscriptSegment } from "@/lib/transcript/transcript-display";
 import { useMeetingIdentities } from "./meeting-identity-context";
 import { ParticipantAvatar } from "./participant-avatar";
@@ -13,7 +16,7 @@ import { ParticipantAvatar } from "./participant-avatar";
 const LANE_LINES = 3;
 
 /**
- * Live captions: what was SAID, in the language it was said in, attributed to a face.
+ * Live captions: what was said, IN THE READER'S OWN LANGUAGE, attributed to a face.
  *
  * WHY IT IS A ROLLING LIST AND NOT ONE BOX
  *   It used to be a single centred box holding the newest sentence, which auto-hid after six
@@ -29,11 +32,33 @@ const LANE_LINES = 3;
  *   The transcript panel is the RECORD: every line, the reader's own translation of it, timestamps
  *   and confidence. Neither is a worse copy of the other.
  *
- * WHY IT STILL SHOWS ONLY THE ORIGINAL
- *   Unchanged from before, and deliberately. CC used to render the TRANSLATION with the original
- *   demoted underneath, which made turning captions on indistinguishable from turning translation
- *   on. Closed captions are an accessibility surface for the audio in the room; the translation has
- *   its own surfaces (the transcript panel, and the synthesised voice).
+ * WHY IT SHOWS THE TRANSLATION AND NOT THE ORIGINAL
+ *   REVERSED ON 2026-08-20, by the product owner, after reading it as a defect in a live meeting:
+ *   a reader listening in English watched Vietnamese captions scroll past. This file previously
+ *   argued the opposite — that CC is an accessibility surface for the audio in the room, so it
+ *   should show the language actually being spoken. That reasoning holds for a meeting product.
+ *   It does not hold for a TRANSLATION product, where the caption lane is the largest, most
+ *   readable surface in the window and the one a participant watches instead of listening.
+ *
+ *   The original did not lose a home. The transcript panel shows it beside the reader's
+ *   translation, with timestamps and confidence, which is a better place to read a source
+ *   language than a three-line lane that scrolls.
+ *
+ *   The old worry — that turning captions on becomes indistinguishable from turning translation
+ *   on — is answered in words on the CC control, not by withholding the translation.
+ *
+ * WHY A LINE CAN BE HELD BACK
+ *   A transcript segment arrives before its translation does. Rendering the original in the
+ *   meantime would put the line up in the wrong language and then change it under the reader,
+ *   which is the thing being fixed rather than a smaller version of it. So a line with no
+ *   caption for this reader yet is simply not shown yet — see captionTextForReader, which is
+ *   also what keeps a same-language room captioned normally.
+ *
+ *   Only while translation is RUNNING, though. Transcription does not wait for Start
+ *   Translation — the AI bot joins on the first published microphone — so before anybody
+ *   presses it these lines are all there will ever be, and holding them for a translation
+ *   nobody ordered is how the lane ends up blank for the first half of a meeting. Hence
+ *   `translationActive`: off, the caption is what was said.
  *
  * Fed only by real segments from the AI pipeline over SignalR (TranscriptSegmentReceived /
  * TranslationTextReceived). There is no mock or preview fallback here.
@@ -42,25 +67,48 @@ export function LiveSubtitleOverlay({
   enabled = true,
   /** "compact" is the minimised dock: one line, no surface of its own, over live video. */
   variant = "lane",
+  readerLanguage,
+  translationActive = true,
 }: {
   enabled?: boolean;
   variant?: "lane" | "compact";
+  /**
+   * The language THIS viewer listens in. Omit and the lane falls back to the original, which is
+   * what the dev preview page renders and what a cold join shows for its first moments — a blank
+   * caption surface reads as broken, so it is never the answer to "not resolved yet".
+   */
+  readerLanguage?: string | null;
+  /**
+   * Whether translation is running in this room right now. False means the captions below are
+   * all there will ever be for these lines, so they are shown as spoken rather than held for a
+   * translation that is not coming — see captionTextForReader.
+   */
+  translationActive?: boolean;
 }) {
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
   const identities = useMeetingIdentities();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const lines = useMemo(() => {
-    const spoken = groupTranscriptSegments(segments).filter((utterance) =>
-      utterance.originalText?.trim(),
-    );
+    // Resolved ONCE per utterance here rather than inside CaptionLine, so a line with nothing to
+    // show this reader yet never occupies a slot. Filtering after the slice would leave the lane
+    // rendering two lines and a gap.
+    const spoken = groupTranscriptSegments(segments)
+      .map((utterance) => ({
+        utterance,
+        caption: captionTextForReader(utterance, readerLanguage, translationActive),
+      }))
+      .filter((line): line is { utterance: GroupedTranscriptSegment; caption: string } =>
+        Boolean(line.caption),
+      );
     return spoken.slice(-(variant === "compact" ? 1 : LANE_LINES));
-  }, [segments, variant]);
+  }, [segments, variant, readerLanguage, translationActive]);
 
   const newest = lines[lines.length - 1];
   // Length, not just the id: a live utterance keeps the same segmentId while its text grows, and
-  // the lane has to follow it down as it does.
-  const tailKey = newest ? `${newest.segmentId}:${newest.originalText.length}` : "";
+  // the lane has to follow it down as it does. Measured on the CAPTION, because that is the text
+  // that grows on screen — the original can lengthen while the translation has not caught up.
+  const tailKey = newest ? `${newest.utterance.segmentId}:${newest.caption.length}` : "";
 
   useEffect(() => {
     const element = scrollRef.current;
@@ -83,7 +131,7 @@ export function LiveSubtitleOverlay({
               transition={{ duration: 0.15 }}
               className="line-clamp-2 max-w-full rounded-lg bg-black/75 px-2 py-1 text-[11px] font-medium leading-snug text-white"
             >
-              {newest.originalText}
+              {newest.caption}
             </motion.p>
           ) : null}
         </AnimatePresence>
@@ -107,8 +155,9 @@ export function LiveSubtitleOverlay({
         ) : (
           lines.map((line, index) => (
             <CaptionLine
-              key={line.segmentId}
-              line={line}
+              key={line.utterance.segmentId}
+              line={line.utterance}
+              caption={line.caption}
               identities={identities}
               // Older lines step back rather than disappear: still readable if you want them,
               // never competing with the sentence being spoken right now.
@@ -123,10 +172,13 @@ export function LiveSubtitleOverlay({
 
 function CaptionLine({
   line,
+  caption,
   identities,
   dimmed,
 }: {
   line: GroupedTranscriptSegment;
+  /** Already resolved for this reader by captionTextForReader — never the raw original. */
+  caption: string;
   identities: ReturnType<typeof useMeetingIdentities>;
   dimmed: boolean;
 }) {
@@ -151,7 +203,7 @@ function CaptionLine({
             being reviewed and badly for a caption being read live: the words the eye is on are
             still fading in. AnimatedWords stays in use in the transcript panel, where the reader
             sets the pace. */}
-        <span>{line.originalText}</span>
+        <span>{caption}</span>
       </span>
     </motion.p>
   );

@@ -66,6 +66,61 @@ export function resolveSegmentTranslation(
   return null;
 }
 
+/**
+ * The one line the CAPTION LANE should show this reader for this utterance, or null to hold it.
+ *
+ * The lane used to render `originalText` unconditionally, so a reader listening in English
+ * watched Vietnamese captions scroll past while their English sat one tab away. The product
+ * decision (2026-08-20, owner) is that the caption lane is a TRANSLATION surface: the original
+ * has the transcript panel, which shows it beside the translation with timestamps.
+ *
+ * WHY THIS IS NOT JUST resolveSegmentTranslation
+ *   That function returns null for two OPPOSITE situations, and the lane must render them
+ *   differently:
+ *
+ *     nothing to translate — the speaker was already speaking the reader's language, so the
+ *                            original IS the reader's language and must be shown as-is. Filter
+ *                            it out and a room where everyone shares a language has no captions
+ *                            at all, and nobody ever sees their own words.
+ *     not translated YET   — the transcript segment arrives before its translation. Showing the
+ *                            original here is what the decision above rejects: the line would
+ *                            appear in the wrong language and then change under the reader.
+ *
+ *   Null therefore means only the second: hold this line until its translation lands.
+ *
+ * WHY `translationActive` IS A PARAMETER AND NOT AN ASSUMPTION
+ *   Holding a line only makes sense while a translation is actually coming. Transcription runs
+ *   for any live meeting — livekit_ingress_worker joins on the first published mic and
+ *   translation_worker is the stage gated behind Start Translation — so before anybody presses
+ *   it there ARE captions and there is no translation, ever, for those lines. Holding them left
+ *   the lane permanently empty for the whole pre-Start half of every meeting, which is the exact
+ *   failure WT-387 spent a release fixing one layer down. Off means show the original: it is not
+ *   the wrong language when no other language is on the way.
+ *
+ * A reader with no resolved language yet gets the original rather than an empty lane — that
+ * state lasts for the first moments of a cold join, and a blank caption surface reads as broken.
+ */
+export function captionTextForReader(
+  segment: Pick<
+    TranscriptSegmentDto,
+    "translations" | "translatedText" | "targetLanguage" | "originalLanguage" | "originalText"
+  >,
+  readerLanguage: string | null | undefined,
+  translationActive = true,
+): string | null {
+  const language = normalizeLanguageCode(readerLanguage ?? "");
+  if (!language) return segment.originalText?.trim() || null;
+
+  if (normalizeLanguageCode(segment.originalLanguage) === language) {
+    return segment.originalText?.trim() || null;
+  }
+
+  const translated = resolveSegmentTranslation(segment, readerLanguage);
+  if (translated) return translated;
+
+  return translationActive ? null : segment.originalText?.trim() || null;
+}
+
 /** Union of two bubbles' per-language translations, appending where both hold the same language. */
 function mergeTranslations(
   previous: Record<string, string> | undefined,
