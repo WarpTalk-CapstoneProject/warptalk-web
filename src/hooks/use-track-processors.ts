@@ -14,6 +14,22 @@ export interface TrackEffectsPreferences {
   noiseSuppressionEnabled: boolean;
   backgroundBlurEnabled: boolean;
   onNoiseSuppressionError?: (error: unknown) => void;
+  /**
+   * What the denoiser ENDED UP doing, reported whether or not anything went wrong.
+   *
+   * Separate from onNoiseSuppressionError above, which exists to put a toast in front of a person.
+   * This one is for the server log, and the difference that matters is that it also fires on
+   * SUCCESS — "it worked for everyone except this one person" and "it has never worked for
+   * anybody" are different problems, and only the successes tell them apart.
+   *
+   * Also fires for the unsupported-browser path, which is not an error and never produced a toast:
+   * from the outside it is still a meeting whose audio nobody cleaned up.
+   */
+  onNoiseSuppressionOutcome?: (outcome: {
+    enabled: boolean;
+    processor: "krisp" | "browser";
+    reason?: string;
+  }) => void;
   /** Reported when the blur processor could not be attached. Omit to fail silently (do not). */
   onBackgroundBlurError?: (error: unknown) => void;
 }
@@ -56,6 +72,7 @@ export function useTrackProcessors({
   noiseSuppressionEnabled,
   backgroundBlurEnabled,
   onNoiseSuppressionError,
+  onNoiseSuppressionOutcome,
   onBackgroundBlurError,
 }: TrackEffectsPreferences) {
   const { microphoneTrack, cameraTrack } = useLocalParticipant();
@@ -154,6 +171,15 @@ export function useTrackProcessors({
         // Not an error: some browsers simply cannot run it. The browser's own suppression stays
         // on, which is the best available, and nothing is reported as broken.
         await setBrowserSuppression(captureTrack, true);
+        // Still worth recording. Nobody is at fault and there is nothing to fix in this tab, but
+        // a room where half the participants are on Firefox is a room whose transcript quality has
+        // an explanation, and that explanation was previously invisible.
+        if (!cancelled)
+          onNoiseSuppressionOutcome?.({
+            enabled: false,
+            processor: "browser",
+            reason: "Krisp is not supported in this browser",
+          });
         return;
       }
 
@@ -183,6 +209,10 @@ export function useTrackProcessors({
         }
 
         await setBrowserSuppression(captureTrack, false);
+        // Reported only here, after the browser's own pair has actually been stood down. Anywhere
+        // earlier and this would be claiming success for a filter that had not finished taking
+        // over — which is the precise shape of the bug this whole path exists to have fixed.
+        if (!cancelled) onNoiseSuppressionOutcome?.({ enabled: true, processor: "krisp" });
       } catch (error) {
         // The full cause, verbatim, where a developer will look. This failure fired on
         // production for weeks with the only record of WHY discarded right here — the toast
@@ -199,7 +229,14 @@ export function useTrackProcessors({
         // A processor that failed to enable is spent whatever the cause. Keeping it would make
         // the next attempt fail for a reason that has nothing to do with the original one.
         krispRef.current = null;
-        if (!cancelled) onNoiseSuppressionError?.(error);
+        if (!cancelled) {
+          onNoiseSuppressionOutcome?.({
+            enabled: false,
+            processor: "browser",
+            reason: error instanceof Error ? error.message : String(error ?? "unknown"),
+          });
+          onNoiseSuppressionError?.(error);
+        }
       }
     }
     void applyNoiseProcessor();
@@ -211,7 +248,12 @@ export function useTrackProcessors({
       krispRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noiseSuppressionEnabled, microphoneTrackSid, onNoiseSuppressionError]);
+  }, [
+    noiseSuppressionEnabled,
+    microphoneTrackSid,
+    onNoiseSuppressionError,
+    onNoiseSuppressionOutcome,
+  ]);
 
   useEffect(() => {
     const track = cameraTrack?.track;

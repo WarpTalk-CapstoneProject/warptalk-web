@@ -6,6 +6,7 @@ import {
   readMeetingJoinState,
   readMeetingMediaPreferences,
 } from "../meeting-join-state.ts";
+import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "../track-effects-preferences.ts";
 
 function storageWith(values: Record<string, string>): Storage {
   const entries = new Map(Object.entries(values));
@@ -38,9 +39,45 @@ test("keeps camera off for the room selected in preview", () => {
   assert.deepEqual(readMeetingMediaPreferences(storage, "room-1"), {
     cameraEnabled: false,
     microphoneEnabled: true,
-    noiseSuppressionEnabled: false,
+    // ON, with nothing stored about it. Camera and microphone are permissions and stay fail-closed
+    // above; this only describes how an already-permitted microphone is processed, and off is
+    // simply a dirtier microphone.
+    noiseSuppressionEnabled: true,
     backgroundBlurEnabled: false,
   });
+});
+
+test("an opt-out at the current version is honoured; an older one is not a choice", () => {
+  // The version is what makes changing the default safe. Most stored `false` values were never a
+  // decision — they were the previous default written down — so they must not pin somebody to it
+  // forever. A `false` written at the CURRENT version is a real opt-out and survives.
+  const optedOut = storageWith({
+    "warptalk.join.preview": JSON.stringify({ roomId: "room-1", microphoneEnabled: true }),
+    "warptalk.devices.preview": JSON.stringify({
+      roomId: "room-1",
+      microphoneEnabled: true,
+      noiseSuppressionEnabled: false,
+      noiseSuppressionPreferenceVersion: NOISE_SUPPRESSION_PREFERENCE_VERSION,
+    }),
+  });
+  assert.equal(
+    readMeetingMediaPreferences(optedOut, "room-1").noiseSuppressionEnabled,
+    false,
+  );
+
+  const staleOff = storageWith({
+    "warptalk.join.preview": JSON.stringify({ roomId: "room-1", microphoneEnabled: true }),
+    "warptalk.devices.preview": JSON.stringify({
+      roomId: "room-1",
+      microphoneEnabled: true,
+      noiseSuppressionEnabled: false,
+      noiseSuppressionPreferenceVersion: NOISE_SUPPRESSION_PREFERENCE_VERSION - 1,
+    }),
+  });
+  assert.equal(
+    readMeetingMediaPreferences(staleOff, "room-1").noiseSuppressionEnabled,
+    true,
+  );
 });
 
 test("defaults camera and microphone off for stale, missing, or malformed state", () => {
