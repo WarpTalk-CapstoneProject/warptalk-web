@@ -175,7 +175,7 @@ function JoinMeetingContent() {
 
   // Krisp noise filter / background blur — applied as LiveKit track processors once in
   // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
-  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(false);
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);

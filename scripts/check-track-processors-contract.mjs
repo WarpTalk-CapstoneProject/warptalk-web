@@ -57,14 +57,54 @@ assert.doesNotMatch(
   /handleNoiseSuppressionError[\s\S]*?writeTrackEffectsPreferences\(\{\s*noiseSuppressionEnabled:\s*false\s*\}\)/,
   "a transient Krisp failure must be retried after reload, not persisted forever",
 );
+// THE DEFAULT IS NOW ON, and this assertion used to say the opposite. Read this before changing
+// it back, because the reason it said the opposite has been fixed rather than forgotten.
+//
+//   The rule was written on 2026-07-30 as "Krisp must remain opt-in after a production room
+//   published frames but no speech chunks" — a participant whose audio published fine and
+//   produced no transcript at all. At that date the hook disabled the browser's own suppression
+//   FIRST and attached Krisp second, with no rollback; production's CSP was missing
+//   'wasm-unsafe-eval', so the attach threw every time and left a WebAudio track carrying
+//   nothing, with the browser's denoiser already stood down. Frames, no speech. That is the
+//   symptom the rule was protecting against.
+//
+//   Three separate fixes later removed it: the CSP token, attach-before-stand-down, and the
+//   explicit isEnabled() check (WT-320) — all three asserted further down this file, which is
+//   where the protection now lives. Defaulting to on with those in place cannot reproduce the
+//   July failure: every path that does not end with Krisp genuinely running restores the
+//   browser's suppression before it reports.
+//
+// So the pin moved from "the default" to "the version gate exists and an opt-out survives it".
+// The version is what lets the default change without overriding somebody who said no.
 assert.match(
   preferences,
-  /NOISE_SUPPRESSION_PREFERENCE_VERSION\s*=\s*3/,
+  /NOISE_SUPPRESSION_PREFERENCE_VERSION\s*=\s*\d+/,
+  "the preference version must exist — it is what makes changing the default safe",
 );
 assert.match(
   meetingJoinState,
-  /noiseSuppressionPreferenceVersion\s*===\s*[\s\S]*?NOISE_SUPPRESSION_PREFERENCE_VERSION[\s\S]*?noiseSuppressionEnabled\s*===\s*true/,
-  "Krisp must remain opt-in after a production room published frames but no speech chunks",
+  /noiseSuppressionPreferenceVersion\s*===\s*[\s\S]*?NOISE_SUPPRESSION_PREFERENCE_VERSION\s*\?\s*roomDevices\.noiseSuppressionEnabled\s*===\s*true\s*:\s*true/,
+  "a preference at the CURRENT version must be honoured either way, and anything older must fall "
+    + "through to the default rather than pinning somebody to a value that was never a choice",
+);
+
+// The outcome must reach the server, whichever way it went. Krisp runs in the browser and fails
+// silently; without this the only record of "it is not running" is a console.error in one tab, and
+// turning it on for everybody without that record would be turning on something unobservable.
+assert.match(
+  hook,
+  /onNoiseSuppressionOutcome\?\.\(\{\s*enabled:\s*true,\s*processor:\s*"krisp"\s*\}\)/,
+  "a working filter must be reported too — 'it failed for one person' and 'it has never worked' "
+    + "are different problems, and only the successes tell them apart",
+);
+assert.ok(
+  (hook.match(/onNoiseSuppressionOutcome\?\./g) ?? []).length >= 3,
+  "every outcome must be reported: enabled, unsupported browser, and failed to enable",
+);
+assert.match(
+  roomPage,
+  /reportNoiseSuppression/,
+  "the meeting must actually send the outcome somewhere a person can read it later",
 );
 assert.match(
   roomPage,

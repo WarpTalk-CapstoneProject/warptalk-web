@@ -101,6 +101,12 @@ export const API = {
     flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
     noiseReduction: (id: string) =>
       `/translation-rooms/${id}/audio-routes/noise-reduction`,
+    // NOT a setting — the browser telling the server what its OWN denoiser ended up doing. Krisp
+    // runs entirely client-side and fails silently (livekit-client never awaits the entitlement
+    // answer), so without this the only record of "it is not running" is a console.error in one
+    // participant's tab.
+    noiseSuppressionReport: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-suppression/report`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
