@@ -15,6 +15,14 @@ export const API = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
+    /**
+     * WT-597: a new verification link, asked for by address rather than by session.
+     *
+     * `/auth/resend-verification` is `[Authorize]`, and a self-registered account has no session
+     * until it is verified — so the only resend the product had was unreachable by the people who
+     * needed it. Answers 204 for any address, so it says nothing about who has an account.
+     */
+    resendVerification: "/auth/resend-verification-request",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",
