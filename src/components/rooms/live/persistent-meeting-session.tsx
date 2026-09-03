@@ -35,6 +35,7 @@ import {
   useResumeTranslationRoom,
   useStopTranslation,
   sessionsKey,
+  transcriptPauseWindowsKey,
   useEndTranslationRoom,
   useLeaveTranslationRoom,
   useRefreshDubVoice,
@@ -47,6 +48,9 @@ import {
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
   useTranslationRoomSessions,
+  usePauseTranscript,
+  useResumeTranscript,
+  useTranscriptPauseWindows,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { getLanguageName } from "@/lib/language/languages";
@@ -293,6 +297,8 @@ export function PersistentMeetingSession({
   const startRoom = useStartTranslationRoom();
   const resumeRoom = useResumeTranslationRoom();
   const stopTranslation = useStopTranslation();
+  const pauseTranscriptMutation = usePauseTranscript();
+  const resumeTranscriptMutation = useResumeTranscript();
   const endRoom = useEndTranslationRoom();
   const leaveRoom = useLeaveTranslationRoom(roomId);
   const setVoiceCloneConsent = useSetVoiceCloneConsent(roomId);
@@ -535,6 +541,12 @@ export function PersistentMeetingSession({
   // begin at all. One flag for two features also made "transcript only" impossible to express —
   // there was no state in which the meeting was live and translation was not.
   const translationSessionsQuery = useTranslationRoomSessions(roomId, meetingLive);
+  // WT-605. Independent of translationStarted below — a room can have translation running while
+  // the transcript is paused, or vice versa before Start Translation is ever pressed.
+  const transcriptPauseWindowsQuery = useTranscriptPauseWindows(roomId, meetingLive);
+  const isTranscriptPaused = (transcriptPauseWindowsQuery.data ?? []).some(
+    (window) => window.endedAt === null,
+  );
   const translationStarted = (translationSessionsQuery.data ?? []).some(
     (session) => session.status === "ACTIVE",
   );
@@ -1873,6 +1885,18 @@ export function PersistentMeetingSession({
     connection.on("TranslationStopped", () => {
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
+    // WT-605 — Pause Transcript. Deliberately does NOT touch meetingLiveRef, translation state
+    // or dub preference, for the same reason TranslationStopped above does not: translation,
+    // dubbing, subtitles and LiveKit keep running through a transcript pause. All that changes
+    // is whether the transcript is currently being written down, which the pause-windows query
+    // already answers — re-reading it is what lands the "Transcript paused" banner and divider
+    // for every participant, not only the host who pressed the button.
+    connection.on("TranscriptPaused", () => {
+      void queryClient.invalidateQueries({ queryKey: transcriptPauseWindowsKey(roomId) });
+    });
+    connection.on("TranscriptResumed", () => {
+      void queryClient.invalidateQueries({ queryKey: transcriptPauseWindowsKey(roomId) });
+    });
     // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
     // after JoinTranslationRoom — every other participant event describes a CHANGE, so without a
     // starting point the live roster of a late joiner began empty and no later event could fill
@@ -2682,6 +2706,18 @@ export function PersistentMeetingSession({
     });
   }
 
+  // WT-605 — Pause Transcript. Deliberately separate from Start/Stop Translation above: this
+  // stops the transcript being written down while translation, dubbing, subtitles and LiveKit
+  // keep running untouched. Confirmed via the TranscriptPaused/TranscriptResumed broadcast the
+  // REST call triggers (see the connection.on handlers above) — no optimistic local update.
+  function handleToggleTranscriptPaused(paused: boolean) {
+    const mutation = paused ? pauseTranscriptMutation : resumeTranscriptMutation;
+    mutation.mutate(roomId, {
+      onError: () =>
+        toast.error(paused ? "Could not pause the transcript." : "Could not resume the transcript."),
+    });
+  }
+
   function handleMuteAll() {
     const connection = translationConnectionRef.current;
     if (connection?.state !== HubConnectionState.Connected) return;
@@ -3194,6 +3230,8 @@ export function PersistentMeetingSession({
                     onToggleMuteOnEntry={
                       isHost ? handleToggleMuteOnEntry : undefined
                     }
+                    isTranscriptPaused={isTranscriptPaused}
+                    onToggleTranscriptPaused={isHost ? handleToggleTranscriptPaused : undefined}
                     onMuteAll={isHost ? handleMuteAll : undefined}
                     // Not gated on isHost, unlike the three host controls above it.
                     //

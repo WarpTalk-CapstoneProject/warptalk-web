@@ -158,6 +158,12 @@ export const API = {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    // WT-605 — Pause Transcript. Stops the transcript from being written down; translation,
+    // dubbing, subtitles and LiveKit keep running untouched. Not `pause`/`resume` above — those
+    // gate the AI pipeline itself (translationRooms.pause/resume), which this must not touch.
+    pauseTranscript: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}/pause`,
+    resumeTranscript: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}/resume`,
+    pauseWindows: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,

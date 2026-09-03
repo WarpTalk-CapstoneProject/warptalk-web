@@ -2,7 +2,9 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import { transcriptService } from "@/services/transcript.service";
 import type { FlashModeState } from "@/services/translation-room.service";
+import type { TranscriptPauseWindowDto } from "@/types/transcript";
 import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
@@ -21,6 +23,9 @@ const MEETING_KEY = ["translationRooms"] as const;
 const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
 /** Exported so a room-wide Start/Stop broadcast can refresh it without re-spelling the key. */
 export const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
+/** WT-605. Exported so a room-wide TranscriptPaused/TranscriptResumed broadcast can refresh it
+ * without re-spelling the key. */
+export const transcriptPauseWindowsKey = (roomId: string) => [...MEETING_KEY, roomId, "transcript-pause-windows"] as const;
 
 export function useTranslationRooms(params?: {
   status?: string;
@@ -265,6 +270,52 @@ export function useTranslationRoomSessions(roomId: string, enabled = true) {
     queryKey: sessionsKey(roomId),
     queryFn: async () => {
       const { data } = await translationRoomService.sessions(roomId);
+      return data;
+    },
+    enabled: Boolean(roomId) && enabled,
+    refetchInterval: enabled ? 5000 : false,
+  });
+}
+
+/**
+ * WT-605 — Pause Transcript. Stops the transcript from being written down; translation,
+ * dubbing, subtitles and LiveKit keep running untouched. Host-only. Not
+ * `usePauseTranslationRoom`/`useStopTranslation` above — those gate the AI pipeline itself,
+ * which this must not touch.
+ */
+export function usePauseTranscript() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await transcriptService.pauseTranscript(id);
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: transcriptPauseWindowsKey(id) });
+    },
+  });
+}
+
+/** The counterpart to {@link usePauseTranscript}. Host-only. */
+export function useResumeTranscript() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await transcriptService.resumeTranscript(id);
+    },
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: transcriptPauseWindowsKey(id) });
+    },
+  });
+}
+
+/** Every pause/resume window for this room's transcript — used to draw the "Transcript paused ·
+ * HH:MM–HH:MM" divider. Polls while the room is live so a participant who did not press the
+ * button still sees the divider land without a manual refresh. */
+export function useTranscriptPauseWindows(roomId: string, enabled = true) {
+  return useQuery<TranscriptPauseWindowDto[]>({
+    queryKey: transcriptPauseWindowsKey(roomId),
+    queryFn: async () => {
+      const { data } = await transcriptService.pauseWindows(roomId);
       return data;
     },
     enabled: Boolean(roomId) && enabled,

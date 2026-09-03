@@ -9,6 +9,7 @@ import type {
   TranscriptDto,
   TranscriptExportDto,
   TranscriptLanguageCoverage,
+  TranscriptPauseWindowDto,
   TranscriptSegmentDto,
   TranscriptTranslationDto,
 } from "@/types/transcript";
@@ -76,5 +77,23 @@ export const transcriptService = {
 
   finalize(id: string) {
     return apiClient.post<void>(API.transcripts.finalize(id));
+  },
+
+  /**
+   * WT-605 — Pause/Resume Transcript. Host-only. Stops (or resumes) the transcript being
+   * written down; translation, dubbing, subtitles and LiveKit keep running untouched. Not
+   * `translationRoomService.pause/resume` — those gate the AI pipeline itself.
+   */
+  pauseTranscript(translationRoomId: string) {
+    return apiClient.post<void>(API.transcripts.pauseTranscript(translationRoomId));
+  },
+
+  resumeTranscript(translationRoomId: string) {
+    return apiClient.post<void>(API.transcripts.resumeTranscript(translationRoomId));
+  },
+
+  /** Every pause/resume window for this room's transcript, for the panel's dividers. */
+  pauseWindows(translationRoomId: string) {
+    return apiClient.get<TranscriptPauseWindowDto[]>(API.transcripts.pauseWindows(translationRoomId));
   },
 };

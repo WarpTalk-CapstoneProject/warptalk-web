@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, FileText, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
@@ -117,6 +117,7 @@ export function MeetingControlBar({
   handRaised,
   isLocked,
   muteOnEntry,
+  isTranscriptPaused,
   isRecording,
   recordingPending,
   onCopyText,
@@ -140,6 +141,7 @@ export function MeetingControlBar({
   onSendReaction,
   onToggleLock,
   onToggleMuteOnEntry,
+  onToggleTranscriptPaused,
   onMuteAll,
   onToggleRecording,
 }: {
@@ -275,6 +277,14 @@ export function MeetingControlBar({
   onToggleLock?: (locked: boolean) => void;
   /** WT-04, host-only: toggles whether new joiners start muted. */
   onToggleMuteOnEntry?: (enabled: boolean) => void;
+  /**
+   * WT-605, host-only: stops (or resumes) the transcript being written down. Deliberately NOT
+   * the same switch as Start/Stop Translation above — translation, dubbing, subtitles and
+   * LiveKit keep running through a transcript pause. Omit to hide the row.
+   */
+  onToggleTranscriptPaused?: (paused: boolean) => void;
+  /** Whether the transcript is currently paused for this room. */
+  isTranscriptPaused?: boolean;
   /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
   onMuteAll?: () => void;
   /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
@@ -474,6 +484,16 @@ export function MeetingControlBar({
                     active={Boolean(muteOnEntry)}
                     toggle
                     onClick={() => onToggleMuteOnEntry(!muteOnEntry)}
+                  />
+                ) : null}
+                {onToggleTranscriptPaused ? (
+                  <HostControlRow
+                    label={isTranscriptPaused ? "Transcript paused" : "Pause transcript"}
+                    description="Stops the written transcript only — translation, dubbing and subtitles keep running."
+                    icon={<FileText className="h-4 w-4" weight={isTranscriptPaused ? "fill" : "regular"} />}
+                    active={Boolean(isTranscriptPaused)}
+                    toggle
+                    onClick={() => onToggleTranscriptPaused(!isTranscriptPaused)}
                   />
                 ) : null}
                 {onMuteAll ? (

@@ -12,7 +12,10 @@ import {
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
   resolveSegmentTranslation,
+  resolveTranscriptPauseGaps,
+  splitSegmentsAroundPauseGaps,
   type GroupedTranscriptSegment,
+  type TranscriptPauseGap,
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
@@ -24,7 +27,7 @@ import {
 } from "@/components/rooms/live/side-panel/suggestion-badge";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
-import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import { useTranslationRoomSessions, useTranscriptPauseWindows } from "@/hooks/use-translationRooms";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
@@ -74,6 +77,13 @@ export function TranscriptPanel({
   const dismissSuggestion = useTranslationRoomStore((state) => state.dismissSuggestion);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
+  // WT-605. Independent of the translation-session grouping above — pausing the transcript and
+  // pausing translation are different, unrelated actions.
+  const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  const pauseGaps = useMemo(
+    () => resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
+    [pauseWindowsQuery.data, baseTime],
+  );
 
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The distance this panel itself uses to decide it has stopped following. A chip offering to
@@ -169,15 +179,20 @@ export function TranscriptPanel({
         {blocks.map((block) => (
           <div key={block.sessionNumber} className="space-y-2">
             {showSessionLabels ? <SessionDivider block={block} /> : null}
-            {block.segments.map((segment) => (
-              <TranscriptBubble
-                key={segment.segmentId}
-                segment={segment}
-                readerLanguage={readerLanguage}
-                isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
-                suggestion={findSuggestionForUtterance(segment, suggestions)}
-                onDismissSuggestion={dismissSuggestion}
-              />
+            {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
+              <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`} className="space-y-2">
+                {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
+                {sub.segments.map((segment) => (
+                  <TranscriptBubble
+                    key={segment.segmentId}
+                    segment={segment}
+                    readerLanguage={readerLanguage}
+                    isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
+                    suggestion={findSuggestionForUtterance(segment, suggestions)}
+                    onDismissSuggestion={dismissSuggestion}
+                  />
+                ))}
+              </div>
             ))}
           </div>
         ))}
@@ -199,6 +214,26 @@ function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTrans
         Translation {block.sessionNumber}
         {formatSessionWindow(block.session)}
       </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/**
+ * WT-605. The gap left by a Pause Transcript window — no line was recorded here, only
+ * translation/dubbing/subtitles were still running. Same visual language as SessionDivider
+ * above, deliberately distinct wording so the two are never mistaken for one another.
+ */
+function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
+  const started = new Date(gap.window.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const ended = gap.window.endedAt
+    ? new Date(gap.window.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "now";
+
+  return (
+    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+      <div className="h-px flex-1 bg-border" />
+      <span>Transcript paused · {started}–{ended}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );
