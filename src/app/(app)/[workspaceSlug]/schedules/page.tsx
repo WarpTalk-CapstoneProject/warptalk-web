@@ -53,17 +53,37 @@ import {
   canDownloadArtifact,
 } from "@/lib/meeting/meeting-artifacts";
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
+import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { MyMeetingItem } from "@/types/myMeetings";
+import type { MeetingTimeState, MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
-type TimeFilter = "all" | "upcoming" | "past";
+/**
+ * WT-538 — exactly three chips, and `missed` is in none of them.
+ *
+ * `past` was renamed to `joined` rather than merely relabelled: the value now has to mean "the
+ * viewer was in this room", and a filter called `past` holding meetings selected by attendance is
+ * the kind of name that invites the next person to widen it back.
+ *
+ * There is no Missed chip, deliberately. A missed meeting is something you have already lost; a
+ * standing tab counting them is a scoreboard nobody asked for. They appear under All, in amber, and
+ * that is the whole of their presence.
+ *
+ * The consequence is accepted and is not a bug: All ≠ Upcoming + Joined, because the missed rows
+ * are in All and in neither of the others. Do not "fix" the arithmetic by inventing a fourth chip
+ * or by folding missed into one of these two.
+ */
+type TimeFilter = "all" | "upcoming" | "joined";
+
+/** One meeting with its state resolved for this viewer, at this minute. See `timedMeetings`. */
+type TimedMeeting = MyMeetingItem & { timeState: MeetingTimeState };
 
 /**
  * Month or week.
@@ -78,9 +98,9 @@ type CalendarView = "month" | "week";
 const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "past", label: "Attended" },
+  { value: "joined", label: "Joined" },
 ];
-const EMPTY_MEETINGS: MyMeetingItem[] = [];
+const EMPTY_MEETINGS: TimedMeeting[] = [];
 const APP_CALENDAR_LOCALE = "en-GB";
 
 /**
@@ -104,6 +124,26 @@ export default function MyMeetingsPage() {
   const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+
+  /**
+   * WT-538 — who is looking, and what time it is.
+   *
+   * `timeState` is resolved HERE rather than in the mapper that fills the React Query cache, and
+   * that placement is the decision, not an accident of where the code fit:
+   *
+   *  - The cache key is `["my-meetings", workspaceId, monthKey, search]` and carries no user id.
+   *    Baking a viewer-dependent field into the cached rows would make that key a lie. (The cache
+   *    is emptied on both sign-in and sign-out — see lib/auth/session-scoped-state — so nothing is
+   *    actually served across accounts today; this keeps it that way without depending on it.)
+   *  - `missed` decays out of `upcoming` as the clock passes. A value computed inside `queryFn` is
+   *    frozen at fetch time, so a tab left open would keep showing a meeting as upcoming for as
+   *    long as the query stayed fresh — the very bug this ticket is about, reintroduced one layer
+   *    down. `useNowMinute` already ticks for the week view's now-line, so re-deriving is free.
+   *
+   * It is still ONE rule in ONE place — `resolveMeetingTimeState` — just called instead of stored.
+   */
+  const viewerUserId = useAuthStore((state) => state.user?.id ?? null);
+  const now = useNowMinute();
 
   const [view, setView] = useState<CalendarView>("month");
   // One anchor for both views. Switching from week to month keeps you in the month you were
@@ -131,7 +171,7 @@ export default function MyMeetingsPage() {
   const fetched = meetings.data?.meetings ?? EMPTY_MEETINGS;
 
   // The months are fetched whole, so a week view holds up to two months of rows it must not show.
-  const allMeetings = useMemo(() => {
+  const windowed = useMemo(() => {
     if (view === "month") return fetched;
     const from = rangeFrom.getTime();
     const to = rangeTo.getTime();
@@ -141,10 +181,25 @@ export default function MyMeetingsPage() {
     });
   }, [fetched, view, rangeFrom, rangeTo]);
 
+  // One derivation for the whole page, so the chip counts, the colours and the badge can never
+  // disagree about the same meeting. `now` is null until after hydration and is passed through as
+  // null rather than papered over with `Date.now()`: reading the clock inside a `useMemo` is
+  // impure, and the resolver has a defined answer for "no clock yet".
+  const allMeetings = useMemo<TimedMeeting[]>(() => {
+    const nowMs = now === null ? null : now.getTime();
+    return windowed.map((meeting) => ({
+      ...meeting,
+      timeState: resolveMeetingTimeState(meeting, { viewerUserId, now: nowMs }),
+    }));
+  }, [windowed, viewerUserId, now]);
+
+  // `missed` is in neither bucket. Upcoming holds what is still ahead (and what is running now);
+  // Joined holds what the viewer was actually in. A meeting that is over and was never attended is
+  // in neither, which is why the three numbers do not add up — see `TimeFilter`.
   const visible = useMemo(() => {
     return allMeetings.filter((meeting) => {
-      if (filter === "upcoming") return meeting.timeState !== "past";
-      if (filter === "past") return meeting.timeState === "past";
+      if (filter === "upcoming") return isAhead(meeting.timeState);
+      if (filter === "joined") return meeting.timeState === "joined";
       return true;
     });
   }, [allMeetings, filter]);
@@ -159,8 +214,8 @@ export default function MyMeetingsPage() {
   const counts = useMemo(() => {
     return {
       all: allMeetings.length,
-      upcoming: allMeetings.filter((meeting) => meeting.timeState !== "past").length,
-      past: allMeetings.filter((meeting) => meeting.timeState === "past").length,
+      upcoming: allMeetings.filter((meeting) => isAhead(meeting.timeState)).length,
+      joined: allMeetings.filter((meeting) => meeting.timeState === "joined").length,
     };
   }, [allMeetings]);
 
@@ -333,6 +388,7 @@ export default function MyMeetingsPage() {
           ) : view === "week" ? (
             <WeekGrid
               days={weekDays}
+              now={now}
               meetings={visible}
               workspaceSlug={workspaceSlug}
               onOpenPast={setDialogMeetingId}
@@ -369,7 +425,7 @@ function ScheduleMetricTabs({
   filter,
   onFilterChange,
 }: {
-  counts: { all: number; upcoming: number; past: number };
+  counts: { all: number; upcoming: number; joined: number };
   filter: TimeFilter;
   onFilterChange: (filter: TimeFilter) => void;
 }) {
@@ -385,7 +441,7 @@ function ScheduleMetricTabs({
             ? counts.all
             : item.value === "upcoming"
               ? counts.upcoming
-              : counts.past;
+              : counts.joined;
         return (
           <button
             key={item.value}
@@ -423,7 +479,7 @@ function MonthGrid({
   onNavigate,
 }: {
   monthAnchor: Date;
-  meetings: MyMeetingItem[];
+  meetings: TimedMeeting[];
   hasQuery: boolean;
   onOpenPast: (id: string) => void;
   onNavigate: (id: string) => void;
@@ -446,7 +502,7 @@ function MonthGrid({
   }, [monthAnchor]);
 
   const byDay = useMemo(() => {
-    const map = new Map<string, MyMeetingItem[]>();
+    const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
       const key = dayKey(meeting.occursAt);
       const bucket = map.get(key);
@@ -464,8 +520,8 @@ function MonthGrid({
 
   // One rule for what a meeting row does, so a chip in the cell and the same meeting listed in the
   // day popover cannot drift apart: a finished meeting opens the recap dialog, anything else the room.
-  function openMeeting(meeting: MyMeetingItem) {
-    if (meeting.timeState === "past") onOpenPast(meeting.id);
+  function openMeeting(meeting: TimedMeeting) {
+    if (hasFinished(meeting)) onOpenPast(meeting.id);
     else onNavigate(meeting.id);
   }
 
@@ -476,7 +532,7 @@ function MonthGrid({
           <FileText size={14} />
           {hasQuery
             ? "No meetings match this search."
-            : "Nothing on your timeline this month. Upcoming invites and attended meetings appear here."}
+            : "Nothing on your timeline this month. Upcoming invites and meetings you joined appear here."}
         </div>
       ) : null}
 
@@ -571,7 +627,7 @@ function MonthChip({
   onOpen,
   className,
 }: {
-  meeting: MyMeetingItem;
+  meeting: TimedMeeting;
   onOpen: () => void;
   className?: string;
 }) {
@@ -629,8 +685,8 @@ function DayOverflowPopover({
   onOpenMeeting,
 }: {
   day: Date;
-  meetings: MyMeetingItem[];
-  onOpenMeeting: (meeting: MyMeetingItem) => void;
+  meetings: TimedMeeting[];
+  onOpenMeeting: (meeting: TimedMeeting) => void;
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -733,19 +789,22 @@ function DayOverflowPopover({
  */
 function WeekGrid({
   days,
+  now,
   meetings,
   workspaceSlug,
   onOpenPast,
   onNavigate,
 }: {
   days: Date[];
-  meetings: MyMeetingItem[];
+  /** The same minute the page resolved `timeState` against — not a second reading of the clock. */
+  now: Date | null;
+  meetings: TimedMeeting[];
   workspaceSlug: string;
   onOpenPast: (id: string) => void;
   onNavigate: (id: string) => void;
 }) {
   const byDay = useMemo(() => {
-    const map = new Map<string, MyMeetingItem[]>();
+    const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
       const key = dayKey(meeting.occursAt);
       const bucket = map.get(key);
@@ -759,8 +818,6 @@ function WeekGrid({
   }, [meetings]);
 
   const todayKey = String(startOfDay(new Date()));
-
-  const now = useNowMinute();
 
   return (
     <div className="flex h-full flex-col">
@@ -827,7 +884,7 @@ function WeekGrid({
                             meeting={meeting}
                             workspaceSlug={workspaceSlug}
                             onOpen={() =>
-                              meeting.timeState === "past"
+                              hasFinished(meeting)
                                 ? onOpenPast(meeting.id)
                                 : onNavigate(meeting.id)
                             }
@@ -907,7 +964,7 @@ function WeekCard({
   workspaceSlug,
   onOpen,
 }: {
-  meeting: MyMeetingItem;
+  meeting: TimedMeeting;
   workspaceSlug: string;
   onOpen: () => void;
 }) {
@@ -1176,7 +1233,40 @@ function formatWeekRange(days: Date[]) {
   return `${start} – ${end}`;
 }
 
-function rowToneClass(meeting: MyMeetingItem) {
+/**
+ * Whether this meeting is still ahead of the viewer — the Upcoming bucket.
+ *
+ * `live` is in it because a meeting happening right now is the most "upcoming" thing there is.
+ * `missed` is NOT, and that is the entire point of WT-538: this used to be `timeState !== "past"`,
+ * which is why a room booked for last Tuesday and never opened was counted here forever.
+ */
+function isAhead(timeState: MeetingTimeState) {
+  return timeState === "upcoming" || timeState === "live";
+}
+
+/**
+ * Whether the room is over, and therefore has a recap to open instead of a room to enter.
+ *
+ * Asked of the ROOM's status, not of `timeState`: `missed` covers both a meeting that ended
+ * without the viewer and a booked slot that never happened at all, and those two want opposite
+ * destinations. The first has artifacts; the second still has a room sitting there unopened.
+ */
+function hasFinished(meeting: MyMeetingItem) {
+  return !["scheduled", "waiting", "in_progress", "paused"].includes(meeting.status);
+}
+
+/**
+ * WT-538 — amber is `missed`, and it is deliberately nothing like the other four.
+ *
+ * The palette is the whole signal on this page: rose is happening, sky is coming, emerald is you
+ * were there, slate is called off. Amber had to be legible against all four at chip size, and it
+ * had to avoid reading as a dimmer emerald or a warmer rose — a missed meeting confused for an
+ * attended one is exactly the confusion this ticket exists to remove.
+ *
+ * And it is colour ONLY. No strike-through, on anything: `line-through` was removed from this file
+ * in 8953691 at the user's request, and it does not come back for this state or any other.
+ */
+function rowToneClass(meeting: TimedMeeting) {
   if (meeting.status === "cancelled") {
     return "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
   }
@@ -1186,10 +1276,13 @@ function rowToneClass(meeting: MyMeetingItem) {
   if (meeting.timeState === "upcoming") {
     return "border-l-4 border-l-sky-500 border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
   }
+  if (meeting.timeState === "missed") {
+    return "border-l-4 border-l-amber-500 border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20";
+  }
   return "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
-function monthChipToneClass(meeting: MyMeetingItem) {
+function monthChipToneClass(meeting: TimedMeeting) {
   if (meeting.status === "cancelled") {
     return "border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
   }
@@ -1199,28 +1292,38 @@ function monthChipToneClass(meeting: MyMeetingItem) {
   if (meeting.timeState === "upcoming") {
     return "border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
   }
+  if (meeting.timeState === "missed") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20";
+  }
   return "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
 /**
  * Cancellation outranks the clock, exactly as it already does in rowToneClass and
- * monthChipToneClass. Without this first branch a cancelled meeting wore a green "Attended" or a
- * blue "Upcoming" pill next to its own struck-through title on a grey card — three signals, three
+ * monthChipToneClass. Without this first branch a cancelled meeting wore a green "Joined" or a
+ * blue "Upcoming" pill next to its own greyed-out title on a grey card — three signals, three
  * different answers to "what happened to this meeting?".
+ *
+ * That branch is also why a cancelled meeting resolving to `missed` changes nothing on screen: it
+ * never reaches the state branches below. "Cancelled" is the more specific answer and it wins.
  */
-function stateBadgeClass(meeting: MyMeetingItem) {
+function stateBadgeClass(meeting: TimedMeeting) {
   if (meeting.status === "cancelled") return "bg-surface-3 text-ink-muted";
   if (meeting.timeState === "live") return "bg-rose-500/10 text-rose-700";
   if (meeting.timeState === "upcoming") return "bg-sky-500/10 text-sky-700";
+  if (meeting.timeState === "missed") return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
   return "bg-emerald-500/10 text-emerald-700";
 }
 
 /** The label half of the same decision — kept beside the colour so the two cannot drift apart. */
-function stateBadgeLabel(meeting: MyMeetingItem) {
+function stateBadgeLabel(meeting: TimedMeeting) {
   if (meeting.status === "cancelled") return "Cancelled";
   if (meeting.timeState === "live") return "Live";
   if (meeting.timeState === "upcoming") return "Upcoming";
-  return "Attended";
+  // "Missed", not "Not attended": the shorter word is the one people use, and the badge has room
+  // for one word. It says nothing about fault — a meeting that never happened is missed too.
+  if (meeting.timeState === "missed") return "Missed";
+  return "Joined";
 }
 
 function formatTime(value: string) {
