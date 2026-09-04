@@ -11,7 +11,6 @@ import {
   CheckCircle,
   Clock,
   DownloadSimple,
-  FileText,
   SpinnerGap,
   Translate,
   Users,
