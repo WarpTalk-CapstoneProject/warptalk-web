@@ -470,7 +470,15 @@ function MonthGrid({
                 className={cn(
                   "flex min-h-[110px] min-w-0 flex-col overflow-hidden border-b border-r border-border p-1.5 transition-colors last:border-r-0",
                   !isCurrentMonth && "bg-surface-2/30 text-ink-subtle",
-                  isToday && "bg-primary/[0.04]",
+                  // Today has to be findable at a glance in a grid of 35 identical boxes, and the
+                  // 4% wash it used to carry was invisible in both themes. The weight is in the
+                  // inset ring rather than the fill: the ring reads as an outline at any distance,
+                  // while the fill stays light enough that the rose/sky/emerald chips inside the
+                  // cell keep their own hue instead of sitting in a violet bath. Inset, so it draws
+                  // inside the cell's own box and cannot escape overflow-hidden or thicken the grid
+                  // lines it shares with its neighbours.
+                  isToday &&
+                    "bg-primary/[0.07] ring-1 ring-inset ring-primary/45 dark:bg-primary/[0.14] dark:ring-primary/55",
                 )}
               >
                 <div className="flex h-5 shrink-0 items-center justify-between px-1">
