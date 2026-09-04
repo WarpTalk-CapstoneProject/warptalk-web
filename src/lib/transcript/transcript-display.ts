@@ -172,7 +172,7 @@ export function groupTranscriptSegments(
     // Dropping before the merge matters as much as dropping at all: a marker absorbed into a
     // neighbouring utterance stops being a segment of its own and becomes part of a real line's
     // text, where no later filter can find it.
-    if (isTranscriptControlMarker(segment.originalText)) continue;
+    if (isTranscriptSystemSegment(segment)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
@@ -237,6 +237,59 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
 }
 
 /**
+ * Whether a segment came from the pipeline rather than from a person.
+ *
+ * `isTranscriptControlMarker` reads the text, and the text is not the only tell. When the meeting
+ * service publishes a sentinel it does so as speaker `system`, and the transcript consumer
+ * persists that as NO participant id, the display name "System" and the pseudo-language
+ * "system" (TranscriptConsumerPollingPolicy.TryResolveSpeaker). A marker whose text was mangled
+ * on the way — production holds a `__MEETING_END__a` — still carries every one of those, so a
+ * line is dropped on ANY of them.
+ *
+ * WT-311: this is why the empty state was inconsistent. A transcript holding nothing but such a
+ * row rendered as a list of one "System 00:00 …" line on some meetings and as "No transcript
+ * recorded" on others, depending on which of the tells the row happened to carry. The saved
+ * and live shapes name the speaker id differently (`speakerParticipantId` and `speakerId`);
+ * both are read so the two paths cannot disagree.
+ */
+export function isTranscriptSystemSegment(segment: {
+  originalText?: string | null;
+  originalLanguage?: string | null;
+  speakerName?: string | null;
+  speakerParticipantId?: string | null;
+  speakerId?: string | null;
+}): boolean {
+  if (isTranscriptControlMarker(segment.originalText)) return true;
+  if ((segment.originalLanguage ?? "").trim().toLowerCase() === "system") return true;
+
+  const speakerId = (segment.speakerParticipantId ?? segment.speakerId ?? "").trim();
+  if (speakerId.toLowerCase() === "system") return true;
+  // A person always speaks as a participant id. "System" with no id is the persisted sentinel;
+  // a participant who happens to be called System has an id and is kept.
+  return !speakerId && (segment.speakerName ?? "").trim().toLowerCase() === "system";
+}
+
+/**
+ * WT-311: when translation FIRST started in a meeting — the earliest session with a start.
+ *
+ * Sessions arrive oldest-first, but that is a convention of the endpoint rather than a
+ * guarantee, and the header line built from this must not move when a refetch reorders them.
+ * Null when translation never ran, which is a real state and not a missing one.
+ */
+export function firstTranslationStart<T extends { startedAt?: string | null }>(
+  sessions: readonly T[],
+): string | null {
+  let earliest: { at: number; iso: string } | null = null;
+  for (const session of sessions) {
+    if (!session.startedAt) continue;
+    const at = Date.parse(session.startedAt);
+    if (!Number.isFinite(at)) continue;
+    if (!earliest || at < earliest.at) earliest = { at, iso: session.startedAt };
+  }
+  return earliest?.iso ?? null;
+}
+
+/**
  * A saved utterance. `id` is the FIRST segment folded into it — the same partial identity
  * `GroupedTranscriptSegment` carries on the live side, and for the same reason: anything keyed
  * by the segment ids the backend emitted has to read `mergedSegmentIds` instead.
@@ -263,7 +316,7 @@ export function groupSavedTranscriptSegments(
   const utterances: GroupedSavedTranscriptSegment[] = [];
 
   for (const segment of segments) {
-    if (isTranscriptControlMarker(segment.originalText)) continue;
+    if (isTranscriptSystemSegment(segment)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
@@ -275,6 +328,10 @@ export function groupSavedTranscriptSegments(
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
+      // A correction to ANY chunk of the sentence is a correction to the sentence. Read off the
+      // first chunk alone, an edit to the second half of a long utterance left the line showing
+      // no history at all.
+      isCorrected: previous.isCorrected || segment.isCorrected,
       mergedSegmentIds: [...previous.mergedSegmentIds, segment.id],
     };
   }

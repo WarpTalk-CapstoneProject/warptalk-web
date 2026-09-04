@@ -2,12 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
+import { sortCorrectionsNewestFirst } from "@/lib/transcript/correction-history";
 import { transcriptService } from "@/services/transcript.service";
 import type {
   CreateCorrectionRequest,
   CreateTranscriptExportRequest,
   CreateTranscriptRequest,
   PagedResult,
+  TranscriptCorrectionDto,
 } from "@/types/transcript";
 
 const TRANSCRIPT_KEY = ["transcripts"] as const;
@@ -275,6 +277,33 @@ export function useCorrectTranscriptSegment() {
       queryClient.invalidateQueries({ queryKey: [...TRANSCRIPT_KEY, variables.transcriptId, "segments"] });
       queryClient.invalidateQueries({ queryKey: [...TRANSCRIPT_KEY, variables.transcriptId, "translations"] });
     },
+  });
+}
+
+/**
+ * WT-311: the revision history of one rendered line, newest first.
+ *
+ * A line on screen may be several stored segments merged into one utterance, and corrections
+ * are stored per segment — so this asks for each of them and folds the answers into one list.
+ * It is meant to be called from the component that mounts WITH the history popover, so nothing
+ * is fetched until somebody asks to see it; and it is never treated as fresh, because a
+ * correction saved a moment ago must be in the list the next time it opens.
+ */
+export function useSegmentCorrections(
+  transcriptId: string | undefined,
+  segmentIds: readonly string[],
+) {
+  return useQuery({
+    queryKey: [...TRANSCRIPT_KEY, transcriptId, "corrections", segmentIds.join(",")],
+    queryFn: async (): Promise<TranscriptCorrectionDto[]> => {
+      if (!transcriptId) return [];
+      const responses = await Promise.all(
+        segmentIds.map((segmentId) => transcriptService.corrections(transcriptId, segmentId)),
+      );
+      return sortCorrectionsNewestFirst(responses.flatMap((response) => response.data ?? []));
+    },
+    enabled: Boolean(transcriptId) && segmentIds.length > 0,
+    staleTime: 0,
   });
 }
 

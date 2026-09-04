@@ -6,6 +6,7 @@ import {
   pendingCorrections,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
+  firstTranslationStart,
   confidencePercent,
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
@@ -14,6 +15,7 @@ import {
   groupSavedTranscriptSegments,
   groupTranscriptSegments,
   isTranscriptControlMarker,
+  isTranscriptSystemSegment,
   resolveSegmentTranslation,
   resolveTranscriptSpeakerName,
 } from "../transcript-display.ts";
@@ -256,6 +258,83 @@ test("a control marker is not swallowed into the line before it", () => {
 
   assert.equal(grouped.length, 1);
   assert.ok(!grouped[0].originalText.includes("MEETING_END"), grouped[0].originalText);
+});
+
+// WT-311(e). The consumer stamps a sentinel three ways — no participant id, the name "System",
+// the pseudo-language "system" — and the text filter alone read only the fourth. A transcript
+// whose only row was a mangled marker therefore rendered as a one-line list attributed to
+// System, while a clean one rendered as empty: two empty states for one empty meeting.
+
+test("isTranscriptSystemSegment reads every tell the consumer stamps on a sentinel", () => {
+  assert.equal(isTranscriptSystemSegment({ originalText: "__MEETING_END__" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", originalLanguage: "system" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", speakerId: "system" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", speakerName: "System" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", speakerName: " system " }), true);
+});
+
+test("a participant who happens to be called System is a person, and is kept", () => {
+  assert.equal(
+    isTranscriptSystemSegment({
+      originalText: "Hello",
+      speakerName: "System",
+      speakerParticipantId: "019f0d00-0de0-7000-9000-000000000003",
+    }),
+    false,
+  );
+  assert.equal(
+    isTranscriptSystemSegment({ originalText: "Hello", speakerName: "Alice", speakerParticipantId: "u1" }),
+    false,
+  );
+  assert.equal(isTranscriptSystemSegment({ originalText: "Hello", originalLanguage: "en" }), false);
+});
+
+test("a line the pipeline attributed to System is dropped even when its text was mangled", () => {
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("Hello everyone", 1),
+    { ...savedSegment("MEETING END", 2, "System"), originalLanguage: "system" },
+    savedSegment("end of meeting", 3, "System"),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].originalText, "Hello everyone");
+});
+
+test("a transcript holding only the sentinel is empty, not a one-line list", () => {
+  // The two empty states of WT-311(e), collapsed into one: the panel counts what this returns,
+  // and zero is what makes it say "No transcript was captured" instead of listing the marker.
+  assert.deepEqual(
+    groupSavedTranscriptSegments([
+      { ...savedSegment("__MEETING_END__", 1, "System"), originalLanguage: "system" },
+    ]),
+    [],
+  );
+});
+
+test("a correction on any merged chunk marks the whole utterance as corrected", () => {
+  const grouped = groupSavedTranscriptSegments([
+    { ...savedSegment("Hello", 1), speakerParticipantId: "u1" },
+    { ...savedSegment("everyone", 2), speakerParticipantId: "u1", isCorrected: true },
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].isCorrected, true);
+  assert.deepEqual(grouped[0].mergedSegmentIds, ["seg-1", "seg-2"]);
+});
+
+test("the header's 'Translation started' is the earliest session, whatever order they arrived", () => {
+  assert.equal(
+    firstTranslationStart([
+      { startedAt: "2026-09-01T10:30:00Z" },
+      { startedAt: "2026-09-01T10:05:00Z" },
+      { startedAt: null },
+      { startedAt: "garbage" },
+    ]),
+    "2026-09-01T10:05:00Z",
+  );
+  // Translation never ran: a real state, not a missing one — the header says nothing.
+  assert.equal(firstTranslationStart([]), null);
+  assert.equal(firstTranslationStart([{ startedAt: undefined }]), null);
 });
 
 test("a participant whose display name is their own id is not a name", () => {

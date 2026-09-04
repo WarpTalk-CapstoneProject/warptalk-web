@@ -716,6 +716,10 @@ export default function RoomInformationPage() {
                     onCopy={handleCopy}
                     transcriptId={transcriptQuery.data?.id}
                     transcriptStatus={transcriptQuery.data?.status}
+                    // WT-311(c): the meeting's own clock, not the translation session's. A
+                    // host who never pressed Start Translation still held a meeting with a length.
+                    meetingStartedAt={room.startedAt}
+                    meetingEndedAt={room.endedAt}
                     // WT-516: the panel cannot tell "refused" from "empty" without this. The
                     // by-room lookup is where a non-participant is turned away (FORBIDDEN), and
                     // it is also the query whose failure leaves `transcriptId` undefined — so
