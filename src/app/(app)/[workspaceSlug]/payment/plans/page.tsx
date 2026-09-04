@@ -43,7 +43,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
-import { checkoutTotal, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
+import { checkoutTotal, checkoutCurrency, monthlyDisplayPrice, selectablePlans } from "@/lib/billing/plan-pricing";
 
 // We fetch plans dynamically now.
 
@@ -265,7 +265,9 @@ export default function WorkspacePlansPage() {
         userId: user.id,
         workspaceId: activeWorkspaceId,
         amount,
-        currency: "vnd",
+        // WT-518: the plan decides its own denomination. A literal here charged a USD plan
+        // in VND while every screen quoted it in USD.
+        currency: checkoutCurrency(activePlans.find((p) => p.slug === planSlug)),
         paymentType,
         planSlug: planSlug || undefined,
         billingCycle: billingCycle || undefined,

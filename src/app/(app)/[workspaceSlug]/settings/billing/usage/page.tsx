@@ -9,45 +9,90 @@
  * (số lần trừ credit) hơi khó theo dõi." Every number here is credits; the settlement count is
  * kept only as a secondary figure, because it explains a row rather than being the point of it.
  *
- * IT AGGREGATES. Per-day for the chart, per-service for the table. A stream of individual −2
+ * IT AGGREGATES. Cumulative for the chart, per-service for the table. A stream of individual −2
  * credit lines is a log, not a report, and it was the specific complaint: "chứ mỗi lần -2 credit
  * cx show lên."
  *
- * Layout follows the OpenAI usage screen: one headline number with its series, a right rail of
- * supporting totals, then the breakdown underneath. Rules, not floating tiles — and no shadows.
+ * ONE BLOCK, RULED — NOT A GRID OF CARDS. The page used to stack three bordered sections inside
+ * a bordered surface, which is a card inside a card and reads as patches rather than as a page.
+ * Everything now lives in a single frame: one vertical rule between the chart and its totals,
+ * horizontal rules between the parts. Same language as the OpenAI usage screen this follows.
+ *
+ * THE THREE TOP-LINE NUMBERS ADD UP. "Credits granted 385,000" beside "Credits spent 2,106,183"
+ * read as broken data on the demo workspace; it was not, the workspace had topped up and carried
+ * a balance in. Granted + carried over + topped up now sum to Credits available, which is the
+ * number the chart's ceiling draws and the number Remaining subtracts from.
  */
 
 import { Spinner } from "@phosphor-icons/react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useBillingRealtime } from "@/hooks/use-billing-realtime";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import {
   summariseCycleActivity,
   summariseServiceUsage,
 } from "@/lib/billing/cycle-activity";
+import { summariseCycleBurnUp } from "@/lib/billing/cycle-burnup";
 import { formatAmount } from "@/lib/format/currency";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
-import { CycleSpendChart } from "../components/cycle-spend-chart";
-import {
-  Row,
-  RowGroup,
-  Section,
-  SectionHeader,
-} from "../components/billing-primitives";
+import { CreditBurnUpChart } from "../components/credit-burnup-chart";
 import { ServiceUsageTable } from "../components/service-usage-table";
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * How often the page re-reads its own numbers while it is on screen.
+ *
+ * Thirty seconds is chosen against what it is watching: credits move in settlements a few seconds
+ * apart during a live meeting, and not at all between them. Faster buys nothing a reader would
+ * notice on a cumulative chart; slower makes a meeting look like it is not being billed.
+ */
+const POLL_INTERVAL_MS = 30_000;
 
 export default function WorkspaceUsagePage() {
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceId = activeWorkspaceId || "";
   const role = useWorkspaceRole();
 
-  // Read once, at mount. Reading the clock during render is impure — the chart and the window
-  // length would each see a slightly different "now" and could disagree across midnight.
-  const [now] = useState(() => Date.now());
+  const queryClient = useQueryClient();
+
+  /**
+   * One clock for the whole page, advanced only when the data behind it is refetched.
+   *
+   * Reading `Date.now()` during render is impure — the chart and the window length would each see
+   * a slightly different "now" and could disagree across midnight. But holding the mount value
+   * forever is its own bug: a tab left open overnight keeps drawing yesterday's TODAY line and
+   * files fresh transactions into the wrong day. It moves with the refresh, and only there.
+   */
+  const [now, setNow] = useState(() => Date.now());
+
+  const refresh = useCallback(() => {
+    setNow(Date.now());
+    queryClient.invalidateQueries({ queryKey: ["billing"] });
+  }, [queryClient]);
+
+  /**
+   * Two sources of freshness, because neither one covers this page alone.
+   *
+   * The hub carries subscription, plan, payment and overage events the moment they happen. It
+   * does NOT carry credit consumption — nothing in the billing service publishes that — so the
+   * number this page is actually about would sit still without a timer.
+   */
+  useBillingRealtime(refresh);
+
+  useEffect(() => {
+    // Only while the tab is on screen. A background tab polling billing endpoints every half
+    // minute is load nobody is reading, on a gateway that rate-limits.
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [refresh]);
 
   const { data: balance, isLoading: isBalanceLoading } = useQuery({
     queryKey: ["billing", "balance", workspaceId],
@@ -73,7 +118,7 @@ export default function WorkspaceUsagePage() {
   // above it. Asking for a fixed 30 would label a 30-day window as "this cycle" on every plan
   // whose cycle is not 30 days.
   const cycleDaysElapsed = cycleStart
-    ? Math.max(1, Math.ceil((now - new Date(cycleStart).getTime()) / 86_400_000))
+    ? Math.max(1, Math.ceil((now - new Date(cycleStart).getTime()) / MS_PER_DAY))
     : 30;
 
   const { data: serviceUsage, isLoading: isServiceUsageLoading } = useQuery({
@@ -96,6 +141,20 @@ export default function WorkspaceUsagePage() {
     );
   }, [balance, cycleLedger, now]);
 
+  const burnUp = useMemo(() => {
+    if (!balance || !cycleLedger?.items) return null;
+    return summariseCycleBurnUp(
+      {
+        transactions: cycleLedger.items,
+        currentPeriodStart: balance.currentPeriodStart,
+        currentPeriodEnd: balance.currentPeriodEnd,
+        totalCredits: balance.totalCredits,
+        currentCredits: balance.currentCredits,
+      },
+      now,
+    );
+  }, [balance, cycleLedger, now]);
+
   const serviceRows = useMemo(
     () => summariseServiceUsage(serviceUsage ?? []),
     [serviceUsage],
@@ -110,6 +169,23 @@ export default function WorkspaceUsagePage() {
 
   const toppedUp = cycleActivity ? Math.round(cycleActivity.totalToppedUp) : 0;
   const consumed = cycleActivity ? Math.round(cycleActivity.totalConsumed) : 0;
+  const granted = Math.round(balance?.totalCredits ?? 0);
+  const available = burnUp ? Math.round(burnUp.available) : granted + toppedUp;
+
+  // Whatever the cycle started with that the plan did not grant: a balance rolled over from last
+  // cycle, or an admin adjustment. It is not a mystery to be hidden — it is the difference
+  // between two numbers the page already shows, and leaving it out is what made them disagree.
+  const carried = available - granted - toppedUp;
+
+  const share = available > 0 ? Math.round((consumed / available) * 100) : 0;
+
+  const overageDate = useMemo(() => {
+    if (!burnUp || burnUp.overageAt === null) return null;
+    const bucketDays = burnUp.bucketSize === "week" ? 7 : 1;
+    const at = new Date(burnUp.points[0].start.getTime());
+    at.setDate(at.getDate() + Math.round(burnUp.overageAt * bucketDays));
+    return at;
+  }, [burnUp]);
 
   if (role && role !== "owner" && role !== "admin") {
     return (
@@ -122,82 +198,162 @@ export default function WorkspaceUsagePage() {
   const isLoading = isBalanceLoading || isLedgerLoading;
 
   return (
-    <div className="flex flex-col gap-4 bg-surface-1 px-4 py-4 text-ink">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <Section>
-          <div className="flex items-start justify-between gap-4 px-4 py-3.5">
-            <div className="min-w-0">
-              <p className="text-[13px] text-ink-muted">Credits spent</p>
-              <p className="mt-2 text-[28px] font-semibold leading-none tabular-nums text-ink">
-                {formatAmount(consumed)}
-              </p>
-              <p className="mt-2 text-[12px] text-ink-muted">
-                {cycleActivity
-                  ? `Per ${cycleActivity.bucketSize} since ${format(cycleActivity.buckets[0].start, "MMM d")}`
-                  : "This billing cycle"}
-              </p>
+    <div className="bg-surface-1 px-4 py-4 text-ink">
+      <div className="overflow-hidden rounded-[12px] border border-border bg-surface-1 shadow-none">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
+          <h1 className="text-[14px] font-semibold text-ink">Usage</h1>
+          <span className="rounded-[6px] border border-border px-2 py-1 text-[11px] text-ink-muted">
+            {balance
+              ? `${format(new Date(balance.currentPeriodStart), "d MMM")} – ${format(
+                  new Date(balance.currentPeriodEnd),
+                  "d MMM",
+                )} · ${cycleDaysElapsed}d elapsed`
+              : "This billing cycle"}
+          </span>
+        </div>
+
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_296px]">
+          <div className="min-w-0 px-4 py-4">
+            <p className="text-[13px] text-ink-muted">Credits spent</p>
+            <p className="mt-2 text-[30px] font-semibold leading-none tabular-nums text-ink">
+              {formatAmount(consumed)}
+            </p>
+            <p className="mt-2 text-[12px] text-ink-muted">
+              {available > 0 ? (
+                <>
+                  <b className="font-semibold text-ink">{share}%</b> of {formatAmount(available)}{" "}
+                  available
+                </>
+              ) : (
+                "This billing cycle"
+              )}
+              {overageDate && burnUp ? (
+                <>
+                  {" · "}
+                  <span className="font-semibold text-destructive">
+                    {burnUp.overageIsMeasured ? "in overage since" : "projected overage on"}{" "}
+                    {format(overageDate, "d MMM")}
+                  </span>
+                </>
+              ) : null}
+            </p>
+
+            <div className="mt-4">
+              {isLoading ? (
+                <div className="flex h-[220px] items-center justify-center">
+                  <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
+                </div>
+              ) : burnUp ? (
+                <CreditBurnUpChart burnUp={burnUp} />
+              ) : (
+                <p className="flex h-[220px] items-center justify-center text-[12px] text-ink-muted">
+                  This cycle has no dates to chart against.
+                </p>
+              )}
             </div>
-            <span className="shrink-0 rounded-[6px] border border-border px-2 py-1 text-[11px] text-ink-muted">
-              {cycleDaysElapsed}d
-            </span>
           </div>
-          <div className="border-t border-hairline px-4 py-3.5">
-            {isLoading ? (
-              <div className="flex h-[220px] items-center justify-center">
-                <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
-              </div>
-            ) : cycleActivity ? (
-              <CycleSpendChart activity={cycleActivity} />
-            ) : (
-              <p className="flex h-[220px] items-center justify-center text-[12px] text-ink-muted">
-                This cycle has no dates to chart against.
-              </p>
-            )}
-          </div>
-        </Section>
 
-        <Section className="h-fit">
-          <SectionHeader title="This cycle" />
-          <RowGroup>
-            <Row label="Credits granted" value={formatAmount(balance?.totalCredits ?? 0)} />
-            <Row label="Credits spent" value={formatAmount(consumed)} />
-            <Row label="Topped up" value={formatAmount(toppedUp)} />
-            <Row label="Remaining" value={formatAmount(balance?.currentCredits ?? 0)} />
-            <Row
-              label="Settlements"
-              value={formatAmount(settlementCount)}
-              hint="How many times credits were deducted"
-            />
-            <Row
-              label="Busiest day"
-              value={
-                cycleActivity?.busiest
-                  ? format(cycleActivity.busiest.start, "MMM d")
-                  : "—"
-              }
-              hint={
-                cycleActivity?.busiest
-                  ? `${formatAmount(Math.round(cycleActivity.busiest.consumed))} credits`
-                  : undefined
-              }
-            />
-          </RowGroup>
-        </Section>
+          {/* The rail is separated by ONE rule, not by a card of its own. At narrow widths the
+              grid drops to a single column and the rule has to move with it, or the totals hang
+              under the chart with nothing between them. */}
+          <aside className="border-t border-hairline xl:border-l xl:border-t-0">
+            <p className="px-4 pb-2 pt-3.5 text-[13px] font-semibold text-ink">This cycle</p>
+
+            <RailGroup>
+              <RailRow label="Credits available" value={formatAmount(available)} strong />
+              <RailRow label="Granted" value={formatAmount(granted)} />
+              <RailRow
+                label={carried < 0 ? "Adjustments" : "Carried over"}
+                value={formatAmount(carried)}
+              />
+              <RailRow label="Topped up" value={formatAmount(toppedUp)} />
+            </RailGroup>
+
+            <RailGroup>
+              <RailRow label="Spent" value={formatAmount(consumed)} strong />
+              <RailRow
+                label="Remaining"
+                value={formatAmount(balance?.currentCredits ?? 0)}
+                tone={(balance?.currentCredits ?? 0) <= 0 ? "warn" : "default"}
+              />
+            </RailGroup>
+
+            <RailGroup>
+              <RailRow
+                label="Settlements"
+                hint="How many times credits were deducted"
+                value={formatAmount(settlementCount)}
+              />
+              <RailRow
+                label="Busiest day"
+                hint={
+                  cycleActivity?.busiest
+                    ? `${formatAmount(Math.round(cycleActivity.busiest.consumed))} credits`
+                    : undefined
+                }
+                value={
+                  cycleActivity?.busiest ? format(cycleActivity.busiest.start, "d MMM") : "—"
+                }
+              />
+            </RailGroup>
+          </aside>
+        </div>
+
+        <div className="border-t border-hairline px-4 pb-3 pt-4">
+          <h2 className="text-[14px] font-semibold leading-tight text-ink">
+            Credits by AI service
+          </h2>
+          <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+            What each service cost, and what it cost per use · last {cycleDaysElapsed} day
+            {cycleDaysElapsed === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        <div className="border-t border-hairline">
+          {isServiceUsageLoading ? (
+            <div className="flex h-[120px] items-center justify-center">
+              <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
+            </div>
+          ) : (
+            <ServiceUsageTable rows={serviceRows} />
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
 
-      <Section>
-        <SectionHeader
-          title="Credits by AI service"
-          description={`What each service cost, and what it cost per use · last ${cycleDaysElapsed} day${cycleDaysElapsed === 1 ? "" : "s"}`}
-        />
-        {isServiceUsageLoading ? (
-          <div className="flex h-[120px] items-center justify-center">
-            <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
-          </div>
-        ) : (
-          <ServiceUsageTable rows={serviceRows} />
-        )}
-      </Section>
+/** Rows that belong to one statement, ruled together and separated from the next group. */
+function RailGroup({ children }: { children: React.ReactNode }) {
+  return <div className="divide-y divide-hairline border-t border-hairline">{children}</div>;
+}
+
+function RailRow({
+  label,
+  value,
+  hint,
+  strong,
+  tone = "default",
+}: {
+  label: string;
+  value: React.ReactNode;
+  hint?: string;
+  strong?: boolean;
+  tone?: "default" | "warn";
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 px-4 py-2.5">
+      <div className="min-w-0">
+        <span className="text-[13px] text-ink-muted">{label}</span>
+        {hint ? <p className="mt-0.5 text-[11px] text-ink-subtle">{hint}</p> : null}
+      </div>
+      <span
+        className={`shrink-0 font-semibold tabular-nums ${strong ? "text-[14px]" : "text-[13px]"} ${
+          tone === "warn" ? "text-destructive" : "text-ink"
+        }`}
+      >
+        {value}
+      </span>
     </div>
   );
 }

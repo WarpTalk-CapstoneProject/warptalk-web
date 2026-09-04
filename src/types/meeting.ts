@@ -50,3 +50,16 @@ export interface MeetingRoomDetailDto {
   title?: string;
   recentMessages?: MeetingMessageDto[];
 }
+
+/**
+ * WT-525. The stand-in seat's LiveKit credentials for an EXTERNAL_BRIDGE room.
+ *
+ * `participantIdentity` comes from the server rather than being spelled here on purpose: the AI
+ * pipeline routes on that exact string, and a client-side copy would be a second definition of
+ * the identity, free to drift from the one the room was seeded with.
+ */
+export interface BridgeTokenDto {
+  token: string;
+  providerRoomName: string;
+  participantIdentity: string;
+}

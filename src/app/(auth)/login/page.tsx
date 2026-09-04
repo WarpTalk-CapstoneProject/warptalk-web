@@ -25,6 +25,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
+import { WorkspaceService } from "@/services/workspace.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
@@ -45,6 +46,21 @@ function getSafeCallbackUrl(value: string | null) {
   )
     return "/workspace";
   return value;
+}
+
+async function processPendingInvitationToken(rawToken?: string | null) {
+  const token =
+    rawToken ??
+    (typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("token")
+      : null);
+  if (!token) return;
+  try {
+    await WorkspaceService.acceptInvitation(token);
+    toast.success("Joined workspace successfully!");
+  } catch {
+    // Proceed to redirect
+  }
 }
 
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
@@ -72,6 +88,8 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         setAccessTokenCookie(accessToken, expiresAt);
 
         toast.success("Google login successful!");
+
+        await processPendingInvitationToken();
 
         const isAdmin = user.roles?.some(
           (r: string) => r.toLowerCase() === "admin",
@@ -183,6 +201,8 @@ function LoginForm() {
 
       toast.success("Login successful!");
 
+      await processPendingInvitationToken();
+
       const isAdmin = user.roles?.some(
         (r: string) => r.toLowerCase() === "admin",
       );
@@ -192,7 +212,20 @@ function LoginForm() {
         router.replace(callbackUrl);
       }
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
+      const error = err as { response?: { data?: { error?: string; code?: string } } };
+
+      // WT-597: an unverified account is not a failed login, it is an unfinished one.
+      //
+      // The server refuses it with ACCOUNT_PENDING and the words "Email not verified", which named
+      // the problem and offered nothing to do about it — and the one endpoint that resends a link
+      // needs a session this account cannot get. Sending them to /verify-email puts the resend
+      // form in front of them instead.
+      if (error?.response?.data?.code === "ACCOUNT_PENDING") {
+        toast.error("Verify your email address to finish signing in.");
+        router.push("/verify-email");
+        return;
+      }
+
       toast.error(
         error?.response?.data?.error || "Login failed. Please try again.",
       );

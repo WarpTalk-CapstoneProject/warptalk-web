@@ -14,7 +14,7 @@ import gsap from "gsap";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel } from "@/lib/meeting/meeting-types";
+import { meetingTypeByLabel, isExternalBridge } from "@/lib/meeting/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -96,6 +96,10 @@ export function CreateRoomDialog() {
   const [requiresApproval, setRequiresApproval] = useState<boolean | null>(null);
   // WT-371: off unless the host says otherwise — see the toggle's comment in OptionsMenu.
   const [participantsCanStartTranslation, setParticipantsCanStartTranslation] = useState(false);
+  // WT-587: on unless the host turns it off. The only option in this dialog whose non-default
+  // value DESTROYS something — no transcript means no summary, no minutes and no knowledge-base
+  // entry — so it starts true and is only put on the wire when somebody changes it.
+  const [saveTranscript, setSaveTranscript] = useState(true);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -193,6 +197,13 @@ export function CreateRoomDialog() {
   // per-meeting decision and a second place to set it was one place too many.
   const effectiveRequiresApproval =
     requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
+
+  // WT-525. The one type whose meeting does not happen on WarpTalk: the call is on Google Meet
+  // and WarpTalk sits beside it, so the room is seeded with exactly two seats — the host, and a
+  // stand-in that carries everyone on the far side. Several controls below mean something
+  // different (or nothing) under it, and the host needs to know that before submitting rather
+  // than after the room exists.
+  const bridgeSelected = isExternalBridge(meetingTypeByLabel(meetingTemplate).value);
 
   const validation = {
     title: title.trim().length > 0,
@@ -315,13 +326,19 @@ export function CreateRoomDialog() {
           // that is what lets the meeting type seed the rest. Echoing the type's own default back
           // at it would work today and quietly pin the value if a type's profile ever changed.
           settings:
-            requiresApproval === null && !participantsCanStartTranslation
+            requiresApproval === null &&
+            !participantsCanStartTranslation &&
+            saveTranscript
               ? undefined
               : {
                   ...(requiresApproval === null ? {} : { requiresApproval }),
                   ...(participantsCanStartTranslation
                     ? { participantsCanStartTranslation: true }
                     : {}),
+                  // WT-587: sent only as `false`. True is the server's own default, and echoing
+                  // it back would pin the value against any future change — the same reasoning
+                  // as requiresApproval above.
+                  ...(saveTranscript ? {} : { saveTranscript: false }),
                 },
         };
 
@@ -445,6 +462,26 @@ export function CreateRoomDialog() {
                 </button>
               </div>
 
+              {/* WT-525: what picking External Meeting actually does. Shown here rather than as a
+                  tooltip in the picker because it changes what the rest of this dialog means —
+                  the seat count is fixed at two, and the languages below stop being "what the
+                  room offers" and become "what you speak" and "what the call speaks". */}
+              {bridgeSelected && (
+                <div className="mx-5 mt-1 rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2">
+                  <p className="text-[12px] leading-relaxed text-ink-muted">
+                    Your call runs on <span className="text-ink font-medium">Google Meet</span>.
+                    WarpTalk sits beside it: this room gets two seats — you, and one stand-in for
+                    everyone on the other side.{" "}
+                    <span className="text-ink">Source</span> is the language you speak;{" "}
+                    <span className="text-ink">target</span> is what the call hears.
+                  </p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-ink-muted/70">
+                    Needs the two virtual audio devices installed, and Meet pointed at them. The
+                    setup check runs when you open the room.
+                  </p>
+                </div>
+              )}
+
               {/* Header / Title Input */}
               <div
                 className={cn(
@@ -526,6 +563,8 @@ export function CreateRoomDialog() {
                   onParticipantsCanStartTranslationChange={
                     setParticipantsCanStartTranslation
                   }
+                  saveTranscript={saveTranscript}
+                  onSaveTranscriptChange={setSaveTranscript}
                   onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>

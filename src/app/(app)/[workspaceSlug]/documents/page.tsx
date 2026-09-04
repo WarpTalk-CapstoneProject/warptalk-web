@@ -67,7 +67,9 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { DocumentActor } from "@/components/documents/document-actor";
+import { findDocumentActor } from "@/lib/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 const uploadSchema = z.object({
   name: z.string().min(2, "Document name must be at least 2 characters"),
@@ -475,17 +477,15 @@ export default function WorkspaceDocumentsPage() {
           <Spinner className="h-7 w-7 animate-spin text-primary" />
         </div>
       ) : filteredDocs.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-3 text-center border border-dashed border-hairline rounded-2xl bg-surface-1/30 p-8">
-          <FileText className="h-10 w-10 text-ink-muted/60" />
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold text-ink">No documents found</p>
-            <p className="text-xs text-ink-muted">
-              {canApproveDocuments
-                ? "Click the 'New' button above to upload reference documents."
-                : "No reference documents have been uploaded to this workspace yet."}
-            </p>
-          </div>
-        </div>
+        <PagePlaceholder
+          kind="documents"
+          title="No documents found"
+          description={
+            canApproveDocuments
+              ? "Use New above to upload a reference document."
+              : "No reference documents have been uploaded to this workspace yet."
+          }
+        />
       ) : viewMode === "list" ? (
         /* List Table View — flat, with no card around it. The border, radius, tinted fill and
            shadow drew a box whose only content was the table, so the page read as a card on a
@@ -513,8 +513,8 @@ export default function WorkspaceDocumentsPage() {
                   doc.uploadedBy === currentUser?.id ||
                   doc.ownerId === currentUser?.id;
                 const canManageDoc = canApproveDocuments || isDocOwner;
-                const uploader = workspaceMembers.find((m) => m.userId === doc.uploadedBy || m.id === doc.uploadedBy);
-                const approver = workspaceMembers.find((m) => m.userId === doc.approvedBy || m.id === doc.approvedBy);
+                const uploader = findDocumentActor(workspaceMembers, doc.uploadedBy);
+                const approver = findDocumentActor(workspaceMembers, doc.approvedBy);
 
                 return (
                   <tr
@@ -760,15 +760,11 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex items-center gap-3 pt-1">
                   <DocumentActor
                     label="Uploader"
-                    member={workspaceMembers.find(
-                      (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
-                    )}
+                    member={findDocumentActor(workspaceMembers, doc.uploadedBy)}
                   />
                   <DocumentActor
                     label="Approver"
-                    member={workspaceMembers.find(
-                      (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
-                    )}
+                    member={findDocumentActor(workspaceMembers, doc.approvedBy)}
                   />
                 </div>
               </CardContent>

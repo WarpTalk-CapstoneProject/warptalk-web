@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Microphone,
   MicrophoneSlash,
   Star,
   UserMinus,
+  UserPlus,
   CheckCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { HandRaiseBadge } from "@/components/rooms/live/hand-raise-badge";
@@ -37,13 +38,15 @@ import type {
   TranslationRoomParticipantDto,
 } from "@/types/translationRoom";
 import { useParticipants } from "@livekit/components-react";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import {
   PRESENCE_LABELS,
   participantPresence,
   type ParticipantPresence,
 } from "@/lib/meeting/room-occupancy";
+import { useWorkspaceMembers } from "@/hooks/use-workspace";
+import { MEETING_MEMBER_PAGE_SIZE } from "@/lib/meeting/participant-identity";
+import { InviteToMeetingDialog } from "./invite-to-meeting-dialog";
 
 export function PeoplePanel({
   roomId,
@@ -73,8 +76,6 @@ export function PeoplePanel({
   const currentUserId = useAuthStore((state) => state.user?.id);
   const lkParticipants = useParticipants();
   const lkParticipantIds = new Set(lkParticipants.map((p) => p.identity));
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   // WT-308: "who is gone" is the same question the badge answers, so it is asked the same
   // way. This used to be a second, private status list; keeping two meant they could
   // disagree, and a roster that hides a status the badge still renders is exactly how the
@@ -86,6 +87,82 @@ export function PeoplePanel({
 
   // One request for the whole roster instead of one per row.
   usePresence(visibleParticipants.map((participant) => participant.userId));
+
+  // WT-537 — admit the whole lobby at once.
+  //
+  // Admitting one at a time is fine for a stray latecomer and unusable for the case this exists
+  // for: a scheduled meeting where everyone arrives in the same minute and the host is left
+  // clicking through a queue while the room waits on them.
+  //
+  // Deliberately N calls to the existing per-participant endpoint rather than a new bulk one.
+  // Admission is not a set operation server-side — each admit writes a participant row, seats
+  // them against the room's capacity, and publishes its own realtime event — so a bulk endpoint
+  // would have to reproduce all of that and decide what "half of them fit" means. Looping here
+  // keeps one definition of admitting somebody, and a capacity refusal lands on the person it
+  // refused rather than failing the whole batch.
+  const waitingParticipants = visibleParticipants.filter(
+    (participant) => participant.status === "waiting",
+  );
+  const admitAll = useAdmitParticipant(roomId);
+  const [admittingAll, setAdmittingAll] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
+
+  // WT-552 — the roster carries no email address.
+  //
+  // `GET /translation-rooms/{id}/participants` returns names, roles and languages and nothing to
+  // match an invitation against, so "this person is already in the room" cannot be answered from
+  // the roster alone. The workspace member list is the same source the meeting already uses to
+  // put a face on a participant (see buildParticipantIdentities), and it is the one that carries
+  // the address. Same page size, so both callers share one cached request.
+  //
+  // A participant with no member row — an external or a bridge guest — simply is not matched, and
+  // re-inviting them falls through to the server's own de-duplication. Under-claiming here is the
+  // safe direction: the alternative is telling a host somebody is present when they are not.
+  const membersQuery = useWorkspaceMembers(
+    isHost && room.workspaceId ? room.workspaceId : undefined,
+    1,
+    MEETING_MEMBER_PAGE_SIZE,
+  );
+  const participantEmails = useMemo(() => {
+    const byUserId = new Map(
+      (membersQuery.data?.items ?? []).map((member) => [member.userId, member.email]),
+    );
+    return visibleParticipants
+      .map((participant) => byUserId.get(participant.userId))
+      .filter((email): email is string => Boolean(email));
+  }, [membersQuery.data, visibleParticipants]);
+
+  async function handleAdmitAll() {
+    setAdmittingAll(true);
+    // Snapshotted before the first await: the roster polls every 3 seconds, so the array this
+    // closes over would otherwise be replaced mid-loop and somebody could be admitted twice or
+    // skipped entirely.
+    const queue = waitingParticipants;
+    let admitted = 0;
+    const failures: string[] = [];
+
+    for (const participant of queue) {
+      try {
+        await admitAll.mutateAsync(participant.id);
+        admitted += 1;
+      } catch (error) {
+        // Kept going rather than aborting. One person failing capacity or having already left
+        // is not a reason to leave the rest of the lobby waiting.
+        failures.push(getErrorMessage(error, participant.displayName));
+      }
+    }
+
+    setAdmittingAll(false);
+    if (admitted > 0) {
+      toast.success(`Admitted ${admitted} ${admitted === 1 ? "person" : "people"}.`);
+    }
+    if (failures.length > 0) {
+      toast.error(
+        `${failures.length} could not be admitted.`,
+        { description: failures[0] },
+      );
+    }
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -102,12 +179,51 @@ export function PeoplePanel({
             Copy Link
           </button>
         </div>
+        {/* WT-552 — host-only, and next to the link rather than behind a menu.
+            The link works for anybody the host can already reach on chat. This is for the person
+            they cannot: it sends a real invitation, which is what puts the meeting in that
+            person's own room list and bell. Room settings refuse to add an invitee once the room
+            leaves SCHEDULED, so before this there was no way to do it at all. */}
+        {isHost ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowInvite(true)}
+            className="mt-1 w-full bg-surface-2 hover:bg-surface-3 text-ink border-border"
+          >
+            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+            Invite people
+          </Button>
+        ) : null}
       </div>
+
+      {isHost ? (
+        <InviteToMeetingDialog
+          open={showInvite}
+          onOpenChange={setShowInvite}
+          roomId={roomId}
+          participantEmails={participantEmails}
+          joinLink={joinLink}
+          onCopyLink={() => onCopyText(joinLink, "Invite link")}
+        />
+      ) : null}
+
+      {isHost && waitingParticipants.length > 1 ? (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2/60 px-3 py-2">
+          <p className="text-[12px] text-ink-muted">
+            <span className="font-medium text-ink">{waitingParticipants.length} people</span> are
+            waiting to join.
+          </p>
+          <Button size="sm" onClick={handleAdmitAll} disabled={admittingAll}>
+            {admittingAll ? "Admitting…" : "Admit all"}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="space-y-1">
         {participantsLoading ? (
           <div className="flex items-center gap-2">
-            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <LumidotSpinner />
             <p className="text-[13px] text-ink-subtle">
               Loading participants...
             </p>

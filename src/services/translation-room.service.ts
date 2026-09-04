@@ -1,6 +1,10 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import {
+  normalizeNoiseReductionMode,
+  type NoiseReductionMode,
+} from "@/lib/meeting/noise-reduction";
 import type {
   CancelSeriesResult,
   CreateRecurringRoomResponse,
@@ -137,6 +141,23 @@ function toPreflight(room: TranslationRoomDto, participantCount = 0): Translatio
   };
 }
 
+/**
+ * What flash mode is actually doing for a room, and why.
+ *
+ * `enabled` used to be the whole answer, and it meant "a per-room override exists and says on".
+ * That is a different question from the one the switch asks — whether the room is streaming —
+ * and the two diverged the moment the deployment default became on: an untouched room read
+ * "off" while streaming, and turning the switch on and off again wrote a real override that
+ * took away the speed it had been wrong about.
+ *
+ * `source` is what lets the panel say WHICH of those it is looking at.
+ */
+export type FlashModeState = {
+  enabled: boolean;
+  /** "room" = a host chose it · "deployment" = following the default · "unknown" = neither is known. */
+  source: "room" | "deployment" | "unknown";
+};
+
 export const translationRoomService = {
   async create(data: CreateTranslationRoomRequest) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.create, toBackendCreateRequest(data));
@@ -199,9 +220,9 @@ export const translationRoomService = {
    * already ran are left alone. Cancelling a SINGLE occurrence is the ordinary
    * `translationRoomService.cancel(roomId)` and does not touch the series.
    */
-  async cancelSeries(seriesId: string) {
+  async cancelSeries(seriesId: string, keepOccurrenceId?: string) {
     const response = await apiClient.post<CancelSeriesResult>(
-      API.translationRoomSeries.cancel(seriesId),
+      API.translationRoomSeries.cancel(seriesId, keepOccurrenceId),
     );
     return response.data;
   },
@@ -274,8 +295,11 @@ export const translationRoomService = {
    * this is how an uninvited teammate asks to join instead of dead-ending on the detail page.
    */
   async joinById(roomId: string, data: JoinTranslationRoomRequest) {
+    // WT-555: no `translationRoomCode` key at all. It used to send "" to satisfy a shared request
+    // type, and the server's by-code validator — which also ran on this route — answered every
+    // shared meeting link with 400 "The TranslationRoomCode field is required." The route names
+    // the room; the server reads the code off it.
     return apiClient.post<BackendJoinResponse>(`/translation-rooms/${roomId}/join`, {
-      translationRoomCode: "",
       displayName: data.displayName.trim(),
       speakLanguage: data.speakLanguage,
       listenLanguage: data.listenLanguage,
@@ -358,6 +382,78 @@ export const translationRoomService = {
    */
   async refreshDubVoice(id: string) {
     return apiClient.post<void>(API.translationRooms.refreshDubVoice(id));
+  },
+
+  /**
+   * WT-B "flash mode" — whether this ROOM streams audio to STT while a speaker is still talking.
+   *
+   * Readable by any participant, so a guest can render the switch where the host left it rather
+   * than guessing. Writing is host-only and answers 403 to anybody else, which the caller must
+   * surface rather than swallow: a switch that silently springs back is worse than one that says
+   * it is not yours to move.
+   */
+  async getFlashMode(id: string): Promise<FlashModeState> {
+    const { data } = await apiClient.get<FlashModeState>(API.translationRooms.flashMode(id));
+    // An older gateway sends only `enabled`. Reading that as "unknown" rather than inventing a
+    // source keeps the copy hedged during a rolling deploy instead of confidently wrong.
+    return { enabled: Boolean(data?.enabled), source: data?.source ?? "unknown" };
+  },
+
+  async setFlashMode(id: string, enabled: boolean): Promise<FlashModeState> {
+    const { data } = await apiClient.put<FlashModeState>(
+      API.translationRooms.flashMode(id),
+      { enabled },
+    );
+    // Always "room" once this succeeds: setting it IS the act of creating an override.
+    return { enabled: Boolean(data?.enabled), source: data?.source ?? "room" };
+  },
+
+  /**
+   * How much the STT provider denoises THIS caller's own microphone in this meeting.
+   *
+   * NOT the noise-suppression toggle in the same menu. That one is Krisp/the browser filtering the
+   * raw microphone, which changes what other people HEAR. This one changes how accurately what you
+   * say is RECOGNISED, and touches nobody else's audio — which is also why, unlike flash mode
+   * above, any participant may set it for themselves without the host.
+   *
+   * Self-service, so there is no 403 branch to think about: the only failure worth surfacing is a
+   * write that did not happen.
+   */
+  async getNoiseReduction(id: string) {
+    const { data } = await apiClient.get<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+    );
+    return normalizeNoiseReductionMode(data?.mode);
+  },
+
+  async setNoiseReduction(id: string, mode: NoiseReductionMode) {
+    const { data } = await apiClient.put<{ mode: NoiseReductionMode }>(
+      API.translationRooms.noiseReduction(id),
+      { mode },
+    );
+    return normalizeNoiseReductionMode(data?.mode);
+  },
+
+  /**
+   * Tell the server what this browser's own noise suppression ended up doing.
+   *
+   * Diagnostics, never a gate: the audio is already published and already being processed one way
+   * or the other by the time this is called, so a failure here must not reach the participant.
+   * The caller is not expected to await it for anything but ordering.
+   */
+  async reportNoiseSuppression(
+    id: string,
+    report: { enabled: boolean; processor: "krisp" | "browser"; reason?: string },
+  ) {
+    try {
+      await apiClient.post<{ recorded: boolean; enabled: boolean }>(
+        API.translationRooms.noiseSuppressionReport(id),
+        report,
+      );
+    } catch {
+      // Swallowed deliberately. Reporting that the diagnostics endpoint is down, in a toast, to a
+      // person whose microphone is working, would be the feature reporting itself as broken.
+    }
   },
 
   async start(id: string) {
@@ -477,6 +573,25 @@ export const translationRoomService = {
 
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
+  },
+
+  /**
+   * WT-552: add somebody to a meeting that is already running.
+   *
+   * POST to the same path the invitation list is read from. Not `updateSettings` — that endpoint
+   * freezes at IN_PROGRESS on purpose, because languages and approval policy must not change
+   * under people already in the room.
+   *
+   * Returns the number actually invited, which can be LOWER than the list submitted: the server
+   * treats re-inviting somebody as a no-op. That count is the truth for the toast — this client
+   * may not have refetched the invitation list.
+   */
+  async inviteParticipants(id: string, emails: string[]) {
+    const { data } = await apiClient.post<{ invited: number }>(
+      API.translationRooms.invitations(id),
+      { emails },
+    );
+    return data;
   },
 
   /**

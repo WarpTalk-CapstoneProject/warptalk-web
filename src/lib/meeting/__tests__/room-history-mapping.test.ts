@@ -319,3 +319,78 @@ test("parsePageParam tolerates junk in the URL", () => {
   assert.equal(parsePageParam("-2"), 1);
   assert.equal(parsePageParam("7"), 7);
 });
+
+// ── a meeting nobody spoke in is not waiting on a summary ────────────────────
+//
+// Reported from production: a room with "Saved · 0 entries" sat on "Generating summary…" with a
+// spinner. Nothing was coming. The AI worker accumulates transcript segments and, on the
+// end-of-meeting marker, returns BEFORE the model when there are no substantive segments — so
+// for a silent meeting no summary is ever published, and the panel promised one for the whole
+// fifteen-minute window before silently switching to "no summary output", which reads as a
+// generator that broke rather than a meeting in which nobody said anything.
+
+test("no transcript means no summary is coming, however recently it ended", () => {
+  assert.equal(
+    resolveSummaryState({
+      artifactStatus: null,
+      hasStructuredContent: false,
+      recentlyEnded: true,
+      hasTranscript: false,
+    }),
+    "empty",
+  );
+});
+
+test("an unloaded transcript is not an empty one", () => {
+  // The trap this guards: `undefined` is what the page reports while the transcript query is
+  // still in flight, and zero segments then means "not fetched", not "nobody spoke". Treating
+  // the two the same would flash "nothing to summarise" at every reader on every load.
+  assert.equal(
+    resolveSummaryState({
+      artifactStatus: null,
+      hasStructuredContent: false,
+      recentlyEnded: true,
+      hasTranscript: undefined,
+    }),
+    "generating",
+  );
+});
+
+test("a transcript that exists still waits for its summary", () => {
+  assert.equal(
+    resolveSummaryState({
+      artifactStatus: null,
+      hasStructuredContent: false,
+      recentlyEnded: true,
+      hasTranscript: true,
+    }),
+    "generating",
+  );
+});
+
+test("a running regeneration outranks an empty transcript", () => {
+  // A rewrite can be asked for at any time and writes a `processing` artifact. While one is
+  // running the meeting genuinely IS generating, whatever the transcript holds — so the
+  // emptiness check sits below the artifact checks, not above them.
+  assert.equal(
+    resolveSummaryState({
+      artifactStatus: "processing",
+      hasStructuredContent: false,
+      hasTranscript: false,
+    }),
+    "generating",
+  );
+});
+
+test("a summary that exists survives an empty transcript", () => {
+  // A correction can empty a transcript after its summary was written. The summary is still
+  // there and still readable.
+  assert.equal(
+    resolveSummaryState({
+      artifactStatus: "ready",
+      hasStructuredContent: true,
+      hasTranscript: false,
+    }),
+    "ready",
+  );
+});

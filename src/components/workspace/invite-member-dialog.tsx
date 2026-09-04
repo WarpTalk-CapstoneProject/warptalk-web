@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useInviteWorkspaceMember, useInvitationPolicy } from "@/hooks/use-workspace";
+import { useAuthStore } from "@/stores/auth-store";
 
 /**
  * The one control for both role and access type.
@@ -117,10 +118,17 @@ export function InviteMemberDialog({
     setDelivered(true);
   };
 
+  const currentUser = useAuthStore((s) => s.user);
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmed = email.trim();
     if (!workspaceId || !trimmed) return;
+
+    if (currentUser?.email && trimmed.toLowerCase() === currentUser.email.toLowerCase()) {
+      toast.error("You cannot invite yourself to the workspace.");
+      return;
+    }
 
     try {
       const response = await inviteMutation.mutateAsync({
@@ -135,7 +143,7 @@ export function InviteMemberDialog({
       const token = response?.rawToken;
 
       if (token) {
-        setLink(`${window.location.origin}/invitations/${token}`);
+        setLink(`${window.location.origin}/login?token=${token}`);
         setLinkEmail(trimmed);
         setDelivered(wasDelivered);
       } else {

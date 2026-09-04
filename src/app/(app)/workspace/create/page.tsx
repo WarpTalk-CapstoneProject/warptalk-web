@@ -16,6 +16,7 @@ import {
 } from "@/lib/billing/checkout-intent";
 import {
   checkoutTotal,
+  checkoutCurrency,
   readBillingInterval,
   selectablePlans,
 } from "@/lib/billing/plan-pricing";
@@ -61,6 +62,18 @@ type CreateWorkspaceFormData = z.infer<typeof createWorkspaceSchema>;
  *   what they mean elsewhere; they just are not decided by the email domain.
  */
 type MembershipPolicy = "domain-verified" | "manual";
+
+type AccessChoice = "Member" | "Admin" | "External";
+
+function toRequestFields(choice: AccessChoice): {
+  roleName: string;
+  membershipType: "Internal" | "External";
+} {
+  return {
+    roleName: choice === "Admin" ? "Admin" : "Member",
+    membershipType: choice === "External" ? "External" : "Internal",
+  };
+}
 
 type ServerErrorKind = "account" | "domain" | "internal-home" | "form";
 
@@ -117,6 +130,36 @@ export default function CreateWorkspaceDemoPage() {
   // Additional domains claimed by the Owner during creation
   const [extraDomains, setExtraDomains] = useState<string[]>([]);
   const [newDomainInput, setNewDomainInput] = useState("");
+
+  // Initial workspace invitation list
+  const [initialInvites, setInitialInvites] = useState<{ email: string; access: AccessChoice }[]>([]);
+  const [inviteEmailInput, setInviteEmailInput] = useState("");
+  const [inviteAccessChoice, setInviteAccessChoice] = useState<AccessChoice>("Member");
+
+  function handleAddInitialInvite() {
+    const trimmed = inviteEmailInput.trim().toLowerCase();
+    if (!trimmed) return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+
+    if (user?.email && trimmed === user.email.toLowerCase()) {
+      toast.error("You cannot invite yourself to the workspace.");
+      return;
+    }
+
+    if (initialInvites.some((inv) => inv.email.toLowerCase() === trimmed)) {
+      toast.error("Email is already in the invitation list.");
+      return;
+    }
+
+    setInitialInvites((prev) => [...prev, { email: trimmed, access: inviteAccessChoice }]);
+    setInviteEmailInput("");
+    toast.success(`Added ${trimmed} to initial invitations.`);
+  }
 
   const allVerifiedDomains = useMemo(() => {
     if (!wantsVerifiedDomain || !emailDomain) return [];
@@ -229,6 +272,11 @@ export default function CreateWorkspaceDemoPage() {
     setServerError(null);
 
     try {
+      const initialInvitations = initialInvites.map((inv) => ({
+        email: inv.email,
+        ...toRequestFields(inv.access),
+      }));
+
       const workspace = await createWorkspace.mutateAsync({
         name: values.name.trim(),
         logoUrl: values.logoUrl?.trim() || null,
@@ -236,6 +284,7 @@ export default function CreateWorkspaceDemoPage() {
           ? { verifiedDomains: allVerifiedDomains }
           : {}),
         requireVerifiedDomainForInternal: wantsVerifiedDomain,
+        ...(initialInvitations.length > 0 ? { initialInvitations } : {}),
       });
 
       const selection = await selectWorkspace.mutateAsync(workspace.id);
@@ -260,7 +309,8 @@ export default function CreateWorkspaceDemoPage() {
        * gap where that used to happen.
        *
        * The amount comes from the shared pricing rule, so it is the same figure quoted on the
-       * plan grid one screen ago. `currency: "vnd"` matches every other checkout in this app.
+       * plan grid one screen ago, and its currency comes from the same plan (WT-518) rather
+       * than a literal beside it — a USD plan quoted in USD must not be charged in VND.
        */
       if (!chosenPlan) {
         // The plan list has not resolved, or the slug names a plan that is no longer sold. The
@@ -276,7 +326,7 @@ export default function CreateWorkspaceDemoPage() {
           userId: user!.id,
           workspaceId: workspace.id,
           amount: checkoutTotal(chosenPlan, billingInterval),
-          currency: "vnd",
+          currency: checkoutCurrency(chosenPlan),
           paymentType: "Subscription",
           planSlug: chosenPlan.slug,
           billingCycle: billingInterval,
@@ -511,6 +561,77 @@ export default function CreateWorkspaceDemoPage() {
               />
             </div>
           </fieldset>
+
+          {/* Initial Member Invitations Section */}
+          <div className="flex flex-col gap-2.5 rounded-md border border-hairline bg-surface-2/40 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-semibold text-foreground">
+                Invite initial team members (Optional)
+              </span>
+              <span className="text-[10px] text-ink-muted">
+                3-Choice Access
+              </span>
+            </div>
+
+            {/* Badge list of added invitees */}
+            {initialInvites.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {initialInvites.map((inv) => (
+                  <div
+                    key={inv.email}
+                    className="flex items-center gap-1.5 bg-surface-1 border border-hairline px-2 py-1 rounded text-[11px]"
+                  >
+                    <span className="font-mono text-ink">{inv.email}</span>
+                    <span className="text-[9px] uppercase tracking-wider bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded font-sans">
+                      {inv.access}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInitialInvites((prev) => prev.filter((item) => item.email !== inv.email))}
+                      className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer"
+                      title={`Remove ${inv.email}`}
+                    >
+                      <Trash size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Input & 3-way select for adding invitees */}
+            <div className="flex gap-2 items-center">
+              <Input
+                type="email"
+                placeholder="colleague@company.com"
+                value={inviteEmailInput}
+                onChange={(e) => setInviteEmailInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddInitialInvite();
+                  }
+                }}
+                className="h-8 text-xs bg-surface-1 border-border flex-1"
+              />
+              <select
+                value={inviteAccessChoice}
+                onChange={(e) => setInviteAccessChoice(e.target.value as AccessChoice)}
+                className="h-8 rounded-md border border-border bg-surface-1 px-2 text-xs text-ink focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              >
+                <option value="Member">Member</option>
+                <option value="Admin">Admin</option>
+                <option value="External">External</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleAddInitialInvite}
+                disabled={!inviteEmailInput.trim()}
+                className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink disabled:opacity-50"
+              >
+                <Plus size={12} /> Add
+              </button>
+            </div>
+          </div>
 
           {/* Submit Button */}
           <Button

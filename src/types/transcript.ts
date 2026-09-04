@@ -31,6 +31,9 @@ export interface TranscriptDto {
   createdAt: string;
   updatedAt: string;
   finalizedAt?: string;
+  /** WT-473: the UTC instant startTimeMs values are measured from. Absent means the
+   *  transcript CANNOT be aligned to a recording — never substitute createdAt. */
+  timelineAnchorAt?: string | null;
 }
 
 export interface TranscriptSegmentDto {
@@ -43,6 +46,10 @@ export interface TranscriptSegmentDto {
   startTimeMs: number;
   endTimeMs: number;
   sequenceOrder: number;
+  /** A human has corrected this line. Also what tells the summary it is behind the record. */
+  isCorrected?: boolean;
+  /** When the row last changed — moved by a correction. */
+  updatedAt?: string | null;
 }
 
 export interface TranscriptTranslationDto {
@@ -54,6 +61,25 @@ export interface TranscriptTranslationDto {
   confidence?: number;
   isRetranslated: boolean;
   latencyMs?: number;
+}
+
+/**
+ * How much of a transcript can be read in one language.
+ *
+ * The live pipeline only translates into whatever target was selected at that moment, so a
+ * meeting that switched languages half way through has a different subset covered for each of
+ * them, and one where translation was never started has none. `missing` is the work a backfill
+ * would do; `status` says whether one is already doing it.
+ */
+export interface TranscriptLanguageCoverage {
+  targetLanguage: string;
+  /** Real lines only — control markers and system notices are not part of the meeting. */
+  totalSegments: number;
+  /** Lines already spoken in this language; their own words are the answer. */
+  spokenInTarget: number;
+  translated: number;
+  missing: number;
+  status: "idle" | "running" | "complete" | "failed";
 }
 
 export interface TranscriptExportDto {
@@ -92,5 +118,4 @@ export interface CreateCorrectionRequest {
   originalText: string;
   correctedText: string;
   correctionType: "stt" | "translation" | "speaker" | "timing";
-  triggeredRetranslation?: boolean;
 }

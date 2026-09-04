@@ -2,12 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  captionTextForReader,
+  pendingCorrections,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
   confidencePercent,
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
   getLiveCaptionText,
+  groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupTranscriptSegments,
   isTranscriptControlMarker,
@@ -214,7 +217,15 @@ function savedSegment(text: string, sequenceOrder: number, speakerName = "Demo H
 }
 
 test("recognises a control marker, whatever the marker is called", () => {
-  for (const marker of ["__MEETING_END__", "  __MEETING_END__  ", "__TRANSLATION_STARTED__"]) {
+  // "__MEETING_END__a" is a real row in production: 1 corrupted sentinel among 156 clean ones.
+  // With the old `$` anchor it rendered as a line of dialogue attributed to "System", and it
+  // would now also put "system" in the transcript's language picker.
+  for (const marker of [
+    "__MEETING_END__",
+    "  __MEETING_END__  ",
+    "__TRANSLATION_STARTED__",
+    "__MEETING_END__a",
+  ]) {
     assert.equal(isTranscriptControlMarker(marker), true, marker);
   }
 });
@@ -422,4 +433,207 @@ test("one speaker's continuous sentence stays one bubble across several language
   ]);
 
   assert.equal(utterances.length, 1);
+});
+
+function turnLine(
+  id: string,
+  speaker: string,
+  startTimeMs: number,
+  endTimeMs = startTimeMs + 1_000,
+) {
+  return { id, speakerName: speaker, speakerParticipantId: speaker, startTimeMs, endTimeMs };
+}
+
+test("a speaker turn ends when somebody else speaks", () => {
+  const turns = groupIntoSpeakerTurns([
+    turnLine("s1", "Tuan", 0),
+    turnLine("s2", "Tuan", 2_000),
+    turnLine("s3", "Ky", 4_000),
+  ]);
+
+  assert.deepEqual(turns.map((turn) => turn.speakerName), ["Tuan", "Ky"]);
+  assert.deepEqual(turns[0].lines.map((line) => line.id), ["s1", "s2"]);
+  assert.equal(turns[0].key, "s1");
+  assert.equal(turns[0].startTimeMs, 0);
+});
+
+test("a long silence starts a new turn even for the same speaker", () => {
+  // Otherwise a 40-minute presentation is one dot on a rail whose whole job is to show the
+  // shape of the meeting.
+  const turns = groupIntoSpeakerTurns([
+    turnLine("s1", "Tuan", 0),
+    turnLine("s2", "Tuan", 90_000),
+  ]);
+
+  assert.equal(turns.length, 2);
+});
+
+test("a reconnect does not become a turn boundary", () => {
+  // startTimeMs is an offset into the audio ingress track and resets when that track
+  // reconnects, so the gap between two consecutive lines can be negative. That is a dropped
+  // connection, not thirty seconds of silence.
+  const turns = groupIntoSpeakerTurns([
+    turnLine("s1", "Tuan", 600_000),
+    turnLine("s2", "Tuan", 0),
+  ]);
+
+  assert.equal(turns.length, 1);
+});
+
+test("a speaker with no participant id is still one speaker", () => {
+  const turns = groupIntoSpeakerTurns([
+    { id: "s1", speakerName: "Tuan", speakerParticipantId: null, startTimeMs: 0, endTimeMs: 1_000 },
+    { id: "s2", speakerName: "Tuan", speakerParticipantId: null, startTimeMs: 2_000, endTimeMs: 3_000 },
+  ]);
+
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].speakerId, null);
+});
+
+test("a line with no speaker name at all is attributed to nobody, not to blank", () => {
+  const turns = groupIntoSpeakerTurns([
+    { id: "s1", speakerName: null, speakerParticipantId: null, startTimeMs: 0, endTimeMs: 1_000 },
+  ]);
+
+  assert.equal(turns[0].speakerName, "Unknown speaker");
+});
+
+// ── the caption lane's own language rule ────────────────────────────────────────────────────
+//
+// Reversed on 2026-08-20 by the product owner. The lane rendered originalText unconditionally,
+// so a reader listening in English watched Vietnamese captions scroll past while their English
+// sat one tab away in the transcript panel.
+//
+// The subtle half is that resolveSegmentTranslation returns null for two OPPOSITE situations,
+// and the lane has to tell them apart: "there was nothing to translate" must still be
+// captioned, "the translation has not arrived yet" must not.
+
+test("a reader sees the caption in their own language, not the speaker's", () => {
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en"), "Hello");
+});
+
+test("a speaker already in the reader's language is captioned, not held back", () => {
+  // THE CASE THAT WOULD EMPTY THE LANE. No translation is ever produced for a matched pair —
+  // the pipeline drops it as same_language_targets_dropped — so requiring one would leave a
+  // room where everybody shares a language with no captions at all, and would stop anyone ever
+  // seeing their own words.
+  const line = segment({
+    originalLanguage: "en",
+    originalText: "Hello everyone",
+    translations: {},
+  });
+
+  assert.equal(captionTextForReader(line, "en"), "Hello everyone");
+  assert.equal(captionTextForReader(line, "en-US"), "Hello everyone");
+});
+
+test("a line whose translation has not arrived yet is held rather than shown in the wrong language", () => {
+  // The transcript segment lands before its translation does. Showing the original in the gap is
+  // the defect being fixed, not a smaller version of it: the line would go up in the wrong
+  // language and then change under the reader.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en"), null);
+});
+
+test("somebody else's translation is never shown as this reader's caption", () => {
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { ja: "こんにちは" },
+  });
+
+  assert.equal(captionTextForReader(line, "en"), null);
+});
+
+test("before Start Translation the caption is what was said, not an empty lane", () => {
+  // Transcription does not wait for translation: livekit_ingress_worker joins on the first
+  // published microphone and translation_worker is the stage gated behind Start Translation
+  // (`translation_skipped_not_started`). So for the whole pre-Start half of a meeting there are
+  // segments and there will never be a translation of them. Holding those lines emptied the lane
+  // completely — the same class of failure as WT-387, one layer up.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Xin chào");
+  // ...and the hold comes straight back once translation is running.
+  assert.equal(captionTextForReader(line, "en", true), null);
+});
+
+test("a translation already in hand is shown whether or not translation is still running", () => {
+  // Stop Translation does not retroactively unsay what was already translated.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Hello");
+});
+
+test("a reader with no resolved language yet sees the original rather than an empty lane", () => {
+  // The first moments of a cold join, before the participant row arrives. A blank caption
+  // surface reads as broken, so it is never the answer to "not resolved yet".
+  const line = segment({ originalLanguage: "vi", originalText: "Xin chào", translations: {} });
+
+  assert.equal(captionTextForReader(line, null), "Xin chào");
+  assert.equal(captionTextForReader(line, ""), "Xin chào");
+});
+
+// ── WT-589: which batch edits are actually corrections ──────────────────────────────────────
+//
+// Every survivor of this filter becomes an immutable transcript_corrections row AND a
+// re-translation of that line into every target language, so a false positive is not a wasted
+// request — it is a revision that changed nothing, multiplied by the length of the meeting.
+
+const line = (id: string, originalText: string) => ({ id, originalText });
+
+test("a line nobody touched is not a correction", () => {
+  const segments = [line("a", "Xin chào"), line("b", "Cảm ơn")];
+
+  assert.deepEqual(pendingCorrections(segments, {}), []);
+});
+
+test("a draft identical to what is stored is not a correction", () => {
+  // Tabbing through a transcript opens every field. Without this, reviewing a meeting and
+  // changing nothing would file a revision for every line in it.
+  const segments = [line("a", "Xin chào")];
+
+  assert.deepEqual(pendingCorrections(segments, { a: "Xin chào" }), []);
+  // ...and whitespace is what a caret leaves behind, not an edit.
+  assert.deepEqual(pendingCorrections(segments, { a: "  Xin chào  " }), []);
+});
+
+test("an emptied line is left alone rather than blanked", () => {
+  // There is no delete on this path. An empty draft is somebody mid-retype or an accidental
+  // clear; writing a blank sentence over the stored one is the wrong answer to both.
+  const segments = [line("a", "Xin chào")];
+
+  assert.deepEqual(pendingCorrections(segments, { a: "" }), []);
+  assert.deepEqual(pendingCorrections(segments, { a: "   " }), []);
+});
+
+test("only the changed lines are posted, and in transcript order", () => {
+  const segments = [line("a", "Xin chào"), line("b", "Cảm ơn"), line("c", "Tạm biệt")];
+
+  const pending = pendingCorrections(segments, { a: "Xin chào bạn", c: "Tạm biệt nhé" });
+
+  assert.deepEqual(pending.map((segment) => segment.id), ["a", "c"]);
 });

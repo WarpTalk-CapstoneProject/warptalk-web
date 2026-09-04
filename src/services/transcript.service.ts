@@ -8,6 +8,7 @@ import type {
   ProcessAudioChunkRequest,
   TranscriptDto,
   TranscriptExportDto,
+  TranscriptLanguageCoverage,
   TranscriptSegmentDto,
   TranscriptTranslationDto,
 } from "@/types/transcript";
@@ -32,6 +33,26 @@ export const transcriptService = {
 
   translations(id: string, params?: { skip?: number; take?: number }) {
     return apiClient.get<PagedResult<TranscriptTranslationDto>>(API.transcripts.translations(id), { params });
+  },
+
+  /**
+   * How much of this transcript is readable in one language, and whether a backfill of the rest
+   * is already running. Cheap enough to poll — the counts ARE the progress.
+   */
+  translationCoverage(id: string, targetLanguage: string) {
+    return apiClient.get<TranscriptLanguageCoverage>(API.transcripts.translationCoverage(id), {
+      params: { targetLanguage },
+    });
+  },
+
+  /**
+   * Translate the lines that have no version in this language. Answers 202 with the coverage as
+   * it stands; the work lands asynchronously, so follow it with translationCoverage.
+   */
+  backfillTranslations(id: string, targetLanguage: string) {
+    return apiClient.post<TranscriptLanguageCoverage>(API.transcripts.translationBackfill(id), {
+      targetLanguage,
+    });
   },
 
   createExport(id: string, data: CreateTranscriptExportRequest) {

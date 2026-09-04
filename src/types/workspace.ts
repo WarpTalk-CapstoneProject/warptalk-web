@@ -10,11 +10,18 @@ export interface WorkspaceDto {
   defaultLanguage?: string;
 }
 
+export interface InitialWorkspaceInvitation {
+  email: string;
+  roleName: string;
+  membershipType: string;
+}
+
 export interface CreateWorkspaceRequest {
   name: string;
   logoUrl?: string | null;
   verifiedDomains?: string[];
   requireVerifiedDomainForInternal?: boolean;
+  initialInvitations?: InitialWorkspaceInvitation[];
 }
 
 export interface VerifiedDomainDto {
@@ -52,6 +59,18 @@ export interface WorkspaceSettingsDto {
   maxActiveRoomsCeiling?: number | null;
   /** Where the ceiling came from — "plan:enterprise", "platform_default", … */
   maxActiveRoomsCeilingSource?: string | null;
+  /**
+   * How many target languages this workspace's plan permits IN ONE MEETING. WT-500.
+   *
+   * Not a cap on `allowedTargetLanguages`: that list is what a meeting may choose FROM, this is how
+   * many it may choose AT ONCE. Meeting creation enforces it, and it used to be invisible until it
+   * did — an Owner enabled six languages here and met the refusal somewhere else entirely.
+   *
+   * Absent when no plan quota is in force (cold start, or no live subscription).
+   */
+  maxLanguagesCeiling?: number | null;
+  /** Where the language ceiling came from. */
+  maxLanguagesCeilingSource?: string | null;
   artifactRetentionDays: number;
   invitationExpiryDays: number;
   verifiedDomains: string[];

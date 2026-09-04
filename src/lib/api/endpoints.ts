@@ -4,6 +4,8 @@
  */
 export const API = {
   auth: {
+    /** Upload/replace the signed-in user's avatar (multipart). */
+    avatar: "/auth/profile/avatar",
     register: "/auth/register",
     registerInvited: "/auth/register-invited",
     login: "/auth/login",
@@ -13,6 +15,14 @@ export const API = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
+    /**
+     * WT-597: a new verification link, asked for by address rather than by session.
+     *
+     * `/auth/resend-verification` is `[Authorize]`, and a self-registered account has no session
+     * until it is verified — so the only resend the product had was unreachable by the people who
+     * needed it. Answers 204 for any address, so it says nothing about who has an account.
+     */
+    resendVerification: "/auth/resend-verification-request",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",
@@ -93,6 +103,18 @@ export const API = {
     // there; this only tells the room to go and re-read it, so the change reaches the AI
     // pipeline without waiting for the next join or restart to trigger a publish.
     refreshDubVoice: (id: string) => `/translation-rooms/${id}/audio-routes/dub-voice/refresh`,
+    // WT-B "flash mode": stream audio to STT while a speaker is still talking. A ROOM setting —
+    // GET is open to any participant so a guest renders the switch in the host's position, PUT
+    // is host-only and answers 403 to anyone else.
+    flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
+    noiseReduction: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-reduction`,
+    // NOT a setting — the browser telling the server what its OWN denoiser ended up doing. Krisp
+    // runs entirely client-side and fails silently (livekit-client never awaits the entitlement
+    // answer), so without this the only record of "it is not running" is a console.error in one
+    // participant's tab.
+    noiseSuppressionReport: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-suppression/report`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
@@ -101,7 +123,12 @@ export const API = {
   translationRoomSeries: {
     get: (id: string) => `/translation-room-series/${id}`,
     update: (id: string) => `/translation-room-series/${id}`,
-    cancel: (id: string) => `/translation-room-series/${id}/cancel`,
+    cancel: (id: string, keepOccurrenceId?: string) =>
+      // WT-548: `keep` names the occurrence the host is looking at, which the server
+      // leaves scheduled. Without it, stopping the schedule cancels that meeting too.
+      keepOccurrenceId
+        ? `/translation-room-series/${id}/cancel?keep=${encodeURIComponent(keepOccurrenceId)}`
+        : `/translation-room-series/${id}/cancel`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
@@ -109,12 +136,32 @@ export const API = {
     regenerateSummary: (roomId: string) =>
       `/room-artifacts/rooms/${roomId}/summary/regenerate`,
   },
+  // Biên bản họp. Its own group rather than an artifact route: minutes are not an output a job
+  // produced, they are a record with a lifecycle and a signature.
+  minutes: {
+    byRoom: (roomId: string) => `/rooms/${roomId}/minutes`,
+    draft: (roomId: string) => `/rooms/${roomId}/minutes/draft`,
+    update: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}`,
+    sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
+    approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
+    revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
+    exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+  },
+  // Work a meeting produced. Readable where the meeting is; closeable by the person it was
+  // given to, or the host.
+  actionItems: {
+    forRoom: (roomId: string) => `/rooms/${roomId}/action-items`,
+    mine: (workspaceId: string) => `/workspaces/${workspaceId}/action-items/mine`,
+    status: (itemId: string) => `/action-items/${itemId}/status`,
+  },
   transcripts: {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
+    translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
+    translationBackfill: (id: string) => `/transcripts/${id}/translations/backfill`,
     exports: (id: string) => `/transcripts/${id}/exports`,
     exportDownload: (id: string, exportId: string) => `/transcripts/${id}/exports/${exportId}/download`,
     correctSegment: (id: string, segmentId: string) => `/transcripts/${id}/segments/${segmentId}/correct`,
@@ -131,6 +178,10 @@ export const API = {
   },
   meetings: {
     join: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/join`,
+
+    /** WT-525: publish-only token for the EXTERNAL_BRIDGE stand-in seat. Host-only, bridge-rooms-only. */
+
+    bridgeToken: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/bridge-token`,
     triggerAi: (translationRoomId: string) => `/meetings/rooms/${translationRoomId}/trigger-ai`,
     chatList: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
     chatSend: (roomId: string) => `/meetings/rooms/${roomId}/chat`,
@@ -329,6 +380,9 @@ export const API = {
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
+    // WT-560: the portal addresses a workspace by its own slug, so the admin's address bar
+    // names the workspace instead of carrying its primary key.
+    detailBySlug: (slug: string) => `/admin/workspaces/by-slug/${encodeURIComponent(slug)}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
     delete: (id: string) => `/admin/workspaces/${id}/delete`,
