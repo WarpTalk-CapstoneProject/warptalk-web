@@ -3,7 +3,6 @@
 import {
   Fragment,
   type ElementType,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -634,28 +633,6 @@ function DayOverflowPopover({
 }) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-
-  // Base UI dismisses on outside press by itself — except it does not here. Verified against an
-  // untouched `<Popover>` from components/ui on this same page: a trusted click anywhere outside
-  // leaves the panel open, on @base-ui/react 1.3.0 with React 19.2. Escape and the close button
-  // both work, so the popup is not stuck; only the outside-press path is. Rather than patch the
-  // shared primitive under every other caller, this closes the day popover the plain way. If the
-  // library's own dismissal starts working again, this simply sets `open` to false twice.
-  useEffect(() => {
-    if (!open) return;
-
-    function onPointerDownOutside(event: PointerEvent) {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      // The trigger toggles itself; swallowing its press here would fight that.
-      if (triggerRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest('[data-slot="popover-content"]')) return;
-      setOpen(false);
-    }
-
-    document.addEventListener("pointerdown", onPointerDownOutside, true);
-    return () => document.removeEventListener("pointerdown", onPointerDownOutside, true);
-  }, [open]);
 
   const heading = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     weekday: "long",
