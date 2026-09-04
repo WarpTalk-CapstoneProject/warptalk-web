@@ -3,7 +3,10 @@ import type { RetentionState } from "@/lib/meeting/room-history-mapping";
 export type { RetentionState };
 
 import type { TranscriptDto } from "@/types/transcript";
-import type { TranslationRoomStatus } from "@/types/translationRoom";
+import type {
+  TranslationRoomParticipantDto,
+  TranslationRoomStatus,
+} from "@/types/translationRoom";
 import type { MeetingSummaryActionItem, MeetingSummarySection } from "@/types/meetingSummary";
 
 export type RoomHistoryLoadState = "ready" | "loading" | "empty" | "permission_denied" | "error";
@@ -28,6 +31,21 @@ export interface RoomHistoryParticipant {
   role: "host" | "co_host" | "participant" | "observer";
   speakLanguage: string;
   listenLanguage: string;
+
+  /**
+   * WT-538 — the ONLY evidence on this row of whether the person actually turned up.
+   *
+   * `joinedAt` below is not that evidence and never was: the backend stamps `JoinedAt = now` when
+   * it writes the row, INVITED rows included, so that readers do not have to handle a null. Its
+   * own comment says so — "it is not evidence of attendance while the status says INVITED". Anyone
+   * inferring attendance from a timestamp being present gets the wrong answer on every invitee who
+   * never showed, and gets it silently.
+   *
+   * Optional because a caller may build this row from a payload that carries no roster status.
+   * Absent means UNKNOWN, never "did not attend" — see `resolveMeetingTimeState`.
+   */
+  status?: TranslationRoomParticipantDto["status"];
+
   joinedAt?: string;
   leftAt?: string;
 }
