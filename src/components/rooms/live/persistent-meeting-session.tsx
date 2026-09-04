@@ -92,6 +92,7 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 // Import Refactored Components
 import {
   MeetingExitControl,
+  MeetingEphemeralBadge,
   MeetingStageTimer,
 } from "@/components/rooms/live/meeting-top-bar";
 import {
@@ -153,6 +154,7 @@ import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
+import { translationRoomService } from "@/services/translation-room.service";
 import { getErrorMessage } from "@/lib/api/errors";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
@@ -372,8 +374,7 @@ export function PersistentMeetingSession({
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
 
-  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] =
-    useState(false);
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   useEffect(() => {
@@ -409,6 +410,31 @@ export function PersistentMeetingSession({
    * user told to reload will reload, repeatedly, and report the feature as broken. Which is the
    * report we got.
    */
+  /**
+   * WHAT THE DENOISER ACTUALLY DID, sent where somebody can read it later.
+   *
+   * Krisp runs in this browser and nowhere else, and it fails silently — enabling it asks the
+   * LiveKit project whether it is entitled, and livekit-client never awaits the answer. Until this
+   * existed the only trace was a toast and a console.error in one participant's tab, so "is noise
+   * suppression working in production" could not be answered from outside a meeting.
+   *
+   * DEDUPED, because the effect behind it re-runs on every microphone track change and muting
+   * republishes the track. Without this a fidgety participant writes the same line a dozen times
+   * and the log stops being countable — which is the one thing it is for.
+   */
+  const reportedSuppressionRef = useRef<string | null>(null);
+  const handleNoiseSuppressionOutcome = useCallback(
+    (outcome: { enabled: boolean; processor: "krisp" | "browser"; reason?: string }) => {
+      const signature = `${outcome.enabled}:${outcome.processor}:${outcome.reason ?? ""}`;
+      if (reportedSuppressionRef.current === signature) return;
+      reportedSuppressionRef.current = signature;
+      // Not awaited, and the service swallows its own failures. This is an observation about audio
+      // that is already flowing; nothing in the meeting may wait on it or be broken by it.
+      void translationRoomService.reportNoiseSuppression(roomId, outcome);
+    },
+    [roomId],
+  );
+
   const handleNoiseSuppressionError = useCallback((error: unknown) => {
     setNoiseSuppressionEnabled(false);
     const failure = describeNoiseSuppressionFailure(error);
@@ -2815,6 +2841,7 @@ export function PersistentMeetingSession({
           noiseSuppressionEnabled={noiseSuppressionEnabled}
           backgroundBlurEnabled={backgroundBlurEnabled}
           onNoiseSuppressionError={handleNoiseSuppressionError}
+          onNoiseSuppressionOutcome={handleNoiseSuppressionOutcome}
           onBackgroundBlurError={handleBackgroundBlurError}
         />
 
@@ -2892,6 +2919,12 @@ export function PersistentMeetingSession({
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
                   // when there is one), so they follow the meeting being live, not translation.
                   enabled={meetingLive && subtitlesEnabled}
+                  // The lane renders THIS reader's language, not the speaker's. Without it the
+                  // dock shows whatever language was spoken, which is what it did.
+                  readerLanguage={targetLanguage}
+                  // ...but only once there IS another language. Before Start Translation the
+                  // captions are the transcript and nothing else.
+                  translationActive={translationStarted}
                   // 360x220 has no room for a speaker column and three lines of history. The
                   // newest sentence, and nothing else.
                   variant="compact"
@@ -3000,6 +3033,11 @@ export function PersistentMeetingSession({
                 createdAt={room.createdAt}
                 endedAt={room.endedAt}
               />
+              {/* WT-587: whoever booked this room chose whether it leaves a record; the people
+                  in it did not, and had no way to find out. */}
+              <MeetingEphemeralBadge
+                saveTranscript={room.settings?.saveTranscript}
+              />
               {/* The minimise button sat here. Removed on the owner's call — the floating
                   window still appears on its own when you navigate away from the room, which
                   is how it worked before WT-246 added a button for it. */}
@@ -3048,6 +3086,11 @@ export function PersistentMeetingSession({
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
                   // when there is one), so they follow the meeting being live, not translation.
                   enabled={meetingLive && subtitlesEnabled}
+                  // The lane renders THIS reader's language, not the speaker's.
+                  readerLanguage={targetLanguage}
+                  // ...but only once there IS another language. Before Start Translation the
+                  // captions are the transcript and nothing else.
+                  translationActive={translationStarted}
                 />
               </div>
             ) : null}
@@ -3075,6 +3118,10 @@ export function PersistentMeetingSession({
                     availableListenLanguages={availableListenLanguages}
                     speakLanguage={sourceLanguage}
                     availableSpeakLanguages={availableListenLanguages}
+                    // WT-497: the policy itself, not only the room list it already narrowed.
+                    // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
+                    // exactly what availableListenLanguages excluded.
+                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}

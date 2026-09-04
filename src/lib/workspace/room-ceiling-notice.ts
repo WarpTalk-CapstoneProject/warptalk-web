@@ -71,3 +71,60 @@ export function describeRoomCeiling(input: {
   // set it — which is not something to attribute to a plan.
   return { message: `This workspace is limited to ${ceiling} concurrent rooms${tail}` };
 }
+
+/**
+ * What to tell an Owner about their plan's per-meeting language limit. WT-500.
+ *
+ * Lives beside describeRoomCeiling because the two share the provenance vocabulary — `plan:<slug>`
+ * and `platform_default` mean the same things here, and an Owner should not meet two different
+ * explanations of the same three sources.
+ *
+ * THE SENTENCE IS DIFFERENT, THOUGH, AND DELIBERATELY SO.
+ *   The room ceiling overrides the setting beside it: a bigger number in the box does nothing.
+ *   This one does not. Allowed Target Translation Languages is the list a meeting may choose FROM;
+ *   `max_languages` is how many it may choose AT ONCE. Permitting six languages and running
+ *   three-language meetings is a coherent setup, so this must not tell an Owner their list is
+ *   being ignored — it is not.
+ *
+ *   What it must do is make a quota visible that previously fired only at the point of creating a
+ *   meeting, with nothing on this screen to connect the refusal to. That was the whole report.
+ */
+export function describeLanguageCeiling(input: {
+  /** From `maxLanguagesCeiling` — null when no plan quota is in force. */
+  ceiling: number | null | undefined;
+  /** How many languages the workspace currently permits. */
+  allowedCount: number | null | undefined;
+  source?: string | null;
+}): RoomCeilingNotice {
+  const { ceiling, allowedCount, source } = input;
+
+  // Silent unless the allowlist is wider than a single meeting may use. Permitting exactly as
+  // many as the plan allows, or fewer, needs no explanation.
+  if (
+    ceiling === null
+    || ceiling === undefined
+    || allowedCount === null
+    || allowedCount === undefined
+    || ceiling <= 0
+    || allowedCount <= ceiling
+  ) {
+    return { message: null };
+  }
+
+  const tail =
+    ` per meeting. You may permit more here — a single meeting simply cannot use `
+    + `more than ${ceiling} at once.`;
+
+  if (source?.startsWith("plan:")) {
+    return { message: `Your plan allows ${ceiling} target languages${tail}` };
+  }
+
+  if (source === "platform_default") {
+    return {
+      message:
+        `Until this workspace has an active plan it is limited to ${ceiling} target languages${tail}`,
+    };
+  }
+
+  return { message: `This workspace is limited to ${ceiling} target languages${tail}` };
+}

@@ -60,6 +60,7 @@ import {
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
+  pendingCorrections,
   type GroupedSavedTranscriptSegment,
 } from "@/lib/transcript/transcript-display";
 import {
@@ -297,12 +298,29 @@ export function MeetingTranscriptArtifact({
       revealed: Boolean(revealedOriginals[segment.id]),
       onToggleReveal: () => toggleOriginal(segment.id),
       canCorrect,
-      isEditing: editingSegmentId === segment.id,
+      // WT-589: in batch mode every line is open at once, so the three layouts need no changes —
+      // they already ask "is this row being edited" and render `editor` when it is.
+      isEditing: isBatchEditing ? true : editingSegmentId === segment.id,
       onStartEdit: () => {
         setEditingSegmentId(segment.id);
         setDraftText(segment.originalText);
       },
-      editor: (
+      editor: isBatchEditing ? (
+        <TranscriptBatchLineEditor
+          segmentId={segment.id}
+          // `??` not `||`: a line the user has emptied must stay empty while they retype it.
+          // Falling back to the original on every empty string would undo their deletion as
+          // they made it.
+          value={batchDrafts[segment.id] ?? segment.originalText}
+          speakerName={segment.speakerName}
+          disabled={isSavingBatch}
+          onChange={(next) =>
+            setBatchDrafts((current) => ({ ...current, [segment.id]: next }))
+          }
+          onCommitAndMoveOn={() => focusNextField(segment.id)}
+          onExit={exitBatchEditing}
+        />
+      ) : (
         <TranscriptLineEditor
           value={draftText}
           onChange={setDraftText}
@@ -324,6 +342,32 @@ export function MeetingTranscriptArtifact({
   const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
   const [isSavingCorrection, setIsSavingCorrection] = useState(false);
+
+  /**
+   * WT-589 — reviewing a whole meeting instead of fixing one line.
+   *
+   * The pencil-per-line editor is right for what it was built for: somebody spots one wrong name
+   * and fixes it. It is the wrong shape for the other job, which is reading three hundred lines
+   * end to end and correcting as you go — that meant a mouse trip to a hover target, a click, a
+   * save, and a scroll, per sentence.
+   *
+   * Batch mode turns every line into a field and leaves the keyboard in charge. Enter commits the
+   * line and moves down; Tab and Shift+Tab move without committing (that is the browser's own
+   * behaviour over a list of textareas, and it is better than anything reimplemented here);
+   * Shift+Enter is a newline; Escape leaves.
+   *
+   * WHY THERE IS NO DEBOUNCED AUTO-SAVE
+   *   The ticket asks for one. A correction is not a draft: each POST writes an immutable row to
+   *   transcript_corrections AND queues a re-translation of that line into every target language
+   *   (see saveCorrection). Firing that on a typing pause would file a revision — and a round of
+   *   MT — for every pause mid-sentence, and the transcript's own edit history would become
+   *   unreadable. Enter is the save, and it is a save the user asked for by moving on. "Done &
+   *   save all" catches whatever they typed without pressing it.
+   */
+  const [isBatchEditing, setIsBatchEditing] = useState(false);
+  const [batchDrafts, setBatchDrafts] = useState<Record<string, string>>({});
+  const [isSavingBatch, setIsSavingBatch] = useState(false);
+  const batchContainerRef = useRef<HTMLDivElement>(null);
   const refreshTranslationsAfterCorrection = useTranslationRefreshAfterCorrection(transcriptId);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
@@ -365,6 +409,99 @@ export function MeetingTranscriptArtifact({
     }
   }
 
+  /** The textareas batch mode renders, in the order they appear on screen. */
+  function batchFields(): HTMLTextAreaElement[] {
+    const root = batchContainerRef.current;
+    if (!root) return [];
+    return Array.from(root.querySelectorAll<HTMLTextAreaElement>("[data-batch-segment-id]"));
+  }
+
+  /**
+   * Enter: commit this line and put the cursor on the next one.
+   *
+   * DOM order, not an index into the segment list. The panel has three layouts and each builds
+   * its own loop; a numeric cursor would have to be kept in step with whichever one is mounted,
+   * and would be wrong the moment a layout groups or filters lines. What is on screen, in the
+   * order it is on screen, is the thing the user is moving through.
+   */
+  function focusNextField(currentSegmentId: string) {
+    const fields = batchFields();
+    const index = fields.findIndex(
+      (field) => field.dataset.batchSegmentId === currentSegmentId,
+    );
+    const next = index >= 0 ? fields[index + 1] : undefined;
+    if (!next) return;
+    next.focus();
+    // The caret lands at the end rather than selecting the line: this is "carry on reading",
+    // not "replace this". A select-all would make the next keystroke delete a correct sentence.
+    next.setSelectionRange(next.value.length, next.value.length);
+    next.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function exitBatchEditing() {
+    setIsBatchEditing(false);
+    setBatchDrafts({});
+  }
+
+  /**
+   * Posts the lines that actually changed, and only those.
+   *
+   * Sequential, not Promise.all: each correction queues a re-translation of its line into every
+   * target language, and firing three hundred of those at once is the retry storm WT-373 spent a
+   * release on. It also lets a partial failure be reported honestly — the ones that landed did
+   * land, and saying "saved 12, 3 failed" is the only report that matches the database.
+   *
+   * The refetch and the translation refresh happen ONCE at the end. Per-correction they would
+   * rebuild the entire transcript under the cursor of somebody still typing in it.
+   */
+  async function saveBatch(): Promise<boolean> {
+    if (!transcriptId) return false;
+
+    const pending = pendingCorrections(segments, batchDrafts);
+
+    if (pending.length === 0) return true;
+
+    setIsSavingBatch(true);
+    let saved = 0;
+    const failed: string[] = [];
+    try {
+      for (const segment of pending) {
+        try {
+          await transcriptService.correctSegment(transcriptId, segment.id, {
+            originalText: segment.originalText,
+            correctedText: batchDrafts[segment.id].trim(),
+            correctionType: "stt",
+          });
+          saved += 1;
+        } catch {
+          failed.push(segment.id);
+        }
+      }
+    } finally {
+      setIsSavingBatch(false);
+    }
+
+    if (saved > 0) {
+      onSegmentsChanged?.();
+      refreshTranslationsAfterCorrection();
+    }
+
+    if (failed.length === 0) {
+      toast.success(
+        `Saved ${saved} ${saved === 1 ? "correction" : "corrections"}. Their translations are being redone.`,
+      );
+      return true;
+    }
+
+    // Deliberately stays in batch mode with the failures still on screen. Dropping out would
+    // discard the text the user typed for the lines that did NOT save, which is the only copy
+    // of it anywhere.
+    toast.error(
+      `Saved ${saved}, but ${failed.length} could not be saved. Their edits are still here — try again.`,
+    );
+    return false;
+  }
+
   async function finalizeTranscript() {
     if (!transcriptId) return;
     setIsFinalizing(true);
@@ -404,7 +541,7 @@ export function MeetingTranscriptArtifact({
     /* The heading and the section frame belong to MeetingRecordSection now — this is the
        Transcript tab, not a section of its own. The action row stays: copy, download and
        finalize act on the transcript specifically, not on the record as a whole. */
-    <div>
+    <div ref={batchContainerRef}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <TranscriptChip icon={<FileText className="size-3.5" />}>
@@ -447,7 +584,53 @@ export function MeetingTranscriptArtifact({
               <Download className="size-3.5" />
               Download
             </button>
+            {/* WT-589. Two states, one button, and the second one is not a toggle — it commits.
+                "Edit all" reads as a mode; leaving it has to say what leaving does, or somebody
+                clicks the same button again expecting it to close and loses their typing. */}
             {canCorrect ? (
+              isBatchEditing ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={exitBatchEditing}
+                    disabled={isSavingBatch}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                  >
+                    Discard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void saveBatch().then((ok) => {
+                        if (ok) exitBatchEditing();
+                      });
+                    }}
+                    disabled={isSavingBatch}
+                    className="flex items-center gap-1.5 rounded-md bg-ink px-2.5 py-1 text-[12px] font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    <CheckCircle className="size-3.5" />
+                    {isSavingBatch ? "Saving…" : "Done & save all"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // The per-line pencil and batch mode are the same editor in two postures;
+                    // leaving one open underneath the other would leave two fields claiming the
+                    // same sentence.
+                    setEditingSegmentId(null);
+                    setBatchDrafts({});
+                    setIsBatchEditing(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+                >
+                  <Pencil className="size-3.5" />
+                  Edit all
+                </button>
+              )
+            ) : null}
+            {canCorrect && !isBatchEditing ? (
               <button
                 type="button"
                 onClick={() => void finalizeTranscript()}
@@ -1268,6 +1451,58 @@ function TranscriptSpokenOriginal({ resolved }: { resolved: ResolvedTranscriptLi
       <span className="mr-1.5 font-medium uppercase">{resolved.spokenLanguage}</span>
       {resolved.spokenText}
     </p>
+  );
+}
+
+/**
+ * WT-589: one line inside batch mode. A field, not a form.
+ *
+ * No Save/Cancel pair of its own — that is the whole point. Three hundred of them would be six
+ * hundred buttons, and the commit is the Enter key that already moves you on. The dashed border
+ * says the same thing the buttons used to: this text is editable right now.
+ */
+function TranscriptBatchLineEditor({
+  segmentId,
+  value,
+  speakerName,
+  disabled,
+  onChange,
+  onCommitAndMoveOn,
+  onExit,
+}: {
+  segmentId: string;
+  value: string;
+  speakerName?: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onCommitAndMoveOn: () => void;
+  onExit: () => void;
+}) {
+  return (
+    <textarea
+      data-batch-segment-id={segmentId}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          onExit();
+          return;
+        }
+        // Shift+Enter is a newline, which is the textarea's own behaviour — so it is not handled
+        // here, it is simply not intercepted. Tab and Shift+Tab are left alone for the same
+        // reason: the browser already walks a list of textareas in document order, and that is
+        // exactly the movement the ticket asks for.
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          onCommitAndMoveOn();
+        }
+      }}
+      aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
+      rows={Math.min(6, Math.max(1, Math.ceil(value.length / 80)))}
+      className="w-full min-w-0 resize-y rounded-md border border-dashed border-primary/50 bg-canvas px-2.5 py-1.5 text-[13px] leading-6 text-ink outline-none focus:border-solid focus:border-primary disabled:opacity-60"
+    />
   );
 }
 

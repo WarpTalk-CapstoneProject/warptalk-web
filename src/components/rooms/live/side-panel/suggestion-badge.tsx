@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { motion } from "motion/react";
 import type { AiSuggestionDto } from "@/types/realtime";
+import { actionsFor } from "@/lib/meeting/suggestion-actions";
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
@@ -71,77 +72,6 @@ const CATEGORY_MEANINGS: Record<string, string> = {
  * Two at most. This card sits inside a transcript bubble in a side panel, and a row of
  * choices there competes with the conversation it is commenting on.
  */
-type SuggestionAction = {
-  label: string;
-  /** Built from the hint, and handed to the widget as a question. */
-  prompt: (subject: string, detail: string) => string;
-};
-
-const GENERIC_ACTIONS: SuggestionAction[] = [
-  {
-    label: "Ask WarpBot",
-    prompt: (subject, detail) =>
-      `About our meeting: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
-  },
-];
-
-const CATEGORY_ACTIONS: Record<string, SuggestionAction[]> = {
-  term: [
-    {
-      label: "Research this term",
-      prompt: (subject) => `Research this term from our meeting and explain it plainly: ${subject}`,
-    },
-    {
-      label: "Find it in our documents",
-      prompt: (subject) =>
-        `Search our workspace documents and glossary for this term and tell me how we use it: ${subject}`,
-    },
-  ],
-  clarification: [
-    {
-      label: "Ask WarpBot this",
-      prompt: (subject, detail) =>
-        `This came up in our meeting and went unanswered: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
-    },
-    {
-      label: "Find who would know",
-      prompt: (subject) =>
-        `Who in this workspace has worked on this, based on our meetings and documents? ${subject}`,
-    },
-  ],
-  fact: [
-    {
-      label: "Check this in the documents",
-      prompt: (subject, detail) =>
-        `Check this against our workspace documents and say whether it matches: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
-    },
-  ],
-  correction: [
-    {
-      label: "Check which is right",
-      prompt: (subject, detail) =>
-        `Two things said in our meeting disagree. Work out which one our documents support: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
-    },
-  ],
-  action: [
-    {
-      label: "Draft this task",
-      prompt: (subject, detail) =>
-        `Turn this into a task with a clear owner and a deadline, and say what is still missing: ${subject}${detail ? `\n\nContext: ${detail}` : ""}`,
-    },
-  ],
-};
-
-function actionsFor(suggestion: AiSuggestionDto): { label: string; prompt: string }[] {
-  const subject = suggestion.content.trim();
-  const detail = suggestion.detail?.trim() ?? "";
-  const actions = CATEGORY_ACTIONS[suggestion.category] ?? GENERIC_ACTIONS;
-  return actions.slice(0, 2).map((action) => ({
-    label: action.label,
-    prompt: action.prompt(subject, detail),
-  }));
-}
-
 function labelFor(category: string) {
   return CATEGORY_LABELS[category] ?? "Suggestion";
 }

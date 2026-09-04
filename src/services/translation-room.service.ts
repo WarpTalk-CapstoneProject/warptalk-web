@@ -434,6 +434,28 @@ export const translationRoomService = {
     return normalizeNoiseReductionMode(data?.mode);
   },
 
+  /**
+   * Tell the server what this browser's own noise suppression ended up doing.
+   *
+   * Diagnostics, never a gate: the audio is already published and already being processed one way
+   * or the other by the time this is called, so a failure here must not reach the participant.
+   * The caller is not expected to await it for anything but ordering.
+   */
+  async reportNoiseSuppression(
+    id: string,
+    report: { enabled: boolean; processor: "krisp" | "browser"; reason?: string },
+  ) {
+    try {
+      await apiClient.post<{ recorded: boolean; enabled: boolean }>(
+        API.translationRooms.noiseSuppressionReport(id),
+        report,
+      );
+    } catch {
+      // Swallowed deliberately. Reporting that the diagnostics endpoint is down, in a toast, to a
+      // person whose microphone is working, would be the feature reporting itself as broken.
+    }
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };

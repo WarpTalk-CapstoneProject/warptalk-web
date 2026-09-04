@@ -27,6 +27,7 @@ import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
 import { downloadAuthenticatedFile } from "@/lib/ui/download-artifact";
 import { API } from "@/lib/api/endpoints";
+import { MAX_QUEUED_AGENT_ASKS, decideAgentSend } from "@/lib/meeting/assistant-queue";
 import { getErrorMessage } from "@/lib/api/errors";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
@@ -147,6 +148,17 @@ export function ChatPanel({
   );
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  /**
+   * Questions for WarpBot typed while it was still answering the previous one. WT-580.
+   *
+   * Held on the client because the ordering problem is a client-side one: the backend builds each
+   * request's history from the DATABASE, and waiting until the previous ANSWER is stored is what
+   * puts that reply into the history question 2 is answered against. In the STORE rather than in
+   * this component because switching to Transcript or People unmounts the panel.
+   */
+  const queuedAsks = useTranslationRoomStore((state) => state.queuedAgentAsks);
+  const enqueueAgentAsk = useTranslationRoomStore((state) => state.enqueueAgentAsk);
+  const dequeueAgentAsk = useTranslationRoomStore((state) => state.dequeueAgentAsk);
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
   const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
   const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
@@ -282,6 +294,90 @@ export function ChatPanel({
     // declared over, the answer arriving could no longer clear the notice, so a slow reply left a
     // permanent "WarpBot didn't answer" sitting above a WarpBot answer.
   }, [messages, assistantState, setAssistantState, sealAssistantTrail]);
+
+
+  /**
+   * Actually send one message. Separated from composing it so a queued ask — which no longer has
+   * an editor document behind it — goes out through exactly the same path, including the
+   * assistant-turn bookkeeping that the answer-detection effect depends on.
+   */
+  function dispatchMessage(
+    trimmedText: string,
+    mentions: ChatMentionDto[],
+    asksTheAgent: boolean,
+    onSent?: () => void,
+  ) {
+    // BEFORE the request, not in onSuccess.
+    //
+    // onSuccess runs after the HTTP round trip, and WarpBot's answer arrives over SignalR
+    // independently — so a fast answer landed FIRST, cleared a state that was still idle, and
+    // then onSuccess switched "thinking" on with nothing left to turn it off. Ninety seconds
+    // later the user saw "WarpBot didn't answer" sitting underneath the answer.
+    //
+    // `asksTheAgent` is a parameter now rather than being recomputed here: sendMessage has to
+    // know it before this runs, to decide whether the message waits at all (WT-580).
+    if (asksTheAgent) {
+      // How many answers existed at the moment of asking. Captured here, synchronously,
+      // rather than in an effect: an effect runs after the render, by which time a fast
+      // answer may already have arrived and would be counted as part of the baseline — which
+      // is a spinner that never stops.
+      answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
+      // Opens the trail on "reading your question", exactly as the widget does. This used to be
+      // setAssistantState("thinking"), which moved the state without starting a trail — and
+      // because every later signal then saw a non-idle state, nothing ever seeded one. The
+      // whole stretch before the first tool call showed a bare spinner instead of a step.
+      beginAssistantTurn();
+    }
+
+    sendMessageAPI(
+      {
+        roomId,
+        data: {
+          originalText: trimmedText,
+          originalLanguage: sourceLanguage,
+          translationEnabled: true,
+          mentions: mentions.length > 0 ? mentions : undefined,
+        },
+      },
+      {
+        onSuccess: (message) => {
+          addChatMessage(message);
+          onSent?.();
+        },
+        onError: (error) => {
+          // WT-365: "Try again." was advice that could not work. A 403 here means the server is
+          // REFUSING the message — the room no longer counts this client as an active
+          // participant — and retrying refuses it again, forever. The backend now sends its
+          // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
+          // the generic line stays for the faults where trying again genuinely is the answer.
+          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
+          // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
+          // seconds and then blame WarpBot for a message that never reached it.
+          if (asksTheAgent) {
+            setAssistantState("idle");
+          }
+        },
+      },
+    );
+  }
+
+  // WT-580 — drain the queue, ONE ask at a time.
+  //
+  // Keyed on the assistant going idle, which is the same signal the effect above uses to decide
+  // an answer has landed. One per transition rather than a loop: dispatching sets the state busy
+  // again, so the next question waits for the next answer, which is the whole point — question 2
+  // is answered with question 1's reply already in the history the backend reads.
+  useEffect(() => {
+    if (assistantState !== "idle") return;
+    if (queuedAsks.length === 0) return;
+
+    const next = dequeueAgentAsk();
+    if (next) dispatchMessage(next.text, next.mentions, true);
+    // dispatchMessage is redeclared every render, so this effect re-runs on every render — and
+    // that is harmless by construction: both guards above return unless the assistant is idle AND
+    // something is waiting, and acting removes the item from the queue and sets the state busy,
+    // so neither condition survives the dispatch.
+  }, [assistantState, queuedAsks, dequeueAgentAsk, dispatchMessage]);
 
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
   // server's pending signal. A spinner with no end is its own lie, and this one would
@@ -490,58 +586,44 @@ export function ChatPanel({
 
     setSendError(null);
 
-    // BEFORE the request, not in onSuccess.
-    //
-    // onSuccess runs after the HTTP round trip, and WarpBot's answer arrives over SignalR
-    // independently — so a fast answer landed FIRST, cleared a state that was still idle, and
-    // then onSuccess switched "thinking" on with nothing left to turn it off. Ninety seconds
-    // later the user saw "WarpBot didn't answer" sitting underneath the answer.
     const asksTheAgent = mentions.some((mention) => mention.type === "agent");
-    if (asksTheAgent) {
-      // How many answers existed at the moment of asking. Captured here, synchronously,
-      // rather than in an effect: an effect runs after the render, by which time a fast
-      // answer may already have arrived and would be counted as part of the baseline — which
-      // is a spinner that never stops.
-      answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
-      // Opens the trail on "reading your question", exactly as the widget does. This used to be
-      // setAssistantState("thinking"), which moved the state without starting a trail — and
-      // because every later signal then saw a non-idle state, nothing ever seeded one. The
-      // whole stretch before the first tool call showed a bare spinner instead of a step.
-      beginAssistantTurn();
+
+    // WT-580 — a second question while WarpBot is still answering the first.
+    //
+    // Held rather than refused: the user asked two things and both deserve an answer, each with
+    // the other's in view. See lib/meeting/assistant-queue for why only AGENT messages wait —
+    // holding ordinary chat behind a model would be a worse bug than this one.
+    const decision = decideAgentSend({
+      asksTheAgent,
+      assistantBusy: assistantState !== "idle",
+      queueLength: queuedAsks.length,
+    });
+
+    if (decision === "refuse") {
+      setSendError(
+        `WarpBot already has ${MAX_QUEUED_AGENT_ASKS} questions waiting. Let it catch up before asking another.`,
+      );
+      return;
     }
 
-    sendMessageAPI(
-      {
-        roomId,
-        data: {
-          originalText: trimmedText,
-          originalLanguage: sourceLanguage,
-          translationEnabled: true,
-          mentions: mentions.length > 0 ? mentions : undefined,
-        },
-      },
-      {
-        onSuccess: (message) => {
-          addChatMessage(message);
-          setAssistantQuestionsJson(null);
-          editor?.commands.clearContent(true);
-        },
-        onError: (error) => {
-          // WT-365: "Try again." was advice that could not work. A 403 here means the server is
-          // REFUSING the message — the room no longer counts this client as an active
-          // participant — and retrying refuses it again, forever. The backend now sends its
-          // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
-          // the generic line stays for the faults where trying again genuinely is the answer.
-          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
-          // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
-          // seconds and then blame WarpBot for a message that never reached it.
-          if (asksTheAgent) {
-            setAssistantState("idle");
-          }
-        },
-      },
+    if (decision === "queue") {
+      enqueueAgentAsk({ text: trimmedText, mentions });
+      // Cleared now, not on a response that has not been requested yet: the message has been
+      // accepted, and leaving it in the box reads as the send having failed. A queued ask can
+      // also come from an in-chat card (WT-565), which has no editor document behind it.
+      setAssistantQuestionsJson(null);
+      editor?.commands.clearContent(true);
+      return;
+    }
+
+    dispatchMessage(trimmedText, mentions, asksTheAgent, () => {
+      // A card's follow-up has been sent, so the card is no longer pending (WT-565).
+      setAssistantQuestionsJson(null);
+      editor?.commands.clearContent(true);
+    }
     );
   }
+
 
   useEffect(() => {
     setMentionMenusVisible(active);
@@ -816,6 +898,14 @@ export function ChatPanel({
               {assistantState === "slow"
                 ? "WarpBot is still working — this one is taking a while."
                 : "WarpBot is thinking…"}
+              {/* WT-580 — say that the next question was kept, not lost. Without this the
+                  composer clears and nothing happens for several seconds, which is
+                  indistinguishable from the message having failed to send. */}
+              {queuedAsks.length > 0
+                ? queuedAsks.length === 1
+                  ? " Your next question is queued."
+                  : ` ${queuedAsks.length} more questions are queued.`
+                : null}
             </span>
           </div>
         ) : null}

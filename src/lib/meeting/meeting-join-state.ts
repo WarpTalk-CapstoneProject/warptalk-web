@@ -72,7 +72,12 @@ export function readMeetingMediaPreferences(
     return {
       cameraEnabled: false,
       microphoneEnabled: false,
-      noiseSuppressionEnabled: false,
+      // ON, unlike the two above it, and the difference is what fail-closed means here. Camera and
+      // microphone are PERMISSIONS: publishing one the participant did not ask for is the failure.
+      // Noise suppression is not a permission — it only describes how an already-permitted
+      // microphone gets processed, and there is nothing to fail closed about. Off would just be a
+      // dirtier microphone.
+      noiseSuppressionEnabled: true,
       backgroundBlurEnabled: false,
     };
   }
@@ -90,10 +95,20 @@ export function readMeetingMediaPreferences(
       typeof roomDevices.microphoneEnabled === "boolean"
         ? roomDevices.microphoneEnabled
         : join.microphoneEnabled === true,
+    // ON BY DEFAULT, and the version check is what makes that safe to change. A preference
+    // written at the CURRENT version is a real choice and is honoured either way — including an
+    // explicit opt-out. Anything older is not an answer to this question at all (most of those
+    // `false` values were the previous default, never a decision), so it falls through to the
+    // default rather than pinning people to it forever.
+    //
+    // The downgrade path is what makes ON the right default: every failure inside
+    // useTrackProcessors restores the browser's own suppression BEFORE reporting, so the worst
+    // outcome of defaulting to on is exactly the audio that defaulting to off would have given.
     noiseSuppressionEnabled:
       roomDevices.noiseSuppressionPreferenceVersion ===
-        NOISE_SUPPRESSION_PREFERENCE_VERSION &&
-      roomDevices.noiseSuppressionEnabled === true,
+      NOISE_SUPPRESSION_PREFERENCE_VERSION
+        ? roomDevices.noiseSuppressionEnabled === true
+        : true,
     backgroundBlurEnabled:
       roomDevices.backgroundBlurEnabled === true ||
       join.backgroundBlurEnabled === true,

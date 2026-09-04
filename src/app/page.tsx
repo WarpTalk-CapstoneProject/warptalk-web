@@ -1056,12 +1056,20 @@ function PricingSection() {
   );
 }
 
-const footerNavigation = [
-  "How it works",
-  "Features",
-  "Pricing",
-  "Testimonials",
-  "FAQ",
+/**
+ * WT-584: entries carry an href now, because one of them finally has somewhere to go.
+ *
+ * The rest still point at "#" — they were written before the sections they name existed and
+ * that is a separate piece of work. Encoding the destination per entry rather than hardcoding
+ * "#" at the call site is what lets the download link be real without pretending the others are.
+ */
+const footerNavigation: Array<{ label: string; href: string }> = [
+  { label: "How it works", href: "#" },
+  { label: "Features", href: "#features" },
+  { label: "Pricing", href: "#pricing" },
+  { label: "Download desktop app", href: "/download" },
+  { label: "Testimonials", href: "#" },
+  { label: "FAQ", href: "#" },
 ];
 const footerCompany = [
   "Blog",
@@ -1215,8 +1223,8 @@ function LandingFooter() {
               <div className="footer-col">
                 <h3 className="footer-col-title">Navigation</h3>
                 {footerNavigation.map((item) => (
-                  <a href="#" key={item}>
-                    {item}
+                  <a href={item.href} key={item.label}>
+                    {item.label}
                   </a>
                 ))}
               </div>
@@ -1459,6 +1467,19 @@ export default function HomePage() {
                     </span>
                   </a>
                 ))}
+
+                {/* WT-584. A real route, so it cannot live in navLinks: every entry there is a
+                    same-page anchor driven by handleNavClick and the scroll-spy, and giving one
+                    of them an href to another page would either be swallowed by
+                    preventDefault or make the spy hunt for a section that does not exist.
+                    /download was reachable only by typing the URL — the signed-in workspace
+                    dropdown linked to it, which is no use to the visitor it was written for. */}
+                <Link
+                  href="/download"
+                  className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
+                >
+                  <span className="relative z-10">Download</span>
+                </Link>
               </div>
 
               <button

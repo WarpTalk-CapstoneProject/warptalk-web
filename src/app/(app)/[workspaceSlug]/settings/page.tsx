@@ -33,7 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
-import { describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
+import { describeLanguageCeiling, describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
@@ -179,6 +179,16 @@ export default function WorkspaceSettingsPage() {
     ceiling: planRoomCeiling,
     configured: watchedMaxActiveRooms,
     source: settings?.maxActiveRoomsCeilingSource,
+  }).message;
+
+  // WT-500 — the plan's per-meeting language quota, which is enforced at meeting creation and
+  // used to be invisible everywhere else. Counted off the live form value rather than the saved
+  // settings so the notice appears the moment an Owner ticks the language that crosses the line,
+  // not after they navigate away and come back.
+  const languageCeilingNotice = describeLanguageCeiling({
+    ceiling: settings?.maxLanguagesCeiling,
+    allowedCount: (watchAll.allowedTargetLanguages || []).length,
+    source: settings?.maxLanguagesCeilingSource,
   }).message;
 
   const saveWorkspacePatch = useCallback(async (patch: Partial<WorkspaceSettingsDto>) => {
@@ -623,6 +633,9 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Allowed Target Translation Languages</span>
                 <span className="text-[11px] text-ink-muted">Languages available for live translation in meeting rooms.</span>
+                {languageCeilingNotice ? (
+                  <span className="text-[11px] text-amber-600">{languageCeilingNotice}</span>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
                 {languages.map((l) => {

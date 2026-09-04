@@ -23,7 +23,15 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 FROM node:22.17.1-alpine3.22@sha256:5539840ce9d013fa13e3b9814c9353024be7ac75aca5db6d039504a56c04ea59 AS final
+# The explicit openssl floor is not redundant with `apk upgrade`. The release build pins
+# this base image by digest and passes `--cache-from` against a registry BuildKit cache
+# (scripts/build-release.sh), so this RUN layer is a cache hit on every rebuild and the
+# upgrade never actually re-runs -- which is how CVE-2026-14456 (libcrypto3/libssl3
+# 3.5.7-r0) survived a rebuild and blocked the release gate. Naming the fixed version
+# changes this layer's cache key and fails the build loudly if it is unavailable, rather
+# than silently reinstalling the vulnerable one. Raise the floor on the next advisory.
 RUN apk upgrade --no-cache \
+    && apk add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0' \
     && rm -rf /usr/local/lib/node_modules/npm \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx
 WORKDIR /app

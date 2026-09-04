@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import type {
   AiSuggestionDto,
+  ChatMentionDto,
   ChatMessageDto,
   TranslationRoomStateDto,
   ParticipantInfoDto,
@@ -40,6 +41,16 @@ interface TranslationRoomStoreState {
    * being ignored look identical when there is nothing in between.
    */
   assistantState: "idle" | "thinking" | "slow";
+  /**
+   * Questions for WarpBot typed while it was still answering the previous one. WT-580.
+   *
+   * IN THE STORE, NOT IN THE PANEL. Switching to Transcript or People unmounts the chat panel, so
+   * component state would drop a question the user had already sent and been told was queued —
+   * the same class of loss the side-panel tabs have caused before. It also keeps the drain out of
+   * a React setState-in-effect: this is an external store, which is where an effect is allowed to
+   * write.
+   */
+  queuedAgentAsks: { text: string; mentions: ChatMentionDto[] }[];
   /**
    * When the open turn began and when it ended, so the finished trail can say how long it took
    * rather than only what it did. Both null before the first question of a session.
@@ -118,6 +129,10 @@ interface TranslationRoomStoreState {
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
   setAssistantState: (state: "idle" | "thinking" | "slow") => void;
+  /** Hold a question until WarpBot finishes the one it is on. WT-580. */
+  enqueueAgentAsk: (ask: { text: string; mentions: ChatMentionDto[] }) => void;
+  /** Take the oldest queued question, or null when there is none. */
+  dequeueAgentAsk: () => { text: string; mentions: ChatMentionDto[] } | null;
   /**
    * A question has just been put to WarpBot. Opens a fresh trail on the step that is genuinely
    * running — reading the question — and drops whatever the previous turn left behind.
@@ -175,6 +190,7 @@ const initialState = {
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
+  queuedAgentAsks: [],
   assistantStartedAt: null as number | null,
   assistantFinishedAt: null as number | null,
   assistantSteps: [] as AssistantStep[],
@@ -186,7 +202,7 @@ const initialState = {
   raisedHands: [],
 };
 
-export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set) => ({
+export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set, get) => ({
   ...initialState,
 
   setTranslationRoomState: (translationRoomState) =>
@@ -394,6 +410,16 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
     set((s) => ({
       chatMessages: mergeChatMessages(s.chatMessages, messages),
     })),
+
+  enqueueAgentAsk: (ask) =>
+    set((state) => ({ queuedAgentAsks: [...state.queuedAgentAsks, ask] })),
+
+  dequeueAgentAsk: () => {
+    const [next, ...rest] = get().queuedAgentAsks;
+    if (!next) return null;
+    set({ queuedAgentAsks: rest });
+    return next;
+  },
 
   setAssistantState: (assistantState) =>
     set((state) => ({
