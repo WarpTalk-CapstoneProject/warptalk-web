@@ -1,6 +1,14 @@
 "use client";
 
-import { Fragment, type ElementType, useMemo, useState, useSyncExternalStore } from "react";
+import {
+  Fragment,
+  type ElementType,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { enGB } from "date-fns/locale";
@@ -16,6 +24,7 @@ import {
   Translate,
   Users,
   WarningCircle,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -28,6 +37,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverDescription,
+  PopoverHeader,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useMyMeetingsInRange } from "@/hooks/use-my-meetings";
 import {
   artifactLabel,
@@ -64,6 +82,14 @@ const timeFilters: Array<{ value: TimeFilter; label: string }> = [
 ];
 const EMPTY_MEETINGS: MyMeetingItem[] = [];
 const APP_CALENDAR_LOCALE = "en-GB";
+
+/**
+ * How many chips a month cell shows before it gives up and counts the rest.
+ *
+ * The cell is `overflow-hidden` on purpose (WT-538), so anything past this is not merely ugly,
+ * it is invisible — which is why the "+N more" below is a real button opening the whole day.
+ */
+const MONTH_CELL_CHIP_LIMIT = 3;
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -436,6 +462,13 @@ function MonthGrid({
   const todayKey = String(startOfDay(new Date()));
   const currentMonth = monthAnchor.getMonth();
 
+  // One rule for what a meeting row does, so a chip in the cell and the same meeting listed in the
+  // day popover cannot drift apart: a finished meeting opens the recap dialog, anything else the room.
+  function openMeeting(meeting: MyMeetingItem) {
+    if (meeting.timeState === "past") onOpenPast(meeting.id);
+    else onNavigate(meeting.id);
+  }
+
   return (
     <div className="flex h-full flex-col">
       {meetings.length === 0 ? (
@@ -502,40 +535,19 @@ function MonthGrid({
                 </div>
 
                 <div className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden">
-                  {dayMeetings.slice(0, 3).map((meeting) => (
-                    <div
+                  {dayMeetings.slice(0, MONTH_CELL_CHIP_LIMIT).map((meeting) => (
+                    <MonthChip
                       key={meeting.id}
-                      onClick={() =>
-                        meeting.timeState === "past"
-                          ? onOpenPast(meeting.id)
-                          : onNavigate(meeting.id)
-                      }
-                      title={meeting.title}
-                      className={cn(
-                        "group h-5 cursor-pointer overflow-hidden rounded-sm border px-1.5 text-[10px] leading-5 transition-colors",
-                        monthChipToneClass(meeting),
-                      )}
-                    >
-                      <div className="flex h-full min-w-0 items-center gap-1">
-                        <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
-                          {meeting.title}
-                        </span>
-                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
-                          {formatTime(meeting.occursAt)}
-                        </span>
-                        {meeting.timeState === "live" && meeting.status !== "cancelled" ? (
-                          <span className="relative flex size-1.5 shrink-0">
-                            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-                            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
+                      meeting={meeting}
+                      onOpen={() => openMeeting(meeting)}
+                    />
                   ))}
-                  {dayMeetings.length > 3 ? (
-                    <div className="h-4 truncate px-1 text-[9px] font-medium leading-4 text-ink-subtle">
-                      +{dayMeetings.length - 3} more
-                    </div>
+                  {dayMeetings.length > MONTH_CELL_CHIP_LIMIT ? (
+                    <DayOverflowPopover
+                      day={day}
+                      meetings={dayMeetings}
+                      onOpenMeeting={openMeeting}
+                    />
                   ) : null}
                 </div>
               </div>
@@ -544,6 +556,167 @@ function MonthGrid({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * One meeting on a month cell.
+ *
+ * A `<button>` rather than the clickable `<div>` this used to be: the identical row is also listed
+ * inside the day popover, which is reached by keyboard, and a div with an onClick is a dead end
+ * there. It also makes the cell chips themselves tabbable, which they always should have been.
+ */
+function MonthChip({
+  meeting,
+  onOpen,
+  className,
+}: {
+  meeting: MyMeetingItem;
+  onOpen: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={meeting.title}
+      className={cn(
+        "group block h-5 w-full cursor-pointer overflow-hidden rounded-sm border px-1.5 text-left text-[10px] leading-5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+        monthChipToneClass(meeting),
+        className,
+      )}
+    >
+      <div className="flex h-full min-w-0 items-center gap-1">
+        <span
+          className={cn(
+            "truncate font-medium",
+            meeting.status === "cancelled" && "text-ink-muted",
+          )}
+        >
+          {meeting.title}
+        </span>
+        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
+          {formatTime(meeting.occursAt)}
+        </span>
+        {meeting.timeState === "live" && meeting.status !== "cancelled" ? (
+          <span className="relative flex size-1.5 shrink-0">
+            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
+          </span>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * "+3 more", and the day behind it — Google Calendar's overflow popover.
+ *
+ * A month cell is `overflow-hidden` and only has room for three chips, so before this the fourth
+ * meeting of a day had no reachable representation anywhere in month view; the count was a dead
+ * `<div>`. The list here is the WHOLE day, not the remainder, because "what else is on Thursday"
+ * is the question being asked and re-reading the three chips already on screen is not an answer.
+ *
+ * It is portalled out of the cell (`PopoverContent` renders through `Popover.Portal`) precisely so
+ * the cell can keep clipping its own contents: an `absolute` panel inside the cell would be sliced
+ * off at the border. `modal="trap-focus"` keeps Tab inside the panel while it is open without
+ * locking the page, and Base UI flips or shifts the panel back into view on the outer columns and
+ * the last row, so Monday and Sunday do not hang off the viewport.
+ */
+function DayOverflowPopover({
+  day,
+  meetings,
+  onOpenMeeting,
+}: {
+  day: Date;
+  meetings: MyMeetingItem[];
+  onOpenMeeting: (meeting: MyMeetingItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Base UI dismisses on outside press by itself — except it does not here. Verified against an
+  // untouched `<Popover>` from components/ui on this same page: a trusted click anywhere outside
+  // leaves the panel open, on @base-ui/react 1.3.0 with React 19.2. Escape and the close button
+  // both work, so the popup is not stuck; only the outside-press path is. Rather than patch the
+  // shared primitive under every other caller, this closes the day popover the plain way. If the
+  // library's own dismissal starts working again, this simply sets `open` to false twice.
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDownOutside(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      // The trigger toggles itself; swallowing its press here would fight that.
+      if (triggerRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-slot="popover-content"]')) return;
+      setOpen(false);
+    }
+
+    document.addEventListener("pointerdown", onPointerDownOutside, true);
+    return () => document.removeEventListener("pointerdown", onPointerDownOutside, true);
+  }, [open]);
+
+  const heading = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(day);
+  const hidden = meetings.length - MONTH_CELL_CHIP_LIMIT;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen} modal="trap-focus">
+      <PopoverTrigger
+        ref={triggerRef}
+        aria-label={`Show all ${meetings.length} meetings on ${heading}`}
+        className="block h-4 w-full cursor-pointer truncate rounded-sm px-1 text-left text-[9px] font-medium leading-4 text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40 data-[popup-open]:bg-surface-2 data-[popup-open]:text-ink"
+      >
+        +{hidden} more
+      </PopoverTrigger>
+
+      <PopoverContent
+        side="bottom"
+        align="center"
+        sideOffset={6}
+        collisionPadding={12}
+        className="w-[260px] gap-0 rounded-xl p-0 shadow-lg"
+      >
+        <PopoverHeader className="flex flex-row items-start justify-between gap-2 border-b border-border px-3 py-2">
+          <div className="min-w-0">
+            <PopoverTitle className="truncate text-[11px] font-semibold text-ink">
+              {heading}
+            </PopoverTitle>
+            <PopoverDescription className="text-[10px] text-ink-subtle">
+              {meetings.length} {meetings.length === 1 ? "meeting" : "meetings"}
+            </PopoverDescription>
+          </div>
+          <PopoverClose
+            aria-label="Close"
+            className="-mr-1 grid size-5 shrink-0 cursor-pointer place-items-center rounded-md text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <X size={11} />
+          </PopoverClose>
+        </PopoverHeader>
+
+        {/* Capped and scrolled rather than allowed to grow: a day with twenty meetings would
+            otherwise be taller than the viewport, and there is nothing left to flip it into. */}
+        <div className="max-h-[268px] space-y-1 overflow-y-auto p-2">
+          {meetings.map((meeting) => (
+            <MonthChip
+              key={meeting.id}
+              meeting={meeting}
+              className="h-6 leading-6"
+              onOpen={() => {
+                // Closed before the recap dialog opens, or the panel would sit behind it — and
+                // closing hands focus back to the "+N more" that opened it.
+                setOpen(false);
+                onOpenMeeting(meeting);
+              }}
+            />
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -783,7 +956,7 @@ function WeekCard({
       <p
         className={cn(
           "mt-1 line-clamp-2 text-[11px] font-medium leading-snug text-ink",
-          isCancelled && "text-ink-muted line-through",
+          isCancelled && "text-ink-muted",
         )}
       >
         {meeting.title}
