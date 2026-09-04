@@ -1,6 +1,6 @@
 "use client";
 
-import { type ElementType, useMemo, useState } from "react";
+import { Fragment, type ElementType, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { enGB } from "date-fns/locale";
@@ -579,6 +579,8 @@ function WeekGrid({
 
   const todayKey = String(startOfDay(new Date()));
 
+  const now = useNowMinute();
+
   return (
     <div className="flex h-full flex-col">
       {/* Horizontal scroll rather than a responsive collapse: seven columns squeezed onto a phone
@@ -590,6 +592,14 @@ function WeekGrid({
             const dayMeetings = byDay.get(key) ?? EMPTY_MEETINGS;
             const isToday = key === todayKey;
             const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+
+            // The column is sorted by start time, so "now" has an insertion point even without an
+            // hour axis: before the first meeting that has not started. -1 means the whole day has
+            // already begun, and the line belongs at the bottom. Null on every day that is not today.
+            const nowIndex =
+              isToday && now
+                ? dayMeetings.findIndex((meeting) => Date.parse(meeting.occursAt) > now.getTime())
+                : null;
 
             return (
               <div
@@ -622,20 +632,29 @@ function WeekGrid({
 
                 <div className="flex-1 space-y-1.5 p-1.5">
                   {dayMeetings.length === 0 ? (
-                    <div className="pt-6 text-center text-[10px] text-ink-subtle/60">—</div>
+                    nowIndex !== null && now ? (
+                      <NowLine now={now} />
+                    ) : (
+                      <div className="pt-6 text-center text-[10px] text-ink-subtle/60">—</div>
+                    )
                   ) : (
-                    dayMeetings.map((meeting) => (
-                      <WeekCard
-                        key={meeting.id}
-                        meeting={meeting}
-                        workspaceSlug={workspaceSlug}
-                        onOpen={() =>
-                          meeting.timeState === "past"
-                            ? onOpenPast(meeting.id)
-                            : onNavigate(meeting.id)
-                        }
-                      />
-                    ))
+                    <>
+                      {dayMeetings.map((meeting, index) => (
+                        <Fragment key={meeting.id}>
+                          {now && nowIndex === index ? <NowLine now={now} /> : null}
+                          <WeekCard
+                            meeting={meeting}
+                            workspaceSlug={workspaceSlug}
+                            onOpen={() =>
+                              meeting.timeState === "past"
+                                ? onOpenPast(meeting.id)
+                                : onNavigate(meeting.id)
+                            }
+                          />
+                        </Fragment>
+                      ))}
+                      {now && nowIndex === -1 ? <NowLine now={now} /> : null}
+                    </>
                   )}
                 </div>
               </div>
@@ -649,6 +668,55 @@ function WeekGrid({
           Nothing on your timeline this week.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+const MINUTE_MS = 60_000;
+
+function subscribeToMinute(onChange: () => void) {
+  const timer = setInterval(onChange, MINUTE_MS);
+  return () => clearInterval(timer);
+}
+
+/**
+ * The wall clock at minute resolution.
+ *
+ * Null on the server and through hydration, so the markup React checks matches what it rendered;
+ * the line appears on the first client pass afterwards. The snapshot is a minute bucket rather than
+ * a timestamp, so a tab left open re-renders once a minute instead of on every tick.
+ */
+function useNowMinute(): Date | null {
+  const bucket = useSyncExternalStore(
+    subscribeToMinute,
+    () => Math.floor(Date.now() / MINUTE_MS),
+    () => null,
+  );
+
+  return useMemo(() => (bucket === null ? null : new Date(bucket * MINUTE_MS)), [bucket]);
+}
+
+/**
+ * Google Calendar's red "now" rule, adapted to a column that has no hour axis.
+ *
+ * It cannot sit at a clock position, because vertical space here is list order rather than time.
+ * It sits at the boundary instead: everything above it has started, everything below has not. That
+ * is the question the line actually answers on a page of thirty-minute meetings.
+ */
+function NowLine({ now }: { now: Date }) {
+  const label = formatTime(now.toISOString());
+
+  return (
+    <div
+      role="separator"
+      aria-label={`Current time, ${label}`}
+      className="flex items-center gap-1 py-0.5"
+    >
+      <span className="size-1.5 shrink-0 rounded-full bg-rose-500" />
+      <span className="h-px flex-1 bg-rose-500" />
+      <span className="shrink-0 text-[9px] font-medium tabular-nums text-rose-600 dark:text-rose-400">
+        {label}
+      </span>
     </div>
   );
 }
