@@ -46,10 +46,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { Resolver, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { useGoogleLogin } from "@react-oauth/google";
 
 import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
@@ -80,13 +82,13 @@ const MEETING_LANGUAGES = languagesInScope("meeting");
 const DEFAULT_SPEAK = "vi-VN";
 const DEFAULT_LISTEN = "en-US";
 
-const getRegisterSchema = (hasToken: boolean) =>
+const getRegisterSchema = (hasToken: boolean, tv: ReturnType<typeof useTranslations>) =>
   z.object({
     email: hasToken
       ? z.string().optional().or(z.literal(""))
-      : z.string().min(1, "Email is required").email("Invalid email address"),
-    fullName: z.string().min(1, "Please enter your name"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+      : z.string().min(1, tv("emailRequired")).email(tv("emailInvalid")),
+    fullName: z.string().min(1, tv("fullNameRequired")),
+    password: z.string().min(8, tv("passwordMin8")),
   });
 
 type RegisterFormData = {
@@ -103,6 +105,7 @@ interface PendingVerification {
 }
 
 function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
+  const t = useTranslations("auth.register");
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
@@ -118,14 +121,14 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
 
         login(user, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
-        toast.success("Google sign-in successful!");
+        toast.success(t("toasts.googleSignInSuccess"));
         router.replace(callbackUrl);
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+        toast.error(error?.response?.data?.error || t("toasts.googleSignInFailed"));
       }
     },
-    onError: () => toast.error("Google authentication failed or popup was closed."),
+    onError: () => toast.error(t("toasts.googleAuthFailed")),
   });
 
   return (
@@ -135,26 +138,29 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
       className="flex h-14 w-full cursor-pointer items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50"
     >
       <GoogleAuthIcon className="size-5" />
-      Continue with Google
+      {t("continueWithGoogle")}
     </button>
   );
 }
 
 function RegisterGoogleUnavailableButton() {
+  const t = useTranslations("auth.register");
   return (
     <button
       type="button"
       disabled
-      title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google sign-in."
+      title={t("googleUnavailableHint")}
       className="flex h-14 w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-neutral-200 bg-neutral-50 text-[15px] font-medium text-neutral-400"
     >
       <GoogleAuthIcon className="size-5" />
-      Continue with Google
+      {t("continueWithGoogle")}
     </button>
   );
 }
 
 function RegisterForm() {
+  const t = useTranslations("auth.register");
+  const tv = useTranslations("validation");
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -166,6 +172,7 @@ function RegisterForm() {
   // An invitation is proof of the address, so there is no email to ask for.
   const [step, setStep] = useState<Step>(hasToken ? "details" : "email");
 
+  const registerSchema = useMemo(() => getRegisterSchema(hasToken, tv), [hasToken, tv]);
   const {
     register,
     handleSubmit,
@@ -173,7 +180,7 @@ function RegisterForm() {
     getValues,
     formState: { errors, isSubmitting },
   } = useForm<RegisterFormData>({
-    resolver: zodResolver(getRegisterSchema(hasToken)) as Resolver<RegisterFormData>,
+    resolver: zodResolver(registerSchema) as Resolver<RegisterFormData>,
   });
 
   // Plain state, not form fields. These two always hold a valid answer — the step opens
@@ -239,7 +246,7 @@ function RegisterForm() {
       // path is deliberately different: an invitation that arrived at the address IS the proof of
       // the address, so it signs in directly.
       if ("emailVerificationRequired" in res.data && res.data.emailVerificationRequired) {
-        toast.success("Account created. Check your email to verify your address.");
+        toast.success(t("toasts.accountCreatedCheckEmail"));
         // The address is not put in the query string: it is personal data, and a URL is the one
         // place every proxy on the way would log it.
         router.replace("/verify-email");
@@ -249,11 +256,11 @@ function RegisterForm() {
       const { user, accessToken, expiresAt } = res.data as AuthResponse;
       login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
-      toast.success("Registration successful!");
+      toast.success(t("toasts.registrationSuccess"));
       router.replace(callbackUrl);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Registration failed. Please try again.");
+      toast.error(error?.response?.data?.error || t("toasts.registrationFailed"));
     }
   };
 
@@ -274,10 +281,14 @@ function RegisterForm() {
         </Link>
       </div>
 
+      <div className="absolute right-6 top-6 z-30">
+        <LanguageSwitcher />
+      </div>
+
       <div className="relative z-20 w-full max-w-[360px] px-4">
         <div className="mb-8 flex flex-col items-center">
           <h1 className="mb-2 text-center text-3xl font-semibold tracking-tight text-black">
-            Create your account
+            {t("heading")}
           </h1>
           {/* Three segments, not "Step 2 of 3" — the shape of the progress is the message, and it
               stays out of the way of the question being asked. */}
@@ -338,7 +349,7 @@ function RegisterForm() {
                 <div className="flex items-center gap-4 py-2">
                   <div className="h-[1px] flex-1 bg-neutral-200" />
                   <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">
-                    Or
+                    {t("or")}
                   </span>
                   <div className="h-[1px] flex-1 bg-neutral-200" />
                 </div>
@@ -348,14 +359,14 @@ function RegisterForm() {
                     type="email"
                     autoComplete="email"
                     autoFocus
-                    placeholder="Email address"
+                    placeholder={t("emailPlaceholder")}
                     className={inputClass(Boolean(errors.email))}
                     {...register("email")}
                   />
                   <FieldError message={errors.email?.message} />
                 </div>
 
-                <PrimaryButton>Continue</PrimaryButton>
+                <PrimaryButton>{t("continue")}</PrimaryButton>
               </motion.div>
             ) : step === "details" ? (
               <motion.div
@@ -376,7 +387,7 @@ function RegisterForm() {
                     type="text"
                     autoComplete="name"
                     autoFocus
-                    placeholder="Full name"
+                    placeholder={t("fullNamePlaceholder")}
                     className={inputClass(Boolean(errors.fullName))}
                     {...register("fullName")}
                   />
@@ -388,7 +399,7 @@ function RegisterForm() {
                     <input
                       type={showPassword ? "text" : "password"}
                       autoComplete="new-password"
-                      placeholder="Password"
+                      placeholder={t("passwordPlaceholder")}
                       className={cn(inputClass(Boolean(errors.password)), "pr-12")}
                       {...register("password")}
                     />
@@ -396,19 +407,19 @@ function RegisterForm() {
                       type="button"
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 transition-colors hover:text-black"
                       onClick={() => setShowPassword((value) => !value)}
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={showPassword ? t("hidePassword") : t("showPassword")}
                     >
                       {showPassword ? <EyeClosed weight="regular" size={20} /> : <Eye weight="regular" size={20} />}
                     </button>
                   </div>
                   <FieldError message={errors.password?.message} />
                   {errors.password ? null : (
-                    <p className="px-1 text-[13px] text-neutral-500">At least 8 characters.</p>
+                    <p className="px-1 text-[13px] text-neutral-500">{t("passwordHint")}</p>
                   )}
                 </div>
 
-                <PrimaryButton>Continue</PrimaryButton>
-                {stepIndex > 0 ? <BackButton onClick={goBack} /> : null}
+                <PrimaryButton>{t("continue")}</PrimaryButton>
+                {stepIndex > 0 ? <BackButton onClick={goBack} label={t("back")} /> : null}
               </motion.div>
             ) : (
               <motion.div
@@ -420,27 +431,26 @@ function RegisterForm() {
                 className="space-y-4"
               >
                 <p className="px-1 text-[13px] leading-5 text-neutral-600">
-                  These become the defaults when you join a meeting. You can change them at any
-                  time, and per meeting.
+                  {t("languagesIntro")}
                 </p>
 
                 <LanguageField
                   id="speak-language"
-                  label="I speak"
+                  label={t("speakLabel")}
                   value={speakLanguage}
                   onChange={setSpeakLanguage}
                 />
                 <LanguageField
                   id="listen-language"
-                  label="I want to hear"
+                  label={t("listenLabel")}
                   value={listenLanguage}
                   onChange={setListenLanguage}
                 />
 
                 <PrimaryButton disabled={isSubmitting}>
-                  {isSubmitting ? <Spinner weight="bold" className="animate-spin" /> : "Create account"}
+                  {isSubmitting ? <Spinner weight="bold" className="animate-spin" /> : t("createAccount")}
                 </PrimaryButton>
-                <BackButton onClick={goBack} />
+                <BackButton onClick={goBack} label={t("back")} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -448,12 +458,12 @@ function RegisterForm() {
 
         <p className="relative z-20 mt-6 text-center text-[13px] font-medium text-neutral-700">
           <span className="rounded-lg bg-white/70 px-2 py-1 backdrop-blur-md">
-            Already have an account?{" "}
+            {t("alreadyHaveAccount")}{" "}
             <Link
               href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}
               className="text-black hover:underline"
             >
-              Log in
+              {t("logIn")}
             </Link>
           </span>
         </p>
@@ -461,11 +471,11 @@ function RegisterForm() {
         <div className="relative z-20 mt-auto flex justify-center pb-6 pt-12">
           <div className="flex items-center gap-4 rounded-full border border-white/50 bg-white/70 px-4 py-1.5 text-[13px] font-medium text-neutral-700 shadow-sm backdrop-blur-md">
             <Link href="/terms" className="transition-colors hover:text-black hover:underline">
-              Terms of use
+              {t("termsOfUse")}
             </Link>
             <span className="text-neutral-400">|</span>
             <Link href="/privacy" className="transition-colors hover:text-black hover:underline">
-              Privacy policy
+              {t("privacyPolicy")}
             </Link>
           </div>
         </div>
@@ -504,7 +514,7 @@ function PrimaryButton({ children, disabled }: { children: React.ReactNode; disa
   );
 }
 
-function BackButton({ onClick }: { onClick: () => void }) {
+function BackButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
       type="button"
@@ -512,17 +522,18 @@ function BackButton({ onClick }: { onClick: () => void }) {
       className="flex h-10 w-full items-center justify-center gap-1 rounded-full text-[13px] font-medium text-neutral-600 transition-colors hover:text-black"
     >
       <CaretLeft size={13} weight="bold" />
-      Back
+      {label}
     </button>
   );
 }
 
 /** The answered email, with a way back to it — the login page's own pattern. */
 function EmailSummary({ email, onEdit }: { email: string; onEdit: () => void }) {
+  const t = useTranslations("auth.register");
   return (
     <div className="relative mb-4 flex h-14 w-full items-center justify-between rounded-full border border-neutral-300 bg-white px-5">
       <label className="absolute -top-2 left-4 bg-white px-1 text-[12px] font-normal text-neutral-500">
-        Email address
+        {t("emailLabel")}
       </label>
       <span className="truncate pr-4 text-[15px] text-black">{email}</span>
       <button
@@ -530,7 +541,7 @@ function EmailSummary({ email, onEdit }: { email: string; onEdit: () => void }) 
         onClick={onEdit}
         className="whitespace-nowrap text-[15px] font-normal text-[#2563eb] hover:underline"
       >
-        Edit
+        {t("edit")}
       </button>
     </div>
   );

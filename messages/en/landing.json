@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "about": "About",
+    "features": "Feature",
+    "pricing": "Pricing",
+    "contact": "Contact",
+    "download": "Download",
+    "getStarted": "Get Started"
+  },
+  "badges": {
+    "realtimeTranslation": "Real-time Translation",
+    "aiSummaryAnalysis": "AI Summary Analysis",
+    "humanVoiceCloning": "Human Voice Cloning"
+  },
+  "hero": {
+    "title": "Translation that feel native",
+    "subtitle": "Real-time interpretation global teams. Natural conversations. Zero language barriers",
+    "getStarted": "Get Started",
+    "createAccount": "Create an Account"
+  },
+  "featureSteps": {
+    "signalDrift": { "kicker": "Signal Drift", "title": "Every voice leaves a trace." },
+    "languageCrossing": { "kicker": "Language Crossing", "title": "Meaning crosses over." },
+    "thePause": { "kicker": "The Pause", "title": "The conversation keeps moving while the signal changes form." },
+    "memoryBloom": { "kicker": "Memory Bloom", "title": "The room remembers." }
+  },
+  "signals": {
+    "capture": { "meta": "Capture / STT / Audio", "label": "Capture" },
+    "understand": { "meta": "Understand / Context / Memory", "label": "Understand" },
+    "translate": { "meta": "Translate / AI / Language", "label": "Translate" },
+    "speak": { "meta": "Speak / TTS / Voice", "label": "Speak" },
+    "remember": { "meta": "Remember / Transcript / Assistant", "label": "Remember" }
+  },
+  "voiceHeading": "Voice returns human.",
+  "understandHeading": "When the room understands.",
+  "understandBody": "No switching tabs. No waiting for summaries. The conversation stays alive.",
+  "systemSignalsTitle": "System Signals",
+  "systemSignalsBody": "Five core signals power every conversation across any language.",
+  "pricing": {
+    "loading": "Loading plans...",
+    "free": "Free",
+    "perMonth": "/mo",
+    "choosePlan": "Choose Plan",
+    "descriptionStartup": "For growing global teams that need reliable AI summaries and history.",
+    "descriptionEnterprise": "For operators using voice cloning and native-feeling interpretation at scale.",
+    "descriptionDefault": "Flexible plan for customized workspace requirements and additional features.",
+    "featureCredits": "{count} credits per cycle",
+    "featureParticipants": "Up to {count} participants per meeting",
+    "featureLanguages": "Up to {count} languages simultaneously",
+    "featureDefaultSupport": "Standard email support"
+  },
+  "footer": {
+    "stayInTouch": "Stay in touch!",
+    "navigationTitle": "Navigation",
+    "companyTitle": "Company",
+    "navHowItWorks": "How it works",
+    "navFeatures": "Features",
+    "navPricing": "Pricing",
+    "navDownload": "Download desktop app",
+    "navTestimonials": "Testimonials",
+    "navFaq": "FAQ",
+    "companyBlog": "Blog",
+    "companyAbout": "About",
+    "companyTerms": "Terms and Condition",
+    "companyPrivacy": "Privacy Policy",
+    "taglineLine1": "Translation that feels native,",
+    "taglineLine2": "powered by AI.",
+    "copyright": "© 2026 WarpTalk. All rights reserved.",
+    "ctaLine1": "AI moves fast.",
+    "ctaLine2": "Stay ahead with WarpTalk.",
+    "emailPlaceholder": "Enter email address",
+    "subscribe": "Subscribe",
+    "feelingLucky": "Feeling lucky?"
+  }
+}

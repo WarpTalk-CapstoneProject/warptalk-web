@@ -70,6 +70,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The `.glass-dashboard-scope` class in `globals.css` scopes glass styling to authenticated host pages so landing and auth pages stay unchanged.
 - The Host profile control is currently presentational in this layout pass. Account-menu behavior should be wired back in if the product requires profile or logout actions from the topbar.
 - Removing the Ask WarpBot page-context strip only suppresses the ambient `pageContext` payload for the current page/entity. Explicit `@` mention chips still send their selected entity references.
+- **2026-09-04 (WT-607):** the primary workspace navigation in `src/components/layout/linear-sidebar.tsx` — `mainNav` (Home/Meetings/Schedules/History/Voice Profiles, plus the "Join by code"/"Create Meeting" action tooltips) and `workspaceNav` (Dashboard/Members/Documents/Glossary/My tasks/Knowledge/Settings) — now reads labels from `useTranslations("common.sidebar")` against `messages/{en,vi,ja}/common.json`, and the "Switched to workspace"/"Failed to switch workspace" toasts are translated too. The **admin console nav** (`adminSections`) and the **settings-page collapsed nav** (`settingsItems`) inside the same file were deliberately left as English literals for this pass — see `.agents/page-docs/i18n-localization.md` for the Phase A/B split and why.
 
 ## Known Limitations
 

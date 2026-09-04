@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import type { Variants } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 const AUTH_VIDEO_URL =
   "/assets/videos/auth-investor-deck.mp4";
@@ -66,7 +67,11 @@ export function GoogleAuthIcon({ className = "size-4" }: { className?: string })
 
 export function CinematicAuthShell({ children }: { children: ReactNode }) {
   return (
-    <main className="flex min-h-screen w-full bg-black p-2 text-white selection:bg-white/30 transition-all duration-500 lg:h-screen lg:overflow-hidden lg:p-4">
+    <main className="relative flex min-h-screen w-full bg-black p-2 text-white selection:bg-white/30 transition-all duration-500 lg:h-screen lg:overflow-hidden lg:p-4">
+      <div className="absolute right-4 top-4 z-30 lg:right-6 lg:top-6">
+        <LanguageSwitcher className="border-white/15 bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white" />
+      </div>
+
       <section className="relative hidden h-full w-[52%] flex-col items-center justify-end overflow-hidden rounded-3xl px-12 pb-32 shadow-2xl lg:flex">
         <video
           autoPlay

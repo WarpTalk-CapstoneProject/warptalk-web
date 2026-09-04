@@ -7,11 +7,12 @@ import Hls from "hls.js";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import type { MotionValue, Variants } from "motion/react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
-import { getPlanDescription, buildFeatureList } from "@/lib/utils";
+import { getPlanDescription, buildFeatureList, cn } from "@/lib/utils";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import {
   getLandingGetStartedHref,
@@ -20,74 +21,40 @@ import {
 } from "@/lib/auth/landing-redirect";
 import type { PlanDto } from "@/types/billing";
 import { formatMoney } from "@/lib/format/currency";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 const VIDEO_SRC =
   "https://stream.mux.com/9JXDljEVWYwWu01PUkAemafDugK89o01BR6zqJ3aS9u00A.m3u8";
 
 const navLinks = [
-  { id: "about", label: "About", href: "#about" },
-  { id: "features", label: "Feature", href: "#features" },
-  { id: "pricing", label: "Pricing", href: "#pricing" },
-  { id: "contact", label: "Contact", href: "#contact" },
+  { id: "about", href: "#about" },
+  { id: "features", href: "#features" },
+  { id: "pricing", href: "#pricing" },
+  { id: "contact", href: "#contact" },
 ];
 
-const badges = [
-  "Real-time Translation",
-  "AI Summary Analysis",
-  "Human Voice Cloning",
-];
+const badgeKeys = [
+  "realtimeTranslation",
+  "aiSummaryAnalysis",
+  "humanVoiceCloning",
+] as const;
 const logos = ["NOVA", "AXIS", "ORBIT", "PRISM", "LUMA", "ECHO"];
+// i18n-allow: single words on the splash screen, not read for their meaning.
 const loaderWords = ["Translation", "Clone Voice", "AI"];
 
 const featureSteps = [
-  {
-    number: "01",
-    kicker: "Signal Drift",
-    title: "Every voice leaves a trace.",
-  },
-  {
-    number: "02",
-    kicker: "Language Crossing",
-    title: "Meaning crosses over.",
-  },
-  {
-    number: "03",
-    kicker: "The Pause",
-    title: "The conversation keeps moving while the signal changes form.",
-  },
-  {
-    number: "04",
-    kicker: "Memory Bloom",
-    title: "The room remembers.",
-  },
-];
+  { number: "01", key: "signalDrift" },
+  { number: "02", key: "languageCrossing" },
+  { number: "03", key: "thePause" },
+  { number: "04", key: "memoryBloom" },
+] as const;
 
 const signalRows = [
-  {
-    number: "01",
-    meta: "Capture / STT / Audio",
-    label: "Capture",
-    pattern: "wave",
-  },
-  {
-    number: "02",
-    meta: "Understand / Context / Memory",
-    label: "Understand",
-    pattern: "ring",
-  },
-  {
-    number: "03",
-    meta: "Translate / AI / Language",
-    label: "Translate",
-    pattern: "sine",
-  },
-  { number: "04", meta: "Speak / TTS / Voice", label: "Speak", pattern: "orb" },
-  {
-    number: "05",
-    meta: "Remember / Transcript / Assistant",
-    label: "Remember",
-    pattern: "arc",
-  },
-];
+  { number: "01", key: "capture", pattern: "wave" },
+  { number: "02", key: "understand", pattern: "ring" },
+  { number: "03", key: "translate", pattern: "sine" },
+  { number: "04", key: "speak", pattern: "orb" },
+  { number: "05", key: "remember", pattern: "arc" },
+] as const;
 
 const containerVariants = {
   hidden: {},
@@ -485,6 +452,7 @@ function BranchTextLabel({
 }
 
 function FeatureStoryBoard() {
+  const t = useTranslations("landing");
   const storyRef = useRef<HTMLDivElement | null>(null);
   const { scrollYProgress } = useScroll({
     target: storyRef,
@@ -621,6 +589,14 @@ function FeatureStoryBoard() {
               }}
             />
           ))}
+          {/*
+            Phase A scope note (see .agents/page-docs/i18n-localization.md): the annotation
+            labels along this hand-tuned SVG story map ("live", "low latency", language names,
+            "decisions"/"questions"/etc. below) are left English-only for now. Their x/y
+            coordinates were tuned against these exact character widths, and swapping in
+            longer vi/ja strings would need each position re-tuned per locale — real work,
+            tracked as Phase B rather than done blind here.
+          */}
           <BranchLabel
             x={586}
             y={484}
@@ -813,9 +789,9 @@ function FeatureStoryBoard() {
         >
           <div className="feature-story-index">
             <span>{step.number}</span>
-            <small>{step.kicker}</small>
+            <small>{t(`featureSteps.${step.key}.kicker`)}</small>
           </div>
-          <h2>{step.title}</h2>
+          <h2>{t(`featureSteps.${step.key}.title`)}</h2>
         </motion.article>
       ))}
 
@@ -828,8 +804,8 @@ function FeatureStoryBoard() {
           className="feature-signal-copy"
           style={{ opacity: signalCopyOpacity, y: signalCopyY }}
         >
-          <h3>System Signals</h3>
-          <p>Five core signals power every conversation across any language.</p>
+          <h3>{t("systemSignalsTitle")}</h3>
+          <p>{t("systemSignalsBody")}</p>
         </motion.aside>
 
         <motion.div
@@ -847,8 +823,8 @@ function FeatureStoryBoard() {
             >
               <span className="feature-signal-number">{row.number}</span>
               <span className="feature-signal-label">
-                <small>{row.meta}</small>
-                <strong>{row.label}</strong>
+                <small>{t(`signals.${row.key}.meta`)}</small>
+                <strong>{t(`signals.${row.key}.label`)}</strong>
               </span>
               <span className="feature-signal-pattern">
                 <FeaturePattern type={row.pattern} />
@@ -863,6 +839,7 @@ function FeatureStoryBoard() {
 }
 
 function FeatureTraceSection() {
+  const t = useTranslations("landing");
   const sectionRef = useRef<HTMLElement | null>(null);
   const { scrollYProgress } = useScroll({
     target: sectionRef,
@@ -887,15 +864,11 @@ function FeatureTraceSection() {
             viewport={{ once: true, amount: 0.35 }}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           >
-            <h2>
-              Voice
-              <br />
-              returns
-              <br />
-              human.
-            </h2>
+            <h2>{t("voiceHeading")}</h2>
           </motion.div>
           <div className="feature-wave-panel">
+            {/* i18n-allow: single-word ambient labels in a decorative waveform panel, not
+                load-bearing content — kept in this Phase A pass, see i18n-localization.md. */}
             <div className="feature-wave-labels">
               <span>tone</span>
               <span>intent</span>
@@ -922,12 +895,11 @@ function FeatureTraceSection() {
 
         <div className="feature-understand-row">
           <div>
-            <h2>When the room understands.</h2>
-            <p>
-              No switching tabs. No waiting for summaries. The conversation
-              stays alive.
-            </p>
+            <h2>{t("understandHeading")}</h2>
+            <p>{t("understandBody")}</p>
           </div>
+          {/* i18n-allow: decorative language-name chips illustrating the product's multilingual
+              reach, not read as instructional copy — kept in this Phase A pass. */}
           <div className="feature-language-line">
             <span>English</span>
             <span>Vietnamese</span>
@@ -942,6 +914,9 @@ function FeatureTraceSection() {
 }
 
 function PricingSection() {
+  const t = useTranslations("landing");
+  const pricingT = (key: string, values?: Record<string, string | number>) =>
+    t(`pricing.${key}` as string, values);
   const router = useRouter();
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
@@ -998,14 +973,14 @@ function PricingSection() {
       <div className="c3-grid">
         {isLoading ? (
           <div className="col-span-full flex justify-center py-20 text-white/50">
-            Loading plans...
+            {t("pricing.loading")}
           </div>
         ) : (
           plans
             .filter((plan: PlanDto) => plan.isActive !== false)
             .sort((a: PlanDto, b: PlanDto) => a.sortOrder - b.sortOrder)
             .map((plan: PlanDto) => {
-              const featureList = buildFeatureList(plan);
+              const featureList = buildFeatureList(plan, pricingT);
 
               return (
                 <article
@@ -1017,10 +992,10 @@ function PricingSection() {
                   <p className="c3-tier-small">{plan.tier}</p>
                   <h3 className="c3-tier-large">
                     {plan.price === 0
-                      ? "Free"
-                      : `${formatMoney(plan.price, plan.currency)}/mo`}
+                      ? t("pricing.free")
+                      : `${formatMoney(plan.price, plan.currency)}${t("pricing.perMonth")}`}
                   </h3>
-                  <p className="c3-desc">{getPlanDescription(plan.name)}</p>
+                  <p className="c3-desc">{getPlanDescription(plan.name, pricingT)}</p>
                   <ul className="c3-list">
                     {featureList.map((feature: string) => (
                       <li key={feature}>
@@ -1045,7 +1020,7 @@ function PricingSection() {
                     className="c3-btn cursor-pointer"
                     onClick={() => handleChoosePlan(plan.slug)}
                   >
-                    Choose Plan
+                    {t("pricing.choosePlan")}
                   </button>
                 </article>
               );
@@ -1063,20 +1038,20 @@ function PricingSection() {
  * that is a separate piece of work. Encoding the destination per entry rather than hardcoding
  * "#" at the call site is what lets the download link be real without pretending the others are.
  */
-const footerNavigation: Array<{ label: string; href: string }> = [
-  { label: "How it works", href: "#" },
-  { label: "Features", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "Download desktop app", href: "/download" },
-  { label: "Testimonials", href: "#" },
-  { label: "FAQ", href: "#" },
+const footerNavigation: Array<{ key: string; href: string }> = [
+  { key: "navHowItWorks", href: "#" },
+  { key: "navFeatures", href: "#features" },
+  { key: "navPricing", href: "#pricing" },
+  { key: "navDownload", href: "/download" },
+  { key: "navTestimonials", href: "#" },
+  { key: "navFaq", href: "#" },
 ];
-const footerCompany = [
-  "Blog",
-  "About",
-  "Terms and Condition",
-  "Privacy Policy",
-];
+const footerCompanyKeys = [
+  "companyBlog",
+  "companyAbout",
+  "companyTerms",
+  "companyPrivacy",
+] as const;
 
 const footerSocialIcons = [
   {
@@ -1116,6 +1091,7 @@ function FooterLogoMark({ large = false }: { large?: boolean }) {
 }
 
 function LandingFooter() {
+  const t = useTranslations("landing.footer");
   useEffect(() => {
     function fitWatermark() {
       const svg = document.getElementById("watermarkSvg");
@@ -1172,14 +1148,14 @@ function LandingFooter() {
 
           <div className="footer-tagline-container">
             <p className="footer-tagline">
-              Translation that feels native,
+              {t("taglineLine1")}
               <br />
-              <span>powered by AI.</span>
+              <span>{t("taglineLine2")}</span>
             </p>
           </div>
 
           <div className="footer-social-row">
-            <span className="footer-social-label">Stay in touch!</span>
+            <span className="footer-social-label">{t("stayInTouch")}</span>
             <div className="footer-social-icons" aria-label="Social links">
               {footerSocialIcons.map((icon) => (
                 <div
@@ -1214,25 +1190,25 @@ function LandingFooter() {
                 <path d="M18 5 L 12 5" />
                 <path d="M18 5 L 18 11" />
               </svg>
-              <span className="lucky-text">Feeling lucky?</span>
+              <span className="lucky-text">{t("feelingLucky")}</span>
             </div>
           </div>
 
           <div className="footer-right-top">
             <div className="footer-nav-cols">
               <div className="footer-col">
-                <h3 className="footer-col-title">Navigation</h3>
+                <h3 className="footer-col-title">{t("navigationTitle")}</h3>
                 {footerNavigation.map((item) => (
-                  <a href={item.href} key={item.label}>
-                    {item.label}
+                  <a href={item.href} key={item.key}>
+                    {t(item.key as string)}
                   </a>
                 ))}
               </div>
               <div className="footer-col">
-                <h3 className="footer-col-title">Company</h3>
-                {footerCompany.map((item) => (
-                  <a href="#" key={item}>
-                    {item}
+                <h3 className="footer-col-title">{t("companyTitle")}</h3>
+                {footerCompanyKeys.map((key) => (
+                  <a href="#" key={key}>
+                    {t(key)}
                   </a>
                 ))}
               </div>
@@ -1240,18 +1216,16 @@ function LandingFooter() {
           </div>
 
           <div className="footer-bottom">
-            <p className="footer-copyright">
-              © 2026 WarpTalk. All rights reserved.
-            </p>
+            <p className="footer-copyright">{t("copyright")}</p>
             <div className="footer-cta-mini">
               <h4>
-                AI moves fast.
+                {t("ctaLine1")}
                 <br />
-                <strong>Stay ahead with WarpTalk.</strong>
+                <strong>{t("ctaLine2")}</strong>
               </h4>
               <div className="footer-subscribe-row">
-                <input type="email" placeholder="Enter email address" />
-                <button type="button">Subscribe</button>
+                <input type="email" placeholder={t("emailPlaceholder")} />
+                <button type="button">{t("subscribe")}</button>
               </div>
             </div>
           </div>
@@ -1281,6 +1255,8 @@ function LandingFooter() {
 }
 
 export default function HomePage() {
+  const t = useTranslations("landing");
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const [hasLoaderFinished, setHasLoaderFinished] = useState(false);
   const [hasShellLoaded, setHasShellLoaded] = useState(false);
@@ -1437,7 +1413,7 @@ export default function HomePage() {
               <div className="hidden items-center gap-2 text-sm text-white/62 md:flex">
                 {navLinks.map((link) => (
                   <a
-                    key={link.label}
+                    key={link.id}
                     href={link.href}
                     onClick={(event) => handleNavClick(event, link.id)}
                     className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
@@ -1463,7 +1439,7 @@ export default function HomePage() {
                           : "relative z-10"
                       }
                     >
-                      {link.label}
+                      {t(`nav.${link.id}`)}
                     </span>
                   </a>
                 ))}
@@ -1478,17 +1454,21 @@ export default function HomePage() {
                   href="/download"
                   className="relative rounded-full px-4 py-2 transition-colors hover:text-white"
                 >
-                  <span className="relative z-10">Download</span>
+                  <span className="relative z-10">{t("nav.download")}</span>
                 </Link>
               </div>
 
-              <button
-                type="button"
-                onClick={handleGetStarted}
-                className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
-              >
-                Get Started
-              </button>
+              <div className="flex items-center gap-3">
+                <LanguageSwitcher className="border-white/15 bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white" />
+
+                <button
+                  type="button"
+                  onClick={handleGetStarted}
+                  className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
+                >
+                  {t("nav.getStarted")}
+                </button>
+              </div>
             </nav>
           </header>
 
@@ -1503,30 +1483,42 @@ export default function HomePage() {
                 variants={itemVariants}
                 className="relative top-[clamp(-8rem,-12vh,-5rem)] mb-7 flex flex-wrap justify-center gap-3"
               >
-                {badges.map((badge) => (
+                {badgeKeys.map((key) => (
                   <div
-                    key={badge}
+                    key={key}
                     className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-4 py-2 text-xs text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-md"
                   >
                     <BadgeIcon />
-                    <span>{badge}</span>
+                    <span>{t(`badges.${key}`)}</span>
                   </div>
                 ))}
               </motion.div>
 
+              {/*
+                Japanese needs its own leading and tracking. `leading-[0.92]` is a line box
+                SHORTER than the font size, which only works because Latin glyphs leave slack
+                above the cap height — a CJK glyph fills its em box, so at 0.92 the two lines
+                of the Japanese headline physically overlapped. The negative letter-spacing is
+                dropped for the same reason: it is tuned for Latin sidebearings and crowds
+                kana/kanji.
+              */}
               <motion.h1
                 variants={itemVariants}
-                className="max-w-5xl text-[3.25rem] font-normal leading-[0.92] tracking-[-0.065em] text-white md:text-[5rem] lg:text-[6.1rem]"
+                className={cn(
+                  "max-w-5xl text-[3.25rem] font-normal text-white md:text-[5rem] lg:text-[6.1rem]",
+                  locale === "ja"
+                    ? "leading-[1.14] tracking-[-0.02em]"
+                    : "leading-[0.92] tracking-[-0.065em]",
+                )}
               >
-                Translation that feel native
+                {t("hero.title")}
               </motion.h1>
 
               <motion.p
                 variants={itemVariants}
                 className="mt-6 max-w-2xl text-base leading-7 text-white/58 md:text-lg"
               >
-                Real-time interpretation global teams. Natural conversations.
-                Zero language barriers
+                {t("hero.subtitle")}
               </motion.p>
 
               <motion.div
@@ -1538,7 +1530,7 @@ export default function HomePage() {
                   onClick={handleGetStarted}
                   className="rounded-xl border border-white/55 bg-black px-7 py-3 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)] transition-colors hover:bg-white hover:text-black cursor-pointer"
                 >
-                  Get Started
+                  {t("hero.getStarted")}
                 </button>
                 {/*
                   Both hero CTAs used to lead to /login, and the login screen
@@ -1550,7 +1542,7 @@ export default function HomePage() {
                   href="/register"
                   className="rounded-xl border border-white/10 bg-white/[0.06] px-7 py-3 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white hover:text-black"
                 >
-                  Create an Account
+                  {t("hero.createAccount")}
                 </Link>
               </motion.div>
             </motion.div>

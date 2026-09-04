@@ -1,0 +1,16 @@
+{
+  "brand": "WarpTalk",
+  "terms": {
+    "title": "Terms of use",
+    "summary": "The terms that will govern your use of WarpTalk — accounts, workspaces, meetings, and the translation and voice features."
+  },
+  "privacy": {
+    "title": "Privacy policy",
+    "summary": "What WarpTalk collects, how long it keeps it, and what happens to the audio, transcripts, and voice models produced by a meeting."
+  },
+  "placeholder": {
+    "disclaimer": "This document has not been published yet. Until it is, no version of it is in force, and nothing on this page should be read as an agreement. For questions about how WarpTalk handles your account, your recordings, or your voice data, contact the team before creating an account.",
+    "backToHome": "Back to home",
+    "backToSignIn": "Back to sign in"
+  }
+}

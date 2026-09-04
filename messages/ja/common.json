@@ -1,0 +1,28 @@
+{
+  "languageSwitcher": {
+    "srLabel": "言語を切り替える",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "ja": "日本語"
+  },
+  "sidebar": {
+    "nav": {
+      "home": "ホーム",
+      "meetings": "ミーティング",
+      "joinByCode": "コードで参加",
+      "createMeeting": "ミーティングを作成",
+      "schedules": "スケジュール",
+      "history": "履歴",
+      "voiceProfiles": "ボイスプロファイル",
+      "dashboard": "ダッシュボード",
+      "members": "メンバー",
+      "documents": "ドキュメント",
+      "glossary": "用語集",
+      "myTasks": "自分のタスク",
+      "knowledge": "ナレッジ",
+      "settings": "設定"
+    },
+    "switchWorkspaceSuccess": "ワークスペース「{name}」に切り替えました",
+    "switchWorkspaceError": "ワークスペースの切り替えに失敗しました"
+  }
+}

@@ -72,6 +72,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 type IconType = React.ElementType<IconProps>;
 
 interface NavItem {
@@ -178,6 +179,7 @@ function NavLink({
 }
 
 export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
+  const t = useTranslations("common.sidebar");
   const pathname = usePathname();
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
   const canCreateMeetings = useCanCreateMeetings();
@@ -203,14 +205,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const slug = activeWorkspaceSlug || "workspace";
 
   const mainNav: NavItem[] = [
-    { icon: House, label: "Home", href: `/${slug}/home` },
+    { icon: House, label: t("nav.home"), href: `/${slug}/home` },
     {
       icon: SquaresFour,
-      label: "Meetings",
+      label: t("nav.meetings"),
       href: `/${slug}/rooms`,
       tourId: "nav-meetings",
       actions: [
-        { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
+        { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: t("nav.joinByCode") },
         // Join by code stays for everyone — an external collaborator is invited INTO meetings, they
         // just may not open them. WT-371 #2.
         ...(canCreateMeetings
@@ -218,18 +220,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               {
                 icon: Plus,
                 onClick: () => setCreateRoomModalOpen(true),
-                title: "Create Meeting",
+                title: t("nav.createMeeting"),
                 tourId: "nav-create-meeting",
               },
             ]
           : [])
       ]
     },
-    { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
-    { icon: Archive, label: "History", href: `/${slug}/history` },
+    { icon: CalendarBlank, label: t("nav.schedules"), href: `/${slug}/schedules` },
+    { icon: Archive, label: t("nav.history"), href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
-    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
+    { icon: Waveform, label: t("nav.voiceProfiles"), href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -273,10 +275,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     try {
       const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
       applySelectedWorkspace(res, setActiveWorkspace);
-      toast.success(`Switched to workspace "${res.name}"`);
+      toast.success(t("switchWorkspaceSuccess", { name: res.name }));
       router.push(`/${res.slug}/home`);
     } catch {
-      toast.error("Failed to switch workspace");
+      toast.error(t("switchWorkspaceError"));
     }
   };
 
@@ -298,14 +300,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // summarises.
     workspaceNav.push({
       icon: SquaresFour,
-      label: "Dashboard",
+      label: t("nav.dashboard"),
       href: `/${slug}/dashboard`,
       tourId: "nav-dashboard",
     });
   }
   workspaceNav.push(
-    { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
+    { icon: Users, label: t("nav.members"), href: `/${slug}/members`, tourId: "nav-members" },
+    { icon: FileText, label: t("nav.documents"), href: `/${slug}/documents`, tourId: "nav-documents" },
     // Directly under Documents, and visible to every member — the two are constantly mistaken for
     // each other, and sitting them together is what makes the difference legible: Documents is
     // content the assistant retrieves from afterwards, Glossary is terminology applied to speech
@@ -314,12 +316,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // Its absence from this list is the whole reason the page was deleted as dead code, and the
     // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
     // can navigate to is indistinguishable from one that was never built.
-    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" },
+    { icon: BookOpen, label: t("nav.glossary"), href: `/${slug}/glossary`, tourId: "nav-glossary" },
     // Work the meetings assigned to you, keyed on the person rather than the meeting. Listed here
     // for the same reason Glossary is: an endpoint no navigation reaches is indistinguishable
     // from one that was never built, and this list is the whole point of action items becoming
     // rows instead of sentences.
-    { icon: CheckSquare, label: "My tasks", href: `/${slug}/tasks`, tourId: "nav-tasks" }
+    { icon: CheckSquare, label: t("nav.myTasks"), href: `/${slug}/tasks`, tourId: "nav-tasks" }
   );
 
   if (isOwnerOrAdmin) {
@@ -327,13 +329,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // "who is in this workspace" and "who is on the way in" were never two questions.
     // What the system has indexed from this workspace's documents and meetings. Owner/Admin
     // only, because the view crosses per-document access policies.
-    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
+    workspaceNav.push({ icon: Brain, label: t("nav.knowledge"), href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
     // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
     // credit balance belong. It is reached through Settings now, not from the app's main nav.
     //
     // Last in the list, and pushed after everything else so it stays last as entries are added.
     // Settings is where you go to change the workspace, not one of the places in it.
-    workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
+    workspaceNav.push({ icon: GearSix, label: t("nav.settings"), href: `/${slug}/settings` });
   }
 
   /**

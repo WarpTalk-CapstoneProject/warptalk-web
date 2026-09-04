@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 
 import { LegalPlaceholder } from "@/components/legal/legal-placeholder";
 
@@ -6,11 +7,7 @@ export const metadata: Metadata = {
   title: "Privacy policy",
 };
 
-export default function PrivacyPage() {
-  return (
-    <LegalPlaceholder
-      title="Privacy policy"
-      summary="What WarpTalk collects, how long it keeps it, and what happens to the audio, transcripts, and voice models produced by a meeting."
-    />
-  );
+export default async function PrivacyPage() {
+  const t = await getTranslations("legal.privacy");
+  return <LegalPlaceholder title={t("title")} summary={t("summary")} />;
 }

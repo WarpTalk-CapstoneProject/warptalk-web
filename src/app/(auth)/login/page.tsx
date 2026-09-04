@@ -11,16 +11,18 @@ import { AnimatePresence, motion } from "motion/react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 
 import { useGoogleLogin } from "@react-oauth/google";
 
 import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import { Checkbox } from "@/components/ui/checkbox";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
@@ -29,12 +31,14 @@ import { WorkspaceService } from "@/services/workspace.service";
 import { useAuthStore } from "@/stores/auth-store";
 import type { AuthResponse } from "@/types/auth";
 
-const loginSchema = z.object({
-  email: z.string().min(1, "Email is required").email("Invalid email address"),
-  password: z.string().optional(),
-});
+function getLoginSchema(tv: ReturnType<typeof useTranslations>) {
+  return z.object({
+    email: z.string().min(1, tv("emailRequired")).email(tv("emailInvalid")),
+    password: z.string().optional(),
+  });
+}
 
-type LoginFormData = z.infer<typeof loginSchema>;
+type LoginFormData = { email: string; password?: string };
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
 function getSafeCallbackUrl(value: string | null) {
@@ -48,7 +52,7 @@ function getSafeCallbackUrl(value: string | null) {
   return value;
 }
 
-async function processPendingInvitationToken(rawToken?: string | null) {
+async function processPendingInvitationToken(rawToken: string | null | undefined, joinedMessage: string) {
   const token =
     rawToken ??
     (typeof window !== "undefined"
@@ -57,13 +61,14 @@ async function processPendingInvitationToken(rawToken?: string | null) {
   if (!token) return;
   try {
     await WorkspaceService.acceptInvitation(token);
-    toast.success("Joined workspace successfully!");
+    toast.success(joinedMessage);
   } catch {
     // Proceed to redirect
   }
 }
 
 function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
+  const t = useTranslations("auth.login");
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
@@ -87,9 +92,9 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         login(user, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
 
-        toast.success("Google login successful!");
+        toast.success(t("toasts.googleLoginSuccess"));
 
-        await processPendingInvitationToken();
+        await processPendingInvitationToken(null, t("toasts.joinedWorkspace"));
 
         const isAdmin = user.roles?.some(
           (r: string) => r.toLowerCase() === "admin",
@@ -102,13 +107,12 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
         toast.error(
-          error?.response?.data?.error ||
-            "Google login failed. Please try again.",
+          error?.response?.data?.error || t("toasts.googleLoginFailed"),
         );
       }
     },
     onError: () => {
-      toast.error("Google authentication failed or popup was closed.");
+      toast.error(t("toasts.googleAuthFailed"));
     },
   });
 
@@ -119,26 +123,30 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
       className="flex h-14 w-full items-center justify-center gap-3 rounded-full border border-neutral-300 bg-white text-[15px] font-medium text-black transition-colors hover:bg-neutral-50 cursor-pointer"
     >
       <GoogleAuthIcon className="size-5" />
-      Continue with Google
+      {t("continueWithGoogle")}
     </button>
   );
 }
 
 function GoogleLoginUnavailableButton() {
+  const t = useTranslations("auth.login");
   return (
     <button
       type="button"
       disabled
-      title="Set NEXT_PUBLIC_GOOGLE_CLIENT_ID to enable Google login."
+      title={t("googleUnavailableHint")}
       className="flex h-14 w-full cursor-not-allowed items-center justify-center gap-3 rounded-full border border-neutral-200 bg-neutral-50 text-[15px] font-medium text-neutral-400"
     >
       <GoogleAuthIcon className="size-5" />
-      Continue with Google
+      {t("continueWithGoogle")}
     </button>
   );
 }
 
 function LoginForm() {
+  const t = useTranslations("auth.login");
+  const tv = useTranslations("validation");
+  const loginSchema = useMemo(() => getLoginSchema(tv), [tv]);
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = getSafeCallbackUrl(
@@ -184,7 +192,7 @@ function LoginForm() {
 
     if (!data.password || data.password.length < 6) {
       setError("password", {
-        message: "Password must be at least 6 characters",
+        message: tv("passwordMin6"),
       });
       return;
     }
@@ -199,9 +207,9 @@ function LoginForm() {
       login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
 
-      toast.success("Login successful!");
+      toast.success(t("toasts.loginSuccess"));
 
-      await processPendingInvitationToken();
+      await processPendingInvitationToken(null, t("toasts.joinedWorkspace"));
 
       const isAdmin = user.roles?.some(
         (r: string) => r.toLowerCase() === "admin",
@@ -221,13 +229,13 @@ function LoginForm() {
       // needs a session this account cannot get. Sending them to /verify-email puts the resend
       // form in front of them instead.
       if (error?.response?.data?.code === "ACCOUNT_PENDING") {
-        toast.error("Verify your email address to finish signing in.");
+        toast.error(t("toasts.verifyEmailPrompt"));
         router.push("/verify-email");
         return;
       }
 
       toast.error(
-        error?.response?.data?.error || "Login failed. Please try again.",
+        error?.response?.data?.error || t("toasts.loginFailed"),
       );
     }
   };
@@ -253,10 +261,14 @@ function LoginForm() {
         </Link>
       </div>
 
+      <div className="absolute top-6 right-6 z-30">
+        <LanguageSwitcher />
+      </div>
+
       <div className="relative z-20 w-full max-w-[360px] px-4">
         <div className="flex flex-col items-center mb-10">
           <h1 className="text-3xl font-semibold tracking-tight text-black mb-2 text-center">
-            Log in or sign up
+            {t("heading")}
           </h1>
         </div>
 
@@ -282,7 +294,7 @@ function LoginForm() {
                 <div className="flex items-center gap-4 py-2">
                   <div className="h-[1px] flex-1 bg-neutral-200" />
                   <span className="text-[11px] font-medium uppercase text-neutral-500 tracking-wider">
-                    Or
+                    {t("or")}
                   </span>
                   <div className="h-[1px] flex-1 bg-neutral-200" />
                 </div>
@@ -293,7 +305,7 @@ function LoginForm() {
                     type="email"
                     autoComplete="email"
                     autoFocus
-                    placeholder="Email address"
+                    placeholder={t("emailPlaceholder")}
                     className={cn(
                       "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
                       errors.email &&
@@ -316,7 +328,7 @@ function LoginForm() {
                   type="submit"
                   className="flex h-14 w-full items-center justify-center rounded-full bg-black font-medium text-white transition hover:bg-neutral-800 active:scale-[0.99] text-[15px]"
                 >
-                  Continue
+                  {t("continue")}
                 </button>
               </motion.div>
             ) : (
@@ -330,7 +342,7 @@ function LoginForm() {
               >
                 <div className="relative flex h-14 w-full items-center justify-between rounded-full border border-neutral-300 bg-white px-5 mb-4">
                   <label className="absolute -top-2 left-4 bg-white px-1 text-[12px] font-normal text-neutral-500">
-                    Email address
+                    {t("emailLabel")}
                   </label>
                   <span className="text-[15px] text-black truncate pr-4">
                     {getValues("email")}
@@ -340,7 +352,7 @@ function LoginForm() {
                     onClick={() => setStep("email")}
                     className="text-[15px] font-normal text-[#2563eb] hover:underline whitespace-nowrap"
                   >
-                    Edit
+                    {t("edit")}
                   </button>
                 </div>
 
@@ -350,7 +362,7 @@ function LoginForm() {
                       type={showPassword ? "text" : "password"}
                       autoComplete="current-password"
                       autoFocus
-                      placeholder="Password"
+                      placeholder={t("passwordPlaceholder")}
                       className={cn(
                         "h-14 w-full rounded-full border border-neutral-300 bg-white px-5 pr-12 text-[15px] text-black outline-none transition-all placeholder:text-neutral-500 focus:border-black focus:ring-1 focus:ring-black",
                         errors.password &&
@@ -383,13 +395,13 @@ function LoginForm() {
                 <div className="flex items-center justify-between pt-1">
                   <label className="flex items-center gap-2 text-[13px] font-medium text-neutral-800 cursor-pointer bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
                     <Checkbox className="size-[14px] rounded-sm border-neutral-300 data-[state=checked]:bg-black data-[state=checked]:text-white" />
-                    Keep me logged in
+                    {t("keepLoggedIn")}
                   </label>
                   <Link
                     href="/forgot-password"
                     className="text-[13px] font-medium text-neutral-800 hover:text-black hover:underline bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg"
                   >
-                    Forgot password?
+                    {t("forgotPassword")}
                   </Link>
                 </div>
 
@@ -401,7 +413,7 @@ function LoginForm() {
                   {isSubmitting ? (
                     <Spinner weight="bold" className="animate-spin" />
                   ) : (
-                    "Log In"
+                    t("logIn")
                   )}
                 </button>
               </motion.div>
@@ -419,12 +431,12 @@ function LoginForm() {
         */}
         <p className="mt-6 text-center text-[13px] font-medium text-neutral-700 relative z-20">
           <span className="bg-white/70 backdrop-blur-md px-2 py-1 rounded-lg">
-            New to WarpTalk?{" "}
+            {t("newToWarpTalk")}{" "}
             <Link
               href={`/register?callbackUrl=${encodeURIComponent(callbackUrl)}`}
               className="text-black hover:underline"
             >
-              Create account
+              {t("createAccount")}
             </Link>
           </span>
         </p>
@@ -436,14 +448,14 @@ function LoginForm() {
               href="/terms"
               className="hover:text-black hover:underline transition-colors"
             >
-              Terms of use
+              {t("termsOfUse")}
             </Link>
             <span className="text-neutral-400">|</span>
             <Link
               href="/privacy"
               className="hover:text-black hover:underline transition-colors"
             >
-              Privacy policy
+              {t("privacyPolicy")}
             </Link>
           </div>
         </div>

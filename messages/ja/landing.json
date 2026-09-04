@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "about": "概要",
+    "features": "機能",
+    "pricing": "料金",
+    "contact": "お問い合わせ",
+    "download": "ダウンロード",
+    "getStarted": "はじめる"
+  },
+  "badges": {
+    "realtimeTranslation": "リアルタイム翻訳",
+    "aiSummaryAnalysis": "AI要約分析",
+    "humanVoiceCloning": "人の声のクローン"
+  },
+  "hero": {
+    "title": "ネイティブのように自然な翻訳",
+    "subtitle": "グローバルチームのためのリアルタイム通訳。自然な会話。言語の壁はもうありません",
+    "getStarted": "はじめる",
+    "createAccount": "アカウントを作成"
+  },
+  "featureSteps": {
+    "signalDrift": { "kicker": "シグナルの軌跡", "title": "すべての声が痕跡を残す。" },
+    "languageCrossing": { "kicker": "言語を越えて", "title": "意味は国境を越えて伝わる。" },
+    "thePause": { "kicker": "その瞬間", "title": "信号が形を変える間も、会話は止まらない。" },
+    "memoryBloom": { "kicker": "記憶の芽生え", "title": "この部屋はすべてを覚えている。" }
+  },
+  "signals": {
+    "capture": { "meta": "収録 / 音声認識 / オーディオ", "label": "収録" },
+    "understand": { "meta": "理解 / コンテキスト / 記憶", "label": "理解" },
+    "translate": { "meta": "翻訳 / AI / 言語", "label": "翻訳" },
+    "speak": { "meta": "発話 / 音声合成 / ボイス", "label": "発話" },
+    "remember": { "meta": "記憶 / 文字起こし / アシスタント", "label": "記憶" }
+  },
+  "voiceHeading": "声は、そのまま人らしく戻ってくる。",
+  "understandHeading": "会話がその場で理解されるとき。",
+  "understandBody": "タブを切り替える必要はありません。要約を待つ必要もありません。会話はずっと生きたままです。",
+  "systemSignalsTitle": "5つのコアシグナル",
+  "systemSignalsBody": "5つのコアシグナルが、どの言語の会話も支えています。",
+  "pricing": {
+    "loading": "プランを読み込んでいます...",
+    "free": "無料",
+    "perMonth": "/月",
+    "choosePlan": "プランを選択",
+    "descriptionStartup": "信頼できるAI要約と履歴機能を必要とする、成長中のグローバルチーム向け。",
+    "descriptionEnterprise": "音声クローンとネイティブレベルの通訳を大規模に活用する事業者向け。",
+    "descriptionDefault": "ワークスペースの要件や追加機能に合わせて柔軟にカスタマイズできるプラン。",
+    "featureCredits": "サイクルごとに{count}クレジット",
+    "featureParticipants": "1ミーティングあたり最大{count}人まで参加可能",
+    "featureLanguages": "最大{count}言語まで同時利用可能",
+    "featureDefaultSupport": "標準メールサポート"
+  },
+  "footer": {
+    "stayInTouch": "つながりましょう!",
+    "navigationTitle": "ナビゲーション",
+    "companyTitle": "会社情報",
+    "navHowItWorks": "使い方",
+    "navFeatures": "機能",
+    "navPricing": "料金",
+    "navDownload": "デスクトップアプリをダウンロード",
+    "navTestimonials": "お客様の声",
+    "navFaq": "よくある質問",
+    "companyBlog": "ブログ",
+    "companyAbout": "会社概要",
+    "companyTerms": "利用規約",
+    "companyPrivacy": "プライバシーポリシー",
+    "taglineLine1": "ネイティブのように自然な翻訳、",
+    "taglineLine2": "AIによって実現。",
+    "copyright": "© 2026 WarpTalk. 無断転載・複製を禁じます。",
+    "ctaLine1": "AIは、日々進化しています。",
+    "ctaLine2": "WarpTalkとともに、その先へ。",
+    "emailPlaceholder": "メールアドレスを入力",
+    "subscribe": "登録する",
+    "feelingLucky": "運試ししてみる?"
+  }
+}

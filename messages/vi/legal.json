@@ -1,0 +1,16 @@
+{
+  "brand": "WarpTalk",
+  "terms": {
+    "title": "Điều khoản sử dụng",
+    "summary": "Các điều khoản chi phối việc bạn sử dụng WarpTalk — tài khoản, không gian làm việc, cuộc họp, và các tính năng dịch thuật, giọng nói."
+  },
+  "privacy": {
+    "title": "Chính sách bảo mật",
+    "summary": "WarpTalk thu thập những gì, lưu trữ trong bao lâu, và điều gì xảy ra với âm thanh, bản ghi và mô hình giọng nói được tạo ra từ một cuộc họp."
+  },
+  "placeholder": {
+    "disclaimer": "Tài liệu này chưa được công bố. Cho đến khi được công bố, không phiên bản nào của tài liệu có hiệu lực, và không nội dung nào trên trang này nên được hiểu là một thỏa thuận. Nếu có câu hỏi về cách WarpTalk xử lý tài khoản, bản ghi hoặc dữ liệu giọng nói của bạn, hãy liên hệ với đội ngũ trước khi tạo tài khoản.",
+    "backToHome": "Về trang chủ",
+    "backToSignIn": "Về trang đăng nhập"
+  }
+}

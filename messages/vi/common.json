@@ -1,0 +1,28 @@
+{
+  "languageSwitcher": {
+    "srLabel": "Đổi ngôn ngữ",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "ja": "日本語"
+  },
+  "sidebar": {
+    "nav": {
+      "home": "Trang chủ",
+      "meetings": "Cuộc họp",
+      "joinByCode": "Tham gia bằng mã",
+      "createMeeting": "Tạo cuộc họp",
+      "schedules": "Lịch họp",
+      "history": "Lịch sử",
+      "voiceProfiles": "Hồ sơ giọng nói",
+      "dashboard": "Bảng điều khiển",
+      "members": "Thành viên",
+      "documents": "Tài liệu",
+      "glossary": "Thuật ngữ",
+      "myTasks": "Công việc của tôi",
+      "knowledge": "Kiến thức",
+      "settings": "Cài đặt"
+    },
+    "switchWorkspaceSuccess": "Đã chuyển sang không gian làm việc \"{name}\"",
+    "switchWorkspaceError": "Không thể chuyển không gian làm việc"
+  }
+}

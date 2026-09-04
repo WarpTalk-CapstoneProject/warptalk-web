@@ -1,0 +1,75 @@
+{
+  "nav": {
+    "about": "Giới thiệu",
+    "features": "Tính năng",
+    "pricing": "Bảng giá",
+    "contact": "Liên hệ",
+    "download": "Tải xuống",
+    "getStarted": "Bắt đầu ngay"
+  },
+  "badges": {
+    "realtimeTranslation": "Dịch thời gian thực",
+    "aiSummaryAnalysis": "Tóm tắt bằng AI",
+    "humanVoiceCloning": "Nhân bản giọng nói"
+  },
+  "hero": {
+    "title": "Bản dịch tự nhiên như người bản xứ",
+    "subtitle": "Phiên dịch thời gian thực cho đội nhóm toàn cầu. Trò chuyện tự nhiên. Không còn rào cản ngôn ngữ",
+    "getStarted": "Bắt đầu ngay",
+    "createAccount": "Tạo tài khoản"
+  },
+  "featureSteps": {
+    "signalDrift": { "kicker": "Dấu vết tín hiệu", "title": "Mỗi giọng nói đều để lại một dấu vết." },
+    "languageCrossing": { "kicker": "Vượt qua ngôn ngữ", "title": "Ý nghĩa được truyền tải trọn vẹn." },
+    "thePause": { "kicker": "Khoảnh khắc chuyển giao", "title": "Cuộc trò chuyện vẫn tiếp diễn trong lúc tín hiệu đổi dạng." },
+    "memoryBloom": { "kicker": "Ký ức lưu giữ", "title": "Căn phòng ghi nhớ tất cả." }
+  },
+  "signals": {
+    "capture": { "meta": "Thu âm / Nhận dạng giọng nói / Âm thanh", "label": "Thu âm" },
+    "understand": { "meta": "Thấu hiểu / Ngữ cảnh / Ghi nhớ", "label": "Thấu hiểu" },
+    "translate": { "meta": "Dịch thuật / AI / Ngôn ngữ", "label": "Dịch thuật" },
+    "speak": { "meta": "Phát giọng nói / TTS / Giọng nói", "label": "Phát âm" },
+    "remember": { "meta": "Ghi nhớ / Bản ghi / Trợ lý", "label": "Ghi nhớ" }
+  },
+  "voiceHeading": "Giọng nói trở lại chân thực.",
+  "understandHeading": "Khi cả phòng cùng thấu hiểu.",
+  "understandBody": "Không cần chuyển tab. Không cần chờ tóm tắt. Cuộc trò chuyện luôn sống động.",
+  "systemSignalsTitle": "Tín hiệu cốt lõi",
+  "systemSignalsBody": "Năm tín hiệu cốt lõi vận hành mọi cuộc trò chuyện, bất kể ngôn ngữ nào.",
+  "pricing": {
+    "loading": "Đang tải các gói...",
+    "free": "Miễn phí",
+    "perMonth": "/tháng",
+    "choosePlan": "Chọn gói",
+    "descriptionStartup": "Dành cho các đội nhóm toàn cầu đang phát triển, cần tóm tắt AI và lịch sử đáng tin cậy.",
+    "descriptionEnterprise": "Dành cho tổ chức sử dụng nhân bản giọng nói và phiên dịch tự nhiên ở quy mô lớn.",
+    "descriptionDefault": "Gói linh hoạt, tùy chỉnh theo nhu cầu không gian làm việc và các tính năng bổ sung.",
+    "featureCredits": "{count} tín dụng mỗi chu kỳ",
+    "featureParticipants": "Tối đa {count} người tham gia mỗi cuộc họp",
+    "featureLanguages": "Tối đa {count} ngôn ngữ cùng lúc",
+    "featureDefaultSupport": "Hỗ trợ qua email tiêu chuẩn"
+  },
+  "footer": {
+    "stayInTouch": "Kết nối với chúng tôi!",
+    "navigationTitle": "Điều hướng",
+    "companyTitle": "Công ty",
+    "navHowItWorks": "Cách hoạt động",
+    "navFeatures": "Tính năng",
+    "navPricing": "Bảng giá",
+    "navDownload": "Tải ứng dụng máy tính",
+    "navTestimonials": "Đánh giá",
+    "navFaq": "Câu hỏi thường gặp",
+    "companyBlog": "Blog",
+    "companyAbout": "Giới thiệu",
+    "companyTerms": "Điều khoản sử dụng",
+    "companyPrivacy": "Chính sách bảo mật",
+    "taglineLine1": "Bản dịch tự nhiên như người bản xứ,",
+    "taglineLine2": "được vận hành bởi AI.",
+    "copyright": "© 2026 WarpTalk. Bảo lưu mọi quyền.",
+    "ctaLine1": "AI đang phát triển từng ngày.",
+    "ctaLine2": "Luôn dẫn đầu cùng WarpTalk.",
+    "emailPlaceholder": "Nhập địa chỉ email",
+    "subscribe": "Đăng ký",
+    "feelingLucky": "Thử vận may?"
+  }
+}

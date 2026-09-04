@@ -1,0 +1,28 @@
+{
+  "languageSwitcher": {
+    "srLabel": "Change language",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "ja": "日本語"
+  },
+  "sidebar": {
+    "nav": {
+      "home": "Home",
+      "meetings": "Meetings",
+      "joinByCode": "Join by code",
+      "createMeeting": "Create Meeting",
+      "schedules": "Schedules",
+      "history": "History",
+      "voiceProfiles": "Voice Profiles",
+      "dashboard": "Dashboard",
+      "members": "Members",
+      "documents": "Documents",
+      "glossary": "Glossary",
+      "myTasks": "My tasks",
+      "knowledge": "Knowledge",
+      "settings": "Settings"
+    },
+    "switchWorkspaceSuccess": "Switched to workspace \"{name}\"",
+    "switchWorkspaceError": "Failed to switch workspace"
+  }
+}

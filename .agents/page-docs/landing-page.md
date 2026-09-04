@@ -8,6 +8,14 @@
 
 ## Latest Changes
 
+### 2026-09-04 i18n migration (WT-607)
+
+- The landing page is the first fully-migrated screen for the new `next-intl` i18n layer (see `.agents/page-docs/i18n-localization.md` for the system-wide overview).
+- All static nav/hero/feature-step/signal-row/pricing/footer copy now reads through `useTranslations("landing")` (and `useTranslations("landing.pricing")` inside `PricingSection`) against `messages/{en,vi,ja}/landing.json`, instead of literal JSX strings and the module-level `navLinks`/`badges`/`footerNavigation`/`footerCompany` arrays (those arrays now carry stable `id`/`key`s only, with the label looked up at render time).
+- `getPlanDescription`/`buildFeatureList` in `src/lib/utils.ts` now take an optional translator function (defaults to the pre-migration English strings, so `src/app/workspace/payment/plans/page.tsx` and `src/app/(app)/workspace/plans/page.tsx` — not yet migrated — keep working unchanged); the landing page passes a `pricing.*`-scoped translator built from `useTranslations("landing")`.
+- Added a `<LanguageSwitcher />` (`src/components/layout/language-switcher.tsx`) to the navbar, next to the `Download` link.
+- **Deliberately left English-only, not translated in this pass**: the hand-tuned SVG story-board branch labels (`live`, `low latency`, `room signal`, the crossing-diagram language names, `decisions`/`questions`/`next steps`/`names`) and the small waveform/`feature-language-line` word chips. Their x/y coordinates and layout were tuned against these exact English character widths; translating them needs per-locale coordinate re-tuning, tracked as a Phase B follow-up rather than done blind. See the inline comments at those call sites in `src/app/page.tsx`.
+
 ### 2026-07-30 Get Started Redirect Fix
 
 - Landing CTA routing now uses `src/lib/landing-redirect.ts` and shared workspace slug validation in `src/lib/workspace-slug.ts` instead of inline branching in `src/app/page.tsx`.
