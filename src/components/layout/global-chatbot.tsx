@@ -77,6 +77,11 @@ import {
   parsePluginConnectionAction,
   type PluginConnectionAction,
 } from "@/components/layout/plugin-connection-action-card";
+import {
+  PluginOperatorSetupCard,
+  parsePluginOperatorSetupAction,
+  type PluginOperatorSetupAction,
+} from "@/components/layout/plugin-operator-setup-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
@@ -378,6 +383,8 @@ export function GlobalChatbot() {
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
   const [pendingPluginConnection, setPendingPluginConnection] =
     useState<PluginConnectionAction | null>(null);
+  const [pendingPluginSetup, setPendingPluginSetup] =
+    useState<PluginOperatorSetupAction | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
    * A question handed over from somewhere else on the page — today, the "Research this term"
@@ -789,6 +796,10 @@ export function GlobalChatbot() {
         // the user's own message box still works, which is the fallback that matters.
         if (questions.length) setPendingQuestions(questions);
         if (pluginConnection) setPendingPluginConnection(pluginConnection);
+        // Mutually exclusive with the connect card by construction: the worker emits one or the
+        // other, never both, because "press Connect" and "no button will help" cannot both be true.
+        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
+        if (pluginSetup) setPendingPluginSetup(pluginSetup);
         armResponseTimeout();
       },
     );
@@ -1497,6 +1508,14 @@ export function GlobalChatbot() {
                       disabled={connectPlugin.isPending}
                       onDismiss={() => setPendingPluginConnection(null)}
                       onConnect={handlePluginConnectionAction}
+                    />
+                  </div>
+                ) : null}
+                {pendingPluginSetup ? (
+                  <div className="pl-4">
+                    <PluginOperatorSetupCard
+                      action={pendingPluginSetup}
+                      onDismiss={() => setPendingPluginSetup(null)}
                     />
                   </div>
                 ) : null}
