@@ -1,24 +1,19 @@
 import { translationRoomService } from "@/services/translation-room.service";
 import { mapArtifact } from "@/services/room-history.service";
 import { resolveMeetingDurationSeconds } from "@/lib/meeting/room-history-mapping";
-import type { MeetingTimeState, MyMeetingItem, MyMeetingsResponse } from "@/types/myMeetings";
+import type { MyMeetingItem, MyMeetingsResponse } from "@/types/myMeetings";
 import type { TranslationRoomDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 
-/**
- * WT-333 — where a room sits relative to now.
+/*
+ * WT-538 — `resolveTimeState(status)` used to live here, and it is gone on purpose.
  *
- * Read from STATUS, not from comparing timestamps to the clock. A room booked for 09:00 that nobody
- * opened is still `upcoming` at 09:05 — it has not started, and showing a Join button for it would
- * be a lie the status already contradicts. The clock only decides the day a row is filed under.
- *
- * `waiting` counts as live because the lobby being open is the point at which a participant can act
- * on the row: the room is reachable, which is the only distinction this state drives in the UI.
+ * It answered from the room's status alone, so a room booked for last Tuesday that nobody opened
+ * kept `status: SCHEDULED` and stayed `upcoming` forever. Its replacement,
+ * `resolveMeetingTimeState` in @/lib/meeting/meeting-time-state, needs two things this layer
+ * cannot supply honestly: the wall clock at the moment of rendering (not at the moment of
+ * fetching), and which participant row belongs to the person looking. So the answer is derived
+ * where both are known — see the note on `MyMeetingItem` about why there is no `timeState` field.
  */
-function resolveTimeState(status: TranslationRoomDto["status"]): MeetingTimeState {
-  if (status === "in_progress" || status === "waiting" || status === "paused") return "live";
-  if (status === "scheduled") return "upcoming";
-  return "past";
-}
 
 /**
  * The moment a meeting belongs to on the timeline.
@@ -45,7 +40,6 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
     description: room.description,
     translationRoomCode: room.translationRoomCode,
     status: room.status,
-    timeState: resolveTimeState(room.status),
     occursAt: resolveOccursAt(room),
     startedAt: room.startedAt,
     endedAt: room.endedAt,
@@ -76,6 +70,13 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
       role: participant.role === "host" || participant.role === "HOST" ? "host" : "participant",
       speakLanguage: participant.speakLanguage,
       listenLanguage: participant.listenLanguage,
+      // WT-538: carried through, and it is the reason "Joined" can mean anything. The roster
+      // status is the only field on this row that says whether the person actually turned up —
+      // `joinedAt` below does NOT, because the backend stamps it on every row it writes,
+      // INVITED ones included, so its own reader never has to handle a null. This mapper used to
+      // drop `status` on the floor, which is why the page had nothing to distinguish an attendee
+      // from an invitee who never opened the link.
+      status: participant.status,
       joinedAt: participant.joinedAt,
     })),
     participantCount: room.participantCount ?? item.participants.length,
