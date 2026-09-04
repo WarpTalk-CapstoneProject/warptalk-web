@@ -1,10 +1,10 @@
 "use client";
 
-import { type ElementType, useEffect, useMemo, useRef, useState } from "react";
+import { type ElementType, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { enGB } from "date-fns/locale";
 import {
-  ArrowRight,
   CalendarBlank,
   CaretLeft,
   CaretRight,
@@ -41,11 +41,9 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
-import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
-import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 type TimeFilter = "all" | "upcoming" | "past";
 
@@ -65,6 +63,7 @@ const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "past", label: "Attended" },
 ];
 const EMPTY_MEETINGS: MyMeetingItem[] = [];
+const APP_CALENDAR_LOCALE = "en-GB";
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -79,7 +78,6 @@ export default function MyMeetingsPage() {
   const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const viewerUserId = useAuthStore((state) => state.user?.id ?? null);
 
   const [view, setView] = useState<CalendarView>("month");
   // One anchor for both views. Switching from week to month keeps you in the month you were
@@ -125,8 +123,6 @@ export default function MyMeetingsPage() {
     });
   }, [allMeetings, filter]);
 
-  const groups = useMemo(() => groupByDay(visible), [visible]);
-
   // Marked from everything fetched rather than from the visible window: in week view the little
   // calendar is how you find the week that holds something, so it must still show the whole month.
   const daysWithMeetings = useMemo(
@@ -136,6 +132,7 @@ export default function MyMeetingsPage() {
 
   const counts = useMemo(() => {
     return {
+      all: allMeetings.length,
       upcoming: allMeetings.filter((meeting) => meeting.timeState !== "past").length,
       past: allMeetings.filter((meeting) => meeting.timeState === "past").length,
     };
@@ -143,32 +140,9 @@ export default function MyMeetingsPage() {
 
   const dialogMeeting = allMeetings.find((meeting) => meeting.id === dialogMeetingId) ?? null;
 
-  const dayRefs = useRef(new Map<string, HTMLDivElement>());
-  const todayRef = useRef<HTMLDivElement>(null);
-
-  const anchoredMonth = useRef<string | null>(null);
-  const monthLabel = `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`;
-  useEffect(() => {
-    // Week view is seven columns with nothing to scroll to, so the agenda's jump-to-today does not
-    // apply — and running it there would scroll the page out from under a grid that fits.
-    if (view !== "month" || meetings.isLoading || anchoredMonth.current === monthLabel) return;
-    anchoredMonth.current = monthLabel;
-    todayRef.current?.scrollIntoView({ block: "center" });
-  }, [view, meetings.isLoading, monthLabel]);
-
-  /** Picking a day in the sidebar means "take me there" — which is a different move per view. */
+  /** Picking a day in the sidebar re-anchors the visible calendar range. */
   function goToDay(date: Date) {
-    if (view === "week") {
-      setMonthAnchor(date);
-      return;
-    }
-
-    const target = dayRefs.current.get(String(startOfDay(date)));
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    toast.info("No meetings on that day.");
+    setMonthAnchor(date);
   }
 
   function stepRange(delta: number) {
@@ -198,7 +172,6 @@ export default function MyMeetingsPage() {
     }
   }
 
-  const todayKey = String(startOfDay(new Date()));
   // Compared against everything the months returned, not against the visible week: truncation
   // happens at the month fetch, so that is the number the server's total describes.
   const truncated = (meetings.data?.total ?? 0) > fetched.length;
@@ -212,7 +185,9 @@ export default function MyMeetingsPage() {
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
           open straight onto their content and this now does too. */}
-      <header className="flex border-b border-border px-5 py-3 lg:items-center lg:justify-end lg:px-8">
+      <header className="flex flex-col gap-3 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <ScheduleMetricTabs counts={counts} filter={filter} onFilterChange={setFilter} />
+
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock
@@ -249,7 +224,12 @@ export default function MyMeetingsPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5 lg:flex">
+        <aside
+          className={cn(
+            "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5",
+            view === "week" && "lg:flex",
+          )}
+        >
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -263,7 +243,7 @@ export default function MyMeetingsPage() {
               <span className="text-[12px] font-medium">
                 {view === "week"
                   ? formatWeekRange(weekDays)
-                  : monthAnchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  : monthAnchor.toLocaleDateString(APP_CALENDAR_LOCALE, { month: "long", year: "numeric" })}
               </span>
               <button
                 type="button"
@@ -279,6 +259,8 @@ export default function MyMeetingsPage() {
               <Calendar
                 mode="single"
                 month={monthAnchor}
+                locale={enGB}
+                weekStartsOn={1}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && goToDay(date)}
                 className="w-full p-0.5 [--cell-size:1.8rem]"
@@ -300,38 +282,6 @@ export default function MyMeetingsPage() {
               />
             </div>
           </div>
-
-          {/* 3 Filter Tabs positioned above Statistics Count Cards */}
-          <div className="flex items-center justify-around gap-1 rounded-lg border border-border bg-surface-2/50 p-1" role="tablist" aria-label="Timeline filters">
-            {timeFilters.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                role="tab"
-                aria-selected={filter === item.value}
-                onClick={() => setFilter(item.value)}
-                className={cn(
-                  "flex-1 rounded-md py-1.5 text-center text-[11px] font-medium transition-colors",
-                  filter === item.value
-                    ? "bg-surface-1 text-ink font-semibold shadow-xs"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <dl className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-sky-500/15 bg-sky-500/[0.05] px-3 py-2">
-              <dt className="text-[10px] text-ink-subtle">Upcoming</dt>
-              <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.upcoming}</dd>
-            </div>
-            <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.05] px-3 py-2">
-              <dt className="text-[10px] text-ink-subtle">Attended</dt>
-              <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.past}</dd>
-            </div>
-          </dl>
 
           {meetings.isPartial ? (
             <p className="text-[10px] leading-4 text-amber-700">
@@ -366,8 +316,6 @@ export default function MyMeetingsPage() {
             <MonthGrid
               monthAnchor={monthAnchor}
               meetings={visible}
-              workspaceSlug={workspaceSlug}
-              viewerUserId={viewerUserId}
               hasQuery={Boolean(query)}
               onOpenPast={setDialogMeetingId}
               onNavigate={(id) => router.push(`/${workspaceSlug}/rooms/${id}`)}
@@ -390,6 +338,51 @@ export default function MyMeetingsPage() {
   );
 }
 
+function ScheduleMetricTabs({
+  counts,
+  filter,
+  onFilterChange,
+}: {
+  counts: { all: number; upcoming: number; past: number };
+  filter: TimeFilter;
+  onFilterChange: (filter: TimeFilter) => void;
+}) {
+  return (
+    <div
+      className="grid w-full grid-cols-3 gap-2 rounded-lg border border-border bg-surface-2/40 p-1 sm:max-w-[390px]"
+      role="tablist"
+      aria-label="Timeline filters"
+    >
+      {timeFilters.map((item) => {
+        const value =
+          item.value === "all"
+            ? counts.all
+            : item.value === "upcoming"
+              ? counts.upcoming
+              : counts.past;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={filter === item.value}
+            onClick={() => onFilterChange(item.value)}
+            className={cn(
+              "min-w-0 rounded-md px-3 py-2 text-left transition-colors",
+              filter === item.value
+                ? "bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                : "text-ink-muted hover:bg-surface-1/60 hover:text-ink",
+            )}
+          >
+            <span className="block truncate text-[10px] font-medium">{item.label}</span>
+            <span className="mt-0.5 block text-[16px] font-semibold tabular-nums">{value}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The month, as a 7-column calendar grid (Google Calendar style).
  *
@@ -399,16 +392,12 @@ export default function MyMeetingsPage() {
 function MonthGrid({
   monthAnchor,
   meetings,
-  workspaceSlug,
-  viewerUserId,
   hasQuery,
   onOpenPast,
   onNavigate,
 }: {
   monthAnchor: Date;
   meetings: MyMeetingItem[];
-  workspaceSlug: string;
-  viewerUserId: string | null;
   hasQuery: boolean;
   onOpenPast: (id: string) => void;
   onNavigate: (id: string) => void;
@@ -479,12 +468,12 @@ function MonthGrid({
               <div
                 key={key}
                 className={cn(
-                  "flex min-h-[110px] min-w-0 flex-col border-b border-r border-border p-1.5 transition-colors last:border-r-0",
+                  "flex min-h-[110px] min-w-0 flex-col overflow-hidden border-b border-r border-border p-1.5 transition-colors last:border-r-0",
                   !isCurrentMonth && "bg-surface-2/30 text-ink-subtle",
                   isToday && "bg-primary/[0.04]",
                 )}
               >
-                <div className="flex items-center justify-between px-1">
+                <div className="flex h-5 shrink-0 items-center justify-between px-1">
                   <span
                     className={cn(
                       "grid size-5 place-items-center rounded-full text-[11px] font-medium tabular-nums",
@@ -504,7 +493,7 @@ function MonthGrid({
                   ) : null}
                 </div>
 
-                <div className="mt-1 flex-1 space-y-1">
+                <div className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden">
                   {dayMeetings.slice(0, 3).map((meeting) => (
                     <div
                       key={meeting.id}
@@ -515,11 +504,11 @@ function MonthGrid({
                       }
                       title={meeting.title}
                       className={cn(
-                        "group cursor-pointer rounded border px-1.5 py-1 text-[10px] transition-colors",
-                        rowToneClass(meeting),
+                        "group h-5 cursor-pointer overflow-hidden rounded-sm border px-1.5 text-[10px] leading-5 transition-colors",
+                        monthChipToneClass(meeting),
                       )}
                     >
-                      <div className="flex items-center gap-1">
+                      <div className="flex h-full min-w-0 items-center gap-1">
                         <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
                           {meeting.title}
                         </span>
@@ -536,7 +525,7 @@ function MonthGrid({
                     </div>
                   ))}
                   {dayMeetings.length > 3 ? (
-                    <div className="px-1 text-[9px] font-medium text-ink-subtle">
+                    <div className="h-4 truncate px-1 text-[9px] font-medium leading-4 text-ink-subtle">
                       +{dayMeetings.length - 3} more
                     </div>
                   ) : null}
@@ -617,7 +606,7 @@ function WeekGrid({
                   )}
                 >
                   <div className="text-[10px] uppercase tracking-wide text-ink-subtle">
-                    {day.toLocaleDateString(undefined, { weekday: "short" })}
+                    {day.toLocaleDateString(APP_CALENDAR_LOCALE, { weekday: "short" })}
                   </div>
                   <div
                     className={cn(
@@ -738,149 +727,6 @@ function WeekCard({
   );
 }
 
-function AgendaRow({
-  meeting,
-  workspaceSlug,
-  viewerUserId,
-  onOpenPast,
-  onNavigate,
-}: {
-  meeting: MyMeetingItem;
-  workspaceSlug: string;
-  viewerUserId: string | null;
-  onOpenPast: () => void;
-  onNavigate: () => void;
-}) {
-  const isPast = meeting.timeState === "past";
-  const stateLabel =
-    meeting.timeState === "live"
-      ? "Live now"
-      : meeting.timeState === "upcoming"
-        ? "Upcoming"
-        : "Past";
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => {
-        if (isPast) onOpenPast();
-        else onNavigate();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          if (isPast) onOpenPast();
-          else onNavigate();
-        }
-      }}
-      className={cn(
-        "flex cursor-pointer gap-3 rounded-xl border px-3 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
-        rowToneClass(meeting),
-      )}
-    >
-      <div className="w-[52px] shrink-0 pt-0.5 text-right">
-        <div className="text-[12px] font-medium tabular-nums text-ink">{formatTime(meeting.occursAt)}</div>
-        <div className="mt-0.5 text-[10px] tabular-nums text-ink-subtle">
-          {formatDuration(meeting.durationSeconds)}
-        </div>
-      </div>
-
-      <span className={cn("mt-1 w-0.5 shrink-0 self-stretch rounded-full", spineClass(meeting))} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              "truncate text-[13px] font-medium text-ink",
-              meeting.status === "cancelled" && "text-ink-muted line-through",
-            )}
-          >
-            {meeting.title}
-          </span>
-
-          {meeting.isHost ? (
-            <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-muted">
-              Host
-            </span>
-          ) : null}
-
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase",
-              stateBadgeClass(meeting),
-            )}
-          >
-            {meeting.timeState === "live" ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-2 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-                  <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
-                </span>
-                {stateLabel}
-              </span>
-            ) : (
-              stateLabel
-            )}
-          </span>
-        </div>
-
-        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2 text-[10px] text-ink-subtle">
-          <span className="truncate">{meeting.translationRoomCode}</span>
-          <span>&middot;</span>
-          <span className="truncate">{meeting.hostName}</span>
-          <span>&middot;</span>
-          <span className="truncate">
-            {formatLanguageRoute(meeting.sourceLanguage, meeting.targetLanguages)}
-          </span>
-        </div>
-
-        {isPast ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="rounded border border-emerald-500/15 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700">
-              {meeting.artifacts.length ? `${meeting.artifacts.length} artifacts` : "No artifacts"}
-            </span>
-            <span className="text-[10px] text-ink-subtle">Open popup for room info and outputs.</span>
-            {meeting.artifacts.length ? (
-              <div className="flex flex-wrap gap-1.5">
-                {meeting.artifacts.slice(0, 2).map((artifact) => (
-                  <span
-                    key={artifact.id}
-                    className="flex items-center gap-1.5 rounded border border-border bg-surface-1 px-2 py-1 text-[10px] text-ink-muted"
-                  >
-                    <ArtifactIcon artifact={artifact} />
-                    {artifactLabel(artifact.type)}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-muted">
-              {meetingAudienceLabel(meeting, viewerUserId)}
-            </span>
-
-            <Link
-              href={`/${workspaceSlug}/rooms/${meeting.id}`}
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex items-center gap-1.5 rounded border border-border bg-surface-1 px-2 py-1 text-[10px] font-medium text-ink transition-colors hover:border-ink/30"
-            >
-              {meeting.timeState === "live" ? "Join" : "Open"}
-              <ArrowRight size={11} />
-            </Link>
-          </div>
-        )}
-      </div>
-
-      <div className="hidden shrink-0 items-start gap-1 pt-1 text-[10px] tabular-nums text-ink-subtle sm:flex">
-        <Users size={12} />
-        {meeting.participantCount}
-      </div>
-    </div>
-  );
-}
-
 function PastMeetingDialog({
   meeting,
   workspaceSlug,
@@ -987,22 +833,6 @@ function PastMeetingDialog({
   );
 }
 
-function GapNotice({ previous, current }: { previous?: string; current: string }) {
-  if (!previous) return null;
-
-  const days = Math.round(Math.abs(Number(previous) - Number(current)) / 86_400_000);
-  if (days < 8) return null;
-
-  const weeks = Math.floor(days / 7);
-  return (
-    <div className="my-3 flex items-center gap-3 px-1 text-[10px] text-ink-subtle">
-      <span className="h-px flex-1 bg-border" />
-      {weeks === 1 ? "1 week with no meetings" : `${weeks} weeks with no meetings`}
-      <span className="h-px flex-1 bg-border" />
-    </div>
-  );
-}
-
 function Detail({
   icon: Icon,
   label,
@@ -1064,42 +894,6 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function EmptyState({ hasQuery }: { hasQuery: boolean }) {
-  return (
-    <PagePlaceholder
-      kind="schedules"
-      className="min-h-[420px]"
-      title={hasQuery ? "No meetings match this search" : "Nothing on your timeline this month"}
-      description={
-        hasQuery
-          ? "Try a different title, code, or description."
-          : "Upcoming invites and attended meetings appear here."
-      }
-    />
-  );
-}
-
-type DayGroup = { key: string; date: Date; meetings: MyMeetingItem[] };
-
-function groupByDay(meetings: MyMeetingItem[]): DayGroup[] {
-  const byDay = new Map<string, MyMeetingItem[]>();
-
-  for (const meeting of meetings) {
-    const key = dayKey(meeting.occursAt);
-    const bucket = byDay.get(key);
-    if (bucket) bucket.push(meeting);
-    else byDay.set(key, [meeting]);
-  }
-
-  return [...byDay.entries()]
-    .map(([key, items]) => ({
-      key,
-      date: new Date(Number(key)),
-      meetings: items.sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt)),
-    }))
-    .sort((a, b) => Number(b.key) - Number(a.key));
-}
-
 function addMonths(date: Date, delta: number) {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
@@ -1119,32 +913,17 @@ function formatWeekRange(days: Date[]) {
   const last = days[days.length - 1];
   const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
 
-  const start = new Intl.DateTimeFormat(undefined, {
+  const start = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     day: "numeric",
     ...(sameMonth ? {} : { month: "short" }),
   }).format(first);
-  const end = new Intl.DateTimeFormat(undefined, {
+  const end = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(last);
 
   return `${start} – ${end}`;
-}
-
-function meetingAudienceLabel(meeting: MyMeetingItem, viewerUserId: string | null) {
-  if (meeting.isHost) return "Host";
-  if (viewerUserId && meeting.participants.some((participant) => participant.userId === viewerUserId)) {
-    return "Going";
-  }
-  return "Invited";
-}
-
-function spineClass(meeting: MyMeetingItem) {
-  if (meeting.timeState === "live") return "bg-rose-500 motion-safe:animate-pulse";
-  if (meeting.timeState === "upcoming") return "bg-sky-500";
-  if (meeting.status === "cancelled") return "bg-slate-400";
-  return "bg-emerald-500";
 }
 
 function rowToneClass(meeting: MyMeetingItem) {
@@ -1160,6 +939,19 @@ function rowToneClass(meeting: MyMeetingItem) {
   return "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
+function monthChipToneClass(meeting: MyMeetingItem) {
+  if (meeting.status === "cancelled") {
+    return "border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
+  }
+  if (meeting.timeState === "live") {
+    return "border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20";
+  }
+  if (meeting.timeState === "upcoming") {
+    return "border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
+  }
+  return "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
+}
+
 function stateBadgeClass(meeting: MyMeetingItem) {
   if (meeting.timeState === "live") return "bg-rose-500/10 text-rose-700";
   if (meeting.timeState === "upcoming") return "bg-sky-500/10 text-sky-700";
@@ -1169,13 +961,13 @@ function stateBadgeClass(meeting: MyMeetingItem) {
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -1186,16 +978,12 @@ function formatDateTime(value: string) {
 function formatCompactDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown time";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-}
-
-function formatDayHeading(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" }).format(date);
 }
 
 function formatDuration(seconds: number | null) {
