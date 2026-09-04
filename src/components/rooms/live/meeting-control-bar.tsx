@@ -487,11 +487,6 @@ export function MeetingControlBar({
                     }}
                   />
                 ) : null}
-                {/* Breakout rooms were removed from the product; their two rows are gone with
-                    them. The menu had outlived the feature and was still offering "Split
-                    participants into smaller groups" in the host controls — the one menu a host
-                    opens during a live meeting. An entry point to something that no longer
-                    exists is worse than no entry point. */}
               </FlyoutSurface>
             ) : null}
           </AnimatePresence>
