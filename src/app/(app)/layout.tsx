@@ -42,6 +42,10 @@ import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
+import {
+  preferRememberedWorkspace,
+  recallLastWorkspaceSlug,
+} from "@/lib/workspace/last-workspace";
 
 const PersistentMeetingSession = dynamic(
   () =>
@@ -274,8 +278,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (selectWorkspace.isPending) return;
 
     if (!activeWorkspaceId) {
-      if (workspacesData?.items && workspacesData.items.length > 0) {
-        const firstWs = workspacesData.items[0];
+      // WT-347: the workspace this account was last in, when it is still one of theirs;
+      // otherwise the first in the list, as before.
+      const firstWs = preferRememberedWorkspace(
+        workspacesData?.items ?? [],
+        recallLastWorkspaceSlug(currentUserId),
+      );
+      if (firstWs) {
         // Hydrated from the SELECT RESPONSE, not from the list row. The list's shape varies by
         // endpoint — hence the `"membershipType" in firstWs` guards this replaced — and the
         // select call is the one authority on what this user's role in this workspace is. It is
@@ -299,7 +308,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         router.replace("/workspace");
       }
     }
-  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, isSystemAdmin, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated]);
+  }, [activeWorkspaceId, workspacesData, workspacesLoading, isOnboardingRoute, isAdminRoute, isSystemAdmin, selectWorkspace, setActiveWorkspace, router, mounted, isAuthenticated, currentUserId]);
 
   if (!mounted || !isAuthenticated) {
     return (

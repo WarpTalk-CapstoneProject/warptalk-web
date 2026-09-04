@@ -24,10 +24,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import { cn } from "@/lib/utils";
+import {
+  getSafeCallbackUrl,
+  resolvePostLoginDestination,
+} from "@/lib/auth/post-login-destination";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
+import { recallLastWorkspaceSlug } from "@/lib/workspace/last-workspace";
 import { WorkspaceService } from "@/services/workspace.service";
 import { useAuthStore } from "@/stores/auth-store";
-import type { AuthResponse } from "@/types/auth";
+import type { AuthResponse, UserDto } from "@/types/auth";
 
 const loginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Invalid email address"),
@@ -37,15 +42,19 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
 
-function getSafeCallbackUrl(value: string | null) {
-  if (
-    !value ||
-    !value.startsWith("/") ||
-    value.startsWith("//") ||
-    value === "/rooms"
-  )
-    return "/workspace";
-  return value;
+/**
+ * WT-347: where this sign-in goes, decided AFTER the account is known.
+ *
+ * Replacing the route with the callback was the whole answer before, and `callbackUrl` fell back to the
+ * hub whenever nothing was asked for — so a person who already had a workspace signed in and
+ * stopped one screen short of it, every time. The remembered workspace is keyed by the user id
+ * that has just been confirmed, which is why this cannot be computed before the response lands.
+ */
+function postLoginDestination(user: UserDto, rawCallbackUrl: string | null) {
+  return resolvePostLoginDestination({
+    callbackUrl: rawCallbackUrl,
+    lastWorkspaceSlug: recallLastWorkspaceSlug(user.id),
+  });
 }
 
 async function processPendingInvitationToken(rawToken?: string | null) {
@@ -63,9 +72,10 @@ async function processPendingInvitationToken(rawToken?: string | null) {
   }
 }
 
-function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
+function GoogleLoginButton({ rawCallbackUrl }: { rawCallbackUrl: string | null }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+  const callbackUrl = getSafeCallbackUrl(rawCallbackUrl);
 
   // Nothing on this path may be written to the console. The Google access
   // token, and the AuthResponse the backend returns for it, both carry live
@@ -97,7 +107,7 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
         if (isAdmin && callbackUrl === "/workspace/dashboard") {
           router.replace("/dashboard");
         } else {
-          router.replace(callbackUrl);
+          router.replace(postLoginDestination(user, rawCallbackUrl));
         }
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
@@ -141,9 +151,9 @@ function GoogleLoginUnavailableButton() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = getSafeCallbackUrl(
-    searchParams.get("callbackUrl") || searchParams.get("redirect"),
-  );
+  const rawCallbackUrl =
+    searchParams.get("callbackUrl") || searchParams.get("redirect");
+  const callbackUrl = getSafeCallbackUrl(rawCallbackUrl);
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "password">("email");
@@ -209,7 +219,7 @@ function LoginForm() {
       if (isAdmin && callbackUrl === "/workspace/dashboard") {
         router.replace("/dashboard");
       } else {
-        router.replace(callbackUrl);
+        router.replace(postLoginDestination(user, rawCallbackUrl));
       }
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string; code?: string } } };
@@ -273,7 +283,7 @@ function LoginForm() {
               >
                 {/* Social Login */}
                 {GOOGLE_CLIENT_ID ? (
-                  <GoogleLoginButton callbackUrl={callbackUrl} />
+                  <GoogleLoginButton rawCallbackUrl={rawCallbackUrl} />
                 ) : (
                   <GoogleLoginUnavailableButton />
                 )}

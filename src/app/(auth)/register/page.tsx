@@ -52,15 +52,27 @@ import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import {
+  getSafeCallbackUrl,
+  resolvePostLoginDestination,
+} from "@/lib/auth/post-login-destination";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { languagesInScope } from "@/lib/language/languages";
+import { recallLastWorkspaceSlug } from "@/lib/workspace/last-workspace";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { AuthResponse } from "@/types/auth";
+import type { AuthResponse, UserDto } from "@/types/auth";
 
-function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
-  return value;
+/**
+ * WT-347: the same answer the login page gives. A Google sign-in from this page is a returning
+ * account as often as a new one, and a returning account with a workspace belongs in it, not on
+ * the hub. (`getSafeCallbackUrl` used to be a second copy of the login page's; it is one now.)
+ */
+function postLoginDestination(user: UserDto, rawCallbackUrl: string | null) {
+  return resolvePostLoginDestination({
+    callbackUrl: rawCallbackUrl,
+    lastWorkspaceSlug: recallLastWorkspaceSlug(user.id),
+  });
 }
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
@@ -102,7 +114,7 @@ interface PendingVerification {
   emailVerificationRequired: true;
 }
 
-function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
+function RegisterGoogleButton({ rawCallbackUrl }: { rawCallbackUrl: string | null }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
@@ -119,7 +131,7 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
         login(user, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
         toast.success("Google sign-in successful!");
-        router.replace(callbackUrl);
+        router.replace(postLoginDestination(user, rawCallbackUrl));
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
         toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
@@ -159,7 +171,8 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const hasToken = Boolean(token);
-  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
+  const rawCallbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect");
+  const callbackUrl = getSafeCallbackUrl(rawCallbackUrl);
 
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
@@ -250,7 +263,7 @@ function RegisterForm() {
       login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
       toast.success("Registration successful!");
-      router.replace(callbackUrl);
+      router.replace(postLoginDestination(user, rawCallbackUrl));
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error?.response?.data?.error || "Registration failed. Please try again.");
@@ -330,7 +343,7 @@ function RegisterForm() {
                 className="space-y-4"
               >
                 {GOOGLE_CLIENT_ID ? (
-                  <RegisterGoogleButton callbackUrl={callbackUrl} />
+                  <RegisterGoogleButton rawCallbackUrl={rawCallbackUrl} />
                 ) : (
                   <RegisterGoogleUnavailableButton />
                 )}
