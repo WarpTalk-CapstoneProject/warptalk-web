@@ -515,7 +515,7 @@ function MonthGrid({
                         <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
                           {formatTime(meeting.occursAt)}
                         </span>
-                        {meeting.timeState === "live" ? (
+                        {meeting.timeState === "live" && meeting.status !== "cancelled" ? (
                           <span className="relative flex size-1.5 shrink-0">
                             <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
                             <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
@@ -730,6 +730,11 @@ function WeekCard({
   workspaceSlug: string;
   onOpen: () => void;
 }) {
+  // A cancelled meeting is not live, whatever the clock says about its slot: the pulsing dot and
+  // the Join button are affordances for a room that is actually open.
+  const isCancelled = meeting.status === "cancelled";
+  const isLive = meeting.timeState === "live" && !isCancelled;
+
   return (
     <div
       role="button"
@@ -757,13 +762,9 @@ function WeekCard({
             stateBadgeClass(meeting),
           )}
         >
-          {meeting.timeState === "live"
-            ? "Live"
-            : meeting.timeState === "upcoming"
-            ? "Upcoming"
-            : "Attended"}
+          {stateBadgeLabel(meeting)}
         </span>
-        {meeting.timeState === "live" ? (
+        {isLive ? (
           <span className="relative flex size-1.5 shrink-0">
             <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
             <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
@@ -774,7 +775,7 @@ function WeekCard({
       <p
         className={cn(
           "mt-1 line-clamp-2 text-[11px] font-medium leading-snug text-ink",
-          meeting.status === "cancelled" && "text-ink-muted line-through",
+          isCancelled && "text-ink-muted line-through",
         )}
       >
         {meeting.title}
@@ -782,7 +783,7 @@ function WeekCard({
 
       <p className="mt-0.5 truncate text-[9px] text-ink-subtle">{meeting.hostName}</p>
 
-      {meeting.timeState === "live" ? (
+      {isLive ? (
         <Link
           href={`/${workspaceSlug}/rooms/${meeting.id}`}
           onClick={(event) => event.stopPropagation()}
@@ -1020,10 +1021,25 @@ function monthChipToneClass(meeting: MyMeetingItem) {
   return "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
+/**
+ * Cancellation outranks the clock, exactly as it already does in rowToneClass and
+ * monthChipToneClass. Without this first branch a cancelled meeting wore a green "Attended" or a
+ * blue "Upcoming" pill next to its own struck-through title on a grey card — three signals, three
+ * different answers to "what happened to this meeting?".
+ */
 function stateBadgeClass(meeting: MyMeetingItem) {
+  if (meeting.status === "cancelled") return "bg-surface-3 text-ink-muted";
   if (meeting.timeState === "live") return "bg-rose-500/10 text-rose-700";
   if (meeting.timeState === "upcoming") return "bg-sky-500/10 text-sky-700";
   return "bg-emerald-500/10 text-emerald-700";
+}
+
+/** The label half of the same decision — kept beside the colour so the two cannot drift apart. */
+function stateBadgeLabel(meeting: MyMeetingItem) {
+  if (meeting.status === "cancelled") return "Cancelled";
+  if (meeting.timeState === "live") return "Live";
+  if (meeting.timeState === "upcoming") return "Upcoming";
+  return "Attended";
 }
 
 function formatTime(value: string) {
