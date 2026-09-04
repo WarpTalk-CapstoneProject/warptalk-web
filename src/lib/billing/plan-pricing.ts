@@ -56,6 +56,28 @@ export function checkoutTotal(plan: PlanDto, interval: BillingInterval): number 
     : plan.price;
 }
 
+/**
+ * The currency the checkout is denominated in — the other half of `checkoutTotal`.
+ *
+ * WT-518: a 200 USD plan showed "200 VND" on the success page and on the invoice. Nothing
+ * downstream was wrong — both read the currency back off the Stripe session, which had been
+ * created with the wrong one. WT-459 had already fixed the visible half (the plan card reads
+ * `plan.currency`), but every checkout call site still sent a literal `"vnd"` a few lines away,
+ * so the buyer was quoted in one currency and charged in another.
+ *
+ * It lives beside `checkoutTotal` for the same reason that function exists: an amount and its
+ * denomination are one decision, and splitting them across two files is how they drifted.
+ *
+ * Defaults to VND when there is no plan, which is correct rather than merely safe — the only
+ * plan-less purchase is a credit top-up, priced server-side against `credit_value_vnd`.
+ *
+ * The server has always handled the rest: `StripePaymentService` passes VND through as a
+ * zero-decimal currency and multiplies everything else by 100. It was simply never asked to.
+ */
+export function checkoutCurrency(plan?: PlanDto | null): string {
+  return (plan?.currency ?? "vnd").toLowerCase();
+}
+
 /** The plans a buyer may choose from, in the order the platform wants them shown. */
 export function selectablePlans(plans: PlanDto[]): PlanDto[] {
   return plans

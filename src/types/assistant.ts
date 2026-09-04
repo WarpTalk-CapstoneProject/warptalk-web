@@ -9,6 +9,12 @@ export interface AssistantMessageDto {
   status: AssistantMessageStatus;
   createdAt: string;
   completedAt?: string | null;
+  /**
+   * The sources this answer cited, as the JSON array warptalk-ai published — see
+   * lib/assistant/answer-sources. Absent on everything the user wrote, and on an answer that
+   * cited nothing.
+   */
+  sourcesJson?: string | null;
 }
 
 export interface AssistantConversationDto {

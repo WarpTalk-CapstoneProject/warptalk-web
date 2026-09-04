@@ -5,10 +5,11 @@ const createRoom = fs.readFileSync("src/components/rooms/create-room-dialog.tsx"
 const optionsMenu = fs.readFileSync("src/components/rooms/create/options-menu.tsx", "utf8");
 const mockArtifactsPage = "src/app/(app)/workspace/artifacts/page.tsx";
 const assistantPage = fs.readFileSync("src/app/(app)/[workspaceSlug]/ai-chat/page.tsx", "utf8");
-// Feedback is a dialog, not a route: four score rows never needed a page of their own, a query
-// string to carry the meeting id, or an empty state for arriving without one. The surface it must
-// not fabricate is the same either way, so the check follows the component.
-const feedbackDialog = fs.readFileSync("src/components/rooms/feedback-dialog.tsx", "utf8");
+// Feedback is a control on the meeting, not a route: four score rows never needed a page of their
+// own, a query string to carry the meeting id, or an empty state for arriving without one. It has
+// been a route, then a dialog on the post-meeting page, and is now a popover on room detail — the
+// surface it must not fabricate is the same each time, so the check follows the component.
+const feedbackMenu = fs.readFileSync("src/components/rooms/feedback-menu.tsx", "utf8");
 // There is no separate artifacts page any more. It was a second, worse view of the Files tab that
 // the room page and the post-meeting page already carry, and nothing linked to it once the
 // post-meeting page grew its own tabs — an unreachable route is not a surface worth checking.
@@ -16,8 +17,12 @@ const waitingPage = fs.readFileSync(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/waiting/page.tsx",
   "utf8",
 );
-const endedPage = fs.readFileSync(
-  "src/app/(app)/[workspaceSlug]/rooms/[id]/ended/page.tsx",
+// The post-meeting page is gone: transcript, summary, minutes, files and the rating are the
+// meeting's own page now, which is where the reader already is when a meeting ends. The record
+// still has to be read from the shared room-history query rather than fetched a second time
+// under a key of its own, so the rule follows the page that carries it.
+const roomDetailPage = fs.readFileSync(
+  "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
   "utf8",
 );
 const voiceProfilesPage = fs.readFileSync(
@@ -70,11 +75,11 @@ for (const marker of ["initialConversations", "Preview response", "warptalk-ai-c
   }
 }
 for (const [name, source, required, forbidden] of [
-  ["feedback", feedbackDialog, "useSubmitTranslationRoomFeedback", ["Submit preview", "recentFeedback"]],
+  ["feedback", feedbackMenu, "useSubmitTranslationRoomFeedback", ["Submit preview", "recentFeedback"]],
   ["waiting room", waitingPage, "useTranslationRoomParticipants", ["Preview fallback", "const participants = ["]],
-  // The post-meeting page reads the shared room-history record now — the same query the room page
-  // and the archive use — instead of fetching the artifact list a second time under its own key.
-  ["ended room", endedPage, "useEndedRoomRecord", ["const jobs = ["]],
+  // The meeting record reads the shared room-history record — the same query the archive uses —
+  // instead of fetching the artifact list a second time under its own key.
+  ["meeting record", roomDetailPage, "useEndedRoomRecord", ["const jobs = ["]],
   ["voice profiles", voiceProfilesPage, "useVoiceProfiles", ["FEATURED_VOICES", "Trending voice presets"]],
 ]) {
   if (!source.includes(required)) {

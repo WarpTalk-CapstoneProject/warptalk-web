@@ -39,8 +39,7 @@ import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effect
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import { toast } from "sonner";
 
 type SinkVideoElement = HTMLVideoElement & {
@@ -61,8 +60,6 @@ export function SetupRoomModal() {
   const { data: room, isLoading: isLoadingRoom } = useTranslationRoom(
     roomId ?? "",
   );
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   // Host is strictly the room owner (room.hostId). Workspace admins/owners are NOT the host:
   // the backend rejects a room start from a non-host with 403, so they enter as participants.
   const isHost = Boolean(room && user && room.hostId === user.id);
@@ -139,7 +136,7 @@ export function SetupRoomModal() {
 
   // Krisp noise filter / background blur — applied as LiveKit track processors once in
   // the room (see src/hooks/use-track-processors.ts), not to this raw preview stream.
-  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(false);
+  const [noiseSuppressionEnabled, setNoiseSuppressionEnabled] = useState(true);
   const [backgroundBlurEnabled, setBackgroundBlurEnabled] = useState(false);
 
   const [cameraDevices, setCameraDevices] = useState<MediaDeviceInfo[]>([]);
@@ -437,7 +434,7 @@ export function SetupRoomModal() {
           <h2 className="text-[20px] font-semibold tracking-tight text-foreground pr-8 flex items-center gap-3">
             {isLoadingRoom ? (
               <>
-                <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />{" "}
+                <LumidotSpinner />{" "}
                 <span>Loading room...</span>
               </>
             ) : (

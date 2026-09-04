@@ -45,6 +45,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
+import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
 type TimeFilter = "all" | "upcoming" | "past";
 
@@ -964,19 +965,16 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
 
 function EmptyState({ hasQuery }: { hasQuery: boolean }) {
   return (
-    <div className="grid min-h-[420px] place-items-center text-center">
-      <div>
-        <FileText size={22} className="mx-auto text-ink-muted" />
-        <p className="mt-3 text-[12px] font-medium">
-          {hasQuery ? "No meetings match this search" : "Nothing on your timeline this month"}
-        </p>
-        <p className="mt-1 text-[11px] text-ink-muted">
-          {hasQuery
-            ? "Try a different title, code, or description."
-            : "Upcoming invites and attended meetings appear here."}
-        </p>
-      </div>
-    </div>
+    <PagePlaceholder
+      kind="schedules"
+      className="min-h-[420px]"
+      title={hasQuery ? "No meetings match this search" : "Nothing on your timeline this month"}
+      description={
+        hasQuery
+          ? "Try a different title, code, or description."
+          : "Upcoming invites and attended meetings appear here."
+      }
+    />
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
+import type { FlashModeState } from "@/services/translation-room.service";
 import type { NoiseReductionMode } from "@/lib/meeting/noise-reduction";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
 import type {
@@ -115,7 +116,8 @@ export function useCreateRecurringTranslationRoom() {
 export function useCancelTranslationRoomSeries() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (seriesId: string) => translationRoomService.cancelSeries(seriesId),
+    mutationFn: async ({ seriesId, keepOccurrenceId }: { seriesId: string; keepOccurrenceId?: string }) =>
+      translationRoomService.cancelSeries(seriesId, keepOccurrenceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
@@ -309,10 +311,12 @@ export function useFlashMode(roomId: string, enabled = true) {
     queryFn: () => translationRoomService.getFlashMode(roomId),
     enabled: enabled && Boolean(roomId),
     refetchInterval: 30_000,
-    // A room that cannot answer is not an error worth showing anybody: the AI side falls back to
-    // the deployment default, and "off" is the honest thing to render.
+    // A room that cannot answer is not an error worth showing anybody. It is NOT rendered as
+    // "off" any more, though: the AI side falls back to the deployment default, so "off" was a
+    // claim about the room that nothing had actually checked — and it became a false one the day
+    // that default turned on. "unknown" renders the same switch position without asserting it.
     retry: false,
-    initialData: false,
+    initialData: { enabled: false, source: "unknown" } satisfies FlashModeState,
   });
 }
 
@@ -419,6 +423,25 @@ export function useTranslationRoomInvitations(roomId: string) {
       return data;
     },
     enabled: Boolean(roomId),
+  });
+}
+
+/**
+ * WT-552: invite somebody once the meeting has started.
+ *
+ * Invalidates the invitation list AND the roster. A member of this workspace who is already
+ * signed in gets the in-app notification immediately and can be in the room before the host has
+ * closed the dialog, so the roster is as stale as the invitation list after this succeeds.
+ */
+export function useInviteToRoom(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (emails: string[]) => translationRoomService.inviteParticipants(roomId, emails),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "invitations"] });
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
   });
 }
 

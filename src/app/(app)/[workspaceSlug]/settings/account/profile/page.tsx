@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
+import { Button } from "@/components/ui/button";
+import { getErrorMessage } from "@/lib/api/errors";
 import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Spinner, PencilSimple } from "@phosphor-icons/react";
@@ -50,6 +52,30 @@ export default function SettingsPage() {
   const [phone, setPhone] = useState("");
   const [preferredLanguage, setPreferredLanguage] = useState(DEFAULT_PROFILE_LANGUAGE);
   const [timezone, setTimezone] = useState(getDefaultProfileTimezone);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const setStoredUser = useAuthStore((state) => state.setUser);
+
+  /**
+   * The server is the one that validates. It checks the magic bytes, not just the Content-Type,
+   * so a renamed file is refused there rather than here — this only reports what it said.
+   *
+   * The auth store is updated from the response so the avatar in the sidebar and the top bar
+   * change with this one, instead of staying stale until the next sign-in.
+   */
+  async function uploadAvatar(file: File) {
+    setAvatarUploading(true);
+    try {
+      const { data } = await authService.uploadAvatar(file);
+      setStoredUser(data);
+      toast.success("Profile picture updated.");
+    } catch (error) {
+      toast.error(getErrorMessage(error, "Could not update your profile picture."));
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
   const languageOptions = useMemo(() => {
     const options = getProfileLanguageOptions();
     return options.some((option) => option.value === preferredLanguage)
@@ -200,11 +226,35 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-3">
                 <Avatar className="size-8 rounded-full border border-border">
-                  <AvatarImage src={user?.avatarUrl} alt={fullName} />
+                  <AvatarImage src={user?.avatarUrl ?? undefined} alt={fullName} />
                   <AvatarFallback className="rounded-full bg-sky-500 text-white text-xs font-semibold">
                     {getInitials(fullName)}
                   </AvatarFallback>
                 </Avatar>
+                {/* The input is hidden and the button drives it: a bare file input cannot be
+                    styled to match anything else on this page, and its "No file chosen" label
+                    states the obvious in a row that is already showing the picture. */}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void uploadAvatar(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[12px]"
+                  disabled={avatarUploading}
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  {avatarUploading ? "Uploading…" : user?.avatarUrl ? "Change" : "Upload"}
+                </Button>
               </div>
             </div>
 
@@ -232,24 +282,38 @@ export default function SettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Full name</span>
               </div>
-              <Input
-                id="fullName"
-                placeholder="Your full name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                onBlur={(e) => commitTextField("fullName", e.currentTarget.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    commitTextField("fullName", e.currentTarget.value);
-                    e.currentTarget.blur();
-                  }
-                }}
-                className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px] focus-visible:ring-1 focus-visible:ring-primary"
-              />
-              {profileError === "Full name is required" && (
-                <span className="text-[11px] text-destructive">{profileError}</span>
-              )}
+              {/*
+                WT-550. The message belongs in the input's OWN column, not beside it.
+
+                It used to be a third child of this `justify-between` row, so the instant
+                validation fired the row had three things to spread instead of two and the input
+                was shoved out of its column — the field moved sideways while you were still
+                fixing what it was complaining about. The width lives on this wrapper so the
+                column is the same size whether or not the message is showing.
+              */}
+              <div className="flex w-[160px] shrink-0 flex-col items-end gap-1 md:w-[240px]">
+                <Input
+                  id="fullName"
+                  placeholder="Your full name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  onBlur={(e) => commitTextField("fullName", e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitTextField("fullName", e.currentTarget.value);
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  aria-invalid={profileError === "Full name is required"}
+                  className="h-8 w-full text-xs bg-surface-2 border-hairline focus-visible:ring-1 focus-visible:ring-primary"
+                />
+                {profileError === "Full name is required" && (
+                  <span className="w-full text-right text-[11px] text-destructive">
+                    {profileError}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Phone Number */}

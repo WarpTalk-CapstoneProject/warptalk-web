@@ -51,7 +51,27 @@ export const MEETING_TYPES: MeetingType[] = [
     value: "LIVE_EVENT",
     defaults: { requiresApproval: true, muteOnEntry: true, autoRecord: true, breakoutsEnabled: false, maxParticipants: 1000 },
   },
+  {
+    label: "External Meeting",
+    value: "EXTERNAL_BRIDGE",
+    defaults: { requiresApproval: false, muteOnEntry: false, autoRecord: false, breakoutsEnabled: false, maxParticipants: 2 },
+  },
 ];
+
+/**
+ * The only type whose meeting does not happen on WarpTalk. The call is on Google Meet, Zoom or
+ * Teams, and WarpTalk sits beside it translating: the two seats are the user and one stand-in for
+ * everyone on the far side.
+ *
+ * It needs its own setup — two virtual audio devices, and Meet pointed at them — so surfaces that
+ * offer it or open it have to branch, which is why this is a named predicate rather than a string
+ * compared in six places.
+ */
+export const EXTERNAL_BRIDGE_TYPE = "EXTERNAL_BRIDGE";
+
+export function isExternalBridge(value?: string | null): boolean {
+  return value?.trim().toUpperCase() === EXTERNAL_BRIDGE_TYPE;
+}
 
 const BY_LABEL = new Map(MEETING_TYPES.map((type) => [type.label, type]));
 

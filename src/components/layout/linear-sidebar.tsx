@@ -64,7 +64,7 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-} from "@phosphor-icons/react/dist/ssr";
+  CheckSquare,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -291,6 +291,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   }, [activeWorkspaceName]);
 
   const workspaceNav: NavItem[] = [];
+  if (isOwnerOrAdmin) {
+    // First, not last. Dashboard is the overview of everything under it, and it was sitting at
+    // the bottom under Settings — the one entry that is not a place in the workspace but a
+    // control panel for it. An overview reads as an overview when it comes before the things it
+    // summarises.
+    workspaceNav.push({
+      icon: SquaresFour,
+      label: "Dashboard",
+      href: `/${slug}/dashboard`,
+      tourId: "nav-dashboard",
+    });
+  }
   workspaceNav.push(
     { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
     { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
@@ -302,7 +314,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // Its absence from this list is the whole reason the page was deleted as dead code, and the
     // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
     // can navigate to is indistinguishable from one that was never built.
-    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" }
+    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" },
+    // Work the meetings assigned to you, keyed on the person rather than the meeting. Listed here
+    // for the same reason Glossary is: an endpoint no navigation reaches is indistinguishable
+    // from one that was never built, and this list is the whole point of action items becoming
+    // rows instead of sentences.
+    { icon: CheckSquare, label: "My tasks", href: `/${slug}/tasks`, tourId: "nav-tasks" }
   );
 
   if (isOwnerOrAdmin) {
@@ -313,8 +330,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
     // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
     // credit balance belong. It is reached through Settings now, not from the app's main nav.
+    //
+    // Last in the list, and pushed after everything else so it stays last as entries are added.
+    // Settings is where you go to change the workspace, not one of the places in it.
     workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
-    workspaceNav.push({ icon: SquaresFour, label: "Dashboard", href: `/${slug}/dashboard`, tourId: "nav-dashboard" });
   }
 
   /**
@@ -358,7 +377,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // as active for anything beneath its href, and every admin page is beneath /admin.
           { icon: Gauge, label: "Overview", href: "/admin", exact: true },
           { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
-          { icon: Users, label: "Users", href: "/admin/users" },
+          // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
+          // "Users" is the same word the workspace sidebar uses for that workspace's members —
+          // two very different populations under one label, in a console where the difference is
+          // the whole point. The route keeps its path; only what a person reads changes.
+          { icon: Users, label: "Accounts", href: "/admin/users" },
         ],
       },
       {
@@ -389,20 +412,35 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       },
     ];
 
-    const backHref = activeWorkspaceSlug ? `/${activeWorkspaceSlug}/home` : "/workspace";
+    // WT-444: "Back to app" pointed at /workspace whenever no workspace was active, and for the
+    // only person who ever sees this button that is a loop. /workspace redirects a system admin
+    // straight back to /admin — unconditionally, by WT-417 — so the button returned the admin to
+    // the console they were trying to leave, with a page flash in between.
+    //
+    // Fall back to any workspace they actually belong to instead. A platform admin with none has
+    // no app to go back to, so the button is not rendered at all rather than made to look
+    // clickable: WT-417's whole point is that such an account is not a workspace user.
+    const fallbackWorkspaceSlug = workspaces.find((w) => w.slug)?.slug;
+    const backHref = activeWorkspaceSlug
+      ? `/${activeWorkspaceSlug}/home`
+      : fallbackWorkspaceSlug
+        ? `/${fallbackWorkspaceSlug}/home`
+        : null;
 
     if (collapsed) {
       return (
         <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
           <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
-            <Link
-              href={backHref}
-              title="Back to app"
-              aria-label="Back to app"
-              className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <CaretLeft size={16} weight="bold" />
-            </Link>
+            {backHref && (
+              <Link
+                href={backHref}
+                title="Back to app"
+                aria-label="Back to app"
+                className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <CaretLeft size={16} weight="bold" />
+              </Link>
+            )}
           </div>
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
             {adminSections.flatMap((group, groupIndex) =>
@@ -438,13 +476,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     return (
       <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
         <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
-          <Link
-            href={backHref}
-            className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-          >
-            <CaretLeft size={14} weight="bold" />
-            <span>Back to app</span>
-          </Link>
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+            >
+              <CaretLeft size={14} weight="bold" />
+              <span>Back to app</span>
+            </Link>
+          ) : (
+            // Same height and padding as the link so the header does not jump between an admin
+            // who has a workspace and one who does not.
+            <span className="-ml-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted/50">
+              Platform console
+            </span>
+          )}
         </div>
 
         {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a

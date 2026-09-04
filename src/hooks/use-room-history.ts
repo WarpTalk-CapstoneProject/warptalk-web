@@ -44,6 +44,24 @@ function roomHistoryQuery(workspaceId: string | null, options?: RoomHistoryOptio
         status: options?.status,
         search: options?.search,
       }),
+    // WT-509: the poll belongs to the QUERY, not to one of its two callers.
+    //
+    // A meeting's summary and recording are produced after it ends, so the first load of either
+    // surface routinely shows work in progress. `useRoomHistory` carried this and
+    // `useEndedRoomRecord` did not — so the archive list updated itself while the meeting-record
+    // page, which is the page somebody actually opens after their meeting, sat on "Generating
+    // summary…" until a manual reload. The room page even documents the behaviour it was not
+    // getting: "useEndedRoomRecord already polls while anything is generating, so this clears
+    // itself."
+    //
+    // Both hooks build on this object, so neither can be the one that forgets.
+    //
+    // `query.state.data` is the RAW list, before either hook's `select` narrows it, which is why
+    // the same predicate serves both. It stops on its own once nothing is generating, so an idle
+    // tab does not sit on an unbounded interval.
+    refetchInterval: (query: {
+      state: { data?: Awaited<ReturnType<typeof roomHistoryService.listEndedRooms>> };
+    }) => (shouldPollRoomHistory(query.state.data?.rooms ?? []) ? POLL_INTERVAL_MS : false),
   };
 }
 
@@ -51,11 +69,6 @@ export function useRoomHistory(workspaceId: string | null, options?: RoomHistory
   return useQuery({
     ...roomHistoryQuery(workspaceId, options),
     enabled: Boolean(workspaceId),
-    // A meeting's summary and recording are produced after it ends, so the first load of the
-    // archive routinely shows work in progress. Without this the page sat on "generating"
-    // until somebody reloaded, which reads as broken rather than as pending.
-    refetchInterval: (query) =>
-      shouldPollRoomHistory(query.state.data?.rooms ?? []) ? POLL_INTERVAL_MS : false,
   });
 }
 

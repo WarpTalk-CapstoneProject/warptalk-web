@@ -29,7 +29,17 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  assistantToolDoneLabel,
+  assistantToolLabel,
+  withStepDetail,
+  REASONING_STEP,
+  THINKING_STEP,
+  WRITING_STEP,
+  type AssistantStep,
+} from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { composerReadiness } from "@/lib/assistant/composer-readiness";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
   useWorkspaceMembers,
@@ -56,8 +66,18 @@ import {
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { AnswerSources } from "@/components/assistant/answer-sources";
+import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import {
+  parseAnswerSources,
+  type AnswerSource,
+} from "@/lib/assistant/answer-sources";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
+
+import { ScrollFadeEdge, ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
+import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
+
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { toast } from "sonner";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
@@ -96,21 +116,24 @@ interface ChatMessage {
   content: string;
   context?: string;
   failed?: boolean;
+  /**
+   * What this answer cited. Held on the message rather than in a lookup beside it, so it
+   * survives every path a message arrives by — streamed, completed, or replayed out of
+   * history — and cannot end up under the wrong bubble.
+   */
+  sources?: AnswerSource[];
+  /**
+   * What WarpBot did to produce this answer, and how long it took.
+   *
+   * Kept on the message for the same reason `sources` is: it belongs to the answer, and holding
+   * it in a lookup beside the thread would put it under the wrong bubble the first time two turns
+   * overlapped. Absent on anything replayed out of history — the server stores no trail, and an
+   * invented duration is a number a person can check and find wrong.
+   */
+  steps?: AssistantStep[];
+  durationMs?: number;
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  search_workspace_members: "Searching workspace members…",
-  search_terminology: "Searching terminology…",
-  list_recent_meetings: "Looking up recent meetings…",
-  translate_text: "Translating…",
-  semantic_search: "Searching knowledge base…",
-  get_meeting_summary: "Looking up meeting summary…",
-  get_room_detail: "Looking up room details…",
-  get_transcript: "Reading the transcript…",
-  get_document: "Reading the document…",
-  ask_user: "Needs a couple of details…",
-  create_meeting: "Creating the meeting…",
-};
 
 interface SlashCommand {
   command: string;
@@ -296,19 +319,68 @@ export function GlobalChatbot() {
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
   );
+  const activeWorkspaceSlug = useWorkspaceStore(
+    (state) => state.activeWorkspaceSlug,
+  );
+  // WT-541: one answer to "can this send", shared by the button and by sendMessage.
+  const composerState = composerReadiness({
+    text: inputValue,
+    attachmentCount: attachments.length,
+    activeWorkspaceId,
+  });
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
   );
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
-  const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
+  /**
+   * The tools WarpBot reached for this turn, in order, kept until the next question.
+   *
+   * This used to be one string that every other event cleared: a chunk arriving set it back to
+   * null, and so did each tool finishing. The steps were published correctly by the worker and
+   * relayed correctly by the backend — they were simply overwritten faster than a person could
+   * read them, so the widget looked like it only ever said "Thinking...". Keeping the trail is
+   * the whole point: somebody wants to see that it checked the knowledge base AND searched
+   * documents, not to catch one label mid-flash.
+   */
+  const [steps, setSteps] = useState<AssistantStep[]>([]);
+  /** When the open turn began, so the folded summary can say how long it took. */
+  const turnStartedAtRef = useRef<number | null>(null);
+  /**
+   * The turn has run past the watchdog and is still going.
+   *
+   * It used to append a message saying "WarpBot didn't answer in time" with failed: true, which
+   * is a claim the widget was in no position to make: the deadline is a clock, not a signal from
+   * the worker, and the answer usually arrived seconds later. The claim then STAYED in the
+   * thread, in red, above the answer that disproved it.
+   *
+   * A model thinking for longer than expected is not a failure, so this says only that, and any
+   * chunk, completion or failure clears it.
+   */
+  const [isSlow, setIsSlow] = useState(false);
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
+  /**
+   * A question handed over from somewhere else on the page — today, the "Research this term"
+   * action on a transcript hint.
+   *
+   * It is put in the box rather than sent. The person asked to look something up, not to have
+   * a question asked on their behalf; leaving it editable is the difference between a shortcut
+   * and the widget speaking for them.
+   */
+  const pendingPrompt = useAssistantWidgetStore((state) => state.pendingPrompt);
+  const consumePendingPrompt = useAssistantWidgetStore((state) => state.consumePendingPrompt);
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    const prompt = consumePendingPrompt();
+    if (!prompt) return;
+    setInputValue(prompt);
+    setIsMinimized(false);
+    setIsOpen(true);
+  }, [pendingPrompt, consumePendingPrompt]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState("New chat");
 
@@ -342,18 +414,7 @@ export function GlobalChatbot() {
     clearResponseTimeout();
     responseTimeoutRef.current = setTimeout(() => {
       responseTimeoutRef.current = null;
-      setIsAiTyping(false);
-      setActiveToolLabel(null);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `timeout-${Date.now()}`,
-          role: "assistant",
-          content:
-            "WarpBot didn't answer in time — the live connection may have dropped. Please send that message again.",
-          failed: true,
-        },
-      ]);
+      setIsSlow(true);
     }, ASSISTANT_RESPONSE_TIMEOUT_MS);
   }, [clearResponseTimeout]);
 
@@ -381,7 +442,8 @@ export function GlobalChatbot() {
     setInputValue("");
     setSelectedContexts([]);
     setIsAiTyping(false);
-    setActiveToolLabel(null);
+    setSteps([]);
+    setIsSlow(false);
     setIsMinimized(false);
     shouldAutoScrollRef.current = true;
   };
@@ -403,12 +465,14 @@ export function GlobalChatbot() {
             role: message.role as ChatRole,
             content: message.content,
             failed: message.status === "failed",
+            sources: parseAnswerSources(message.sourcesJson),
           })),
       );
       setConversationTitle(detail.title?.trim() || "Chat history");
       setConversationId(detail.id);
       setIsAiTyping(false);
-      setActiveToolLabel(null);
+      setSteps([]);
+      setIsSlow(false);
       setInputValue("");
       setSelectedContexts([]);
       setIsMinimized(false);
@@ -539,7 +603,15 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; messageId: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setActiveToolLabel(null);
+        // A new turn starts a new trail; the previous one has been folded into the answer it
+        // produced and stays there.
+        //
+        // Seeded with the step that is genuinely running: before the first tool call WarpBot is
+        // reading the question, which on a slow turn is the longest stretch of the whole thing
+        // and used to be drawn as a bare "Thinking..." with no trail at all.
+        setSteps([{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
+        turnStartedAtRef.current = Date.now();
+        setIsSlow(false);
         armResponseTimeout();
         upsertAssistantMessage(payload.messageId, (prev) => ({
           id: payload.messageId,
@@ -558,7 +630,17 @@ export function GlobalChatbot() {
       }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
-        setActiveToolLabel(null);
+        setIsSlow(false);
+        // Marked finished, NOT discarded. Once prose starts arriving no tool is still running,
+        // but what it ran is exactly what the reader wants left on screen — and writing the
+        // answer is itself a step, so the trail names it rather than going quiet for the
+        // longest visible part of the turn.
+        setSteps((current) => {
+          const settled = current.map((step) => ({ ...step, done: true }));
+          return settled.some((step) => step.tool === WRITING_STEP)
+            ? settled
+            : [...settled, { key: WRITING_STEP, tool: WRITING_STEP, done: false }];
+        });
         // Still mid-turn: re-arm rather than clear, so a stream that dies halfway through
         // also surfaces instead of freezing under a half-written answer.
         armResponseTimeout();
@@ -572,10 +654,43 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantToolCallStarted",
-      (payload: { conversationId: string; toolName: string }) => {
+      (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setActiveToolLabel(TOOL_LABELS[payload.toolName] ?? "Looking that up…");
+        setSteps((current) => [
+          // Anything still marked running when a new tool starts has finished — the worker
+          // emits a completed for each, but the trail must not show two spinners if one is lost.
+          ...current.map((step) => ({ ...step, done: true })),
+          {
+            key: `${payload.toolName}-${current.length}`,
+            tool: payload.toolName,
+            done: false,
+            detail: payload.toolDetail || undefined,
+          },
+        ]);
+        armResponseTimeout();
+      },
+    );
+
+    connection.on(
+      "AssistantReasoning",
+      (payload: { conversationId: string; title?: string; body?: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        const title = payload.title?.trim() ?? "";
+        const body = payload.body?.trim() ?? "";
+        if (!title && !body) return;
+        setIsAiTyping(true);
+        setSteps((current) => [
+          // The model has moved on from whatever it was doing when it wrote this.
+          ...current.map((step) => ({ ...step, done: true })),
+          {
+            key: `${REASONING_STEP}-${current.length}`,
+            tool: REASONING_STEP,
+            done: false,
+            detail: title || undefined,
+            body: body || undefined,
+          },
+        ]);
         armResponseTimeout();
       },
     );
@@ -594,24 +709,54 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantToolCallCompleted",
-      (payload: { conversationId: string }) => {
+      (payload: { conversationId: string; toolName?: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
-        setActiveToolLabel(null);
+        // The hosted web search publishes its started event before OpenAI has said what it is
+        // searching for, so this is often the first event that can name the target.
+        setSteps((current) =>
+          withStepDetail(current, payload.toolName ?? "", payload.toolDetail).map((step) => ({
+            ...step,
+            done: true,
+          })),
+        );
         armResponseTimeout();
       },
     );
 
     connection.on(
       "AssistantMessageCompleted",
-      (payload: { conversationId: string; id: string; content: string }) => {
+      (payload: {
+        conversationId: string;
+        id: string;
+        content: string;
+        sourcesJson?: string | null;
+      }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
-        setActiveToolLabel(null);
+        setIsSlow(false);
         clearResponseTimeout();
+
+        // Folded onto the answer, not deleted.
+        //
+        // This used to clear the trail outright, arguing that a finished turn showing its steps
+        // claims they are still worth watching. Half right: they are not worth WATCHING, and
+        // throwing them away also threw away the only record of which tools an answer came
+        // through — the first thing a person checking a surprising answer reaches for. It is one
+        // folded line now: over, and still there.
+        const finishedSteps = steps.map((step) => ({ ...step, done: true }));
+        const startedAt = turnStartedAtRef.current;
+        turnStartedAtRef.current = null;
+        setSteps([]);
+
+        // Only the completed event carries them: the worker decides which sources the answer
+        // pointed at once the whole answer exists, so there is nothing to show mid-stream.
         upsertAssistantMessage(payload.id, () => ({
           id: payload.id,
           role: "assistant",
           content: payload.content,
+          sources: parseAnswerSources(payload.sourcesJson),
+          steps: finishedSteps.length > 0 ? finishedSteps : undefined,
+          durationMs: startedAt ? Date.now() - startedAt : undefined,
         }));
       },
     );
@@ -625,24 +770,41 @@ export function GlobalChatbot() {
       }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(false);
-        setActiveToolLabel(null);
+        setIsSlow(false);
         clearResponseTimeout();
+        // A failure is the case the trail matters MOST: how far it got is the only clue to why.
+        const failedSteps = steps.map((step) => ({ ...step, done: true }));
+        const failedStartedAt = turnStartedAtRef.current;
+        turnStartedAtRef.current = null;
+        setSteps([]);
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
           role: "assistant",
           content: payload.error,
           failed: true,
+          steps: failedSteps.length > 0 ? failedSteps : undefined,
+          durationMs: failedStartedAt ? Date.now() - failedStartedAt : undefined,
         }));
       },
     );
 
     connection.on(
       "AssistantFollowUpMessage",
-      (payload: { conversationId: string; id: string; content: string }) => {
+      (payload: {
+        conversationId: string;
+        id: string;
+        content: string;
+        sourcesJson?: string | null;
+      }) => {
         if (payload.conversationId !== conversationId) return;
         setMessages((prev) => [
           ...prev,
-          { id: payload.id, role: "assistant", content: payload.content },
+          {
+            id: payload.id,
+            role: "assistant",
+            content: payload.content,
+            sources: parseAnswerSources(payload.sourcesJson),
+          },
         ]);
       },
     );
@@ -863,7 +1025,15 @@ export function GlobalChatbot() {
     const container = messagesContainerRef.current;
     if (!container || !shouldAutoScrollRef.current) return;
     container.scrollTop = container.scrollHeight;
-  }, [messages, isAiTyping, activeToolLabel, isOpen, isExpanded]);
+  }, [messages, isAiTyping, steps, isOpen, isExpanded]);
+
+  const { isAway, scrollToLatest } = useScrollToLatest(messagesContainerRef, {
+    // The same slack handleMessagesScroll uses to decide the widget is still following.
+    threshold: AUTOSCROLL_THRESHOLD_PX,
+    // Steps and the typing flag too: a long answer grows the list without adding a message, and
+    // that is exactly when a reader who scrolled up needs to be told the bottom has moved.
+    revision: `${messages.length}:${steps.length}:${isAiTyping}`,
+  });
 
   const handleMessagesScroll = () => {
     const container = messagesContainerRef.current;
@@ -939,9 +1109,18 @@ export function GlobalChatbot() {
 
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? inputValue).trim();
-    // WT-474: an attachment on its own is a question ("what is this?"), so a turn carrying only
-    // files is allowed to go. Both shapes still need a workspace.
-    if ((!content && attachments.length === 0) || !activeWorkspaceId) return;
+    // WT-541: the same rule the send button is disabled by. It used to be spelled out here and
+    // only half-spelled on the button, so a turn with no workspace was swallowed by a control
+    // that looked alive.
+    const readiness = composerReadiness({
+      text: content,
+      attachmentCount: attachments.length,
+      activeWorkspaceId,
+    });
+    if (!readiness.canSend) return;
+    // The id travels with the yes, so this handler cannot disagree with the check above about
+    // which workspace the turn belongs to.
+    const sendWorkspaceId = readiness.workspaceId;
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
@@ -974,7 +1153,7 @@ export function GlobalChatbot() {
     if (!convId) {
       try {
         const conversation =
-          await createConversation.mutateAsync(activeWorkspaceId);
+          await createConversation.mutateAsync(sendWorkspaceId);
         convId = conversation.id;
         setConversationId(convId);
       } catch {
@@ -1129,10 +1308,11 @@ export function GlobalChatbot() {
               </div>
 
               {/* Chat Messages */}
+              <div className="relative flex min-h-0 flex-1 flex-col">
               <div
                 ref={messagesContainerRef}
                 onScroll={handleMessagesScroll}
-                className="flex-1 overflow-y-auto px-2 flex flex-col gap-4"
+                className="min-h-0 flex-1 overflow-y-auto px-2 flex flex-col gap-4"
               >
                 {messages.length > 0 &&
                   messages.map((msg) => (
@@ -1155,24 +1335,53 @@ export function GlobalChatbot() {
                         }`}
                       >
                         {msg.role === "assistant" && !msg.failed ? (
-                          <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                          <>
+                            <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                            <AnswerSources
+                              sources={msg.sources ?? []}
+                              workspaceSlug={activeWorkspaceSlug}
+                            />
+                            {/* Under the answer, folded. Over as a progress display, still there
+                                as the record of which tools it came through. */}
+                            <AssistantWorkTrail
+                              steps={msg.steps ?? []}
+                              running={false}
+                              durationMs={msg.durationMs}
+                            />
+                          </>
                         ) : (
                           msg.content
                         )}
                       </div>
                     </div>
                   ))}
-                {isAiTyping && (
+                {steps.length > 0 && (
+                  <div className="flex justify-start">
+                    <AssistantWorkTrail
+                      steps={steps}
+                      running
+                      slow={isSlow}
+                      className="ml-4 mr-2 flex-1"
+                    />
+                  </div>
+                )}
+
+                {/* Only when there is no trail to say it on. With one on screen this repeated the
+                    same fact in a second place. */}
+                {isSlow && steps.length === 0 && (
+                  <p className="py-1 pl-4 text-[12px] text-ink-subtle">
+                    Still working — this one is taking a while.
+                  </p>
+                )}
+
+                {/* Only before the first tool names itself. Once there is a trail it says more
+                    than a spinner can, and showing both puts two answers to one question on
+                    screen. */}
+                {isAiTyping && steps.length === 0 && (
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
-                      <div className="scale-75 origin-left flex items-center justify-center">
-                        <Lumidot
-                          variant={lumidotVariant}
-                          pattern="frame"
-                          glow={4}
-                        />
-                      </div>
-                      <span>{activeToolLabel ?? "Thinking..."}</span>
+                      <LumidotSpinner />
+                      <span>Thinking...</span>
                     </div>
                   </div>
                 )}
@@ -1195,6 +1404,16 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
+              </div>
+              {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
+                  the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
+                  panels end against the page and read as continuing on their own. */}
+              {/* Only while the reader is up the page. It used to render unconditionally, so
+                  at the bottom — where every reader spends most of their time — a soft band sat
+                  over the last two lines of the answer they were reading. The edge exists to say
+                  "there is more below"; at the bottom there is not. */}
+              <ScrollFadeEdge visible={isAway} />
+              <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
               </div>
 
               {/* Chat Input Section
@@ -1448,6 +1667,17 @@ export function GlobalChatbot() {
                     }
                   />
 
+                  {/* WT-541 — said on screen, not only in the send button's tooltip.
+                      The admin portal is outside [workspaceSlug], so an admin who signs in and
+                      goes straight to /admin has no active workspace and every WarpBot turn was
+                      swallowed in silence. A disabled button explains nothing to somebody who
+                      has already typed their question. */}
+                  {composerState.blocker === "no-workspace" ? (
+                    <p className="px-2.5 pb-1.5 text-[11px] leading-4 text-ink-subtle">
+                      {composerState.hint}
+                    </p>
+                  ) : null}
+
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
                     {/* WT-474: the paperclip sits with Skills, at the left of the control row,
                         which is where Claude and Codex put it — the composer's own actions on one
@@ -1556,7 +1786,11 @@ export function GlobalChatbot() {
                         // WT-474: an attachment on its own is a question, so send is live for a
                         // turn carrying only files. Matching the same rule in sendMessage and in
                         // AssistantService — a button the server would accept must not look dead.
-                        disabled={!inputValue.trim() && attachments.length === 0}
+                        //
+                        // WT-541 is the converse, and was the actual bug: a button the server
+                        // CANNOT accept must not look alive. Both now read one rule.
+                        disabled={!composerState.canSend}
+                        title={composerState.hint ?? "Send message"}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
                         <ArrowUp weight="bold" size={13} />

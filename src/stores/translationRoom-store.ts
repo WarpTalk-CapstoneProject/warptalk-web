@@ -4,12 +4,22 @@ import { create } from "zustand";
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
 import type {
   AiSuggestionDto,
+  ChatMentionDto,
   ChatMessageDto,
   TranslationRoomStateDto,
   ParticipantInfoDto,
   TranscriptSegmentDto,
   TranslationTextDto,
 } from "@/types/realtime";
+// Relative, not "@/...": these stores are imported directly by node-run contract tests, which
+// have no bundler and cannot resolve the alias. The same trap already cost a fix once
+// (normalizeLanguageCode, WT-371).
+import {
+  REASONING_STEP,
+  THINKING_STEP,
+  WRITING_STEP,
+  type AssistantStep,
+} from "../lib/meeting/assistant-tool-labels.ts";
 
 interface TranslationRoomStoreState {
   // Current live translationRoom state
@@ -30,7 +40,73 @@ interface TranslationRoomStoreState {
    * seconds, not milliseconds — the chat showed no sign anything was happening. Asking and
    * being ignored look identical when there is nothing in between.
    */
-  assistantState: "idle" | "thinking" | "timed_out";
+  assistantState: "idle" | "thinking" | "slow";
+  /**
+   * Questions for WarpBot typed while it was still answering the previous one. WT-580.
+   *
+   * IN THE STORE, NOT IN THE PANEL. Switching to Transcript or People unmounts the chat panel, so
+   * component state would drop a question the user had already sent and been told was queued —
+   * the same class of loss the side-panel tabs have caused before. It also keeps the drain out of
+   * a React setState-in-effect: this is an external store, which is where an effect is allowed to
+   * write.
+   */
+  queuedAgentAsks: { text: string; mentions: ChatMentionDto[] }[];
+  /**
+   * When the open turn began and when it ended, so the finished trail can say how long it took
+   * rather than only what it did. Both null before the first question of a session.
+   */
+  assistantStartedAt: number | null;
+  assistantFinishedAt: number | null;
+  /**
+   * Which tool WarpBot reached for last, so the room can see the step rather than a spinner.
+   *
+   * The backend has always carried the tool name on the result message and threw it away; the
+   * global assistant widget has shown it since it shipped.
+   */
+  /**
+   * The tools WarpBot has reached for this turn, in order.
+   *
+   * A single latest-tool string was overwritten by each new call, so a loop that checked the
+   * glossary and then searched documents showed one label for a moment and looked like a
+   * spinner. The trail is the evidence somebody asked for: which tools, in what order.
+   */
+  assistantSteps: AssistantStep[];
+  /**
+   * The finished trail of each answer that has already landed, keyed by its message id.
+   *
+   * WHY THE LIVE ARRAY IS NOT ENOUGH
+   *   `assistantSteps` is ONE turn — the next question clears it. In the widget every answer
+   *   keeps its own folded trail underneath it, so scrolling back shows which tools each reply
+   *   came through; here the trail sat at the bottom of the panel and belonged to whichever
+   *   question was asked last. Two surfaces running one agent, showing two different amounts of
+   *   its work.
+   *
+   *   Sealed rather than copied live: a trail is attached to the message it produced at the
+   *   moment that message arrives, which is the only point where the pairing is known.
+   */
+  assistantTrails: Record<string, { steps: AssistantStep[]; durationMs: number | null }>;
+  /**
+   * The answer as WarpBot is writing it, before it exists as a message.
+   *
+   * A meeting chat message is only persisted once the whole turn is over, so the room saw
+   * nothing between the question and the finished reply — a long answer read as a stall while
+   * the widget beside it was visibly writing. The agent takes the same time on both surfaces;
+   * only one of them showed its work.
+   *
+   * A DRAFT, not a message: it has no id, is never persisted, and is dropped the moment the real
+   * one arrives. Anyone who reloads or joins late sees the persisted message and never this.
+   */
+  assistantDraft: string;
+  /**
+   * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
+   *
+   * The deadline is measured from HERE, not from when the question was asked. Measured from the
+   * question, a model that simply thought for longer than the threshold was declared dead while
+   * it was still working, and the notice then sat in the chat after the answer arrived. A
+   * tool-calling loop emits a step every few seconds, so silence for the whole window is the only
+   * thing that can now mean trouble.
+   */
+  assistantActivityAt: number;
   isMuted: boolean;
   // userIds of OTHER participants with a raised hand — TranslationRoomHub.RaiseHand
   // broadcasts via OthersInGroup, so this never includes the caller's own userId; the
@@ -51,7 +127,54 @@ interface TranslationRoomStoreState {
   dismissSuggestion: (segmentId: string) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
   addChatMessage: (message: ChatMessageDto) => void;
-  setAssistantState: (state: "idle" | "thinking" | "timed_out") => void;
+  setAssistantState: (state: "idle" | "thinking" | "slow") => void;
+  /** Hold a question until WarpBot finishes the one it is on. WT-580. */
+  enqueueAgentAsk: (ask: { text: string; mentions: ChatMentionDto[] }) => void;
+  /** Take the oldest queued question, or null when there is none. */
+  dequeueAgentAsk: () => { text: string; mentions: ChatMentionDto[] } | null;
+  /**
+   * A question has just been put to WarpBot. Opens a fresh trail on the step that is genuinely
+   * running — reading the question — and drops whatever the previous turn left behind.
+   *
+   * SEPARATE FROM setAssistantState("thinking"), which is what the panel used to call on its
+   * own. That set the state to "thinking" BEFORE any activity arrived, so every later
+   * `noteAssistantActivity` saw a non-idle state, took the "already running" branch, and never
+   * seeded anything. The trail therefore began at the first tool call — and for the whole
+   * stretch before it, which on a slow turn is the longest part, the panel showed a bare
+   * spinner where the widget shows "Reading your question".
+   */
+  beginAssistantTurn: () => void;
+  /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
+  noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
+  /**
+   * A tool WarpBot reached for has FINISHED, and what it was aimed at.
+   *
+   * Folded into the step already running for that tool rather than appended: OpenAI's hosted web
+   * search reports its target on the completed event, because the started one fires before the
+   * item naming the query is on the wire. Appending would draw the same search twice — once with
+   * no target and once with it.
+   */
+  noteAssistantToolFinished: (toolName?: string | null, toolDetail?: string | null) => void;
+  /**
+   * WarpBot said, in its own words, what it is doing.
+   *
+   * Separate from noteAssistantActivity because it is a different KIND of step, not another
+   * tool: it carries a heading and a paragraph, and the trail draws those on two lines.
+   */
+  noteAssistantReasoning: (title?: string | null, body?: string | null) => void;
+  /**
+   * Attach the turn that just finished to the answer it produced, and clear the live trail.
+   *
+   * Idempotent by message id: the answer can arrive twice — once over the hub and again in a
+   * history backfill after a reconnect — and the second arrival must not overwrite a sealed
+   * trail with the empty array the first one left behind.
+   */
+  /**
+   * Another piece of the answer. Additive — the worker emits the text since the last piece, so
+   * these concatenate rather than replace.
+   */
+  appendAssistantDraft: (delta?: string | null) => void;
+  sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
   setHandRaised: (userId: string, isRaised: boolean) => void;
@@ -65,11 +188,18 @@ const initialState = {
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
+  queuedAgentAsks: [],
+  assistantStartedAt: null as number | null,
+  assistantFinishedAt: null as number | null,
+  assistantSteps: [] as AssistantStep[],
+  assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
+  assistantDraft: "",
+  assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
 };
 
-export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set) => ({
+export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set, get) => ({
   ...initialState,
 
   setTranslationRoomState: (translationRoomState) =>
@@ -278,7 +408,220 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set)
       chatMessages: mergeChatMessages(s.chatMessages, messages),
     })),
 
-  setAssistantState: (assistantState) => set({ assistantState }),
+  enqueueAgentAsk: (ask) =>
+    set((state) => ({ queuedAgentAsks: [...state.queuedAgentAsks, ask] })),
+
+  dequeueAgentAsk: () => {
+    const [next, ...rest] = get().queuedAgentAsks;
+    if (!next) return null;
+    set({ queuedAgentAsks: rest });
+    return next;
+  },
+
+  setAssistantState: (assistantState) =>
+    set((state) => ({
+      assistantState,
+      // Stamped on the way to idle, and only from a turn that was actually running: the room sets
+      // idle defensively in several places, and a second stamp would restart the clock on a trail
+      // already folded.
+      assistantFinishedAt:
+        assistantState === "idle" && state.assistantState !== "idle"
+          ? Date.now()
+          : state.assistantFinishedAt,
+    })),
+  beginAssistantTurn: () =>
+    set(() => ({
+      assistantState: "thinking" as const,
+      assistantStartedAt: Date.now(),
+      assistantFinishedAt: null,
+      // The previous turn's live steps go, whether or not it ever produced an answer to seal
+      // them onto — a question that failed leaves a trail behind, and appending the next
+      // question's steps to it would present one turn's work as another's.
+      assistantSteps: [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }],
+      // A turn that died without an answer leaves its half-written draft behind; the next
+      // question must not open under somebody else's unfinished sentence.
+      assistantDraft: "",
+      assistantActivityAt: Date.now(),
+    })),
+
+  // One call for "WarpBot did something", so no caller can move the state and forget to reset
+  // the deadline it is measured against.
+  noteAssistantActivity: (toolName = null, toolDetail = null) =>
+    set((state) => {
+      // Idle -> thinking is a NEW question, so the previous turn's trail goes with it.
+      const starting = state.assistantState === "idle";
+      // A turn that opens without naming a tool opens on the step that IS running: WarpBot is
+      // reading the question. The widget has seeded this since the trail shipped; here the same
+      // moment drew a bare "WarpBot is thinking…" with no trail behind it, so the longest
+      // stretch of a slow turn was the one stretch that said nothing about itself.
+      const carried = starting
+        ? toolName
+          ? []
+          : [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]
+        : state.assistantSteps;
+      return {
+        assistantState: starting ? "thinking" : state.assistantState,
+        assistantStartedAt: starting ? Date.now() : state.assistantStartedAt,
+        assistantFinishedAt: starting ? null : state.assistantFinishedAt,
+        assistantSteps: toolName
+          ? [
+              // Anything still running has finished — a second tool cannot start inside the
+              // first, and two spinners at once would say otherwise.
+              ...carried.map((step) => ({ ...step, done: true })),
+              {
+                key: `${toolName}-${carried.length}`,
+                tool: toolName,
+                done: false,
+                // What the call is about, straight from the worker. Never derived here: a
+                // target this client guessed at would be a claim about what the agent did,
+                // made by something that cannot know.
+                detail: toolDetail || undefined,
+              },
+            ]
+          : carried,
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
+  noteAssistantToolFinished: (toolName = null, toolDetail = null) =>
+    set((state) => {
+      if (!toolName) return state;
+
+      // Last match, not first: one turn can search the web more than once, and the call that
+      // just finished is the most recent one bearing that name.
+      const index = [...state.assistantSteps]
+        .map((step, position) => ({ step, position }))
+        .reverse()
+        .find((entry) => entry.step.tool === toolName)?.position;
+
+      // A tool whose start was never announced still deserves its step. The hosted web search is
+      // exactly this: in production the only event it emits is the completed one, so without
+      // this branch a whole web-search turn leaves no trace in the trail at all — which is the
+      // reported defect.
+      if (index === undefined) {
+        return {
+          assistantState: state.assistantState === "idle" ? "thinking" : state.assistantState,
+          assistantStartedAt: state.assistantStartedAt ?? Date.now(),
+          assistantSteps: [
+            ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+            {
+              key: `${toolName}-${state.assistantSteps.length}`,
+              tool: toolName,
+              done: true,
+              detail: toolDetail || undefined,
+            },
+          ],
+          assistantActivityAt: Date.now(),
+        };
+      }
+
+      return {
+        assistantSteps: state.assistantSteps.map((step, position) =>
+          position === index
+            ? {
+                ...step,
+                done: true,
+                // Only ever FILLS a gap. The started event may have had no target yet; if it did
+                // have one, it described this same call and is not overwritten by a later,
+                // possibly emptier, report of the same thing.
+                detail: step.detail || toolDetail || undefined,
+              }
+            : step,
+        ),
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
+  noteAssistantReasoning: (title = null, body = null) =>
+    set((state) => {
+      const heading = title?.trim() ?? "";
+      const paragraph = body?.trim() ?? "";
+      if (!heading && !paragraph) return state;
+      const starting = state.assistantState === "idle";
+      const carried = starting ? [] : state.assistantSteps;
+      return {
+        assistantState: starting ? "thinking" : state.assistantState,
+        assistantStartedAt: starting ? Date.now() : state.assistantStartedAt,
+        assistantFinishedAt: starting ? null : state.assistantFinishedAt,
+        assistantSteps: [
+          // The model has moved on from whatever it was doing when it wrote this.
+          ...carried.map((step) => ({ ...step, done: true })),
+          {
+            key: `${REASONING_STEP}-${carried.length}`,
+            tool: REASONING_STEP,
+            done: false,
+            detail: heading || undefined,
+            body: paragraph || undefined,
+          },
+        ],
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
+  appendAssistantDraft: (delta = null) =>
+    set((state) => {
+      if (!delta) return state;
+
+      // The FIRST piece of prose ends the tool phase and starts the writing one — the same
+      // signal the widget takes off its token stream, which this surface only gained when the
+      // meeting chat started streaming. Before that, "wrote the answer" could only be claimed
+      // on arrival, because nothing here could see it begin.
+      const writing = state.assistantSteps.some((step) => step.tool === WRITING_STEP);
+      const steps = writing
+        ? state.assistantSteps
+        : [
+            ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+            { key: `${WRITING_STEP}-${state.assistantSteps.length}`, tool: WRITING_STEP, done: false },
+          ];
+
+      return {
+        assistantSteps: steps,
+        assistantDraft: state.assistantDraft + delta,
+        // Text arriving IS a sign of life, and the panel's deadline is measured from the last
+        // one. Without this a long answer that streams for two minutes without a tool call
+        // would be declared slow while it was visibly writing.
+        assistantActivityAt: Date.now(),
+      };
+    }),
+
+  sealAssistantTrail: (messageId) =>
+    set((state) => {
+      // Nothing to attach, or this answer already has its trail. Either way, leave it alone:
+      // the same answer arrives twice whenever the hub reconnects mid-turn, and the second
+      // arrival carries an empty live array that would erase what the first one sealed.
+      if (!messageId || state.assistantTrails[messageId]) return state;
+      if (state.assistantSteps.length === 0) return state;
+
+      return {
+        assistantTrails: {
+          ...state.assistantTrails,
+          [messageId]: {
+            // Every step is over — the answer is the last thing a turn produces, so a step
+            // still marked running would spin forever underneath a finished reply.
+            steps: state.assistantSteps.some((step) => step.tool === WRITING_STEP)
+              ? state.assistantSteps.map((step) => ({ ...step, done: true }))
+              : [
+                  ...state.assistantSteps.map((step) => ({ ...step, done: true })),
+                  // "Wrote the answer" when nothing streamed — a turn whose text never arrived
+                  // as chunks still produced an answer, and the trail should say so. Guarded,
+                  // because appendAssistantDraft names this step the moment prose starts and a
+                  // second copy would claim the answer was written twice.
+                  { key: WRITING_STEP, tool: WRITING_STEP, done: true },
+                ],
+            durationMs:
+              state.assistantStartedAt !== null ? Date.now() - state.assistantStartedAt : null,
+          },
+        },
+        // The live trail belongs to the turn that just ended, and the next question starts its
+        // own. Left in place, it would render twice: folded under the answer and live below it.
+        assistantSteps: [],
+        // And the draft is superseded by the message it was a preview of. The persisted one is
+        // authoritative: an aborted tool-calling iteration can emit text that is not in the
+        // final answer, so a client that kept its own accumulation would keep a sentence the
+        // server never saved.
+        assistantDraft: "",
+      };
+    }),
 
   addChatMessage: (message) =>
     set((s) => ({

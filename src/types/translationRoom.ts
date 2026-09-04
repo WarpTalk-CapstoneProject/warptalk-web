@@ -49,6 +49,16 @@ export interface TranslationRoomDto {
     artifactAccess?: string;
     /** WT-371: whether anyone in the room may start translation, or only the host. */
     participantsCanStartTranslation?: boolean;
+    /**
+     * WT-587: whether this meeting leaves a written record at all.
+     *
+     * `false` is an EPHEMERAL meeting — captions and live translation run exactly as normal and
+     * nothing is written to the transcript, so there is also no summary, no minutes and no
+     * knowledge-base entry afterwards. Absent reads as TRUE: every room created before this
+     * setting existed keeps its transcript, and a client that cannot see the field must never
+     * render a recorded meeting as an unrecorded one.
+     */
+    saveTranscript?: boolean;
   };
   participantCount?: number;
   /**
@@ -123,6 +133,8 @@ export interface CreateTranslationRoomRequest {
     autoRecord?: boolean;
     breakoutsEnabled?: boolean;
     participantsCanStartTranslation?: boolean;
+    /** WT-587: send `false` for a meeting that is not to be written down. Omit to keep it. */
+    saveTranscript?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];
@@ -369,6 +381,11 @@ export interface TranslationRoomArtifactDto {
   /** Inline artifact payload (e.g. the AI meeting-summary JSON). Null for artifact types
    * that only carry a fileUrl (transcript export, recording). */
   content?: string | null;
+  /** When the CONTENT last changed — moved by a summary rewrite. Absent on artifacts written
+   *  before the column existed; read that as unknown and fall back to createdAt. */
+  updatedAt?: string | null;
+  /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
+  recordingStartedAt?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

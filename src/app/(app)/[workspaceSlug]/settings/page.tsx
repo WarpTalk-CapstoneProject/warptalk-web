@@ -33,6 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
+import { describeLanguageCeiling, describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
@@ -171,6 +172,21 @@ export default function WorkspaceSettingsPage() {
   const settings = settingsQuery.data;
   const planRoomCeiling = settings?.maxActiveRoomsCeiling ?? null;
   const watchedMaxActiveRooms = watchAll.maxActiveRooms;
+  const roomCeilingNotice = describeRoomCeiling({
+    ceiling: planRoomCeiling,
+    configured: watchedMaxActiveRooms,
+    source: settings?.maxActiveRoomsCeilingSource,
+  }).message;
+
+  // WT-500 — the plan's per-meeting language quota, which is enforced at meeting creation and
+  // used to be invisible everywhere else. Counted off the live form value rather than the saved
+  // settings so the notice appears the moment an Owner ticks the language that crosses the line,
+  // not after they navigate away and come back.
+  const languageCeilingNotice = describeLanguageCeiling({
+    ceiling: settings?.maxLanguagesCeiling,
+    allowedCount: (watchAll.allowedTargetLanguages || []).length,
+    source: settings?.maxLanguagesCeilingSource,
+  }).message;
 
   const saveWorkspacePatch = useCallback(async (patch: Partial<WorkspaceSettingsDto>) => {
     const saved = await patchSettingsMutation.mutateAsync(patch);
@@ -524,16 +540,14 @@ export default function WorkspaceSettingsPage() {
                     A workspace may tighten its own cap and may never raise it above what the plan
                     sells, so meeting creation enforces the LOWER of the two. Saying so here is the
                     missing half of the reported bug: this field read 20 while room creation
-                    refused at 5, and the page offered no way to find out why. */}
-                {planRoomCeiling !== null && planRoomCeiling < watchedMaxActiveRooms ? (
-                  <span className="text-[11px] text-amber-600">
-                    Your plan allows {planRoomCeiling} concurrent rooms
-                    {settings?.maxActiveRoomsCeilingSource
-                      ? ` (${settings.maxActiveRoomsCeilingSource})`
-                      : ""}
-                    , so {planRoomCeiling} is what applies. A higher number here has no effect —
-                    this setting can only lower the limit.
-                  </span>
+                    refused at 5, and the page offered no way to find out why.
+
+                    WT-562: the sentence itself was then wrong. It printed the entitlement's raw
+                    provenance at the Owner — "(plan:enterpise2)", an internal catalogue id, and a
+                    misspelled one — and asserted "Your plan allows" for a number that does not
+                    always come from a plan. See lib/workspace/room-ceiling-notice. */}
+                {roomCeilingNotice ? (
+                  <span className="text-[11px] text-amber-600">{roomCeilingNotice}</span>
                 ) : null}
               </div>
               <Input
@@ -616,6 +630,9 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Allowed Target Translation Languages</span>
                 <span className="text-[11px] text-ink-muted">Languages available for live translation in meeting rooms.</span>
+                {languageCeilingNotice ? (
+                  <span className="text-[11px] text-amber-600">{languageCeilingNotice}</span>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
                 {languages.map((l) => {

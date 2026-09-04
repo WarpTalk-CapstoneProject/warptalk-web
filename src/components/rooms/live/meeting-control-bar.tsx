@@ -6,14 +6,17 @@ import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
+import { getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   applySingleLanguageChoice,
   describeLanguageChoice,
 } from "@/lib/meeting/language-choice";
 import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
+import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
+import { useLocalMicLevels } from "@/hooks/use-local-mic-levels";
+import { MicCheck } from "@/components/rooms/live/mic-check";
 import {
   NOISE_REDUCTION_MODES,
   noiseReductionDescription,
@@ -97,11 +100,13 @@ export function MeetingControlBar({
   availableListenLanguages,
   speakLanguage,
   availableSpeakLanguages,
+  allowedTargetLanguages,
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
   voiceCloneHasAudience = false,
   flashModeEnabled = false,
+  flashModeSource = "unknown",
   noiseReductionMode = "off",
   onChangeFlashMode,
   dubVoice,
@@ -168,6 +173,13 @@ export function MeetingControlBar({
   speakLanguage?: string;
   /** Languages selectable in the speak-language dropdown — omit or pass a single-item list to hide it. */
   availableSpeakLanguages?: string[];
+  /**
+   * The workspace's Allowed Target Translation Languages. WT-497 — the room's own list is
+   * already narrowed by this upstream; the bar needs the policy itself so the "Other
+   * languages" disclosure cannot re-offer what that narrowing removed. Empty/absent means
+   * unrestricted.
+   */
+  allowedTargetLanguages?: string[] | null;
   /** A real Cartesia voice id this listener explicitly chose, or null/undefined for the automatic default. */
   voicePreference?: string | null;
   /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
@@ -202,6 +214,14 @@ export function MeetingControlBar({
    * answers "how fast is the room", and it applies to EVERYBODY in it.
    */
   flashModeEnabled?: boolean;
+  /**
+   * Where flashModeEnabled came from — a host's override, the deployment default, or neither.
+   *
+   * The switch position alone cannot carry this, and the sentence under it was written as though
+   * it could: it said "Set by the host" to every guest, including in rooms no host had ever
+   * touched, which are most of them.
+   */
+  flashModeSource?: "room" | "deployment" | "unknown";
   noiseReductionMode?: NoiseReductionMode;
   /** Omit to render the state read-only — the host owns this setting, a guest only sees it. */
   onChangeFlashMode?: (enabled: boolean) => void;
@@ -301,6 +321,19 @@ export function MeetingControlBar({
   // WT-420: the live capture state, in the same panel as the choice it explains.
   const cloneStatus = describeCloneCapture(cloneCapture);
 
+  /**
+   * The take, as heard by this browser. Sampled here rather than inside each of the two places
+   * that draw it, so the floating card and the Voice section show the SAME strip — two meters of
+   * one microphone that disagree would be worse than either alone — and so only one AudioContext
+   * is ever open. Idle meetings hold none: the hook stops at `enabled: false`.
+   *
+   * The window is the clip the worker actually asked for, so a full strip means a full take.
+   */
+  const cloneLevels = useLocalMicLevels({
+    enabled: cloneStatus.tone === "working",
+    windowSeconds: Math.max(6, Math.round(cloneCapture?.requiredSeconds ?? 18)),
+  });
+
   // What listeners will actually hear, derived in one place — see lib/meeting/voice-selection.ts.
   const voiceSelection = describeVoiceSelection({
     voiceEnabled,
@@ -334,7 +367,7 @@ export function MeetingControlBar({
   return (
     <div
       ref={barRef}
-      className="relative flex h-[60px] items-center gap-2 rounded-full border border-border/50 bg-surface-1/80 px-3 shadow-sm backdrop-blur-xl"
+      className="relative flex h-[52px] items-center gap-1.5 rounded-full border border-border/50 bg-surface-1/80 px-2.5 shadow-sm backdrop-blur-xl"
     >
       {/* The clone capture, OUTSIDE the settings menu.
           The progress block below (inside the Voice section) only exists while that menu is
@@ -346,6 +379,7 @@ export function MeetingControlBar({
           reporting, whatever the menu is doing. */}
       <CloneCaptureCard
         status={cloneStatus}
+        levels={cloneLevels}
         suppressed={isSettingsMenuOpen && settingsSection === "voice"}
         anchorRef={barRef}
       />
@@ -354,7 +388,7 @@ export function MeetingControlBar({
           <button
             type="button"
             onClick={warptalkStarted ? onStopWarptalk : onStartWarptalk}
-            className={`flex h-11 items-center gap-2 whitespace-nowrap rounded-full px-4 text-[14px] font-medium transition-colors ${
+            className={`flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[13px] font-medium transition-colors ${
               warptalkStarted
                 ? "bg-surface-2 text-ink hover:bg-surface-3"
                 : "bg-primary text-primary-foreground hover:bg-primary/80"
@@ -363,7 +397,7 @@ export function MeetingControlBar({
             {warptalkStarted ? <Stop className="h-3.5 w-3.5" weight="fill" /> : <Play className="h-3.5 w-3.5" weight="fill" />}
             {warptalkStarted ? "Stop Translation" : "Start Translation"}
           </button>
-          <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
         </>
       ) : null}
 
@@ -384,12 +418,13 @@ export function MeetingControlBar({
             // offered on either side has to be offerable at all — dropping to one list would
             // silently remove options the moment they ever diverge.
             languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
+            allowedTargetLanguages={allowedTargetLanguages}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
             onLanguagePicked={onLanguagePicked}
             onChangeListenLanguage={onChangeListenLanguage}
             highlight={Boolean(warptalkStarted) && (!speakLanguage || !listenLanguage)}
           />
-          <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+          <div className="h-6 w-[1px] bg-surface-3 mx-1" />
         </>
       ) : null}
 
@@ -577,7 +612,7 @@ export function MeetingControlBar({
         </div>
       ) : null}
 
-      <div className="h-7 w-[1px] bg-surface-3 mx-1.5" />
+      <div className="h-6 w-[1px] bg-surface-3 mx-1" />
       
       <div className="relative" ref={settingsRef}>
         <MeetControl
@@ -611,6 +646,14 @@ export function MeetingControlBar({
                     active={noiseSuppressionEnabled}
                     value={noiseSuppressionEnabled ? "On" : "Off"}
                     onClick={onToggleNoiseSuppression}
+                  />
+                  {/* Right under the switch it proves. The strip draws the PUBLISHED signal —
+                      after Krisp when it is attached — so flipping the row above visibly moves
+                      the background floor, which is the evidence the switch never had. */}
+                  <MicCheck
+                    enabled={isSettingsMenuOpen && settingsSection === "root"}
+                    suppressionActive={noiseSuppressionEnabled}
+                    microphoneOn={microphoneEnabled}
                   />
                   {/* Deliberately the NEXT row, and deliberately worded differently. The row
                       above filters the microphone other people hear (Krisp, client-side). This one
@@ -918,7 +961,16 @@ export function MeetingControlBar({
                       <span className="block text-[11px] leading-snug text-ink-subtle">
                         {onChangeFlashMode
                           ? "Start translating while people are still speaking. Faster, and still experimental."
-                          : "Set by the host. Translation starts while people are still speaking."}
+                          : flashModeSource === "room"
+                            ? "Set by the host. Translation starts while people are still speaking."
+                            : flashModeSource === "deployment"
+                              // Nobody set this room. Saying "the host" here named a person who
+                              // had made no such choice, and made a default look like a decision.
+                              ? "Following the platform default. Translation starts while people are still speaking."
+                              // No override and no published default. The switch has to sit
+                              // somewhere, so it sits off — but it is not reporting a reading,
+                              // and claiming one is the whole defect this replaces.
+                              : "Not known right now — the room is using whatever the platform defaults to."}
                       </span>
                     </span>
                     <Switch
@@ -954,15 +1006,12 @@ export function MeetingControlBar({
                           </span>
                         ) : null}
                       </div>
-                      {cloneStatus.progress !== null ? (
-                        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-surface-3">
-                          <div
-                            className={`h-full rounded-full transition-[width] duration-500 ${
-                              cloneStatus.tone === "done" ? "bg-emerald-500" : "bg-primary"
-                            }`}
-                            style={{ width: `${Math.round(cloneStatus.progress * 100)}%` }}
-                          />
-                        </div>
+                      {cloneStatus.tone === "working" || cloneStatus.progress !== null ? (
+                        <CloneCaptureMeter
+                          levels={cloneLevels}
+                          progress={cloneStatus.progress}
+                          tone={cloneStatus.tone}
+                        />
                       ) : null}
                       <p className="mt-1 text-[11px] leading-snug text-ink-muted">
                         {cloneStatus.detail}
@@ -992,10 +1041,13 @@ export function MeetingControlBar({
  */
 function CloneCaptureCard({
   status,
+  levels,
   suppressed,
   anchorRef,
 }: {
   status: ReturnType<typeof describeCloneCapture>;
+  /** Sampled by the bar, not here, so this card and the Voice section draw one identical take. */
+  levels: number[];
   suppressed: boolean;
   /** The bar. This card is portaled out of it, because the bar's wrapper clips upward. */
   anchorRef: React.RefObject<HTMLDivElement | null>;
@@ -1055,15 +1107,12 @@ function CloneCaptureCard({
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
-      {status.progress !== null ? (
-        <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-3">
-          <div
-            className={`h-full rounded-full transition-[width] duration-500 ${
-              status.tone === "done" ? "bg-emerald-500" : "bg-primary"
-            }`}
-            style={{ width: `${Math.round(status.progress * 100)}%` }}
-          />
-        </div>
+      {status.tone === "working" || status.progress !== null ? (
+        <CloneCaptureMeter
+          levels={levels}
+          progress={status.progress}
+          tone={status.tone}
+        />
       ) : null}
       <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">{status.detail}</p>
     </FlyoutSurface>
@@ -1227,10 +1276,30 @@ function mergeLanguageOptions(
   return merged;
 }
 
-/** Every meeting language this product knows, minus the ones the room already offers. */
-function languagesNotAlreadyOffered(offered: string[] | undefined) {
+/**
+ * The meeting languages the WORKSPACE permits, minus the ones the room already offers.
+ *
+ * WT-497 — this used to be "every meeting language this product knows", and that is the whole
+ * defect. The room's own list was already narrowed by the workspace policy upstream (see
+ * `availableListenLanguages` in persistent-meeting-session), so the main section of the menu
+ * obeyed the Owner's setting — and then this disclosure re-offered everything it had just
+ * excluded. A workspace permitting vi/en/ko still showed French, Japanese and Spanish under
+ * "Other languages", and picking one was accepted.
+ *
+ * `isLanguageAllowedByPolicy` is what keeps an EMPTY policy meaning "unrestricted" rather than
+ * "permit nothing" — the same rule the server's whitelist check uses. An absent or still-loading
+ * settings response must therefore leave this list at its full width rather than emptying it.
+ */
+function languagesNotAlreadyOffered(
+  offered: string[] | undefined,
+  allowedTargetLanguages?: string[] | null,
+) {
   const already = new Set((offered ?? []).map(normalizeLanguageCode));
-  return languagesInScope("meeting").filter((language) => !already.has(language.code));
+  return languagesInScope("meeting").filter(
+    (language) =>
+      !already.has(language.code) &&
+      isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  );
 }
 
 // AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
@@ -1310,7 +1379,7 @@ function LiveKitTrackControls({
           // black squares sitting in a light, rounded bar next to buttons we do style.
           //
           // rounded-l-xl, not rounded-xl: the caret next to it supplies the right-hand corners.
-          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+          className="grid h-10 w-10 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
         />
         <MediaDeviceMenuButton
           // The speaker lives on the microphone caret. To a user "my headset" is one decision,
@@ -1322,7 +1391,7 @@ function LiveKitTrackControls({
       <div className="flex items-center">
         <TrackToggle
           source={Track.Source.Camera}
-          className="grid h-11 w-11 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
+          className="grid h-10 w-10 place-items-center rounded-l-xl !border-0 !bg-transparent !p-0 !text-ink-muted hover:!bg-surface-2 hover:!text-ink data-[lk-enabled=false]:!bg-red-50 data-[lk-enabled=false]:!text-red-600"
         />
         <MediaDeviceMenuButton kinds={["videoinput"]} label="Choose camera" />
       </div>
@@ -1360,7 +1429,7 @@ function MeetControl({
       aria-haspopup={hasPopup ? "menu" : undefined}
       aria-expanded={hasPopup ? Boolean(expanded) : undefined}
       aria-controls={hasPopup && expanded ? controls : undefined}
-      className={`grid h-11 w-11 place-items-center rounded-xl transition-colors ${
+      className={`grid h-10 w-10 place-items-center rounded-xl transition-colors ${
         disabled
           ? "cursor-not-allowed bg-canvas text-ink-tertiary"
           : active
@@ -1409,6 +1478,7 @@ function LanguagePairPicker({
   speakLanguage,
   listenLanguage,
   languageOptions,
+  allowedTargetLanguages,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
   onLanguagePicked,
@@ -1422,6 +1492,11 @@ function LanguagePairPicker({
    * lists, so taking two would just be a way for them to disagree later.
    */
   languageOptions: string[];
+  /**
+   * The workspace's Allowed Target Translation Languages — the ceiling on the "Other languages"
+   * disclosure below. WT-497. Empty or absent means unrestricted, never "none".
+   */
+  allowedTargetLanguages?: string[] | null;
   /**
    * Still two callbacks, because the wire format is still two fields. Every pick writes both:
    * see the onSelect below.
@@ -1452,9 +1527,11 @@ function LanguagePairPicker({
   // advertise a state the control can no longer produce.
   const shownLanguage = choice.speak || choice.hear;
 
-  // Every meeting language the room does NOT offer, as plain codes so the list below can treat
-  // both halves the same way.
-  const otherLanguages = languagesNotAlreadyOffered(languageOptions).map((language) => language.code);
+  // Every meeting language the room does NOT offer but the workspace still permits, as plain codes
+  // so the list below can treat both halves the same way.
+  const otherLanguages = languagesNotAlreadyOffered(languageOptions, allowedTargetLanguages).map(
+    (language) => language.code,
+  );
 
   // Somebody whose current language is not on the room's list is already off-menu — collapsing
   // the section that contains their own selection would hide the state they are in.
@@ -1511,7 +1588,7 @@ function LanguagePairPicker({
         aria-haspopup="menu"
         aria-expanded={open}
         title="Choose your language"
-        className={`flex h-11 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[13px] font-medium transition-colors ${
+        className={`flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 text-[13px] font-medium transition-colors ${
           highlight
             ? "bg-amber-500/10 text-amber-600 ring-1 ring-amber-500/40 hover:bg-amber-500/15"
             : "bg-surface-2 text-ink hover:bg-surface-3"

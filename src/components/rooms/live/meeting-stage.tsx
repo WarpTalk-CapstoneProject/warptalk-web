@@ -14,6 +14,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import {
   ConnectionState,
+  ParticipantEvent,
   RoomEvent,
   Track,
   type Participant,
@@ -25,9 +26,12 @@ import {
   SPEAKER_HOLD_MS,
   nextStickySpeaker,
 } from "@/lib/meeting/sticky-speaker";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { getInitials, identityFor } from "@/lib/meeting/participant-identity";
 import { HandRaiseBadge } from "./hand-raise-badge";
+import { useMeetingIdentities } from "./meeting-identity-context";
+import { ParticipantAvatar, ParticipantLanguageBadge } from "./participant-avatar";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
+import { MicStatusIcon } from "./mic-status-icon";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
 /**
@@ -109,6 +113,9 @@ export function LiveKitMeetingStage({
 }) {
   const connectionState = useConnectionState();
   const room = useMaybeRoomContext();
+  // Read once for the whole stage. `renderTile` is a nested function, so it cannot call the hook
+  // itself; it resolves against this map instead.
+  const identities = useMeetingIdentities();
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
   const [activeSpeakerIdentities, setActiveSpeakerIdentities] = useState<
     Set<string>
@@ -145,9 +152,38 @@ export function LiveKitMeetingStage({
         new Set(speakers.map((speaker) => speaker.identity)),
       );
     };
+    // WT-535: also follow each participant's own isSpeaking flag.
+    //
+    // ActiveSpeakersChanged is a ROOM-level event the SFU emits on its own cadence, and the
+    // comment above used to note — accurately — that the ring therefore clears about a second
+    // after somebody stops. That second is the "kéo dài mờ dần khi dứt lời" in the report.
+    //
+    // IsSpeakingChanged fires per participant off the same audio data but is not batched behind
+    // the room-level cadence, so it turns the ring off as soon as that one person stops rather
+    // than at the next room-wide recalculation. Both feed the same set: whichever arrives first
+    // wins, and neither can leave a stale ring behind because both are re-read from the room.
+    const handleSpeakingChanged = () => {
+      setActiveSpeakerIdentities(
+        new Set(
+          [room.localParticipant, ...room.remoteParticipants.values()]
+            .filter((participant) => participant.isSpeaking)
+            .map((participant) => participant.identity),
+        ),
+      );
+    };
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+    room.on(RoomEvent.ParticipantConnected, handleSpeakingChanged);
+    room.localParticipant.on(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+    for (const participant of room.remoteParticipants.values()) {
+      participant.on(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+    }
     return () => {
       room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
+      room.off(RoomEvent.ParticipantConnected, handleSpeakingChanged);
+      room.localParticipant.off(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+      for (const participant of room.remoteParticipants.values()) {
+        participant.off(ParticipantEvent.IsSpeakingChanged, handleSpeakingChanged);
+      }
     };
   }, [room]);
 
@@ -250,6 +286,7 @@ export function LiveKitMeetingStage({
     const isFeatured = featuredIdentity === identity;
     const handRaised = raisedHandUserIds?.has(identity) ?? false;
     const displayName = trackRef.participant.name || identity || fallbackName;
+    const person = identityFor(identities, identity, displayName);
     const showCameraOffState = isCameraUnavailable(trackRef);
     const isThumbnail = options?.variant === "thumbnail";
 
@@ -259,7 +296,7 @@ export function LiveKitMeetingStage({
           trackRef.participant.sid +
           (trackRef.publication?.trackSid ?? "placeholder")
         }
-        className={`group ${isThumbnail ? THUMBNAIL_SIZING : GRID_TILE_SIZING} overflow-hidden rounded-xl transition-shadow ${isActiveSpeaker ? "ring-2 ring-inset ring-primary" : ""} ${options?.className ?? ""}`}
+        className={`group ${isThumbnail ? THUMBNAIL_SIZING : GRID_TILE_SIZING} overflow-hidden rounded-xl ${options?.className ?? ""}`}
         onClick={() => onPinParticipant?.(identity)}
       >
         <ParticipantTile
@@ -273,23 +310,16 @@ export function LiveKitMeetingStage({
               isThumbnail ? "gap-1.5" : "gap-3"
             }`}
           >
-            <Avatar
-              size="lg"
-              className={`${isThumbnail ? "size-10" : "size-16"} border border-border bg-white shadow-sm`}
-            >
-              <AvatarFallback
-                className={`${isThumbnail ? "text-sm" : "text-lg"} bg-white font-semibold text-ink`}
-              >
-                {initials(displayName) || "?"}
-              </AvatarFallback>
-            </Avatar>
-            <div
-              className={`rounded-full border border-border bg-white px-2.5 py-0.5 font-medium text-ink shadow-sm ${
-                isThumbnail ? "text-[10px]" : "text-[12px]"
-              }`}
-            >
-              Camera is off
-            </div>
+            <ParticipantAvatar
+              identity={person}
+              size={isThumbnail ? "md" : "xl"}
+              speaking={isActiveSpeaker}
+            />
+            {isThumbnail ? null : (
+              <div className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[12px] font-medium text-ink-muted">
+                Camera is off
+              </div>
+            )}
           </div>
         ) : null}
         <div
@@ -310,20 +340,50 @@ export function LiveKitMeetingStage({
               )}
             </span>
           ) : null}
+          {/* WT-583. Beside the signal bars rather than somewhere of its own: both answer
+              "can I hear this person right now", and the cluster is already the place the tile
+              puts that kind of standing fact. Always rendered, not muted-only — the ticket asks
+              for a Mic/Unmute STATE, and an icon that vanishes when live cannot be told apart
+              from an icon that failed to render. */}
+          <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 shadow-sm backdrop-blur">
+            <MicStatusIcon participantIdentity={identity} />
+          </span>
           <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 shadow-sm backdrop-blur">
             <NetworkQualityIcon participantIdentity={identity} />
           </span>
         </div>
         <div
           style={{ bottom: (isThumbnail ? 8 : 20) + bottomInset }}
-          className={`pointer-events-none absolute max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
+          className={`pointer-events-none absolute flex max-w-[calc(100%-1rem)] items-center rounded-full bg-black/55 font-medium text-white shadow-sm backdrop-blur ${
             isThumbnail
-              ? "left-2 px-2 py-0.5 text-[11px]"
-              : "left-5 px-3 py-1 text-[13px]"
+              ? "left-2 gap-1 px-2 py-0.5 text-[11px]"
+              : "left-5 gap-1.5 px-3 py-1 text-[13px]"
           }`}
         >
-          {displayName}
+          {/* The flag rides with the name rather than only on the camera-off avatar, so which
+              language somebody is speaking is legible whether or not their camera is on. */}
+          <ParticipantLanguageBadge
+            identity={person}
+            className={isThumbnail ? "text-[10px]" : "text-[12px]"}
+          />
+          <span className="truncate">{person.name}</span>
         </div>
+        {/* WT-535 fix, second half. The ring used to live on this wrapper as `ring-inset`, and an
+            inset box-shadow paints BELOW the element's descendants — so the opaque camera-off
+            overlay above covered it completely, and a participant with their camera off got no
+            speaking indicator at all. As an overlay of its own, drawn last, it is on top of every
+            state the tile can be in.
+
+            Still no `transition`: a Tailwind ring IS a box-shadow, so transitioning it made the
+            indicator fade instead of switch, and an indicator that eases is wrong for the length
+            of its own easing. It is a light — on or off. */}
+        {isActiveSpeaker ? (
+          <span
+            aria-hidden
+            data-speaking-ring
+            className="pointer-events-none absolute inset-0 z-30 rounded-[inherit] ring-2 ring-inset ring-primary"
+          />
+        ) : null}
       </div>
     );
   }
@@ -354,10 +414,17 @@ export function LiveKitMeetingStage({
   }
 
   if (hasParticipants) {
+    // WT-531: a participant can be in `visibleTracks` TWICE — once for their camera and once
+    // for a screen share — because useTracks is asked for both sources. `find` returned the
+    // first match, and Camera is listed first, so pinning somebody who was sharing their screen
+    // put their FACE on the stage and hid the thing everyone was looking at. The screen share is
+    // the reason anyone pins a sharer, so it wins whenever it exists.
+    const featuredCandidates = visibleTracks.filter(
+      (trackRef) => trackRef.participant.identity === featuredIdentity,
+    );
     const featuredTrack =
-      visibleTracks.find(
-        (trackRef) => trackRef.participant.identity === featuredIdentity,
-      ) ??
+      featuredCandidates.find((trackRef) => trackRef.source === Track.Source.ScreenShare) ??
+      featuredCandidates[0] ??
       // No publication for them this tick — render the camera placeholder for the person
       // themselves, which is what a pinned camera-off participant should look like anyway.
       (featuredParticipant
@@ -449,7 +516,7 @@ export function LiveKitMeetingStage({
   return (
     <div className="flex w-full flex-col items-center justify-center px-6 py-20 bg-surface-2">
       <div className="grid h-20 w-20 place-items-center rounded-full bg-surface-3 text-2xl font-medium text-ink-muted shadow-sm">
-        {initials(fallbackName)}
+        {getInitials(fallbackName)}
       </div>
       <p className="mt-4 max-w-xl truncate text-center text-[15px] font-medium text-ink">
         {fallbackName}
@@ -518,11 +585,3 @@ function isAutomatedParticipant(identity?: string, name?: string) {
   );
 }
 
-function initials(value: string) {
-  return value
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
