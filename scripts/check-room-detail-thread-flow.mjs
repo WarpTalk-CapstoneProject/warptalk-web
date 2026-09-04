@@ -9,6 +9,10 @@ const sidePanel = await readFile(
   path.join(root, "src/components/rooms/live/side-panel/meeting-side-panel.tsx"),
   "utf8",
 );
+const meetingEndpoints = await readFile(
+  path.join(root, "src/lib/api/endpoints.ts"),
+  "utf8",
+);
 
 // The transcript panel's own props, so a host gate cannot be added to it without failing a check.
 const transcriptPanelStart = sidePanel.indexOf("<TranscriptPanel");
@@ -36,6 +40,8 @@ const checks = [
   ["live side panel removes notes polls and q-and-a tabs", !sidePanel.includes('label="Notes"') && !sidePanel.includes('label="Polls"') && !sidePanel.includes('label="Q&A"')],
   ["live side panel does not fetch removed feature badges", !sidePanel.includes("usePolls(") && !sidePanel.includes("useQuestions(")],
   ["live room no longer subscribes to removed polls and q-and-a events", !livePage.includes('connection.on("PollCreated"') && !livePage.includes('connection.on("QuestionAsked"')],
+  ["live room no longer subscribes to removed breakout events", !livePage.includes('connection.on("BreakoutsStarted"') && !livePage.includes('connection.on("BreakoutsEnded"')],
+  ["meeting API exposes no retired collaboration endpoints", !meetingEndpoints.includes("pollsList") && !meetingEndpoints.includes("questionsList") && !meetingEndpoints.includes("breakoutsStart")],
   // This has now flipped twice. 2026-07-30 pinned "never auto-starts"; WT-183 replaced it with
   // auto-start because a room stayed "Waiting" in the list while its host was already inside;
   // WT-248 reverted that, because starting to record and translate a conversation unasked is

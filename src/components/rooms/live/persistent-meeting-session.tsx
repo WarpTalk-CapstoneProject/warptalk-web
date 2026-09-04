@@ -147,10 +147,6 @@ import {
   shouldAskForLanguages,
   suggestLanguageProfile,
 } from "@/lib/language/language-profile";
-import {
-  fetchMyBreakoutAssignment,
-} from "@/hooks/use-breakouts";
-import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
@@ -682,37 +678,7 @@ export function PersistentMeetingSession({
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
 
-  // Breakout rooms (scoped-down): `breakoutState` describes THIS viewer's own current
-  // assignment/connection (drives the LiveKit token swap + top-bar countdown chip below).
-  // The host-facing breakout controls are gone with the feature; these handlers stay only so a
-  // client already in a breakout still follows a BreakoutsEnded back to the main room.
-  // `breakoutState` is per-viewer — it describes THIS viewer's own current
-  // last BreakoutsEnded one, regardless of whether THIS viewer has an assignment (e.g. the
-  // host, who stays in the main room) — drives the host-controls flyout's active state.
-  const [breakoutState, setBreakoutState] = useState<{
-    active: boolean;
-    label: string | null;
-    startedAt: string | null;
-    durationSeconds: number | null;
-  }>({ active: false, label: null, startedAt: null, durationSeconds: null });
-  const breakoutActiveRef = useRef(false);
-  useEffect(() => {
-    breakoutActiveRef.current = breakoutState.active;
-  }, [breakoutState.active]);
-  // The main room's own LiveKit session, remembered so BreakoutsEnded can reconnect back to
-  // it — only updated while NOT in a breakout (see the LiveKitRoom's token-swap comment
-  // further down for why simply swapping `meetingSession.token` is enough to move the
-  // LiveKitRoom component between provider rooms without a full remount).
-  const mainMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
-  useEffect(() => {
-    if (!breakoutState.active) {
-      mainMeetingSessionRef.current = meetingSession;
-    }
-  }, [meetingSession, breakoutState.active]);
   // WT-357: the session as it is right now, for handlers registered once on the hub connection.
-  // Distinct from mainMeetingSessionRef above, which deliberately freezes at the MAIN room's
-  // session while a breakout is active — a handler asking "do I already hold a live session"
-  // must be told about the session it actually holds.
   const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
   useEffect(() => {
     currentMeetingSessionRef.current = meetingSession;
@@ -2112,69 +2078,6 @@ export function PersistentMeetingSession({
       toast.error("You have been permanently removed from this room.");
       onMeetingClosed();
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
-    });
-
-    // Breakout rooms (scoped-down) — BreakoutsStarted/BreakoutsEnded are relayed by
-    // BreakoutsService through TranslationRoomRedisSubscriberService on the Gateway.
-    // Assignments carries no LiveKit
-    // token (see BreakoutAssignmentRelayDto's doc on the backend) — an assigned client mints
-    // its own via GET .../breakouts/my-assignment, then swaps meetingSession.token to move
-    // the already-mounted <LiveKitRoom> from the main room to the sub-room in place (see
-    // useLiveKitRoom's connect/token effect: changing `token` while `connect` stays true
-    // just calls room.connect() again with the new token, no remount needed).
-    connection.on(
-      "BreakoutsStarted",
-      (
-        assignments: BreakoutAssignmentRelay[] | null,
-        durationSeconds: number | null,
-        startedAt: string | null,
-      ) => {
-        const mine = user?.id
-          ? (assignments ?? []).find((a) => a.userId === user.id)
-          : undefined;
-        if (!mine) return;
-
-        setBreakoutState({
-          active: true,
-          label: mine.label,
-          startedAt,
-          durationSeconds,
-        });
-        void fetchMyBreakoutAssignment(roomId)
-          .then((info) => {
-            setMeetingSession({
-              token: info.token,
-              providerRoomName: info.providerRoomName,
-              participantIdentity: info.participantIdentity,
-              isWaitingRoom: false,
-              muteOnEntry: false,
-            });
-            toast.success(`You've been moved to ${mine.label}.`);
-          })
-          .catch(() => {
-            toast.error("Could not join your breakout room.");
-            setBreakoutState({
-              active: false,
-              label: null,
-              startedAt: null,
-              durationSeconds: null,
-            });
-          });
-      },
-    );
-    connection.on("BreakoutsEnded", () => {
-      if (!breakoutActiveRef.current) return;
-
-      setBreakoutState({
-        active: false,
-        label: null,
-        startedAt: null,
-        durationSeconds: null,
-      });
-      if (mainMeetingSessionRef.current) {
-        setMeetingSession(mainMeetingSessionRef.current);
-      }
-      toast.success("Breakout rooms ended — you're back in the main room.");
     });
 
     let cancelled = false;
