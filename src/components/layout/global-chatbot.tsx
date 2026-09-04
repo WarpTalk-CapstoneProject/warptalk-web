@@ -619,13 +619,9 @@ export function GlobalChatbot() {
       id: `plugin-${plugin.tileId}`,
       title: plugin.label,
       type: "Plugins",
-      icon: (
-        <img
-          src={plugin.avatarUrl ?? undefined}
-          alt=""
-          className="size-4 rounded object-cover"
-        />
-      ),
+      // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
+      // handling, and the avatar contract forbids bypassing the primitives with a bare <img>.
+      icon: <PluginGlyph plugin={plugin} size="xs" />,
       description: plugin.description,
       entityType: "plugin",
       entityId: plugin.tileId,
