@@ -51,7 +51,7 @@ export interface VirtualAudioStatus {
 
 export interface VirtualAudioRiskControl {
   id: "R1" | "R2" | "R3" | "R4" | "R5" | "R6" | "R7" | "R8" | "B1" | "B2" | "X1";
-  status: "mitigated" | "implemented" | "known-limitation" | "requires-runtime";
+  status: "mitigated" | "guarded" | "implemented" | "known-limitation" | "requires-runtime";
   control: string;
 }
 
