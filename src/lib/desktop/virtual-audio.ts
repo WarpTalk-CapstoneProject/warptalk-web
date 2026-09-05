@@ -263,3 +263,28 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
 export function shouldShowAudioBridge(view: AudioBridgeView): boolean {
   return view.state !== "unavailable";
 }
+
+/**
+ * What the user has to agree to before WarpTalk listens to their meeting on Windows.
+ *
+ * Written here, and tested, because the wording is the whole control. Windows can only scope a
+ * capture to a process tree, so picking the meeting window does NOT narrow it to that window: every
+ * other tab making sound in the same browser is captured too, and reaches the pipeline as if the
+ * far side had said it. Measured, not assumed — two tabs playing different tones both arrived at
+ * identical amplitude.
+ *
+ * A picker that says "choose your meeting window" and then takes the browser is asking for consent
+ * to one thing and doing another. So the ask names the real scope, and names the one action that
+ * actually helps: mute the other tabs. There is no flag that fixes this; only capturing from inside
+ * the browser would, which is a different design.
+ */
+export const WINDOWS_CAPTURE_CONSENT = {
+  title: "WarpTalk needs to listen to your browser",
+  body:
+    "To translate the other side of your meeting, WarpTalk listens to everything the chosen " +
+    "browser is playing — not just the meeting tab. Anything else making sound in that browser, " +
+    "like music or a video in another tab, is heard too and may end up in the transcript.",
+  action: "Mute your other tabs before you start.",
+  confirm: "Listen to this browser",
+  decline: "Not now",
+} as const;

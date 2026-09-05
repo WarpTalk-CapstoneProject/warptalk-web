@@ -10,7 +10,34 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { VirtualAudioStatus } from "../bridge.ts";
-import { describeAudioBridge, shouldShowAudioBridge } from "../virtual-audio.ts";
+import {
+  describeAudioBridge,
+  shouldShowAudioBridge,
+  WINDOWS_CAPTURE_CONSENT,
+} from "../virtual-audio.ts";
+
+test("the capture consent names the browser as the scope, never the window", () => {
+  const { title, body, action, confirm } = WINDOWS_CAPTURE_CONSENT;
+  const ask = `${title} ${body} ${action} ${confirm}`.toLowerCase();
+
+  // The whole point of this string is that it does not repeat the mistake the picker invites.
+  // Windows scopes a capture to a process tree, so "just this window" would be a promise the
+  // capture breaks — every other audible tab in that browser is taken too.
+  //
+  // Asserted as a positive: the ask has to state the breadth out loud. A ban on phrases like
+  // "only the meeting window" reads well but cannot be checked, because "not just the meeting tab"
+  // contains the banned phrase while saying the opposite — a regex over prose does not see
+  // negation. So the test checks for the words that make the scope explicit instead.
+  assert.match(ask, /browser/);
+  assert.match(ask, /another tab|other tabs/);
+  assert.match(ask, /everything|not just|as well as|too\b/);
+
+  // Naming the problem without naming the fix leaves the user with nothing to do about it.
+  assert.match(action.toLowerCase(), /mute/);
+
+  // Internal words for the two halves of the bridge mean nothing in a consent dialog.
+  assert.doesNotMatch(ask, /\boutbound\b|\binbound\b|\bloopback\b/);
+});
 
 function macStatus(overrides: Partial<VirtualAudioStatus> = {}): VirtualAudioStatus {
   return {
