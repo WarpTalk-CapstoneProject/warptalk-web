@@ -68,6 +68,14 @@ export interface WindowsLoopbackSource {
   likelyMeetingWindow: boolean;
 }
 
+export interface WindowsLoopbackPcmChunk {
+  data: Uint8Array;
+  format: "s16le";
+  sampleRate: 48000;
+  channelCount: 2;
+  capturedAtMs: number;
+}
+
 /**
  * Only the methods this app actually calls.
  *
@@ -83,6 +91,7 @@ export interface DesktopBridge {
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
   listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
+  onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
 }
 
 /**
@@ -157,6 +166,18 @@ export async function listWindowsLoopbackSources(): Promise<WindowsLoopbackSourc
   if (!bridge?.listWindowsLoopbackSources) return null;
   try {
     return await bridge.listWindowsLoopbackSources();
+  } catch {
+    return null;
+  }
+}
+
+export function onWindowsLoopbackPcmChunk(
+  callback: (chunk: WindowsLoopbackPcmChunk) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onWindowsLoopbackPcmChunk) return null;
+  try {
+    return bridge.onWindowsLoopbackPcmChunk(callback);
   } catch {
     return null;
   }
