@@ -104,6 +104,9 @@ import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL, INBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
+import { deviceInboundSource, openLoopbackInboundSource } from "@/lib/audio/bridge-inbound-source";
+import { readVirtualAudioStatus } from "@/lib/desktop/bridge";
+import { selectBridgeTier } from "@/lib/desktop/bridge-tiers";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -238,6 +241,8 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+  /** Windows only: the far side can be captured from the browser even with no inbound device. */
+  const [bridgeInboundLoopback, setBridgeInboundLoopback] = useState(false);
 
   // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
   // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
@@ -258,6 +263,14 @@ export function PersistentMeetingSession({
         if (cancelled) return;
         setBridgeOutboundDeviceId(outboundDeviceId);
         setBridgeInboundDeviceId(inboundDeviceId);
+
+        // Windows has a second way in. Where there is no second virtual device, process loopback
+        // pulls the far side out of the browser itself — so the absence of an inbound device id is
+        // no longer the same thing as no inbound leg. Asked through the tier picker rather than by
+        // re-deriving the rules here: it already owns the question of what this machine can run.
+        const status = await readVirtualAudioStatus();
+        if (cancelled) return;
+        setBridgeInboundLoopback(selectBridgeTier(status)?.id === "loopback-bridge");
         if (!outboundDeviceId) {
           toast.error("This meeting cannot reach Google Meet yet.", {
             description: `${OUTBOUND_DEVICE_LABEL} is not installed, so the far side will not hear the translation.`,
@@ -579,7 +592,8 @@ export function PersistentMeetingSession({
   const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
 
   useEffect(() => {
-    const wanted = isBridgeRoom && isHost && translationStarted && Boolean(bridgeInboundDeviceId);
+    const hasInboundSource = Boolean(bridgeInboundDeviceId) || bridgeInboundLoopback;
+    const wanted = isBridgeRoom && isHost && translationStarted && hasInboundSource;
     if (!wanted) {
       // Covers Stop Translation and leaving the room. Not awaited: teardown is fire-and-forget by
       // nature and an effect cleanup cannot await anyway.
@@ -599,26 +613,47 @@ export function PersistentMeetingSession({
         );
         if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
 
+        // A device id wins when there is one: it is the path both platforms share, and the one the
+        // user can point at in a settings dialog. Loopback is the answer only where no second
+        // virtual device exists.
+        const inbound = bridgeInboundDeviceId
+          ? deviceInboundSource(bridgeInboundDeviceId)
+          : await openLoopbackInboundSource({ consentGranted: true });
+        if (cancelled) {
+          await inbound.dispose();
+          return;
+        }
+
         const handles = await openBridgeInbound({
           serverUrl,
           token: data.token,
-          inboundDeviceId: bridgeInboundDeviceId!,
+          source: inbound.source,
           onDisconnected: () => {
             bridgeInboundRef.current = null;
+            void inbound.dispose();
             toast.error("The external call was disconnected.", {
               description: "WarpTalk has stopped hearing the other side of the meeting.",
             });
           },
         });
 
+        // Stopping has to release both halves. The publisher owns the connection and, on the
+        // device path, the track it opened; the source owns whatever it set up to produce a track
+        // in the first place — on the loopback path that is a capture running in the main process,
+        // which nothing else can reach.
+        const release = async () => {
+          await handles.stop();
+          await inbound.dispose();
+        };
+
         // The effect can be torn down while connect() is in flight. Without this the handles
         // would be unreachable and the second connection would stay in the room, publishing a
         // device nobody is releasing.
         if (cancelled) {
-          void handles.stop();
+          void release();
           return;
         }
-        bridgeInboundRef.current = handles;
+        bridgeInboundRef.current = { stop: release };
       } catch (error) {
         if (cancelled) return;
         // Said out loud rather than logged: with the outbound leg working, the far side can hear
@@ -636,7 +671,7 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [isBridgeRoom, isHost, translationStarted, bridgeInboundDeviceId, roomId]);
+  }, [isBridgeRoom, isHost, translationStarted, bridgeInboundDeviceId, bridgeInboundLoopback, roomId]);
 
   // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
   // the capture device, neither of which the room teardown above knows about.

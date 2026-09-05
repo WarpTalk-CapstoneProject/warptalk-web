@@ -68,6 +68,26 @@ export interface WindowsLoopbackSource {
   likelyMeetingWindow: boolean;
 }
 
+export interface WindowsLoopbackCaptureRequest {
+  sourceId?: string;
+  targetProcessId?: number;
+  /** The user agreed to WarpTalk listening to the whole browser. See WINDOWS_CAPTURE_CONSENT. */
+  consentGranted?: boolean;
+  /** Must be true. `false` is the OS's EXCLUDE mode, which captures everything BUT the target. */
+  includeTargetProcessTree?: boolean;
+}
+
+/**
+ * Why a refusal carries a `riskId`.
+ *
+ * The desktop side gates the start behind the risk register rather than a single boolean, so a
+ * refusal can say which control stopped it — R5 for missing consent, R8 for an unresolved window,
+ * R2 for a capture path that is not wired. A caller that only sees "false" can only apologise.
+ */
+export type WindowsLoopbackStartResult =
+  | { started: true }
+  | { started: false; riskId: string; reason: string };
+
 export interface WindowsLoopbackPcmChunk {
   data: Uint8Array;
   format: "s16le";
@@ -94,6 +114,8 @@ export interface DesktopBridge {
   closeTranscriptWindow?: () => Promise<void>;
   listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
+  startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
+  stopAudioCapture?: () => Promise<void>;
 }
 
 /**

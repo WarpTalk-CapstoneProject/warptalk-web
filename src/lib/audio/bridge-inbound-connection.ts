@@ -32,20 +32,42 @@ export interface BridgeInboundHandles {
   stop: () => Promise<void>;
 }
 
+/**
+ * Where the far side's audio comes from.
+ *
+ * Two shapes, because the two Windows paths do not look alike. A virtual device has an endpoint we
+ * can open by id; process loopback has no endpoint at all — the track is built from PCM the main
+ * process forwards, and by the time it reaches here it already exists.
+ *
+ * The distinction that matters below is OWNERSHIP. A track we opened is ours to close; a track
+ * handed to us belongs to whoever built it, and stopping it would tear down an AudioContext this
+ * module never created and cannot rebuild.
+ */
+export type BridgeInboundSource =
+  | { kind: "device"; deviceId: string }
+  | { kind: "track"; track: MediaStreamTrack };
+
 export async function openBridgeInbound(options: {
   /** LiveKit server URL — the same one the host's own connection uses. */
   serverUrl: string;
   /** Publish-only token for the stand-in identity, from `meetingService.bridgeToken`. */
   token: string;
-  /** The virtual device Meet uses as its SPEAKER, i.e. what WarpTalk records from. */
-  inboundDeviceId: string;
+  /** Where the far side's audio comes from — a virtual device, or a track already assembled. */
+  source: BridgeInboundSource;
   /** Called when the second connection drops on its own, so the UI can stop claiming it is bridged. */
   onDisconnected?: (reason?: DisconnectReason) => void;
 }): Promise<BridgeInboundHandles> {
   // Capture BEFORE connecting. A failure here — device unplugged, permission withdrawn — should
   // leave no half-open room behind: a connected stand-in publishing nothing looks exactly like a
   // working bridge with a silent far side, which is the hardest version of this to diagnose.
-  const mediaTrack = await captureFarSideAudio(options.inboundDeviceId);
+  //
+  // A borrowed track is already open, so there is nothing to fail here and nothing to release
+  // later; `ownsTrack` carries that difference to every teardown path below.
+  const ownsTrack = options.source.kind === "device";
+  const mediaTrack =
+    options.source.kind === "device"
+      ? await captureFarSideAudio(options.source.deviceId)
+      : options.source.track;
 
   const room = new Room();
   let stopped = false;
@@ -53,7 +75,7 @@ export async function openBridgeInbound(options: {
   const stop = async () => {
     if (stopped) return;
     stopped = true;
-    mediaTrack.stop();
+    if (ownsTrack) mediaTrack.stop();
     try {
       await room.disconnect();
     } catch {
@@ -66,9 +88,12 @@ export async function openBridgeInbound(options: {
     // the participant, the network going away. Release the device in that case too: a held
     // capture keeps the virtual device busy, and the next attempt then fails for a different
     // reason than the real one.
+    //
+    // A borrowed track is left alone: its owner may still be feeding it, and killing it here would
+    // strand them with a dead track they never closed.
     if (!stopped) {
       stopped = true;
-      mediaTrack.stop();
+      if (ownsTrack) mediaTrack.stop();
     }
     options.onDisconnected?.(reason);
   });

@@ -3,25 +3,31 @@
  *
  * A bridge meeting moves sound along four paths. Two are what any meeting already does — the
  * user's real microphone goes in, and the dub meant for the user comes out of their headphones.
- * The other two are what makes it a bridge, and both are just device routing:
+ * The other two are what makes it a bridge:
  *
  *   outbound   the dub meant for the far side is played into the virtual microphone Google Meet
  *              is listening to, instead of into the user's headphones.
- *   inbound    the virtual speaker Meet is playing into is captured, so the far side's voice can
- *              be fed to the pipeline like any other participant's.
+ *   inbound    the far side's voice is captured, so it can be fed to the pipeline like any other
+ *              participant's.
  *
  * Kept out of the meeting session component on purpose. The routing is the part that has to be
  * exactly right and is testable on its own; the session is 2700 lines of LiveKit lifecycle it
  * would be buried in.
  *
- * NOT SUFFICIENT ON ITS OWN
- *   Capturing the far side is only half of the inbound leg. Publishing it needs a second LiveKit
- *   connection joined as the bridge participant, because the pipeline routes on participant
- *   identity and a second track from the user's own connection would be attributed to the user.
- *   The backend derives a token's identity from the authenticated caller
- *   (MeetingRoomService: `providerIdentity = userIdString`), so a token for the stand-in cannot
- *   currently be obtained. That endpoint is the remaining blocker and this module does not
- *   pretend otherwise — it hands back a track, and leaves publishing to a caller that has one.
+ * INBOUND HAS TWO SHAPES, AND ONLY ONE OF THEM LIVES HERE
+ *   Where a virtual device exists — BlackHole on macOS, a second VB-CABLE on Windows — the far
+ *   side arrives on an audio endpoint and `captureFarSideAudio` reads it by device id. Where it
+ *   does not, Windows process loopback pulls the browser's own output and the track is assembled
+ *   from raw PCM instead (`windows-loopback-pcm.ts`). Both end in a MediaStreamTrack, and
+ *   `bridge-inbound-connection.ts` takes either.
+ *
+ * PUBLISHING IS SOMEBODY ELSE'S JOB, AND IT EXISTS
+ *   Capturing the far side is only half the leg: publishing it needs a second LiveKit connection
+ *   joined as the stand-in, because the pipeline routes on participant identity and a second track
+ *   from the user's own connection would be attributed to the user. That used to be blocked —
+ *   every endpoint derived identity from the authenticated caller — and this comment used to say
+ *   so. WT-525 shipped `meetings/rooms/{id}/bridge-token` for exactly this seat, so the blocker is
+ *   gone; `openBridgeInbound` is where a track becomes a published participant.
  */
 
 export interface BridgeLegHandles {
