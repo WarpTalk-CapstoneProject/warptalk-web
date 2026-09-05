@@ -21,6 +21,15 @@
  * Derived independently at their own call sites they drift — a green "ready" heading above a list
  * showing a missing device is worse than either alone. One function returns all of them.
  *
+ * A LADDER, NOT A SWITCH
+ *
+ * Which of the two legs a machine can run varies, so an external-bridge meeting has four possible
+ * shapes rather than one. They live as a table in ./bridge-tiers.ts and arrive on the view as
+ * `tier`, alongside — not instead of — `state`: `state` is about what is missing and whether the
+ * user can fix it, `tier` is about what will run if they start a meeting right now. A machine with
+ * one of two devices installed is honestly both "still needs setup" and "already able to speak
+ * into the meeting", and the panel says both.
+ *
  * THREE ABSENCES THAT MEAN DIFFERENT THINGS
  *
  *   no bridge      a browser tab, or a desktop build too old to answer. We do not know.
@@ -32,6 +41,9 @@
  * setup is broken when nothing was ever checked.
  */
 
+// Explicit extension: this module is exercised by `node --test --experimental-strip-types`, which
+// does no extension resolution. Matches the other runtime-imported modules under src/lib.
+import { selectBridgeTier, type BridgeTier } from "./bridge-tiers.ts";
 import type { VirtualAudioDevice, VirtualAudioStatus } from "./bridge";
 
 export type AudioBridgeState =
@@ -63,6 +75,17 @@ export interface AudioBridgeDeviceView {
 
 export interface AudioBridgeView {
   state: AudioBridgeState;
+  /**
+   * The rung of the fallback ladder this machine will actually run on, or null when nothing was
+   * checked. See lib/desktop/bridge-tiers.ts.
+   *
+   * Deliberately NOT the same axis as `state`. `state` answers "what is missing and can the user
+   * fix it"; `tier` answers "what happens if they start a bridge meeting right now". They differ
+   * exactly where it matters most: a machine with one of two devices installed is `missing` — it
+   * still has a full bridge to set up — and at the same time is already able to run rung 3. Fusing
+   * them would force a choice between hiding the setup step and hiding what is running.
+   */
+  tier: BridgeTier | null;
   heading: string;
   /** One sentence under the heading, or null when the panel is not shown. */
   message: string | null;
@@ -75,6 +98,7 @@ export interface AudioBridgeView {
 
 const EMPTY: AudioBridgeView = {
   state: "unavailable",
+  tier: null,
   heading: "",
   message: null,
   devices: [],
@@ -115,10 +139,14 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
 
   const devices = (status.devices ?? []).map(toDeviceView);
   const foreignDrivers = status.foreignDrivers ?? [];
+  // Chosen once, from the table, and carried into every branch below. Deriving it per branch is
+  // how the heading and the thing that actually runs drift apart.
+  const tier = selectBridgeTier(status);
 
   if (!status.supported) {
     return {
       state: "unsupported-platform",
+      tier,
       heading: "Audio bridge not available on this system yet",
       // Names the platform gap rather than implying the user did something wrong, and does not
       // suggest an install: there is nothing WarpTalk can detect here even after one.
@@ -138,6 +166,7 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
   if (status.ready) {
     return {
       state: "ready",
+      tier,
       heading: "Audio bridge ready",
       message:
         "Both virtual devices are installed. In your meeting app, pick them as shown below so " +
@@ -148,17 +177,22 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
     };
   }
 
-  if (
-    status.bridgeMode === "outbound-only" ||
-    (status.capabilities?.outboundOnly && status.capabilities.processLoopback !== false)
-  ) {
+  // Keyed off the ladder rather than re-reading the capability flags: the rung's own predicate is
+  // the single place that decides whether this machine can speak into the meeting. Scoped to
+  // Windows because on macOS a not-ready bridge is a half-finished BlackHole install, and the
+  // honest thing to show there is still the setup step.
+  if (status.platform === "win32" && tier?.id === "outbound-only") {
     return {
       state: "outbound-only",
+      tier,
       heading: "Audio bridge can speak into the meeting",
+      // Says the loss out loud. Half a bridge that nobody was told about is the failure this
+      // whole ladder exists to prevent, and "we found a cable" on its own reads as success.
       message:
-        "Windows found the outbound virtual cable. WarpTalk can send translated speech to the " +
-        "meeting app; hearing the meeting back through per-process loopback is the next bridge " +
-        "step. Captions and WarpTalk-native meetings still work now.",
+        "Windows found the virtual cable WarpTalk plays into, so it can translate what you say " +
+        "and send it to the meeting app. The other side is not translated yet — hearing the " +
+        "meeting back through per-process loopback is the next bridge step. Captions and " +
+        "WarpTalk-native meetings still work now.",
       devices,
       action: null,
       foreignDrivers,
@@ -173,11 +207,12 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
   ) {
     return {
       state: "caption-only",
+      tier,
       heading: "Audio bridge needs Windows process loopback",
       message:
         "VB-CABLE is installed, but this Windows build cannot use process loopback to capture " +
-        "only the meeting app yet. " +
-        "Use captions or a WarpTalk-native meeting, or use the backup bridge path when it is wired.",
+        "only the meeting app yet, and the cable on its own is not usable here. Live captions " +
+        "still work, and so does a WarpTalk-native meeting.",
       devices,
       action: null,
       foreignDrivers,
@@ -187,6 +222,7 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
   if (status.bridgeMode === "installed-not-running") {
     return {
       state: "installed-not-running",
+      tier,
       heading: "Audio bridge engine is not running",
       message:
         "Voicemeeter is installed, but WarpTalk cannot use it until the Windows engine " +
@@ -201,6 +237,7 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
 
   return {
     state: "missing",
+    tier,
     heading: "Audio bridge needs setup",
     // Says how many are missing, because the half-installed case is common and confusing: one
     // device present looks like success in the system sound settings, and the meeting then fails
