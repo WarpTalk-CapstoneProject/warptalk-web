@@ -83,6 +83,48 @@ export async function captureFarSideAudio(inputDeviceId: string): Promise<MediaS
   return track;
 }
 
+/** What an outbound-only bridge hands back. There is deliberately no track on it. */
+export interface OutboundOnlyLegHandle {
+  /** Stops the playback element. Safe to call more than once. */
+  stop: () => void;
+}
+
+/**
+ * Rung 3 of the fallback ladder: the dub goes into the meeting, and nothing comes back.
+ *
+ * A machine with one free virtual cable can carry the user's translated voice into Google Meet and
+ * nothing else. That is a real, useful meeting — the user speaks a language the room does not —
+ * and before this it was unreachable: the bridge either ran both legs or ran nothing.
+ *
+ * WHAT IT DOES NOT DO
+ *   There is no capture here and no `inboundTrack` on the handle, because there is no second
+ *   device to capture from. That absence is the type's job: a caller cannot accidentally treat
+ *   this as a full bridge and then wonder why the far side is never transcribed. It is also why
+ *   this is a separate function rather than `openBridgeLegs` with an optional inbound device —
+ *   an optional field gets defaulted, a missing field gets noticed.
+ *
+ *   Publishing a far-side track would be blocked anyway; see the NOT SUFFICIENT ON ITS OWN note
+ *   at the top of this file. Nothing here works around it.
+ */
+export async function openOutboundLegOnly(options: {
+  /** Dub meant for the far side, as delivered by the meeting session. */
+  farSideDubTrack: MediaStreamTrack;
+  /** Virtual device the meeting app uses as its MICROPHONE. */
+  outboundDeviceId: string;
+}): Promise<OutboundOnlyLegHandle> {
+  const playback = await playTrackToDevice(options.farSideDubTrack, options.outboundDeviceId);
+
+  let stopped = false;
+  return {
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      playback.pause();
+      playback.srcObject = null;
+    },
+  };
+}
+
 /**
  * Wires both bridge-only legs and returns what the caller needs to publish and to tear down.
  *

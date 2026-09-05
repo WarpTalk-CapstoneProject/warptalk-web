@@ -90,6 +90,8 @@ export interface DesktopBridge {
   openExternal?: (url: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
+  openTranscriptWindow?: (roomId: string) => Promise<void>;
+  closeTranscriptWindow?: () => Promise<void>;
   listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
 }
@@ -158,6 +160,40 @@ export async function requestVirtualAudioInstall(): Promise<VirtualAudioInstallR
     return await bridge.installVirtualAudio();
   } catch {
     return null;
+  }
+}
+
+/**
+ * Show the small always-on-top transcript window over the user's meeting app.
+ *
+ * This is the whole of the caption-only rung of the fallback ladder, which is why it gets a helper
+ * rather than an inline `window.warptalk?.` reach: on a machine with no virtual audio device it is
+ * the only thing WarpTalk can offer, and a silent no-op there would be indistinguishable from the
+ * state this ladder was built to remove.
+ *
+ * Returns false when there was no bridge to take it — a browser tab, or a desktop build older than
+ * the window — so the caller can say so instead of leaving a button that appears to do nothing.
+ */
+export async function openTranscriptWindow(roomId: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.openTranscriptWindow) return false;
+  try {
+    await bridge.openTranscriptWindow(roomId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Closes the transcript window if one is open. Safe to call when there is none. */
+export async function closeTranscriptWindow(): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.closeTranscriptWindow) return false;
+  try {
+    await bridge.closeTranscriptWindow();
+    return true;
+  } catch {
+    return false;
   }
 }
 
