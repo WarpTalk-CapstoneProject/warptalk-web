@@ -3,8 +3,9 @@
 import {
   Fragment,
   type ElementType,
+  useCallback,
+  useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -36,15 +37,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Popover,
-  PopoverClose,
-  PopoverContent,
-  PopoverDescription,
-  PopoverHeader,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { useMyMeetingsInRange } from "@/hooks/use-my-meetings";
 import {
   artifactLabel,
@@ -103,12 +95,28 @@ const EMPTY_MEETINGS: TimedMeeting[] = [];
 const APP_CALENDAR_LOCALE = "en-GB";
 
 /**
- * How many chips a month cell shows before it gives up and counts the rest.
+ * The geometry a month cell packs its chips with — NOT a chip limit.
  *
- * The cell is `overflow-hidden` on purpose (WT-538), so anything past this is not merely ugly,
- * it is invisible — which is why the "+N more" below is a real button opening the whole day.
+ * There used to be a `MONTH_CELL_CHIP_LIMIT = 3` here, and it was a bug: the grid is `h-full` with
+ * stretched rows, so a cell is whatever height the window gives it — 110px on a laptop, 250px on a
+ * tall screen — while the constant stayed at three 20px chips. A cell twice as tall as it needed to
+ * be still drew three rows and then "+4 more" under half a cell of white space.
+ *
+ * So the count is measured instead (see `useMeasuredHeight`): these are the sizes the arithmetic
+ * needs, and they must stay in step with the classes on `MonthChip` (h-5), the list's `space-y-0.5`
+ * and the overflow row (h-4).
  */
-const MONTH_CELL_CHIP_LIMIT = 3;
+const MONTH_CHIP_HEIGHT = 20;
+const MONTH_CHIP_GAP = 2;
+const MONTH_OVERFLOW_ROW_HEIGHT = 16;
+
+/**
+ * What a cell draws before the first measurement lands — server render and the first client paint.
+ *
+ * Three is the number that fits the 110px minimum cell, so the common case starts correct and the
+ * measurement only ever adds rows. Never used once a real height is in hand.
+ */
+const MONTH_CELL_CHIP_FALLBACK = 3;
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -153,6 +161,13 @@ export default function MyMeetingsPage() {
   const [filter, setFilter] = useState<TimeFilter>("all");
   const [dialogMeetingId, setDialogMeetingId] = useState<string | null>(null);
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
+  /**
+   * The day whose detail panel is open, as the same `startOfDay` key the cells are grouped by.
+   *
+   * A key rather than a Date so "is this the selected cell?" is a string compare in the render
+   * loop, and so the state cannot hold two different Dates that mean the same day.
+   */
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
 
   const weekDays = useMemo(() => weekOf(monthAnchor), [monthAnchor]);
 
@@ -220,15 +235,57 @@ export default function MyMeetingsPage() {
 
   const dialogMeeting = allMeetings.find((meeting) => meeting.id === dialogMeetingId) ?? null;
 
+  const selectedDay = useMemo(
+    () => (selectedDayKey === null ? null : new Date(Number(selectedDayKey))),
+    [selectedDayKey],
+  );
+
+  // The panel lists the day out of the SAME filtered rows the cells are drawn from, keyed the same
+  // way, so "3 meetings" in the cell and the panel's list cannot disagree about what a day holds.
+  const selectedDayMeetings = useMemo(() => {
+    if (selectedDayKey === null) return EMPTY_MEETINGS;
+    return visible
+      .filter((meeting) => dayKey(meeting.occursAt) === selectedDayKey)
+      .sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt));
+  }, [visible, selectedDayKey]);
+
+  /**
+   * Clicking a day opens its panel; clicking the day that is already open closes it again.
+   *
+   * The toggle is the third way out, next to the close button and Escape — a selected cell that
+   * does nothing when you click it again reads as stuck.
+   */
+  function toggleDay(date: Date) {
+    const key = String(startOfDay(date));
+    setSelectedDayKey((current) => (current === key ? null : key));
+  }
+
   /** Picking a day in the sidebar re-anchors the visible calendar range. */
   function goToDay(date: Date) {
     setMonthAnchor(date);
+    setSelectedDayKey(null);
   }
 
   function stepRange(delta: number) {
     setMonthAnchor((current) =>
       view === "week" ? shiftWeeks(current, delta) : addMonths(current, delta),
     );
+    // The selected day belonged to the month you just left; keeping it would leave a panel open
+    // describing a date that is no longer on the grid behind it.
+    setSelectedDayKey(null);
+  }
+
+  /**
+   * One rule for what a meeting row does, wherever it is drawn.
+   *
+   * The chip in the cell and the same meeting listed in the day panel go through this single
+   * function, so the two cannot drift apart. It asks `hasFinished` — the ROOM's status — not
+   * `timeState`: `missed` covers both a room that ended without you (a recap to read) and a slot
+   * nobody ever opened (a room still sitting there), and those two want opposite destinations.
+   */
+  function openMeeting(meeting: TimedMeeting) {
+    if (hasFinished(meeting)) setDialogMeetingId(meeting.id);
+    else router.push(`/${workspaceSlug}/rooms/${meeting.id}`);
   }
 
   async function downloadArtifact(artifact: RoomHistoryArtifact) {
@@ -288,7 +345,12 @@ export default function MyMeetingsPage() {
                 type="button"
                 role="tab"
                 aria-selected={view === value}
-                onClick={() => setView(value)}
+                onClick={() => {
+                  setView(value);
+                  // The panel is a month-view affordance; leaving its state set would spring it
+                  // back open on the way back from the week.
+                  setSelectedDayKey(null);
+                }}
                 className={cn(
                   "h-8 rounded px-3 text-[12px] font-medium capitalize transition-colors",
                   view === value
@@ -303,7 +365,10 @@ export default function MyMeetingsPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      {/* `relative`, so the day panel can fall back to an overlay INSIDE the calendar area rather
+          than over the whole viewport: below xl it is positioned against this box, which leaves the
+          workspace's own top bar and rail reachable while a day is open. */}
+      <div className="relative flex min-h-0 flex-1">
         <aside
           className={cn(
             "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5",
@@ -398,11 +463,26 @@ export default function MyMeetingsPage() {
               monthAnchor={monthAnchor}
               meetings={visible}
               hasQuery={Boolean(query)}
-              onOpenPast={setDialogMeetingId}
-              onNavigate={(id) => router.push(`/${workspaceSlug}/rooms/${id}`)}
+              selectedDayKey={selectedDayKey}
+              onSelectDay={toggleDay}
+              onOpenMeeting={openMeeting}
             />
           )}
         </div>
+
+        {view === "month" && selectedDay ? (
+          <DayDetailPanel
+            day={selectedDay}
+            meetings={selectedDayMeetings}
+            workspaceSlug={workspaceSlug}
+            narrowed={filter !== "all" || Boolean(query)}
+            // Escape belongs to the topmost thing on screen. While the recap dialog is up it is
+            // the dialog's key, and the panel must not close underneath it.
+            closeOnEscape={!dialogMeeting}
+            onOpenMeeting={openMeeting}
+            onClose={() => setSelectedDayKey(null)}
+          />
+        ) : null}
       </div>
 
       <PastMeetingDialog
@@ -474,14 +554,16 @@ function MonthGrid({
   monthAnchor,
   meetings,
   hasQuery,
-  onOpenPast,
-  onNavigate,
+  selectedDayKey,
+  onSelectDay,
+  onOpenMeeting,
 }: {
   monthAnchor: Date;
   meetings: TimedMeeting[];
   hasQuery: boolean;
-  onOpenPast: (id: string) => void;
-  onNavigate: (id: string) => void;
+  selectedDayKey: string | null;
+  onSelectDay: (day: Date) => void;
+  onOpenMeeting: (meeting: TimedMeeting) => void;
 }) {
   const monthDays = useMemo(() => {
     const start = startOfMonth(monthAnchor);
@@ -517,12 +599,19 @@ function MonthGrid({
   const todayKey = String(startOfDay(new Date()));
   const currentMonth = monthAnchor.getMonth();
 
-  // One rule for what a meeting row does, so a chip in the cell and the same meeting listed in the
-  // day popover cannot drift apart: a finished meeting opens the recap dialog, anything else the room.
-  function openMeeting(meeting: TimedMeeting) {
-    if (hasFinished(meeting)) onOpenPast(meeting.id);
-    else onNavigate(meeting.id);
-  }
+  /**
+   * How many chips fit, from the cell's REAL height.
+   *
+   * Measured on the first cell's list area and applied to all of them, because every row in this
+   * grid is exactly as tall as every other: the rows are auto-sized, the cells all carry the same
+   * `min-h-[110px]`, and the list is `flex-1` (`flex: 1 1 0%`) with `min-h-0`, so its content
+   * contributes nothing to the row's own height. That last part is what makes the measurement
+   * safe rather than circular — drawing more chips cannot make the box we just measured taller,
+   * so there is no observe → grow → observe loop and no layout shift, only more of the cell used.
+   */
+  const [listRef, listHeight] = useMeasuredHeight();
+  const chipsIfNoOverflow = fitsInList(listHeight, 0);
+  const chipsWithOverflowRow = fitsInList(listHeight, MONTH_OVERFLOW_ROW_HEIGHT + MONTH_CHIP_GAP);
 
   return (
     <div className="flex h-full flex-col">
@@ -546,30 +635,59 @@ function MonthGrid({
             </div>
           ))}
 
-          {monthDays.map((day) => {
+          {monthDays.map((day, index) => {
             const key = String(startOfDay(day));
             const dayMeetings = byDay.get(key) ?? EMPTY_MEETINGS;
             const isToday = key === todayKey;
+            const isSelected = key === selectedDayKey;
             const isCurrentMonth = day.getMonth() === currentMonth;
+
+            // Everything fits, or it does not and the last row has to be spent on the count.
+            const shown =
+              dayMeetings.length <= chipsIfNoOverflow ? dayMeetings.length : chipsWithOverflowRow;
+            const hiddenCount = dayMeetings.length - shown;
 
             return (
               <div
                 key={key}
                 className={cn(
-                  "flex min-h-[110px] min-w-0 flex-col overflow-hidden border-b border-r border-border p-1.5 transition-colors last:border-r-0",
+                  "relative flex min-h-[110px] min-w-0 flex-col overflow-hidden border-b border-r border-border p-1.5 transition-colors last:border-r-0",
                   !isCurrentMonth && "bg-surface-2/30 text-ink-subtle",
-                  // Today has to be findable at a glance in a grid of 35 identical boxes, and the
-                  // 4% wash it used to carry was invisible in both themes. The weight is in the
-                  // inset ring rather than the fill: the ring reads as an outline at any distance,
-                  // while the fill stays light enough that the rose/sky/emerald chips inside the
-                  // cell keep their own hue instead of sitting in a violet bath. Inset, so it draws
-                  // inside the cell's own box and cannot escape overflow-hidden or thicken the grid
-                  // lines it shares with its neighbours.
-                  isToday &&
-                    "bg-primary/[0.07] ring-1 ring-inset ring-primary/45 dark:bg-primary/[0.14] dark:ring-primary/55",
+                  // Selected and today are two different questions and must not answer in the same
+                  // colour. Today is the primary ring it has always been; the selected day — the one
+                  // the panel on the right is describing — is a heavier NEUTRAL ring, so a selected
+                  // Tuesday cannot be misread as "today" from across the room. They are exclusive
+                  // rather than stacked: on a day that is both, the filled primary date pill below
+                  // still says "today", and one ring per cell keeps the grid lines even.
+                  isSelected
+                    ? "bg-ink/[0.05] ring-2 ring-inset ring-ink/55 dark:bg-ink/[0.10] dark:ring-ink/45"
+                    : isToday
+                      ? // Today has to be findable at a glance in a grid of 35 identical boxes, and
+                        // the 4% wash it used to carry was invisible in both themes. The weight is
+                        // in the inset ring rather than the fill: the ring reads as an outline at
+                        // any distance, while the fill stays light enough that the rose/sky/emerald
+                        // chips keep their own hue instead of sitting in a violet bath. Inset, so it
+                        // draws inside the cell's own box and cannot escape overflow-hidden or
+                        // thicken the grid lines it shares with its neighbours.
+                        "bg-primary/[0.07] ring-1 ring-inset ring-primary/45 dark:bg-primary/[0.14] dark:ring-primary/55"
+                      : null,
                 )}
               >
-                <div className="flex h-5 shrink-0 items-center justify-between px-1">
+                {/* The whole cell selects the day, as a real button filling it rather than an
+                    onClick on the div: the chips above it are buttons too, and a <button> cannot
+                    contain one. It sits underneath — the rows that follow are `relative`, so they
+                    paint over it — and the content layers are pointer-transparent except for the
+                    chips themselves, so a click on bare cell background lands here and a click on a
+                    chip opens that meeting without either having to swallow the other's event. */}
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-label={`${formatDayHeading(day)}, ${describeCount(dayMeetings.length)}`}
+                  onClick={() => onSelectDay(day)}
+                  className="absolute inset-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                />
+
+                <div className="pointer-events-none relative flex h-5 shrink-0 items-center justify-between px-1">
                   <span
                     className={cn(
                       "grid size-5 place-items-center rounded-full text-[11px] font-medium tabular-nums",
@@ -589,20 +707,28 @@ function MonthGrid({
                   ) : null}
                 </div>
 
-                <div className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden">
-                  {dayMeetings.slice(0, MONTH_CELL_CHIP_LIMIT).map((meeting) => (
+                <div
+                  // Measured on cell 0 only; see `chipsIfNoOverflow` above for why one reading
+                  // describes every cell. `min-h-0` + `flex-1` is load-bearing, not decoration.
+                  ref={index === 0 ? listRef : undefined}
+                  className="pointer-events-none relative mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
+                >
+                  {dayMeetings.slice(0, shown).map((meeting) => (
                     <MonthChip
                       key={meeting.id}
                       meeting={meeting}
-                      onOpen={() => openMeeting(meeting)}
+                      onOpen={() => onOpenMeeting(meeting)}
                     />
                   ))}
-                  {dayMeetings.length > MONTH_CELL_CHIP_LIMIT ? (
-                    <DayOverflowPopover
-                      day={day}
-                      meetings={dayMeetings}
-                      onOpenMeeting={openMeeting}
-                    />
+                  {hiddenCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectDay(day)}
+                      aria-label={`Show all ${dayMeetings.length} meetings on ${formatDayHeading(day)}`}
+                      className="pointer-events-auto block h-4 w-full cursor-pointer truncate rounded-sm px-1 text-left text-[9px] font-medium leading-4 text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
+                    >
+                      +{hiddenCount} more
+                    </button>
                   ) : null}
                 </div>
               </div>
@@ -617,28 +743,21 @@ function MonthGrid({
 /**
  * One meeting on a month cell.
  *
- * A `<button>` rather than the clickable `<div>` this used to be: the identical row is also listed
- * inside the day popover, which is reached by keyboard, and a div with an onClick is a dead end
- * there. It also makes the cell chips themselves tabbable, which they always should have been.
+ * A `<button>` rather than the clickable `<div>` this used to be, so a chip is tabbable and opens
+ * on Enter like everything else on the page. `pointer-events-auto` puts it back on top of the
+ * cell-wide select-this-day button it sits over — see the cell for why that layering exists.
+ *
+ * `h-5` is not free styling: `MONTH_CHIP_HEIGHT` is this number, and the cell counts chips with it.
  */
-function MonthChip({
-  meeting,
-  onOpen,
-  className,
-}: {
-  meeting: TimedMeeting;
-  onOpen: () => void;
-  className?: string;
-}) {
+function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => void }) {
   return (
     <button
       type="button"
       onClick={onOpen}
       title={meeting.title}
       className={cn(
-        "group block h-5 w-full cursor-pointer overflow-hidden rounded-sm border px-1.5 text-left text-[10px] leading-5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+        "group pointer-events-auto block h-5 w-full cursor-pointer overflow-hidden rounded-sm border px-1.5 text-left text-[10px] leading-5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
         monthChipToneClass(meeting),
-        className,
       )}
     >
       <div className="flex h-full min-w-0 items-center gap-1">
@@ -665,92 +784,176 @@ function MonthChip({
 }
 
 /**
- * "+3 more", and the day behind it — Google Calendar's overflow popover.
+ * The selected day, in full, beside the grid — Outlook's day pane, not Google's overflow bubble.
  *
- * A month cell is `overflow-hidden` and only has room for three chips, so before this the fourth
- * meeting of a day had no reachable representation anywhere in month view; the count was a dead
- * `<div>`. The list here is the WHOLE day, not the remainder, because "what else is on Thursday"
- * is the question being asked and re-reading the three chips already on screen is not an answer.
+ * What was here before was a popover dropped BELOW the cell it came from, listing the whole day
+ * while the cell's own chips stayed visible two centimetres above it: the same three meetings
+ * printed twice, side by side, with the second copy floating over the days underneath. This is the
+ * same list in a place where repeating the cell is not a repetition — the pane is understood as
+ * "the day you selected, in detail", and the grid it details stays whole and untouched to its left.
  *
- * It is portalled out of the cell (`PopoverContent` renders through `Popover.Portal`) precisely so
- * the cell can keep clipping its own contents: an `absolute` panel inside the cell would be sliced
- * off at the border. `modal="trap-focus"` keeps Tab inside the panel while it is open without
- * locking the page, and Base UI flips or shifts the panel back into view on the outer columns and
- * the last row, so Monday and Sunday do not hang off the viewport.
+ * Rows are `WeekCard`s, the same component the week view builds a column out of. A detail pane
+ * should say more than the chip it expands — the time, the host, the state badge, a Join button on
+ * a live room — and the week view already had that row, so this cannot drift away from it either.
  */
-function DayOverflowPopover({
+function DayDetailPanel({
   day,
   meetings,
+  workspaceSlug,
+  narrowed,
+  closeOnEscape,
   onOpenMeeting,
+  onClose,
 }: {
   day: Date;
   meetings: TimedMeeting[];
+  workspaceSlug: string;
+  /** A search or a filter chip is on, so an empty day may only be empty of MATCHING meetings. */
+  narrowed: boolean;
+  closeOnEscape: boolean;
   onOpenMeeting: (meeting: TimedMeeting) => void;
+  onClose: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const heading = formatDayHeading(day);
 
-  const heading = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+  useEffect(() => {
+    if (!closeOnEscape) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [closeOnEscape, onClose]);
+
+  return (
+    <>
+      {/* Below xl the pane covers part of the grid, so it needs a scrim to say so and to give the
+          click-anywhere-out dismissal somewhere to land. At xl the pane is a real column and there
+          is nothing to dim. */}
+      <div
+        aria-hidden
+        onClick={onClose}
+        className="absolute inset-0 z-20 bg-ink/20 dark:bg-black/45 xl:hidden"
+      />
+
+      {/*
+        The month grid asks for 860px before it starts scrolling sideways, and this pane costs 340.
+        1180 of the two together is why the split becomes a real two-column layout at xl (1280) and
+        not at lg (1024): at lg the pane would have taken a fifth of the grid's width away and left
+        every month view permanently scrolling horizontally, which is a worse trade than an overlay.
+        So below xl it is an overlay pinned to the right of the calendar area — a 380px drawer on a
+        tablet, the full width on a phone, where 375px has no room for two things at once.
+
+        It also stays CLOSED until a day is picked, in every size. Nothing is taken from the grid
+        until somebody actually asks a question about a day.
+      */}
+      <aside
+        aria-label={`Meetings on ${heading}`}
+        className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[380px] flex-col border-l border-border bg-surface-1 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-2 motion-safe:duration-150 xl:static xl:z-auto xl:w-[340px] xl:max-w-none xl:shrink-0 xl:shadow-none xl:motion-safe:animate-none"
+      >
+        <header className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-[13px] font-semibold text-ink">{heading}</h2>
+            <p className="mt-0.5 text-[11px] text-ink-subtle">{describeCount(meetings.length)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close day details"
+            className="-mr-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <X size={12} />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+          {meetings.length ? (
+            meetings.map((meeting) => (
+              <WeekCard
+                key={meeting.id}
+                meeting={meeting}
+                workspaceSlug={workspaceSlug}
+                onOpen={() => onOpenMeeting(meeting)}
+              />
+            ))
+          ) : (
+            // An empty day still opens, and still says which kind of empty it is. A pane that went
+            // blank would read as broken, and "nothing here" is a different fact from "nothing here
+            // that matches what you typed".
+            <div className="grid h-full place-items-center px-4 text-center">
+              <div>
+                <CalendarBlank size={20} className="mx-auto text-ink-subtle" />
+                <p className="mt-2 text-[11px] font-medium text-ink-muted">
+                  {narrowed ? "Nothing on this day matches" : "Nothing on this day"}
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-ink-subtle">
+                  {narrowed
+                    ? "Clear the search or switch back to All to see everything booked here."
+                    : "Meetings you host or are invited to will show up here."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+/**
+ * The height of an element, kept current by a `ResizeObserver`.
+ *
+ * The first reading is taken synchronously inside the ref callback rather than waiting for the
+ * observer: ref callbacks run in the commit phase, before paint, so the cells are drawn at their
+ * measured size on the very first frame. The observer that follows is what keeps the count honest
+ * when the window is resized, when the month goes from five rows to six, or when the "no meetings"
+ * banner above the grid appears and takes a slice of the height away.
+ */
+function useMeasuredHeight() {
+  const [height, setHeight] = useState<number | null>(null);
+
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    setHeight(node.getBoundingClientRect().height);
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (box) setHeight(box.height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, height] as const;
+}
+
+/**
+ * How many `MONTH_CHIP_HEIGHT` rows fit in `height`, once `reserved` pixels are spoken for.
+ *
+ * `reserved` is the "+N more" line: a cell that cannot show everything has to keep room for the
+ * count, or the count is the thing that gets clipped and the day silently loses meetings again.
+ * Returns the fallback while nothing has been measured yet, and never returns a negative.
+ */
+function fitsInList(height: number | null, reserved: number) {
+  if (height === null) return MONTH_CELL_CHIP_FALLBACK;
+  const usable = height - reserved + MONTH_CHIP_GAP;
+  return Math.max(0, Math.floor(usable / (MONTH_CHIP_HEIGHT + MONTH_CHIP_GAP)));
+}
+
+/** "Tuesday, 8 September 2026" — the panel's title and the cells' accessible names. */
+function formatDayHeading(day: Date) {
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     weekday: "long",
     day: "numeric",
     month: "long",
+    year: "numeric",
   }).format(day);
-  const hidden = meetings.length - MONTH_CELL_CHIP_LIMIT;
+}
 
-  return (
-    <Popover open={open} onOpenChange={setOpen} modal="trap-focus">
-      <PopoverTrigger
-        ref={triggerRef}
-        aria-label={`Show all ${meetings.length} meetings on ${heading}`}
-        className="block h-4 w-full cursor-pointer truncate rounded-sm px-1 text-left text-[9px] font-medium leading-4 text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40 data-[popup-open]:bg-surface-2 data-[popup-open]:text-ink"
-      >
-        +{hidden} more
-      </PopoverTrigger>
-
-      <PopoverContent
-        side="bottom"
-        align="center"
-        sideOffset={6}
-        collisionPadding={12}
-        className="w-[260px] gap-0 rounded-xl p-0 shadow-lg"
-      >
-        <PopoverHeader className="flex flex-row items-start justify-between gap-2 border-b border-border px-3 py-2">
-          <div className="min-w-0">
-            <PopoverTitle className="truncate text-[11px] font-semibold text-ink">
-              {heading}
-            </PopoverTitle>
-            <PopoverDescription className="text-[10px] text-ink-subtle">
-              {meetings.length} {meetings.length === 1 ? "meeting" : "meetings"}
-            </PopoverDescription>
-          </div>
-          <PopoverClose
-            aria-label="Close"
-            className="-mr-1 grid size-5 shrink-0 cursor-pointer place-items-center rounded-md text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
-          >
-            <X size={11} />
-          </PopoverClose>
-        </PopoverHeader>
-
-        {/* Capped and scrolled rather than allowed to grow: a day with twenty meetings would
-            otherwise be taller than the viewport, and there is nothing left to flip it into. */}
-        <div className="max-h-[268px] space-y-1 overflow-y-auto p-2">
-          {meetings.map((meeting) => (
-            <MonthChip
-              key={meeting.id}
-              meeting={meeting}
-              className="h-6 leading-6"
-              onOpen={() => {
-                // Closed before the recap dialog opens, or the panel would sit behind it — and
-                // closing hands focus back to the "+N more" that opened it.
-                setOpen(false);
-                onOpenMeeting(meeting);
-              }}
-            />
-          ))}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
+function describeCount(count: number) {
+  if (count === 0) return "no meetings";
+  return `${count} ${count === 1 ? "meeting" : "meetings"}`;
 }
 
 /**
