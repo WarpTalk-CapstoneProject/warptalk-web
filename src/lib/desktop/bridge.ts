@@ -60,6 +60,14 @@ export interface VirtualAudioInstallResult {
   reason?: string;
 }
 
+export interface WindowsLoopbackSource {
+  id: string;
+  name: string;
+  windowHandle?: number;
+  ownerProcessId?: number;
+  likelyMeetingWindow: boolean;
+}
+
 /**
  * Only the methods this app actually calls.
  *
@@ -74,6 +82,7 @@ export interface DesktopBridge {
   openExternal?: (url: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
+  listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
 }
 
 /**
@@ -138,6 +147,16 @@ export async function requestVirtualAudioInstall(): Promise<VirtualAudioInstallR
   if (!bridge?.installVirtualAudio) return null;
   try {
     return await bridge.installVirtualAudio();
+  } catch {
+    return null;
+  }
+}
+
+export async function listWindowsLoopbackSources(): Promise<WindowsLoopbackSource[] | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.listWindowsLoopbackSources) return null;
+  try {
+    return await bridge.listWindowsLoopbackSources();
   } catch {
     return null;
   }
