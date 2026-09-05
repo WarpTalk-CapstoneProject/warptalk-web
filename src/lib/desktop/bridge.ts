@@ -52,6 +52,7 @@ export interface DesktopBridge {
   getVersion?: () => Promise<string>;
   getPlatform?: () => string;
   openExternal?: (url: string) => Promise<void>;
+  openTranscriptWindow?: (roomId: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
 }
@@ -85,6 +86,13 @@ export async function openInSystemBrowser(url: string): Promise<boolean> {
   const bridge = getDesktopBridge();
   if (!bridge?.openExternal) return false;
   await bridge.openExternal(url);
+  return true;
+}
+
+export async function openDesktopTranscriptWindow(roomId: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.openTranscriptWindow) return false;
+  await bridge.openTranscriptWindow(roomId);
   return true;
 }
 

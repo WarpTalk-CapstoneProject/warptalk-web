@@ -82,6 +82,10 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
     participantCount: room.participantCount ?? item.participants.length,
     artifacts: item.artifacts.map(mapArtifact),
     isHost: room.isHost === true,
+    externalProvider: room.externalProvider,
+    externalMeetingUrl: room.externalMeetingUrl,
+    externalCalendarEventId: room.externalCalendarEventId,
+    externalCalendarEventUrl: room.externalCalendarEventUrl,
   };
 }
 

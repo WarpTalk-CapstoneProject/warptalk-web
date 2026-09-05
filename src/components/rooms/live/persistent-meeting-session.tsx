@@ -104,6 +104,7 @@ import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL, INBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
+import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -242,6 +243,7 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+  const transcriptPopupOpenedRef = useRef<string | null>(null);
 
   // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
   // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
@@ -278,6 +280,12 @@ export function PersistentMeetingSession({
       cancelled = true;
     };
   }, [isBridgeRoom]);
+
+  useEffect(() => {
+    if (!isBridgeRoom || transcriptPopupOpenedRef.current === roomId) return;
+    transcriptPopupOpenedRef.current = roomId;
+    void openDesktopTranscriptWindow(roomId);
+  }, [isBridgeRoom, roomId]);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
   // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
   // rejections with a bodyless 503 that reads exactly like an outage. An idle-reaped session
