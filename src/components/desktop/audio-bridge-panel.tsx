@@ -42,6 +42,21 @@ const TONE = {
     iconClass: "text-amber-500",
     ring: "border-amber-500/25 bg-amber-500/[0.04]",
   },
+  "outbound-only": {
+    icon: Info,
+    iconClass: "text-sky-500",
+    ring: "border-sky-500/25 bg-sky-500/[0.04]",
+  },
+  "installed-not-running": {
+    icon: Warning,
+    iconClass: "text-amber-500",
+    ring: "border-amber-500/25 bg-amber-500/[0.04]",
+  },
+  "caption-only": {
+    icon: Info,
+    iconClass: "text-amber-500",
+    ring: "border-amber-500/25 bg-amber-500/[0.04]",
+  },
   "unsupported-platform": {
     icon: Info,
     iconClass: "text-ink-muted",
@@ -157,8 +172,8 @@ export function AudioBridgePanel({
             // Named because "I already have a virtual microphone" is the first thing people say
             // when asked to install one, and naming theirs is how that conversation ends.
             <p className="mt-2.5 text-[11px] leading-5 text-ink-subtle">
-              Other virtual audio drivers on this Mac: {view.foreignDrivers.join(", ")}. WarpTalk
-              does not use them.
+              Other virtual audio drivers on this device: {view.foreignDrivers.join(", ")}.
+              WarpTalk does not use them.
             </p>
           ) : null}
 

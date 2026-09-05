@@ -5,15 +5,15 @@
  * Zoom — by borrowing two virtual audio devices from the operating system. WarpTalk ships no
  * driver of its own on purpose: a macOS AudioServerPlugIn and a Windows WDM driver signed with an
  * EV certificate are not things this app can install for the user. So the devices come from
- * BlackHole, and the desktop app detects them (warptalk-desktop/src/main/virtual-audio.ts).
+ * BlackHole on macOS or VB-Audio on Windows, and the desktop app detects them
+ * (warptalk-desktop/src/main/virtual-audio.ts).
  *
- * TWO DEVICES, NOT ONE
+ * TWO LEGS, PLATFORM-SPECIFIC DEVICES
  *
  * The bridge runs in both directions at the same time. WarpTalk writes the dubbed voice into the
- * OUTBOUND device and the user picks that as Meet's microphone; Meet writes the far side's audio
- * into the INBOUND device and WarpTalk reads it back out. A single device cannot serve both,
- * because whatever is written to it is what is read from it — the user's own dubbed voice would
- * loop straight back into the pipeline.
+ * OUTBOUND device and the user picks that as Meet's microphone. macOS reads the far side back
+ * from a second virtual device; Windows primary reads it through per-process loopback scoped to
+ * the meeting app, so a second paid cable is not part of the path.
  *
  * WHY THIS MODULE IS PURE
  *
@@ -24,7 +24,7 @@
  * THREE ABSENCES THAT MEAN DIFFERENT THINGS
  *
  *   no bridge      a browser tab, or a desktop build too old to answer. We do not know.
- *   not supported  the desktop app has no detection for this platform (Windows, Linux today).
+ *   not supported  the desktop app has no detection for this platform.
  *   not ready      we looked, and at least one device is not installed.
  *
  * Collapsing these would produce the worst possible sentence: telling somebody on Windows to
@@ -41,6 +41,12 @@ export type AudioBridgeState =
   | "unsupported-platform"
   /** Both devices present. */
   | "ready"
+  /** The mixer/driver is installed, but the engine control leg is not running yet. */
+  | "installed-not-running"
+  /** The outbound leg can run, but inbound still needs the Windows loopback leg. */
+  | "outbound-only"
+  /** A driver exists, but this machine cannot run the Windows audio bridge path yet. */
+  | "caption-only"
   /** At least one device missing, and this platform can do something about it. */
   | "missing";
 
@@ -49,6 +55,8 @@ export interface AudioBridgeDeviceView {
   /** The exact string to look for in the other app's device picker. */
   deviceName: string;
   installed: boolean;
+  providerName?: string;
+  providerRole?: "primary" | "backup";
   /** Which slot this device goes in, phrased from inside Google Meet's settings. */
   role: string;
 }
@@ -91,6 +99,8 @@ function toDeviceView(device: VirtualAudioDevice): AudioBridgeDeviceView {
     leg: device.leg,
     deviceName: device.deviceName,
     installed: device.installed,
+    providerName: device.providerName,
+    providerRole: device.providerRole,
     role: ROLE[device.leg],
   };
 }
@@ -132,6 +142,55 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
       message:
         "Both virtual devices are installed. In your meeting app, pick them as shown below so " +
         "WarpTalk can hear the call and speak into it.",
+      devices,
+      action: null,
+      foreignDrivers,
+    };
+  }
+
+  if (
+    status.bridgeMode === "outbound-only" ||
+    (status.capabilities?.outboundOnly && status.capabilities.processLoopback !== false)
+  ) {
+    return {
+      state: "outbound-only",
+      heading: "Audio bridge can speak into the meeting",
+      message:
+        "Windows found the outbound virtual cable. WarpTalk can send translated speech to the " +
+        "meeting app; hearing the meeting back through per-process loopback is the next bridge " +
+        "step. Captions and WarpTalk-native meetings still work now.",
+      devices,
+      action: null,
+      foreignDrivers,
+    };
+  }
+
+  if (
+    status.platform === "win32" &&
+    status.bridgeMode === "caption-only" &&
+    status.capabilities?.processLoopback === false &&
+    devices.some((device) => device.providerRole === "primary" && device.installed)
+  ) {
+    return {
+      state: "caption-only",
+      heading: "Audio bridge needs Windows process loopback",
+      message:
+        "VB-CABLE is installed, but this Windows build cannot use process loopback to capture " +
+        "only the meeting app yet. " +
+        "Use captions or a WarpTalk-native meeting, or use the backup bridge path when it is wired.",
+      devices,
+      action: null,
+      foreignDrivers,
+    };
+  }
+
+  if (status.bridgeMode === "installed-not-running") {
+    return {
+      state: "installed-not-running",
+      heading: "Audio bridge engine is not running",
+      message:
+        "Voicemeeter is installed, but WarpTalk cannot use it until the Windows engine " +
+        "lifecycle is wired. Use captions or a WarpTalk-native meeting for now.",
       devices,
       action: null,
       foreignDrivers,

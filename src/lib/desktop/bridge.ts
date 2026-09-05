@@ -12,7 +12,7 @@
  * implements it. The types below mirror warptalk-desktop/src/shared/types.ts.
  */
 
-/** Which side of the bridge a virtual device carries. See virtual-audio.ts for why it takes two. */
+/** Which side of the bridge a virtual device carries when that leg uses a virtual device. */
 export type BridgeLeg = "outbound" | "inbound";
 
 export interface VirtualAudioDevice {
@@ -21,6 +21,9 @@ export interface VirtualAudioDevice {
   /** What the device is called in Google Meet's picker — the string the user has to hunt for. */
   deviceName: string;
   installed: boolean;
+  providerId?: string;
+  providerName?: string;
+  providerRole?: "primary" | "backup";
 }
 
 export interface VirtualAudioStatus {
@@ -32,7 +35,24 @@ export interface VirtualAudioStatus {
   supported: boolean;
   devices: VirtualAudioDevice[];
   ready: boolean;
+  bridgeMode?: "full" | "outbound-only" | "installed-not-running" | "caption-only";
+  recommendedProviderId?: string;
+  capabilities?: {
+    fullBridge: boolean;
+    outboundOnly: boolean;
+    captionOnly: boolean;
+    processLoopback: boolean;
+    processLoopbackRuntime?: "available" | "not-wired";
+    minWindowsProcessLoopbackBuild?: number;
+  };
+  riskControls?: VirtualAudioRiskControl[];
   foreignDrivers: string[];
+}
+
+export interface VirtualAudioRiskControl {
+  id: "R1" | "R2" | "R3" | "R4" | "R5" | "R6" | "R7" | "R8" | "B1" | "B2" | "X1";
+  status: "mitigated" | "implemented" | "known-limitation" | "requires-runtime";
+  control: string;
 }
 
 export interface VirtualAudioInstallResult {

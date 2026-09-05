@@ -36,6 +36,35 @@ function macStatus(overrides: Partial<VirtualAudioStatus> = {}): VirtualAudioSta
   };
 }
 
+function windowsCableStatus(overrides: Partial<VirtualAudioStatus> = {}): VirtualAudioStatus {
+  return {
+    platform: "win32",
+    supported: true,
+    ready: false,
+    bridgeMode: "outbound-only",
+    recommendedProviderId: "vbcable-free",
+    capabilities: {
+      fullBridge: false,
+      outboundOnly: true,
+      captionOnly: true,
+      processLoopback: true,
+    },
+    foreignDrivers: [],
+    devices: [
+      {
+        leg: "outbound",
+        driverBundle: "VB-CABLE",
+        deviceName: "CABLE Output (VB-Audio Virtual Cable)",
+        installed: true,
+        providerId: "vbcable-free",
+        providerName: "VB-CABLE",
+        providerRole: "primary",
+      },
+    ],
+    ...overrides,
+  };
+}
+
 test("no answer renders nothing at all", () => {
   // A browser tab, or a desktop build predating the check. Distinct from "not installed": we did
   // not look, so there is nothing honest to say.
@@ -121,6 +150,94 @@ test("a half-installed bridge is called out, not rounded to 'missing'", () => {
   assert.equal(view.action, "Set up audio bridge");
 });
 
+test("Windows with the free cable is shown as outbound-only, not full bridge ready", () => {
+  const view = describeAudioBridge(windowsCableStatus());
+
+  assert.equal(view.state, "outbound-only");
+  assert.equal(view.action, null);
+  assert.match(view.heading, /speak into the meeting/);
+  assert.match(view.message ?? "", /per-process loopback/);
+  assert.equal(view.devices.length, 1);
+  assert.equal(view.devices[0]?.deviceName, "CABLE Output (VB-Audio Virtual Cable)");
+  assert.match(view.devices[0]?.role ?? "", /microphone/);
+});
+
+test("outbound-only is decided before the generic missing copy when process loopback is available", () => {
+  const view = describeAudioBridge(
+    windowsCableStatus({
+      bridgeMode: undefined,
+      capabilities: {
+        fullBridge: false,
+        outboundOnly: true,
+        captionOnly: true,
+        processLoopback: true,
+      },
+    }),
+  );
+
+  assert.equal(view.state, "outbound-only");
+});
+
+test("Windows free cable on an unsupported build is caption-only, not a setup prompt", () => {
+  const view = describeAudioBridge(
+    windowsCableStatus({
+      bridgeMode: "caption-only",
+      capabilities: {
+        fullBridge: false,
+        outboundOnly: false,
+        captionOnly: true,
+        processLoopback: false,
+      },
+    }),
+  );
+
+  assert.equal(view.state, "caption-only");
+  assert.equal(view.action, null);
+  assert.match(view.message ?? "", /Windows build/);
+  assert.match(view.message ?? "", /process loopback/);
+});
+
+test("Voicemeeter endpoints are not treated as ready until engine lifecycle is wired", () => {
+  const view = describeAudioBridge({
+    platform: "win32",
+    supported: true,
+    ready: false,
+    bridgeMode: "installed-not-running",
+    recommendedProviderId: "vbcable-free",
+    capabilities: {
+      fullBridge: false,
+      outboundOnly: false,
+      captionOnly: true,
+      processLoopback: false,
+    },
+    foreignDrivers: [],
+    devices: [
+      {
+        leg: "outbound",
+        driverBundle: "Voicemeeter AUX",
+        deviceName: "VoiceMeeter Aux Output (VB-Audio VoiceMeeter AUX VAIO)",
+        installed: true,
+        providerId: "voicemeeter-banana",
+        providerName: "Voicemeeter Banana",
+        providerRole: "backup",
+      },
+      {
+        leg: "inbound",
+        driverBundle: "Voicemeeter VAIO",
+        deviceName: "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)",
+        installed: true,
+        providerId: "voicemeeter-banana",
+        providerName: "Voicemeeter Banana",
+        providerRole: "backup",
+      },
+    ],
+  });
+
+  assert.equal(view.state, "installed-not-running");
+  assert.equal(view.action, null);
+  assert.match(view.message ?? "", /engine lifecycle/);
+});
+
 test("readiness comes from the desktop app, not recomputed from the device list", () => {
   // Both devices report installed while the desktop app says not ready — it checked something
   // this build does not render. Trusting the local recomputation would show a green panel over a
@@ -157,6 +274,28 @@ test("a malformed status does not throw", () => {
 test("every shown state carries a heading and a message", () => {
   const cases: Array<VirtualAudioStatus | null> = [
     macStatus(),
+    windowsCableStatus(),
+    {
+      ...windowsCableStatus({
+        ready: false,
+        bridgeMode: "installed-not-running",
+        capabilities: {
+          fullBridge: false,
+          outboundOnly: false,
+          captionOnly: true,
+          processLoopback: false,
+        },
+      }),
+    },
+    windowsCableStatus({
+      bridgeMode: "caption-only",
+      capabilities: {
+        fullBridge: false,
+        outboundOnly: false,
+        captionOnly: true,
+        processLoopback: false,
+      },
+    }),
     macStatus({ ready: false }),
     macStatus({ supported: false, ready: false }),
   ];
