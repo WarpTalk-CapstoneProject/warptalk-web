@@ -3,6 +3,8 @@
  * Source: WarpTalk.Gateway.Hubs.HubModels
  */
 
+import type { TranslationRoomParticipantDto } from "@/types/translationRoom";
+
 // ── TranslationRoom Hub DTOs ──────────────────────────
 
 export interface ParticipantInfoDto {
@@ -13,7 +15,17 @@ export interface ParticipantInfoDto {
   isMuted: boolean;
   joinedAt: string;
   role?: "host" | "participant" | "interpreter";
-  status?: "joined" | "connected" | "left" | "removed";
+  /**
+   * WT-538: was `"joined" | "connected" | "left" | "removed"`, and `"joined"` was a value the
+   * backend has never once written — `IdleRoomMonitoringWorker` removed the last branch that
+   * read it as dead code. Typed against the participant DTO's own union now, so a live roster
+   * cannot merge a status the rest of the app does not recognise (see `mergeParticipants`).
+   *
+   * Like `role` above, this is never populated in practice: the Gateway's `ParticipantInfoDto`
+   * record (gateway/Hubs/HubModels.cs) carries only user id, name, the two languages, mute and
+   * joined-at. Optional because the wire may omit it, which it always does.
+   */
+  status?: TranslationRoomParticipantDto["status"];
   avatarUrl?: string;
   isUsingVoiceClone?: boolean;
 }
