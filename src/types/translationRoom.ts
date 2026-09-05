@@ -102,7 +102,30 @@ export interface TranslationRoomParticipantDto {
   role: "host" | "participant" | "interpreter" | "HOST" | "PARTICIPANT" | "INTERPRETER";
   listenLanguage: string;
   speakLanguage: string;
-  status: "invited" | "waiting" | "joined" | "connected" | "disconnected" | "left" | "removed" | "kicked" | "rejected";
+  /**
+   * The backend `participant_status` enum, lowercased — plus one client-side alias.
+   *
+   * Backend emits exactly INVITED · WAITING · CONNECTED · DISCONNECTED · LEFT · KICKED · REJECTED.
+   * `"joined"` used to be listed here and is gone: the branch that produced JOINED was dead code
+   * on the backend and has been removed, so `status === "joined"` was a comparison that type-checked
+   * and could never once be true. That is the worst shape a union can have — it does not fail, it
+   * silently never matches.
+   *
+   * `"removed"` is NOT a backend value. It survives here only because
+   * `normalizeParticipantStatus` (services/translation-room.service.ts) rewrites KICKED to it
+   * before any reader sees this DTO, so it is what actually arrives on the client. Anything asking
+   * "was this person kicked?" must accept BOTH spellings — see `room-occupancy`, which maps
+   * `kicked` and `removed` to the same presence.
+   */
+  status:
+    | "invited"
+    | "waiting"
+    | "connected"
+    | "disconnected"
+    | "left"
+    | "kicked"
+    | "removed"
+    | "rejected";
   isTranslationAudioEnabled?: boolean;
   isUsingVoiceClone?: boolean;
   avatarUrl?: string;
