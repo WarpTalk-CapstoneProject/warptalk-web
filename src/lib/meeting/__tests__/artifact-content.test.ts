@@ -122,14 +122,19 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
   //
   // The standalone artifacts page — the other half of the original WT-432 pair — is gone. It was
   // a second view of the Files tab both of these already carry, and nothing linked to it.
+  //
+  // The archive's entry moved rather than being dropped. /history is the meeting-DOCUMENTS grid
+  // now, and a grid of cards renders no artifact bodies at all — the drawer that opens one does,
+  // through `readableBody`. Pinning the assertion to the file that actually reads a payload is the
+  // point of this test: pointed at the page, it would pass forever by asserting nothing.
   const pages = [
     {
       path: "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
       viewer: "SummaryPanel",
     },
     {
-      path: "src/app/(app)/[workspaceSlug]/history/page.tsx",
-      viewer: "readableArtifactBody",
+      path: "src/components/meeting-documents/document-drawer.tsx",
+      viewer: "readableBody",
     },
   ];
 

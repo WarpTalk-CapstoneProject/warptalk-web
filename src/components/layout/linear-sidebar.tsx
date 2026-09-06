@@ -227,7 +227,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       ]
     },
     { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
-    { icon: Archive, label: "History", href: `/${slug}/history` },
+    // "Meeting records", not "History": the page lists the DOCUMENTS meetings produced —
+    // transcripts, AI summaries, minutes and recordings — and "History" named a list of past
+    // meetings, which is what Meetings above already is. The route stays /history so existing
+    // links keep working; `/documents` is the knowledge library and is a different thing.
+    { icon: Archive, label: "Meeting records", href: `/${slug}/history` },
     // No Transcripts entry: a meeting's transcript, summary and files live on that
     // meeting's own page, below its description.
     { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
@@ -353,9 +357,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   /**
    * The platform admin console gets its own chrome — a third branch beside the app and Settings.
    *
-   * Without one, /admin inherited the app's nav wholesale: Home, Meetings, Schedules, History,
-   * Voice Profiles, Members and Documents, every one of them scoped to whichever workspace the
-   * admin happened to have open. A platform administrator is not standing *inside* a workspace,
+   * Without one, /admin inherited the app's nav wholesale: Home, Meetings, Schedules, Meeting
+   * records, Voice Profiles, Members and Documents, every one of them scoped to whichever
+   * workspace the admin happened to have open. A platform administrator is not standing *inside*
+   * a workspace,
    * so a workspace switcher and a workspace's meetings are not merely irrelevant there — they
    * invite the reader to act on one tenant while looking at a page about all of them.
    *

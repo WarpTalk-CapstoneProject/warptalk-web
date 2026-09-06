@@ -237,7 +237,9 @@ const PAGE_CONTEXT_LABELS: Record<string, string> = {
   in_meeting: "Live meeting",
   document_detail: "Document",
   documents: "Documents",
-  history: "History",
+  // The `history` pageType is registered by the meeting-documents grid, and only ever with a
+  // document open — so the chip names one meeting's record, not the archive.
+  history: "Meeting record",
 };
 
 const PAGE_CONTEXT_ICONS: Record<string, ReactNode> = {

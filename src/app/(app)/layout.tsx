@@ -428,7 +428,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       parts.push({ label: roomTitle || "Loading..." });
                     }
                   } else if (feature === "history") {
-                    parts.push({ label: "History" });
+                    // The route is still /history; the page is the meeting-documents grid.
+                    parts.push({ label: "Meeting records" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {

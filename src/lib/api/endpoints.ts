@@ -51,6 +51,16 @@ export const API = {
     create: "/translation-rooms",
     list: "/translation-rooms",
     history: "/translation-rooms/history",
+    /**
+     * Every document the caller's visible meetings produced — transcripts, AI summaries,
+     * recordings and minutes — as one ordered, paged list.
+     *
+     * A sibling of `history`, not a flag on it. That route returns MEETINGS carrying their
+     * outputs, and it cannot include minutes at all: minutes are not artifacts and live in their
+     * own table. Only the server can order and count across both, so a client that paged the two
+     * sources separately and merged them would get the order and the total wrong.
+     */
+    documents: "/translation-rooms/documents",
     /** WT-333 — the caller's own meetings in one workspace, past and upcoming (UC 25). */
     myMeetings: "/translation-rooms/my-meetings",
     join: "/translation-rooms/join",

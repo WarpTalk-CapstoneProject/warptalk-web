@@ -5,12 +5,23 @@ import path from "node:path";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (relativePath) => readFile(path.join(root, relativePath), "utf8");
 
-const [hook, historyService, roomService, roomDetailPage, historyPage, workspaceLayout] = await Promise.all([
+const [
+  hook,
+  historyService,
+  roomService,
+  roomDetailPage,
+  documentsPage,
+  documentsHook,
+  documentsService,
+  workspaceLayout,
+] = await Promise.all([
   read("src/hooks/use-room-history.ts"),
   read("src/services/room-history.service.ts"),
   read("src/services/translation-room.service.ts"),
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
   read("src/app/(app)/[workspaceSlug]/history/page.tsx"),
+  read("src/hooks/use-meeting-documents.ts"),
+  read("src/services/meeting-document.service.ts"),
   read("src/app/(app)/[workspaceSlug]/layout.tsx"),
 ]);
 
@@ -31,7 +42,23 @@ const checks = [
     hook.includes("export function useEndedRoomRecord") &&
       hook.includes("...roomHistoryQuery(workspaceId)"),
   ],
-  ["meeting history requests the active workspace", historyPage.includes("useRoomHistory(activeWorkspaceId)")],
+  // `/history` is now the meeting-DOCUMENTS grid, not the meeting archive, so the assertion moved
+  // with it rather than being dropped. The requirement did not change one bit: that page reads a
+  // workspace's transcripts, summaries, minutes and recordings, which is exactly the payload this
+  // contract exists to keep from leaking across workspaces.
+  [
+    "the documents page requests the active workspace",
+    documentsPage.includes("useMeetingDocuments(activeWorkspaceId"),
+  ],
+  [
+    "documents cache is isolated per workspace",
+    documentsHook.includes('["meeting-documents", workspaceId'),
+  ],
+  ["documents wait for a resolved workspace", documentsHook.includes("enabled: Boolean(workspaceId)")],
+  [
+    "the documents service sends the workspace id",
+    documentsService.includes("workspaceId: query.workspaceId"),
+  ],
   [
     "workspace pages wait until the active id matches the route",
     workspaceLayout.includes("activeWorkspaceId !== targetWorkspace.id"),
