@@ -52,7 +52,6 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import {
   useAssistantConversations,
   useAssistantPlugins,
-  useAssistantSkills,
   useCreateAssistantConversation,
   useInstallAssistantPlugin,
   useLoadAssistantConversation,
@@ -420,7 +419,6 @@ export function GlobalChatbot() {
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
-  const { data: skills } = useAssistantSkills();
   const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } = useAssistantPlugins();
   const installPlugin = useInstallAssistantPlugin();
   const connectPlugin = usePluginConnectUrl();
@@ -1859,7 +1857,7 @@ export function GlobalChatbot() {
                     >
                       <PopoverTrigger className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                         <Cube weight="regular" size={14} />
-                        Skills
+                        Tools
                         <CaretDown
                           weight="bold"
                           size={10}
@@ -1873,29 +1871,46 @@ export function GlobalChatbot() {
                         className="p-1.5 w-[300px] bg-surface-1 border border-border shadow-xl rounded-xl"
                       >
                         <div className="flex flex-col gap-2">
+                          {/* The same commands the "/" menu offers, and the same
+                              insertSlashCommand that runs them, so the menu and the keyboard
+                              cannot drift apart. This list used to render the backend's
+                              /assistant/skills, which had no prompt attached and so was
+                              `cursor-default` text -- a menu that looked clickable, was not,
+                              and told nobody what to do with it. */}
                           <section>
                             <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
-                              Skills
+                              Tools
                             </div>
-                            {skills && skills.length > 0 ? (
+                            {availableSlashCommands.length > 0 ? (
                               <ul className="flex flex-col">
-                                {skills.map((skill) => (
-                                  <li
-                                    key={skill.name}
-                                    className="flex cursor-default flex-col gap-0.5 rounded-md px-2.5 py-1.5"
-                                  >
-                                    <span className="text-[12px] font-medium text-ink">
-                                      {skill.label}
-                                    </span>
-                                    <span className="text-[11px] text-ink-subtle">
-                                      {skill.description}
-                                    </span>
+                                {availableSlashCommands.map((command) => (
+                                  <li key={command.command}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSkillsMenuOpen(false);
+                                        insertSlashCommand(command);
+                                      }}
+                                      className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-surface-2"
+                                    >
+                                      <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+                                        <span className="font-mono text-[11px] text-ink-subtle">
+                                          {command.command}
+                                        </span>
+                                        {command.label}
+                                      </span>
+                                      <span className="text-[11px] text-ink-subtle">
+                                        {command.description}
+                                      </span>
+                                    </button>
                                   </li>
                                 ))}
                               </ul>
                             ) : (
+                              // Not "loading": availableSlashCommands is filtered by the page
+                              // you are on, so an empty list is an answer, not a wait.
                               <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
-                                Loading skills…
+                                No tools for this page. Open a meeting or a document.
                               </div>
                             )}
                           </section>
