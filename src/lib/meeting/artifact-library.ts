@@ -30,6 +30,7 @@ import { readableArtifactBody } from "./artifact-content.ts";
 import { foldSearchText } from "../ui/search-text.ts";
 import { parseMinutesContent } from "../../types/meetingMinutes.ts";
 import { sectionTitle } from "./meeting-summary.ts";
+import { ARTIFACT_WITHHELD_FALLBACK } from "./artifact-denial.ts";
 
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { MeetingMinutesDto } from "@/types/meetingMinutes";
@@ -350,7 +351,20 @@ export function entryExcerpt(entry: LibraryEntry, maxChars = 320): string {
 export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): string {
   switch (absence) {
     case "withheld":
-      return "Only the host can read this until they share the meeting's record.";
+      // The app's existing sentence, imported rather than rewritten. Two things were wrong with
+      // "Only the host can read this until they share the meeting's record".
+      //
+      // It was a FOURTH wording for one fact — artifact-denial, summary-absence and
+      // transcript-absence already phrase it — so the same participant read one sentence on the
+      // meeting page and a different one here.
+      //
+      // Worse, it was not always TRUE. What is withheld is the OUTPUT: the server omits an
+      // artifact's body under ArtifactAccessHelper, which refuses a participant of a HOST_ONLY
+      // room. The transcript endpoints never consult that setting (TranscriptReadAccess is
+      // host-or-participant, full stop), so the same person can often read the very transcript
+      // this card called unreadable. This sentence is about the file the host has not shared,
+      // which is what is actually true here.
+      return ARTIFACT_WITHHELD_FALLBACK;
     case "generating":
       return kind === "summary"
         ? "The assistant is still writing this summary."

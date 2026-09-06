@@ -12,6 +12,7 @@ import {
   narrowLibrary,
   relativeTime,
 } from "../artifact-library.ts";
+import { ARTIFACT_WITHHELD_FALLBACK } from "../artifact-denial.ts";
 
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { MeetingMinutesDto } from "@/types/meetingMinutes";
@@ -143,7 +144,11 @@ test("a ready artifact with no body is withheld, not missing", () => {
 
   assert.equal(entry.body, null);
   assert.equal(entry.absence, "withheld");
-  assert.match(describeAbsence("withheld", "transcript"), /host/i);
+  // The SHARED sentence, not a lookalike. A fourth wording for one fact is how the same
+  // participant comes to read one thing on the meeting page and another in the library — and the
+  // sentence must stay about the OUTPUT, because the transcript endpoints ignore artifactAccess
+  // entirely and will often hand this person the transcript a card called unreadable.
+  assert.equal(describeAbsence("withheld", "transcript"), ARTIFACT_WITHHELD_FALLBACK);
 });
 
 test("an artifact still being produced says so instead of reading as withheld", () => {
