@@ -110,12 +110,31 @@ export interface DesktopBridge {
   openExternal?: (url: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
-  openTranscriptWindow?: (roomId: string) => Promise<void>;
+  openTranscriptWindow?: (roomId: string | null) => Promise<void>;
+  activateRoom?: (roomId: string) => Promise<void>;
+  onRoomActivated?: (callback: (roomId: string) => void) => () => void;
   closeTranscriptWindow?: () => Promise<void>;
   listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
   startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
   stopAudioCapture?: () => Promise<void>;
+  watchMeetPresence?: () => Promise<void>;
+  unwatchMeetPresence?: () => Promise<void>;
+  onMeetPresence?: (callback: (presence: MeetPresence) => void) => () => void;
+}
+
+/**
+ * One observation of whether a Google Meet call is on screen, as the desktop app saw it.
+ *
+ * Mirrors the desktop repo's own type rather than importing it, for the same reason the rest of
+ * this file does: the two repos ship separately, and a build older than this field simply never
+ * sends one.
+ */
+export interface MeetPresence {
+  meetWindowVisible: boolean;
+  /** Present only when the window title carried a room code. A named meeting has none. */
+  meetCode?: string;
+  observedAtMs: number;
 }
 
 /**
@@ -196,7 +215,7 @@ export async function requestVirtualAudioInstall(): Promise<VirtualAudioInstallR
  * Returns false when there was no bridge to take it — a browser tab, or a desktop build older than
  * the window — so the caller can say so instead of leaving a button that appears to do nothing.
  */
-export async function openTranscriptWindow(roomId: string): Promise<boolean> {
+export async function openTranscriptWindow(roomId: string | null): Promise<boolean> {
   const bridge = getDesktopBridge();
   if (!bridge?.openTranscriptWindow) return false;
   try {
@@ -205,6 +224,60 @@ export async function openTranscriptWindow(roomId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Subscribes to "is a Google Meet window on screen", and starts the desktop app looking.
+ *
+ * Arming is the caller's job to undo: the watcher enumerates every window on the machine on a
+ * timer, so leaving it armed after the meeting is over spends the user's battery on a question
+ * nobody is asking. The returned function disarms and unsubscribes together, which is what makes
+ * it safe to hand straight to an effect cleanup.
+ *
+ * Returns null on a browser tab or a desktop build without the sensor. Callers fall back to the
+ * schedule-only trigger there, which needs no window knowledge at all.
+ */
+export function watchMeetPresence(
+  onPresence: (presence: MeetPresence) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.watchMeetPresence || !bridge.onMeetPresence) return null;
+
+  const unsubscribe = bridge.onMeetPresence(onPresence);
+  void bridge.watchMeetPresence().catch(() => undefined);
+
+  return () => {
+    unsubscribe();
+    void bridge.unwatchMeetPresence?.().catch(() => undefined);
+  };
+}
+
+/**
+ * Flow 2: tells the main window to make this room the active meeting.
+ *
+ * The offer window can create a room but cannot start translating in it - the pipeline lives in
+ * the main window's meeting session, keyed off a store in sessionStorage, which is per-window. So
+ * the popup asks main to pass the message on rather than writing state the other window will never
+ * read.
+ */
+export async function activateBridgeRoom(roomId: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.activateRoom) return false;
+  try {
+    await bridge.activateRoom(roomId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The other end of activateBridgeRoom, for the main window. Null off the desktop shell. */
+export function onBridgeRoomActivated(
+  callback: (roomId: string) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onRoomActivated) return null;
+  return bridge.onRoomActivated(callback);
 }
 
 /** Closes the transcript window if one is open. Safe to call when there is none. */

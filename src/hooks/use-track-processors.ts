@@ -6,6 +6,7 @@ import { LocalAudioTrack, LocalVideoTrack } from "livekit-client";
 import { KrispNoiseFilter, isKrispNoiseFilterSupported, type KrispNoiseFilterProcessor } from "@livekit/krisp-noise-filter";
 import { BackgroundProcessor, type BackgroundProcessorWrapper } from "@livekit/track-processors";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
+import { shouldAttemptKrispNoiseFilter } from "@/lib/meeting/krisp-availability";
 
 const DEVICE_PREVIEW_KEY = "warptalk.devices.preview";
 const BLUR_RADIUS = 10;
@@ -179,6 +180,21 @@ export function useTrackProcessors({
             enabled: false,
             processor: "browser",
             reason: "Krisp is not supported in this browser",
+          });
+        return;
+      }
+
+      if (!shouldAttemptKrispNoiseFilter()) {
+        // Krisp's browser support check says whether WASM can run; it does not say whether the
+        // connected LiveKit project has Krisp enabled. Local self-hosted LiveKit returns 404 for
+        // that entitlement request, so skip construction entirely and keep the browser fallback.
+        // This also avoids livekit-client's un-awaited onPublish() rejection path.
+        await setBrowserSuppression(captureTrack, true);
+        if (!cancelled)
+          onNoiseSuppressionOutcome?.({
+            enabled: true,
+            processor: "browser",
+            reason: "Krisp is unavailable on the local LiveKit server",
           });
         return;
       }

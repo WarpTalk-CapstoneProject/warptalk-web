@@ -19,9 +19,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   checkVirtualBridge,
-  INBOUND_DEVICE_LABEL,
-  OUTBOUND_DEVICE_LABEL,
+  currentBridgeDeviceLabels,
   type BridgeCheckResult,
+  type BridgeDeviceLabels,
   type DeviceProbe,
 } from "@/lib/audio/virtual-bridge-check";
 
@@ -102,6 +102,19 @@ export function BridgeSetupWizard({
   const [checking, setChecking] = useState(false);
   const [meetConfirmed, setMeetConfirmed] = useState(false);
   const [copied, setCopied] = useState(false);
+  /**
+   * Resolved after mount, not during render.
+   *
+   * The device names depend on the platform, and the platform is read from `navigator`, which the
+   * server does not have. Computing them in render would make the server emit the macOS names and
+   * the client replace them with the Windows ones — a hydration mismatch on the one piece of text
+   * the user is meant to copy exactly. Null until mount, and the instructions wait for it.
+   */
+  const [labels, setLabels] = useState<BridgeDeviceLabels | null>(null);
+
+  useEffect(() => {
+    setLabels(currentBridgeDeviceLabels());
+  }, []);
 
   const check = useCallback(async () => {
     setChecking(true);
@@ -180,15 +193,28 @@ export function BridgeSetupWizard({
         state={!devicesReady ? "todo" : meetConfirmed ? "done" : "active"}
       >
         <p className="mb-3">
-          In your Meet tab, open Settings → Audio and set both:
+          In your Meet tab, open Settings → Audio and set
+          {labels?.meetSpeaker ? " both:" : ":"}
         </p>
         <ul className="mb-3 space-y-1">
           <li>
-            Microphone → <span className="font-medium text-white/85">{OUTBOUND_DEVICE_LABEL}</span>
+            Microphone → <span className="font-medium text-white/85">{labels?.meetMicrophone ?? "…"}</span>
           </li>
-          <li>
-            Speakers → <span className="font-medium text-white/85">{INBOUND_DEVICE_LABEL}</span>
-          </li>
+          {/*
+            Only where a second virtual device carries the far side. On Windows process loopback
+            reads the browser's own output instead, so there is nothing to change here — and
+            pointing Meet's speaker at a virtual device would only make the call inaudible.
+          */}
+          {labels?.meetSpeaker ? (
+            <li>
+              Speakers → <span className="font-medium text-white/85">{labels.meetSpeaker}</span>
+            </li>
+          ) : (
+            <li>
+              Speakers → <span className="font-medium text-white/85">leave as they are</span>, so you
+              can still hear the call. WarpTalk listens to the browser directly.
+            </li>
+          )}
         </ul>
         <p className="mb-3 text-xs text-white/45">
           Keep your own microphone and headphones selected here in WarpTalk. Meet talks to the
