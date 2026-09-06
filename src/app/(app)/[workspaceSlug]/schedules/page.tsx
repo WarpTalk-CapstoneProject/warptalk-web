@@ -23,6 +23,7 @@ import {
   SpinnerGap,
   Translate,
   Users,
+  VideoCamera,
   WarningCircle,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -1210,6 +1211,19 @@ function WeekCard({
           Join
         </Link>
       ) : null}
+
+      {isGoogleMeetMeeting(meeting) ? (
+        <a
+          href={meeting.externalMeetingUrl ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700"
+        >
+          <VideoCamera size={10} />
+          <span className="truncate">Google Meet</span>
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -1433,6 +1447,13 @@ function isAhead(timeState: MeetingTimeState) {
  */
 function hasFinished(meeting: MyMeetingItem) {
   return !["scheduled", "waiting", "in_progress", "paused"].includes(meeting.status);
+}
+
+function isGoogleMeetMeeting(meeting: MyMeetingItem) {
+  return (
+    meeting.externalProvider?.toUpperCase() === "GOOGLE_MEET" &&
+    Boolean(meeting.externalMeetingUrl)
+  );
 }
 
 /**

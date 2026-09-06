@@ -71,6 +71,10 @@ export interface MyMeetingItem {
 
   /** True when the viewer is the host, which is what the row badges instead of an RSVP state. */
   isHost: boolean;
+  externalProvider?: "GOOGLE_MEET" | string | null;
+  externalMeetingUrl?: string | null;
+  externalCalendarEventId?: string | null;
+  externalCalendarEventUrl?: string | null;
 }
 
 export interface MyMeetingsResponse {
