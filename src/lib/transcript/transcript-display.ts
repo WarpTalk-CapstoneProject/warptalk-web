@@ -4,7 +4,7 @@
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
-import type { TranscriptSegmentDto as SavedTranscriptSegmentDto } from "@/types/transcript";
+import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
 type SpeakerParticipant = {
@@ -419,6 +419,81 @@ export function groupSegmentsByTranslationSession<T extends { startTimeMs: numbe
       blocks.push({ sessionNumber: index + 1, session: ordered[index], segments: [segment] });
     }
   }
+  return blocks;
+}
+
+/**
+ * WT-605. Where one [Pause Transcript, Resume Transcript] window falls in MEETING-RELATIVE time
+ * (the same units as `segment.startTimeMs`), so the panel can draw a "Transcript paused ·
+ * HH:MM–HH:MM" divider between the segments on either side of it — the transcript-pause
+ * counterpart to `groupSegmentsByTranslationSession`'s "Translation N" dividers.
+ */
+export type TranscriptPauseGap = {
+  window: TranscriptPauseWindowDto;
+  startMs: number;
+  /** null while the transcript is CURRENTLY paused for this room. */
+  endMs: number | null;
+};
+
+/**
+ * Converts each window's wall-clock StartedAt/EndedAt into meeting-relative ms. Returns []
+ * without a `baseTime` to anchor against — old data, or a room with no timeline anchor yet —
+ * same "nothing to compute a position with" fallback `groupSegmentsByTranslationSession` takes.
+ */
+export function resolveTranscriptPauseGaps(
+  windows: readonly TranscriptPauseWindowDto[],
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  if (Number.isNaN(baseMs) || !windows.length) return [];
+
+  return windows
+    .filter((window) => window.startedAt)
+    .map((window) => ({
+      window,
+      startMs: new Date(window.startedAt).getTime() - baseMs,
+      endMs: window.endedAt ? new Date(window.endedAt).getTime() - baseMs : null,
+    }))
+    .sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
+ * Splits an already-chronological list of segments into blocks around each pause gap. No
+ * segment is ever expected to fall INSIDE a gap — that is the entire point of Pause Transcript,
+ * the segments spoken during it were never persisted — so each gap lands cleanly on the boundary
+ * between the segment before it and the segment after.
+ *
+ * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
+ * translation and pause transcript at different, unrelated moments, so callers run this within
+ * each translation-session block rather than instead of that grouping.
+ */
+export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
+  segments: readonly T[],
+  gaps: readonly TranscriptPauseGap[],
+): Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> {
+  if (!gaps.length) return [{ gapBefore: null, segments: [...segments] }];
+
+  const blocks: Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> = [
+    { gapBefore: null, segments: [] },
+  ];
+  let gapIndex = 0;
+
+  for (const segment of segments) {
+    while (gapIndex < gaps.length && segment.startTimeMs >= gaps[gapIndex].startMs) {
+      blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+      gapIndex += 1;
+    }
+    blocks[blocks.length - 1].segments.push(segment);
+  }
+
+  // A gap with no segment after it — the room is still paused, or nobody has spoken since
+  // resuming — would otherwise vanish here instead of rendering its divider. Trailing blocks
+  // stay empty; the divider itself is drawn from `gapBefore`, not from having lines to hold.
+  while (gapIndex < gaps.length) {
+    blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+    gapIndex += 1;
+  }
+
   return blocks;
 }
 

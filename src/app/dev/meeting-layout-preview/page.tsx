@@ -138,6 +138,9 @@ export default function MeetingLayoutPreview() {
               roomId="preview-paused"
               readerLanguage="en"
               transcriptPause={{ paused: true, since: "2026-09-06T10:05:00Z" }}
+              /* The "Transcript paused · HH:MM–HH:MM" DIVIDERS are not visible here: they are
+                 drawn from the pause-window list the panel fetches itself, and this preview has
+                 no server. The banner above is the part that renders from props. */
             />
           </div>
 
