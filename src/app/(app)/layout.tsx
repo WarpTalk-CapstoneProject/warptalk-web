@@ -31,7 +31,7 @@ import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-pan
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
-import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { useOnboardingStore } from "@/stores/onboarding-store";
@@ -211,12 +211,25 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     [pathname, workspaceTabOptions]
   );
 
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  /**
+   * The routes that get NO portal drawn around them.
+   *
+   * The first four are the ones that run before a workspace is chosen. `/{slug}/activate` is the
+   * fifth and arrives from the other direction — a workspace exists, and has not been paid for.
+   * It belongs in this list for the same reason they do: a sidebar full of destinations that all
+   * redirect back to the page you are on is not navigation, it is the product with its doors
+   * locked, which was the exact complaint about the screen this route replaced.
+   *
+   * `isAdminRoute` is subtracted because the activation matcher is `/{anything}/activate` — it
+   * cannot tell a workspace slug from a top-level route on its own.
+   */
   const isOnboardingRoute =
     pathname === "/workspace" ||
     pathname === "/workspace/plans" ||
     pathname === "/workspace/create" ||
-    pathname === "/workspace/join";
-  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+    pathname === "/workspace/join" ||
+    (!isAdminRoute && isWorkspaceActivationPath(pathname));
   const isSystemAdmin = useIsSystemAdmin();
   // Decides more than the header divider: it is also what tells the meeting dock to stop
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
