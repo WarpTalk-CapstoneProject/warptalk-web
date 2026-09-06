@@ -13,6 +13,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button } from "@/components/ui/button";
@@ -67,7 +68,7 @@ function ConnectionNotice({
         type="button"
         size="sm"
         variant="outline"
-        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+        onClick={() => openProviderConsent(url)}
       >
         Open browser
       </Button>
@@ -277,8 +278,14 @@ export default function PluginsPage() {
 
   async function handlePrimaryAction(plugin: PluginDisplayTile) {
     if (plugin.installationStatus !== "installed") {
-      await installPlugin.mutateAsync({ pluginKey: plugin.key });
-      toast.success(`${plugin.label} installed`);
+      try {
+        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        toast.success(`${plugin.label} installed`);
+      } catch {
+        // Without this the button simply does nothing on a 500: the label never changes, no
+        // toast appears, and the only trace is an unhandled rejection in the console.
+        toast.error(`Could not install ${plugin.label}.`);
+      }
       return;
     }
 
@@ -286,26 +293,40 @@ export default function PluginsPage() {
   }
 
   async function continueToProvider(plugin: PluginDisplayTile) {
-    const result = await connectUrl.mutateAsync({ pluginKey: plugin.key });
-    setBrowserConnect({ plugin, url: result.url });
-    window.open(result.url, "_blank", "noopener,noreferrer");
+    try {
+      const result = await connectUrl.mutateAsync({ pluginKey: plugin.key });
+      setBrowserConnect({ plugin, url: result.url });
+      openProviderConsent(result.url);
+    } catch {
+      toast.error(`Could not start the ${plugin.label} connection.`);
+    }
   }
 
   async function disconnectSelected(plugin: PluginDisplayTile) {
-    await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
-    toast.success(`${plugin.label} disconnected`);
-    setSelectedPlugin(null);
+    try {
+      await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
+      toast.success(`${plugin.label} disconnected`);
+      setSelectedPlugin(null);
+    } catch {
+      toast.error(`Could not disconnect ${plugin.label}.`);
+    }
   }
 
   async function removeSelected(plugin: PluginDisplayTile) {
     // Disabling the installation leaves the stored provider tokens behind, which is
     // not what "Remove" reads like to the person clicking it.
-    if (plugin.connectionStatus === "connected") {
-      await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
+    try {
+      if (plugin.connectionStatus === "connected") {
+        await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
+      }
+      await disablePlugin.mutateAsync({ pluginKey: plugin.key });
+      toast.success(`${plugin.label} removed`);
+      setSelectedPlugin(null);
+    } catch {
+      // Two calls, and the first can land while the second throws - which leaves the plugin
+      // disconnected but still installed. Saying so beats a silent half-removal.
+      toast.error(`Could not finish removing ${plugin.label}.`);
     }
-    await disablePlugin.mutateAsync({ pluginKey: plugin.key });
-    toast.success(`${plugin.label} removed`);
-    setSelectedPlugin(null);
   }
 
   return (

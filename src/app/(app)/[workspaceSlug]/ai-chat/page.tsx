@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import type * as signalR from "@microsoft/signalr";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
@@ -29,18 +28,27 @@ export default function AiChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
-  const hubConnectionRef = useRef<signalR.HubConnection | null>(null);
 
   const conversations = conversationsQuery.data ?? [];
   const selectedId = activeId ?? conversations[0]?.id ?? null;
   const conversationQuery = useAssistantConversation(selectedId);
   const messages = conversationQuery.data?.messages ?? [];
 
+  // Through refs, not through the dependency array. A TanStack query result is a fresh
+  // tracked proxy on every render, so depending on the query objects made this effect tear
+  // down the hub and build a new one every single render - and an AssistantQuestion landing
+  // during one of those gaps was simply lost, which is the confirmation card never appearing.
+  const refetchConversationRef = useRef(conversationQuery.refetch);
+  const refetchConversationsRef = useRef(conversationsQuery.refetch);
+  useEffect(() => {
+    refetchConversationRef.current = conversationQuery.refetch;
+    refetchConversationsRef.current = conversationsQuery.refetch;
+  }, [conversationQuery.refetch, conversationsQuery.refetch]);
+
   useEffect(() => {
     if (!selectedId) return;
 
     const connection = createHubConnection("/api/v1/assistant/chat-hub");
-    hubConnectionRef.current = connection;
 
     connection.on(
       "AssistantQuestion",
@@ -50,14 +58,13 @@ export default function AiChatPage() {
         if (questions.length) setPendingQuestions(questions);
       },
     );
-    connection.on("AssistantMessageCompleted", () => {
-      void conversationQuery.refetch();
-      void conversationsQuery.refetch();
-    });
-    connection.on("AssistantMessageFailed", () => {
-      void conversationQuery.refetch();
-      void conversationsQuery.refetch();
-    });
+    const refetchBoth = (payload?: { conversationId?: string }) => {
+      if (payload?.conversationId && payload.conversationId !== selectedId) return;
+      void refetchConversationRef.current();
+      void refetchConversationsRef.current();
+    };
+    connection.on("AssistantMessageCompleted", refetchBoth);
+    connection.on("AssistantMessageFailed", refetchBoth);
 
     connection
       .start()
@@ -68,9 +75,8 @@ export default function AiChatPage() {
 
     return () => {
       void connection.stop();
-      hubConnectionRef.current = null;
     };
-  }, [selectedId, conversationQuery, conversationsQuery]);
+  }, [selectedId]);
 
   async function handleCreateConversation() {
     if (!workspaceId || createConversation.isPending) return;

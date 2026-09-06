@@ -39,6 +39,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -683,7 +684,11 @@ export function ChatPanel({
     try {
       setSendError(null);
       const result = await connectPlugin.mutateAsync({ pluginKey });
-      window.open(result.url, "_blank", "noopener,noreferrer");
+      if (!openProviderConsent(result.url)) {
+        // Blocked popup, most likely: the user gesture is gone by the time the mutation
+        // resolves. Saying nothing leaves them waiting on a window that never opened.
+        setSendError("Your browser blocked the consent window. Allow pop-ups and try again.");
+      }
     } catch {
       setSendError("Could not open the plugin connection flow. Try again.");
     }

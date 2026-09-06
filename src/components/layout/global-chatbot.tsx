@@ -97,6 +97,7 @@ import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { toast } from "sonner";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
 import { toDisplayTiles } from "@/lib/assistant/plugin-tiles";
@@ -385,6 +386,15 @@ export function GlobalChatbot() {
     useState<PluginConnectionAction | null>(null);
   const [pendingPluginSetup, setPendingPluginSetup] =
     useState<PluginOperatorSetupAction | null>(null);
+  // Both plugin cards are turn-scoped. Nothing but a click used to clear them, so a Connect
+  // card outlived the turn that raised it: still there under a successful answer, still there
+  // after New chat - where pressing Connect opened an OAuth flow the current turn never asked
+  // for - and two of them could stack up, one per error code. The meeting panel already gets
+  // this right by clearing in beginAssistantTurn; this is the same rule.
+  const clearPluginCards = useCallback(() => {
+    setPendingPluginConnection(null);
+    setPendingPluginSetup(null);
+  }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
    * A question handed over from somewhere else on the page — today, the "Research this term"
@@ -448,8 +458,17 @@ export function GlobalChatbot() {
 
       if (plugin.connectionStatus !== "connected") {
         const result = await connectPlugin.mutateAsync({ pluginKey: plugin.key });
-        window.open(result.url, "_blank", "noopener,noreferrer");
-        toast.message(`Finish connecting ${plugin.label} in your browser.`);
+        if (openProviderConsent(result.url)) {
+          toast.message(`Finish connecting ${plugin.label} in your browser.`);
+        } else {
+          // The toast action is a real click, so the open it makes is not blocked.
+          toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
+            action: {
+              label: "Open it",
+              onClick: () => openProviderConsent(result.url),
+            },
+          });
+        }
         return;
       }
 
@@ -462,8 +481,16 @@ export function GlobalChatbot() {
   const handlePluginConnectionAction = async (pluginKey: string) => {
     try {
       const result = await connectPlugin.mutateAsync({ pluginKey });
-      window.open(result.url, "_blank", "noopener,noreferrer");
-      toast.message("Finish connecting this plugin in your browser.");
+      if (openProviderConsent(result.url)) {
+        toast.message("Finish connecting this plugin in your browser.");
+      } else {
+        toast.error("Your browser blocked the consent window.", {
+          action: {
+            label: "Open it",
+            onClick: () => openProviderConsent(result.url),
+          },
+        });
+      }
       void refetchAssistantPlugins();
     } catch {
       toast.error("Could not open the plugin connection flow.");
@@ -516,6 +543,7 @@ export function GlobalChatbot() {
     setSteps([]);
     setIsSlow(false);
     setIsMinimized(false);
+    clearPluginCards();
     shouldAutoScrollRef.current = true;
   };
 
@@ -548,6 +576,7 @@ export function GlobalChatbot() {
       setSelectedContexts([]);
       setIsMinimized(false);
       setHistoryMenuOpen(false);
+      clearPluginCards();
       shouldAutoScrollRef.current = true;
       setIsOpen(true);
     } catch {
@@ -790,12 +819,19 @@ export function GlobalChatbot() {
         const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
         // A malformed payload leaves the card absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
-        if (questions.length) setPendingQuestions(questions);
-        if (pluginConnection) setPendingPluginConnection(pluginConnection);
-        // Mutually exclusive with the connect card by construction: the worker emits one or the
-        // other, never both, because "press Connect" and "no button will help" cannot both be true.
         const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
-        if (pluginSetup) setPendingPluginSetup(pluginSetup);
+        if (questions.length) setPendingQuestions(questions);
+        // Enforced here rather than assumed of the worker. "Press Connect" and "no button
+        // will help" cannot both be true, but they are two independent keys on one payload,
+        // and two unconditional setters rendered both cards the moment anything emitted both.
+        // Setup wins: it is the one saying the registration ladder is already exhausted.
+        if (pluginSetup) {
+          setPendingPluginSetup(pluginSetup);
+          setPendingPluginConnection(null);
+        } else if (pluginConnection) {
+          setPendingPluginConnection(pluginConnection);
+          setPendingPluginSetup(null);
+        }
         armResponseTimeout();
       },
     );
@@ -828,6 +864,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
+        clearPluginCards();
 
         // Folded onto the answer, not deleted.
         //
@@ -865,6 +902,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
+        clearPluginCards();
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
         const failedSteps = steps.map((step) => ({ ...step, done: true }));
         const failedStartedAt = turnStartedAtRef.current;
@@ -1269,6 +1307,7 @@ export function GlobalChatbot() {
       { id: `local-${Date.now()}`, role: "user", content },
     ]);
     setIsAiTyping(true);
+    clearPluginCards();
     shouldAutoScrollRef.current = true;
     armResponseTimeout();
 
