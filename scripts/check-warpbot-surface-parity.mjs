@@ -185,6 +185,60 @@ assert.match(
   "A finished tool call must FILL a missing target rather than overwrite one already reported for the same call.",
 );
 
+// ── WarpBot asking rather than guessing ─────────────────────────────────────
+//
+// This is the gap that got past the file you are reading. WT-565 gave both surfaces the same
+// clarifying-question step and the widget rendered it from the start; the meeting chat received
+// the same event and did nothing, so in a meeting WarpBot asked and appeared to stall. It stayed
+// that way until the cross-repo realtime contract reported the event as unhandled — on an
+// unrelated PR, days later. The check meant to catch exactly this drift looked at markdown,
+// chips, colour, trail and streaming, and not at the one thing the user is asked to ACT on.
+//
+// Both events, because they are named differently on the two hubs.
+assert.match(
+  widget,
+  /"AssistantQuestion"/,
+  "The widget must subscribe to WarpBot's questions.",
+);
+assert.match(
+  session,
+  /"ChatAssistantQuestion"/,
+  "The meeting session must subscribe to WarpBot's questions.",
+);
+
+for (const [surface, source] of [
+  ["the widget", widget],
+  ["the in-meeting chat", chatPanel],
+]) {
+  assert.match(
+    source,
+    // Anchored on what must FOLLOW the name: a bare prefix match is satisfied by
+    // <AssistantQuestionCardAnything, which is not this component.
+    /<AssistantQuestionCard[\s/>]/,
+    `${surface} must render the question card. Receiving the questions and not showing them is the same silence as not binding the event.`,
+  );
+}
+
+// The answer has to reach the agent that asked. The meeting chat is a SHARED room, and the
+// backend decides a message is for the agent from the `mentions` array — `asksTheAgent` is
+// `mentions.some(m => m.type === "agent")` — never from the text. An answer sent without it is
+// delivered to the humans in the room while the assistant that asked hears nothing, which is
+// indistinguishable from WarpBot ignoring the reply it requested.
+assert.match(
+  chatPanel,
+  /overrideContent[\s\S]{0,400}?type: "agent"/,
+  "A message sent without the composer — the question card's answer — must carry the agent mention that routes it to WarpBot.",
+);
+
+// Through the ordinary send, not around it. WT-580 holds a second ask while WarpBot is busy, and
+// an answer dropped on a busy assistant is the failure that ticket exists to prevent; a private
+// send path beside `sendMessage` would skip the queue and the length check with it.
+assert.match(
+  chatPanel,
+  /onSubmit=\{\([\s\S]{0,300}?sendMessage\(/,
+  "Answering must go through sendMessage, so it inherits decideAgentSend and the length limit.",
+);
+
 console.log(
-  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming)",
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, questions)",
 );

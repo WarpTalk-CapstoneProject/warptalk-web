@@ -16,6 +16,10 @@ import { AnswerSources } from "@/components/assistant/answer-sources";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+} from "@/components/layout/assistant-question-card";
+import {
   REASONING_STEP,
   THINKING_STEP,
   WRITING_STEP,
@@ -26,6 +30,30 @@ import {
   LumidotSpinner,
   LumidotSpinnerPlaceholder,
 } from "@/components/ui/lumidot-spinner";
+
+/**
+ * WarpBot asking rather than guessing — the shape the worker sends on the wire.
+ *
+ * Raw JSON, not a parsed object, so this exercises the same defensive parser the real panels use.
+ */
+const QUESTIONS_JSON = JSON.stringify({
+  questions: [
+    {
+      header: "Meeting type",
+      question: "What kind of meeting should I create?",
+      options: [
+        { label: "Standard", description: "Anyone with the link can join." },
+        { label: "Private", description: "Invited participants only." },
+      ],
+    },
+    {
+      header: "Languages",
+      question: "Which languages should it translate between?",
+      multi_select: true,
+      options: [{ label: "Vietnamese" }, { label: "English" }, { label: "Japanese" }],
+    },
+  ],
+});
 
 /** The turn from the production report: asked what C# is, workspace had nothing, web answered. */
 const TRAIL: AssistantStep[] = [
@@ -112,6 +140,30 @@ export default function WarpBotParityPreviewPage() {
                 <AnswerSources sources={SOURCES} />
                 <AssistantWorkTrail steps={TRAIL} running={false} durationMs={7400} />
               </div>
+            </div>
+          </Column>
+        </div>
+
+        {/* The clarifying question, on both surfaces.
+            Added after the meeting chat spent days receiving this event and rendering nothing
+            while the widget rendered it perfectly — the drift this page exists to make visible,
+            in the one place the page did not yet look. */}
+        <div className="flex flex-col gap-6 md:flex-row">
+          <Column title="Global widget · asking" note="last in the thread, not on a bubble">
+            <div className="pl-4">
+              <AssistantQuestionCard
+                questions={parseAssistantQuestions(QUESTIONS_JSON)}
+                onSubmit={() => {}}
+              />
+            </div>
+          </Column>
+
+          <Column title="In-meeting chat · asking" note="everyone in the room can answer">
+            <div className="px-1">
+              <AssistantQuestionCard
+                questions={parseAssistantQuestions(QUESTIONS_JSON)}
+                onSubmit={() => {}}
+              />
             </div>
           </Column>
         </div>
