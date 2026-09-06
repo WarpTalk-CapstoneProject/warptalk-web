@@ -15,6 +15,12 @@ This document tracks project-wide code quality checks that affect local developm
   - manual memoization preservation
   - unescaped JSX entities
 - Unused ESLint disable comments are reported as warnings.
+- `npm run test:contracts` runs the existing contract suite and automatically invokes the plugin contract checks through `pretest:contracts`:
+  - marketplace surface
+  - confirmation surfaces
+  - connection action
+  - card lifecycle
+  - plugin mention behavior
 
 ## Files Affected
 
@@ -29,3 +35,4 @@ This document tracks project-wide code quality checks that affect local developm
 
 - Run `npm run lint`.
 - Run `npx tsc --noEmit` before Docker builds when TypeScript behavior changed.
+- Run `npm run test:contracts` after merging feature branches that add contract scripts.

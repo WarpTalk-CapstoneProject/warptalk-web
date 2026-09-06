@@ -51,6 +51,7 @@ import {
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
+  PlugsConnected,
   SignOut,
   Plus,
   Sliders,
@@ -573,6 +574,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           ? `/${activeWorkspaceSlug}/settings/account/profile`
           : "/workspace",
       },
+      {
+        icon: PlugsConnected,
+        label: "Plugins",
+        href: "/settings/plugins",
+      },
     ];
 
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
@@ -707,6 +713,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                   Profile
+                </span>
+              </Link>
+            </div>
+
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === "/settings/plugins" ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Plugins
                 </span>
               </Link>
             </div>
