@@ -13,6 +13,7 @@ import {
   NO_SUBSCRIPTION_CODE,
   decidePaywall,
   isPaywallExemptPath,
+  paywallRedirectPath,
 } from "../workspace-paywall.ts";
 import type { SubscriptionDto } from "../../../types/billing.ts";
 
@@ -107,18 +108,33 @@ test("nothing is decided while the answer is still in flight", () => {
 
 // ── Must not cover the page that unlocks it ──────────────────────────────────
 
-test("billing and settings stay reachable on an unpaid workspace", () => {
-  for (const pathname of [
-    `/${SLUG}/settings/billing`,
-    `/${SLUG}/settings/billing/invoices`,
-    `/${SLUG}/settings`,
-    `/${SLUG}/payment/plans`,
-  ]) {
+test("the checkout stays reachable on an unpaid workspace", () => {
+  // The one page that must never be covered, because it is the page that uncovers everything
+  // else. It is also where paywallRedirectPath sends the buyer, so if this ever stopped being
+  // exempt the redirect would target a blocked route and loop.
+  for (const pathname of [`/${SLUG}/payment/plans`, `/${SLUG}/payment`]) {
     assert.deepEqual(
       decidePaywall({ ...base, pathname, subscription: null }),
       { kind: "open" },
       `${pathname} must stay open, or the workspace can never be paid for`,
     );
+  }
+});
+
+test("the redirect target is itself exempt, so the hold cannot loop", () => {
+  assert.equal(isPaywallExemptPath(paywallRedirectPath(SLUG), SLUG), true);
+});
+
+test("settings is gated too — WT-570 holds the buyer on the payment page", () => {
+  // Deliberately reversed from WT-515, where settings was exempt so the "Choose a plan" button
+  // had somewhere to go. The buyer is now put ON the checkout instead of being handed a link to
+  // it, so an open Settings would just be somewhere to wander unpaid.
+  for (const pathname of [
+    `/${SLUG}/settings`,
+    `/${SLUG}/settings/billing`,
+    `/${SLUG}/settings/account/profile`,
+  ]) {
+    assert.equal(isPaywallExemptPath(pathname, SLUG), false, `${pathname} must be gated`);
   }
 });
 

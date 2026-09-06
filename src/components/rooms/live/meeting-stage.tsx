@@ -31,6 +31,7 @@ import { HandRaiseBadge } from "./hand-raise-badge";
 import { useMeetingIdentities } from "./meeting-identity-context";
 import { ParticipantAvatar, ParticipantLanguageBadge } from "./participant-avatar";
 import type { MeetingLayoutMode } from "./meeting-control-bar";
+import { MicStatusIcon } from "./mic-status-icon";
 import { NetworkQualityIcon } from "./network-quality-icon";
 
 /**
@@ -339,6 +340,14 @@ export function LiveKitMeetingStage({
               )}
             </span>
           ) : null}
+          {/* WT-583. Beside the signal bars rather than somewhere of its own: both answer
+              "can I hear this person right now", and the cluster is already the place the tile
+              puts that kind of standing fact. Always rendered, not muted-only — the ticket asks
+              for a Mic/Unmute STATE, and an icon that vanishes when live cannot be told apart
+              from an icon that failed to render. */}
+          <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 shadow-sm backdrop-blur">
+            <MicStatusIcon participantIdentity={identity} />
+          </span>
           <span className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 shadow-sm backdrop-blur">
             <NetworkQualityIcon participantIdentity={identity} />
           </span>

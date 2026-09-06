@@ -198,14 +198,27 @@ assert.doesNotMatch(
 // Only an explicit choice is sent. Echoing the resolved default back would pin the value into the
 // room's settings blob and defeat the server-side resolution this mirrors.
 //
-// WT-371 added a second setting to the same payload, so this pins the RULE rather than the one
-// expression that used to express it: `settings` stays undefined until the host has actually
-// chosen something, and each key is included only when they chose that key. Matching the literal
-// ternary meant the contract failed the moment a second setting was added correctly.
+// WT-371 added a second setting to the same payload and WT-587 a third, so this pins the RULE
+// rather than the expression that happens to express it: `settings` stays undefined until the host
+// has actually chosen something, and each key is included only when they chose that key.
+//
+// The regex used to spell out the guard verbatim, with a comment saying it pinned the rule and not
+// the literal. It did not — it broke on the very next correctly-added setting, which is the second
+// time this exact assertion has had to be rewritten for a change it was supposed to allow. It now
+// matches any guard that ends in `? undefined`, and the per-key assertions below carry the real
+// weight: a key that leaked into the payload unconditionally would fail one of those.
 assert.match(
   createRoomDialog,
-  /settings:\s*\n?\s*requiresApproval === null && !participantsCanStartTranslation\s*\n?\s*\?\s*undefined/,
+  /settings:\s*\n?\s*[^;]*?\?\s*\n?\s*undefined/,
   "The create dialog must send settings only when the host made an explicit choice.",
+);
+// WT-587: and the retention flag travels only in the direction that removes something. `true` is
+// the server's own default; sending it back would pin it against any later change, and — far
+// worse — a bug that sent `false` by default would silently stop recording every new meeting.
+assert.match(
+  createRoomDialog,
+  /\.\.\.\(saveTranscript \? \{\} : \{ saveTranscript: false \}\)/,
+  "saveTranscript must be sent only when the host turned it OFF, never echoed back as true.",
 );
 assert.match(
   createRoomDialog,

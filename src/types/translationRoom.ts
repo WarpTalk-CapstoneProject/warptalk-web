@@ -49,6 +49,16 @@ export interface TranslationRoomDto {
     artifactAccess?: string;
     /** WT-371: whether anyone in the room may start translation, or only the host. */
     participantsCanStartTranslation?: boolean;
+    /**
+     * WT-587: whether this meeting leaves a written record at all.
+     *
+     * `false` is an EPHEMERAL meeting — captions and live translation run exactly as normal and
+     * nothing is written to the transcript, so there is also no summary, no minutes and no
+     * knowledge-base entry afterwards. Absent reads as TRUE: every room created before this
+     * setting existed keeps its transcript, and a client that cannot see the field must never
+     * render a recorded meeting as an unrecorded one.
+     */
+    saveTranscript?: boolean;
   };
   participantCount?: number;
   /**
@@ -56,6 +66,10 @@ export interface TranslationRoomDto {
    * for every finished meeting, so a room that ended showed "0/100" however many attended.
    */
   attendedCount?: number;
+  externalProvider?: "GOOGLE_MEET" | string | null;
+  externalMeetingUrl?: string | null;
+  externalCalendarEventId?: string | null;
+  externalCalendarEventUrl?: string | null;
   isHost?: boolean;
   /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
@@ -92,7 +106,30 @@ export interface TranslationRoomParticipantDto {
   role: "host" | "participant" | "interpreter" | "HOST" | "PARTICIPANT" | "INTERPRETER";
   listenLanguage: string;
   speakLanguage: string;
-  status: "invited" | "waiting" | "joined" | "connected" | "disconnected" | "left" | "removed" | "kicked" | "rejected";
+  /**
+   * The backend `participant_status` enum, lowercased — plus one client-side alias.
+   *
+   * Backend emits exactly INVITED · WAITING · CONNECTED · DISCONNECTED · LEFT · KICKED · REJECTED.
+   * `"joined"` used to be listed here and is gone: the branch that produced JOINED was dead code
+   * on the backend and has been removed, so `status === "joined"` was a comparison that type-checked
+   * and could never once be true. That is the worst shape a union can have — it does not fail, it
+   * silently never matches.
+   *
+   * `"removed"` is NOT a backend value. It survives here only because
+   * `normalizeParticipantStatus` (services/translation-room.service.ts) rewrites KICKED to it
+   * before any reader sees this DTO, so it is what actually arrives on the client. Anything asking
+   * "was this person kicked?" must accept BOTH spellings — see `room-occupancy`, which maps
+   * `kicked` and `removed` to the same presence.
+   */
+  status:
+    | "invited"
+    | "waiting"
+    | "connected"
+    | "disconnected"
+    | "left"
+    | "kicked"
+    | "removed"
+    | "rejected";
   isTranslationAudioEnabled?: boolean;
   isUsingVoiceClone?: boolean;
   avatarUrl?: string;
@@ -123,6 +160,8 @@ export interface CreateTranslationRoomRequest {
     autoRecord?: boolean;
     breakoutsEnabled?: boolean;
     participantsCanStartTranslation?: boolean;
+    /** WT-587: send `false` for a meeting that is not to be written down. Omit to keep it. */
+    saveTranscript?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];
@@ -132,6 +171,10 @@ export interface CreateTranslationRoomRequest {
    * `scheduledAt` is refused rather than silently resolved in favour of one of them.
    */
   recurrence?: RecurrenceRequest;
+  externalProvider?: "GOOGLE_MEET" | string;
+  externalMeetingUrl?: string;
+  externalCalendarEventId?: string;
+  externalCalendarEventUrl?: string;
 }
 
 /**

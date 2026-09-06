@@ -226,18 +226,32 @@ export default function WorkspaceGlossaryPage() {
   /**
    * WT-472. Reports BOTH numbers, because the server skips terms already present and only one of
    * "imported 40" and "imported 40, skipped 60" is true of the same file.
+   *
+   * WT-601 — and it says WHICH rows were skipped. The server has always sent one message per
+   * rejected row and this threw the list away, so "skipped 12" was a number with nothing to act
+   * on: no way to tell a re-import of terms already here from a spreadsheet that names a word
+   * twice. Three are shown because a toast is not a report and the rest are still in the file.
    */
   async function importTerms(rows: ParsedGlossaryRow[]) {
     if (!selected) return;
     try {
       const result = await bulkImport.mutateAsync(rows);
-      if (result.skipped > 0) {
-        toast.success(
-          `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already in this glossary.`,
-        );
-      } else {
-        toast.success(`Imported ${result.imported} term${result.imported === 1 ? "" : "s"}.`);
-      }
+      const summary =
+        result.skipped > 0
+          ? `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already in this glossary.`
+          : `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}.`;
+
+      toast.success(summary, {
+        description:
+          result.errors.length > 0
+            ? [
+                ...result.errors.slice(0, 3),
+                result.errors.length > 3 ? `…and ${result.errors.length - 3} more.` : null,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            : undefined,
+      });
       setImportDialogOpen(false);
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not import the file."));

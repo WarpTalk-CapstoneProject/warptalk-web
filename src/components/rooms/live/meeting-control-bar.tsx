@@ -1,12 +1,12 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
 import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
+import { getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   applySingleLanguageChoice,
   describeLanguageChoice,
@@ -100,6 +100,7 @@ export function MeetingControlBar({
   availableListenLanguages,
   speakLanguage,
   availableSpeakLanguages,
+  allowedTargetLanguages,
   voicePreference,
   voiceCatalog,
   voiceCloneEnabled,
@@ -118,6 +119,8 @@ export function MeetingControlBar({
   muteOnEntry,
   isRecording,
   recordingPending,
+  transcriptPaused,
+  transcriptPausePending,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
@@ -141,6 +144,7 @@ export function MeetingControlBar({
   onToggleMuteOnEntry,
   onMuteAll,
   onToggleRecording,
+  onToggleTranscriptPause,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -172,6 +176,13 @@ export function MeetingControlBar({
   speakLanguage?: string;
   /** Languages selectable in the speak-language dropdown — omit or pass a single-item list to hide it. */
   availableSpeakLanguages?: string[];
+  /**
+   * The workspace's Allowed Target Translation Languages. WT-497 — the room's own list is
+   * already narrowed by this upstream; the bar needs the policy itself so the "Other
+   * languages" disclosure cannot re-offer what that narrowing removed. Empty/absent means
+   * unrestricted.
+   */
+  allowedTargetLanguages?: string[] | null;
   /** A real Cartesia voice id this listener explicitly chose, or null/undefined for the automatic default. */
   voicePreference?: string | null;
   /** Voices offered for the CURRENT listenLanguage — empty/omit hides the picker. */
@@ -229,6 +240,16 @@ export function MeetingControlBar({
   isRecording?: boolean;
   /** True while the start/stop Egress request is awaiting confirmation. */
   recordingPending?: boolean;
+  /**
+   * WT-605: whether the transcript is currently NOT being written down.
+   *
+   * A different switch from Stop Translation. While this is on, people still hear each other in
+   * their own language — translation, dubbing and subtitles all keep running — and only the
+   * written record stops growing. Nothing here may present it as the meeting being paused.
+   */
+  transcriptPaused?: boolean;
+  /** True while the pause/resume request is awaiting confirmation. */
+  transcriptPausePending?: boolean;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -272,6 +293,14 @@ export function MeetingControlBar({
   /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
    * is told by toast either way. Omit to hide the record button. */
   onToggleRecording?: () => void;
+  /**
+   * WT-605, host-only: stops/resumes writing the transcript down.
+   *
+   * Omit to hide the control — the endpoint gates on the room's HostId, so anyone else pressing
+   * it gets a 403. The STATE is still shown to everybody, in the transcript panel; it is only the
+   * switch that is the host's.
+   */
+  onToggleTranscriptPause?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
@@ -410,6 +439,7 @@ export function MeetingControlBar({
             // offered on either side has to be offerable at all — dropping to one list would
             // silently remove options the moment they ever diverge.
             languageOptions={mergeLanguageOptions(availableSpeakLanguages, availableListenLanguages)}
+            allowedTargetLanguages={allowedTargetLanguages}
             onChangeSpeakLanguage={onChangeSpeakLanguage}
             onLanguagePicked={onLanguagePicked}
             onChangeListenLanguage={onChangeListenLanguage}
@@ -510,6 +540,35 @@ export function MeetingControlBar({
             />
           }
           onClick={onToggleRecording}
+        />
+      ) : null}
+
+      {/* WT-605. Sits beside Record because both are about what the meeting leaves behind, and
+          they are genuinely independent: a room can be recorded with the transcript paused, or
+          transcribed with no recording.
+
+          Host-only by omission, unlike Record directly above — TranscriptRecordingService gates
+          on IsRoomHostAsync. Every participant is still TOLD, by the notice in the transcript
+          panel and the toast the broadcast raises; it is the switch that is restricted, not the
+          fact. */}
+      {onToggleTranscriptPause ? (
+        <MeetControl
+          label={
+            transcriptPausePending
+              ? "Transcript request in progress"
+              : transcriptPaused
+                ? "Resume transcript"
+                : "Pause transcript"
+          }
+          active={transcriptPaused}
+          disabled={transcriptPausePending}
+          icon={
+            <PauseCircle
+              className={`h-[18px] w-[18px] ${transcriptPausePending ? "animate-pulse" : ""}`}
+              weight={transcriptPaused ? "fill" : "regular"}
+            />
+          }
+          onClick={onToggleTranscriptPause}
         />
       ) : null}
 
@@ -1267,10 +1326,30 @@ function mergeLanguageOptions(
   return merged;
 }
 
-/** Every meeting language this product knows, minus the ones the room already offers. */
-function languagesNotAlreadyOffered(offered: string[] | undefined) {
+/**
+ * The meeting languages the WORKSPACE permits, minus the ones the room already offers.
+ *
+ * WT-497 — this used to be "every meeting language this product knows", and that is the whole
+ * defect. The room's own list was already narrowed by the workspace policy upstream (see
+ * `availableListenLanguages` in persistent-meeting-session), so the main section of the menu
+ * obeyed the Owner's setting — and then this disclosure re-offered everything it had just
+ * excluded. A workspace permitting vi/en/ko still showed French, Japanese and Spanish under
+ * "Other languages", and picking one was accepted.
+ *
+ * `isLanguageAllowedByPolicy` is what keeps an EMPTY policy meaning "unrestricted" rather than
+ * "permit nothing" — the same rule the server's whitelist check uses. An absent or still-loading
+ * settings response must therefore leave this list at its full width rather than emptying it.
+ */
+function languagesNotAlreadyOffered(
+  offered: string[] | undefined,
+  allowedTargetLanguages?: string[] | null,
+) {
   const already = new Set((offered ?? []).map(normalizeLanguageCode));
-  return languagesInScope("meeting").filter((language) => !already.has(language.code));
+  return languagesInScope("meeting").filter(
+    (language) =>
+      !already.has(language.code) &&
+      isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  );
 }
 
 // AddLanguageRow and LanguageOption lived here to serve the settings menu's four language
@@ -1449,6 +1528,7 @@ function LanguagePairPicker({
   speakLanguage,
   listenLanguage,
   languageOptions,
+  allowedTargetLanguages,
   onChangeSpeakLanguage,
   onChangeListenLanguage,
   onLanguagePicked,
@@ -1462,6 +1542,11 @@ function LanguagePairPicker({
    * lists, so taking two would just be a way for them to disagree later.
    */
   languageOptions: string[];
+  /**
+   * The workspace's Allowed Target Translation Languages — the ceiling on the "Other languages"
+   * disclosure below. WT-497. Empty or absent means unrestricted, never "none".
+   */
+  allowedTargetLanguages?: string[] | null;
   /**
    * Still two callbacks, because the wire format is still two fields. Every pick writes both:
    * see the onSelect below.
@@ -1492,9 +1577,11 @@ function LanguagePairPicker({
   // advertise a state the control can no longer produce.
   const shownLanguage = choice.speak || choice.hear;
 
-  // Every meeting language the room does NOT offer, as plain codes so the list below can treat
-  // both halves the same way.
-  const otherLanguages = languagesNotAlreadyOffered(languageOptions).map((language) => language.code);
+  // Every meeting language the room does NOT offer but the workspace still permits, as plain codes
+  // so the list below can treat both halves the same way.
+  const otherLanguages = languagesNotAlreadyOffered(languageOptions, allowedTargetLanguages).map(
+    (language) => language.code,
+  );
 
   // Somebody whose current language is not on the room's list is already off-menu — collapsing
   // the section that contains their own selection would hide the state they are in.

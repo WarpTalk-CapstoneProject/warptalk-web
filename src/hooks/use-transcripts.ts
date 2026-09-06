@@ -8,6 +8,7 @@ import type {
   CreateTranscriptExportRequest,
   CreateTranscriptRequest,
   PagedResult,
+  TranscriptPauseWindowDto,
 } from "@/types/transcript";
 
 const TRANSCRIPT_KEY = ["transcripts"] as const;
@@ -287,6 +288,59 @@ export function useFinalizeTranscript() {
     },
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: [...TRANSCRIPT_KEY, id] });
+    },
+  });
+}
+
+/** The query every pause read and write shares, so an invalidation cannot miss one of them. */
+export function transcriptPauseWindowsKey(translationRoomId?: string) {
+  return [...TRANSCRIPT_KEY, "pause-windows", translationRoomId] as const;
+}
+
+/**
+ * Every pause this room has had. WT-605.
+ *
+ * Fetched once on mount rather than polled: the live changes arrive as TranscriptPaused /
+ * TranscriptResumed broadcasts, and this exists for the person those broadcasts already missed —
+ * somebody who joined while the transcript was already paused.
+ *
+ * `retry: false` — a room whose transcript has never started 404s, and that is an answer, not a
+ * fault worth three round trips.
+ */
+export function useTranscriptPauseWindows(translationRoomId?: string, enabled = true) {
+  return useQuery<TranscriptPauseWindowDto[]>({
+    queryKey: transcriptPauseWindowsKey(translationRoomId),
+    queryFn: async () => {
+      const { data } = await transcriptService.pauseWindows(translationRoomId!);
+      return data;
+    },
+    enabled: Boolean(translationRoomId) && enabled,
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Pause or resume the writing-down of the transcript. Host-only, server-enforced.
+ *
+ * Deliberately does NOT set any local state itself. The room learns the new state from the
+ * broadcast the server publishes after it commits, and the caller reads that one source — an
+ * optimistic flip here would put the host's screen and everybody else's on different clocks, and
+ * would survive a 409 that says the state was never what we assumed.
+ */
+export function useSetTranscriptPaused(translationRoomId?: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (paused: boolean) =>
+      paused
+        ? transcriptService.pauseByRoom(translationRoomId!)
+        : transcriptService.resumeByRoom(translationRoomId!),
+    onSettled: () => {
+      // Settled, not success: a 409 means the server's state is not what this client thought, so
+      // that is exactly when the window list is worth re-reading.
+      queryClient.invalidateQueries({
+        queryKey: transcriptPauseWindowsKey(translationRoomId),
+      });
     },
   });
 }

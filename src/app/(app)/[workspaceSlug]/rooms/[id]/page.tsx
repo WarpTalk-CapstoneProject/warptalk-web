@@ -15,6 +15,8 @@ import {
   Archive,
   ArrowRight,
   Bold,
+  Maximize2,
+  Minimize2,
   CalendarPlus,
   Check,
   ChevronDown,
@@ -179,6 +181,20 @@ export default function RoomInformationPage() {
   const startRoomMutation = useStartTranslationRoom();
   const updateRoomSettings = useUpdateTranslationRoomSettings();
   const user = useAuthStore((state) => state.user);
+
+  /**
+   * WT-588: whether the record has taken the whole page.
+   *
+   * The default split gives the transcript ~780px, which at 14px is 95–105 characters a line —
+   * well past the 80 that makes prose readable — while the right rail holds a roster nobody is
+   * reading WHILE they read the transcript. Expanding drops the rail and lets the column breathe.
+   *
+   * Page state rather than a URL param or localStorage on purpose: it is a reading posture for
+   * the next few minutes, not a preference. A shared link should open in the layout its author
+   * described, and a remembered value would silently hide the roster for somebody who came here
+   * to look at the roster.
+   */
+  const [recordExpanded, setRecordExpanded] = useState(false);
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
@@ -536,7 +552,16 @@ export default function RoomInformationPage() {
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:px-10">
+        <div
+          className={cn(
+            "mx-auto grid min-h-full w-full max-w-[1500px] grid-cols-1 gap-8 px-6 py-8 xl:px-10",
+            // WT-588: expanded is one column, and the aside is not rendered at all rather than
+            // hidden — a `display:none` rail keeps mounting its roster queries and its
+            // collapsibles, and keeps them in the tab order for a keyboard user who cannot see
+            // where focus went.
+            recordExpanded ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_300px]",
+          )}
+        >
           <main className="min-w-0">
             <div className="mb-8 flex flex-col gap-5 border-b border-border/60 pb-6">
               <div className="flex items-start justify-between gap-4">
@@ -707,6 +732,8 @@ export default function RoomInformationPage() {
                   />
                 }
                 transcriptCount={transcriptEntryCount}
+                expanded={recordExpanded}
+                onToggleExpanded={() => setRecordExpanded((current) => !current)}
               />
             ) : null}
 
@@ -724,39 +751,15 @@ export default function RoomInformationPage() {
               that GROWS on a tall screen instead of a hardcoded max-height that is wrong on
               every screen but one. Below `xl` the column is a normal stacked block and the
               page scrolls, so none of this applies — hence every class here is `xl:`. */}
+          {recordExpanded ? null : (
           <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-hidden">
-            <PropertyPanel
-              title="Tracking"
-              className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden"
-              /* The one bounded scroll region. `overscroll-auto` is the default, restated:
-                 chaining is what keeps this from trapping the page's scroll at its end. */
-              bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-auto xl:pr-1"
-            >
-              <PropertyLine label="Organizer">
-                <UserChip user={hostUser} compact />
-              </PropertyLine>
-              {/* WT-330(5): "Attendees" here was the page's only use of that word — every other
-                  surface, and the seat rule itself, says "participants". One word, everywhere. */}
-              <CollapsibleSection label={`Participants: ${occupancy.label}`}>
-                {seatedIdentities.length > 0 ? (
-                  seatedIdentities.map((participant) => (
-                    <UserRow key={participant.id} user={participant} />
-                  ))
-                ) : (
-                  <p className="text-[12px] text-muted-foreground">
-                    Nobody is in the room right now.
-                  </p>
-                )}
-              </CollapsibleSection>
-              {notInRoom.length > 0 ? (
-                <CollapsibleSection label={`Invited: ${notInRoom.length}`}>
-                  {notInRoom.map((participant) => (
-                    <UserRow key={participant.id} user={participant} />
-                  ))}
-                </CollapsibleSection>
-              ) : null}
-            </PropertyPanel>
-
+            {/* WT-588: Actions ABOVE Tracking.
+                WT-330(8) already stopped the invitee list pushing this panel off screen, by
+                giving Tracking its own bounded scroll and pinning Actions below it. That fixed
+                the mechanism and left the order: the controls a host came here for still sit
+                under a roster, and on a short viewport they still sit under a roster that is
+                itself scrolling. Reading order is the remaining half — the thing you act on
+                goes above the thing you look at. */}
             <PropertyPanel title="Actions" className="xl:shrink-0">
               <ActionButton
                 icon={<Copy className="size-3.5" />}
@@ -803,11 +806,45 @@ export default function RoomInformationPage() {
               ) : null}
             </PropertyPanel>
 
+            <PropertyPanel
+              title="Tracking"
+              className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden"
+              /* The one bounded scroll region. `overscroll-auto` is the default, restated:
+                 chaining is what keeps this from trapping the page's scroll at its end. */
+              bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-auto xl:pr-1"
+            >
+              <PropertyLine label="Organizer">
+                <UserChip user={hostUser} compact />
+              </PropertyLine>
+              {/* WT-330(5): "Attendees" here was the page's only use of that word — every other
+                  surface, and the seat rule itself, says "participants". One word, everywhere. */}
+              <CollapsibleSection label={`Participants: ${occupancy.label}`}>
+                {seatedIdentities.length > 0 ? (
+                  seatedIdentities.map((participant) => (
+                    <UserRow key={participant.id} user={participant} />
+                  ))
+                ) : (
+                  <p className="text-[12px] text-muted-foreground">
+                    Nobody is in the room right now.
+                  </p>
+                )}
+              </CollapsibleSection>
+              {notInRoom.length > 0 ? (
+                <CollapsibleSection label={`Invited: ${notInRoom.length}`}>
+                  {notInRoom.map((participant) => (
+                    <UserRow key={participant.id} user={participant} />
+                  ))}
+                </CollapsibleSection>
+              ) : null}
+            </PropertyPanel>
+
+
             {/* "Meeting access" stood here: a hardcoded "WarpTalk Session" over the room
                 code. The pills row under the title already shows that code and, unlike this
                 panel, lets you click it to copy — so the panel was the same fact with less
                 to do. WT-330 had already taken its entry button; this is the rest. */}
           </aside>
+          )}
         </div>
       </div>
     </div>
@@ -879,6 +916,8 @@ function MeetingRecordSection({
   seek,
   onRecordChanged,
   onJumpToMoment,
+  expanded,
+  onToggleExpanded,
 }: {
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
@@ -907,6 +946,9 @@ function MeetingRecordSection({
   seek: SeekRequest | null;
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
+  /** WT-588: whether the record has the page to itself, with the right rail dropped. */
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
 }) {
   const [tab, setTab] = useState<
     "transcript" | "summary" | "minutes" | "artifacts"
@@ -1047,6 +1089,38 @@ function MeetingRecordSection({
             label="Artifacts"
             count={endedRecord?.artifacts.length}
           />
+
+          {/* WT-588. On the tab strip rather than inside the transcript toolbar, because it
+              widens the RECORD — summary, minutes and artifacts gain the same room, and a
+              control that moved only when you were on one tab would read as belonging to that
+              tab's content.
+
+              `ml-auto` and no label: it is the one control here that changes the page's shape
+              rather than what it shows, and the icon pair is the convention for that everywhere
+              else. Hidden below xl — there is no second column to reclaim, so the button would
+              do nothing visible. */}
+          {onToggleExpanded ? (
+            <button
+              type="button"
+              onClick={onToggleExpanded}
+              aria-pressed={!!expanded}
+              title={
+                expanded
+                  ? "Show the meeting details again"
+                  : "Give the record the full width"
+              }
+              aria-label={
+                expanded ? "Collapse the record" : "Expand the record"
+              }
+              className="ml-auto mb-1 hidden shrink-0 cursor-pointer rounded-md p-1.5 text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink xl:block"
+            >
+              {expanded ? (
+                <Minimize2 className="size-4" />
+              ) : (
+                <Maximize2 className="size-4" />
+              )}
+            </button>
+          ) : null}
         </div>
       ) : (
         <div className="mt-3" />

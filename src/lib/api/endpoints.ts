@@ -15,6 +15,14 @@ export const API = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
+    /**
+     * WT-597: a new verification link, asked for by address rather than by session.
+     *
+     * `/auth/resend-verification` is `[Authorize]`, and a self-registered account has no session
+     * until it is verified — so the only resend the product had was unreachable by the people who
+     * needed it. Answers 204 for any address, so it says nothing about who has an account.
+     */
+    resendVerification: "/auth/resend-verification-request",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",
@@ -101,6 +109,12 @@ export const API = {
     flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
     noiseReduction: (id: string) =>
       `/translation-rooms/${id}/audio-routes/noise-reduction`,
+    // NOT a setting — the browser telling the server what its OWN denoiser ended up doing. Krisp
+    // runs entirely client-side and fails silently (livekit-client never awaits the entitlement
+    // answer), so without this the only record of "it is not running" is a console.error in one
+    // participant's tab.
+    noiseSuppressionReport: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-suppression/report`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
@@ -144,6 +158,19 @@ export const API = {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    // WT-605. Keyed by ROOM, not by transcript id, exactly as TranscriptsController declares
+    // them — the host pressing this has a room open, not a transcript id in hand.
+    //
+    // Not to be confused with `translationRooms.pause` further down: that one stops the AI
+    // workers translating and dubbing. These stop only the written record growing, while
+    // translation, dubbing, subtitles and LiveKit carry on.
+    pauseByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause`,
+    resumeByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/resume`,
+    /** Readable by every participant, not just the host — the notice is for the whole room. */
+    pauseWindows: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
@@ -256,6 +283,15 @@ export const API = {
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+    plugins: "/assistant/plugins",
+    installPlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
+    disablePlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
+    pluginConnection: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    pluginConnectUrl: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to

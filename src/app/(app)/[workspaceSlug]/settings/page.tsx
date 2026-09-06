@@ -33,7 +33,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
-import { describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
+import { describeLanguageCeiling, describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
 const settingsSchema = z.object({
@@ -44,6 +44,7 @@ const settingsSchema = z.object({
   invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
+  allowAnyPlugins: z.boolean(),
   allowedTargetLanguages: z.array(z.string()),
   verifiedDomains: z.array(z.string()),
   allowExternalCollaboration: z.boolean(),
@@ -83,6 +84,7 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   invitationExpiryDays: 7,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
+  allowAnyPlugins: true,
   // Empty means unrestricted — every meeting-scope language is offered. It used to read
   // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
   // that had never set one got a three-language allowlist, and Korean, French and Spanish
@@ -117,6 +119,7 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     invitationExpiryDays: settings.invitationExpiryDays ?? DEFAULT_SETTINGS_FORM_DATA.invitationExpiryDays,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
+    allowAnyPlugins: settings.allowAnyPlugins ?? DEFAULT_SETTINGS_FORM_DATA.allowAnyPlugins,
     // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
     // restricting anything, and substituting a list here turns "no policy" into a real one.
     allowedTargetLanguages: settings.allowedTargetLanguages || [],
@@ -176,6 +179,16 @@ export default function WorkspaceSettingsPage() {
     ceiling: planRoomCeiling,
     configured: watchedMaxActiveRooms,
     source: settings?.maxActiveRoomsCeilingSource,
+  }).message;
+
+  // WT-500 — the plan's per-meeting language quota, which is enforced at meeting creation and
+  // used to be invisible everywhere else. Counted off the live form value rather than the saved
+  // settings so the notice appears the moment an Owner ticks the language that crosses the line,
+  // not after they navigate away and come back.
+  const languageCeilingNotice = describeLanguageCeiling({
+    ceiling: settings?.maxLanguagesCeiling,
+    allowedCount: (watchAll.allowedTargetLanguages || []).length,
+    source: settings?.maxLanguagesCeilingSource,
   }).message;
 
   const saveWorkspacePatch = useCallback(async (patch: Partial<WorkspaceSettingsDto>) => {
@@ -620,6 +633,9 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-ink">Allowed Target Translation Languages</span>
                 <span className="text-[11px] text-ink-muted">Languages available for live translation in meeting rooms.</span>
+                {languageCeilingNotice ? (
+                  <span className="text-[11px] text-amber-600">{languageCeilingNotice}</span>
+                ) : null}
               </div>
               <div className="flex flex-wrap gap-2 mt-1">
                 {languages.map((l) => {
@@ -668,6 +684,19 @@ export default function WorkspaceSettingsPage() {
               <Switch
                 checked={watchAll.isProfanityFilterEnabled}
                 onCheckedChange={(val) => commitTopLevel("isProfanityFilterEnabled", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+              />
+            </div>
+
+            {/* Personal MCP Plugins */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5 max-w-[70%]">
+                <span className="text-xs font-semibold text-ink">Allow personal plugins</span>
+                <span className="text-[11px] text-ink-muted">Allow members to use their connected plugins in WarpBot conversations for this workspace.</span>
+              </div>
+              <Switch
+                checked={watchAll.allowAnyPlugins}
+                onCheckedChange={(val) => commitTopLevel("allowAnyPlugins", val)}
                 disabled={isSubmitting || !isOwnerOrAdmin}
               />
             </div>
