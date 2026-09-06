@@ -2409,6 +2409,15 @@ export function PersistentMeetingSession({
       },
     );
 
+    chatConnection.on(
+      "ChatAssistantQuestion",
+      (payload: { questionsJson?: string }) => {
+        useTranslationRoomStore
+          .getState()
+          .setAssistantQuestionsJson(payload?.questionsJson ?? null);
+      },
+    );
+
     chatConnection.on("ChatAssistantResponsePending", () => {
       // A second, confirming trigger. The chat panel already sets this optimistically the
       // moment somebody sends an @agent mention, because waiting for this round trip leaves

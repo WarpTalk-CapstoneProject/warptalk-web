@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
@@ -11,6 +11,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+  type AssistantQuestion,
+} from "@/components/layout/assistant-question-card";
+import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
 import type { AssistantConversationDto } from "@/types/assistant";
 
@@ -21,11 +27,56 @@ export default function AiChatPage() {
   const sendMessage = useSendAssistantMessage();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
 
   const conversations = conversationsQuery.data ?? [];
   const selectedId = activeId ?? conversations[0]?.id ?? null;
   const conversationQuery = useAssistantConversation(selectedId);
   const messages = conversationQuery.data?.messages ?? [];
+
+  // Through refs, not through the dependency array. A TanStack query result is a fresh
+  // tracked proxy on every render, so depending on the query objects made this effect tear
+  // down the hub and build a new one every single render - and an AssistantQuestion landing
+  // during one of those gaps was simply lost, which is the confirmation card never appearing.
+  const refetchConversationRef = useRef(conversationQuery.refetch);
+  const refetchConversationsRef = useRef(conversationsQuery.refetch);
+  useEffect(() => {
+    refetchConversationRef.current = conversationQuery.refetch;
+    refetchConversationsRef.current = conversationsQuery.refetch;
+  }, [conversationQuery.refetch, conversationsQuery.refetch]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const connection = createHubConnection("/api/v1/assistant/chat-hub");
+
+    connection.on(
+      "AssistantQuestion",
+      (payload: { conversationId: string; questionsJson: string }) => {
+        if (payload.conversationId !== selectedId) return;
+        const questions = parseAssistantQuestions(payload.questionsJson);
+        if (questions.length) setPendingQuestions(questions);
+      },
+    );
+    const refetchBoth = (payload?: { conversationId?: string }) => {
+      if (payload?.conversationId && payload.conversationId !== selectedId) return;
+      void refetchConversationRef.current();
+      void refetchConversationsRef.current();
+    };
+    connection.on("AssistantMessageCompleted", refetchBoth);
+    connection.on("AssistantMessageFailed", refetchBoth);
+
+    connection
+      .start()
+      .then(() => connection.invoke("JoinConversation", selectedId))
+      .catch(() => {
+        // The page still works by polling/refetch after POST; realtime cards are best effort.
+      });
+
+    return () => {
+      void connection.stop();
+    };
+  }, [selectedId]);
 
   async function handleCreateConversation() {
     if (!workspaceId || createConversation.isPending) return;
@@ -34,9 +85,8 @@ export default function AiChatPage() {
     await conversationsQuery.refetch();
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const content = draft.trim();
+  async function sendContent(content: string) {
+    content = content.trim();
     if (!content || !workspaceId || sendMessage.isPending) return;
 
     let conversationId = selectedId;
@@ -47,9 +97,15 @@ export default function AiChatPage() {
     }
 
     setDraft("");
+    setPendingQuestions(null);
     await sendMessage.mutateAsync({ conversationId, content });
     await conversationQuery.refetch();
     await conversationsQuery.refetch();
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await sendContent(draft);
   }
 
   return (
@@ -125,6 +181,15 @@ export default function AiChatPage() {
                 </div>
               ))
             )}
+            {pendingQuestions ? (
+              <div className="max-w-[85%]">
+                <AssistantQuestionCard
+                  questions={pendingQuestions}
+                  disabled={sendMessage.isPending}
+                  onSubmit={(answer) => void sendContent(answer)}
+                />
+              </div>
+            ) : null}
           </div>
 
           <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>
