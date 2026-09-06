@@ -92,8 +92,15 @@ export async function openInSystemBrowser(url: string): Promise<boolean> {
 export async function openDesktopTranscriptWindow(roomId: string): Promise<boolean> {
   const bridge = getDesktopBridge();
   if (!bridge?.openTranscriptWindow) return false;
-  await bridge.openTranscriptWindow(roomId);
-  return true;
+  try {
+    await bridge.openTranscriptWindow(roomId);
+    return true;
+  } catch {
+    // Same contract as its siblings below: false means "no window", whether the shell said no or
+    // never answered. The call site fires this with a bare `void`, so a rejection escaping here
+    // would surface as an unhandled promise rejection and nothing else.
+    return false;
+  }
 }
 
 /**
