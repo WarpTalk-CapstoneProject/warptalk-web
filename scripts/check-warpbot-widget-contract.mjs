@@ -155,10 +155,13 @@ const checks = [
       ),
   ],
   [
-    "history registers ambient context only with a selected meeting",
-    /useRegisterAssistantContext\(\s*\n\s*selected\s*\n\s*\? \{/.test(
-      historyPage,
-    ) && /: null,\s*\n\s*\);/.test(historyPage),
+    // The requirement is the CONDITIONAL, not the identifier. This pinned the variable name
+    // `selected`, which is a detail of one page's implementation — when /history became the
+    // meeting-documents grid the selection became `openDocument` and this failed while the rule
+    // it guards was never broken. Matching any identifier keeps the rule and drops the coupling.
+    "history registers ambient context only with something selected",
+    /useRegisterAssistantContext\(\s*\n\s*\w+\s*\n\s*\? \{/.test(historyPage) &&
+      /: null,\s*\n\s*\);/.test(historyPage),
   ],
 ];
 
