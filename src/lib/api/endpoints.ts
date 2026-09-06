@@ -158,6 +158,19 @@ export const API = {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    // WT-605. Keyed by ROOM, not by transcript id, exactly as TranscriptsController declares
+    // them — the host pressing this has a room open, not a transcript id in hand.
+    //
+    // Not to be confused with `translationRooms.pause` further down: that one stops the AI
+    // workers translating and dubbing. These stop only the written record growing, while
+    // translation, dubbing, subtitles and LiveKit carry on.
+    pauseByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause`,
+    resumeByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/resume`,
+    /** Readable by every participant, not just the host — the notice is for the whole room. */
+    pauseWindows: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
