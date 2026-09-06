@@ -9,8 +9,8 @@ import type {
   TranscriptDto,
   TranscriptExportDto,
   TranscriptLanguageCoverage,
-  TranscriptPauseWindowDto,
   TranscriptSegmentDto,
+  TranscriptPauseWindowDto,
   TranscriptTranslationDto,
 } from "@/types/transcript";
 
@@ -26,6 +26,34 @@ export const transcriptService = {
 
   getByRoom(translationRoomId: string) {
     return apiClient.get<TranscriptDto>(API.transcripts.byRoom(translationRoomId));
+  },
+
+  /**
+   * WT-605 — stop writing the transcript down. Host-only; translation, dubbing, subtitles and
+   * LiveKit are untouched.
+   *
+   * 204 on success. 403 when the caller is not the room's host, 409 when it is already paused —
+   * both of which are ordinary answers rather than faults, so the caller shows them as such.
+   */
+  pauseByRoom(translationRoomId: string) {
+    return apiClient.post<void>(API.transcripts.pauseByRoom(translationRoomId));
+  },
+
+  /** The other half of the switch. Host-only, 409 when it is not paused. */
+  resumeByRoom(translationRoomId: string) {
+    return apiClient.post<void>(API.transcripts.resumeByRoom(translationRoomId));
+  },
+
+  /**
+   * Every pause this room has had, open ones included.
+   *
+   * This is the only way somebody who joins mid-pause can learn the transcript is not running:
+   * the broadcast that told everybody else fired before they were in the group.
+   */
+  pauseWindows(translationRoomId: string) {
+    return apiClient.get<TranscriptPauseWindowDto[]>(
+      API.transcripts.pauseWindows(translationRoomId),
+    );
   },
 
   segments(id: string, params?: { skip?: number; take?: number }) {
@@ -77,23 +105,5 @@ export const transcriptService = {
 
   finalize(id: string) {
     return apiClient.post<void>(API.transcripts.finalize(id));
-  },
-
-  /**
-   * WT-605 — Pause/Resume Transcript. Host-only. Stops (or resumes) the transcript being
-   * written down; translation, dubbing, subtitles and LiveKit keep running untouched. Not
-   * `translationRoomService.pause/resume` — those gate the AI pipeline itself.
-   */
-  pauseTranscript(translationRoomId: string) {
-    return apiClient.post<void>(API.transcripts.pauseTranscript(translationRoomId));
-  },
-
-  resumeTranscript(translationRoomId: string) {
-    return apiClient.post<void>(API.transcripts.resumeTranscript(translationRoomId));
-  },
-
-  /** Every pause/resume window for this room's transcript, for the panel's dividers. */
-  pauseWindows(translationRoomId: string) {
-    return apiClient.get<TranscriptPauseWindowDto[]>(API.transcripts.pauseWindows(translationRoomId));
   },
 };

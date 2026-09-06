@@ -6,7 +6,9 @@ import type {
   AssistantConversationDto,
   AssistantMentionDto,
   AssistantPageContextDto,
+  AssistantPluginCatalogItemDto,
   AssistantSkillDto,
+  PluginConnectUrlDto,
   SendAssistantMessageResponse,
 } from "@/types/assistant";
 
@@ -57,5 +59,25 @@ export const assistantService = {
 
   getSkills() {
     return apiClient.get<AssistantSkillDto[]>(API.assistant.skills);
+  },
+
+  listPlugins() {
+    return apiClient.get<AssistantPluginCatalogItemDto[]>(API.assistant.plugins);
+  },
+
+  installPlugin(pluginKey: string) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(API.assistant.installPlugin(pluginKey));
+  },
+
+  getPluginConnectUrl(pluginKey: string) {
+    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey));
+  },
+
+  disconnectPlugin(pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.pluginConnection(pluginKey));
+  },
+
+  disablePlugin(pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
   },
 };

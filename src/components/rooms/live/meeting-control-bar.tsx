@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, FileText, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
@@ -117,9 +117,10 @@ export function MeetingControlBar({
   handRaised,
   isLocked,
   muteOnEntry,
-  isTranscriptPaused,
   isRecording,
   recordingPending,
+  transcriptPaused,
+  transcriptPausePending,
   onCopyText,
   onToggleCamera,
   onToggleMicrophone,
@@ -141,9 +142,9 @@ export function MeetingControlBar({
   onSendReaction,
   onToggleLock,
   onToggleMuteOnEntry,
-  onToggleTranscriptPaused,
   onMuteAll,
   onToggleRecording,
+  onToggleTranscriptPause,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -239,6 +240,16 @@ export function MeetingControlBar({
   isRecording?: boolean;
   /** True while the start/stop Egress request is awaiting confirmation. */
   recordingPending?: boolean;
+  /**
+   * WT-605: whether the transcript is currently NOT being written down.
+   *
+   * A different switch from Stop Translation. While this is on, people still hear each other in
+   * their own language — translation, dubbing and subtitles all keep running — and only the
+   * written record stops growing. Nothing here may present it as the meeting being paused.
+   */
+  transcriptPaused?: boolean;
+  /** True while the pause/resume request is awaiting confirmation. */
+  transcriptPausePending?: boolean;
   onCopyText: (value: string, label: string) => void;
   onToggleCamera: () => void;
   onToggleMicrophone: () => void;
@@ -277,19 +288,19 @@ export function MeetingControlBar({
   onToggleLock?: (locked: boolean) => void;
   /** WT-04, host-only: toggles whether new joiners start muted. */
   onToggleMuteOnEntry?: (enabled: boolean) => void;
-  /**
-   * WT-605, host-only: stops (or resumes) the transcript being written down. Deliberately NOT
-   * the same switch as Start/Stop Translation above — translation, dubbing, subtitles and
-   * LiveKit keep running through a transcript pause. Omit to hide the row.
-   */
-  onToggleTranscriptPaused?: (paused: boolean) => void;
-  /** Whether the transcript is currently paused for this room. */
-  isTranscriptPaused?: boolean;
   /** WT-04, host-only: force-mutes every other participant (they can unmute themselves). */
   onMuteAll?: () => void;
   /** WT-06: starts/stops LiveKit Egress recording for the room. Any participant may — the room
    * is told by toast either way. Omit to hide the record button. */
   onToggleRecording?: () => void;
+  /**
+   * WT-605, host-only: stops/resumes writing the transcript down.
+   *
+   * Omit to hide the control — the endpoint gates on the room's HostId, so anyone else pressing
+   * it gets a 403. The STATE is still shown to everybody, in the transcript panel; it is only the
+   * switch that is the host's.
+   */
+  onToggleTranscriptPause?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
@@ -486,16 +497,6 @@ export function MeetingControlBar({
                     onClick={() => onToggleMuteOnEntry(!muteOnEntry)}
                   />
                 ) : null}
-                {onToggleTranscriptPaused ? (
-                  <HostControlRow
-                    label={isTranscriptPaused ? "Transcript paused" : "Pause transcript"}
-                    description="Stops the written transcript only — translation, dubbing and subtitles keep running."
-                    icon={<FileText className="h-4 w-4" weight={isTranscriptPaused ? "fill" : "regular"} />}
-                    active={Boolean(isTranscriptPaused)}
-                    toggle
-                    onClick={() => onToggleTranscriptPaused(!isTranscriptPaused)}
-                  />
-                ) : null}
                 {onMuteAll ? (
                   <HostControlRow
                     label="Mute all"
@@ -539,6 +540,35 @@ export function MeetingControlBar({
             />
           }
           onClick={onToggleRecording}
+        />
+      ) : null}
+
+      {/* WT-605. Sits beside Record because both are about what the meeting leaves behind, and
+          they are genuinely independent: a room can be recorded with the transcript paused, or
+          transcribed with no recording.
+
+          Host-only by omission, unlike Record directly above — TranscriptRecordingService gates
+          on IsRoomHostAsync. Every participant is still TOLD, by the notice in the transcript
+          panel and the toast the broadcast raises; it is the switch that is restricted, not the
+          fact. */}
+      {onToggleTranscriptPause ? (
+        <MeetControl
+          label={
+            transcriptPausePending
+              ? "Transcript request in progress"
+              : transcriptPaused
+                ? "Resume transcript"
+                : "Pause transcript"
+          }
+          active={transcriptPaused}
+          disabled={transcriptPausePending}
+          icon={
+            <PauseCircle
+              className={`h-[18px] w-[18px] ${transcriptPausePending ? "animate-pulse" : ""}`}
+              weight={transcriptPaused ? "fill" : "regular"}
+            />
+          }
+          onClick={onToggleTranscriptPause}
         />
       ) : null}
 

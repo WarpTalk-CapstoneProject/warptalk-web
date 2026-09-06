@@ -48,7 +48,11 @@ import {
   useTranslationRefreshAfterCorrection,
 } from "@/hooks/use-transcripts";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
-import { useTranslationRoomSessions, useTranscriptPauseWindows } from "@/hooks/use-translationRooms";
+import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+// WT-605. The pause-window read lives with the other transcript hooks, not with the room
+// ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
+// existed, and two hooks of the same name over the same endpoint is how they drift.
+import { useTranscriptPauseWindows } from "@/hooks/use-transcripts";
 import {
   TranscriptSpeakerAvatar,
   TranscriptSpeakerStripe,

@@ -52,6 +52,7 @@ export interface DesktopBridge {
   getVersion?: () => Promise<string>;
   getPlatform?: () => string;
   openExternal?: (url: string) => Promise<void>;
+  openTranscriptWindow?: (roomId: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
 }
@@ -86,6 +87,20 @@ export async function openInSystemBrowser(url: string): Promise<boolean> {
   if (!bridge?.openExternal) return false;
   await bridge.openExternal(url);
   return true;
+}
+
+export async function openDesktopTranscriptWindow(roomId: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.openTranscriptWindow) return false;
+  try {
+    await bridge.openTranscriptWindow(roomId);
+    return true;
+  } catch {
+    // Same contract as its siblings below: false means "no window", whether the shell said no or
+    // never answered. The call site fires this with a bare `void`, so a rejection escaping here
+    // would surface as an unhandled promise rejection and nothing else.
+    return false;
+  }
 }
 
 /**

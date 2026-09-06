@@ -92,19 +92,6 @@ export interface TranscriptExportDto {
   createdAt: string;
 }
 
-/**
- * WT-605. One [Pause Transcript, Resume Transcript] window — display metadata for the
- * transcript panel's "Transcript paused · HH:MM–HH:MM" divider. `endedAt` is null while the
- * transcript is currently paused for this room. Not the same axis as `TranslationRoomSessionDto`:
- * pausing the transcript does not touch translation, dubbing, subtitles or LiveKit.
- */
-export interface TranscriptPauseWindowDto {
-  id: string;
-  translationRoomId: string;
-  startedAt: string;
-  endedAt: string | null;
-}
-
 // ── Request DTOs ──────────────────────────────
 
 export interface CreateTranscriptRequest {
@@ -131,4 +118,17 @@ export interface CreateCorrectionRequest {
   originalText: string;
   correctedText: string;
   correctionType: "stt" | "translation" | "speaker" | "timing";
+}
+
+/**
+ * One stretch during which the transcript was deliberately not written down. WT-605.
+ *
+ * `endedAt` null means the pause is still in force — that is how anyone joining mid-pause learns
+ * the state, since the broadcast that told everybody else fired before they arrived.
+ */
+export interface TranscriptPauseWindowDto {
+  id: string;
+  translationRoomId: string;
+  startedAt: string;
+  endedAt: string | null;
 }

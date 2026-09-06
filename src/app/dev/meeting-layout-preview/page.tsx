@@ -114,13 +114,45 @@ export default function MeetingLayoutPreview() {
           </div>
         </div>
 
-        <div className="mx-auto mt-6 flex max-w-5xl items-start gap-6">
+        <div className="mx-auto mt-6 flex max-w-5xl flex-wrap items-start gap-6">
           <div className="flex h-[320px] w-[340px] flex-col overflow-hidden rounded-xl border border-border bg-surface-1">
             <p className="border-b border-border px-3 py-2 text-[12px] font-medium">Transcript</p>
             <TranscriptPanel
               segments={segments}
               roomId="preview"
               readerLanguage="en"
+            />
+          </div>
+
+          {/* WT-605. Here rather than in a preview of its own because the point of the notice is
+              how it sits ABOVE a transcript that has stopped growing — a screenshot of the notice
+              alone would not show the thing being judged. Two panels: paused with a start time
+              (learned from the window list) and paused without one (learned from the broadcast,
+              which carries no time). */}
+          <div className="flex h-[320px] w-[340px] flex-col overflow-hidden rounded-xl border border-border bg-surface-1">
+            <p className="border-b border-border px-3 py-2 text-[12px] font-medium">
+              Transcript · paused, start time known
+            </p>
+            <TranscriptPanel
+              segments={segments}
+              roomId="preview-paused"
+              readerLanguage="en"
+              transcriptPause={{ paused: true, since: "2026-09-06T10:05:00Z" }}
+              /* The "Transcript paused · HH:MM–HH:MM" DIVIDERS are not visible here: they are
+                 drawn from the pause-window list the panel fetches itself, and this preview has
+                 no server. The banner above is the part that renders from props. */
+            />
+          </div>
+
+          <div className="flex h-[320px] w-[340px] flex-col overflow-hidden rounded-xl border border-border bg-surface-1">
+            <p className="border-b border-border px-3 py-2 text-[12px] font-medium">
+              Transcript · paused before anyone spoke
+            </p>
+            <TranscriptPanel
+              segments={[]}
+              roomId="preview-paused-empty"
+              readerLanguage="en"
+              transcriptPause={{ paused: true, since: null }}
             />
           </div>
           <div className="w-full max-w-sm rounded-xl border border-border bg-surface-1 p-3">
