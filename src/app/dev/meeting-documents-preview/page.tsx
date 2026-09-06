@@ -93,6 +93,8 @@ const FIXTURE: MeetingDocumentDto[] = [
     id: "d6",
     type: "TRANSCRIPT_EXPORT",
     translationRoomId: ROOM_C,
+    // i18n-allow: a person's name, and a deliberately long one — the card has to truncate a
+    // real Vietnamese meeting title, not a short English placeholder that never wraps.
     meetingTitle: "Advisor review with Thân Thị Ngọc Vân",
     translationRoomCode: "WT-4823",
     canOpen: false,
