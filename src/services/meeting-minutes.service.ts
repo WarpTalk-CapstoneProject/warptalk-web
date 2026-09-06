@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { MeetingMinutesDto } from "@/types/meetingMinutes";
+import type { WorkspaceMinutesResponse } from "@/types/workspaceMinutes";
 
 /**
  * Biên bản họp — maps to MeetingMinutesController.
@@ -10,6 +11,22 @@ import type { MeetingMinutesDto } from "@/types/meetingMinutes";
  * being quietly dropped by re-serialising through a typed model.
  */
 export const meetingMinutesService = {
+  /**
+   * The workspace's minutes, newest meeting first.
+   *
+   * Server-side search covers the document's identity — its number and its meeting — which is
+   * what the room history search covers too, so one term narrows every kind of record in the
+   * library the same way. The body is searched in the browser over the page that came back.
+   */
+  listForWorkspace(workspaceId: string, params?: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    return apiClient.get<WorkspaceMinutesResponse>(API.minutes.forWorkspace(workspaceId), { params });
+  },
+
   /** The room's minutes of record. 404 means none has been drawn up yet — not an error. */
   getByRoom(roomId: string) {
     return apiClient.get<MeetingMinutesDto>(API.minutes.byRoom(roomId));
