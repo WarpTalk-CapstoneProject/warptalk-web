@@ -66,6 +66,10 @@ export interface TranslationRoomDto {
    * for every finished meeting, so a room that ended showed "0/100" however many attended.
    */
   attendedCount?: number;
+  externalProvider?: "GOOGLE_MEET" | string | null;
+  externalMeetingUrl?: string | null;
+  externalCalendarEventId?: string | null;
+  externalCalendarEventUrl?: string | null;
   isHost?: boolean;
   /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
@@ -167,6 +171,10 @@ export interface CreateTranslationRoomRequest {
    * `scheduledAt` is refused rather than silently resolved in favour of one of them.
    */
   recurrence?: RecurrenceRequest;
+  externalProvider?: "GOOGLE_MEET" | string;
+  externalMeetingUrl?: string;
+  externalCalendarEventId?: string;
+  externalCalendarEventUrl?: string;
 }
 
 /**
