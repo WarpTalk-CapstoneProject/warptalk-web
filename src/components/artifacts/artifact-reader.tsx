@@ -7,9 +7,12 @@ import {
   CalendarBlank,
   Clock,
   Copy,
+  FileText,
   LockSimple,
   Signature,
+  Sparkle,
   SpinnerGap,
+  Stamp,
   Translate,
   Users,
   WarningCircle,
@@ -19,7 +22,7 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { KIND_LABELS, describeAbsence, relativeTime } from "@/lib/meeting/artifact-library";
-import type { LibraryEntry } from "@/lib/meeting/artifact-library";
+import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { roomDetailPath } from "@/lib/workspace/workspace-routes";
 
@@ -37,15 +40,38 @@ import { roomDetailPath } from "@/lib/workspace/workspace-routes";
  *   This is the audit half. Who hosted it, when it ended, who signed it, how much a person
  *   changed before signing — those are the questions somebody opens a record to settle, and
  *   burying them under a transcript means scrolling past the answer to look for it.
+ *
+ * ONE MEETING, THREE DOCUMENTS
+ *   The panel opens on a MEETING and switches between what it produced. The facts above the text
+ *   belong to the meeting, so they do not move when the reader changes document — which is what
+ *   makes the three read as one meeting's contents rather than as three unrelated files that
+ *   happen to share a title.
  */
 export function ArtifactReader({
+  group,
   entry,
+  onSelectKind,
   workspaceSlug,
   onClose,
+  onDrawUpMinutes,
+  drawingUpMinutes = false,
 }: {
+  group: MeetingRecordGroup;
+  /** The one currently open. Always a member of `group.entries`. */
   entry: LibraryEntry;
+  onSelectKind: (kind: ArtifactKind) => void;
   workspaceSlug: string;
   onClose: () => void;
+  /**
+   * Draw this meeting's biên bản up from the summary being read.
+   *
+   * Omitted unless it would actually work — the page owns that decision because only it can see
+   * every entry at once (it has to know whether this room already HAS minutes). Reaching minutes
+   * otherwise means opening the meeting, finding the Minutes tab and pressing a button four
+   * steps in, which is a large part of why production holds so few of them.
+   */
+  onDrawUpMinutes?: () => void;
+  drawingUpMinutes?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -66,14 +92,12 @@ export function ArtifactReader({
     <aside className="flex min-h-0 flex-col border-t border-border bg-surface-1 lg:border-l lg:border-t-0">
       <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
-          <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-ink-subtle">
-            {KIND_LABELS[entry.kind]}
-          </p>
-          <h2 className="mt-1 truncate text-[17px] font-semibold leading-6 text-ink" title={entry.title}>
-            {entry.title}
+          <h2 className="truncate text-[17px] font-semibold leading-6 text-ink" title={group.roomTitle}>
+            {group.roomTitle}
           </h2>
-          <p className="mt-0.5 truncate text-[11px] text-ink-muted" title={entry.roomTitle}>
-            {entry.roomTitle} · {entry.roomCode}
+          <p className="mt-0.5 truncate text-[11px] text-ink-muted">
+            {group.roomCode}
+            {group.hostName ? ` · ${group.hostName}` : ""}
           </p>
         </div>
         <button
@@ -85,6 +109,8 @@ export function ArtifactReader({
           <X size={15} />
         </button>
       </header>
+
+      <RecordTabs group={group} current={entry} onSelectKind={onSelectKind} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         <dl className="grid grid-cols-2 gap-x-4 border-b border-border pb-4">
@@ -139,6 +165,21 @@ export function ArtifactReader({
                 {copied ? "Copied" : "Copy"}
               </button>
             ) : null}
+            {onDrawUpMinutes ? (
+              <button
+                type="button"
+                onClick={onDrawUpMinutes}
+                disabled={drawingUpMinutes}
+                className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+              >
+                {drawingUpMinutes ? (
+                  <SpinnerGap size={12} className="animate-spin" />
+                ) : (
+                  <Stamp size={12} />
+                )}
+                Draw up the minutes
+              </button>
+            ) : null}
             <Link
               href={roomDetailPath(workspaceSlug, entry.roomId)}
               className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
@@ -158,6 +199,64 @@ export function ArtifactReader({
         )}
       </div>
     </aside>
+  );
+}
+
+const KIND_ICONS: Record<ArtifactKind, React.ElementType> = {
+  transcript: FileText,
+  summary: Sparkle,
+  minutes: Stamp,
+};
+
+/**
+ * The meeting's three documents, as a row you switch between.
+ *
+ * Every record the meeting produced is listed, INCLUDING the ones this viewer cannot open. A tab
+ * that is present but locked answers "is there a transcript?" — which is the question — while
+ * hiding it answers a different question the reader did not ask, and answers it misleadingly.
+ *
+ * Rendered even when there is only one, so the panel says what it is holding. A single unlabelled
+ * document is the state the old panel was permanently in.
+ */
+function RecordTabs({
+  group,
+  current,
+  onSelectKind,
+}: {
+  group: MeetingRecordGroup;
+  current: LibraryEntry;
+  onSelectKind: (kind: ArtifactKind) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Records from this meeting"
+      className="flex shrink-0 items-center gap-1 border-b border-border px-3 py-1.5"
+    >
+      {group.entries.map((candidate) => {
+        const active = candidate.id === current.id;
+        const Icon = KIND_ICONS[candidate.kind];
+        const readable = Boolean(candidate.body);
+        return (
+          <button
+            key={candidate.id}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelectKind(candidate.kind)}
+            title={readable ? undefined : describeAbsence(candidate.absence ?? "unavailable", candidate.kind)}
+            className={cn(
+              "flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors",
+              active ? "bg-surface-2 text-ink" : "text-ink-muted hover:text-ink",
+            )}
+          >
+            <Icon size={12} weight="fill" className="shrink-0" />
+            <span className="truncate">{KIND_LABELS[candidate.kind]}</span>
+            {readable ? null : <LockSimple size={10} className="shrink-0 text-ink-subtle" />}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

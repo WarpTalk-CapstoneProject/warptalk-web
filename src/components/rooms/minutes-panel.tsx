@@ -19,11 +19,21 @@
  *   closing note. A rich-text surface over a structured document would have to flatten it to
  *   HTML and parse it back, and every round trip is a chance to lose a citation — which is the
  *   one thing on a summary line that lets a reader check it.
+ *
+ * WHY THIS FILE IS NOW MOSTLY CHROME
+ *   It used to render the whole document itself, as a flat stack of labelled key/value rows and
+ *   small section headings — everything present, nothing reading as a record. The document proper
+ *   moved into `minutes-document.tsx`, which sets it as an A4 page in one of two templates, and
+ *   what is left here is what surrounds a document rather than what is in it: which template, the
+ *   margin guides, print, download, and the draft → sign → approve → addendum flow.
+ *
+ *   The one thing deliberately kept OUT of the page is the assigned-work list at the bottom. Those
+ *   commitments move as people finish them, and a record that changed whenever somebody ticked a
+ *   box would stop being a record. It sits below the page, as work, not as part of the document.
  */
 
 import { useMemo, useState } from "react";
 import {
-  CheckCircle,
   CheckSquare,
   Square,
   XSquare,
@@ -31,28 +41,39 @@ import {
   DownloadSimple,
   FileText,
   PencilSimple,
-  Sparkle,
+  Printer,
+  Ruler,
   Spinner,
-  Warning,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { sectionTitle } from "@/lib/meeting/meeting-summary";
+import { isRecordShared } from "@/lib/meeting/record-sharing";
+import {
+  MINUTES_TEMPLATES,
+  resolveMinutesTemplate,
+  translationLanguagesOf,
+  type MinutesPolicyFacts,
+  type MinutesTemplateId,
+} from "@/lib/meeting/minutes-document";
 import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
 import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useWorkspace, useWorkspaceSettings } from "@/hooks/use-workspace";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MeetingActionItemDto } from "@/types/meetingActionItem";
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import {
-  counterpartOf,
   isEditable,
-  pairByCitation,
   parseMinutesContent,
   type MeetingMinutesContent,
-  type MeetingMinutesDto,
-  type MinutesItem,
-  type MinutesSection,
 } from "@/types/meetingMinutes";
+import {
+  MinutesDocument,
+  printDocument,
+  type MinutesEditHandlers,
+} from "@/components/rooms/minutes-document";
 
 function formatTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -65,26 +86,25 @@ function formatTime(value: string | null | undefined): string {
       date.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" });
 }
 
-function formatOffset(atMs: number | null | undefined): string | null {
-  if (atMs == null || atMs < 0) return null;
-  const total = Math.floor(atMs / 1000);
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
+/** The short form, for the badge beside the number. */
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft",
   IN_REVIEW: "Signed by secretary",
   APPROVED: "Approved",
 };
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex gap-2 text-[13px]">
-      <span className="w-36 shrink-0 text-ink-muted">{label}</span>
-      <span className="text-ink">{value}</span>
-    </div>
-  );
-}
+/**
+ * The long form, printed ON THE FACE of the document.
+ *
+ * A record whose draft status lives only in the app's chrome becomes an unmarked record the
+ * moment somebody prints or forwards it — which is exactly when being able to tell a draft from
+ * a signed document matters. So the status says what is missing, not just what state it is in.
+ */
+const DOCUMENT_STATUS: Record<string, string> = {
+  DRAFT: "Draft — not signed and not approved",
+  IN_REVIEW: "Signed by the secretary — not yet approved by the chair",
+  APPROVED: "Approved",
+};
 
 export function MinutesPanel({
   roomId,
@@ -100,14 +120,76 @@ export function MinutesPanel({
   const { data: minutes, isLoading } = useMeetingMinutes(roomId);
   const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
 
+  /*
+   * Everything the document needs that does not live on the minutes row itself.
+   *
+   * All three are already-warm caches rather than new traffic on the common path: the room is the
+   * same query key the room page fetched to render this tab at all, and the workspace and its
+   * settings are the shell's own. They are read HERE rather than passed in as props because the
+   * room page that renders this panel is another branch's file — reaching for the data directly is
+   * what lets the document carry a letterhead and a retention window without editing it.
+   */
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const workspaceLanguage = useWorkspaceStore((state) => state.defaultLanguage);
+  const { data: workspace } = useWorkspace(workspaceId ?? "");
+  const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
+  const { data: room } = useTranslationRoom(roomId);
+
   const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
   const [editing, setEditing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [showGuides, setShowGuides] = useState(false);
+  /**
+   * The reader's template choice for this sitting, or null to follow the default.
+   *
+   * Not persisted, because there is nowhere honest to persist it yet: the template is a property
+   * of the WORKSPACE — a company sends domestic partners one layout and overseas clients the other
+   * — and storing one reader's preference in their own browser would quietly make the same
+   * document look different to different people on the same team. Until a workspace setting exists
+   * this follows the meeting's own language and can be switched per sitting.
+   */
+  const [chosenTemplate, setChosenTemplate] = useState<MinutesTemplateId | null>(null);
 
   const stored = useMemo(() => parseMinutesContent(minutes?.content), [minutes?.content]);
   // Editing works on a copy so an in-flight refetch cannot overwrite what is being typed; the
   // copy is dropped the moment editing ends, which is also what discards an abandoned edit.
   const view = editing && draft ? draft : stored;
+
+  /**
+   * Writing an edit back to the slot it came from.
+   *
+   * The document lays sections out into parts for reading and flattens them into numbered clauses.
+   * Every one of those clauses carries the index of the stored section (and item) it was built
+   * from, so this writes back by index and never by the order anything appeared on the page. Each
+   * update SPREADS the item rather than replacing it, which is how the citation survives a
+   * reworded sentence: only `text` is touched.
+   */
+  const edits = useMemo<MinutesEditHandlers>(
+    () => ({
+      setAgenda: (value) =>
+        setDraft((current) => (current ? { ...current, agenda: value } : current)),
+      setNotes: (value) =>
+        setDraft((current) => (current ? { ...current, notes: value } : current)),
+      setSectionText: (sectionIndex, value) =>
+        setDraft((current) => {
+          if (!current) return current;
+          const sections = [...current.sections];
+          sections[sectionIndex] = { ...sections[sectionIndex], text: value };
+          return { ...current, sections };
+        }),
+      setItemText: (sectionIndex, itemIndex, value) =>
+        setDraft((current) => {
+          if (!current) return current;
+          const sections = [...current.sections];
+          const items = [...(sections[sectionIndex].items ?? [])];
+          items[itemIndex] = { ...items[itemIndex], text: value };
+          sections[sectionIndex] = { ...sections[sectionIndex], items };
+          return { ...current, sections };
+        }),
+    }),
+    [],
+  );
 
   if (isLoading) {
     return (
@@ -129,8 +211,12 @@ export function MinutesPanel({
             summary. You review and sign; the system does not sign for you.
           </p>
           {canManage ? (
-            <button
-              type="button"
+            // The same Button the Summary tab's "Download summary file" uses, rather than a
+            // hand-rolled `bg-ink` one. These two sit in sibling tabs of the same record and are
+            // the same kind of act — the primary thing to do with this tab — so a black button
+            // beside a primary one read as a different, heavier control than it is.
+            <Button
+              size="sm"
               onClick={() =>
                 createDraft.mutate(undefined, {
                   onError: () =>
@@ -138,15 +224,15 @@ export function MinutesPanel({
                 })
               }
               disabled={createDraft.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+              className="h-8 rounded-md text-[11px] shadow-none"
             >
               {createDraft.isPending ? (
                 <Spinner size={14} className="animate-spin" />
               ) : (
                 <FileText size={14} />
-              )}
+              )}{" "}
               Draft minutes
-            </button>
+            </Button>
           ) : (
             <p className="text-[12px] text-ink-subtle">Only the meeting chair can draft the minutes.</p>
           )}
@@ -156,6 +242,37 @@ export function MinutesPanel({
   }
 
   const editable = isEditable(minutes) && canManage;
+
+  const template =
+    chosenTemplate
+    ?? resolveMinutesTemplate({
+      primaryLanguage: view.primaryLanguage,
+      workspaceDefaultLanguage: workspaceLanguage,
+    });
+
+  /*
+   * The policy block, assembled from what the product genuinely holds.
+   *
+   *   classification  — the stored document's own field. Nothing derives one: see the comment on
+   *                     `MeetingMinutesContent.classification`. Absent today, so no row prints.
+   *   record owner    — the secretary named on the minutes row.
+   *   circulation     — the room's `artifactAccess`, read through the same helper the sharing
+   *                     banner uses. `null` while the room query is in flight, so a document being
+   *                     read before that resolves prints no circulation line rather than "host
+   *                     only" — the difference between not knowing and knowing it is private.
+   *   retention       — the workspace's own artifact retention window, counted from the closing
+   *                     time the minutes recorded.
+   *   language        — what was spoken, and what the record was also produced in.
+   */
+  const policy: MinutesPolicyFacts = {
+    classification: view.classification,
+    recordOwner: minutes.secretaryName,
+    recordShared: room ? isRecordShared(room.settings?.artifactAccess) : null,
+    artifactRetentionDays: workspaceSettings?.artifactRetentionDays ?? null,
+    retentionFrom: view.closedAt ?? null,
+    primaryLanguage: view.primaryLanguage,
+    translationLanguages: translationLanguagesOf(view),
+  };
 
   function beginEdit() {
     setDraft(structuredClone(stored));
@@ -205,482 +322,262 @@ export function MinutesPanel({
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <MinutesHeader minutes={minutes} />
-
-      <section className="space-y-1.5">
-        <Field label="Meeting" value={view.meetingTitle || "—"} />
-        <Field label="Location" value={view.location || "—"} />
-        <Field label="Opened at" value={formatTime(view.openedAt)} />
-        <Field label="Closed at" value={formatTime(view.closedAt)} />
-        {view.scheduledAt ? (
-          <Field label="Scheduled for" value={formatTime(view.scheduledAt)} />
-        ) : null}
-      </section>
-
-      <Attendance content={view} />
-
-      <EditableBlock
-        title="Agenda"
-        value={view.agenda ?? ""}
-        editing={editing}
-        placeholder="No agenda recorded."
-        onChange={(next) => setDraft((current) => (current ? { ...current, agenda: next } : current))}
-      />
-
-      <Sections content={view} editing={editing} setDraft={setDraft} onSeek={onSeek} />
-
-      <ApprovedWork roomId={roomId} />
-
-      <Votes content={view} />
-
-      <EditableBlock
-        title="Secretary's notes"
-        value={view.notes ?? ""}
-        editing={editing}
-        placeholder="No additional notes."
-        onChange={(next) => setDraft((current) => (current ? { ...current, notes: next } : current))}
-      />
-
-      <Signatures minutes={minutes} />
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-        <button
-          type="button"
-          onClick={downloadDocx}
-          disabled={downloading}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink disabled:opacity-60"
-        >
-          {downloading ? (
-            <Spinner size={14} className="animate-spin" />
-          ) : (
-            <DownloadSimple size={14} />
-          )}
-          Download Word
-        </button>
-        <span className="text-[11px] text-ink-subtle">
-          Open it in Word or Google Docs to print or export a PDF.
-        </span>
-      </div>
-
-      {canManage ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                onClick={commit}
-                disabled={save.isPending}
-                className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
-              >
-                {save.isPending ? "Saving…" : "Save"}
-              </button>
-              <button
-                type="button"
-                onClick={stopEditing}
-                className="rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
-              >
-                Cancel
-              </button>
-            </>
+    <div className="space-y-4 py-4">
+      {/* Chrome. All of it hidden from the printer — what gets printed is the page below. */}
+      <div className="space-y-3 px-6 print:hidden">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-3">
+          <span className="font-mono text-[13px] font-semibold text-ink">{minutes.minutesNo}</span>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[11px] font-medium",
+              minutes.status === "APPROVED"
+                ? "bg-semantic-success/10 text-semantic-success"
+                : "bg-surface-2 text-ink-muted",
+            )}
+          >
+            {STATUS_LABEL[minutes.status] ?? minutes.status}
+          </span>
+          {minutes.version > 1 ? (
+            <span className="text-[11px] text-ink-subtle">Revision {minutes.version - 1}</span>
           ) : null}
-
-          {!editing && editable ? (
-            <button
-              type="button"
-              onClick={beginEdit}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
-            >
-              <PencilSimple size={14} />
-              Edit
-            </button>
-          ) : null}
-
-          {!editing && editable && minutes.status === "DRAFT" ? (
-            <button
-              type="button"
-              onClick={() =>
-                sign.mutate(minutes.id, {
-                  onSuccess: () => toast.success("Minutes signed."),
-                  onError: () => toast.error("Could not sign the minutes."),
-                })
-              }
-              disabled={sign.isPending}
-              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
-            >
-              Sign as secretary
-            </button>
-          ) : null}
-
-          {!editing && editable && minutes.status === "IN_REVIEW" ? (
-            <button
-              type="button"
-              onClick={() =>
-                approve.mutate(minutes.id, {
-                  onSuccess: () => toast.success("Minutes approved."),
-                  onError: () => toast.error("Could not approve the minutes."),
-                })
-              }
-              disabled={approve.isPending}
-              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
-            >
-              Approve as chair
-            </button>
-          ) : null}
-
-          {!editing && minutes.status === "APPROVED" ? (
-            <button
-              type="button"
-              onClick={() =>
-                revise.mutate(minutes.id, {
-                  onSuccess: () => toast.success("Addendum opened."),
-                  onError: () => toast.error("Could not open an addendum."),
-                })
-              }
-              disabled={revise.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
-            >
-              <ClockCounterClockwise size={14} />
-              Draft an addendum
-            </button>
-          ) : null}
+          <span className="text-[11px] text-ink-subtle">Drafted {formatTime(minutes.createdAt)}</span>
         </div>
-      ) : null}
-    </div>
-  );
-}
 
-function MinutesHeader({ minutes }: { minutes: MeetingMinutesDto }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-4">
-      <span className="font-mono text-[13px] font-semibold text-ink">{minutes.minutesNo}</span>
-      <span
-        className={cn(
-          "rounded-full px-2 py-0.5 text-[11px] font-medium",
-          minutes.status === "APPROVED"
-            ? "bg-semantic-success/10 text-semantic-success"
-            : "bg-surface-2 text-ink-muted",
-        )}
-      >
-        {STATUS_LABEL[minutes.status] ?? minutes.status}
-      </span>
-      {minutes.version > 1 ? (
-        <span className="text-[11px] text-ink-subtle">Revision {minutes.version - 1}</span>
-      ) : null}
-      <span className="text-[11px] text-ink-subtle">Drafted {formatTime(minutes.createdAt)}</span>
-    </div>
-  );
-}
+        <div className="flex flex-wrap items-center gap-2">
+          <TemplateSwitch
+            template={template}
+            onChange={setChosenTemplate}
+            disabled={editing}
+          />
 
-function Attendance({ content }: { content: MeetingMinutesContent }) {
-  const { attendance } = content;
+          <button
+            type="button"
+            onClick={() => setShowGuides((current) => !current)}
+            aria-pressed={showGuides}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px]",
+              showGuides
+                ? "border-ink bg-surface-2 text-ink"
+                : "border-border text-ink-muted hover:text-ink",
+            )}
+          >
+            <Ruler size={13} />
+            Margins
+          </button>
 
-  return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">Attendees</h4>
+          {/* The shared Button, at the size and weight the records page settled on when it grew a
+              door to the minutes (#422). That change and this one landed on the same file from
+              opposite directions: it restyled the action row of the old stacked panel, and this
+              replaced the panel with a document. The row survives either way, so it takes their
+              styling rather than keeping a second hand-rolled one beside it. */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* Print styles come with a page-shaped layout for almost nothing — see the print
+                block in minutes-document.tsx, which redefines --mm and --pt to real physical
+                units and sends this page alone to the printer at true A4 size. */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={printDocument}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              <Printer size={13} />
+              Print
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={downloadDocx}
+              disabled={downloading}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              {downloading ? (
+                <Spinner size={13} className="animate-spin" />
+              ) : (
+                <DownloadSimple size={13} />
+              )}
+              Download Word
+            </Button>
+          </div>
+        </div>
 
-      <ul className="space-y-1">
-        {attendance.present.length === 0 ? (
-          <li className="text-[13px] text-ink-subtle">Nobody was recorded entering the room.</li>
-        ) : (
-          attendance.present.map((person) => (
-            <li key={person.participantId} className="flex flex-wrap items-center gap-2 text-[13px]">
-              <span className="text-ink">{person.name}</span>
-              {person.role === "HOST" ? (
-                <span className="text-[11px] text-ink-muted">Chair</span>
-              ) : null}
-              {person.isExternal ? (
-                <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-muted">
-                  External guest
+        {canManage ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {editing ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={commit}
+                  disabled={save.isPending}
+                  className="h-8 rounded-md text-[11px] shadow-none"
+                >
+                  {save.isPending ? "Saving…" : "Save"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={stopEditing}
+                  className="h-8 rounded-md text-[11px] shadow-none"
+                >
+                  Cancel
+                </Button>
+                <span className="text-[11px] text-ink-subtle">
+                  Edit the document itself — every line with a dashed rule under it can be typed
+                  in. Timestamps stay attached to their line.
                 </span>
-              ) : null}
-              {person.speakLanguage ? (
-                <span className="text-[11px] text-ink-subtle">{person.speakLanguage}</span>
-              ) : null}
-              <span className="text-[11px] text-ink-subtle">{formatTime(person.joinedAt)}</span>
-            </li>
-          ))
-        )}
-      </ul>
+              </>
+            ) : null}
 
-      {attendance.absent.length > 0 ? (
-        <div className="space-y-1 pt-1">
-          <h4 className="text-[13px] font-semibold text-ink">Absent</h4>
-          <ul className="space-y-1">
-            {attendance.absent.map((person) => (
-              <li key={person.participantId} className="text-[13px] text-ink">
-                {person.name}
-                {person.reason ? (
-                  <span className="text-ink-muted"> — {person.reason}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+            {!editing && editable ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={beginEdit}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                <PencilSimple size={14} />
+                Edit
+              </Button>
+            ) : null}
 
-      {/* The rule is printed beside the verdict. A bare "met/not met" would not tell the reader
-          what bar was applied, and quorum is exactly the line somebody later disputes. */}
-      {attendance.quorumMet != null ? (
-        <p className="flex items-center gap-1.5 pt-1 text-[12px] text-ink-muted">
-          {attendance.quorumMet ? (
-            <CheckCircle size={13} className="text-semantic-success" />
-          ) : (
-            <Warning size={13} className="text-status-error" />
-          )}
-          {attendance.presentCount}/{attendance.invitedCount} invited attendees present —{" "}
-          {attendance.quorumMet ? "quorum met" : "quorum not met"}
-          {attendance.quorumRule ? ` (${attendance.quorumRule.toLowerCase()})` : ""}
-        </p>
-      ) : null}
-    </section>
-  );
-}
-
-function Sections({
-  content,
-  editing,
-  setDraft,
-  onSeek,
-}: {
-  content: MeetingMinutesContent;
-  editing: boolean;
-  setDraft: React.Dispatch<React.SetStateAction<MeetingMinutesContent | null>>;
-  onSeek?: (atMs: number) => void;
-}) {
-  if (content.sections.length === 0) {
-    return (
-      <section className="space-y-2">
-        <h4 className="text-[13px] font-semibold text-ink">Proceedings</h4>
-        <p className="text-[13px] text-ink-subtle">
-          This meeting&apos;s summary has no body to carry into the minutes. The secretary writes
-          straight into the notes below.
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <>
-      {content.sections.map((section, sectionIndex) => {
-        // Once per section, not once per line: the pairing rule scans both arrays, and calling it
-        // inside the item map made it quadratic for no reason.
-        const paired = pairedFor(section, content.translations);
-
-        return (
-        <section key={`${section.key}-${sectionIndex}`} className="space-y-2">
-          <h4 className="text-[13px] font-semibold text-ink">{sectionTitle(section.key)}</h4>
-
-          {section.kind === "paragraph" ? (
-            editing ? (
-              <textarea
-                value={section.text ?? ""}
-                onChange={(event) =>
-                  setDraft((current) => {
-                    if (!current) return current;
-                    const sections = [...current.sections];
-                    sections[sectionIndex] = { ...sections[sectionIndex], text: event.target.value };
-                    return { ...current, sections };
+            {!editing && editable && minutes.status === "DRAFT" ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  sign.mutate(minutes.id, {
+                    onSuccess: () => toast.success("Minutes signed."),
+                    onError: () => toast.error("Could not sign the minutes."),
                   })
                 }
-                rows={4}
-                className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
-              />
-            ) : (
-              <>
-                <p className="text-[13px] leading-relaxed text-ink">{section.text}</p>
-                <Translations
-                  section={section}
-                  translations={content.translations}
-                  pairedLanguage={null}
-                />
-              </>
-            )
-          ) : (
-            <ul className="relative space-y-0.5 before:absolute before:bottom-3 before:left-[3.5px] before:top-3 before:w-px before:bg-border">
-              {/*
-                A spine, not a column of loose bullets.
+                disabled={sign.isPending}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                Sign as secretary
+              </Button>
+            ) : null}
 
-                Every line in the minutes is anchored to a moment in the recording, and the dots
-                were already there — one per line, with the timestamp beside it wired to onSeek.
-                What was missing is the thread between them: without it the eye has to find each
-                dot on its own, and the list reads as prose rather than as a timeline somebody can
-                run down to reach a moment. The rule is drawn on the list and the dots sit on it,
-                so alignment cannot drift when a line wraps.
+            {!editing && editable && minutes.status === "IN_REVIEW" ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  approve.mutate(minutes.id, {
+                    onSuccess: () => toast.success("Minutes approved."),
+                    onError: () => toast.error("Could not approve the minutes."),
+                  })
+                }
+                disabled={approve.isPending}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                Approve as chair
+              </Button>
+            ) : null}
 
-                The dot itself seeks. The timestamp still does too — it is the labelled, obvious
-                control — but the dot is the one under the reader's eye while they are scanning,
-                and making the thing you are already looking at clickable is the whole point.
-              */}
-              {(section.items ?? []).map((item, itemIndex) => {
-                const offset = formatOffset(item.atMs);
-                const seekable = Boolean(onSeek) && item.atMs != null;
-                return (
-                  <li
-                    key={itemIndex}
-                    className="group relative -mx-2 flex items-start gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-2"
-                  >
-                    {seekable ? (
-                      <button
-                        type="button"
-                        onClick={() => onSeek!(item.atMs!)}
-                        aria-label={`Play the recording from ${offset}`}
-                        // z-[1] and a ring the colour of the page: the dot has to sit ON the
-                        // rule rather than have it run visibly through the middle of it.
-                        className="relative z-[1] mt-[6px] size-[7px] shrink-0 rounded-full bg-hairline-strong ring-2 ring-surface-1 transition-colors group-hover:bg-primary"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="relative z-[1] mt-[6px] size-[7px] shrink-0 rounded-full bg-hairline-strong ring-2 ring-surface-1"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      {editing ? (
-                        <input
-                          value={item.text}
-                          onChange={(event) =>
-                            setDraft((current) => {
-                              if (!current) return current;
-                              const sections = [...current.sections];
-                              const items = [...(sections[sectionIndex].items ?? [])];
-                              items[itemIndex] = { ...items[itemIndex], text: event.target.value };
-                              sections[sectionIndex] = { ...sections[sectionIndex], items };
-                              return { ...current, sections };
-                            })
-                          }
-                          className="w-full rounded border border-border bg-surface-1 px-2 py-1 text-[13px] text-ink"
-                        />
-                      ) : (
-                        <span className="text-ink">{item.text}</span>
-                      )}
-                      {item.owner ? (
-                        <span className="ml-1.5 text-[12px] text-ink-muted">— {item.owner}</span>
-                      ) : null}
-                      {paired && paired.pairs[itemIndex] ? (
-                        <TranslatedLine
-                          language={paired.language}
-                          text={paired.pairs[itemIndex].translated.text}
-                        />
-                      ) : null}
-                    </div>
-                    {/* The citation stays on the line even while editing: it is what lets a
-                        reader check a signed statement, and losing it silently would remove the
-                        only thing making the line verifiable. */}
-                    {offset ? (
-                      onSeek && item.atMs != null ? (
-                        <button
-                          type="button"
-                          onClick={() => onSeek(item.atMs!)}
-                          className="shrink-0 font-mono text-[11px] text-ink-subtle hover:text-ink"
-                        >
-                          {offset}
-                        </button>
-                      ) : (
-                        <span className="shrink-0 font-mono text-[11px] text-ink-subtle">{offset}</span>
-                      )
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {section.kind === "items" ? (
-            <Translations
-              section={section}
-              translations={content.translations}
-              pairedLanguage={paired?.language ?? null}
-            />
-          ) : null}
-        </section>
-        );
-      })}
-    </>
-  );
-}
-
-/**
- * The first language whose translation of this section pairs line-by-line, if any.
- *
- * Deterministic in language order so the same document does not reorder itself between renders.
- */
-function pairedFor(
-  section: MinutesSection,
-  translations: Record<string, MinutesSection[]> | null | undefined,
-): { language: string; pairs: { original: MinutesItem; translated: MinutesItem }[] } | null {
-  if (!translations) return null;
-
-  for (const language of Object.keys(translations).sort()) {
-    const pairs = pairByCitation(section.items, counterpartOf(section, translations[language])?.items);
-    if (pairs) return { language, pairs };
-  }
-  return null;
-}
-
-/**
- * A translated line, set smaller and indented under the original.
- *
- * The subordination is the point: in a bilingual record it must be unmistakable which text is
- * what somebody said and which is a rendering of it. A translation typeset identically to the
- * original is one somebody will later quote as the original.
- */
-function TranslatedLine({ language, text }: { language: string; text: string }) {
-  return (
-    <p className="ml-4 mt-0.5 text-[12px] italic leading-relaxed text-ink-muted">
-      <span className="mr-1 font-mono text-[10px] not-italic text-ink-subtle">[{language}]</span>
-      {text}
-    </p>
-  );
-}
-
-/** Every language's rendering of one section, paired to the original line where it can be. */
-function Translations({
-  section,
-  translations,
-  pairedLanguage,
-}: {
-  section: MinutesSection;
-  translations: Record<string, MinutesSection[]> | null | undefined;
-  /** Already shown line-by-line above; printing it again as a block would duplicate it. */
-  pairedLanguage: string | null;
-}) {
-  if (!translations) return null;
-
-  return (
-    <>
-      {Object.entries(translations).map(([language, sections]) => {
-        if (language === pairedLanguage) return null;
-        const counterpart = counterpartOf(section, sections);
-        if (!counterpart) return null;
-
-        if (counterpart.kind === "paragraph") {
-          return counterpart.text ? (
-            <TranslatedLine key={language} language={language} text={counterpart.text} />
-          ) : null;
-        }
-
-        const items = counterpart.items ?? [];
-        if (items.length === 0) return null;
-
-        // A block, because nothing here may be claimed to translate any particular line above.
-        return (
-          <div key={language} className="mt-1">
-            {items.map((item: MinutesItem, index: number) => (
-              <TranslatedLine key={index} language={language} text={item.text} />
-            ))}
+            {!editing && minutes.status === "APPROVED" ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  revise.mutate(minutes.id, {
+                    onSuccess: () => toast.success("Addendum opened."),
+                    onError: () => toast.error("Could not open an addendum."),
+                  })
+                }
+                disabled={revise.isPending}
+                variant="outline"
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                <ClockCounterClockwise size={14} />
+                Draft an addendum
+              </Button>
+            ) : null}
           </div>
-        );
-      })}
-    </>
+        ) : null}
+      </div>
+
+      {/* The document. The surround is a token colour; the page inside it is not — see the
+          component's own comment on why a printed page does not follow the viewer's theme. */}
+      <div className="bg-surface-2 print:bg-transparent">
+        <MinutesDocument
+          minutes={minutes}
+          content={view}
+          template={template}
+          editing={editing}
+          edits={edits}
+          onSeek={onSeek}
+          branding={{
+            // The workspace's own name and mark, never WarpTalk's. The store's copy is what the
+            // shell already has; the detail query only adds the logo.
+            name: workspace?.name ?? workspaceName ?? null,
+            logoUrl: workspace?.logoUrl ?? null,
+          }}
+          policy={policy}
+          // Absent reads as TRUE (WT-587): every room created before `saveTranscript` existed
+          // keeps its transcript, and a client that cannot see the field must never render a
+          // recorded meeting as an unrecorded one. `null` is only "the room has not loaded".
+          transcriptKept={room ? (room.settings?.saveTranscript ?? true) : null}
+          timeZone={workspaceSettings?.timezone ?? null}
+          showGuides={showGuides}
+          statusLabel={DOCUMENT_STATUS[minutes.status] ?? minutes.status}
+        />
+      </div>
+
+      <div className="px-6 print:hidden">
+        <ApprovedWork roomId={roomId} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Which of the two layouts the document is set in.
+ *
+ * A segmented control rather than a dropdown because there are exactly two and the choice is worth
+ * seeing: neither replaces the other, and a reader should be able to tell at a glance which one
+ * they are looking at without opening a menu. Disabled while editing — swapping the layout under
+ * a half-typed correction moves the field the secretary is in.
+ */
+function TemplateSwitch({
+  template,
+  onChange,
+  disabled,
+}: {
+  template: MinutesTemplateId;
+  onChange: (next: MinutesTemplateId) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="Document layout"
+      className="inline-flex overflow-hidden rounded-md border border-border"
+    >
+      {MINUTES_TEMPLATES.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          disabled={disabled}
+          title={option.note}
+          aria-pressed={template === option.id}
+          onClick={() => onChange(option.id)}
+          className={cn(
+            "px-2.5 py-1.5 text-[12px] transition-colors disabled:opacity-50",
+            template === option.id
+              ? "bg-surface-2 font-medium text-ink"
+              : "text-ink-muted hover:text-ink",
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
 /**
  * The commitments this meeting produced, as things somebody can tick off.
  *
- * Distinct from the "Action items" section above it, and deliberately so: that section is the
- * RECORD of what was said, frozen with the document. This is the WORK, and it moves. A record that
- * changed whenever somebody finished a task would stop being a record.
+ * Distinct from the "Action assignments" part of the document above it, and deliberately so: that
+ * part is the RECORD of what was said, frozen with the document. This is the WORK, and it moves. A
+ * record that changed whenever somebody finished a task would stop being a record — which is why
+ * this sits below the page rather than on it.
  *
  * Empty until the minutes are approved, because a draft's commitments are proposals.
  */
@@ -701,8 +598,14 @@ function ApprovedWork({ roomId }: { roomId: string }) {
   }
 
   return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">Assigned work</h4>
+    <section className="space-y-2 border-t border-border pt-4">
+      <div>
+        <h4 className="text-[13px] font-semibold text-ink">Assigned work</h4>
+        <p className="text-[11.5px] text-ink-subtle">
+          Not part of the record — the document keeps what the meeting decided, this tracks whether
+          it got done.
+        </p>
+      </div>
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item.id} className="flex items-start gap-2 text-[13px]">
@@ -752,108 +655,6 @@ function ApprovedWork({ roomId }: { roomId: string }) {
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function Votes({ content }: { content: MeetingMinutesContent }) {
-  if (content.votes.length === 0) return null;
-
-  return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">Votes</h4>
-      <ul className="space-y-1">
-        {content.votes.map((vote, index) => (
-          <li key={index} className="text-[13px] text-ink">
-            {vote.topic}
-            <span className="ml-2 text-ink-muted">
-              For {vote.forCount} · Against {vote.againstCount} · Abstain{" "}
-              {vote.abstainCount}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Signatures({ minutes }: { minutes: MeetingMinutesDto }) {
-  return (
-    <section className="space-y-1.5 border-t border-border pt-4">
-      {/* Three lines, never two. The machine that produced the draft and the person answerable
-          for the content are different facts, and collapsing them is exactly the claim this
-          product must not make. */}
-      <div className="flex gap-2 text-[13px]">
-        <span className="w-36 shrink-0 text-ink-muted">Drafted by</span>
-        <span className="flex items-center gap-1.5 text-ink">
-          <Sparkle size={13} className="text-ink-subtle" />
-          {minutes.draftedByEngine ?? "—"}
-          <span className="text-[11px] text-ink-subtle">{formatTime(minutes.draftedAt)}</span>
-        </span>
-      </div>
-
-      <div className="flex gap-2 text-[13px]">
-        <span className="w-36 shrink-0 text-ink-muted">Secretary of record</span>
-        <span className="text-ink">
-          {minutes.secretaryName ?? "Not signed"}
-          {minutes.secretarySignedAt ? (
-            <span className="ml-1.5 text-[11px] text-ink-subtle">
-              {formatTime(minutes.secretarySignedAt)}
-            </span>
-          ) : null}
-          {minutes.secretarySignedAt ? (
-            <span className="ml-1.5 text-[11px] text-ink-subtle">
-              {minutes.editCountVsDraft > 0
-                ? `${minutes.editCountVsDraft} change(s) from the draft`
-                : "unchanged from the draft"}
-            </span>
-          ) : null}
-        </span>
-      </div>
-
-      <div className="flex gap-2 text-[13px]">
-        <span className="w-36 shrink-0 text-ink-muted">Approved by chair</span>
-        <span className="text-ink">
-          {minutes.chairName ?? "Not approved"}
-          {minutes.chairApprovedAt ? (
-            <span className="ml-1.5 text-[11px] text-ink-subtle">
-              {formatTime(minutes.chairApprovedAt)}
-            </span>
-          ) : null}
-        </span>
-      </div>
-    </section>
-  );
-}
-
-function EditableBlock({
-  title,
-  value,
-  editing,
-  placeholder,
-  onChange,
-}: {
-  title: string;
-  value: string;
-  editing: boolean;
-  placeholder: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">{title}</h4>
-      {editing ? (
-        <textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          rows={3}
-          className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
-        />
-      ) : value ? (
-        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{value}</p>
-      ) : (
-        <p className="text-[13px] text-ink-subtle">{placeholder}</p>
-      )}
     </section>
   );
 }

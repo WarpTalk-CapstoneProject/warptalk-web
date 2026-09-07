@@ -126,9 +126,9 @@ export default function WorkspaceHomePage() {
       href: `/${slug}/rooms`,
     },
     {
-      title: "History",
+      title: "Artifacts",
       icon: ClockCounterClockwise,
-      href: `/${slug}/history`,
+      href: `/${slug}/artifacts`,
     },
     {
       title: "Documents",

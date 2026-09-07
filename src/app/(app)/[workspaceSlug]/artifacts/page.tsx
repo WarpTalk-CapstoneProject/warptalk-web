@@ -16,10 +16,17 @@ import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Button } from "@/components/ui/button";
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
 import { ArtifactReader } from "@/components/artifacts/artifact-reader";
-import { useArtifactLibrary } from "@/hooks/use-artifact-library";
+import { useArtifactLibrary, useDrawUpMinutes } from "@/hooks/use-artifact-library";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { countByKind, narrowLibrary } from "@/lib/meeting/artifact-library";
+import {
+  countByKind,
+  groupEntriesByMeeting,
+  narrowLibrary,
+  preferredEntry,
+} from "@/lib/meeting/artifact-library";
 import type { ArtifactKind } from "@/lib/meeting/artifact-library";
+import { toast } from "sonner";
+
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { cn } from "@/lib/utils";
@@ -69,7 +76,15 @@ export default function ArtifactsPage() {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
   const [mineOnly, setMineOnly] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /**
+   * The MEETING being read, and which of its records.
+   *
+   * Two fields rather than one artifact id, because they change independently: switching tabs
+   * inside a meeting must not close it, and opening another meeting must not carry the previous
+   * one's tab onto a meeting that has no record of that kind.
+   */
+  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [selectedKind, setSelectedKind] = useState<ArtifactKind | null>(null);
 
   const library = useArtifactLibrary(activeWorkspaceId, { search: query });
 
@@ -87,7 +102,44 @@ export default function ArtifactsPage() {
   // "how much survived the filter I am already looking through".
   const counts = useMemo(() => countByKind(library.entries), [library.entries]);
 
-  const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+  // Grouped AFTER narrowing, so "Transcripts" means "meetings that have one" and a body search
+  // surfaces the meeting whose body matched.
+  const groups = useMemo(() => groupEntriesByMeeting(entries), [entries]);
+
+  const selectedGroup = groups.find((group) => group.roomId === selectedRoomId) ?? null;
+  /**
+   * Falls back to `preferredEntry` whenever the chosen kind is not in this meeting.
+   *
+   * Not only for the first open: narrowing to Minutes while reading a transcript would otherwise
+   * leave the panel pointing at a record the group no longer holds, and it would render nothing
+   * while the card beside it stayed selected.
+   */
+  const selected = selectedGroup
+    ? selectedGroup.entries.find((entry) => entry.kind === selectedKind) ??
+      preferredEntry(selectedGroup)
+    : null;
+
+  const drawUpMinutes = useDrawUpMinutes(activeWorkspaceId);
+
+  /**
+   * Whether the record being read is a summary this viewer could turn into a biên bản.
+   *
+   * All three conditions are answered from the UNNARROWED library, because "does this meeting
+   * already have minutes?" must not change with the filter chips — a Summary-only view would
+   * otherwise offer to draw up minutes that exist and are simply hidden.
+   *
+   * The last condition is the one worth keeping. A summary with no body is a meeting nobody spoke
+   * in, and drawing minutes from it consumes a number from the workspace's yearly sequence to
+   * produce an attendance list with nothing under it. The server refuses that too; this is so the
+   * product does not offer it and then explain itself afterwards.
+   */
+  const canDrawUpMinutes =
+    selected?.kind === "summary" &&
+    Boolean(selected.body) &&
+    selected.hostId === viewerId &&
+    !library.entries.some(
+      (entry) => entry.kind === "minutes" && entry.roomId === selected.roomId,
+    );
 
   useRegisterAssistantContext(
     selected
@@ -126,8 +178,10 @@ export default function ArtifactsPage() {
         }
         actions={
           <>
+            {/* Meetings, because meetings are what the grid lists now. Saying "202 records"
+                over 101 cards invited exactly one question — which card is the other 101? */}
             <span className="shrink-0 text-[12px] text-ink-subtle tabular-nums">
-              {entries.length} {entries.length === 1 ? "record" : "records"}
+              {groups.length} {groups.length === 1 ? "meeting" : "meetings"}
             </span>
             {/* Ownership is a second axis, so it gets its own control rather than a fifth chip in
                 a group that means "kind". Mixing the two in one row makes "Minutes" and "Mine"
@@ -151,10 +205,11 @@ export default function ArtifactsPage() {
       />
 
       <WorkspaceBody>
-        <section
-          className="overflow-hidden rounded-lg border border-border bg-surface-1"
-          aria-label="Meeting records"
-        >
+        {/* No frame around the grid. The cards are already bordered surfaces, so the section's
+            own border, radius and background were a second box drawn around boxes — and its
+            `overflow-hidden` was clipping the reader's own scroll region to it. The landmark and
+            its label stay; only the decoration went. */}
+        <section aria-label="Meeting records">
           {library.isLoading ? (
             <LoadingState />
           ) : library.isError ? (
@@ -168,7 +223,7 @@ export default function ArtifactsPage() {
                 selected && "lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_540px]",
               )}
             >
-              <div className="min-w-0 overflow-y-auto p-4">
+              <div className="min-w-0 overflow-y-auto pb-4 pr-4">
                 {/* One column narrower than a plain gallery once the reader is open, so the cards
                     keep their proportions instead of squashing into letterboxes. */}
                 <div
@@ -177,24 +232,46 @@ export default function ArtifactsPage() {
                     selected ? "xl:grid-cols-3" : "lg:grid-cols-3 xl:grid-cols-4",
                   )}
                 >
-                  {entries.map((entry) => (
+                  {groups.map((group) => (
                     <ArtifactCard
-                      key={entry.id}
-                      entry={entry}
-                      selected={selected?.id === entry.id}
+                      key={group.roomId}
+                      group={group}
+                      selected={selectedGroup?.roomId === group.roomId}
                       onSelect={() =>
-                        setSelectedId((current) => (current === entry.id ? null : entry.id))
+                        setSelectedRoomId((current) => {
+                          // Re-opening a meeting starts from its most readable record rather than
+                          // from whichever tab the last meeting was left on.
+                          setSelectedKind(null);
+                          return current === group.roomId ? null : group.roomId;
+                        })
                       }
                     />
                   ))}
                 </div>
               </div>
 
-              {selected ? (
+              {selectedGroup && selected ? (
                 <ArtifactReader
+                  group={selectedGroup}
                   entry={selected}
+                  onSelectKind={setSelectedKind}
                   workspaceSlug={workspaceSlug}
-                  onClose={() => setSelectedId(null)}
+                  onClose={() => {
+                    setSelectedRoomId(null);
+                    setSelectedKind(null);
+                  }}
+                  onDrawUpMinutes={
+                    canDrawUpMinutes
+                      ? () =>
+                          drawUpMinutes.mutate(selected.roomId, {
+                            onSuccess: (minutes) =>
+                              toast.success(`Minutes ${minutes.minutesNo} drawn up.`),
+                            onError: () =>
+                              toast.error("Could not draw up the minutes for this meeting."),
+                          })
+                      : undefined
+                  }
+                  drawingUpMinutes={drawUpMinutes.isPending}
                 />
               ) : null}
             </div>
