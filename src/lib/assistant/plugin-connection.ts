@@ -151,8 +151,8 @@ export function sharedConnectionWarning(
   if (siblings.length === 0) return null;
   const labels = formatPluginLabelList(siblings.map((sibling) => sibling.label));
   return siblings.length === 1
-    ? `${labels} signs in through the same account connection, so it is disconnected too.`
-    : `${labels} sign in through the same account connection, so they are disconnected too.`;
+    ? `${labels} shares this account connection, so it is disconnected too.`
+    : `${labels} share this account connection, so they are disconnected too.`;
 }
 
 /* ---------------------------------------------------------------------------------------------
