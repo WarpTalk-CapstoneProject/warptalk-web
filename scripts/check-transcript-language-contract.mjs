@@ -82,11 +82,19 @@ assert.ok(
 );
 
 // 4. Every shape of the record.
+//
+// `<TranscriptDocumentTurn` was `<TranscriptDocumentRow` before Option C, and the rename is the
+// change rather than a tidy-up, so it is written down instead of quietly swapped. The document
+// view used to draw one row per utterance — which for one person talking for two minutes is
+// twenty rows, each repeating their name, their face and their timestamp around one paragraph of
+// speech. It draws one block per speaker TURN now, grouped on the same ~30-second window the
+// timeline already used, and prints the name once. What this assertion is for is unchanged: the
+// document view exists and is rendered by this panel.
 for (const [needle, what] of [
   ["<TranscriptLanguageMenu", "the language picker"],
   ["<TranscriptLayoutToggle", "the view toggle"],
   ["<TranscriptChatRow", "the conversation view"],
-  ["<TranscriptDocumentRow", "the document view"],
+  ["<TranscriptDocumentTurn", "the document view"],
   ["<TranscriptTimelineTurn", "the timeline view"],
 ]) {
   assert.ok(panel.includes(needle), `The transcript panel must render ${what} (${needle}).`);
