@@ -7,9 +7,11 @@ import {
   describeAbsence,
   entryExcerpt,
   entryMatches,
+  groupEntriesByMeeting,
   minutesBodyText,
   minutesStatusLabel,
   narrowLibrary,
+  preferredEntry,
   relativeTime,
 } from "../artifact-library.ts";
 import { ARTIFACT_WITHHELD_FALLBACK } from "../artifact-denial.ts";
@@ -330,4 +332,238 @@ test("counts are per kind, so a chip can say how much is behind it", () => {
   });
 
   assert.deepEqual(countByKind(entries), { transcript: 1, summary: 1, minutes: 1 });
+});
+
+
+// ── one card per meeting ─────────────────────────────────────────────────────────
+
+test("a meeting's records become one group, not three cards", () => {
+  // The report: "bị rời rạc quá, tôi không biết combo transcript, summary, minutes là của meeting
+  // nào khi nhìn vào". Two records of one meeting were two adjacent cards under the same title.
+  const entries = buildArtifactLibrary({
+    rooms: [
+      room({
+        artifacts: [
+          artifact({ id: "a-1", type: "transcript_export" }),
+          artifact({ id: "a-2", type: "summary_export", content: "We agreed to ship." }),
+        ],
+      }),
+    ],
+    minutes: [minutesItem()],
+  });
+
+  const groups = groupEntriesByMeeting(entries);
+
+  assert.equal(groups.length, 1, "one meeting must produce one card");
+  assert.equal(groups[0].roomId, "room-1");
+  assert.deepEqual(groups[0].kinds, ["transcript", "summary", "minutes"]);
+  assert.equal(groups[0].entries.length, 3);
+});
+
+test("two meetings stay two groups, newest first", () => {
+  const entries = buildArtifactLibrary({
+    rooms: [
+      room({ id: "room-1", endedAt: "2026-09-01T10:00:00Z" }),
+      room({ id: "room-2", endedAt: "2026-09-05T10:00:00Z", translationRoomCode: "WARP-202" }),
+    ],
+    minutes: [],
+  });
+
+  const groups = groupEntriesByMeeting(entries);
+
+  // Ordered here, by the meeting's own end date — see the split-minutes test below for why this
+  // can no longer be inherited from the flat list.
+  assert.deepEqual(
+    groups.map((group) => group.roomId),
+    ["room-2", "room-1"],
+  );
+});
+
+test("a group reports how many of its records this viewer can open", () => {
+  // A HOST_ONLY room hands a participant rows with no bodies. Zero readable is the answer that
+  // tells the reader to ask the host, and it is different from the meeting having no records.
+  const entries = buildArtifactLibrary({
+    rooms: [
+      room({
+        artifacts: [
+          artifact({ id: "a-1", type: "transcript_export", content: undefined }),
+          artifact({ id: "a-2", type: "summary_export", content: "We agreed to ship." }),
+        ],
+      }),
+    ],
+    minutes: [],
+  });
+
+  const [group] = groupEntriesByMeeting(entries);
+
+  assert.equal(group.entries.length, 2);
+  assert.equal(group.readableCount, 1);
+});
+
+test("a group is dated by its most recently changed record", () => {
+  // Records arrive in produced order, which is not the order they were edited in: minutes signed
+  // days later sit after a transcript untouched since the meeting. Last-wins would date the
+  // meeting by the transcript.
+  const entries = buildArtifactLibrary({
+    rooms: [room()],
+    minutes: [minutesItem()],
+  });
+
+  const [group] = groupEntriesByMeeting(entries);
+  const latest = entries
+    .map((entry) => entry.changedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+
+  assert.equal(group.changedAt, latest);
+});
+
+test("opening a meeting lands on a record that can actually be read", () => {
+  // Opening onto a withheld transcript shows a lock while the summary beside it was readable all
+  // along — and most readers would conclude the meeting holds nothing.
+  const entries = buildArtifactLibrary({
+    rooms: [
+      room({
+        artifacts: [
+          artifact({ id: "a-1", type: "transcript_export", content: undefined }),
+          artifact({ id: "a-2", type: "summary_export", content: "We agreed to ship." }),
+        ],
+      }),
+    ],
+    minutes: [],
+  });
+
+  const [group] = groupEntriesByMeeting(entries);
+
+  assert.equal(preferredEntry(group).kind, "summary");
+});
+
+test("a meeting with nothing readable still opens on something", () => {
+  // The panel has to render, and describeAbsence is what it renders.
+  const entries = buildArtifactLibrary({
+    rooms: [room({ artifacts: [artifact({ id: "a-1", content: undefined })] })],
+    minutes: [],
+  });
+
+  const [group] = groupEntriesByMeeting(entries);
+
+  assert.equal(preferredEntry(group).kind, "transcript");
+  assert.equal(group.readableCount, 0);
+});
+
+test("grouping a narrowed list answers \"meetings that have one\"", () => {
+  // The kind chips keep meaning what they say: filter first, group second.
+  const entries = buildArtifactLibrary({
+    rooms: [
+      room({ id: "room-1", artifacts: [artifact({ id: "a-1", type: "transcript_export" })] }),
+      room({
+        id: "room-2",
+        translationRoomCode: "WARP-202",
+        artifacts: [artifact({ id: "a-2", type: "summary_export", content: "Shipped." })],
+      }),
+    ],
+    minutes: [],
+  });
+
+  const groups = groupEntriesByMeeting(narrowLibrary(entries, { kind: "summary" }));
+
+  assert.deepEqual(
+    groups.map((group) => group.roomId),
+    ["room-2"],
+  );
+});
+
+
+// ── a meeting's records stay together, and the meeting is dated by its END ───────
+
+/**
+ * The case that made adjacency structural rather than inherited.
+ *
+ * `buildArtifactLibrary` orders by `meetingEndedAt` first, and the two sources of that field
+ * disagree for one room: an artifact carries `room.endedAt`, a minutes carries
+ * `roomEndedAt ?? minutes.createdAt`. A minutes filed with no `roomEndedAt` takes the day it was
+ * DRAWN UP — later than the meeting — so it sorted away from its own transcript with other
+ * meetings in between.
+ */
+function splitMeetingFixture() {
+  return buildArtifactLibrary({
+    rooms: [
+      room({
+        id: "room-old",
+        translationRoomCode: "WARP-OLD",
+        endedAt: "2026-09-01T10:00:00Z",
+        artifacts: [artifact({ id: "t-old" })],
+      }),
+      room({
+        id: "room-new",
+        translationRoomCode: "WARP-NEW",
+        endedAt: "2026-09-06T10:00:00Z",
+        artifacts: [artifact({ id: "t-new" })],
+      }),
+    ],
+    minutes: [
+      minutesItem({
+        minutes: minutesDto({
+          translationRoomId: "room-old",
+          createdAt: "2026-09-07T08:00:00Z",
+          updatedAt: "2026-09-07T08:00:00Z",
+        }),
+        roomCode: "WARP-OLD",
+        // The whole point: the minutes row does not say when the meeting ended.
+        roomEndedAt: null,
+      }),
+    ],
+  });
+}
+
+test("the flat list really can separate a meeting's records", () => {
+  // Guards the premise of the three tests below. If this ever stops being true the grouping is
+  // still correct, but the reason it was made structural would have quietly disappeared.
+  const entries = splitMeetingFixture();
+  const positions = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.roomId === "room-old")
+    .map(({ index }) => index);
+
+  assert.equal(positions.length, 2);
+  assert.notEqual(positions[1] - positions[0], 1, "the fixture no longer reproduces the split");
+});
+
+test("a meeting's records are one group even when the flat list splits them", () => {
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+  const old = groups.find((group) => group.roomId === "room-old");
+
+  assert.ok(old);
+  assert.deepEqual(old.kinds, ["transcript", "minutes"]);
+});
+
+test("a meeting is dated by when it ENDED, not by when its minutes were filed", () => {
+  // 2026-09-07 is the day somebody drew the minutes up. Dating the meeting by it would put a
+  // meeting from the 1st at the top of a list sorted by end date.
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+  const old = groups.find((group) => group.roomId === "room-old");
+
+  assert.equal(old?.meetingEndedAt, "2026-09-01T10:00:00Z");
+});
+
+test("groups are ordered by the meeting's end date, newest first", () => {
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+
+  assert.deepEqual(
+    groups.map((group) => group.roomCode),
+    ["WARP-NEW", "WARP-OLD"],
+  );
+});
+
+test("a group's records read transcript, summary, minutes whatever order they arrived in", () => {
+  // The panel's first tab is entries[0]. A minutes that sorted ahead of its own transcript put
+  // "Minutes" there, which is the last thing produced and the first thing shown.
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+  const old = groups.find((group) => group.roomId === "room-old");
+
+  assert.deepEqual(
+    old?.entries.map((entry) => entry.kind),
+    ["transcript", "minutes"],
+  );
 });
