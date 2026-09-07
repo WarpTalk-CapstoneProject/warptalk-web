@@ -10,6 +10,7 @@ import {
   LockSimple,
   Signature,
   SpinnerGap,
+  Stamp,
   Translate,
   Users,
   WarningCircle,
@@ -42,10 +43,22 @@ export function ArtifactReader({
   entry,
   workspaceSlug,
   onClose,
+  onDrawUpMinutes,
+  drawingUpMinutes = false,
 }: {
   entry: LibraryEntry;
   workspaceSlug: string;
   onClose: () => void;
+  /**
+   * Draw this meeting's biên bản up from the summary being read.
+   *
+   * Omitted unless it would actually work — the page owns that decision because only it can see
+   * every entry at once (it has to know whether this room already HAS minutes). Reaching minutes
+   * otherwise means opening the meeting, finding the Minutes tab and pressing a button four
+   * steps in, which is a large part of why production holds so few of them.
+   */
+  onDrawUpMinutes?: () => void;
+  drawingUpMinutes?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -137,6 +150,21 @@ export function ArtifactReader({
               >
                 <Copy size={12} />
                 {copied ? "Copied" : "Copy"}
+              </button>
+            ) : null}
+            {onDrawUpMinutes ? (
+              <button
+                type="button"
+                onClick={onDrawUpMinutes}
+                disabled={drawingUpMinutes}
+                className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-[10px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+              >
+                {drawingUpMinutes ? (
+                  <SpinnerGap size={12} className="animate-spin" />
+                ) : (
+                  <Stamp size={12} />
+                )}
+                Draw up the minutes
               </button>
             ) : null}
             <Link

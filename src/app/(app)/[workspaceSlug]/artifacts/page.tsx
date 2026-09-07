@@ -16,10 +16,12 @@ import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Button } from "@/components/ui/button";
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
 import { ArtifactReader } from "@/components/artifacts/artifact-reader";
-import { useArtifactLibrary } from "@/hooks/use-artifact-library";
+import { useArtifactLibrary, useDrawUpMinutes } from "@/hooks/use-artifact-library";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { countByKind, narrowLibrary } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind } from "@/lib/meeting/artifact-library";
+import { toast } from "sonner";
+
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { cn } from "@/lib/utils";
@@ -88,6 +90,28 @@ export default function ArtifactsPage() {
   const counts = useMemo(() => countByKind(library.entries), [library.entries]);
 
   const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+
+  const drawUpMinutes = useDrawUpMinutes(activeWorkspaceId);
+
+  /**
+   * Whether the record being read is a summary this viewer could turn into a biên bản.
+   *
+   * All three conditions are answered from the UNNARROWED library, because "does this meeting
+   * already have minutes?" must not change with the filter chips — a Summary-only view would
+   * otherwise offer to draw up minutes that exist and are simply hidden.
+   *
+   * The last condition is the one worth keeping. A summary with no body is a meeting nobody spoke
+   * in, and drawing minutes from it consumes a number from the workspace's yearly sequence to
+   * produce an attendance list with nothing under it. The server refuses that too; this is so the
+   * product does not offer it and then explain itself afterwards.
+   */
+  const canDrawUpMinutes =
+    selected?.kind === "summary" &&
+    Boolean(selected.body) &&
+    selected.hostId === viewerId &&
+    !library.entries.some(
+      (entry) => entry.kind === "minutes" && entry.roomId === selected.roomId,
+    );
 
   useRegisterAssistantContext(
     selected
@@ -195,6 +219,18 @@ export default function ArtifactsPage() {
                   entry={selected}
                   workspaceSlug={workspaceSlug}
                   onClose={() => setSelectedId(null)}
+                  onDrawUpMinutes={
+                    canDrawUpMinutes
+                      ? () =>
+                          drawUpMinutes.mutate(selected.roomId, {
+                            onSuccess: (minutes) =>
+                              toast.success(`Minutes ${minutes.minutesNo} drawn up.`),
+                            onError: () =>
+                              toast.error("Could not draw up the minutes for this meeting."),
+                          })
+                      : undefined
+                  }
+                  drawingUpMinutes={drawUpMinutes.isPending}
                 />
               ) : null}
             </div>

@@ -427,8 +427,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     if (sub) {
                       parts.push({ label: roomTitle || "Loading..." });
                     }
-                  } else if (feature === "history") {
-                    parts.push({ label: "History" });
+                  } else if (feature === "artifacts") {
+                    parts.push({ label: "Artifacts" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {
