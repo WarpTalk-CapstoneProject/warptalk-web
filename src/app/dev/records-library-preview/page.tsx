@@ -20,7 +20,7 @@
 import { useState } from "react";
 
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
-import { ArtifactReader } from "@/components/artifacts/artifact-reader";
+import { ArtifactRecordView } from "@/components/artifacts/artifact-reader";
 import {
   groupEntriesByMeeting,
   preferredEntry,
@@ -160,57 +160,59 @@ export default function RecordsLibraryPreviewPage() {
         <div>
           <h1 className="text-[18px] font-semibold">Meeting records</h1>
           <p className="mt-1 text-[13px] text-ink-muted">
-            One card per meeting. Open one and the tab strip carries its transcript, summary and
-            minutes — including the ones that are locked.
+            One card per meeting, each linking to its own page. Below the grid is the record view
+            that page renders — the tab strip carries the meeting&apos;s transcript, summary and
+            minutes, including the ones that are locked.
           </p>
         </div>
 
-        {/* The real page's grid, without the frame that used to wrap it. */}
+        {/* The real list page's grid: one column, cards are links. */}
         <section aria-label="Meeting records">
-          <div
-            className={
-              selectedGroup
-                ? "grid min-h-[560px] lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_540px]"
-                : "grid min-h-[560px]"
-            }
-          >
-            <div className="min-w-0 overflow-y-auto pb-4 pr-4">
-              <div
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {groups.map((group) => (
+              <ArtifactCard key={group.roomId} group={group} workspaceSlug="preview" />
+            ))}
+          </div>
+        </section>
+
+        {/* What the detail page renders. Driven by a local picker here rather than by the route,
+            because a preview has no workspace to route inside. */}
+        <section aria-label="Record view" className="space-y-2 pt-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-ink-muted">Showing:</span>
+            {groups.map((group) => (
+              <button
+                key={group.roomId}
+                type="button"
+                onClick={() => {
+                  setRoomId(group.roomId);
+                  setKind(null);
+                }}
                 className={
-                  selectedGroup
-                    ? "grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3"
-                    : "grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                  group.roomId === roomId
+                    ? "rounded-md bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-ink"
+                    : "rounded-md px-2.5 py-1 text-[11px] text-ink-muted hover:text-ink"
                 }
               >
-                {groups.map((group) => (
-                  <ArtifactCard
-                    key={group.roomId}
-                    group={group}
-                    selected={selectedGroup?.roomId === group.roomId}
-                    onSelect={() =>
-                      setRoomId((current) => {
-                        setKind(null);
-                        return current === group.roomId ? null : group.roomId;
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            </div>
+                {group.roomCode}
+              </button>
+            ))}
+          </div>
 
-            {selectedGroup && selected ? (
-              <ArtifactReader
+          {selectedGroup && selected ? (
+            <div className="overflow-hidden rounded-lg border border-border bg-surface-1">
+              <ArtifactRecordView
                 group={selectedGroup}
                 entry={selected}
                 onSelectKind={setKind}
                 workspaceSlug="preview"
-                onClose={() => {
-                  setRoomId(null);
-                  setKind(null);
-                }}
               />
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[11px] text-ink-subtle">
+              Pick a room code above to render the detail page&apos;s record view.
+            </p>
+          )}
         </section>
       </div>
     </main>

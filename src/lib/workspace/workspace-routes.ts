@@ -30,6 +30,22 @@ export function roomDetailPath(workspaceSlug: string, roomId: string): string {
   return `/${workspaceSlug}/rooms/${roomId}`;
 }
 
+/** The library of everything WarpTalk wrote down, across every meeting. */
+export function recordsPath(workspaceSlug: string): string {
+  return `/${workspaceSlug}/artifacts`;
+}
+
+/**
+ * One meeting's records, at their own address.
+ *
+ * Keyed by ROOM and not by artifact: the page holds a meeting's transcript, summary and minutes
+ * together, and which of them is open is a tab rather than a different page. A record therefore
+ * has a URL that survives the meeting producing another one.
+ */
+export function recordDetailPath(workspaceSlug: string, roomId: string): string {
+  return `/${workspaceSlug}/artifacts/${roomId}`;
+}
+
 /** The lobby a room sits in before anybody has started it. */
 export function roomWaitingPath(workspaceSlug: string, roomId: string): string {
   return `/${workspaceSlug}/rooms/${roomId}/waiting`;
