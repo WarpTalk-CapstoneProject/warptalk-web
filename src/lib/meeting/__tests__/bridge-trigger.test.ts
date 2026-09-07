@@ -154,6 +154,31 @@ test("an offer follows the sensor rather than latching", () => {
   assert.deepEqual(gone, IDLE_TRIGGER);
 });
 
+test("a workspace with no bridge room at all still gets the offer", () => {
+  // An EMPTY schedule plus a Meet window is the only shape flow 2 ever has, so this composes both
+  // halves rather than handing nextBridgeTrigger a written-out `null`: the empty list is the input
+  // the app really holds, and `selectTriggerMeeting` is what turns it into the null.
+  //
+  // BE CLEAR ABOUT WHAT THIS DOES AND DOES NOT CATCH. The bug that made flow 2 unreachable was
+  // never here - the pure half always answered correctly. The hook armed the window sensor on
+  // `meetings.length > 0`, so a workspace that had never made a bridge room never looked, and this
+  // input was never produced. That gate is gone, but its return would not turn this test red:
+  // arming is a subscription inside a hook, not a value, and nothing pure can observe it. See the
+  // note in use-bridge-trigger.ts. What this does hold is the pure path itself - that an empty
+  // schedule and a visible window still compose into an offer rather than into silence.
+  const meeting = selectTriggerMeeting([], NOW);
+  assert.equal(meeting, null);
+  assert.deepEqual(
+    nextBridgeTrigger(IDLE_TRIGGER, {
+      meeting,
+      nowMs: NOW,
+      meetWindowVisible: true,
+      translationStarted: false,
+    }),
+    OFFER_TRIGGER,
+  );
+});
+
 test("a known meeting wins over the offer", () => {
   const withRoom = nextBridgeTrigger(IDLE_TRIGGER, {
     meeting: meeting(),

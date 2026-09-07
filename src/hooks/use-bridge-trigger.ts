@@ -39,7 +39,13 @@ const TICK_MS = 15_000;
 const OFFER_TARGET = "__offer__";
 
 export interface UseBridgeTriggerOptions {
-  /** Bridge meetings that could be in play. Empty disables the trigger entirely. */
+  /**
+   * Bridge meetings that could be in play, for the SCHEDULE half of the trigger.
+   *
+   * Empty is a normal, expected state and disables nothing. An empty list is precisely the flow-2
+   * case - a Meet call with no WarpTalk room behind it - which is the one the `offer` state exists
+   * to catch. It used to gate the sensor; see the arming comment below for why it no longer can.
+   */
   meetings: readonly TriggerMeeting[];
   translationStarted?: boolean;
 }
@@ -73,14 +79,59 @@ export function useBridgeTrigger({
     meetingRoomIdRef.current = meetingRoomId;
   }, [meetingRoomId]);
 
-  // The sensor runs only while there is something it could be about. `meetings.length` rather than
-  // the array itself: a query that refetches hands back a new array with the same content, and
-  // depending on its identity would tear down and re-arm the OS-level watcher on every poll.
-  const armed = meetings.length > 0;
+  /**
+   * The sensor arms for the whole session. Nothing gates it.
+   *
+   * WHAT WAS WRONG WITH THE OLD GATE
+   *   It was `meetings.length > 0` - the workspace's EXTERNAL_BRIDGE rooms, as assembled by the app
+   *   shell. So a workspace that had never created a bridge room never armed the sensor, and a
+   *   workspace that never armed the sensor could never see a Meet window.
+   *
+   *   That is exactly the case `offer` exists for. `nextBridgeTrigger` returns it when there is no
+   *   meeting and a Meet window is on screen - "a call with no room behind it", flow 2, the user who
+   *   opened Google Meet and started talking without touching WarpTalk. Under the old gate, reaching
+   *   it required a workspace to ALREADY own a bridge room and for that room to be outside its own
+   *   trigger window: an accidental precondition nobody designed. The first bridge meeting a
+   *   workspace ever had could not be offered, which is the only one where the offer is the whole
+   *   product.
+   *
+   * WHAT REPLACED IT: NOTHING
+   *   Not a narrower condition - there is no honest one to write. For a desktop user the answer to
+   *   "when could a Meet window matter?" is "at any time", because the whole point of flow 2 is that
+   *   WarpTalk was not told in advance.
+   *
+   *   Off the desktop the effect costs nothing to leave armed: `watchMeetPresence` returns null on a
+   *   browser tab and on a desktop build that predates the sensor - it requires BOTH
+   *   `warptalk.watchMeetPresence` and `warptalk.onMeetPresence` on the preload bridge, and
+   *   `getDesktopBridge()` is null during server rendering and in any ordinary tab (lib/desktop/
+   *   bridge.ts). So there is no subscription, nothing to clean up, and the schedule half of the
+   *   trigger carries on working. Guarding this with `isDesktopApp()` would be a weaker copy of a
+   *   check that already happens one call down: it only proves `window.warptalk` exists, not that
+   *   this build has the sensor.
+   *
+   * WHAT IT COSTS, PLAINLY
+   *   On the desktop a helper process now runs for the whole session for EVERY user, including ones
+   *   who will never use the bridge: the UI Automation sensor keeps a warm PowerShell session and is
+   *   asked one question per poll (warptalk-desktop/src/main/meet-url-sensor.ts). Measured on the
+   *   target machine that is about 0.2 percentage points of one core at the poll cadence, and across
+   *   six paired idle/polling rounds the delta shrank to nothing - the real cost is a one-time
+   *   accessibility wake-up rather than a per-read one. That is small, but it is not zero and it is
+   *   not conditional any more, so it is written down here rather than left to be rediscovered.
+   *
+   * THE GATE THIS SHOULD EVENTUALLY HAVE
+   *   An explicit preference - "let WarpTalk notice Google Meet calls" - asked once and stored.
+   *   Something the user chose, rather than a side effect of whether their workspace happens to own
+   *   a bridge room. Deliberately NOT built here: this change is about making flow 2 reachable at
+   *   all, and swapping one implicit gate for a second one in the same commit would leave nobody
+   *   able to say which of them the feature actually depends on.
+   *
+   * WHY THE DEPENDENCY ARRAY IS EMPTY
+   *   The subscription belongs to the mount, not to the schedule. `meetings` must not appear here:
+   *   a query that refetches hands back a new array with the same content, and re-arming on its
+   *   identity would tear down and restart the helper process on every poll. `meetingRoomIdRef` is
+   *   how the callback reads the current meeting without the effect having to depend on it.
+   */
   useEffect(() => {
-    if (!armed) return;
-    // Null on a browser tab or a desktop build without the sensor. Nothing to clean up, and the
-    // schedule half of the trigger carries on working without it.
     const stop = watchMeetPresence((next) => {
       setPresence(next);
       if (next.meetWindowVisible && meetingRoomIdRef.current) {
@@ -88,7 +139,7 @@ export function useBridgeTrigger({
       }
     });
     return stop ?? undefined;
-  }, [armed]);
+  }, []);
 
   /**
    * Derived during render, not stored.
