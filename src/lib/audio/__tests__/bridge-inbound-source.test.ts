@@ -30,8 +30,22 @@ const globals = globalThis as unknown as Record<string, unknown>;
 
 /** Enough of an AudioContext for the PCM bridge to build a track it never has to play. */
 class StubAudioContext {
+  /**
+   * Counted across instances, because the bridge constructs its own context from this global and
+   * the test never gets a handle on it. Releasing that context is what stops a few join/leave
+   * cycles from exhausting the browser's AudioContext budget, so it is worth asserting rather
+   * than assuming.
+   */
+  static closes = 0;
+
   destination = {};
   currentTime = 0;
+
+  close(): Promise<void> {
+    StubAudioContext.closes += 1;
+    return Promise.resolve();
+  }
+
   createMediaStreamDestination() {
     return { stream: { getAudioTracks: () => [{ stop() {}, kind: "audio" }] } };
   }
@@ -49,6 +63,7 @@ function install(bridge: FakeBridge | null): void {
 }
 
 afterEach(() => {
+  StubAudioContext.closes = 0;
   // Assigned back to undefined rather than deleted: `typeof window` reads "undefined" either way,
   // which is the check `getDesktopBridge` makes, and this keeps the DOM lib out of the argument.
   globals.window = undefined;
@@ -136,6 +151,9 @@ test("disposing stops the capture in the main process, and only once", async () 
 
   assert.equal(stops, 1);
   assert.equal(subscribed, 0);
+  // The context the bridge created is released with everything else. It used to survive, and a
+  // handful of join/leave cycles then failed at construction with a message naming the wrong cause.
+  assert.equal(StubAudioContext.closes, 1);
 });
 
 test("a desktop build without the capture API is refused, not silently ignored", async () => {
