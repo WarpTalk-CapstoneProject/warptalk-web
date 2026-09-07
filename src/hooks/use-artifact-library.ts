@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import { useRoomHistory } from "@/hooks/use-room-history";
@@ -77,4 +77,29 @@ export function useArtifactLibrary(workspaceId: string | null, options?: { searc
       void minutes.refetch();
     },
   };
+}
+
+/**
+ * Draw a meeting's biên bản up from the summary being read.
+ *
+ * Lives beside the library rather than in the minutes panel's own hook because the thing it has
+ * to put right afterwards is the LIBRARY: a new minutes row is a new entry, so it changes what
+ * the grid holds and what the kind counts say. Both halves are invalidated — the minutes query
+ * for the row itself, and the room history because a room that now has minutes is no longer a
+ * room this page should offer to draw them up for.
+ *
+ * Reuses `meetingMinutesService.createDraft`, the same call the meeting's own Minutes tab makes.
+ * The server keeps every gate; offering this from here only changes how far a reader has to walk
+ * to reach it, which was four steps inside a single meeting.
+ */
+export function useDrawUpMinutes(workspaceId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (roomId: string) => (await meetingMinutesService.createDraft(roomId)).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspace-minutes", workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["room-history", workspaceId] });
+    },
+  });
 }

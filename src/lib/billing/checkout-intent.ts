@@ -16,6 +16,10 @@
  * (see CreateCheckoutSessionRequest), so nothing has to be translated on the way in or out.
  */
 
+// Relative, with the extension: this module's unit tests run under the plain node test runner,
+// which does not resolve "@/", and this is a real value rather than an erased type import.
+import { workspaceActivationPath } from "../workspace/workspace-routes.ts";
+
 /** The query key holding the chosen plan. Present ⇒ the visitor is mid-purchase. */
 export const CHECKOUT_PLAN_PARAM = "planSlug";
 
@@ -49,13 +53,19 @@ export function readCheckoutIntent(params: ReadableParams | null | undefined): s
 }
 
 /**
- * Where a visitor goes once their workspace exists: the plan grid, with their plan named.
+ * Where a visitor goes once their workspace exists: the activation landing, with their plan named.
  *
- * The grid rather than a checkout session directly. Creating the session needs an amount and a
- * currency that only the plan grid has resolved, and sending someone straight to a payment page
- * for a plan they chose several screens ago — possibly before registering — skips the one moment
- * they can confirm what they are about to be charged.
+ * A plan grid rather than a checkout session directly. Creating the session needs an amount and a
+ * currency that only the grid has resolved, and sending someone straight to a payment page for a
+ * plan they chose several screens ago — possibly before registering — skips the one moment they
+ * can confirm what they are about to be charged.
+ *
+ * The LANDING's grid, not `/{slug}/payment/plans`. This is reached only when a workspace was
+ * created and the checkout did not complete, which is by definition an unpaid workspace — and an
+ * unpaid workspace is redirected off every route but the landing (see lib/billing/workspace-paywall).
+ * Pointing here keeps the plan the buyer picked; pointing at the old path would have arrived at
+ * the same grid via a redirect that drops the query string, silently losing their choice.
  */
 export function checkoutContinuationPath(workspaceSlug: string, planSlug?: string | null): string {
-  return withCheckoutIntent(`/${workspaceSlug}/payment/plans`, planSlug);
+  return withCheckoutIntent(workspaceActivationPath(workspaceSlug), planSlug);
 }

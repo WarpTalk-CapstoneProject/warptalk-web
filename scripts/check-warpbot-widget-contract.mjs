@@ -26,7 +26,7 @@ const widget = await readFile(
   "utf8",
 );
 const historyPage = await readFile(
-  path.join(root, "src/app/(app)/[workspaceSlug]/history/page.tsx"),
+  path.join(root, "src/app/(app)/[workspaceSlug]/artifacts/page.tsx"),
   "utf8",
 );
 

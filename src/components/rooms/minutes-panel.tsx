@@ -47,6 +47,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isRecordShared } from "@/lib/meeting/record-sharing";
 import {
@@ -210,8 +211,12 @@ export function MinutesPanel({
             summary. You review and sign; the system does not sign for you.
           </p>
           {canManage ? (
-            <button
-              type="button"
+            // The same Button the Summary tab's "Download summary file" uses, rather than a
+            // hand-rolled `bg-ink` one. These two sit in sibling tabs of the same record and are
+            // the same kind of act — the primary thing to do with this tab — so a black button
+            // beside a primary one read as a different, heavier control than it is.
+            <Button
+              size="sm"
               onClick={() =>
                 createDraft.mutate(undefined, {
                   onError: () =>
@@ -219,15 +224,15 @@ export function MinutesPanel({
                 })
               }
               disabled={createDraft.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+              className="h-8 rounded-md text-[11px] shadow-none"
             >
               {createDraft.isPending ? (
                 <Spinner size={14} className="animate-spin" />
               ) : (
                 <FileText size={14} />
-              )}
+              )}{" "}
               Draft minutes
-            </button>
+            </Button>
           ) : (
             <p className="text-[12px] text-ink-subtle">Only the meeting chair can draft the minutes.</p>
           )}
@@ -360,23 +365,30 @@ export function MinutesPanel({
             Margins
           </button>
 
+          {/* The shared Button, at the size and weight the records page settled on when it grew a
+              door to the minutes (#422). That change and this one landed on the same file from
+              opposite directions: it restyled the action row of the old stacked panel, and this
+              replaced the panel with a document. The row survives either way, so it takes their
+              styling rather than keeping a second hand-rolled one beside it. */}
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {/* Print styles come with a page-shaped layout for almost nothing — see the print
                 block in minutes-document.tsx, which redefines --mm and --pt to real physical
                 units and sends this page alone to the printer at true A4 size. */}
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="outline"
               onClick={printDocument}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12px] text-ink"
+              className="h-8 rounded-md text-[11px] shadow-none"
             >
               <Printer size={13} />
               Print
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
               onClick={downloadDocx}
               disabled={downloading}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-[12px] text-ink disabled:opacity-60"
+              className="h-8 rounded-md text-[11px] shadow-none"
             >
               {downloading ? (
                 <Spinner size={13} className="animate-spin" />
@@ -384,7 +396,7 @@ export function MinutesPanel({
                 <DownloadSimple size={13} />
               )}
               Download Word
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -392,21 +404,22 @@ export function MinutesPanel({
           <div className="flex flex-wrap items-center gap-2">
             {editing ? (
               <>
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   onClick={commit}
                   disabled={save.isPending}
-                  className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+                  className="h-8 rounded-md text-[11px] shadow-none"
                 >
                   {save.isPending ? "Saving…" : "Save"}
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={stopEditing}
-                  className="rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
+                  className="h-8 rounded-md text-[11px] shadow-none"
                 >
                   Cancel
-                </button>
+                </Button>
                 <span className="text-[11px] text-ink-subtle">
                   Edit the document itself — every line with a dashed rule under it can be typed
                   in. Timestamps stay attached to their line.
@@ -415,19 +428,20 @@ export function MinutesPanel({
             ) : null}
 
             {!editing && editable ? (
-              <button
-                type="button"
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={beginEdit}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
+                className="h-8 rounded-md text-[11px] shadow-none"
               >
                 <PencilSimple size={14} />
                 Edit
-              </button>
+              </Button>
             ) : null}
 
             {!editing && editable && minutes.status === "DRAFT" ? (
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() =>
                   sign.mutate(minutes.id, {
                     onSuccess: () => toast.success("Minutes signed."),
@@ -435,15 +449,15 @@ export function MinutesPanel({
                   })
                 }
                 disabled={sign.isPending}
-                className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+                className="h-8 rounded-md text-[11px] shadow-none"
               >
                 Sign as secretary
-              </button>
+              </Button>
             ) : null}
 
             {!editing && editable && minutes.status === "IN_REVIEW" ? (
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() =>
                   approve.mutate(minutes.id, {
                     onSuccess: () => toast.success("Minutes approved."),
@@ -451,15 +465,15 @@ export function MinutesPanel({
                   })
                 }
                 disabled={approve.isPending}
-                className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+                className="h-8 rounded-md text-[11px] shadow-none"
               >
                 Approve as chair
-              </button>
+              </Button>
             ) : null}
 
             {!editing && minutes.status === "APPROVED" ? (
-              <button
-                type="button"
+              <Button
+                size="sm"
                 onClick={() =>
                   revise.mutate(minutes.id, {
                     onSuccess: () => toast.success("Addendum opened."),
@@ -467,11 +481,12 @@ export function MinutesPanel({
                   })
                 }
                 disabled={revise.isPending}
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
+                variant="outline"
+                className="h-8 rounded-md text-[11px] shadow-none"
               >
                 <ClockCounterClockwise size={14} />
                 Draft an addendum
-              </button>
+              </Button>
             ) : null}
           </div>
         ) : null}
