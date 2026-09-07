@@ -30,6 +30,8 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useAssistantPlugins } from "@/hooks/use-assistant";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useAutoSaveQueue } from "@/hooks/use-auto-save";
 import { AutoSaveStatusBadge } from "@/components/features/settings/auto-save-status-badge";
 import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
@@ -45,6 +47,13 @@ const settingsSchema = z.object({
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
   allowAnyPlugins: z.boolean(),
+  // Nullable on purpose, and NOT `.default([])`. Null is the workspace saying "I have no
+  // allowlist, ask allowAnyPlugins"; [] is the workspace saying "I have an allowlist and it
+  // permits nothing". Zod would happily flatten the first into the second and nobody would see
+  // it until every plugin in a workspace stopped answering.
+  allowedPluginKeys: z.array(z.string()).nullable(),
+  allowMemberPluginInstall: z.boolean(),
+  requirePluginApproval: z.boolean(),
   allowedTargetLanguages: z.array(z.string()),
   verifiedDomains: z.array(z.string()),
   allowExternalCollaboration: z.boolean(),
@@ -85,6 +94,11 @@ const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
   allowAnyPlugins: true,
+  // No allowlist, which is what every workspace looks like before anyone configures one — and
+  // the only default that leaves plugin behaviour exactly where allowAnyPlugins already put it.
+  allowedPluginKeys: null,
+  allowMemberPluginInstall: true,
+  requirePluginApproval: false,
   // Empty means unrestricted — every meeting-scope language is offered. It used to read
   // ["en","vi","ja"], which is not a default so much as a policy nobody chose: a workspace
   // that had never set one got a three-language allowlist, and Korean, French and Spanish
@@ -120,6 +134,14 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
     allowAnyPlugins: settings.allowAnyPlugins ?? DEFAULT_SETTINGS_FORM_DATA.allowAnyPlugins,
+    // `?? null` and never `?? []`. It maps only the absent field (a server that predates
+    // WT-646) onto null, and leaves a real [] from the server standing as the empty allowlist
+    // it is. `|| []` here would be the bug the backend DTO spends a paragraph warning about:
+    // "permits nothing" would load as "no policy", and the first save of any unrelated setting
+    // on this page would write that reversal back to the server.
+    allowedPluginKeys: settings.allowedPluginKeys ?? null,
+    allowMemberPluginInstall: settings.allowMemberPluginInstall ?? DEFAULT_SETTINGS_FORM_DATA.allowMemberPluginInstall,
+    requirePluginApproval: settings.requirePluginApproval ?? DEFAULT_SETTINGS_FORM_DATA.requirePluginApproval,
     // `|| []` and not `|| [...three languages]`: an absent policy means the server is not
     // restricting anything, and substituting a list here turns "no policy" into a real one.
     allowedTargetLanguages: settings.allowedTargetLanguages || [],
@@ -151,6 +173,11 @@ export default function WorkspaceSettingsPage() {
   const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
   const patchSettingsMutation = usePatchWorkspaceSettings(activeWorkspaceId || "");
   const verifiedDomainsQuery = useVerifiedDomains(activeWorkspaceId || "");
+  // The plugin catalog the allowlist below picks from. Called up here with the other queries and
+  // not beside the section that renders it: everything from `if (!activeWorkspaceId) return null`
+  // downwards is past an early return, and a hook after one is React error #310 — see
+  // scripts/check-hooks-before-early-return.mjs.
+  const pluginCatalogQuery = useAssistantPlugins();
 
   const [newKeyword, setNewKeyword] = useState("");
   const initializedWorkspaceRef = useRef<string | null>(null);
@@ -336,6 +363,40 @@ export default function WorkspaceSettingsPage() {
       next = [...allowedLangs, code];
     }
     commitTopLevel("allowedTargetLanguages", next);
+  };
+
+  // WT-646 — the plugin allowlist.
+  //
+  // `?? null` rather than `|| []`: the whole point of the field is that "no allowlist" and "an
+  // allowlist that permits nothing" are different policies, and every place that reads the value
+  // has to keep them apart. The switch below is bound to which of the two this is, so a stray
+  // `|| []` would show every workspace on earth an enforced, empty allowlist.
+  const allowedPluginKeys = watchAll.allowedPluginKeys ?? null;
+  const allowlistEnforced = allowedPluginKeys !== null;
+  const pluginCatalog = pluginCatalogQuery.data ?? [];
+  // A key saved before the catalog changed shape — google_workspace, after it was split into
+  // google_drive / google_calendar / google_meet — matches no catalog row. Listing it separately
+  // rather than dropping it keeps the saved policy visible and removable; silently omitting it
+  // would make the form post an allowlist the admin never edited.
+  const unmatchedPluginKeys = (allowedPluginKeys ?? []).filter(
+    (key) => !pluginCatalog.some((plugin) => plugin.key === key),
+  );
+
+  const handlePluginKeyToggle = (key: string, checked: boolean) => {
+    const current = allowedPluginKeys ?? [];
+    const next = checked
+      ? current.includes(key) ? current : [...current, key]
+      : current.filter((k) => k !== key);
+    commitTopLevel("allowedPluginKeys", next);
+  };
+
+  // Enforcing starts from [], not from "everything in the catalog". Seeding the list with what
+  // the catalog happens to hold today would write a policy nobody chose — the same mistake the
+  // allowedTargetLanguages default above documents — and it would silently keep permitting new
+  // plugins that an allowlist exists precisely to hold back. [] is severe and honest, and the
+  // notice under the list says so.
+  const handleAllowlistEnforcedToggle = (enforced: boolean) => {
+    commitTopLevel("allowedPluginKeys", enforced ? [] : null);
   };
 
   const verifiedDomainList = verifiedDomainsQuery.data || [];
@@ -693,11 +754,194 @@ export default function WorkspaceSettingsPage() {
               <div className="flex flex-col gap-0.5 max-w-[70%]">
                 <span className="text-xs font-semibold text-ink">Allow personal plugins</span>
                 <span className="text-[11px] text-ink-muted">Allow members to use their connected plugins in WarpBot conversations for this workspace.</span>
+                {/* Said here rather than left for the member to discover: with an allowlist in
+                    force this switch is no longer the answer, and a workspace whose plugins
+                    stopped working would otherwise come looking at this row first. */}
+                {allowlistEnforced ? (
+                  <span className="text-[11px] text-ink-muted">An allowlist is in force below, so this switch no longer decides on its own.</span>
+                ) : null}
               </div>
               <Switch
                 checked={watchAll.allowAnyPlugins}
                 onCheckedChange={(val) => commitTopLevel("allowAnyPlugins", val)}
                 disabled={isSubmitting || !isOwnerOrAdmin}
+              />
+            </div>
+
+            {/*
+              WT-646 — plugin governance, extending the row above rather than moving anywhere
+              else. These four fields are one decision ("which plugins may run here, and who
+              says so"), and splitting them across a tab or a route would leave the oldest of
+              them on this page and the three that qualify it somewhere the reader has to go
+              looking for.
+            */}
+
+            {/* Plugin Allowlist */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5 max-w-[70%]">
+                <span className="text-xs font-semibold text-ink">Restrict to an allowlist</span>
+                <span className="text-[11px] text-ink-muted">
+                  {allowlistEnforced
+                    ? "Only the plugins ticked below may run in this workspace."
+                    : "No allowlist is configured. Plugins are decided by the switch above."}
+                </span>
+              </div>
+              <Switch
+                checked={allowlistEnforced}
+                onCheckedChange={handleAllowlistEnforcedToggle}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+              />
+            </div>
+
+            {allowlistEnforced && (
+              <div className="py-4 px-4 flex flex-col gap-3 bg-surface-2/50">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-semibold text-ink">Permitted plugins</span>
+                  <span className="text-[11px] text-ink-muted">Picked from the plugin catalog. A key is never typed by hand here — nothing downstream can tell a misspelt key from one no plugin claims yet.</span>
+                  {allowedPluginKeys && allowedPluginKeys.length === 0 ? (
+                    <span className="text-[11px] text-amber-600">This allowlist permits nothing. No plugin will run in this workspace until at least one is ticked.</span>
+                  ) : null}
+                </div>
+
+                {/*
+                  Three outcomes, told apart on purpose. A failed catalog request rendered as an
+                  empty list would read as "this workspace permits nothing" — the most alarming
+                  sentence on the page — when the truth is that the assistant service did not
+                  answer. Nothing is saved from this branch either: the saved keys are shown raw
+                  so the policy in force stays legible while the catalog is missing.
+                */}
+                {pluginCatalogQuery.isPending ? (
+                  <div className="flex items-center gap-2 text-[11px] text-ink-muted">
+                    <Spinner className="h-3.5 w-3.5 animate-spin" />
+                    Loading the plugin catalog…
+                  </div>
+                ) : pluginCatalogQuery.isError ? (
+                  <div className="flex flex-col gap-2 rounded border border-hairline bg-surface-1 p-3">
+                    <div className="flex items-start gap-2">
+                      <Warning className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
+                      <span className="text-[11px] text-ink-muted">
+                        The plugin catalog could not be loaded, so there is nothing to tick. This is
+                        not an empty allowlist — the keys this workspace already permits are
+                        unchanged, and listed below. Retry before editing them.
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(allowedPluginKeys ?? []).length === 0 ? (
+                        <span className="text-[10px] italic text-ink-muted">No plugin keys are permitted.</span>
+                      ) : (
+                        (allowedPluginKeys ?? []).map((key) => (
+                          <span key={key} className="rounded border border-hairline bg-surface-2 px-2 py-0.5 font-mono text-[10px] text-ink">
+                            {key}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => pluginCatalogQuery.refetch()}
+                      disabled={pluginCatalogQuery.isFetching}
+                      className="w-fit rounded border border-hairline bg-surface-2 px-3 py-1 text-[11px] font-semibold text-ink transition hover:bg-surface-3 disabled:opacity-60"
+                    >
+                      {pluginCatalogQuery.isFetching ? "Retrying…" : "Retry"}
+                    </button>
+                  </div>
+                ) : pluginCatalog.length === 0 ? (
+                  <span className="text-[11px] text-ink-muted">The plugin catalog is empty, so there is nothing to permit yet.</span>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {pluginCatalog.map((plugin) => (
+                      <label
+                        key={plugin.key}
+                        className="flex cursor-pointer items-start gap-2.5 text-xs text-ink"
+                      >
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={(allowedPluginKeys ?? []).includes(plugin.key)}
+                          onCheckedChange={(checked) => handlePluginKeyToggle(plugin.key, Boolean(checked))}
+                          disabled={isSubmitting || !isOwnerOrAdmin}
+                        />
+                        <span className="flex flex-col gap-0.5">
+                          <span className="font-semibold">{plugin.label}</span>
+                          <span className="font-mono text-[10px] text-ink-muted">{plugin.key}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                {/* Keys the catalog does not claim. Kept visible and removable — see the
+                    google_workspace split, which turned one saved key into three new ones and
+                    left the old one matching nothing. */}
+                {!pluginCatalogQuery.isError && unmatchedPluginKeys.length > 0 ? (
+                  <div className="flex flex-col gap-2 border-t border-hairline pt-3">
+                    <span className="text-[11px] text-amber-600">
+                      These keys are permitted but match no plugin in the catalog, so they permit
+                      nothing. They are usually left over from a plugin that was renamed or split.
+                    </span>
+                    <div className="flex flex-col gap-2">
+                      {unmatchedPluginKeys.map((key) => (
+                        <label key={key} className="flex cursor-pointer items-center gap-2.5 text-xs text-ink">
+                          <Checkbox
+                            checked
+                            onCheckedChange={() => handlePluginKeyToggle(key, false)}
+                            disabled={isSubmitting || !isOwnerOrAdmin}
+                          />
+                          <span className="font-mono text-[10px] text-ink-muted">{key}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Member Plugin Installation */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5 max-w-[70%]">
+                <span className="text-xs font-semibold text-ink">Members can install plugins</span>
+                <span className="text-[11px] text-ink-muted">When off, only Owners and Admins can install a plugin. Plugins already installed keep working.</span>
+              </div>
+              <Switch
+                checked={watchAll.allowMemberPluginInstall}
+                onCheckedChange={(val) => commitTopLevel("allowMemberPluginInstall", val)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+              />
+            </div>
+
+            {/*
+              Owner-only, and DISABLED for an Admin rather than hidden.
+              WorkspaceService.UpdateWorkspaceSettingsAsync gates this field with
+              AllowExternalCollaboration and answers an Admin with 403. An Admin who cannot see
+              the row has no way to learn that; an Admin who can see it live gets a switch that
+              flicks, then a toast, then flicks back. So it renders, greyed, with the reason
+              beside it — the same "Only the workspace owner can …" wording the invite dialog and
+              the advanced page already use for a control the caller may read but not change.
+            */}
+            {/*
+              And the copy says what the flag ACTUALLY does, which is less than its name
+              promises. AssistantService's WorkspacePluginGuard enforces it only where an
+              allowlist exists — there is where the allowlist IS the approval record, an admin
+              adding a key being the approval. With no allowlist there is no approval store at
+              all: plugin_installations has no pending state, no reviewer, no queue, and nothing
+              tells an Owner a request is waiting, so the guard logs a warning and permits.
+              Describing this row as a gate would promise a screen nobody has built.
+            */}
+            {/* Plugin Approval */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5 max-w-[70%]">
+                <span className="text-xs font-semibold text-ink">Require approval before a plugin runs</span>
+                <span className="text-[11px] text-ink-muted">Records that plugins here are vetted. The allowlist above is the approval itself — a plugin counts as approved once an Owner or Admin ticks it.</span>
+                {watchAll.requirePluginApproval && !allowlistEnforced ? (
+                  <span className="text-[11px] text-amber-600">Nothing is enforced while no allowlist is configured — there is no separate approval queue. Turn on the allowlist above to make this mean something.</span>
+                ) : null}
+                {!isOwner ? (
+                  <span className="text-[11px] text-amber-600">Only the workspace owner can change this setting.</span>
+                ) : null}
+              </div>
+              <Switch
+                checked={watchAll.requirePluginApproval}
+                onCheckedChange={(val) => commitTopLevel("requirePluginApproval", val)}
+                disabled={isSubmitting || !isOwner}
               />
             </div>
 
