@@ -116,7 +116,8 @@ export function useCreateRecurringTranslationRoom() {
 export function useCancelTranslationRoomSeries() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (seriesId: string) => translationRoomService.cancelSeries(seriesId),
+    mutationFn: async ({ seriesId, keepOccurrenceId }: { seriesId: string; keepOccurrenceId?: string }) =>
+      translationRoomService.cancelSeries(seriesId, keepOccurrenceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: MEETING_KEY });
     },
@@ -422,6 +423,25 @@ export function useTranslationRoomInvitations(roomId: string) {
       return data;
     },
     enabled: Boolean(roomId),
+  });
+}
+
+/**
+ * WT-552: invite somebody once the meeting has started.
+ *
+ * Invalidates the invitation list AND the roster. A member of this workspace who is already
+ * signed in gets the in-app notification immediately and can be in the room before the host has
+ * closed the dialog, so the roster is as stale as the invitation list after this succeeds.
+ */
+export function useInviteToRoom(roomId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (emails: string[]) => translationRoomService.inviteParticipants(roomId, emails),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "invitations"] });
+      queryClient.invalidateQueries({ queryKey: [...MEETING_KEY, roomId, "participants"] });
+    },
   });
 }
 

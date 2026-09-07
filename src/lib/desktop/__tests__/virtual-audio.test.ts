@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import type { VirtualAudioStatus } from "../bridge.ts";
+import { openDesktopTranscriptWindow, type VirtualAudioStatus } from "../bridge.ts";
 import { describeAudioBridge, shouldShowAudioBridge } from "../virtual-audio.ts";
 
 function macStatus(overrides: Partial<VirtualAudioStatus> = {}): VirtualAudioStatus {
@@ -174,4 +174,33 @@ test("an action is offered only when something can actually be installed", () =>
   assert.equal(describeAudioBridge(macStatus({ supported: false })).action, null);
   assert.equal(describeAudioBridge(null).action, null);
   assert.notEqual(describeAudioBridge(macStatus({ ready: false })).action, null);
+});
+
+test("desktop transcript popup bridge is optional and forwards the room id", async () => {
+  const originalWindow = globalThis.window;
+  // The deployed web bundle also runs in normal browsers, so absence of the bridge is a normal
+  // state and must not throw.
+  Reflect.deleteProperty(globalThis, "window");
+  assert.equal(await openDesktopTranscriptWindow("room-1"), false);
+
+  const calls: string[] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      warptalk: {
+        openTranscriptWindow: async (roomId: string) => {
+          calls.push(roomId);
+        },
+      },
+    },
+  });
+
+  assert.equal(await openDesktopTranscriptWindow("room-2"), true);
+  assert.deepEqual(calls, ["room-2"]);
+
+  if (originalWindow === undefined) {
+    Reflect.deleteProperty(globalThis, "window");
+  } else {
+    Object.defineProperty(globalThis, "window", { configurable: true, value: originalWindow });
+  }
 });

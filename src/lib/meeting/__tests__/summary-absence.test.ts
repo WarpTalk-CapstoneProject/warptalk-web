@@ -70,3 +70,60 @@ test("every state has a message", () => {
     assert.ok(summaryAbsenceMessage(absence).length > 0);
   }
 });
+
+// ── nobody spoke ─────────────────────────────────────────────────────────────
+
+test("a meeting with no transcript says so, rather than blaming the generator", () => {
+  const absence = describeSummaryAbsence({
+    isGenerating: false,
+    summaryState: "empty",
+    hasSummaryArtifact: false,
+    hasParsedSummary: false,
+    hasTranscript: false,
+  });
+
+  assert.equal(absence, "no-transcript");
+  assert.match(summaryAbsenceMessage(absence), /nothing to summarise/i);
+});
+
+test("an unloaded transcript is never reported as an empty one", () => {
+  assert.equal(
+    describeSummaryAbsence({
+      isGenerating: false,
+      summaryState: "empty",
+      hasSummaryArtifact: false,
+      hasParsedSummary: false,
+      hasTranscript: undefined,
+    }),
+    "absent",
+  );
+});
+
+test("a withheld summary outranks an empty transcript", () => {
+  // A summary somebody else can read is a permission answer, and it is the more specific one:
+  // telling this reader "nobody spoke" would be a claim about the meeting that is not ours to
+  // make when a summary of it demonstrably exists.
+  assert.equal(
+    describeSummaryAbsence({
+      isGenerating: false,
+      summaryState: "empty",
+      hasSummaryArtifact: true,
+      hasParsedSummary: false,
+      hasTranscript: false,
+    }),
+    "withheld",
+  );
+});
+
+test("a turn still generating is not reported as an empty meeting", () => {
+  assert.equal(
+    describeSummaryAbsence({
+      isGenerating: true,
+      summaryState: "generating",
+      hasSummaryArtifact: false,
+      hasParsedSummary: false,
+      hasTranscript: false,
+    }),
+    "generating",
+  );
+});

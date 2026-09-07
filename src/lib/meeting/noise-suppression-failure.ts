@@ -57,11 +57,18 @@ export function describeNoiseSuppressionFailure(error: unknown): NoiseSuppressio
   // Everything else: a WASM load blocked by CSP, a network failure fetching the model, a browser
   // that cannot run it. These CAN change between loads, so saying so is honest rather than
   // hopeful.
+  //
+  // The CAUSE rides along now. This branch fired on production (22 Aug, the "test krisp" room)
+  // and there was nothing to read anywhere — not in the toast, not in the console — so the only
+  // possible diagnosis was a guess. A one-line summary that hides the error is how one bug
+  // spends weeks as a mystery.
+  const cause = error instanceof Error && message.trim() ? ` (${message.trim().slice(0, 140)})` : "";
   return {
     title: "Enhanced noise suppression could not start",
     detail:
       "Your microphone is still using the browser's own noise suppression. It will try again the "
-      + "next time you turn it on.",
+      + "next time you turn it on."
+      + cause,
     retryable: true,
   };
 }

@@ -158,7 +158,7 @@ for (const href of hrefs) {
 
 // Conversely: a page that exists but is unreachable from the nav is a page nobody can find.
 // Nested detail routes are exempt — they are reached from their own list.
-const NAV_EXEMPT = new Set([`${ADMIN_ROOT}/layout.tsx`, `${ADMIN_ROOT}/workspaces/[workspaceId]/page.tsx`]);
+const NAV_EXEMPT = new Set([`${ADMIN_ROOT}/layout.tsx`, `${ADMIN_ROOT}/workspaces/[workspaceRef]/page.tsx`]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;
   const segment = rel.slice(ADMIN_ROOT.length + 1).replace(/\/?page\.tsx$/, "");

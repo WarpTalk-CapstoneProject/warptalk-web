@@ -10,8 +10,8 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
@@ -25,12 +25,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useAdminWorkspaceAnalytics,
   useAdminWorkspaceCreditTransactions,
-  useAdminWorkspaceDetail,
+  useAdminWorkspaceByRef,
   useAdminWorkspaceMembers,
   useDeleteAdminWorkspace,
   useReactivateAdminWorkspace,
   useSuspendAdminWorkspace,
 } from "@/hooks/use-admin-workspaces";
+import { workspaceRefKind } from "@/lib/admin/workspace-ref";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { AdminWorkspaceDetailDto } from "@/types/admin-workspace";
@@ -553,17 +554,32 @@ function BillingTab({ workspaceId }: { workspaceId: string }) {
 
 export default function AdminWorkspaceDetailPage() {
   const params = useParams();
-  const workspaceId = typeof params?.workspaceId === "string" ? params.workspaceId : undefined;
+  const router = useRouter();
+  // WT-560: the URL names the workspace rather than carrying its primary key. It still accepts
+  // an id, because the dashboard, the meetings table and the subscriptions table all link here
+  // holding a workspaceId and no slug — see `workspace-ref`.
+  const workspaceRef =
+    typeof params?.workspaceRef === "string" ? params.workspaceRef : undefined;
 
-  const detailQuery = useAdminWorkspaceDetail(workspaceId);
-  const suspendMutation = useSuspendAdminWorkspace(workspaceId ?? "");
-  const reactivateMutation = useReactivateAdminWorkspace(workspaceId ?? "");
-  const deleteMutation = useDeleteAdminWorkspace(workspaceId ?? "");
+  const detailQuery = useAdminWorkspaceByRef(workspaceRef);
+  const workspace = detailQuery.data;
+
+  // Lifecycle actions are addressed by id, which is the workspace's own — never the URL's,
+  // which may be a slug.
+  const suspendMutation = useSuspendAdminWorkspace(workspace?.id ?? "");
+  const reactivateMutation = useReactivateAdminWorkspace(workspace?.id ?? "");
+  const deleteMutation = useDeleteAdminWorkspace(workspace?.id ?? "");
+
+  // An id link resolves, then hands the address bar the workspace's name. `replace` rather than
+  // `push` so Back leaves the portal instead of bouncing through the id form of the same page.
+  useEffect(() => {
+    if (!workspace) return;
+    if (workspaceRefKind(workspaceRef) !== "id") return;
+    router.replace(`/admin/workspaces/${workspace.slug}`);
+  }, [workspace, workspaceRef, router]);
 
   const [dialogAction, setDialogAction] = useState<WorkspaceLifecycleAction | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
-
-  const workspace = detailQuery.data;
   const pending =
     suspendMutation.isPending || reactivateMutation.isPending || deleteMutation.isPending;
 

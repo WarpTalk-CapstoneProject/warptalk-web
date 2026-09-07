@@ -4,7 +4,7 @@
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
-import type { TranscriptSegmentDto as SavedTranscriptSegmentDto } from "@/types/transcript";
+import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
 type SpeakerParticipant = {
@@ -64,6 +64,61 @@ export function resolveSegmentTranslation(
   }
 
   return null;
+}
+
+/**
+ * The one line the CAPTION LANE should show this reader for this utterance, or null to hold it.
+ *
+ * The lane used to render `originalText` unconditionally, so a reader listening in English
+ * watched Vietnamese captions scroll past while their English sat one tab away. The product
+ * decision (2026-08-20, owner) is that the caption lane is a TRANSLATION surface: the original
+ * has the transcript panel, which shows it beside the translation with timestamps.
+ *
+ * WHY THIS IS NOT JUST resolveSegmentTranslation
+ *   That function returns null for two OPPOSITE situations, and the lane must render them
+ *   differently:
+ *
+ *     nothing to translate — the speaker was already speaking the reader's language, so the
+ *                            original IS the reader's language and must be shown as-is. Filter
+ *                            it out and a room where everyone shares a language has no captions
+ *                            at all, and nobody ever sees their own words.
+ *     not translated YET   — the transcript segment arrives before its translation. Showing the
+ *                            original here is what the decision above rejects: the line would
+ *                            appear in the wrong language and then change under the reader.
+ *
+ *   Null therefore means only the second: hold this line until its translation lands.
+ *
+ * WHY `translationActive` IS A PARAMETER AND NOT AN ASSUMPTION
+ *   Holding a line only makes sense while a translation is actually coming. Transcription runs
+ *   for any live meeting — livekit_ingress_worker joins on the first published mic and
+ *   translation_worker is the stage gated behind Start Translation — so before anybody presses
+ *   it there ARE captions and there is no translation, ever, for those lines. Holding them left
+ *   the lane permanently empty for the whole pre-Start half of every meeting, which is the exact
+ *   failure WT-387 spent a release fixing one layer down. Off means show the original: it is not
+ *   the wrong language when no other language is on the way.
+ *
+ * A reader with no resolved language yet gets the original rather than an empty lane — that
+ * state lasts for the first moments of a cold join, and a blank caption surface reads as broken.
+ */
+export function captionTextForReader(
+  segment: Pick<
+    TranscriptSegmentDto,
+    "translations" | "translatedText" | "targetLanguage" | "originalLanguage" | "originalText"
+  >,
+  readerLanguage: string | null | undefined,
+  translationActive = true,
+): string | null {
+  const language = normalizeLanguageCode(readerLanguage ?? "");
+  if (!language) return segment.originalText?.trim() || null;
+
+  if (normalizeLanguageCode(segment.originalLanguage) === language) {
+    return segment.originalText?.trim() || null;
+  }
+
+  const translated = resolveSegmentTranslation(segment, readerLanguage);
+  if (translated) return translated;
+
+  return translationActive ? null : segment.originalText?.trim() || null;
 }
 
 /** Union of two bubbles' per-language translations, appending where both hold the same language. */
@@ -367,6 +422,81 @@ export function groupSegmentsByTranslationSession<T extends { startTimeMs: numbe
   return blocks;
 }
 
+/**
+ * WT-605. Where one [Pause Transcript, Resume Transcript] window falls in MEETING-RELATIVE time
+ * (the same units as `segment.startTimeMs`), so the panel can draw a "Transcript paused ·
+ * HH:MM–HH:MM" divider between the segments on either side of it — the transcript-pause
+ * counterpart to `groupSegmentsByTranslationSession`'s "Translation N" dividers.
+ */
+export type TranscriptPauseGap = {
+  window: TranscriptPauseWindowDto;
+  startMs: number;
+  /** null while the transcript is CURRENTLY paused for this room. */
+  endMs: number | null;
+};
+
+/**
+ * Converts each window's wall-clock StartedAt/EndedAt into meeting-relative ms. Returns []
+ * without a `baseTime` to anchor against — old data, or a room with no timeline anchor yet —
+ * same "nothing to compute a position with" fallback `groupSegmentsByTranslationSession` takes.
+ */
+export function resolveTranscriptPauseGaps(
+  windows: readonly TranscriptPauseWindowDto[],
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  if (Number.isNaN(baseMs) || !windows.length) return [];
+
+  return windows
+    .filter((window) => window.startedAt)
+    .map((window) => ({
+      window,
+      startMs: new Date(window.startedAt).getTime() - baseMs,
+      endMs: window.endedAt ? new Date(window.endedAt).getTime() - baseMs : null,
+    }))
+    .sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
+ * Splits an already-chronological list of segments into blocks around each pause gap. No
+ * segment is ever expected to fall INSIDE a gap — that is the entire point of Pause Transcript,
+ * the segments spoken during it were never persisted — so each gap lands cleanly on the boundary
+ * between the segment before it and the segment after.
+ *
+ * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
+ * translation and pause transcript at different, unrelated moments, so callers run this within
+ * each translation-session block rather than instead of that grouping.
+ */
+export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
+  segments: readonly T[],
+  gaps: readonly TranscriptPauseGap[],
+): Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> {
+  if (!gaps.length) return [{ gapBefore: null, segments: [...segments] }];
+
+  const blocks: Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> = [
+    { gapBefore: null, segments: [] },
+  ];
+  let gapIndex = 0;
+
+  for (const segment of segments) {
+    while (gapIndex < gaps.length && segment.startTimeMs >= gaps[gapIndex].startMs) {
+      blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+      gapIndex += 1;
+    }
+    blocks[blocks.length - 1].segments.push(segment);
+  }
+
+  // A gap with no segment after it — the room is still paused, or nobody has spoken since
+  // resuming — would otherwise vanish here instead of rendering its divider. Trailing blocks
+  // stay empty; the divider itself is drawn from `gapBefore`, not from having lines to hold.
+  while (gapIndex < gaps.length) {
+    blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+    gapIndex += 1;
+  }
+
+  return blocks;
+}
+
 export function resolveTranscriptSpeakerName(
   segment: TranscriptSegmentDto,
   participants: readonly SpeakerParticipant[],
@@ -518,6 +648,33 @@ function belongsToSameSavedUtterance(
  * translations back together and has to do it the same way the original text was joined —
  * two copies of "how do two halves of a sentence become one" is one copy too many.
  */
+/**
+ * WT-589: which of a batch edit's drafts are actually corrections worth posting.
+ *
+ * Each one that survives this filter becomes an immutable row in transcript_corrections AND a
+ * re-translation of that line into every target language, so the two exclusions are not tidiness:
+ *
+ *   unchanged  — a line the user tabbed through without touching. Posting it files a revision
+ *                that changed nothing and re-translates a sentence that already has its
+ *                translations, for every line of the meeting at once.
+ *   emptied    — there is no delete on this path. An empty draft is somebody mid-retype, or a
+ *                line they cleared by accident; either way the honest answer is to leave the
+ *                stored sentence alone rather than to write a blank one over it.
+ *
+ * Compared trimmed on both sides, because whitespace is what a caret leaves behind, not an edit.
+ */
+export function pendingCorrections<T extends { id: string; originalText: string }>(
+  segments: readonly T[],
+  drafts: Readonly<Record<string, string>>,
+): T[] {
+  return segments.filter((segment) => {
+    const draft = drafts[segment.id];
+    if (draft === undefined) return false;
+    const trimmed = draft.trim();
+    return trimmed.length > 0 && trimmed !== segment.originalText.trim();
+  });
+}
+
 export function appendText(current?: string, incoming?: string): string {
   const left = current?.trim() || "";
   const right = incoming?.trim() || "";

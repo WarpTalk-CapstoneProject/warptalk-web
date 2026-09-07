@@ -34,12 +34,22 @@ for (const asset of assets) {
   // `mix-blend-multiply` to hide the matte, which only works against pure white. On this
   // surface every illustration sat in a visible grey square.
   //
-  // Byte 25 of a PNG is the IHDR colour type. 6 is RGBA, 4 is greyscale+alpha; anything else
-  // has no alpha channel and cannot sit on a coloured surface without a box around it.
+  // Byte 25 of a PNG is the IHDR colour type: 6 is RGBA, 4 is greyscale+alpha, 3 is PALETTE —
+  // which carries transparency through a tRNS chunk rather than a per-pixel channel.
+  //
+  // The colour type alone was the test here, accepting only 6 and 4, and that was a proxy for
+  // the thing actually worth checking. It rejected these very files after they were re-encoded
+  // as palette PNGs to cut them from ~300KB to ~25KB each — art that is demonstrably
+  // transparent, tRNS chunk and all. Type 2 (RGB) is the shape of the original bug and still
+  // fails, as it must.
+  //
+  // The corner check below is the real assertion and does not care how the alpha is stored.
   const colourType = png.readUInt8(25);
+  const hasAlphaChannel = colourType === 6 || colourType === 4;
+  const isPaletteWithTransparency = colourType === 3 && png.includes(Buffer.from("tRNS"));
   assert.ok(
-    colourType === 6 || colourType === 4,
-    `${asset} has no alpha channel (PNG colour type ${colourType}) — it will render as a ` +
+    hasAlphaChannel || isPaletteWithTransparency,
+    `${asset} has no transparency (PNG colour type ${colourType}) — it will render as a ` +
       `rectangle of its export matte, not as artwork`,
   );
 
@@ -60,9 +70,13 @@ for (const asset of assets) {
 
   // Size is a design decision, not an accident: displayed at 280–380 CSS px, so 760 covers a
   // 2x screen and nothing more. The first version was 1254px and ~1MB each, 8.1MB of repo.
+  // 100KB, down from 600KB. Flat line art re-encodes to ~25KB as a palette PNG, and the ceiling
+  // is what stops a re-export from silently putting 300KB back — which is what these weighed,
+  // and why an empty state took a visible moment to draw itself.
   assert.ok(
-    info.size < 600 * 1024,
-    `${asset} is ${Math.round(info.size / 1024)}KB — over the 600KB an empty-state drawing needs`,
+    info.size < 100 * 1024,
+    `${asset} is ${Math.round(info.size / 1024)}KB — over the 100KB a flat line drawing needs. ` +
+      `Re-encode as a palette PNG (sharp: .png({ palette: true, quality: 90 })).`,
   );
 }
 

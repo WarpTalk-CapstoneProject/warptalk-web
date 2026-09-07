@@ -31,9 +31,8 @@ import {
 import { downloadBlob } from "@/lib/ui/download-blob";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
-import { DocumentAccessPolicyPanel } from "./components/DocumentAccessPolicyPanel";
 import { DocumentPreview } from "./components/DocumentPreview";
-import { DocumentMetadataCard } from "./components/DocumentMetadataCard";
+import { DocumentSidePanel } from "./components/DocumentSidePanel";
 
 interface PageProps {
   params: Promise<{ documentId: string }>;
@@ -66,10 +65,6 @@ export default function DocumentDetailPage({ params }: PageProps) {
     membersList,
     isExternalAllowed,
     isSubmitting,
-    showAllowedDropdown,
-    showBlockedDropdown,
-    setShowAllowedDropdown,
-    setShowBlockedDropdown,
     toggleExternalAccess,
     allowUser,
     blockUser,
@@ -285,22 +280,14 @@ export default function DocumentDetailPage({ params }: PageProps) {
             AND checking who it will be shared with, and those two facts were previously never on
             screen at the same time. */}
         <div className="flex flex-col gap-6 lg:sticky lg:top-0 lg:max-h-full lg:overflow-y-auto lg:pb-2">
-          <DocumentMetadataCard
+          <DocumentSidePanel
             doc={doc}
             membersList={membersList}
             formatBytes={formatBytes}
-          />
-
-          <DocumentAccessPolicyPanel
             canManagePolicies={canManagePolicies}
             isExternalAllowed={isExternalAllowed}
             isSubmitting={isSubmitting}
             policiesList={policiesList}
-            membersList={membersList}
-            showAllowedDropdown={showAllowedDropdown}
-            showBlockedDropdown={showBlockedDropdown}
-            setShowAllowedDropdown={setShowAllowedDropdown}
-            setShowBlockedDropdown={setShowBlockedDropdown}
             toggleExternalAccess={toggleExternalAccess}
             allowUser={allowUser}
             blockUser={blockUser}

@@ -67,6 +67,7 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { DocumentActor } from "@/components/documents/document-actor";
+import { findDocumentActor } from "@/lib/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
@@ -512,8 +513,8 @@ export default function WorkspaceDocumentsPage() {
                   doc.uploadedBy === currentUser?.id ||
                   doc.ownerId === currentUser?.id;
                 const canManageDoc = canApproveDocuments || isDocOwner;
-                const uploader = workspaceMembers.find((m) => m.userId === doc.uploadedBy || m.id === doc.uploadedBy);
-                const approver = workspaceMembers.find((m) => m.userId === doc.approvedBy || m.id === doc.approvedBy);
+                const uploader = findDocumentActor(workspaceMembers, doc.uploadedBy);
+                const approver = findDocumentActor(workspaceMembers, doc.approvedBy);
 
                 return (
                   <tr
@@ -759,15 +760,11 @@ export default function WorkspaceDocumentsPage() {
                 <div className="flex items-center gap-3 pt-1">
                   <DocumentActor
                     label="Uploader"
-                    member={workspaceMembers.find(
-                      (member) => member.userId === doc.uploadedBy || member.id === doc.uploadedBy,
-                    )}
+                    member={findDocumentActor(workspaceMembers, doc.uploadedBy)}
                   />
                   <DocumentActor
                     label="Approver"
-                    member={workspaceMembers.find(
-                      (member) => member.userId === doc.approvedBy || member.id === doc.approvedBy,
-                    )}
+                    member={findDocumentActor(workspaceMembers, doc.approvedBy)}
                   />
                 </div>
               </CardContent>

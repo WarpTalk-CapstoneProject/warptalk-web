@@ -37,17 +37,41 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatMoney } from "@/lib/format/currency";
 
-interface InvoiceDto {
-  id: string;
-  stripeInvoiceId: string;
-  amount: number;
-  currency: string;
-  status: string;
-  invoicePdfUrl?: string;
-  hostedInvoiceUrl?: string;
-  createdAt: string;
-  workspaceId: string;
-  workspaceName?: string | null;
+/**
+ * WT-457 — this file used to declare its OWN `InvoiceDto` here, and every field of it was wrong.
+ *
+ * It named `stripeInvoiceId`, `amount`, `invoicePdfUrl` and `hostedInvoiceUrl`. The API has never
+ * sent any of them; it sends `invoiceNumber`, `total` and `pdfUrl`. `types/billing.ts` was
+ * corrected for exactly this reason and carries the note — but this shadow copy was left behind,
+ * and `as unknown as InvoiceDto[]` on the query result meant TypeScript checked the fiction
+ * against nothing.
+ *
+ * So every one of these read `undefined` at runtime. "View Receipt" called
+ * `undefined.startsWith("in_")`, which threw and handed the whole route to the error boundary —
+ * the reported 404 with `Cannot read properties of undefined (reading 'startsWith')`. The
+ * quieter half never threw: every amount in the table and on the receipt was `undefined`, and
+ * the min/max amount filters compared against it and silently matched nothing.
+ *
+ * The real type is imported now, so the next field the API renames breaks the build instead of
+ * the page.
+ */
+import type { InvoiceDto } from "@/types/billing";
+
+/**
+ * The number to print on a receipt.
+ *
+ * `invoiceNumber` is the backend's own (`Invoice.InvoiceNumber`, non-null), so the common path is
+ * simply to show it. The `in_…` branch survives because rows created straight from a Stripe
+ * object carry Stripe's id in that column, and "INV-" + the last 8 characters is what the receipt
+ * has always shown for those. Null-tolerant despite the non-null type: this renders inside a
+ * printable receipt, and a blank line there is a better outcome than a thrown route.
+ */
+function receiptNumber(invoice: Pick<InvoiceDto, "invoiceNumber">): string {
+  const number = invoice.invoiceNumber;
+  if (!number) return "—";
+  return number.startsWith("in_")
+    ? `INV-${number.substring(number.length - 8).toUpperCase()}`
+    : number;
 }
 
 function IdBadge({
@@ -118,7 +142,7 @@ export function AdminInvoicesTab() {
   });
 
   const invoices = useMemo(
-    () => (data?.items ?? []) as unknown as InvoiceDto[],
+    () => data?.items ?? [],
     [data?.items],
   );
 
@@ -134,9 +158,9 @@ export function AdminInvoicesTab() {
           ? inv.status?.toLowerCase() === statusFilter.toLowerCase()
           : true;
       const matchMin =
-        minAmountFilter !== "" ? inv.amount >= minAmountFilter : true;
+        minAmountFilter !== "" ? inv.total >= minAmountFilter : true;
       const matchMax =
-        maxAmountFilter !== "" ? inv.amount <= maxAmountFilter : true;
+        maxAmountFilter !== "" ? inv.total <= maxAmountFilter : true;
       return matchWorkspace && matchStatus && matchMin && matchMax;
     });
   }, [
@@ -301,19 +325,27 @@ export function AdminInvoicesTab() {
                     {format(new Date(inv.createdAt), "MMM d, yyyy HH:mm")}
                   </TableCell>
                   <TableCell>
-                    <Link
-                      href={`/billing/workspace/${inv.workspaceId}`}
-                      className="block hover:opacity-80 transition-opacity"
-                    >
-                      <IdBadge
-                        id={inv.workspaceId}
-                        type="workspace"
-                        name={inv.workspaceName}
-                      />
-                    </Link>
+                    {/* `workspaceId` is nullable — a personal invoice belongs to a user, not a
+                        workspace. The shadow type declared it `string`, so this rendered a link to
+                        /billing/workspace/null and handed IdBadge a null it calls .substring() on.
+                        Same defect as the receipt crash, one column across. */}
+                    {inv.workspaceId ? (
+                      <Link
+                        href={`/billing/workspace/${inv.workspaceId}`}
+                        className="block hover:opacity-80 transition-opacity"
+                      >
+                        <IdBadge
+                          id={inv.workspaceId}
+                          type="workspace"
+                          name={inv.workspaceName}
+                        />
+                      </Link>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">
-                    {inv.stripeInvoiceId}
+                    {inv.invoiceNumber}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -328,7 +360,7 @@ export function AdminInvoicesTab() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    {formatMoney(inv.amount, inv.currency)}
+                    {formatMoney(inv.total, inv.currency)}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
@@ -339,9 +371,9 @@ export function AdminInvoicesTab() {
                     >
                       View Receipt
                     </Button>
-                    {inv.hostedInvoiceUrl && (
+                    {inv.pdfUrl && (
                       <a
-                        href={inv.hostedInvoiceUrl}
+                        href={inv.pdfUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="text-primary hover:underline text-xs font-semibold"
@@ -462,9 +494,7 @@ export function AdminInvoicesTab() {
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-ink-muted">Invoice Number</span>
                   <span className="font-mono font-bold text-ink uppercase tracking-wider">
-                    {selectedInvoice.stripeInvoiceId.startsWith("in_")
-                      ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}`
-                      : selectedInvoice.stripeInvoiceId}
+                    {receiptNumber(selectedInvoice)}
                   </span>
                 </div>
 
@@ -500,7 +530,7 @@ export function AdminInvoicesTab() {
                     </span>
                   </div>
                   <span className="text-lg font-extrabold text-ink tracking-tight">
-                    {formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
+                    {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                   </span>
                 </div>
               </div>
@@ -576,10 +606,7 @@ export function AdminInvoicesTab() {
             </h2>
             <p className="text-xs font-mono font-bold text-gray-700 mt-1.5">
               No:{" "}
-              {selectedInvoice &&
-                (selectedInvoice.stripeInvoiceId.startsWith("in_")
-                  ? `INV-${selectedInvoice.stripeInvoiceId.substring(selectedInvoice.stripeInvoiceId.length - 8).toUpperCase()}`
-                  : selectedInvoice.stripeInvoiceId)}
+              {selectedInvoice && receiptNumber(selectedInvoice)}
             </p>
             <p className="text-[10px] text-gray-500 mt-1">
               Date:{" "}
@@ -645,10 +672,10 @@ export function AdminInvoicesTab() {
                 </td>
                 <td className="py-4 px-3 text-center text-gray-700">1</td>
                 <td className="py-4 px-3 text-right text-gray-700 font-mono">
-                  {formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
                 <td className="py-4 px-3 text-right text-gray-900 font-bold font-mono pr-4">
-                  {formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
+                  {formatMoney(selectedInvoice.total, selectedInvoice.currency)}
                 </td>
               </tr>
             )}
@@ -661,7 +688,7 @@ export function AdminInvoicesTab() {
             <div className="flex justify-between text-xs">
               <span className="text-gray-500">Subtotal:</span>
               <span className="font-semibold text-gray-900 font-mono">
-                {selectedInvoice && formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
             <div className="flex justify-between text-xs">
@@ -673,7 +700,7 @@ export function AdminInvoicesTab() {
             <div className="flex justify-between text-xs border-t border-gray-800 pt-3.5 font-black text-sm">
               <span className="text-gray-900">Total Paid:</span>
               <span className="text-gray-950 font-mono text-base">
-                {selectedInvoice && formatMoney(selectedInvoice.amount, selectedInvoice.currency)}
+                {selectedInvoice && formatMoney(selectedInvoice.total, selectedInvoice.currency)}
               </span>
             </div>
           </div>

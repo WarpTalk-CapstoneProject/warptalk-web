@@ -23,6 +23,7 @@ import { useDeleteVoiceProfile, useDubVoice, useSetDubVoice } from "@/hooks/use-
 import { getLanguageName } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
+import { isVoiceProfileCloning } from "@/lib/voice/profile-status";
 
 /**
  * What has actually become of a recording somebody uploaded.
@@ -49,11 +50,13 @@ export function profileState(profile: VoiceProfileDto): {
       detail: "",
     };
   }
-  if (profile.providerVoiceId) {
+  if (!isVoiceProfileCloning(profile)) {
     // Nothing to add. "Ready" is the whole fact, and a second clause repeating it in other words
     // is the kind of filler that made every row look like it had something wrong with it.
     return { tone: "ready", label: "Ready", detail: "" };
   }
+  // WT-598: the same predicate the query polls on — this label and "keep asking the server" have
+  // to be the same question, or the row says "Cloning" while nothing is checking.
   return { tone: "pending", label: "Cloning", detail: "usually under a minute" };
 }
 

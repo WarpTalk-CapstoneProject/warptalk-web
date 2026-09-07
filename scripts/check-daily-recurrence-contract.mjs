@@ -78,13 +78,25 @@ assert.doesNotMatch(
 );
 assert.match(
   modalSource,
-  /type="time"/,
-  "The Daily row must offer a time-of-day control; picking the hour is the entire feature.",
+  /<TimeField[\s\S]{0,300}?value=\{daily\.time\}/,
+  "The Daily row must offer a time-of-day control bound to the rule; picking the hour is the entire feature.",
 );
 assert.match(
   modalSource,
-  /type="date"/,
+  /<DateField[\s\S]{0,300}?value=\{daily\.endDate\}/,
   "Daily must offer an end date. A series with no end generates rooms forever, including for abandoned demo workspaces.",
+);
+// WT-548 — NOT the native controls, and this is the assertion that keeps them out.
+//
+// `<input type="time">` and `<input type="date">` take their language from the BROWSER, not from
+// the page. `<html lang="en">` does not reach them. On a Vietnamese Chrome the English Create
+// Room dialog rendered "09:00 SA" and a "Tháng Chín 2026" calendar with "Xóa"/"Hôm nay" buttons,
+// and there is no attribute that fixes it — the widget is not ours to translate. The controls
+// above are the app's own, in the app's one language.
+assert.doesNotMatch(
+  modalSource,
+  /type="(?:time|date)"/,
+  "The Daily row must not use a native date/time input: its language comes from the browser, so an English dialog renders a Vietnamese picker (WT-548).",
 );
 // WT-327 originally required an occurrence-count preview here — "Every day at 09:00 · 31
 // meetings · Asia/Saigon" — as the guard against the dead switch. The owner removed it: it
@@ -109,7 +121,7 @@ assert.doesNotMatch(
 // the rule rather than hidden behind a further click.
 assert.match(
   modalSource,
-  /isDaily &&[\s\S]{0,200}?type="time"/,
+  /isDaily &&[\s\S]{0,200}?<TimeField/,
   "The hour must appear as soon as Daily is on, beside its own label — not behind another control.",
 );
 

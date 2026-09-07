@@ -1,8 +1,4 @@
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
-import {
-  assistantToolDoneLabel,
-  assistantToolLabel,
-} from "@/lib/meeting/assistant-tool-labels";
 import { chatSenderName, isAssistantMessage } from "@/lib/meeting/chat-sender";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -15,11 +11,23 @@ import {
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+} from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
+import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
+import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
+import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ChatMessageDto, ChatMentionDto } from "@/types/realtime";
 import type { ChatFileMessageDto } from "@/types/meeting-chat-file";
 import { getLanguageName } from "@/lib/language/languages";
 import { downloadAuthenticatedFile } from "@/lib/ui/download-artifact";
 import { API } from "@/lib/api/endpoints";
+import { MAX_QUEUED_AGENT_ASKS, decideAgentSend } from "@/lib/meeting/assistant-queue";
 import { getErrorMessage } from "@/lib/api/errors";
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { JSONContent } from "@tiptap/core";
@@ -31,6 +39,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -48,8 +57,8 @@ import {
   FileArchive,
   Download,
 } from "lucide-react";
-import { Lumidot } from "lumidot";
-import { useTheme } from "next-themes";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
+import { usePluginConnectUrl } from "@/hooks/use-assistant";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -90,6 +99,28 @@ function FileTypeIcon({ contentType }: { contentType?: string }) {
   return <FileText className="h-4 w-4" />;
 }
 
+/**
+ * The face beside a chat message.
+ *
+ * A hook cannot be called inside the message loop, so the lookup lives in its own component —
+ * one per row, which is what a list of messages is anyway.
+ *
+ * The identity comes from the meeting's own join (roster + workspace members), never from the
+ * message: a chat row carries a sender id and a display name and no picture, and the participants
+ * API carries no picture either.
+ */
+function ChatSenderAvatar({
+  userId,
+  displayName,
+}: {
+  userId?: string | null;
+  displayName: string;
+}) {
+  const identity = useMeetingIdentity(userId, displayName);
+  // No flag: the row already prints the message's language beside the name.
+  return <ParticipantAvatar identity={identity} size="sm" showFlag={false} className="mt-0.5" />;
+}
+
 export function ChatPanel({
   roomId,
   sourceLanguage = "en",
@@ -118,11 +149,28 @@ export function ChatPanel({
   );
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
+  /**
+   * Questions for WarpBot typed while it was still answering the previous one. WT-580.
+   *
+   * Held on the client because the ordering problem is a client-side one: the backend builds each
+   * request's history from the DATABASE, and waiting until the previous ANSWER is stored is what
+   * puts that reply into the history question 2 is answered against. In the STORE rather than in
+   * this component because switching to Transcript or People unmounts the panel.
+   */
+  const queuedAsks = useTranslationRoomStore((state) => state.queuedAgentAsks);
+  const enqueueAgentAsk = useTranslationRoomStore((state) => state.enqueueAgentAsk);
+  const dequeueAgentAsk = useTranslationRoomStore((state) => state.dequeueAgentAsk);
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
+  const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
+  const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
+  const assistantQuestionsJson = useTranslationRoomStore((state) => state.assistantQuestionsJson);
+  const setAssistantQuestionsJson = useTranslationRoomStore((state) => state.setAssistantQuestionsJson);
+  const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
   const assistantActivityAt = useTranslationRoomStore((state) => state.assistantActivityAt);
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
+  const beginAssistantTurn = useTranslationRoomStore((state) => state.beginAssistantTurn);
   const answersWhenAskedRef = useRef(0);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
@@ -133,6 +181,7 @@ export function ChatPanel({
   const user = useAuthStore((state) => state.user);
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
+  const connectPlugin = usePluginConnectUrl();
   const { mutate: sendFileAPI, isPending: isUploadingFile } =
     useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
@@ -158,8 +207,6 @@ export function ChatPanel({
   const shouldAutoScrollRef = useRef(true);
   const hasRestoredRef = useRef(false);
   const previousTargetLanguageRef = useRef(targetLanguage);
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   function toggleTranslation(messageId: string) {
     const current = translations[messageId];
@@ -235,13 +282,103 @@ export function ChatPanel({
   // replied.
   useEffect(() => {
     if (assistantState === "idle") return;
-    if (messages.filter(isAssistantMessage).length > answersWhenAskedRef.current) {
+    const answers = messages.filter(isAssistantMessage);
+    if (answers.length > answersWhenAskedRef.current) {
+      // The trail belongs to the answer, not to the panel. Sealed here because this is the one
+      // place that knows WHICH message the turn just produced — the newest one — and the widget
+      // has kept a folded trail under every past reply since it shipped.
+      const newest = answers[answers.length - 1];
+      if (newest) sealAssistantTrail(newest.id);
       setAssistantState("idle");
     }
     // NOT `assistantState !== "thinking"`. That guard is the reported bug: once the wait had been
     // declared over, the answer arriving could no longer clear the notice, so a slow reply left a
     // permanent "WarpBot didn't answer" sitting above a WarpBot answer.
-  }, [messages, assistantState, setAssistantState]);
+  }, [messages, assistantState, setAssistantState, sealAssistantTrail]);
+
+
+  /**
+   * Actually send one message. Separated from composing it so a queued ask — which no longer has
+   * an editor document behind it — goes out through exactly the same path, including the
+   * assistant-turn bookkeeping that the answer-detection effect depends on.
+   */
+  function dispatchMessage(
+    trimmedText: string,
+    mentions: ChatMentionDto[],
+    asksTheAgent: boolean,
+    onSent?: () => void,
+  ) {
+    // BEFORE the request, not in onSuccess.
+    //
+    // onSuccess runs after the HTTP round trip, and WarpBot's answer arrives over SignalR
+    // independently — so a fast answer landed FIRST, cleared a state that was still idle, and
+    // then onSuccess switched "thinking" on with nothing left to turn it off. Ninety seconds
+    // later the user saw "WarpBot didn't answer" sitting underneath the answer.
+    //
+    // `asksTheAgent` is a parameter now rather than being recomputed here: sendMessage has to
+    // know it before this runs, to decide whether the message waits at all (WT-580).
+    if (asksTheAgent) {
+      // How many answers existed at the moment of asking. Captured here, synchronously,
+      // rather than in an effect: an effect runs after the render, by which time a fast
+      // answer may already have arrived and would be counted as part of the baseline — which
+      // is a spinner that never stops.
+      answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
+      // Opens the trail on "reading your question", exactly as the widget does. This used to be
+      // setAssistantState("thinking"), which moved the state without starting a trail — and
+      // because every later signal then saw a non-idle state, nothing ever seeded one. The
+      // whole stretch before the first tool call showed a bare spinner instead of a step.
+      beginAssistantTurn();
+    }
+
+    sendMessageAPI(
+      {
+        roomId,
+        data: {
+          originalText: trimmedText,
+          originalLanguage: sourceLanguage,
+          translationEnabled: true,
+          mentions: mentions.length > 0 ? mentions : undefined,
+        },
+      },
+      {
+        onSuccess: (message) => {
+          addChatMessage(message);
+          onSent?.();
+        },
+        onError: (error) => {
+          // WT-365: "Try again." was advice that could not work. A 403 here means the server is
+          // REFUSING the message — the room no longer counts this client as an active
+          // participant — and retrying refuses it again, forever. The backend now sends its
+          // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
+          // the generic line stays for the faults where trying again genuinely is the answer.
+          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
+          // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
+          // seconds and then blame WarpBot for a message that never reached it.
+          if (asksTheAgent) {
+            setAssistantState("idle");
+          }
+        },
+      },
+    );
+  }
+
+  // WT-580 — drain the queue, ONE ask at a time.
+  //
+  // Keyed on the assistant going idle, which is the same signal the effect above uses to decide
+  // an answer has landed. One per transition rather than a loop: dispatching sets the state busy
+  // again, so the next question waits for the next answer, which is the whole point — question 2
+  // is answered with question 1's reply already in the history the backend reads.
+  useEffect(() => {
+    if (assistantState !== "idle") return;
+    if (queuedAsks.length === 0) return;
+
+    const next = dequeueAgentAsk();
+    if (next) dispatchMessage(next.text, next.mentions, true);
+    // dispatchMessage is redeclared every render, so this effect re-runs on every render — and
+    // that is harmless by construction: both guards above return unless the assistant is idle AND
+    // something is waiting, and acting removes the item from the queue and sets the state busy,
+    // so neither condition survives the dispatch.
+  }, [assistantState, queuedAsks, dequeueAgentAsk, dispatchMessage]);
 
   // One deadline, wherever "thinking" came from — the optimistic set on send, or the
   // server's pending signal. A spinner with no end is its own lie, and this one would
@@ -304,7 +441,13 @@ export function ChatPanel({
     if (shouldAutoScrollRef.current) {
       container.scrollTop = container.scrollHeight;
     }
-  }, [messages, roomId]);
+    // `assistantDraft` is in here so a streamed answer keeps the reader at the bottom as it
+    // grows. Without it the panel only follows whole MESSAGES, and a long reply would write
+    // itself off the bottom of the screen for anyone watching it arrive.
+    //
+    // It respects shouldAutoScrollRef exactly as a message does, so somebody who has scrolled up
+    // to read something is not dragged back down by WarpBot typing.
+  }, [messages, roomId, assistantDraft]);
 
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The same slack handleMessagesScroll uses to decide the panel is still following.
@@ -387,41 +530,47 @@ export function ChatPanel({
     },
   });
 
-  function sendMessage() {
-    if (!editor) return;
+  function sendMessage(overrideContent?: string) {
+    if (!editor && !overrideContent) return;
 
     // Extract plain text and mentions
-    const json = editor.getJSON();
     let textContent = "";
-    const mentions: ChatMentionDto[] = [];
+    let mentions: ChatMentionDto[] = [];
 
-    // A simple recursive function to extract text and mentions
-    const parseNode = (node: JSONContent) => {
-      if (node.type === "text") {
-        textContent += node.text;
-      } else if (node.type === "mention") {
-        const id = String(node.attrs?.id ?? "");
-        const label = String(node.attrs?.label ?? "");
-        textContent += `@${label}`;
-        mentions.push({
-          id,
-          display: label,
-          type: "agent",
+    if (overrideContent) {
+      textContent = overrideContent;
+      mentions = [{ id: "bot-warpbot", display: "WarpBot", type: "agent" }];
+    } else {
+      const json = editor!.getJSON();
+
+      // A simple recursive function to extract text and mentions
+      const parseNode = (node: JSONContent) => {
+        if (node.type === "text") {
+          textContent += node.text;
+        } else if (node.type === "mention") {
+          const id = String(node.attrs?.id ?? "");
+          const label = String(node.attrs?.label ?? "");
+          textContent += `@${label}`;
+          mentions.push({
+            id,
+            display: label,
+            type: "agent",
+          });
+        } else if (node.type === "hardBreak") {
+          textContent += "\n";
+        }
+
+        if (node.content) {
+          node.content.forEach(parseNode);
+        }
+      };
+
+      if (json.content) {
+        json.content.forEach((block) => {
+          parseNode(block);
+          textContent += "\n";
         });
-      } else if (node.type === "hardBreak") {
-        textContent += "\n";
       }
-
-      if (node.content) {
-        node.content.forEach(parseNode);
-      }
-    };
-
-    if (json.content) {
-      json.content.forEach((block) => {
-        parseNode(block);
-        textContent += "\n";
-      });
     }
 
     const trimmedText = textContent.trim();
@@ -438,53 +587,44 @@ export function ChatPanel({
 
     setSendError(null);
 
-    // BEFORE the request, not in onSuccess.
-    //
-    // onSuccess runs after the HTTP round trip, and WarpBot's answer arrives over SignalR
-    // independently — so a fast answer landed FIRST, cleared a state that was still idle, and
-    // then onSuccess switched "thinking" on with nothing left to turn it off. Ninety seconds
-    // later the user saw "WarpBot didn't answer" sitting underneath the answer.
     const asksTheAgent = mentions.some((mention) => mention.type === "agent");
-    if (asksTheAgent) {
-      // How many answers existed at the moment of asking. Captured here, synchronously,
-      // rather than in an effect: an effect runs after the render, by which time a fast
-      // answer may already have arrived and would be counted as part of the baseline — which
-      // is a spinner that never stops.
-      answersWhenAskedRef.current = messages.filter(isAssistantMessage).length;
-      setAssistantState("thinking");
+
+    // WT-580 — a second question while WarpBot is still answering the first.
+    //
+    // Held rather than refused: the user asked two things and both deserve an answer, each with
+    // the other's in view. See lib/meeting/assistant-queue for why only AGENT messages wait —
+    // holding ordinary chat behind a model would be a worse bug than this one.
+    const decision = decideAgentSend({
+      asksTheAgent,
+      assistantBusy: assistantState !== "idle",
+      queueLength: queuedAsks.length,
+    });
+
+    if (decision === "refuse") {
+      setSendError(
+        `WarpBot already has ${MAX_QUEUED_AGENT_ASKS} questions waiting. Let it catch up before asking another.`,
+      );
+      return;
     }
 
-    sendMessageAPI(
-      {
-        roomId,
-        data: {
-          originalText: trimmedText,
-          originalLanguage: sourceLanguage,
-          translationEnabled: true,
-          mentions: mentions.length > 0 ? mentions : undefined,
-        },
-      },
-      {
-        onSuccess: (message) => {
-          addChatMessage(message);
-          editor.commands.clearContent(true);
-        },
-        onError: (error) => {
-          // WT-365: "Try again." was advice that could not work. A 403 here means the server is
-          // REFUSING the message — the room no longer counts this client as an active
-          // participant — and retrying refuses it again, forever. The backend now sends its
-          // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
-          // the generic line stays for the faults where trying again genuinely is the answer.
-          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
-          // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
-          // seconds and then blame WarpBot for a message that never reached it.
-          if (asksTheAgent) {
-            setAssistantState("idle");
-          }
-        },
-      },
+    if (decision === "queue") {
+      enqueueAgentAsk({ text: trimmedText, mentions });
+      // Cleared now, not on a response that has not been requested yet: the message has been
+      // accepted, and leaving it in the box reads as the send having failed. A queued ask can
+      // also come from an in-chat card (WT-565), which has no editor document behind it.
+      setAssistantQuestionsJson(null);
+      editor?.commands.clearContent(true);
+      return;
+    }
+
+    dispatchMessage(trimmedText, mentions, asksTheAgent, () => {
+      // A card's follow-up has been sent, so the card is no longer pending (WT-565).
+      setAssistantQuestionsJson(null);
+      editor?.commands.clearContent(true);
+    }
     );
   }
+
 
   useEffect(() => {
     setMentionMenusVisible(active);
@@ -533,6 +673,27 @@ export function ChatPanel({
     }
   }
 
+  const pendingAssistantQuestions = assistantQuestionsJson
+    ? parseAssistantQuestions(assistantQuestionsJson)
+    : [];
+  const pendingPluginConnection = assistantQuestionsJson
+    ? parsePluginConnectionAction(assistantQuestionsJson)
+    : null;
+
+  async function handlePluginConnectionAction(pluginKey: string) {
+    try {
+      setSendError(null);
+      const result = await connectPlugin.mutateAsync({ pluginKey });
+      if (!openProviderConsent(result.url)) {
+        // Blocked popup, most likely: the user gesture is gone by the time the mutation
+        // resolves. Saying nothing leaves them waiting on a window that never opened.
+        setSendError("Your browser blocked the consent window. Allow pop-ups and try again.");
+      }
+    } catch {
+      setSendError("Could not open the plugin connection flow. Try again.");
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -543,7 +704,7 @@ export function ChatPanel({
       >
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+            <LumidotSpinner />
             <span className="ml-2">Loading messages</span>
           </div>
         ) : null}
@@ -582,11 +743,17 @@ export function ChatPanel({
                 transition={{ duration: 0.2 }}
                 className={`flex gap-3 items-start group ${isMine ? "flex-row-reverse" : ""}`}
               >
-                <div
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold shadow-sm ${isAssistant ? "bg-primary text-white" : isMine ? "bg-ink text-white" : "bg-surface-3 text-ink"}`}
-                >
-                  {displayName.substring(0, 2).toUpperCase()}
-                </div>
+                {/* WarpBot keeps its badge — it is not a person and has no face to show. Everyone
+                    else gets theirs, from the same identity join the stage and the transcript use;
+                    the chat drew two letters in a square and had no path to a picture at all. */}
+                {isAssistant ? (
+                  <WarpBotAvatar />
+                ) : (
+                  <ChatSenderAvatar
+                    userId={message.senderUserId}
+                    displayName={displayName}
+                  />
+                )}
                 <div
                   className={`flex min-w-0 flex-1 flex-col ${isMine ? "items-end" : "items-start"}`}
                 >
@@ -664,8 +831,14 @@ export function ChatPanel({
                     // it — "**transcript hiện tại**" reached the reader as those characters.
                     // Left-aligned unconditionally: a bulleted list right-aligned to match a
                     // chat bubble is unreadable, and WarpBot's messages are never "mine".
+                    // `text-ink`, the same as the widget. This was `font-medium text-primary`
+                    // — violet, bolder than anything else in the panel — so one agent answered
+                    // in two different voices depending on which surface you asked from, and
+                    // the meeting one read as a system notice rather than as a reply.
+                    // Left-aligned unconditionally: a bulleted list right-aligned to match a
+                    // chat bubble is unreadable, and WarpBot's messages are never "mine".
                     <div
-                      className={`mt-0.5 max-w-full break-words text-left text-[13px] font-medium leading-relaxed text-primary`}
+                      className={`mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink`}
                     >
                       <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
                       {/* Under the answer, inside the same left-aligned block: the chips
@@ -675,6 +848,17 @@ export function ChatPanel({
                         sources={parseAnswerSources(message.sourcesJson)}
                         workspaceSlug={activeWorkspaceSlug}
                       />
+                      {/* And under those, the folded trail — the record of which tools this
+                          particular answer came through. The widget has shown one under every
+                          reply since it shipped; here the only trail was a live one at the
+                          bottom of the panel, which belonged to whatever was asked last. */}
+                      {assistantTrails[message.id] ? (
+                        <AssistantWorkTrail
+                          steps={assistantTrails[message.id].steps}
+                          running={false}
+                          durationMs={assistantTrails[message.id].durationMs}
+                        />
+                      ) : null}
                     </div>
                   ) : (
                     <p
@@ -709,21 +893,44 @@ export function ChatPanel({
         {/* The answer arrives as a WarpBot message in this same shared chat, which everyone
             sees — but a tool-calling loop takes seconds, and with nothing here the wait was
             indistinguishable from having been ignored. */}
-        {assistantState !== "idle" && assistantSteps.length === 0 ? (
+        {assistantState !== "idle" && assistantSteps.length === 0 && !assistantDraft ? (
           <div className="flex items-center gap-2 px-1 py-2 text-[12px] text-ink-muted">
-            {/* The same Lumidot the widget uses. Two surfaces run one agent, and three bouncing
-                dots here against a Lumidot there said the waiting was a different kind. */}
-            <span
-              aria-hidden
-              className="flex size-[14px] shrink-0 origin-center scale-[0.42] items-center justify-center"
-            >
-              <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
-            </span>
+            {/* The same mark, at the same size, as everywhere else. It used to be scaled to
+                0.42 here and 0.75 in the widget, so one agent's "working" looked like two
+                different kinds of working depending on which surface you were on. */}
+            <LumidotSpinner />
             <span>
               {assistantState === "slow"
                 ? "WarpBot is still working — this one is taking a while."
                 : "WarpBot is thinking…"}
+              {/* WT-580 — say that the next question was kept, not lost. Without this the
+                  composer clears and nothing happens for several seconds, which is
+                  indistinguishable from the message having failed to send. */}
+              {queuedAsks.length > 0
+                ? queuedAsks.length === 1
+                  ? " Your next question is queued."
+                  : ` ${queuedAsks.length} more questions are queued.`
+                : null}
             </span>
+          </div>
+        ) : null}
+
+        {/* WarpBot's answer as it is written, in the shape the finished message takes — same
+            avatar, same ink, same markdown — so the reply does not visibly jump from one
+            rendering to another when it lands.
+
+            EVERYONE IN THE ROOM SEES THIS, which is the difference from the widget: a private
+            assistant can stream to one person, and a shared chat streams to all of them. That is
+            the point — the wait was the thing being fixed, and it was everybody's wait.
+
+            No id, never persisted, replaced by the real message the moment it arrives. A late
+            joiner or a reload sees the persisted answer and never this. */}
+        {assistantDraft ? (
+          <div className="flex items-start gap-3" data-testid="assistant-draft">
+            <WarpBotAvatar />
+            <div className="mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink">
+              <AssistantMarkdown>{assistantDraft}</AssistantMarkdown>
+            </div>
           </div>
         ) : null}
 
@@ -740,9 +947,31 @@ export function ChatPanel({
                 ? assistantFinishedAt - assistantStartedAt
                 : null
             }
-            lumidotVariant={lumidotVariant}
             className="px-1"
           />
+        ) : null}
+
+        {pendingAssistantQuestions.length > 0 ? (
+          <div className="pl-10">
+            <AssistantQuestionCard
+              questions={pendingAssistantQuestions}
+              disabled={isPending}
+              onSubmit={(answer) => {
+                setAssistantQuestionsJson(null);
+                sendMessage(answer);
+              }}
+            />
+          </div>
+        ) : null}
+        {pendingPluginConnection ? (
+          <div className="pl-10">
+            <PluginConnectionActionCard
+              action={pendingPluginConnection}
+              disabled={connectPlugin.isPending}
+              onDismiss={() => setAssistantQuestionsJson(null)}
+              onConnect={handlePluginConnectionAction}
+            />
+          </div>
         ) : null}
       </div>
       {/* Reading back through a meeting's chat stops the panel following, which is right — and
@@ -789,7 +1018,7 @@ export function ChatPanel({
           <EditorContent editor={editor} className="min-w-0 flex-1" />
           <button
             type="button"
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={isPending}
             aria-label="Send message"
             title="Send message"

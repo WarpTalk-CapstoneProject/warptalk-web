@@ -62,6 +62,14 @@ export function PagePlaceholder({
         width={760}
         height={760}
         sizes="(max-width: 640px) 280px, 380px"
+        // An empty state IS this picture — it is the largest thing on the page and it is in the
+        // viewport the moment the page renders. Lazily loading it means waiting for hydration and
+        // then a round trip before the page looks like anything, which is what "loads slowly"
+        // was: not the file size alone, but that nothing even started fetching until after React
+        // had run. The source art is also a tenth of the weight it was (flat line art was
+        // shipping as 24-bit PNG at ~300KB; palette PNG carries it at ~25KB with the alpha and
+        // the accent glow intact).
+        priority
         className="-mb-16 -mt-12 h-auto w-[280px] select-none dark:hue-rotate-180 dark:invert sm:w-[380px]"
       />
       <p className="relative text-sm font-medium text-ink">{title}</p>

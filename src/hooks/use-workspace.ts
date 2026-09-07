@@ -286,11 +286,18 @@ export function useInvitationPolicy(workspaceId: string, email: string) {
   });
 }
 
-export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string) {
+/**
+ * @param enabled Pass `false` for a viewer who is not allowed to read this list. WT-521 — the
+ * Members page ran the "outbound" and "join-request" queries for everybody, and the server
+ * (correctly) answers 403 to a plain Member, so opening Members as one printed a pair of 403s to
+ * the console on every render. Gating the request is the fix, not widening the endpoint: a Member
+ * genuinely may not see who else has been invited.
+ */
+export function useWorkspaceInvitations(workspaceId: string, page = 1, pageSize = 10, search = "", category?: string, enabled = true) {
   return useQuery({
     queryKey: [...WORKSPACE_KEYS.invitations(workspaceId, page, pageSize, search), category],
     queryFn: () => WorkspaceService.listInvitations(workspaceId, page, pageSize, search, category),
-    enabled: !!workspaceId,
+    enabled: !!workspaceId && enabled,
     placeholderData: (previousData) => previousData,
     staleTime: 30000,
   });

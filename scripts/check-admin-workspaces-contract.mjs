@@ -11,7 +11,7 @@ async function source(relativePath) {
 
 const [directory, detail, service, endpoints, dialog, sidebar] = await Promise.all([
   source("src/app/(app)/admin/workspaces/page.tsx"),
-  source("src/app/(app)/admin/workspaces/[workspaceId]/page.tsx"),
+  source("src/app/(app)/admin/workspaces/[workspaceRef]/page.tsx"),
   source("src/services/admin-workspace.service.ts"),
   source("src/lib/api/endpoints.ts"),
   source("src/components/admin/WorkspaceLifecycleDialog.tsx"),
@@ -67,9 +67,11 @@ assert.match(
 );
 
 // Master → detail navigation is a real route, so the selected workspace lives in the URL.
+// By slug since WT-560 — the workspace is named there rather than keyed. What this assertion
+// is for is unchanged: the row must lead somewhere, and it must be a URL rather than state.
 assert.match(
   directory,
-  /href=\{`\/admin\/workspaces\/\$\{workspace\.id\}`\}/,
+  /href=\{`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
   "rows must link to the detail route",
 );
 

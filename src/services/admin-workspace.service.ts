@@ -34,6 +34,13 @@ export const adminWorkspaceService = {
     return data;
   },
 
+  getDetailBySlug: async (slug: string): Promise<AdminWorkspaceDetailDto> => {
+    const { data } = await apiClient.get<AdminWorkspaceDetailDto>(
+      API.adminWorkspaces.detailBySlug(slug),
+    );
+    return data;
+  },
+
   suspend: async (workspaceId: string, reason: string): Promise<AdminWorkspaceDetailDto> => {
     const { data } = await apiClient.post<AdminWorkspaceDetailDto>(
       API.adminWorkspaces.suspend(workspaceId),

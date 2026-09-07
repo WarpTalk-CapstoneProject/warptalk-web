@@ -12,7 +12,6 @@
  */
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Repeat } from "lucide-react";
 import { toast } from "sonner";
 
@@ -31,14 +30,18 @@ const NEXT_DATE = new Intl.DateTimeFormat("en-US", {
 
 export function RoomRecurrenceLine({
   seriesId,
+  occurrenceId,
   isHost,
-  workspaceSlug,
 }: {
   seriesId: string;
+  /**
+   * The occurrence this page is showing. WT-548: it is the one occurrence "Stop repeating" must
+   * leave alone — it has not started, so without naming it the server counts it among the future
+   * occurrences it cancels, and the host watches the meeting they were looking at disappear.
+   */
+  occurrenceId: string;
   isHost: boolean;
-  workspaceSlug: string;
 }) {
-  const router = useRouter();
   const seriesQuery = useSeries(seriesId);
   const cancelSeries = useCancelTranslationRoomSeries();
   const [isStopping, setIsStopping] = useState(false);
@@ -65,13 +68,15 @@ export function RoomRecurrenceLine({
   async function stopRepeating() {
     setIsStopping(true);
     try {
-      const result = await cancelSeries.mutateAsync(seriesId);
+      const result = await cancelSeries.mutateAsync({ seriesId, keepOccurrenceId: occurrenceId });
+      // Says what survived, not only what was cancelled. The old wording named a number of
+      // cancelled meetings and then navigated away from this one, which read as "it deleted my
+      // meeting" — and until the fix above, it had.
       toast.success(
-        `Schedule stopped. ${result.cancelledOccurrenceCount} upcoming meeting${
-          result.cancelledOccurrenceCount === 1 ? " was" : "s were"
+        `Schedule stopped. This meeting still goes ahead; ${result.cancelledOccurrenceCount} later ${
+          result.cancelledOccurrenceCount === 1 ? "meeting was" : "meetings were"
         } cancelled.`,
       );
-      router.push(`/${workspaceSlug}/rooms`);
     } catch (error) {
       toast.error(getErrorMessage(error, "Could not stop this repeating meeting."));
     } finally {

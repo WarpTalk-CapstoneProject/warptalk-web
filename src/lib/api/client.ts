@@ -165,6 +165,7 @@ const UNAUTHENTICATED_AUTH_ENDPOINTS = [
   "/auth/forgot-password",
   "/auth/reset-password",
   "/auth/verify-email",
+  "/auth/resend-verification-request",
 ];
 
 /**

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { hasCloningVoiceProfile } from "@/lib/voice/profile-status";
 import { VoiceConsentService, VoiceProfileService } from "@/services/voice-profile.service";
 import type {
   CreateVoiceProfileRequest,
@@ -21,11 +22,26 @@ export const VOICE_PROFILE_KEYS = {
   consent: () => ["voiceConsent"] as const,
 };
 
+/**
+ * WT-598: polls while a clone is still being built, and stops the moment none are.
+ *
+ * Cloning finishes on the AI side and writes the provider voice id to the row. Nothing tells the
+ * browser — there is no realtime channel for it — so with only `staleTime` this query refetched
+ * on remount and window focus and at no other moment. Somebody who uploaded a sample and then
+ * WAITED on the page, which is exactly what the screen invites, sat on "Cloning" indefinitely;
+ * navigating to another page and back remounted the query and revealed it had finished minutes
+ * ago. The workaround in the report — "switch to another page" — is a remount, not a fix.
+ *
+ * The interval is conditional so a settled list costs nothing: with every profile ready this is
+ * an ordinary cached query again. A clone that never completes keeps one request every four
+ * seconds while the tab is open and focused, which is the price of not making the reader guess.
+ */
 export function useVoiceProfiles() {
   return useQuery({
     queryKey: VOICE_PROFILE_KEYS.list(),
     queryFn: () => VoiceProfileService.list(),
     staleTime: 30000,
+    refetchInterval: (query) => (hasCloningVoiceProfile(query.state.data) ? 4000 : false),
   });
 }
 

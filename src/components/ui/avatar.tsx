@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
 
+import { resolveAvatarUrl } from "@/lib/auth/avatar-url"
 import { cn } from "@/lib/utils"
 
 function Avatar({
@@ -25,10 +26,29 @@ function Avatar({
   )
 }
 
-function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
+/**
+ * The one place a stored avatar value becomes a URL a browser can fetch.
+ *
+ * WHY THE RESOLUTION LIVES HERE
+ *   `user.avatarUrl` holds an absolute URL for a Google-hosted picture and a RELATIVE path
+ *   (`/api/v1/auth/profile/avatar/{id}.jpg`) for one uploaded here. A relative path handed
+ *   straight to an <img> resolves against the page origin — app.warptalk.io.vn — and the API is
+ *   on api.warptalk.io.vn, so it 404s and the fallback initials take over.
+ *
+ *   That is not hypothetical: nine components render a face and exactly one of them remembered to
+ *   call resolveAvatarUrl. Everyone with a Google picture saw it (absolute, so it worked by
+ *   accident) and everyone who uploaded one saw initials on every screen but their own profile.
+ *   The module's own comment claimed the resolving happened "once, rather than in each of the
+ *   seven places that put a face on screen" — which is exactly what it did NOT do.
+ *
+ *   Doing it inside the primitive makes every call site correct by construction, including ones
+ *   not written yet. It is a no-op for absolute URLs and data: URIs, so nothing else changes.
+ */
+function AvatarImage({ className, src, ...props }: AvatarPrimitive.Image.Props) {
   return (
     <AvatarPrimitive.Image
       data-slot="avatar-image"
+      src={typeof src === "string" ? resolveAvatarUrl(src) : src}
       className={cn(
         "aspect-square size-full rounded-full object-cover",
         className

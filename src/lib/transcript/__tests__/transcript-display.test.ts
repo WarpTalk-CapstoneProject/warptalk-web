@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  captionTextForReader,
+  pendingCorrections,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
   confidencePercent,
@@ -14,6 +16,8 @@ import {
   isTranscriptControlMarker,
   resolveSegmentTranslation,
   resolveTranscriptSpeakerName,
+  resolveTranscriptPauseGaps,
+  splitSegmentsAroundPauseGaps,
 } from "../transcript-display.ts";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "../../../types/realtime.ts";
 
@@ -494,4 +498,237 @@ test("a line with no speaker name at all is attributed to nobody, not to blank",
   ]);
 
   assert.equal(turns[0].speakerName, "Unknown speaker");
+});
+
+// ── the caption lane's own language rule ────────────────────────────────────────────────────
+//
+// Reversed on 2026-08-20 by the product owner. The lane rendered originalText unconditionally,
+// so a reader listening in English watched Vietnamese captions scroll past while their English
+// sat one tab away in the transcript panel.
+//
+// The subtle half is that resolveSegmentTranslation returns null for two OPPOSITE situations,
+// and the lane has to tell them apart: "there was nothing to translate" must still be
+// captioned, "the translation has not arrived yet" must not.
+
+test("a reader sees the caption in their own language, not the speaker's", () => {
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en"), "Hello");
+});
+
+test("a speaker already in the reader's language is captioned, not held back", () => {
+  // THE CASE THAT WOULD EMPTY THE LANE. No translation is ever produced for a matched pair —
+  // the pipeline drops it as same_language_targets_dropped — so requiring one would leave a
+  // room where everybody shares a language with no captions at all, and would stop anyone ever
+  // seeing their own words.
+  const line = segment({
+    originalLanguage: "en",
+    originalText: "Hello everyone",
+    translations: {},
+  });
+
+  assert.equal(captionTextForReader(line, "en"), "Hello everyone");
+  assert.equal(captionTextForReader(line, "en-US"), "Hello everyone");
+});
+
+test("a line whose translation has not arrived yet is held rather than shown in the wrong language", () => {
+  // The transcript segment lands before its translation does. Showing the original in the gap is
+  // the defect being fixed, not a smaller version of it: the line would go up in the wrong
+  // language and then change under the reader.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en"), null);
+});
+
+test("somebody else's translation is never shown as this reader's caption", () => {
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { ja: "こんにちは" },
+  });
+
+  assert.equal(captionTextForReader(line, "en"), null);
+});
+
+test("before Start Translation the caption is what was said, not an empty lane", () => {
+  // Transcription does not wait for translation: livekit_ingress_worker joins on the first
+  // published microphone and translation_worker is the stage gated behind Start Translation
+  // (`translation_skipped_not_started`). So for the whole pre-Start half of a meeting there are
+  // segments and there will never be a translation of them. Holding those lines emptied the lane
+  // completely — the same class of failure as WT-387, one layer up.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: {},
+    translatedText: undefined,
+    targetLanguage: undefined,
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Xin chào");
+  // ...and the hold comes straight back once translation is running.
+  assert.equal(captionTextForReader(line, "en", true), null);
+});
+
+test("a translation already in hand is shown whether or not translation is still running", () => {
+  // Stop Translation does not retroactively unsay what was already translated.
+  const line = segment({
+    originalLanguage: "vi",
+    originalText: "Xin chào",
+    translations: { en: "Hello" },
+  });
+
+  assert.equal(captionTextForReader(line, "en", false), "Hello");
+});
+
+test("a reader with no resolved language yet sees the original rather than an empty lane", () => {
+  // The first moments of a cold join, before the participant row arrives. A blank caption
+  // surface reads as broken, so it is never the answer to "not resolved yet".
+  const line = segment({ originalLanguage: "vi", originalText: "Xin chào", translations: {} });
+
+  assert.equal(captionTextForReader(line, null), "Xin chào");
+  assert.equal(captionTextForReader(line, ""), "Xin chào");
+});
+
+// ── WT-589: which batch edits are actually corrections ──────────────────────────────────────
+//
+// Every survivor of this filter becomes an immutable transcript_corrections row AND a
+// re-translation of that line into every target language, so a false positive is not a wasted
+// request — it is a revision that changed nothing, multiplied by the length of the meeting.
+
+const line = (id: string, originalText: string) => ({ id, originalText });
+
+test("a line nobody touched is not a correction", () => {
+  const segments = [line("a", "Xin chào"), line("b", "Cảm ơn")];
+
+  assert.deepEqual(pendingCorrections(segments, {}), []);
+});
+
+test("a draft identical to what is stored is not a correction", () => {
+  // Tabbing through a transcript opens every field. Without this, reviewing a meeting and
+  // changing nothing would file a revision for every line in it.
+  const segments = [line("a", "Xin chào")];
+
+  assert.deepEqual(pendingCorrections(segments, { a: "Xin chào" }), []);
+  // ...and whitespace is what a caret leaves behind, not an edit.
+  assert.deepEqual(pendingCorrections(segments, { a: "  Xin chào  " }), []);
+});
+
+test("an emptied line is left alone rather than blanked", () => {
+  // There is no delete on this path. An empty draft is somebody mid-retype or an accidental
+  // clear; writing a blank sentence over the stored one is the wrong answer to both.
+  const segments = [line("a", "Xin chào")];
+
+  assert.deepEqual(pendingCorrections(segments, { a: "" }), []);
+  assert.deepEqual(pendingCorrections(segments, { a: "   " }), []);
+});
+
+test("only the changed lines are posted, and in transcript order", () => {
+  const segments = [line("a", "Xin chào"), line("b", "Cảm ơn"), line("c", "Tạm biệt")];
+
+  const pending = pendingCorrections(segments, { a: "Xin chào bạn", c: "Tạm biệt nhé" });
+
+  assert.deepEqual(pending.map((segment) => segment.id), ["a", "c"]);
+});
+
+// ── WT-605: Pause Transcript dividers ────────────────────────────────────────────────────────
+//
+// A pause window's wall-clock StartedAt/EndedAt has to land at the right point among segments
+// whose own timestamps are meeting-RELATIVE ms (segment.startTimeMs) — the same conversion
+// groupSegmentsByTranslationSession already does for "Translation N" dividers, via `baseTime`.
+
+const BASE_TIME = "2026-09-03T10:00:00.000Z";
+
+function pauseWindow(startOffsetMs: number, endOffsetMs: number | null, id = "w1") {
+  const base = new Date(BASE_TIME).getTime();
+  return {
+    id,
+    translationRoomId: "room-1",
+    startedAt: new Date(base + startOffsetMs).toISOString(),
+    endedAt: endOffsetMs === null ? null : new Date(base + endOffsetMs).toISOString(),
+  };
+}
+
+test("resolveTranscriptPauseGaps is empty without a baseTime to anchor against", () => {
+  assert.deepEqual(resolveTranscriptPauseGaps([pauseWindow(1000, 2000)], undefined), []);
+});
+
+test("resolveTranscriptPauseGaps converts wall-clock windows into meeting-relative ms", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  assert.equal(gaps.length, 1);
+  assert.equal(gaps[0].startMs, 60_000);
+  assert.equal(gaps[0].endMs, 120_000);
+});
+
+test("resolveTranscriptPauseGaps leaves endMs null for a window still open", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  assert.equal(gaps[0].endMs, null);
+});
+
+test("splitSegmentsAroundPauseGaps is a no-op with no gaps", () => {
+  const segments = [{ startTimeMs: 0 }, { startTimeMs: 5000 }];
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, []);
+
+  assert.deepEqual(blocks, [{ gapBefore: null, segments }]);
+});
+
+test("splitSegmentsAroundPauseGaps splits cleanly at the gap boundary", () => {
+  // Spoken before the pause, then after it — nothing is ever spoken DURING the gap, since that
+  // is exactly what Pause Transcript means: those segments were never persisted at all.
+  const segments = [
+    { startTimeMs: 1000, id: "before" },
+    { startTimeMs: 200_000, id: "after" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 2);
+  assert.equal(blocks[0].gapBefore, null);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
+  assert.equal(blocks[1].gapBefore, gaps[0]);
+  assert.deepEqual(blocks[1].segments.map((s) => s.id), ["after"]);
+});
+
+test("splitSegmentsAroundPauseGaps handles a room still paused (no segments after)", () => {
+  const segments = [{ startTimeMs: 1000, id: "before" }];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 2);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
+  assert.equal(blocks[1].gapBefore?.endMs, null);
+  assert.deepEqual(blocks[1].segments, []);
+});
+
+test("splitSegmentsAroundPauseGaps handles two separate pauses in one meeting", () => {
+  const segments = [
+    { startTimeMs: 1000, id: "a" },
+    { startTimeMs: 200_000, id: "b" },
+    { startTimeMs: 400_000, id: "c" },
+  ];
+  const gaps = resolveTranscriptPauseGaps(
+    [pauseWindow(60_000, 120_000, "w1"), pauseWindow(250_000, 350_000, "w2")],
+    BASE_TIME,
+  );
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 3);
+  assert.deepEqual(blocks.map((b) => b.segments.map((s) => s.id)), [["a"], ["b"], ["c"]]);
+  assert.equal(blocks[1].gapBefore?.window.id, "w1");
+  assert.equal(blocks[2].gapBefore?.window.id, "w2");
 });

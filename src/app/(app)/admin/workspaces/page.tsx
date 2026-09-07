@@ -273,7 +273,9 @@ function WorkspacesDirectory() {
               {items.map((workspace) => (
                 <li key={workspace.id}>
                   <Link
-                    href={`/admin/workspaces/${workspace.id}`}
+                    // WT-560: the directory has the slug, so it links straight to the named URL — no
+                    // id ever reaches the address bar from here, not even for a redirect.
+                    href={`/admin/workspaces/${workspace.slug}`}
                     className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-2/60 focus-visible:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 md:flex-row md:items-center md:gap-0"
                   >
                     <div className="flex min-w-0 flex-1 items-center gap-3">

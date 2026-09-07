@@ -1,0 +1,373 @@
+/**
+ * The in-meeting WarpBot trail, which must read the same as the widget's.
+ *
+ * One agent, two surfaces. The widget has shown a folded trail under every answer since it
+ * shipped — which tools that reply came through, in order — while the meeting chat kept a single
+ * live trail pinned to the bottom of the panel that belonged to whichever question was asked
+ * last. Scrolling back through a meeting showed no record at all.
+ */
+
+import assert from "node:assert/strict";
+import { beforeEach, test } from "node:test";
+
+import { useTranslationRoomStore } from "../translationRoom-store.ts";
+import {
+  REASONING_STEP,
+  THINKING_STEP,
+  WRITING_STEP,
+} from "../../lib/meeting/assistant-tool-labels.ts";
+
+const store = () => useTranslationRoomStore.getState();
+
+beforeEach(() => {
+  useTranslationRoomStore.getState().reset();
+});
+
+// ── the turn opens on a step, not on a spinner ───────────────────────────────
+
+test("THE REAL SEQUENCE: the panel opens the turn, then the hub events arrive", () => {
+  // This is the order production actually produces, and it is what a seed guarded on
+  // `assistantState === "idle"` could never satisfy: the panel sets the state optimistically the
+  // moment somebody sends an @agent mention — waiting for the round trip leaves the send looking
+  // ignored — so by the time ChatAssistantResponsePending arrives the state is already
+  // "thinking", every later signal takes the "already running" branch, and nothing seeds.
+  //
+  // The visible symptom was the reported one: the trail began at the first tool call, and the
+  // stretch before it (the longest part of a slow turn) showed a bare spinner where the widget
+  // shows "Reading your question".
+  store().beginAssistantTurn(); // panel, on send
+  store().noteAssistantActivity(); // hub: ChatAssistantResponsePending
+  store().noteAssistantActivity("search_terminology", "C#"); // hub: ToolCallStarted
+  store().noteAssistantReasoning("Nothing in the workspace", "No entry for it.");
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP, "search_terminology", REASONING_STEP, "web_search"],
+  );
+});
+
+test("the trail is never empty while the turn is open", () => {
+  // The whole point: something is on screen from the send, not from the first tool call.
+  store().beginAssistantTurn();
+
+  assert.ok(store().assistantSteps.length > 0);
+  assert.equal(store().assistantState, "thinking");
+});
+
+test("a new turn drops a previous turn that never produced an answer", () => {
+  // Nothing sealed it, because no answer arrived. Appending the next question's steps to it
+  // would present one turn's work as another's.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("get_transcript", "Hieu clone");
+
+  store().beginAssistantTurn();
+
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP],
+  );
+});
+
+test("a turn that starts without naming a tool opens on 'reading your question'", () => {
+  store().noteAssistantActivity();
+
+  const steps = store().assistantSteps;
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].tool, THINKING_STEP);
+  assert.equal(steps[0].done, false);
+});
+
+test("a turn that starts WITH a tool does not invent a thinking step in front of it", () => {
+  // The first thing heard was a real tool call, so that is what was happening.
+  store().noteAssistantActivity("search_terminology", "C#");
+
+  const steps = store().assistantSteps;
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].tool, "search_terminology");
+});
+
+test("the opening step is finished by the first real tool call", () => {
+  store().noteAssistantActivity();
+  store().noteAssistantActivity("search_terminology", "C#");
+
+  const steps = store().assistantSteps;
+  assert.equal(steps.length, 2);
+  assert.equal(steps[0].tool, THINKING_STEP);
+  assert.equal(steps[0].done, true, "two steps must never spin at once");
+  assert.equal(steps[1].done, false);
+});
+
+// ── the answer, as it is written ─────────────────────────────────────────────
+
+test("the first piece of prose starts the writing step", () => {
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  store().appendAssistantDraft("C# is ");
+
+  const steps = store().assistantSteps;
+  assert.deepEqual(
+    steps.map((step) => step.tool),
+    [THINKING_STEP, "web_search", WRITING_STEP],
+  );
+  assert.equal(steps.at(-1)!.done, false, "it is still being written");
+  assert.equal(steps[1].done, true, "the search is over once prose starts");
+});
+
+test("later pieces do not start a second writing step", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("C# is ");
+  store().appendAssistantDraft("a language ");
+  store().appendAssistantDraft("from Microsoft.");
+
+  assert.equal(
+    store().assistantSteps.filter((step) => step.tool === WRITING_STEP).length,
+    1,
+    "the answer was written once",
+  );
+  assert.equal(store().assistantDraft, "C# is a language from Microsoft.");
+});
+
+test("the pieces concatenate — they are deltas, not replacements", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("one ");
+  store().appendAssistantDraft("two");
+
+  assert.equal(store().assistantDraft, "one two");
+});
+
+test("an empty piece changes nothing", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("");
+  store().appendAssistantDraft(null);
+
+  assert.equal(store().assistantDraft, "");
+  assert.deepEqual(store().assistantSteps.map((s) => s.tool), [THINKING_STEP]);
+});
+
+test("the persisted answer supersedes the draft", () => {
+  // An aborted tool-calling iteration can emit text that is not in the final answer, so a client
+  // that kept its own accumulation would keep a sentence the server never saved.
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("half a sentence");
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(store().assistantDraft, "");
+});
+
+test("a streamed turn is not credited with writing the answer twice", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("the answer");
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(
+    store().assistantTrails["msg-1"].steps.filter((step) => step.tool === WRITING_STEP).length,
+    1,
+  );
+  assert.ok(store().assistantTrails["msg-1"].steps.every((step) => step.done));
+});
+
+test("a new question does not open under the last one's unfinished sentence", () => {
+  store().beginAssistantTurn();
+  store().appendAssistantDraft("half a sentence that never landed");
+
+  store().beginAssistantTurn();
+
+  assert.equal(store().assistantDraft, "");
+});
+
+// ── sealing the trail onto the answer ────────────────────────────────────────
+
+test("the finished trail is attached to the answer it produced", () => {
+  store().noteAssistantActivity();
+  store().noteAssistantActivity("search_terminology", "C#");
+  store().noteAssistantReasoning("Checking the glossary", "Nothing there for C#.");
+
+  store().sealAssistantTrail("msg-1");
+
+  const trail = store().assistantTrails["msg-1"];
+  assert.ok(trail, "the answer must carry its own trail");
+  assert.deepEqual(
+    trail.steps.map((step) => step.tool),
+    [THINKING_STEP, "search_terminology", REASONING_STEP, WRITING_STEP],
+  );
+});
+
+test("every step in a sealed trail is finished", () => {
+  store().noteAssistantActivity();
+  store().noteAssistantActivity("web_search", "microsoft.com");
+  store().sealAssistantTrail("msg-1");
+
+  assert.ok(
+    store().assistantTrails["msg-1"].steps.every((step) => step.done),
+    "a step still marked running would spin forever under a finished answer",
+  );
+});
+
+test("sealing clears the live trail, so it is not drawn twice", () => {
+  store().noteAssistantActivity("search_terminology", "C#");
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(store().assistantSteps.length, 0);
+});
+
+test("the answer records how long the turn took", () => {
+  store().noteAssistantActivity();
+  store().sealAssistantTrail("msg-1");
+
+  const { durationMs } = store().assistantTrails["msg-1"];
+  assert.ok(durationMs !== null && durationMs >= 0);
+});
+
+// ── the ways sealing must refuse ─────────────────────────────────────────────
+
+test("a second arrival of the same answer does not erase its trail", () => {
+  // The hub delivers the reply, then a reconnect backfills history and delivers it again. By
+  // then the live array is empty, so an unguarded reseal would blank what the first one kept.
+  store().noteAssistantActivity("search_terminology", "C#");
+  store().sealAssistantTrail("msg-1");
+  const first = store().assistantTrails["msg-1"];
+
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(store().assistantTrails["msg-1"], first);
+});
+
+test("an answer that arrived with no trail behind it gets no empty one", () => {
+  store().sealAssistantTrail("msg-1");
+
+  assert.equal(store().assistantTrails["msg-1"], undefined);
+});
+
+test("a nameless message is not sealed onto", () => {
+  store().noteAssistantActivity("search_terminology", "C#");
+  store().sealAssistantTrail("");
+
+  assert.equal(Object.keys(store().assistantTrails).length, 0);
+  assert.equal(store().assistantSteps.length, 1, "the live trail must survive a failed seal");
+});
+
+// ── one turn does not disturb another ────────────────────────────────────────
+
+test("a second question starts a fresh trail and leaves the first answer's alone", () => {
+  store().noteAssistantActivity();
+  store().noteAssistantActivity("get_transcript", "Hieu clone");
+  store().sealAssistantTrail("msg-1");
+  store().setAssistantState("idle");
+
+  store().noteAssistantActivity();
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  assert.deepEqual(
+    store().assistantTrails["msg-1"].steps.map((step) => step.tool),
+    [THINKING_STEP, "get_transcript", WRITING_STEP],
+  );
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP, "web_search"],
+  );
+});
+
+test("the tool's own target is carried through to the sealed trail", () => {
+  // Never derived here: a target this client guessed at would be a claim about what the agent
+  // did, made by something that cannot know.
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+  store().sealAssistantTrail("msg-1");
+
+  const searched = store().assistantTrails["msg-1"].steps.find(
+    (step) => step.tool === "web_search",
+  );
+  assert.equal(searched?.detail, "learn.microsoft.com");
+});
+
+// ── a tool that only ever reports finishing ──────────────────────────────────
+//
+// Reported from production: the widget named every site WarpBot searched while the in-meeting
+// chat sat on "Reading your question" for the whole turn, then showed two steps — the seeded
+// one and the one appended at seal. OpenAI's HOSTED web search never enters the worker's
+// dispatch loop, so no function call is dispatched for it. The worker publishes the step by hand
+// off the response stream, and the event carrying the searched target is the COMPLETED one: the
+// started event fires before the item naming the query is on the wire, so it goes out empty.
+// The meeting consumer dropped that type, discarding the room's entire record of the search.
+
+test("a tool that only reports finishing still earns a step", () => {
+  store().beginAssistantTurn();
+
+  store().noteAssistantToolFinished("web_search", "techcrunch.com");
+
+  const steps = store().assistantSteps;
+  assert.deepEqual(
+    steps.map((step) => step.tool),
+    [THINKING_STEP, "web_search"],
+  );
+  assert.equal(steps.at(-1)!.detail, "techcrunch.com");
+  assert.equal(steps.at(-1)!.done, true);
+});
+
+test("finishing folds into the step that was already running", () => {
+  // The started event announced the search with no target; the completed one carries it. Two
+  // steps here would draw the same search twice, once blank and once named.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", null);
+
+  store().noteAssistantToolFinished("web_search", "techcrunch.com");
+
+  const searches = store().assistantSteps.filter((step) => step.tool === "web_search");
+  assert.equal(searches.length, 1, "one search, not two");
+  assert.equal(searches[0].detail, "techcrunch.com");
+  assert.equal(searches[0].done, true);
+});
+
+test("a target already reported is not overwritten by an emptier one", () => {
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", "learn.microsoft.com");
+
+  store().noteAssistantToolFinished("web_search", "");
+
+  assert.equal(
+    store().assistantSteps.find((step) => step.tool === "web_search")!.detail,
+    "learn.microsoft.com",
+  );
+});
+
+test("two searches in one turn close the one that just finished", () => {
+  // Last match, not first. Closing the earlier call would leave the running one spinning under
+  // a finished answer and credit the wrong step with the wrong site.
+  store().beginAssistantTurn();
+  store().noteAssistantActivity("web_search", "first.com");
+  store().noteAssistantToolFinished("web_search", "first.com");
+  store().noteAssistantActivity("web_search", null);
+
+  store().noteAssistantToolFinished("web_search", "second.com");
+
+  const searches = store().assistantSteps.filter((step) => step.tool === "web_search");
+  assert.equal(searches.length, 2);
+  assert.deepEqual(
+    searches.map((step) => step.detail),
+    ["first.com", "second.com"],
+  );
+  assert.ok(searches.every((step) => step.done));
+});
+
+test("a nameless finish changes nothing", () => {
+  store().beginAssistantTurn();
+
+  store().noteAssistantToolFinished(null, "techcrunch.com");
+
+  assert.deepEqual(
+    store().assistantSteps.map((step) => step.tool),
+    [THINKING_STEP],
+  );
+});
+
+test("finishing re-arms the deadline", () => {
+  // A long search is the case the 90-second deadline exists for. Every sign of life has to push
+  // it out, or the one turn that genuinely needs the window is the one declared slow.
+  store().beginAssistantTurn();
+  const before = store().assistantActivityAt;
+
+  store().noteAssistantToolFinished("web_search", "techcrunch.com");
+
+  assert.ok(store().assistantActivityAt >= before!);
+});

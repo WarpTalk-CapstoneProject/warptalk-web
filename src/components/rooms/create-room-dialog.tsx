@@ -96,6 +96,10 @@ export function CreateRoomDialog() {
   const [requiresApproval, setRequiresApproval] = useState<boolean | null>(null);
   // WT-371: off unless the host says otherwise — see the toggle's comment in OptionsMenu.
   const [participantsCanStartTranslation, setParticipantsCanStartTranslation] = useState(false);
+  // WT-587: on unless the host turns it off. The only option in this dialog whose non-default
+  // value DESTROYS something — no transcript means no summary, no minutes and no knowledge-base
+  // entry — so it starts true and is only put on the wire when somebody changes it.
+  const [saveTranscript, setSaveTranscript] = useState(true);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -322,13 +326,19 @@ export function CreateRoomDialog() {
           // that is what lets the meeting type seed the rest. Echoing the type's own default back
           // at it would work today and quietly pin the value if a type's profile ever changed.
           settings:
-            requiresApproval === null && !participantsCanStartTranslation
+            requiresApproval === null &&
+            !participantsCanStartTranslation &&
+            saveTranscript
               ? undefined
               : {
                   ...(requiresApproval === null ? {} : { requiresApproval }),
                   ...(participantsCanStartTranslation
                     ? { participantsCanStartTranslation: true }
                     : {}),
+                  // WT-587: sent only as `false`. True is the server's own default, and echoing
+                  // it back would pin the value against any future change — the same reasoning
+                  // as requiresApproval above.
+                  ...(saveTranscript ? {} : { saveTranscript: false }),
                 },
         };
 
@@ -553,6 +563,8 @@ export function CreateRoomDialog() {
                   onParticipantsCanStartTranslationChange={
                     setParticipantsCanStartTranslation
                   }
+                  saveTranscript={saveTranscript}
+                  onSaveTranscriptChange={setSaveTranscript}
                   onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>

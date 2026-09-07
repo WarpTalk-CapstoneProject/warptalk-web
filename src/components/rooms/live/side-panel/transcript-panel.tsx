@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useMemo, useState } from "react";
-import { ClosedCaptioning } from "@phosphor-icons/react/dist/ssr";
+import { ClosedCaptioning, PauseCircle } from "@phosphor-icons/react/dist/ssr";
 import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/language/languages";
 import {
@@ -12,7 +12,10 @@ import {
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
   resolveSegmentTranslation,
+  resolveTranscriptPauseGaps,
+  splitSegmentsAroundPauseGaps,
   type GroupedTranscriptSegment,
+  type TranscriptPauseGap,
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
@@ -25,6 +28,10 @@ import {
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+// WT-605. The pause-window read lives with the other transcript hooks, not with the room
+// ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
+// existed, and two hooks of the same name over the same endpoint is how they drift.
+import { useTranscriptPauseWindows } from "@/hooks/use-transcripts";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
@@ -51,6 +58,7 @@ export function TranscriptPanel({
   baseTime,
   missedCount = 0,
   readerLanguage,
+  transcriptPause,
 }: {
   segments: TranscriptSegmentDto[];
   roomId: string;
@@ -65,6 +73,15 @@ export function TranscriptPanel({
   /** Room start time — segments' startTimeMs is elapsed ms from here, used to bucket
    * them into "Translation N" sessions. Omit to skip session labeling. */
   baseTime?: string;
+  /**
+   * WT-605: whether the transcript is currently not being written down, and since when.
+   *
+   * Shown to EVERY participant, not only the host who can toggle it — a transcript that quietly
+   * stops growing looks exactly like a room that has gone quiet, and the difference matters to
+   * anyone relying on it. `since` is absent when this client learned the state from the
+   * broadcast, which carries no start time.
+   */
+  transcriptPause?: { paused: boolean; since: string | null };
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottomRef = useRef(true);
@@ -74,6 +91,13 @@ export function TranscriptPanel({
   const dismissSuggestion = useTranslationRoomStore((state) => state.dismissSuggestion);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
+  // WT-605. Independent of the translation-session grouping above — pausing the transcript and
+  // pausing translation are different, unrelated actions.
+  const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  const pauseGaps = useMemo(
+    () => resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
+    [pauseWindowsQuery.data, baseTime],
+  );
 
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The distance this panel itself uses to decide it has stopped following. A chip offering to
@@ -140,14 +164,30 @@ export function TranscriptPanel({
     if (stickToBottomRef.current) element.scrollTop = element.scrollHeight;
   }, [blocks, roomId]);
 
+  // Above the empty-transcript case on purpose: a host can pause before anyone has spoken, and
+  // "Start WarpTalk to see live translation here" would then be the only thing the panel says —
+  // which is not merely unhelpful, it is the opposite of what is happening.
+  const pausedNotice = transcriptPause?.paused ? (
+    <TranscriptPausedNotice since={transcriptPause.since} />
+  ) : null;
+
   if (!segments.length) {
-    return <EmptyPanel text="Start WarpTalk to see live translation here." />;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {pausedNotice}
+        <EmptyPanel text="Start WarpTalk to see live translation here." />
+      </div>
+    );
   }
 
   const showSessionLabels = blocks.length > 1;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* Pinned above the scroll area rather than dropped into the list. This is a LIVE state,
+          not a marker in the record: a reader parked at the bottom of an hour-long transcript
+          would never scroll up to find it, and by the time they did it could be over. */}
+      {pausedNotice}
     <div
       ref={containerRef}
       onScroll={rememberScroll}
@@ -169,15 +209,20 @@ export function TranscriptPanel({
         {blocks.map((block) => (
           <div key={block.sessionNumber} className="space-y-2">
             {showSessionLabels ? <SessionDivider block={block} /> : null}
-            {block.segments.map((segment) => (
-              <TranscriptBubble
-                key={segment.segmentId}
-                segment={segment}
-                readerLanguage={readerLanguage}
-                isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
-                suggestion={findSuggestionForUtterance(segment, suggestions)}
-                onDismissSuggestion={dismissSuggestion}
-              />
+            {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
+              <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`} className="space-y-2">
+                {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
+                {sub.segments.map((segment) => (
+                  <TranscriptBubble
+                    key={segment.segmentId}
+                    segment={segment}
+                    readerLanguage={readerLanguage}
+                    isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
+                    suggestion={findSuggestionForUtterance(segment, suggestions)}
+                    onDismissSuggestion={dismissSuggestion}
+                  />
+                ))}
+              </div>
             ))}
           </div>
         ))}
@@ -191,6 +236,37 @@ export function TranscriptPanel({
   );
 }
 
+/**
+ * What a paused transcript says to the room.
+ *
+ * The second sentence is the whole point and must not be dropped: WT-605 exists precisely because
+ * this is NOT the meeting stopping. Translation, dubbing and subtitles run exactly as before, and
+ * a notice that let someone believe otherwise would send them out of a working meeting.
+ */
+function TranscriptPausedNotice({ since }: { since: string | null }) {
+  const startedAt = since
+    ? new Date(since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+
+  return (
+    <div
+      role="status"
+      className="mx-3 mt-3 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-relaxed text-ink"
+    >
+      <PauseCircle weight="fill" className="mt-[2px] h-4 w-4 shrink-0 text-amber-500" />
+      <div>
+        <span className="font-medium">
+          Transcript paused{startedAt ? ` at ${startedAt}` : ""}
+        </span>
+        <p className="mt-0.5 text-ink-muted">
+          Nothing said from now on is written down. Live translation, dubbing and subtitles are
+          still running.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTranscriptSegment> }) {
   return (
     <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
@@ -199,6 +275,26 @@ function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTrans
         Translation {block.sessionNumber}
         {formatSessionWindow(block.session)}
       </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/**
+ * WT-605. The gap left by a Pause Transcript window — no line was recorded here, only
+ * translation/dubbing/subtitles were still running. Same visual language as SessionDivider
+ * above, deliberately distinct wording so the two are never mistaken for one another.
+ */
+function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
+  const started = new Date(gap.window.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const ended = gap.window.endedAt
+    ? new Date(gap.window.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "now";
+
+  return (
+    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+      <div className="h-px flex-1 bg-border" />
+      <span>Transcript paused · {started}–{ended}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );

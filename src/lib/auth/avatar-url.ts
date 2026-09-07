@@ -10,8 +10,15 @@
  * served from, and an absolute URL baked at upload time would be wrong the moment that origin
  * differs between environments, which it does.
  *
- * So the resolving happens at render, once, here — rather than in each of the seven places that
- * put a face on screen.
+ * WHO CALLS THIS
+ *   `AvatarImage`, and effectively nothing else. This comment used to claim the resolving
+ *   happened "once, here, rather than in each of the seven places that put a face on screen" —
+ *   and that is precisely what was NOT happening: nine components rendered a face and exactly one
+ *   of them called this. Anyone with a Google picture saw it (absolute, so it worked by accident);
+ *   anyone who uploaded one saw initials everywhere but their own profile page.
+ *
+ *   It is called inside the primitive now, so a call site cannot forget. Calling it yourself is
+ *   harmless — it is idempotent for absolute URLs — but there is no longer a reason to.
  */
 
 /** The API origin, derived from the same variable the axios client is built with. */

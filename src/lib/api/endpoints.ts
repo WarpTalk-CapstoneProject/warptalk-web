@@ -15,6 +15,14 @@ export const API = {
     me: "/auth/me",
     changePassword: "/auth/change-password",
     settings: "/auth/settings",
+    /**
+     * WT-597: a new verification link, asked for by address rather than by session.
+     *
+     * `/auth/resend-verification` is `[Authorize]`, and a self-registered account has no session
+     * until it is verified — so the only resend the product had was unreachable by the people who
+     * needed it. Answers 204 for any address, so it says nothing about who has an account.
+     */
+    resendVerification: "/auth/resend-verification-request",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",
@@ -101,6 +109,12 @@ export const API = {
     flashMode: (id: string) => `/translation-rooms/${id}/audio-routes/flash-mode`,
     noiseReduction: (id: string) =>
       `/translation-rooms/${id}/audio-routes/noise-reduction`,
+    // NOT a setting — the browser telling the server what its OWN denoiser ended up doing. Krisp
+    // runs entirely client-side and fails silently (livekit-client never awaits the entitlement
+    // answer), so without this the only record of "it is not running" is a console.error in one
+    // participant's tab.
+    noiseSuppressionReport: (id: string) =>
+      `/translation-rooms/${id}/audio-routes/noise-suppression/report`,
     calendarIcs: (id: string) => `/translation-rooms/${id}/calendar.ics`,
     sessions: (id: string) => `/translation-rooms/${id}/sessions`,
   },
@@ -109,7 +123,12 @@ export const API = {
   translationRoomSeries: {
     get: (id: string) => `/translation-room-series/${id}`,
     update: (id: string) => `/translation-room-series/${id}`,
-    cancel: (id: string) => `/translation-room-series/${id}/cancel`,
+    cancel: (id: string, keepOccurrenceId?: string) =>
+      // WT-548: `keep` names the occurrence the host is looking at, which the server
+      // leaves scheduled. Without it, stopping the schedule cancels that meeting too.
+      keepOccurrenceId
+        ? `/translation-room-series/${id}/cancel?keep=${encodeURIComponent(keepOccurrenceId)}`
+        : `/translation-room-series/${id}/cancel`,
   },
   roomArtifacts: {
     download: (id: string) => `/room-artifacts/${id}/download`,
@@ -127,6 +146,15 @@ export const API = {
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
     exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+    /**
+     * Every current biên bản in the workspace this caller may read.
+     *
+     * Anchored on the workspace rather than on a room because the Artifacts library asks a
+     * question no room can answer: which meetings left a written record at all. The gateway
+     * routes this one path to the translation-room service ahead of its own workspaces
+     * catch-all — see workspace-minutes-route.
+     */
+    forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
@@ -139,6 +167,19 @@ export const API = {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    // WT-605. Keyed by ROOM, not by transcript id, exactly as TranscriptsController declares
+    // them — the host pressing this has a room open, not a transcript id in hand.
+    //
+    // Not to be confused with `translationRooms.pause` further down: that one stops the AI
+    // workers translating and dubbing. These stop only the written record growing, while
+    // translation, dubbing, subtitles and LiveKit carry on.
+    pauseByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause`,
+    resumeByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/resume`,
+    /** Readable by every participant, not just the host — the notice is for the whole room. */
+    pauseWindows: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
@@ -251,6 +292,15 @@ export const API = {
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+    plugins: "/assistant/plugins",
+    installPlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
+    disablePlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
+    pluginConnection: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    pluginConnectUrl: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
@@ -361,6 +411,9 @@ export const API = {
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
+    // WT-560: the portal addresses a workspace by its own slug, so the admin's address bar
+    // names the workspace instead of carrying its primary key.
+    detailBySlug: (slug: string) => `/admin/workspaces/by-slug/${encodeURIComponent(slug)}`,
     suspend: (id: string) => `/admin/workspaces/${id}/suspend`,
     reactivate: (id: string) => `/admin/workspaces/${id}/reactivate`,
     delete: (id: string) => `/admin/workspaces/${id}/delete`,

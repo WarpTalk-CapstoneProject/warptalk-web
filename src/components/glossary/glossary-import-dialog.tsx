@@ -24,6 +24,10 @@
  */
 
 import { FileArrowUp, Spinner, Warning } from "@phosphor-icons/react";
+import {
+  buildSampleTemplateRows,
+  describeExpectedPair,
+} from "@/lib/glossary/sample-template";
 import ExcelJS from "exceljs";
 import { useRef, useState } from "react";
 
@@ -223,15 +227,15 @@ async function parseWorkbook(file: File): Promise<string[][]> {
  * a static asset, so it cannot drift from HEADER_ALIASES the way a checked-in file would. CSV
  * rather than XLSX because it opens in every spreadsheet app and there is nothing to encode.
  */
-function downloadSampleTemplate() {
-  // i18n-allow: these are glossary ENTRIES, not interface copy. The sample has to demonstrate a
-  // real translation pair, and an English-to-English one would show nothing about what the file
-  // is for — this is the same "genuine language data" exemption the contract exists to allow.
-  const rows = [
-    ["Term", "Translation", "Field", "Definition", "Note", "Part of speech", "Priority"],
-    ["offside", "việt vị", "Football", "Attacker ahead of the last defender", "Common in match commentary", "noun", "1"],
-    ["headshot", "bắn trúng đầu", "Gaming", "A shot that hits the head", "", "noun", "2"],
-  ];
+function downloadSampleTemplate(
+  sourceLanguage: string | null | undefined,
+  targetLanguage: string | null | undefined,
+) {
+  // WT-522: for THIS glossary's languages. These two rows used to be hardcoded English →
+  // Vietnamese and handed to every glossary — an "English → English" one downloaded them and
+  // came back with 93 Vietnamese terms out of 94. The sample is the only instruction anyone
+  // gets about what belongs in the file, so it has to be right for the file being made.
+  const rows = buildSampleTemplateRows(sourceLanguage, targetLanguage);
   const csv = rows
     // Quote everything and double any embedded quote: a term legitimately containing a comma
     // would otherwise produce a sample file the importer itself misreads.
@@ -254,12 +258,21 @@ export function GlossaryImportDialog({
   open,
   onOpenChange,
   glossaryName,
+  sourceLanguage,
+  targetLanguage,
   isImporting,
   onImport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   glossaryName: string;
+  /**
+   * WT-522: the pair this glossary was configured for. The sample template is built from it, and
+   * it is stated on screen — the sample used to be the only instruction a reader got, and it was
+   * hardcoded to a pair that had nothing to do with their glossary.
+   */
+  sourceLanguage?: string | null;
+  targetLanguage?: string | null;
   isImporting: boolean;
   onImport: (rows: ParsedGlossaryRow[]) => Promise<void>;
 }) {
@@ -323,6 +336,8 @@ export function GlossaryImportDialog({
     reset();
   };
 
+  const expectedPair = describeExpectedPair(sourceLanguage, targetLanguage);
+
   return (
     <Dialog
       open={open}
@@ -342,9 +357,15 @@ export function GlossaryImportDialog({
             <span className="font-medium">Translation</span> are required. Field, Definition, Note,
             Part of speech and Priority are used when present.
           </DialogDescription>
+          {/* WT-522: said in words, not left to the sample file. The sample was the only thing
+              telling anyone what belonged in the second column, and it was hardcoded to a pair
+              that had nothing to do with the glossary being imported into. */}
+          {expectedPair ? (
+            <p className="text-[12px] leading-relaxed text-ink-muted">{expectedPair}</p>
+          ) : null}
           <button
             type="button"
-            onClick={downloadSampleTemplate}
+            onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
             className="self-start text-[12px] font-medium text-primary underline-offset-2 hover:underline"
           >
             Download a sample file

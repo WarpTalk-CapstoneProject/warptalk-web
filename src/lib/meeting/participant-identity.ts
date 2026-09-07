@@ -23,6 +23,16 @@
 import { getFlagEmoji } from "../language/language-flag.ts";
 import { getLanguageName } from "../language/languages.ts";
 
+/**
+ * One page, big enough for any workspace that fits in a meeting.
+ *
+ * Shared so every in-meeting caller asks for the SAME page — `useWorkspaceMembers` keys its cache
+ * on (workspaceId, page, pageSize, search), so a second caller passing a different size would
+ * open a second request against a gateway that rate-limits by IP, and the two copies could
+ * disagree about who is in the workspace.
+ */
+export const MEETING_MEMBER_PAGE_SIZE = 100;
+
 export type ParticipantIdentity = {
   userId: string;
   /** What to print. Always non-empty. */

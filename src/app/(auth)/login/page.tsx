@@ -212,7 +212,20 @@ function LoginForm() {
         router.replace(callbackUrl);
       }
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
+      const error = err as { response?: { data?: { error?: string; code?: string } } };
+
+      // WT-597: an unverified account is not a failed login, it is an unfinished one.
+      //
+      // The server refuses it with ACCOUNT_PENDING and the words "Email not verified", which named
+      // the problem and offered nothing to do about it — and the one endpoint that resends a link
+      // needs a session this account cannot get. Sending them to /verify-email puts the resend
+      // form in front of them instead.
+      if (error?.response?.data?.code === "ACCOUNT_PENDING") {
+        toast.error("Verify your email address to finish signing in.");
+        router.push("/verify-email");
+        return;
+      }
+
       toast.error(
         error?.response?.data?.error || "Login failed. Please try again.",
       );

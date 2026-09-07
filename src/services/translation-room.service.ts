@@ -220,9 +220,9 @@ export const translationRoomService = {
    * already ran are left alone. Cancelling a SINGLE occurrence is the ordinary
    * `translationRoomService.cancel(roomId)` and does not touch the series.
    */
-  async cancelSeries(seriesId: string) {
+  async cancelSeries(seriesId: string, keepOccurrenceId?: string) {
     const response = await apiClient.post<CancelSeriesResult>(
-      API.translationRoomSeries.cancel(seriesId),
+      API.translationRoomSeries.cancel(seriesId, keepOccurrenceId),
     );
     return response.data;
   },
@@ -295,8 +295,11 @@ export const translationRoomService = {
    * this is how an uninvited teammate asks to join instead of dead-ending on the detail page.
    */
   async joinById(roomId: string, data: JoinTranslationRoomRequest) {
+    // WT-555: no `translationRoomCode` key at all. It used to send "" to satisfy a shared request
+    // type, and the server's by-code validator — which also ran on this route — answered every
+    // shared meeting link with 400 "The TranslationRoomCode field is required." The route names
+    // the room; the server reads the code off it.
     return apiClient.post<BackendJoinResponse>(`/translation-rooms/${roomId}/join`, {
-      translationRoomCode: "",
       displayName: data.displayName.trim(),
       speakLanguage: data.speakLanguage,
       listenLanguage: data.listenLanguage,
@@ -431,6 +434,28 @@ export const translationRoomService = {
     return normalizeNoiseReductionMode(data?.mode);
   },
 
+  /**
+   * Tell the server what this browser's own noise suppression ended up doing.
+   *
+   * Diagnostics, never a gate: the audio is already published and already being processed one way
+   * or the other by the time this is called, so a failure here must not reach the participant.
+   * The caller is not expected to await it for anything but ordering.
+   */
+  async reportNoiseSuppression(
+    id: string,
+    report: { enabled: boolean; processor: "krisp" | "browser"; reason?: string },
+  ) {
+    try {
+      await apiClient.post<{ recorded: boolean; enabled: boolean }>(
+        API.translationRooms.noiseSuppressionReport(id),
+        report,
+      );
+    } catch {
+      // Swallowed deliberately. Reporting that the diagnostics endpoint is down, in a toast, to a
+      // person whose microphone is working, would be the feature reporting itself as broken.
+    }
+  },
+
   async start(id: string) {
     const response = await apiClient.post<BackendRoom>(API.translationRooms.start(id));
     return { ...response, data: normalizeRoom(response.data) };
@@ -548,6 +573,25 @@ export const translationRoomService = {
 
   async invitations(id: string) {
     return apiClient.get<TranslationRoomInvitationDto[]>(API.translationRooms.invitations(id));
+  },
+
+  /**
+   * WT-552: add somebody to a meeting that is already running.
+   *
+   * POST to the same path the invitation list is read from. Not `updateSettings` — that endpoint
+   * freezes at IN_PROGRESS on purpose, because languages and approval policy must not change
+   * under people already in the room.
+   *
+   * Returns the number actually invited, which can be LOWER than the list submitted: the server
+   * treats re-inviting somebody as a no-op. That count is the truth for the toast — this client
+   * may not have refetched the invitation list.
+   */
+  async inviteParticipants(id: string, emails: string[]) {
+    const { data } = await apiClient.post<{ invited: number }>(
+      API.translationRooms.invitations(id),
+      { emails },
+    );
+    return data;
   },
 
   /**

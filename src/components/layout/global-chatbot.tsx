@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   ArrowUp,
+  ArrowSquareOut,
   ClockCounterClockwise,
   ArrowsOutSimple,
+  CheckCircle,
   CornersIn,
   Plus,
   PaperPlaneTilt,
@@ -20,6 +22,7 @@ import {
   Paperclip,
   FileText,
   BookBookmark,
+  PlugsConnected,
   VideoCamera,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -32,9 +35,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   assistantToolDoneLabel,
   assistantToolLabel,
+  withStepDetail,
+  REASONING_STEP,
+  THINKING_STEP,
+  WRITING_STEP,
   type AssistantStep,
 } from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { composerReadiness } from "@/lib/assistant/composer-readiness";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
   useWorkspaceMembers,
@@ -43,9 +51,11 @@ import {
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import {
   useAssistantConversations,
-  useAssistantSkills,
+  useAssistantPlugins,
   useCreateAssistantConversation,
+  useInstallAssistantPlugin,
   useLoadAssistantConversation,
+  usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -54,29 +64,42 @@ import type {
   AssistantConversationDto,
   AssistantMentionDto,
   AssistantPageContextDto,
+  AssistantPluginCatalogItemDto,
 } from "@/types/assistant";
 import {
   AssistantQuestionCard,
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+  type PluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
+import {
+  PluginOperatorSetupCard,
+  parsePluginOperatorSetupAction,
+  type PluginOperatorSetupAction,
+} from "@/components/layout/plugin-operator-setup-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import {
   parseAnswerSources,
   type AnswerSource,
 } from "@/lib/assistant/answer-sources";
-import { Lumidot } from "lumidot";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 
 import { ScrollFadeEdge, ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
-import { useTheme } from "next-themes";
 import { toast } from "sonner";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
+import { toDisplayTiles } from "@/lib/assistant/plugin-tiles";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -318,11 +341,15 @@ export function GlobalChatbot() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  // WT-541: one answer to "can this send", shared by the button and by sendMessage.
+  const composerState = composerReadiness({
+    text: inputValue,
+    attachmentCount: attachments.length,
+    activeWorkspaceId,
+  });
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
   );
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false);
@@ -354,6 +381,19 @@ export function GlobalChatbot() {
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
+  const [pendingPluginConnection, setPendingPluginConnection] =
+    useState<PluginConnectionAction | null>(null);
+  const [pendingPluginSetup, setPendingPluginSetup] =
+    useState<PluginOperatorSetupAction | null>(null);
+  // Both plugin cards are turn-scoped. Nothing but a click used to clear them, so a Connect
+  // card outlived the turn that raised it: still there under a successful answer, still there
+  // after New chat - where pressing Connect opened an OAuth flow the current turn never asked
+  // for - and two of them could stack up, one per error code. The meeting panel already gets
+  // this right by clearing in beginAssistantTurn; this is the same rule.
+  const clearPluginCards = useCallback(() => {
+    setPendingPluginConnection(null);
+    setPendingPluginSetup(null);
+  }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
    * A question handed over from somewhere else on the page — today, the "Research this term"
@@ -379,9 +419,24 @@ export function GlobalChatbot() {
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
-  const { data: skills } = useAssistantSkills();
+  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } = useAssistantPlugins();
+  const installPlugin = useInstallAssistantPlugin();
+  const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  // Same per-resource split as the Plugins settings page (see toDisplayTiles), so Drive and
+  // Calendar show as their own rows here too instead of one combined "Google Drive & Calendar".
+  const pluginTiles = useMemo(() => assistantPlugins.flatMap(toDisplayTiles), [assistantPlugins]);
+  const installedAssistantPlugins = useMemo(
+    () => pluginTiles.filter((plugin) => plugin.installationStatus === "installed"),
+    [pluginTiles],
+  );
+  // Only a tile that's actually usable can be @mentioned — mentioning a disconnected plugin
+  // would just tell WarpBot to call a tool that fails with connection_required.
+  const mentionablePlugins = useMemo(
+    () => installedAssistantPlugins.filter((plugin) => plugin.connectionStatus === "connected"),
+    [installedAssistantPlugins],
+  );
 
   // Only fetch the conversation list while the history menu is actually open.
   const conversationsQuery = useAssistantConversations(
@@ -390,6 +445,55 @@ export function GlobalChatbot() {
   const visibleConversations = (conversationsQuery.data ?? []).filter(
     (conversation) => !conversation.isArchived,
   );
+
+  const handlePluginAction = async (plugin: AssistantPluginCatalogItemDto) => {
+    try {
+      if (plugin.installationStatus !== "installed") {
+        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        toast.success(`${plugin.label} installed`);
+        return;
+      }
+
+      if (plugin.connectionStatus !== "connected") {
+        const result = await connectPlugin.mutateAsync({ pluginKey: plugin.key });
+        if (openProviderConsent(result.url)) {
+          toast.message(`Finish connecting ${plugin.label} in your browser.`);
+        } else {
+          // The toast action is a real click, so the open it makes is not blocked.
+          toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
+            action: {
+              label: "Open it",
+              onClick: () => openProviderConsent(result.url),
+            },
+          });
+        }
+        return;
+      }
+
+      toast.message(`${plugin.label} is connected.`);
+    } catch {
+      toast.error(`Could not update ${plugin.label}.`);
+    }
+  };
+
+  const handlePluginConnectionAction = async (pluginKey: string) => {
+    try {
+      const result = await connectPlugin.mutateAsync({ pluginKey });
+      if (openProviderConsent(result.url)) {
+        toast.message("Finish connecting this plugin in your browser.");
+      } else {
+        toast.error("Your browser blocked the consent window.", {
+          action: {
+            label: "Open it",
+            onClick: () => openProviderConsent(result.url),
+          },
+        });
+      }
+      void refetchAssistantPlugins();
+    } catch {
+      toast.error("Could not open the plugin connection flow.");
+    }
+  };
 
   /** Conversation id this client is currently *joined to* on the hub, not merely talking about. */
   const joinedConversationIdRef = useRef<string | null>(null);
@@ -437,6 +541,7 @@ export function GlobalChatbot() {
     setSteps([]);
     setIsSlow(false);
     setIsMinimized(false);
+    clearPluginCards();
     shouldAutoScrollRef.current = true;
   };
 
@@ -469,6 +574,7 @@ export function GlobalChatbot() {
       setSelectedContexts([]);
       setIsMinimized(false);
       setHistoryMenuOpen(false);
+      clearPluginCards();
       shouldAutoScrollRef.current = true;
       setIsOpen(true);
     } catch {
@@ -531,8 +637,24 @@ export function GlobalChatbot() {
       entityType: "document",
       entityId: d.id,
     }));
-    return [...memberOptions, ...roomOptions, ...documentOptions];
-  }, [memberResults, roomResults, documentResults]);
+    // WT-565: an installed, connected plugin is mentionable so the user can point WarpBot at
+    // it directly instead of only reaching it through the Skills popover. entityId is the tile
+    // id (plugin key, or "pluginKey:resourceKey" for a split tile) — see AssistantMentionDto.
+    // Not query-filtered here like the three fetches above: mentionablePlugins is already the
+    // full local list, and filteredOptions below re-filters every option by title anyway.
+    const pluginOptions: AssistantContextOption[] = mentionablePlugins.map((plugin) => ({
+      id: `plugin-${plugin.tileId}`,
+      title: plugin.label,
+      type: "Plugins",
+      // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
+      // handling, and the avatar contract forbids bypassing the primitives with a bare <img>.
+      icon: <PluginGlyph plugin={plugin} size="xs" />,
+      description: plugin.description,
+      entityType: "plugin",
+      entityId: plugin.tileId,
+    }));
+    return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
+  }, [memberResults, roomResults, documentResults, mentionablePlugins]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
@@ -597,7 +719,11 @@ export function GlobalChatbot() {
         setIsAiTyping(true);
         // A new turn starts a new trail; the previous one has been folded into the answer it
         // produced and stays there.
-        setSteps([]);
+        //
+        // Seeded with the step that is genuinely running: before the first tool call WarpBot is
+        // reading the question, which on a slow turn is the longest stretch of the whole thing
+        // and used to be drawn as a bare "Thinking..." with no trail at all.
+        setSteps([{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
         turnStartedAtRef.current = Date.now();
         setIsSlow(false);
         armResponseTimeout();
@@ -620,8 +746,15 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         // Marked finished, NOT discarded. Once prose starts arriving no tool is still running,
-        // but what it ran is exactly what the reader wants left on screen.
-        setSteps((current) => current.map((step) => ({ ...step, done: true })));
+        // but what it ran is exactly what the reader wants left on screen — and writing the
+        // answer is itself a step, so the trail names it rather than going quiet for the
+        // longest visible part of the turn.
+        setSteps((current) => {
+          const settled = current.map((step) => ({ ...step, done: true }));
+          return settled.some((step) => step.tool === WRITING_STEP)
+            ? settled
+            : [...settled, { key: WRITING_STEP, tool: WRITING_STEP, done: false }];
+        });
         // Still mid-turn: re-arm rather than clear, so a stream that dies halfway through
         // also surfaces instead of freezing under a half-written answer.
         armResponseTimeout();
@@ -635,7 +768,7 @@ export function GlobalChatbot() {
 
     connection.on(
       "AssistantToolCallStarted",
-      (payload: { conversationId: string; toolName: string }) => {
+      (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
         setSteps((current) => [
@@ -646,6 +779,30 @@ export function GlobalChatbot() {
             key: `${payload.toolName}-${current.length}`,
             tool: payload.toolName,
             done: false,
+            detail: payload.toolDetail || undefined,
+          },
+        ]);
+        armResponseTimeout();
+      },
+    );
+
+    connection.on(
+      "AssistantReasoning",
+      (payload: { conversationId: string; title?: string; body?: string }) => {
+        if (payload.conversationId !== conversationId) return;
+        const title = payload.title?.trim() ?? "";
+        const body = payload.body?.trim() ?? "";
+        if (!title && !body) return;
+        setIsAiTyping(true);
+        setSteps((current) => [
+          // The model has moved on from whatever it was doing when it wrote this.
+          ...current.map((step) => ({ ...step, done: true })),
+          {
+            key: `${REASONING_STEP}-${current.length}`,
+            tool: REASONING_STEP,
+            done: false,
+            detail: title || undefined,
+            body: body || undefined,
           },
         ]);
         armResponseTimeout();
@@ -657,18 +814,38 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== conversationId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
+        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
         // A malformed payload leaves the card absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
+        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
+        // Enforced here rather than assumed of the worker. "Press Connect" and "no button
+        // will help" cannot both be true, but they are two independent keys on one payload,
+        // and two unconditional setters rendered both cards the moment anything emitted both.
+        // Setup wins: it is the one saying the registration ladder is already exhausted.
+        if (pluginSetup) {
+          setPendingPluginSetup(pluginSetup);
+          setPendingPluginConnection(null);
+        } else if (pluginConnection) {
+          setPendingPluginConnection(pluginConnection);
+          setPendingPluginSetup(null);
+        }
         armResponseTimeout();
       },
     );
 
     connection.on(
       "AssistantToolCallCompleted",
-      (payload: { conversationId: string }) => {
+      (payload: { conversationId: string; toolName?: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
-        setSteps((current) => current.map((step) => ({ ...step, done: true })));
+        // The hosted web search publishes its started event before OpenAI has said what it is
+        // searching for, so this is often the first event that can name the target.
+        setSteps((current) =>
+          withStepDetail(current, payload.toolName ?? "", payload.toolDetail).map((step) => ({
+            ...step,
+            done: true,
+          })),
+        );
         armResponseTimeout();
       },
     );
@@ -685,6 +862,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
+        clearPluginCards();
 
         // Folded onto the answer, not deleted.
         //
@@ -722,6 +900,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
+        clearPluginCards();
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
         const failedSteps = steps.map((step) => ({ ...step, done: true }));
         const failedStartedAt = turnStartedAtRef.current;
@@ -1059,9 +1238,18 @@ export function GlobalChatbot() {
 
   const sendMessage = async (overrideContent?: string) => {
     const content = (overrideContent ?? inputValue).trim();
-    // WT-474: an attachment on its own is a question ("what is this?"), so a turn carrying only
-    // files is allowed to go. Both shapes still need a workspace.
-    if ((!content && attachments.length === 0) || !activeWorkspaceId) return;
+    // WT-541: the same rule the send button is disabled by. It used to be spelled out here and
+    // only half-spelled on the button, so a turn with no workspace was swallowed by a control
+    // that looked alive.
+    const readiness = composerReadiness({
+      text: content,
+      attachmentCount: attachments.length,
+      activeWorkspaceId,
+    });
+    if (!readiness.canSend) return;
+    // The id travels with the yes, so this handler cannot disagree with the check above about
+    // which workspace the turn belongs to.
+    const sendWorkspaceId = readiness.workspaceId;
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
@@ -1094,7 +1282,7 @@ export function GlobalChatbot() {
     if (!convId) {
       try {
         const conversation =
-          await createConversation.mutateAsync(activeWorkspaceId);
+          await createConversation.mutateAsync(sendWorkspaceId);
         convId = conversation.id;
         setConversationId(convId);
       } catch {
@@ -1117,6 +1305,7 @@ export function GlobalChatbot() {
       { id: `local-${Date.now()}`, role: "user", content },
     ]);
     setIsAiTyping(true);
+    clearPluginCards();
     shouldAutoScrollRef.current = true;
     armResponseTimeout();
 
@@ -1288,7 +1477,6 @@ export function GlobalChatbot() {
                               steps={msg.steps ?? []}
                               running={false}
                               durationMs={msg.durationMs}
-                              lumidotVariant={lumidotVariant}
                             />
                           </>
                         ) : (
@@ -1303,7 +1491,6 @@ export function GlobalChatbot() {
                       steps={steps}
                       running
                       slow={isSlow}
-                      lumidotVariant={lumidotVariant}
                       className="ml-4 mr-2 flex-1"
                     />
                   </div>
@@ -1323,13 +1510,7 @@ export function GlobalChatbot() {
                 {isAiTyping && steps.length === 0 && (
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
-                      <div className="scale-75 origin-left flex items-center justify-center">
-                        <Lumidot
-                          variant={lumidotVariant}
-                          pattern="frame"
-                          glow={4}
-                        />
-                      </div>
+                      <LumidotSpinner />
                       <span>Thinking...</span>
                     </div>
                   </div>
@@ -1353,11 +1534,33 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
+                {pendingPluginConnection ? (
+                  <div className="pl-4">
+                    <PluginConnectionActionCard
+                      action={pendingPluginConnection}
+                      disabled={connectPlugin.isPending}
+                      onDismiss={() => setPendingPluginConnection(null)}
+                      onConnect={handlePluginConnectionAction}
+                    />
+                  </div>
+                ) : null}
+                {pendingPluginSetup ? (
+                  <div className="pl-4">
+                    <PluginOperatorSetupCard
+                      action={pendingPluginSetup}
+                      onDismiss={() => setPendingPluginSetup(null)}
+                    />
+                  </div>
+                ) : null}
               </div>
               {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
                   the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
                   panels end against the page and read as continuing on their own. */}
-              <ScrollFadeEdge />
+              {/* Only while the reader is up the page. It used to render unconditionally, so
+                  at the bottom — where every reader spends most of their time — a soft band sat
+                  over the last two lines of the answer they were reading. The edge exists to say
+                  "there is more below"; at the bottom there is not. */}
+              <ScrollFadeEdge visible={isAway} />
               <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
               </div>
 
@@ -1612,6 +1815,17 @@ export function GlobalChatbot() {
                     }
                   />
 
+                  {/* WT-541 — said on screen, not only in the send button's tooltip.
+                      The admin portal is outside [workspaceSlug], so an admin who signs in and
+                      goes straight to /admin has no active workspace and every WarpBot turn was
+                      swallowed in silence. A disabled button explains nothing to somebody who
+                      has already typed their question. */}
+                  {composerState.blocker === "no-workspace" ? (
+                    <p className="px-2.5 pb-1.5 text-[11px] leading-4 text-ink-subtle">
+                      {composerState.hint}
+                    </p>
+                  ) : null}
+
                   <div className="flex items-center justify-between px-1.5 pb-1.5">
                     {/* WT-474: the paperclip sits with Skills, at the left of the control row,
                         which is where Claude and Codex put it — the composer's own actions on one
@@ -1643,7 +1857,7 @@ export function GlobalChatbot() {
                     >
                       <PopoverTrigger className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                         <Cube weight="regular" size={14} />
-                        Skills
+                        Tools
                         <CaretDown
                           weight="bold"
                           size={10}
@@ -1654,35 +1868,117 @@ export function GlobalChatbot() {
                         align="start"
                         side="top"
                         sideOffset={8}
-                        className="p-1.5 w-[260px] bg-surface-1 border border-border shadow-xl rounded-xl"
+                        className="p-1.5 w-[300px] bg-surface-1 border border-border shadow-xl rounded-xl"
                       >
-                        {skills && skills.length > 0 ? (
-                          // Read-only capability list: skills are the assistant's own
-                          // tools, picked by the model mid-turn — there is nothing for a
-                          // click to do, so these rows no longer pretend to be buttons.
-                          <ul className="flex flex-col">
-                            <li className="px-2.5 pt-1 pb-1.5 text-[11px] text-ink-subtle">
-                              WarpBot uses these automatically when a question needs them.
-                            </li>
-                            {skills.map((skill) => (
-                              <li
-                                key={skill.name}
-                                className="flex cursor-default flex-col gap-0.5 px-2.5 py-1.5"
+                        <div className="flex flex-col gap-2">
+                          {/* The same commands the "/" menu offers, and the same
+                              insertSlashCommand that runs them, so the menu and the keyboard
+                              cannot drift apart. This list used to render the backend's
+                              /assistant/skills, which had no prompt attached and so was
+                              `cursor-default` text -- a menu that looked clickable, was not,
+                              and told nobody what to do with it. */}
+                          <section>
+                            <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
+                              Tools
+                            </div>
+                            {availableSlashCommands.length > 0 ? (
+                              <ul className="flex flex-col">
+                                {availableSlashCommands.map((command) => (
+                                  <li key={command.command}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSkillsMenuOpen(false);
+                                        insertSlashCommand(command);
+                                      }}
+                                      className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-surface-2"
+                                    >
+                                      <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+                                        <span className="font-mono text-[11px] text-ink-subtle">
+                                          {command.command}
+                                        </span>
+                                        {command.label}
+                                      </span>
+                                      <span className="text-[11px] text-ink-subtle">
+                                        {command.description}
+                                      </span>
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              // Not "loading": availableSlashCommands is filtered by the page
+                              // you are on, so an empty list is an answer, not a wait.
+                              <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
+                                No tools for this page. Open a meeting or a document.
+                              </div>
+                            )}
+                          </section>
+
+                          <section className="border-t border-border pt-2">
+                            <div className="flex items-center justify-between px-2.5 pb-1.5">
+                              <span className="text-[11px] font-medium text-ink-subtle">
+                                Plugins
+                              </span>
+                              <a
+                                href={
+                                  activeWorkspaceSlug
+                                    ? "/settings/plugins"
+                                    : "/workspace"
+                                }
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink"
                               >
-                                <span className="text-[12px] font-medium text-ink">
-                                  {skill.label}
-                                </span>
-                                <span className="text-[11px] text-ink-subtle">
-                                  {skill.description}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                            Loading skills…
-                          </div>
-                        )}
+                                Manage
+                                <ArrowSquareOut size={11} />
+                              </a>
+                            </div>
+                            {installedAssistantPlugins.length > 0 ? (
+                              <ul className="flex flex-col gap-1">
+                                {installedAssistantPlugins.map((plugin) => {
+                                  const connected = plugin.connectionStatus === "connected";
+                                  return (
+                                    <li
+                                      key={plugin.key}
+                                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1.5"
+                                    >
+                                      <PluginGlyph plugin={plugin} size="xs" />
+                                      <div className="min-w-0">
+                                        <div className="truncate text-[12px] font-medium text-ink">
+                                          {plugin.label}
+                                        </div>
+                                        <div className="truncate text-[11px] text-ink-subtle">
+                                          {connected
+                                            ? plugin.connectedAccountEmail ?? "Connected"
+                                            : "Connect to use in WarpBot"}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        disabled={installPlugin.isPending || connectPlugin.isPending}
+                                        onClick={() => void handlePluginAction(plugin)}
+                                        className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                                      >
+                                        {connected ? (
+                                          <>
+                                            <CheckCircle size={12} weight="fill" />
+                                            Ready
+                                          </>
+                                        ) : (
+                                          "Connect"
+                                        )}
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <div className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-ink-subtle">
+                                <PlugsConnected size={14} weight="duotone" />
+                                Install plugins from Personal Settings.
+                              </div>
+                            )}
+                          </section>
+                        </div>
                       </PopoverContent>
                     </Popover>
                     </div>
@@ -1720,7 +2016,11 @@ export function GlobalChatbot() {
                         // WT-474: an attachment on its own is a question, so send is live for a
                         // turn carrying only files. Matching the same rule in sendMessage and in
                         // AssistantService — a button the server would accept must not look dead.
-                        disabled={!inputValue.trim() && attachments.length === 0}
+                        //
+                        // WT-541 is the converse, and was the actual bug: a button the server
+                        // CANNOT accept must not look alive. Both now read one rule.
+                        disabled={!composerState.canSend}
+                        title={composerState.hint ?? "Send message"}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
                         <ArrowUp weight="bold" size={13} />

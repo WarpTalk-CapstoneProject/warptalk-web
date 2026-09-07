@@ -77,7 +77,25 @@ if (!sidebar) {
 }
 
 /**
- * 5. The download page tells people what the OS is about to do to the file they just clicked.
+ * 5. The landing page — the OTHER entry point, and the one that matters most.
+ *
+ * WT-584. Assertion 4 above checks the workspace dropdown, which only exists once you are
+ * signed in and inside a workspace. /download is a marketing page for people who have neither:
+ * assertion 3 went to the trouble of keeping it reachable signed out, and then nothing on the
+ * signed-out site pointed at it. The only way to arrive was to be told the URL.
+ */
+const landing = read("src/app/page.tsx");
+if (!landing) {
+  failures.push("src/app/page.tsx is missing; cannot verify the landing page links to /download.");
+} else if (!landing.includes('href="/download"')) {
+  failures.push(
+    `The landing page does not link to /download. A signed-out visitor has no other way to ` +
+      `reach it — the workspace dropdown checked above is behind the login they have not done.`,
+  );
+}
+
+/**
+ * 6. The download page tells people what the OS is about to do to the file they just clicked.
  *
  * Neither artifact opens on a clean machine: macOS refuses an unnotarized app on first launch,
  * and the Windows installer carries no Authenticode signature at all, so SmartScreen stops it.
@@ -107,7 +125,7 @@ if (page && !/buildInstallNotes/.test(page)) {
 }
 
 /**
- * 6. No quarantine-stripping shell command, anywhere on the public page.
+ * 7. No quarantine-stripping shell command, anywhere on the public page.
  *
  * `xattr -dr com.apple.quarantine` gets past the macOS prompt in one line, and it is documented in
  * warptalk-desktop/README.md for the team. It must not appear here: a download page reaches people

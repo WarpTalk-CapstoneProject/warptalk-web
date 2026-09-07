@@ -23,12 +23,11 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Lumidot } from "lumidot";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import { looksLikeRoomCode } from "@/lib/meeting/room-code-guess";
 import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useUIStore } from "@/stores/ui-store";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
-import { useTheme } from "next-themes";
 import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import { liveMeetingPath, roomDetailPath } from "@/lib/workspace/workspace-routes";
 import type { TranslationRoomDto } from "@/types/translationRoom";
@@ -49,8 +48,6 @@ export function SearchMeetingDialog() {
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [searchQuery, setSearchQuery] = useState("");
-  const { resolvedTheme } = useTheme();
-  const lumidotVariant = resolvedTheme === "dark" ? "white" : "black";
   const slug = activeWorkspaceSlug || "workspace";
 
   useEffect(() => {
@@ -248,7 +245,7 @@ export function SearchMeetingDialog() {
 
           {isLoading && (
             <div className="flex items-center justify-center gap-3 p-4 text-sm text-muted-foreground">
-              <Lumidot variant={lumidotVariant} pattern="frame" glow={4} />
+              <LumidotSpinner />
               <span>Searching meetings...</span>
             </div>
           )}
