@@ -178,7 +178,9 @@ export default function AdminPluginDetailPage() {
 
   const detail = detailQuery.data;
 
-  if (detailQuery.isPending) {
+  // `pluginKey &&` matters: with no key the query is disabled, and a disabled query is pending
+  // forever — which would render a skeleton that never resolves instead of saying anything.
+  if (pluginKey && detailQuery.isPending) {
     return (
       <AdminPage>
         <div className="space-y-4 py-4" aria-busy="true">
