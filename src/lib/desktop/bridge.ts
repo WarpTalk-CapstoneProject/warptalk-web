@@ -170,6 +170,18 @@ export async function openInSystemBrowser(url: string): Promise<boolean> {
 }
 
 /**
+ * Kept as a name, not as a second implementation.
+ *
+ * Two functions arrived here from either side of a merge with the same body: this one and
+ * `openTranscriptWindow` below, which differs only by accepting null for the offer window that has
+ * no room yet. A wider signature subsumes a narrower one, so there is one implementation and this
+ * delegates to it — its callers and its tests keep the name they already use.
+ */
+export async function openDesktopTranscriptWindow(roomId: string): Promise<boolean> {
+  return openTranscriptWindow(roomId);
+}
+
+/**
  * Ask the desktop app about the virtual audio devices an external-bridge meeting needs.
  *
  * Null means "no answer available" — a browser, or a desktop build old enough to predate the

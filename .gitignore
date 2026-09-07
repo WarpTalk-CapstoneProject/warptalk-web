@@ -44,3 +44,6 @@ next-env.d.ts
 
 # local agent/editor state
 /.claude/
+
+# Dev-server logs written into the worktree by `npm run dev -- > dev-<port>.log`.
+dev-*.log

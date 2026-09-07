@@ -11,6 +11,14 @@ import {
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
+import {
+  AssistantQuestionCard,
+  parseAssistantQuestions,
+} from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
@@ -31,6 +39,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -49,6 +58,7 @@ import {
   Download,
 } from "lucide-react";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
+import { usePluginConnectUrl } from "@/hooks/use-assistant";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -153,6 +163,8 @@ export function ChatPanel({
   const assistantSteps = useTranslationRoomStore((state) => state.assistantSteps);
   const assistantTrails = useTranslationRoomStore((state) => state.assistantTrails);
   const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
+  const assistantQuestionsJson = useTranslationRoomStore((state) => state.assistantQuestionsJson);
+  const setAssistantQuestionsJson = useTranslationRoomStore((state) => state.setAssistantQuestionsJson);
   const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
@@ -169,6 +181,7 @@ export function ChatPanel({
   const user = useAuthStore((state) => state.user);
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
+  const connectPlugin = usePluginConnectUrl();
   const { mutate: sendFileAPI, isPending: isUploadingFile } =
     useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
@@ -517,41 +530,47 @@ export function ChatPanel({
     },
   });
 
-  function sendMessage() {
-    if (!editor) return;
+  function sendMessage(overrideContent?: string) {
+    if (!editor && !overrideContent) return;
 
     // Extract plain text and mentions
-    const json = editor.getJSON();
     let textContent = "";
-    const mentions: ChatMentionDto[] = [];
+    let mentions: ChatMentionDto[] = [];
 
-    // A simple recursive function to extract text and mentions
-    const parseNode = (node: JSONContent) => {
-      if (node.type === "text") {
-        textContent += node.text;
-      } else if (node.type === "mention") {
-        const id = String(node.attrs?.id ?? "");
-        const label = String(node.attrs?.label ?? "");
-        textContent += `@${label}`;
-        mentions.push({
-          id,
-          display: label,
-          type: "agent",
+    if (overrideContent) {
+      textContent = overrideContent;
+      mentions = [{ id: "bot-warpbot", display: "WarpBot", type: "agent" }];
+    } else {
+      const json = editor!.getJSON();
+
+      // A simple recursive function to extract text and mentions
+      const parseNode = (node: JSONContent) => {
+        if (node.type === "text") {
+          textContent += node.text;
+        } else if (node.type === "mention") {
+          const id = String(node.attrs?.id ?? "");
+          const label = String(node.attrs?.label ?? "");
+          textContent += `@${label}`;
+          mentions.push({
+            id,
+            display: label,
+            type: "agent",
+          });
+        } else if (node.type === "hardBreak") {
+          textContent += "\n";
+        }
+
+        if (node.content) {
+          node.content.forEach(parseNode);
+        }
+      };
+
+      if (json.content) {
+        json.content.forEach((block) => {
+          parseNode(block);
+          textContent += "\n";
         });
-      } else if (node.type === "hardBreak") {
-        textContent += "\n";
       }
-
-      if (node.content) {
-        node.content.forEach(parseNode);
-      }
-    };
-
-    if (json.content) {
-      json.content.forEach((block) => {
-        parseNode(block);
-        textContent += "\n";
-      });
     }
 
     const trimmedText = textContent.trim();
@@ -591,13 +610,18 @@ export function ChatPanel({
     if (decision === "queue") {
       enqueueAgentAsk({ text: trimmedText, mentions });
       // Cleared now, not on a response that has not been requested yet: the message has been
-      // accepted, and leaving it in the box reads as the send having failed.
-      editor.commands.clearContent(true);
+      // accepted, and leaving it in the box reads as the send having failed. A queued ask can
+      // also come from an in-chat card (WT-565), which has no editor document behind it.
+      setAssistantQuestionsJson(null);
+      editor?.commands.clearContent(true);
       return;
     }
 
-    dispatchMessage(trimmedText, mentions, asksTheAgent, () =>
-      editor.commands.clearContent(true),
+    dispatchMessage(trimmedText, mentions, asksTheAgent, () => {
+      // A card's follow-up has been sent, so the card is no longer pending (WT-565).
+      setAssistantQuestionsJson(null);
+      editor?.commands.clearContent(true);
+    }
     );
   }
 
@@ -646,6 +670,27 @@ export function ChatPanel({
       );
     } catch {
       setFileError("File could not be downloaded. Try again.");
+    }
+  }
+
+  const pendingAssistantQuestions = assistantQuestionsJson
+    ? parseAssistantQuestions(assistantQuestionsJson)
+    : [];
+  const pendingPluginConnection = assistantQuestionsJson
+    ? parsePluginConnectionAction(assistantQuestionsJson)
+    : null;
+
+  async function handlePluginConnectionAction(pluginKey: string) {
+    try {
+      setSendError(null);
+      const result = await connectPlugin.mutateAsync({ pluginKey });
+      if (!openProviderConsent(result.url)) {
+        // Blocked popup, most likely: the user gesture is gone by the time the mutation
+        // resolves. Saying nothing leaves them waiting on a window that never opened.
+        setSendError("Your browser blocked the consent window. Allow pop-ups and try again.");
+      }
+    } catch {
+      setSendError("Could not open the plugin connection flow. Try again.");
     }
   }
 
@@ -905,6 +950,29 @@ export function ChatPanel({
             className="px-1"
           />
         ) : null}
+
+        {pendingAssistantQuestions.length > 0 ? (
+          <div className="pl-10">
+            <AssistantQuestionCard
+              questions={pendingAssistantQuestions}
+              disabled={isPending}
+              onSubmit={(answer) => {
+                setAssistantQuestionsJson(null);
+                sendMessage(answer);
+              }}
+            />
+          </div>
+        ) : null}
+        {pendingPluginConnection ? (
+          <div className="pl-10">
+            <PluginConnectionActionCard
+              action={pendingPluginConnection}
+              disabled={connectPlugin.isPending}
+              onDismiss={() => setAssistantQuestionsJson(null)}
+              onConnect={handlePluginConnectionAction}
+            />
+          </div>
+        ) : null}
       </div>
       {/* Reading back through a meeting's chat stops the panel following, which is right — and
           left the newest message somewhere below with nothing on screen saying so. */}
@@ -950,7 +1018,7 @@ export function ChatPanel({
           <EditorContent editor={editor} className="min-w-0 flex-1" />
           <button
             type="button"
-            onClick={sendMessage}
+            onClick={() => sendMessage()}
             disabled={isPending}
             aria-label="Send message"
             title="Send message"

@@ -128,7 +128,10 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
       viewer: "SummaryPanel",
     },
     {
-      path: "src/app/(app)/[workspaceSlug]/history/page.tsx",
+      // /history is deleted. The archive's reading moved into the library that builds every
+      // card's excerpt — which is the file that actually handles a payload now, and therefore
+      // the only one where pinning this assertion still asserts something.
+      path: "src/lib/meeting/artifact-library.ts",
       viewer: "readableArtifactBody",
     },
   ];

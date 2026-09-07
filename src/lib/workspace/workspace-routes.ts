@@ -48,3 +48,35 @@ export function isLiveMeetingPath(pathname: string): boolean {
     /^\/[^/]+\/rooms\/[^/]+\/live\/?$/.test(pathname)
   );
 }
+
+/**
+ * The activation landing — what a workspace with no plan shows INSTEAD of the product.
+ *
+ * It is a workspace route (it needs the slug: it names the workspace and bills it) but it is
+ * deliberately not a workspace PAGE. The app shell renders it without the portal chrome, the
+ * same way it renders /workspace and /workspace/create, because a sidebar full of destinations
+ * that all bounce back here is not a paywall — it is the product with the doors locked, which
+ * is precisely the thing this route replaced.
+ *
+ * The gate that sends people here lives in lib/billing/workspace-paywall, and imports this
+ * function rather than spelling the path again: the route the paywall holds EXEMPT and the
+ * route it redirects TO must be the same string, or the redirect loops.
+ */
+export function workspaceActivationPath(workspaceSlug: string): string {
+  return `/${workspaceSlug}/activate`;
+}
+
+/**
+ * Whether a path is a workspace's activation landing.
+ *
+ * Asked by the app shell to decide whether to draw the portal around the page. A false negative
+ * puts the sidebar back around the paywall; a false positive strips the chrome off a real page.
+ *
+ * Matched as a whole two-segment path, so `/{slug}/activateXYZ` and `/{slug}/activate/anything`
+ * are not it. The caller is responsible for excluding non-workspace first segments — `/admin`
+ * and `/workspace` are checked before this in the shell — since a bare `/[^/]+` cannot tell a
+ * slug from a top-level route.
+ */
+export function isWorkspaceActivationPath(pathname: string): boolean {
+  return /^\/[^/]+\/activate\/?$/.test(pathname);
+}

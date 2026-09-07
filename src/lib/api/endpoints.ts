@@ -146,6 +146,15 @@ export const API = {
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
     exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+    /**
+     * Every current biên bản in the workspace this caller may read.
+     *
+     * Anchored on the workspace rather than on a room because the Artifacts library asks a
+     * question no room can answer: which meetings left a written record at all. The gateway
+     * routes this one path to the translation-room service ahead of its own workspaces
+     * catch-all — see workspace-minutes-route.
+     */
+    forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
@@ -158,6 +167,19 @@ export const API = {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    // WT-605. Keyed by ROOM, not by transcript id, exactly as TranscriptsController declares
+    // them — the host pressing this has a room open, not a transcript id in hand.
+    //
+    // Not to be confused with `translationRooms.pause` further down: that one stops the AI
+    // workers translating and dubbing. These stop only the written record growing, while
+    // translation, dubbing, subtitles and LiveKit carry on.
+    pauseByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause`,
+    resumeByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/resume`,
+    /** Readable by every participant, not just the host — the notice is for the whole room. */
+    pauseWindows: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
@@ -259,6 +281,15 @@ export const API = {
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+    plugins: "/assistant/plugins",
+    installPlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
+    disablePlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
+    pluginConnection: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    pluginConnectUrl: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to

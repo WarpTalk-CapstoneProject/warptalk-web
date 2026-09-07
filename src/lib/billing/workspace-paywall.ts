@@ -30,6 +30,7 @@
 // which does not resolve the tsconfig path alias. A type-only alias import would be erased and
 // would work; this one would not, and the failure is at test time rather than build time.
 import { describeSubscription, hasPaidEntitlement } from "./subscription-state.ts";
+import { workspaceActivationPath } from "../workspace/workspace-routes.ts";
 import type { SubscriptionDto } from "@/types/billing";
 
 /**
@@ -43,24 +44,31 @@ export const NO_SUBSCRIPTION_CODE = "BILLING_SUBSCRIPTION_NOT_FOUND";
 /**
  * Routes that stay open on an unpaid workspace, as path SEGMENTS after the slug.
  *
- * ONLY the payment flow. WT-570 narrowed this from `["settings", "payment"]`: the owner's
- * instruction is that creating a workspace stays allowed and an unpaid one is HELD ON THE PAYMENT
- * PAGE, and "held" is not true if the whole of Settings — account, profile, preferences,
- * member-roles — is browsable on the way there. `payment` alone is the smallest set that still
- * lets the workspace be paid for, because `/payment/plans` IS the checkout: it lists the plans and
- * opens the Stripe session itself, so nothing on the billing screens is needed to buy.
+ * ONLY the activation landing. This has now been narrowed twice, in the same direction:
+ * WT-515 opened `["settings", "payment"]`, WT-570 cut it to `["payment"]`, and this cut it to
+ * `["activate"]`.
+ *
+ * The reason for the last cut is that `payment/plans` lives inside the `(app)` route group, so
+ * "held on the payment page" rendered the FULL PORTAL around it — sidebar, workspace tabs,
+ * header, chatbot — with every destination in it bouncing back. The owner's report was exact:
+ * you are inside the product with the features locked, which is the wrong shape. The landing is
+ * a page with no portal around it, and it is the only thing an unpaid workspace has.
+ *
+ * `payment/plans` is not exempt any more, and must not be re-added: it is the plan-MANAGEMENT
+ * screen for a workspace that already pays (change plan, cancel renewal), and its own chrome
+ * assumes the portal. An unpaid workspace reaching it is redirected here like any other page.
  */
-const OPEN_SEGMENTS = ["payment"] as const;
+const OPEN_SEGMENTS = ["activate"] as const;
 
 /**
- * Where a buyer with no plan is sent, and kept. WT-570.
+ * Where a workspace with no plan is sent, and kept.
  *
  * Exported rather than written inline at the call site so that the page which must stay open
  * (OPEN_SEGMENTS) and the page we redirect TO cannot drift apart into a loop: this path's first
- * segment is `payment`, which the rule above holds exempt.
+ * segment is `activate`, which the rule above holds exempt.
  */
 export function paywallRedirectPath(workspaceSlug: string): string {
-  return `/${workspaceSlug}/payment/plans`;
+  return workspaceActivationPath(workspaceSlug);
 }
 
 /** True when this path must remain reachable even with no plan. */

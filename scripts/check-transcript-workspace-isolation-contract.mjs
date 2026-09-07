@@ -10,7 +10,7 @@ const [hook, historyService, roomService, roomDetailPage, historyPage, workspace
   read("src/services/room-history.service.ts"),
   read("src/services/translation-room.service.ts"),
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
-  read("src/app/(app)/[workspaceSlug]/history/page.tsx"),
+  read("src/app/(app)/[workspaceSlug]/artifacts/page.tsx"),
   read("src/app/(app)/[workspaceSlug]/layout.tsx"),
 ]);
 
@@ -31,7 +31,13 @@ const checks = [
     hook.includes("export function useEndedRoomRecord") &&
       hook.includes("...roomHistoryQuery(workspaceId)"),
   ],
-  ["meeting history requests the active workspace", historyPage.includes("useRoomHistory(activeWorkspaceId)")],
+  // /history is gone — it was a second, worse answer to what Artifacts answers. The records
+  // page reads the same workspace-scoped payload, so the assertion moved with it rather than
+  // being dropped.
+  [
+    "the records page requests the active workspace",
+    historyPage.includes("useArtifactLibrary(activeWorkspaceId"),
+  ],
   [
     "workspace pages wait until the active id matches the route",
     workspaceLayout.includes("activeWorkspaceId !== targetWorkspace.id"),
