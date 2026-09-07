@@ -22,12 +22,20 @@
  */
 
 import { useMemo, useState } from "react";
-import { Check, Lock, Plus, X } from "@phosphor-icons/react";
+import { Check, Lock, Plus, Sparkle, X } from "@phosphor-icons/react";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
+import { isImageExtension } from "@/constants/workspace-document";
 import { cn } from "@/lib/utils";
 import { documentActorName } from "@/lib/documents/document-actor";
+import {
+  DOCUMENT_PERMISSIONS,
+  DOCUMENT_PERMISSION_HINTS,
+  DOCUMENT_PERMISSION_LABELS,
+  isUserPolicy,
+  type DocumentPermission,
+} from "@/lib/workspace/document-access-policy";
 
 interface WorkspaceMemberItem {
   userId: string;
@@ -41,6 +49,8 @@ interface PolicyItem {
   id: string;
   subjectType: string;
   subjectId?: string | null;
+  subjectKey?: string | null;
+  permission?: string | null;
   effect: string;
 }
 
@@ -50,6 +60,7 @@ interface WorkspaceDocumentData {
   sizeBytes: number;
   fileExtension: string;
   ingestionStatus: string;
+  isAiAllowed: boolean;
   uploadedBy?: string | null;
   createdAt: string;
 }
@@ -246,6 +257,56 @@ function PolicyList({
   );
 }
 
+/**
+ * Which permission the Allowed / Blocked lists below are talking about.
+ *
+ * The panel used to have no such control because it could only ever write `view`. With three
+ * permissions there are three separate lists of people, and showing them stacked would be six
+ * chip rows for a decision that is almost always about one of them — so the lists are one set at
+ * a time and this picks the set.
+ */
+function PermissionTabs({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: DocumentPermission;
+  onChange: (permission: DocumentPermission) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        role="tablist"
+        aria-label="Permission"
+        className="inline-flex w-full items-center gap-0.5 rounded-lg border border-hairline bg-surface-2/70 p-0.5"
+      >
+        {DOCUMENT_PERMISSIONS.map((permission) => (
+          <button
+            key={permission}
+            type="button"
+            role="tab"
+            aria-selected={value === permission}
+            disabled={disabled}
+            onClick={() => onChange(permission)}
+            className={cn(
+              "flex-1 cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              value === permission
+                ? "bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                : "text-ink-muted hover:text-ink",
+            )}
+          >
+            {DOCUMENT_PERMISSION_LABELS[permission]}
+          </button>
+        ))}
+      </div>
+      <p className="px-0.5 text-[10px] leading-tight text-ink-subtle">
+        {DOCUMENT_PERMISSION_HINTS[value]}
+      </p>
+    </div>
+  );
+}
+
 export function DocumentSidePanel({
   doc,
   membersList,
@@ -258,6 +319,8 @@ export function DocumentSidePanel({
   allowUser,
   blockUser,
   removePolicy,
+  onToggleAiIndexing,
+  isAiIndexingBusy,
 }: {
   doc: WorkspaceDocumentData;
   membersList: WorkspaceMemberItem[];
@@ -267,18 +330,26 @@ export function DocumentSidePanel({
   isSubmitting: boolean;
   policiesList: PolicyItem[];
   toggleExternalAccess: (checked: boolean) => Promise<void>;
-  allowUser: (userId: string, userName: string) => Promise<void>;
-  blockUser: (userId: string, userName: string) => Promise<void>;
+  allowUser: (userId: string, userName: string, permission: DocumentPermission) => Promise<void>;
+  blockUser: (userId: string, userName: string, permission: DocumentPermission) => Promise<void>;
   removePolicy: (policyId: string) => Promise<void>;
+  onToggleAiIndexing: (allowed: boolean) => Promise<void>;
+  isAiIndexingBusy: boolean;
 }) {
   // WT-551: null when there is nobody to name — an uploader who left the workspace, or one
   // past the page of members this panel fetched. It used to fall back to the literal word
   // "Uploader", which this row renders as if it were somebody's name.
   const uploaderName = documentActorName(membersList, doc.uploadedBy);
 
+  const [permission, setPermission] = useState<DocumentPermission>("view");
+
   const status = doc.status?.toLowerCase() ?? "";
-  const allowed = policiesList.filter((p) => p.subjectType === "User" && p.effect === "ALLOW");
-  const blocked = policiesList.filter((p) => p.subjectType === "User" && p.effect === "DENY");
+  const allowed = policiesList.filter((p) => isUserPolicy(p, permission, "allow"));
+  const blocked = policiesList.filter((p) => isUserPolicy(p, permission, "deny"));
+
+  // An image has no text to index, so the switch would be a promise the pipeline cannot keep —
+  // the upload dialog already refuses for the same reason.
+  const aiUnavailable = isImageExtension(doc.fileExtension);
 
   return (
     // THE GREY CARD IS THE ONE UNDERNEATH. Header sits directly on it, with a thin margin all
@@ -331,6 +402,41 @@ export function DocumentSidePanel({
           </div>
         </Section>
 
+        <Section title="Assistant">
+          {/* THE SWITCH THAT ONLY EXISTED AT UPLOAD TIME.
+              `isAiAllowed` was asked once, in the upload dialog, and after that it was read for a
+              badge and never written again — so a document handed to the assistant by mistake
+              could not be taken back from any screen. The endpoint has always been there
+              (PATCH /documents/{id}, PatchDocumentRequest.IsAiAllowed) and turning it off also
+              deletes the document's vectors, which is the part that makes this a real revocation
+              rather than a label. */}
+          <div className="flex items-center justify-between gap-3 rounded-md border border-hairline bg-surface-2 p-2.5">
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-ink">
+                <Sparkle className="size-3.5 shrink-0 text-ink-muted" />
+                AI indexing
+              </span>
+              <span className="text-[10px] leading-tight text-ink-muted">
+                {aiUnavailable
+                  ? "Images have no text for the assistant to read"
+                  : doc.isAiAllowed
+                    ? "The assistant may answer from this document"
+                    : "Turning this on re-indexes the document"}
+              </span>
+            </span>
+            <Switch
+              checked={doc.isAiAllowed}
+              disabled={!canManagePolicies || isAiIndexingBusy || aiUnavailable}
+              onCheckedChange={(checked: boolean) => void onToggleAiIndexing(checked)}
+            />
+          </div>
+          {!canManagePolicies ? (
+            <p className="mt-1.5 text-[10px] leading-relaxed text-ink-subtle">
+              Only workspace owners and admins can change this.
+            </p>
+          ) : null}
+        </Section>
+
         <Section title="Access">
           {canManagePolicies ? (
             <div className="flex flex-col gap-3">
@@ -348,6 +454,12 @@ export function DocumentSidePanel({
                 />
               </div>
 
+              <PermissionTabs
+                value={permission}
+                onChange={setPermission}
+                disabled={isSubmitting}
+              />
+
               <PolicyList
                 label="Allowed"
                 emptyLabel="Inherited only"
@@ -356,7 +468,7 @@ export function DocumentSidePanel({
                 tone="allow"
                 canManage={canManagePolicies}
                 onRemove={(id) => void removePolicy(id)}
-                onChoose={(userId, name) => void allowUser(userId, name)}
+                onChoose={(userId, name) => void allowUser(userId, name, permission)}
               />
 
               <PolicyList
@@ -367,7 +479,7 @@ export function DocumentSidePanel({
                 tone="deny"
                 canManage={canManagePolicies}
                 onRemove={(id) => void removePolicy(id)}
-                onChoose={(userId, name) => void blockUser(userId, name)}
+                onChoose={(userId, name) => void blockUser(userId, name, permission)}
               />
             </div>
           ) : (
