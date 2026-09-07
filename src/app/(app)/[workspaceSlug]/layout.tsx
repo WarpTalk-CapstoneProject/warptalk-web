@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
@@ -9,11 +9,13 @@ import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { WorkspacePaywall } from "@/components/workspace/workspace-paywall";
+import { isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { UsageWarningBanner } from "@/components/billing/usage-warning-banner";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
+  const pathname = usePathname() ?? "";
   const workspaceSlug = normalizeWorkspaceSlug(params.workspaceSlug);
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
@@ -111,6 +113,15 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
     );
   }
 
+  /**
+   * The activation landing is the one route the paywall lets through while a workspace is UNPAID,
+   * so it is also the one place the banner's "inside the paywall" reasoning has to be restated by
+   * hand. A workspace with no plan has no cycle and no balance: the banner has nothing to say
+   * there, and would only poll an endpoint that answers BILLING_SUBSCRIPTION_NOT_FOUND every two
+   * minutes for as long as somebody looks at the plan grid.
+   */
+  const showUsageWarning = !isWorkspaceActivationPath(pathname);
+
   // WT-515/WT-554 — no plan, no workspace. Wrapped here rather than per page because a paywall
   // with a page-shaped hole in it is not a paywall: /rooms could be gated and /documents
   // forgotten, and the first person to notice would be somebody using the product for free.
@@ -124,7 +135,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
           also need to be told its credits are low. Above the page rather than on one page,
           because the meeting that stops mid-sentence is the thing this exists to prevent and the
           person it happens to was not on the billing screen at the time. */}
-      <UsageWarningBanner workspaceSlug={workspaceSlug} />
+      {showUsageWarning && <UsageWarningBanner workspaceSlug={workspaceSlug} />}
       {children}
     </WorkspacePaywall>
   );
