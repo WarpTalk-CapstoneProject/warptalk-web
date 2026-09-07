@@ -172,28 +172,22 @@ export interface PluginWorkspaceBlock {
 }
 
 /**
- * Two refusals reach the user through one string field, and they need different next steps:
- * `workspace_plugin_not_allowed` (the workspace permits some plugins, not this one) is fixed by an
- * admin adding one key; `permission_denied` from the workspace-wide switch (personal plugins are
- * off entirely) is not.
+ * A workspace configures exactly one plugin attribute — whether its members may use plugins at all
+ * — so there is exactly one refusal to explain. An earlier revision of this ticket also carried a
+ * per-plugin allowlist, and with it a second refusal ("permits some plugins, not this one") that
+ * needed a different next step; that scope was cut, and the backend no longer emits it.
  *
- * The catalog DTO carries only the message, not the error code, so the two are told apart by a
- * marker phrase from each backend constant. If the backend rewords a message the match fails and
- * the remedy line simply disappears — the user still sees the reason, and nobody is told to go ask
- * for something that would not help. A `workspacePolicyBlockCode` on the DTO would retire this.
+ * The match is kept rather than assuming the single message, because the catalog DTO carries the
+ * sentence and not the error code. If the backend rewords it, the remedy line disappears and the
+ * user still sees the reason — better than confidently offering a remedy for a refusal this is not.
+ * A `workspacePolicyBlockCode` on the DTO would retire the guesswork entirely.
  */
 const WORKSPACE_POLICY_REMEDIES: ReadonlyArray<{ marker: string; remedy: string }> = [
-  {
-    // PluginConstants.WorkspacePolicyMessages.NotOnAllowlist
-    marker: "does not include this plugin",
-    remedy:
-      "Your workspace permits some plugins but not this one. A workspace Owner or Admin can add it to the allowed list.",
-  },
   {
     // PluginConstants.WorkspacePolicyMessages.PluginsDisabled
     marker: "do not allow personal plugins",
     remedy:
-      "Your workspace has turned personal plugins off, so no single plugin can be allowed on its own. Only a workspace Owner or Admin can turn them back on.",
+      "Your workspace has turned plugins off. Only a workspace Owner or Admin can turn them back on.",
   },
 ];
 

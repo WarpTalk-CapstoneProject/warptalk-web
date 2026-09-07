@@ -175,28 +175,29 @@ describe("WT-646 — a workspace's plugin policy, in words a member can act on",
     assert.equal(isPluginWorkspaceBlocked(plugin()), false);
   });
 
-  test("an allowlist that omits this plugin is fixable by asking for one key", () => {
-    // PluginConstants.WorkspacePolicyMessages.NotOnAllowlist
+  test("a reason the backend no longer emits gets no remedy invented for it", () => {
+    // The per-plugin allowlist was cut from this ticket, so "does not include this plugin" is a
+    // sentence nothing produces any more. It must fall through to reason-without-remedy rather
+    // than matching something else and sending the member to ask for the wrong thing.
     const block = pluginWorkspaceBlock(
       plugin({
         workspacePolicyBlockReason: "This workspace's plugin policy does not include this plugin.",
       }),
     );
     assert.equal(block?.reason, "This workspace's plugin policy does not include this plugin.");
-    assert.ok(block?.remedy?.includes("add it to the allowed list"), block?.remedy ?? "");
+    assert.equal(block?.remedy, null);
   });
 
-  test("personal plugins switched off entirely is NOT fixable by asking for one key", () => {
-    // PluginConstants.WorkspacePolicyMessages.PluginsDisabled. The distinction is the whole point:
-    // sending someone to ask an admin to allow one plugin, when the workspace has the feature off,
-    // wastes both their time and the admin's.
+  test("plugins switched off is explained, and points at the one person who can undo it", () => {
+    // PluginConstants.WorkspacePolicyMessages.PluginsDisabled — the single refusal a workspace can
+    // now produce, since a workspace configures exactly one plugin attribute.
     const block = pluginWorkspaceBlock(
       plugin({
         workspacePolicyBlockReason: "Workspace settings do not allow personal plugins in WarpBot.",
       }),
     );
-    assert.ok(block?.remedy?.includes("turned personal plugins off"), block?.remedy ?? "");
-    assert.ok(!block?.remedy?.includes("add it to the allowed list"), block?.remedy ?? "");
+    assert.ok(block?.remedy?.includes("turned plugins off"), block?.remedy ?? "");
+    assert.ok(block?.remedy?.includes("Owner or Admin"), block?.remedy ?? "");
   });
 
   test("an unrecognised reason is still shown, with no invented advice attached", () => {
