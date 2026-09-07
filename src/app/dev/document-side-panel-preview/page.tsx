@@ -38,6 +38,7 @@ const DOC = {
   sizeBytes: 578,
   fileExtension: ".md",
   ingestionStatus: "COMPLETED",
+  isAiAllowed: true,
   uploadedBy: "u1",
   createdAt: "2026-08-21T09:00:00.000Z",
 };
@@ -46,10 +47,17 @@ const formatBytes = (bytes: number) => `${bytes} Bytes`;
 
 export default function DocumentSidePanelPreviewPage() {
   const [policies, setPolicies] = useState<
-    { id: string; subjectType: string; subjectId?: string | null; effect: string }[]
+    {
+      id: string;
+      subjectType: string;
+      subjectId?: string | null;
+      permission?: string | null;
+      effect: string;
+    }[]
   >([]);
   const [external, setExternal] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [aiAllowed, setAiAllowed] = useState(DOC.isAiAllowed);
 
   return (
     <main className="min-h-dvh bg-surface-1 p-8">
@@ -82,7 +90,7 @@ export default function DocumentSidePanelPreviewPage() {
             className="flex flex-col gap-6 lg:sticky lg:top-0 lg:max-h-full lg:overflow-y-auto lg:pb-2"
           >
             <DocumentSidePanel
-              doc={DOC}
+              doc={{ ...DOC, isAiAllowed: aiAllowed }}
               membersList={MEMBERS}
               formatBytes={formatBytes}
               canManagePolicies={!locked}
@@ -90,21 +98,35 @@ export default function DocumentSidePanelPreviewPage() {
               isSubmitting={false}
               policiesList={policies}
               toggleExternalAccess={async (checked) => setExternal(checked)}
-              allowUser={async (userId) =>
+              allowUser={async (userId, _name, permission) =>
                 setPolicies((current) => [
                   ...current,
-                  { id: `a-${userId}`, subjectType: "User", subjectId: userId, effect: "ALLOW" },
+                  {
+                    id: `a-${permission}-${userId}`,
+                    subjectType: "User",
+                    subjectId: userId,
+                    permission,
+                    effect: "ALLOW",
+                  },
                 ])
               }
-              blockUser={async (userId) =>
+              blockUser={async (userId, _name, permission) =>
                 setPolicies((current) => [
                   ...current,
-                  { id: `d-${userId}`, subjectType: "User", subjectId: userId, effect: "DENY" },
+                  {
+                    id: `d-${permission}-${userId}`,
+                    subjectType: "User",
+                    subjectId: userId,
+                    permission,
+                    effect: "DENY",
+                  },
                 ])
               }
               removePolicy={async (policyId) =>
                 setPolicies((current) => current.filter((policy) => policy.id !== policyId))
               }
+              onToggleAiIndexing={async (allowed) => setAiAllowed(allowed)}
+              isAiIndexingBusy={false}
             />
             {/* Enough height that the sidebar genuinely scrolls, as it does on a real document. */}
             <div className="h-64 shrink-0 rounded-xl border border-dashed border-hairline" />

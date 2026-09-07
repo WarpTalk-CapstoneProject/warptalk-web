@@ -46,6 +46,7 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
+  useJoinLanguagePolicy,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -241,7 +242,31 @@ export function PersistentMeetingSession({
 
   // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
   // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  //
+  // Kept as the FALLBACK only. It is keyed on the workspace the user currently has SELECTED, which
+  // is not necessarily the workspace that owns this room, and it is a members-only endpoint: an
+  // external guest is not a member, so it answers 403, the data comes back undefined, and the
+  // "empty means unrestricted" rule below turns a refusal into the full language list. That is how
+  // a workspace limited to two languages still offered Japanese in the meeting.
   const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+  // The room's OWN policy, resolved from its code by the same endpoint /join and the setup modal
+  // use. Public, so it answers for guests too, and it is about this room's workspace rather than
+  // whichever one happens to be selected — both of the reasons the line above cannot be trusted
+  // alone. It is the primary source; the settings read stays for the moment the room (and so its
+  // code) has not loaded yet.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(
+    roomQuery.data?.translationRoomCode ?? "",
+  );
+  /**
+   * The allowed-language list to apply, or undefined when we genuinely do not know one.
+   *
+   * `undefined` and `[]` mean the same thing downstream — unrestricted — which is correct for a
+   * workspace that never set a policy and wrong for a request that failed. Preferring the public
+   * per-room answer is what removes the failing request from the common path rather than trying to
+   * tell its two meanings apart after the fact.
+   */
+  const allowedTargetLanguages =
+    joinLanguagePolicy?.allowedTargetLanguages ?? workspaceSettings?.allowedTargetLanguages;
 
   // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
   // meant for the far side has to leave through the virtual microphone Meet is listening to
@@ -1370,7 +1395,7 @@ export function PersistentMeetingSession({
     // Empty means unrestricted, matching the server's own whitelist check — so an absent or
     // still-loading settings response must NOT be read as "nothing is allowed", or the picker
     // would empty itself while the query is in flight.
-    const allowed = workspaceSettings?.allowedTargetLanguages;
+    const allowed = allowedTargetLanguages;
     if (!allowed || allowed.length === 0) return Array.from(codes);
 
     const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
@@ -1379,7 +1404,7 @@ export function PersistentMeetingSession({
     // them no way to move off it — the policy is enforced by what they can move TO.
     const current = normalizeLanguageCode(targetLanguage);
     return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
-  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
+  }, [room, targetLanguage, addedLanguages, allowedTargetLanguages]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -3229,7 +3254,7 @@ export function PersistentMeetingSession({
                     // WT-497: the policy itself, not only the room list it already narrowed.
                     // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
                     // exactly what availableListenLanguages excluded.
-                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
+                    allowedTargetLanguages={allowedTargetLanguages}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
