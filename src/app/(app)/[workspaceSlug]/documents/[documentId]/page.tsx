@@ -25,6 +25,7 @@ import { useDocumentAccessPolicy } from "@/hooks/use-document-access-policy";
 import {
   useApproveWorkspaceDocument,
   useDownloadWorkspaceDocument,
+  usePatchWorkspaceDocumentMetadata,
   useWorkspace,
   useWorkspaceDocument,
 } from "@/hooks/use-workspace";
@@ -76,6 +77,13 @@ export default function DocumentDetailPage({ params }: PageProps) {
     activeWorkspaceId || "",
   );
   const approveMutation = useApproveWorkspaceDocument(activeWorkspaceId || "");
+  // The switch that turns AI reading off again. The mutation and the endpoint behind it both
+  // already existed; nothing on any screen had ever called them, so a document could be handed to
+  // the assistant at upload and never taken back.
+  const patchMetadataMutation = usePatchWorkspaceDocumentMetadata(
+    activeWorkspaceId || "",
+    documentId,
+  );
   const doc = documentQuery.data;
   const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
   const isPendingApproval = Boolean(
@@ -130,6 +138,22 @@ export default function DocumentDetailPage({ params }: PageProps) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
           ?.error || "Action failed.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleToggleAiIndexing = async (allowed: boolean) => {
+    try {
+      await patchMetadataMutation.mutateAsync({ isAiAllowed: allowed });
+      toast.success(
+        allowed
+          ? "AI indexing enabled. The document will be re-indexed."
+          : "AI indexing disabled. Existing AI copies of this document are being deleted.",
+      );
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to change AI indexing.";
       toast.error(errorMsg);
     }
   };
@@ -292,6 +316,8 @@ export default function DocumentDetailPage({ params }: PageProps) {
             allowUser={allowUser}
             blockUser={blockUser}
             removePolicy={removePolicy}
+            onToggleAiIndexing={handleToggleAiIndexing}
+            isAiIndexingBusy={patchMetadataMutation.isPending}
           />
         </div>
       </div>
