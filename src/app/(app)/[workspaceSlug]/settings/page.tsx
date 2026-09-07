@@ -917,11 +917,23 @@ export default function WorkspaceSettingsPage() {
               beside it — the same "Only the workspace owner can …" wording the invite dialog and
               the advanced page already use for a control the caller may read but not change.
             */}
+            {/*
+              And the copy says what the flag ACTUALLY does, which is less than its name
+              promises. AssistantService's WorkspacePluginGuard enforces it only where an
+              allowlist exists — there is where the allowlist IS the approval record, an admin
+              adding a key being the approval. With no allowlist there is no approval store at
+              all: plugin_installations has no pending state, no reviewer, no queue, and nothing
+              tells an Owner a request is waiting, so the guard logs a warning and permits.
+              Describing this row as a gate would promise a screen nobody has built.
+            */}
             {/* Plugin Approval */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5 max-w-[70%]">
                 <span className="text-xs font-semibold text-ink">Require approval before a plugin runs</span>
-                <span className="text-[11px] text-ink-muted">An installed plugin stays inert until an Owner or Admin approves it for this workspace.</span>
+                <span className="text-[11px] text-ink-muted">Records that plugins here are vetted. The allowlist above is the approval itself — a plugin counts as approved once an Owner or Admin ticks it.</span>
+                {watchAll.requirePluginApproval && !allowlistEnforced ? (
+                  <span className="text-[11px] text-amber-600">Nothing is enforced while no allowlist is configured — there is no separate approval queue. Turn on the allowlist above to make this mean something.</span>
+                ) : null}
                 {!isOwner ? (
                   <span className="text-[11px] text-amber-600">Only the workspace owner can change this setting.</span>
                 ) : null}
