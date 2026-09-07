@@ -19,7 +19,11 @@ import {
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
-import type { WorkspaceSettingsDto } from "@/types/workspace";
+import type {
+  MinutesClassification,
+  MinutesTemplate,
+  WorkspaceSettingsDto,
+} from "@/types/workspace";
 import {
   useWorkspace,
   useWorkspaceSettings,
@@ -41,6 +45,12 @@ const settingsSchema = z.object({
   timezone: z.string().min(1, "Please select timezone"),
   maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
   artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
+  // Enumerated rather than free text, and spelled the way the backend spells them. The server
+  // compares ordinally and refuses an unrecognised value instead of rounding it to the nearest
+  // supported one, so a picker that can only emit these strings is what keeps the two ends
+  // agreeing — there is no casing this form could invent that the save would forgive.
+  minutesClassification: z.enum(["Internal", "Confidential", "Public"]),
+  minutesTemplate: z.enum(["vn-nd30", "global-en"]),
   invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
   voiceCloningEnabled: z.boolean(),
   isProfanityFilterEnabled: z.boolean(),
@@ -76,11 +86,33 @@ const languages = languagesInScope("meeting").map((language) => ({
   label: language.name,
 }));
 
+// The classification values are already the words a reader wants, so they are their own labels —
+// wrapping "Internal" in a lookup that returns "Internal" would only invite the two to drift.
+const minutesClassificationOptions: MinutesClassification[] = ["Internal", "Confidential", "Public"];
+
+// The template values are not. "vn-nd30" and "global-en" are filing-convention ids the backend
+// stores and the document writer switches on; an Owner picking a house style should be reading
+// which convention it is. The Vietnamese decree is named in English here because the shipped UI
+// is English — the value underneath is what travels to the server, and it is unchanged.
+const minutesTemplateOptions: { value: MinutesTemplate; label: string }[] = [
+  { value: "vn-nd30", label: "Vietnamese (Decree 30/2020)" },
+  { value: "global-en", label: "International (English)" },
+];
+
+const describeMinutesTemplate = (value: string) =>
+  minutesTemplateOptions.find((option) => option.value === value)?.label ?? value;
+
 const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   defaultLanguage: "en",
   timezone: "UTC",
   maxActiveRooms: 5,
   artifactRetentionDays: 30,
+  // Both mirror the server's defaults (WorkspaceConstants). They are real postures rather than
+  // placeholders: Internal because the safe direction to be wrong in on a classification is the
+  // closed one, and vn-nd30 because it is the document this system already exports — a workspace
+  // that has never opened this control is not asking for a new house style.
+  minutesClassification: "Internal",
+  minutesTemplate: "vn-nd30",
   invitationExpiryDays: 7,
   voiceCloningEnabled: true,
   isProfanityFilterEnabled: false,
@@ -116,6 +148,8 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
     timezone: settings.timezone || DEFAULT_SETTINGS_FORM_DATA.timezone,
     maxActiveRooms: settings.maxActiveRooms ?? DEFAULT_SETTINGS_FORM_DATA.maxActiveRooms,
     artifactRetentionDays: settings.artifactRetentionDays ?? DEFAULT_SETTINGS_FORM_DATA.artifactRetentionDays,
+    minutesClassification: settings.minutesClassification ?? DEFAULT_SETTINGS_FORM_DATA.minutesClassification,
+    minutesTemplate: settings.minutesTemplate ?? DEFAULT_SETTINGS_FORM_DATA.minutesTemplate,
     invitationExpiryDays: settings.invitationExpiryDays ?? DEFAULT_SETTINGS_FORM_DATA.invitationExpiryDays,
     voiceCloningEnabled: settings.voiceCloningEnabled ?? DEFAULT_SETTINGS_FORM_DATA.voiceCloningEnabled,
     isProfanityFilterEnabled: settings.isProfanityFilterEnabled ?? DEFAULT_SETTINGS_FORM_DATA.isProfanityFilterEnabled,
@@ -599,6 +633,67 @@ export default function WorkspaceSettingsPage() {
               {errors.artifactRetentionDays?.message && (
                 <span className="text-[11px] text-destructive">{errors.artifactRetentionDays.message}</span>
               )}
+            </div>
+
+            {/* Minutes Classification — sits directly under retention on purpose. Retention says
+                how long a record is kept, classification says who it is for, and the template
+                says how it is filed; all three are printed together in the policy block on the
+                face of the minutes document, so splitting them across the page would ask an Owner
+                to assemble the workspace's records policy from three separate places. */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Minutes Classification</span>
+                <span className="text-[11px] text-ink-muted">
+                  Default classification printed on new meeting minutes for this workspace.
+                </span>
+              </div>
+              <Select
+                value={watchAll.minutesClassification}
+                onValueChange={(val) => val && commitTopLevel("minutesClassification", val as MinutesClassification)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+              >
+                <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue>
+                    {(value) => (value ? String(value) : "Select classification")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {minutesClassificationOptions.map((classification) => (
+                    <SelectItem key={classification} value={classification} className="text-xs">
+                      {classification}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Minutes Template */}
+            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-ink">Minutes Template</span>
+                <span className="text-[11px] text-ink-muted">
+                  Layout this workspace&apos;s minutes open in and export as. Neither template replaces
+                  the other — both present the same record.
+                </span>
+              </div>
+              <Select
+                value={watchAll.minutesTemplate}
+                onValueChange={(val) => val && commitTopLevel("minutesTemplate", val as MinutesTemplate)}
+                disabled={isSubmitting || !isOwnerOrAdmin}
+              >
+                <SelectTrigger className="w-[200px] h-8 text-xs bg-surface-2 border-hairline">
+                  <SelectValue>
+                    {(value) => (value ? describeMinutesTemplate(String(value)) : "Select template")}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {minutesTemplateOptions.map((template) => (
+                    <SelectItem key={template.value} value={template.value} className="text-xs">
+                      {template.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Invitation Expiry Days */}
