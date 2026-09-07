@@ -77,7 +77,10 @@ export function MyDubVoicePicker({
     if (ownMatch) return ownMatch.displayName || "My voice";
     const catalogMatch = catalog.find((voice) => voice.id === chosen);
     if (catalogMatch) return catalogMatch.name;
-    return chosen;
+    // WT-649: was `return chosen`, which rendered a raw provider UUID into the select. The
+    // catalogue is empty while its query is in flight and stays empty for a language the TTS
+    // worker has not warmed yet, so this branch is reached in normal use, not just on bad data.
+    return "A voice you picked";
   }, [chosen, profiles, catalog]);
 
   function choose(value: string) {

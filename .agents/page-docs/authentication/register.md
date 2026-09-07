@@ -32,6 +32,48 @@ This document maintains the state, changes, and logic for the Register Page.
 - The submit handler maps `firstName + lastName` into the existing backend `fullName` field.
 - The Google social button is visual only and uses the shared Google mark from `src/components/auth/cinematic-auth-shell.tsx`.
 
+## WT-649 — Field-level validation (latest)
+
+Registration now answers a bad field where the field is, instead of after a round trip.
+
+**What changed**
+
+- `getRegisterSchema` (`src/app/(auth)/register/page.tsx`) gained length ceilings mirroring the
+  server: full name 150, email 255, password 128. Each has a counterpart in the API's
+  `UserConstants`; these exist to name the field, not to be the guard.
+- `fullName` is now `z.string().trim().min(1)`. The order matters: reversed, a name of nothing but
+  spaces passes client validation and is only rejected by the API.
+- The submit `catch` uses the shared `getErrorMessage` from `src/lib/api/errors.ts` instead of
+  reading `response.data.error` by hand.
+
+**Why**
+
+QA entered a name of spaces, and a name longer than the `auth.users.full_name` column. The first
+was refused by the API and surfaced as an anonymous toast on step 3 of the wizard — while the Full
+Name input sits on step 2, so the person was told something was wrong on a screen with nothing to
+fix. The second had no validation rule at all in front of it and failed inside the database, coming
+back as a generic server error.
+
+The API cannot help with field attribution: its 400 body is `{ error, code }` with every message
+space-joined into one string and the field names discarded, so there is nothing for the client to
+map onto a form field. Catching it client-side is what makes the error land on the input.
+
+The hand-rolled `catch` only ever looked at a response body, so every transport failure — offline,
+502, 504, a rate limit — read as "Registration failed. Please try again.", telling the person to
+retry the one thing that could not work yet. `getErrorMessage` already distinguishes those.
+
+**Deliberately not done**
+
+No `maxLength` attribute on the Full Name input. It would make an over-long name impossible to type
+or paste, so the `.max()` message could never appear and the case could only be exercised by curl.
+
+**Testing checklist**
+
+- [x] `npm run lint`, `npm run typecheck` — no findings in the touched files.
+- [ ] Enter only spaces in Full Name on step 2 → inline error, no network request.
+- [ ] Enter 151 characters in Full Name → inline error naming the 150 limit.
+- [ ] Register with the API stopped → a transport message, not "Registration failed".
+
 ## Current Behavior
 
 - Form posts to `API.auth.register`.

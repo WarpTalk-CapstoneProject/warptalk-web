@@ -34,17 +34,24 @@ function bareLanguage(language: string) {
 
 const LANGUAGES = languagesInScope("voiceCatalog");
 
-/** Which catalogue voice this person currently hears other people in, for one language. */
-function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
-  return useMemo(() => {
-    const match = profiles.find(
-      (profile) =>
-        profile.provider === "cartesia" &&
-        profile.providerVoiceId &&
-        bareLanguage(profile.language ?? "") === language,
-    );
-    return match?.providerVoiceId ?? null;
-  }, [profiles, language]);
+/**
+ * Which catalogue voice this person currently hears other people in, for one language.
+ *
+ * Returns the whole profile rather than its id. WT-649: it used to return `providerVoiceId` alone
+ * and throw the rest away — including the `displayName` the API sends on the same object — which
+ * left the caller with nothing but a UUID to render whenever the catalogue lookup missed.
+ */
+function usePreferredVoice(profiles: VoiceProfileDto[], language: string) {
+  return useMemo(
+    () =>
+      profiles.find(
+        (profile) =>
+          profile.provider === "cartesia" &&
+          profile.providerVoiceId &&
+          bareLanguage(profile.language ?? "") === language,
+      ) ?? null,
+    [profiles, language],
+  );
 }
 
 /**
@@ -73,7 +80,7 @@ export function LibraryVoiceList({
 }) {
   const catalogQuery = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
-  const currentVoiceId = usePreferredVoiceId(profiles, language);
+  const currentVoiceId = usePreferredVoice(profiles, language)?.providerVoiceId ?? null;
 
   const voices = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
   const filtered = useMemo(() => {
@@ -184,21 +191,37 @@ export function ListeningVoiceSummary({
   profiles: VoiceProfileDto[];
   language: string;
 }) {
-  const currentVoiceId = usePreferredVoiceId(profiles, language);
-  const { data: catalog = [] } = useVoiceCatalog(language);
+  const preferred = usePreferredVoice(profiles, language);
+  const currentVoiceId = preferred?.providerVoiceId ?? null;
+  const { data: catalog = [], isPending: catalogPending } = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
 
+  /**
+   * WT-649. This used to end `?? currentVoiceId`, so a lookup miss printed a Cartesia UUID where
+   * a voice name belongs — and it missed routinely, not only on bad data: `catalog` defaults to
+   * `[]` while the query is in flight, so the id was rendered on EVERY first paint.
+   *
+   * Note what the fallback is not. "Automatic" means no preference is set, and the Preview and
+   * Remove controls below render precisely when one IS set — so using it as a placeholder would
+   * put a contradiction on screen. While the catalogue is still loading we say nothing and let
+   * the row settle; a stored displayName answers the moment it is there.
+   */
   const name = useMemo(() => {
     if (!currentVoiceId) return null;
-    return catalog.find((voice) => voice.id === currentVoiceId)?.name ?? currentVoiceId;
-  }, [catalog, currentVoiceId]);
+    const fromCatalog = catalog.find((voice) => voice.id === currentVoiceId)?.name;
+    return fromCatalog ?? preferred?.displayName ?? null;
+  }, [catalog, currentVoiceId, preferred]);
+
+  const label = currentVoiceId
+    ? (name ?? (catalogPending ? "…" : "A voice you picked"))
+    : "Automatic";
 
   return (
     <WorkspaceRailModule
       title="Voices you hear"
       description={`Used for a speaker in ${getLanguageName(language)} who has not picked a voice of their own.`}
     >
-      <p className="text-[13px] font-medium text-ink">{name ?? "Automatic"}</p>
+      <p className="text-[13px] font-medium text-ink">{label}</p>
       {currentVoiceId ? (
         <div className="flex items-center justify-between gap-2">
           <VoicePreviewButton
