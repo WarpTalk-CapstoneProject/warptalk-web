@@ -52,14 +52,22 @@ assert.doesNotMatch(
 assert.match(
   rail,
   /"\[--reading-measure:66ch\]"/,
-  "The measure is declared on the ancestor of both regions, because the pip's presence is what "
-    + "decides it.",
+  "The measure is declared on the ancestor of both regions, because it is a fact about the pair "
+    + "rather than about either column.",
 );
-assert.match(
+// This assertion is the reverse of the one it replaces, and the reversal is the point.
+//
+// It used to require `xl:[--reading-measure:52ch]` whenever the pip was open, on the theory that
+// somebody glancing between a picture and the text reads in shorter bursts. The flaw was that the
+// pip opens BY DEFAULT: the narrowest measure became the default state, and 52ch of text sitting
+// in a 940px column read as a broken layout rather than as a considered one. Reading width must
+// not move because a video thumbnail is on screen. If a real compare mode is built later, that
+// mode can own the change — and this assertion should be revisited then, not deleted quietly.
+assert.doesNotMatch(
   rail,
-  /xl:\[--reading-measure:52ch\]/,
-  "Opening the recording pip must narrow the measure to 52ch — a reader comparing against a "
-    + "recording reads in bursts, and 66ch is a measure for reading straight through.",
+  /--reading-measure:52ch/,
+  "The measure must not narrow just because the recording pip is open. 66ch is the measure in "
+    + "both states.",
 );
 
 // ── Vertical breathing room, and the gutter ─────────────────────────────────
@@ -89,14 +97,20 @@ assert.match(
   "The gutter must be mono and tabular, or the times do not form an edge the eye can run down.",
 );
 
-// ── The rail is 380px, and 380px is a decision ──────────────────────────────
+// ── The rail's width is a decision, and the number moved once ───────────────
 
 // A summary is ~15 lines read in 30 seconds; the transcript beside it is ~600 lines read in ten
 // minutes. `1fr 1fr` divides the screen by nominal importance. This divides it by reading volume.
+//
+// It started at 380/320 and is 420/360 now. The rail was widened once the summary stopped being a
+// filtered extract of itself: it carries every point of the document, not only the ones with a
+// citation, so it has more to hold than the number was chosen for. The principle is unchanged and
+// is what this assertion is really pinning — a fixed rail sized to its own content, never a
+// fraction of the viewport and never a half-and-half split.
 assert.match(
   rail,
-  /lg:grid-cols-\[minmax\(0,1fr\)_320px\] xl:grid-cols-\[minmax\(0,1fr\)_380px\]/,
-  "Two regions: 380px of rail at ≥1280px, 320px between 1024 and 1280. Never a half-and-half "
+  /lg:grid-cols-\[minmax\(0,1fr\)_360px\] xl:grid-cols-\[minmax\(0,1fr\)_420px\]/,
+  "Two regions: 420px of rail at ≥1280px, 360px between 1024 and 1280. Never a half-and-half "
     + "split, and never a third column.",
 );
 // <1024px stacks, and the summary goes ON TOP: on a small screen people read the summary and then
@@ -137,14 +151,16 @@ assert.doesNotMatch(
 
 // ── Both directions of the sync, and the one that gets forgotten ────────────
 
+// `atMs` rather than `claim.atMs`: the interactive branch narrows the nullable field to a local
+// first, because a point with no moment is rendered as text and never reaches this button at all.
 assert.match(
   rail,
-  /onMouseEnter=\{\(\) => onMark\(claim\.atMs\)\}[\s\S]{0,200}?onFocus=\{\(\) => onMark\(claim\.atMs\)\}/,
+  /onMouseEnter=\{\(\) => onMark\(atMs\)\}[\s\S]{0,200}?onFocus=\{\(\) => onMark\(atMs\)\}/,
   "Pointing at a claim must mark its paragraph for a keyboard reader too, not only for a mouse.",
 );
 assert.match(
   rail,
-  /onClick=\{\(\) => onJumpToMoment\(claim\.atMs\)\}/,
+  /onClick=\{\(\) => onJumpToMoment\(atMs\)\}/,
   "Clicking a claim must take the reader to the sentence it came from.",
 );
 // The direction that earns the layout. Without it, two columns of text side by side are just two
@@ -162,18 +178,32 @@ assert.match(
     + "comparison of the rail's own — a claim anchored to the pause between two turns has to land.",
 );
 
-// A claim that cannot be checked is not rendered as though it could be. It is counted, and the
-// reader is pointed at the tab where the whole summary is readable.
-assert.match(
+// This rule was inverted, and the note is the record of why.
+//
+// It used to require that a claim with no cited moment be dropped from the rail: a column whose
+// argument is that assertions have sources should not open with an assertion that has none. The
+// principle is right; applying it by DELETING the claim was not. It left the rail showing a
+// filtered, reordered extract while presenting itself as the summary, and the only way to read the
+// rest was a button to another tab. Readers could not tell a short summary from a censored one.
+//
+// The honest rendering is to show every point and let the ones with no moment look like what they
+// are: no jump, no highlight, and the words "no moment recorded" where the timestamp would be.
+assert.doesNotMatch(
   rail,
   /if \(item\.atMs === null\) return;/,
-  "A summary claim with no cited moment must not be rendered in the rail — a column whose whole "
-    + "argument is that assertions have sources cannot open with an assertion that has none.",
+  "Every summary point must render in the rail. A point with no moment loses its jump, not its "
+    + "place in the document.",
+);
+assert.match(
+  rail,
+  /no moment recorded/,
+  "A point with no moment must say so in place of a timestamp, so it cannot be mistaken for one "
+    + "the transcript vouches for.",
 );
 assert.match(
   rail,
   /uncitedCount/,
-  "The claims the rail refuses must be counted and pointed at, never silently dropped.",
+  "How much of the summary the transcript cannot vouch for must be stated, never left implicit.",
 );
 
 // ── The keyboard, and the paper ─────────────────────────────────────────────

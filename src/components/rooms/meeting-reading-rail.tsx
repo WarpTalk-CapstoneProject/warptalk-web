@@ -61,7 +61,16 @@ type RailClaim = {
   heading: string | null;
   text: string;
   owner?: string;
-  atMs: number;
+  /**
+   * When in the meeting this point was made, or null when the summary recorded no moment for it.
+   *
+   * Null used to mean "drop this row". That was wrong, and wrong in a way that was hard to see:
+   * the rail stopped being the summary and became a filtered extract of it, and the only route to
+   * the rest was a button that sent the reader to another tab. A summary you cannot finish reading
+   * where you are is not beside the transcript at all. Every point renders now; the ones with no
+   * moment simply do not offer a jump, and say so.
+   */
+  atMs: number | null;
 };
 
 type RailTab = "summary" | "attendees";
@@ -94,21 +103,8 @@ export function TranscriptReadingLayout({
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
-  /**
-   * Whether the pip is on screen, and — because of that — how wide a line of this meeting is.
-   *
-   * The two are one decision. A reader comparing the transcript against the recording is reading in
-   * short bursts between glances at the picture, which is what 52ch is for; a reader with the
-   * picture put away is reading continuously, which is what 66ch is for. Tying the measure to the
-   * pip's own toggle means the reader sets both with one button and can see what the button did,
-   * instead of a hidden "compare mode" that changes the text width for reasons nobody can trace.
-   *
-   * The narrower measure is applied only at `xl`, because that is the only width at which the
-   * picture is actually drawn — below it the pip is already a bare transport bar and the column
-   * gets its full 66ch back.
-   */
+  /** Whether the recording is shown as a picture or folded away to its transport bar. */
   const [pipOpen, setPipOpen] = useState(true);
-  const hasPip = Boolean(recording) && pipOpen;
 
   return (
     <ReadingSyncProvider>
@@ -120,12 +116,16 @@ export function TranscriptReadingLayout({
              <1024px: stacked, and the SUMMARY GOES FIRST — on a small screen people read the
              summary and then decide whether the transcript is worth their next ten minutes, so
              putting the transcript above it buries the thing that answers that question. */
-          "grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_380px]",
-          // The measure is declared HERE, on the ancestor of both regions, because it is a fact
-          // about the pair and not about the column: it is the pip's presence that decides it.
-          // 52ch only at `xl`, which is the only width where the pip is actually a picture.
+          "grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px]",
+          /* The measure is declared HERE, on the ancestor of both regions, because it is a fact
+             about the pair rather than about either column.
+             It is 66ch and it stays 66ch. It used to drop to 52ch whenever the pip was showing,
+             on the theory that somebody glancing between picture and text reads in shorter
+             bursts — but the pip shows BY DEFAULT, so the default state was the narrowest one,
+             and 52ch of text sitting in a 940px column read as a broken layout rather than as a
+             considered measure. The reading width should not move because a video thumbnail is
+             on screen; if a genuine compare mode arrives later, that mode can own the change. */
           "[--reading-measure:66ch]",
-          hasPip ? "xl:[--reading-measure:52ch]" : "",
         )}
       >
         <div className="order-2 min-w-0 lg:order-none">{transcript}</div>
@@ -174,46 +174,43 @@ function ReadingRail({
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
 
+  /**
+   * The whole summary, in the summary's own order.
+   *
+   * Two earlier decisions are reversed here, and both for the same reason. Uncited points were
+   * skipped, and the survivors were re-sorted into meeting order. Each was defensible alone: a
+   * point with no moment cannot be checked, and a list that jumps back and forth makes the
+   * highlight appear to fly around while you scroll. Together they turned the rail into a filtered,
+   * reordered extract that no longer matched the summary anyone had read on the Summary tab — the
+   * reader was left pressing "Read the whole summary" to see the document they thought they were
+   * already looking at.
+   *
+   * So: every point, in the order the summary itself puts them, grouped under their own section
+   * headings. Sync is unaffected — it keys off the points that DO carry a moment, and the ones
+   * that do not simply never light up, which is the honest rendering of a claim with no source.
+   */
   const claims = useMemo<RailClaim[]>(() => {
-    const rows: Omit<RailClaim, "heading">[] = [];
+    const rows: RailClaim[] = [];
     for (const section of sections ?? []) {
       section.items.forEach((item, index) => {
-        if (item.atMs === null) return;
         rows.push({
           key: `${section.key}-${index}`,
           section: section.title,
+          // Printed when the section CHANGES rather than on every row, the same rule the
+          // transcript's language chip follows.
+          heading: index === 0 ? section.title : null,
           text: item.text,
           owner: item.owner,
           atMs: item.atMs,
         });
       });
     }
-    // In meeting order, not template order. The rail is read down the page beside a transcript
-    // that is also read down the page, and a summary whose items jump backwards and forwards
-    // through the meeting makes the highlight appear to fly around at random while you scroll.
-    rows.sort((left, right) => left.atMs - right.atMs);
-
-    // The heading is decided HERE and not while rendering the list, because deciding it while
-    // rendering means carrying "what was the last section" across iterations — a variable that
-    // outlives the render it belongs to, which is the one thing a render must never do.
-    //
-    // Printed when the section CHANGES, the same rule the transcript's language chip follows and
-    // for the same reason: ordering by when things were said means one section can be interrupted
-    // by another and come back.
-    return rows.map((row, index) => ({
-      ...row,
-      heading: row.section === rows[index - 1]?.section ? null : row.section,
-    }));
+    return rows;
   }, [sections]);
 
   const uncitedCount = useMemo(
-    () =>
-      (sections ?? []).reduce(
-        (count, section) =>
-          count + section.items.filter((item) => item.atMs === null).length,
-        0,
-      ),
-    [sections],
+    () => claims.filter((claim) => claim.atMs === null).length,
+    [claims],
   );
 
   /**
@@ -226,10 +223,12 @@ function ReadingRail({
    * function the jump uses.
    */
   const claimsByAnchor = useMemo(() => {
-    const citations: ReadingCitation[] = claims.map((claim) => ({
-      key: claim.key,
-      atMs: claim.atMs,
-    }));
+    // Only the points that carry a moment take part. A point with no moment is still rendered —
+    // it is part of the summary — but there is no block for it to light up, and inventing one
+    // would be the same lie as inventing the citation.
+    const citations: ReadingCitation[] = claims
+      .filter((claim): claim is RailClaim & { atMs: number } => claim.atMs !== null)
+      .map((claim) => ({ key: claim.key, atMs: claim.atMs }));
     return groupCitationsByAnchor(citations, sync?.anchors ?? []);
   }, [claims, sync?.anchors]);
 
@@ -417,20 +416,24 @@ function RailSummary({
         </div>
       ))}
 
+      {/* A footnote about the summary as a whole, not a door out of it. Every point above is
+          readable here; this only says how much of it the transcript can vouch for. The Summary
+          tab is still offered because it carries what the rail does not — the download and the
+          rewrite controls — but nobody has to go there to finish reading. */}
       {uncitedCount > 0 ? (
         <div className="mt-3 border-t border-border px-2 pt-2.5">
           <p className="text-[11px] leading-5 text-ink-muted">
-            {uncitedCount} more {uncitedCount === 1 ? "point is" : "points are"} in this summary
-            with no moment recorded, so {uncitedCount === 1 ? "it" : "they"} cannot be checked
-            against the transcript from here.
+            {uncitedCount} of these {uncitedCount === 1 ? "points has" : "points have"} no moment
+            recorded, so {uncitedCount === 1 ? "it" : "they"} cannot be checked against the
+            transcript.{" "}
+            <button
+              type="button"
+              onClick={onOpenSummaryTab}
+              className="underline underline-offset-2 transition-colors hover:text-ink"
+            >
+              Open the Summary tab
+            </button>
           </p>
-          <button
-            type="button"
-            onClick={onOpenSummaryTab}
-            className="mt-1.5 rounded-md border border-border bg-surface-1 px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-surface-2"
-          >
-            Read the whole summary
-          </button>
         </div>
       ) : null}
     </div>
@@ -448,17 +451,47 @@ function RailClaimButton({
   onMark: (atMs: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
 }) {
+  const body = (
+    <>
+      <span className="block text-[12.5px] leading-[1.55] text-ink">
+        {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
+        {claim.text}
+      </span>
+      <span
+        className={cn(
+          "mt-1 block font-mono text-[10px] tabular-nums transition-colors",
+          claim.atMs === null ? "text-ink-subtle" : lit ? "text-ink" : "text-ink-subtle",
+        )}
+      >
+        {claim.atMs === null ? "no moment recorded" : formatCitationTime(claim.atMs)}
+      </span>
+    </>
+  );
+
+  /* A point with no moment is text, not a control. Rendering it as a button that looks like every
+     other one and then does nothing on click is worse than not offering the affordance: the
+     reader learns the rail is unreliable rather than learning this particular claim is
+     unsourced. */
+  if (claim.atMs === null) {
+    return (
+      <div className="mb-0.5 block w-full rounded-md border-l-2 border-l-transparent px-2.5 py-2 text-left">
+        {body}
+      </div>
+    );
+  }
+
+  const atMs = claim.atMs;
   return (
     <button
       type="button"
       // Focus as well as hover, in both directions. A keyboard reader tabbing down this rail is
       // doing exactly what a mouse reader is doing with the pointer, and a highlight that only
       // answers to a pointer is a highlight half the readers of this page never see.
-      onMouseEnter={() => onMark(claim.atMs)}
+      onMouseEnter={() => onMark(atMs)}
       onMouseLeave={() => onMark(null)}
-      onFocus={() => onMark(claim.atMs)}
+      onFocus={() => onMark(atMs)}
       onBlur={() => onMark(null)}
-      onClick={() => onJumpToMoment(claim.atMs)}
+      onClick={() => onJumpToMoment(atMs)}
       title="Go to this moment in the transcript"
       className={cn(
         "mb-0.5 block w-full rounded-md border-l-2 px-2.5 py-2 text-left transition-colors",
@@ -467,18 +500,7 @@ function RailClaimButton({
           : "border-l-transparent hover:border-l-primary hover:bg-surface-1",
       )}
     >
-      <span className="block text-[12.5px] leading-[1.55] text-ink">
-        {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
-      </span>
-      <span
-        className={cn(
-          "mt-1 block font-mono text-[10px] tabular-nums transition-colors",
-          lit ? "text-ink" : "text-ink-subtle",
-        )}
-      >
-        {formatCitationTime(claim.atMs)}
-      </span>
+      {body}
     </button>
   );
 }
