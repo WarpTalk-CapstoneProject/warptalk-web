@@ -15,6 +15,7 @@ import {
   isPaywallExemptPath,
   paywallRedirectPath,
 } from "../workspace-paywall.ts";
+import { isWorkspaceActivationPath } from "../../workspace/workspace-routes.ts";
 import type { SubscriptionDto } from "../../../types/billing.ts";
 
 const NOW = Date.parse("2026-08-18T00:00:00Z");
@@ -108,26 +109,34 @@ test("nothing is decided while the answer is still in flight", () => {
 
 // ── Must not cover the page that unlocks it ──────────────────────────────────
 
-test("the checkout stays reachable on an unpaid workspace", () => {
+test("the activation landing stays reachable on an unpaid workspace", () => {
   // The one page that must never be covered, because it is the page that uncovers everything
-  // else. It is also where paywallRedirectPath sends the buyer, so if this ever stopped being
+  // else. It is also where paywallRedirectPath sends everybody, so if this ever stopped being
   // exempt the redirect would target a blocked route and loop.
-  for (const pathname of [`/${SLUG}/payment/plans`, `/${SLUG}/payment`]) {
-    assert.deepEqual(
-      decidePaywall({ ...base, pathname, subscription: null }),
-      { kind: "open" },
-      `${pathname} must stay open, or the workspace can never be paid for`,
-    );
-  }
+  assert.deepEqual(
+    decidePaywall({ ...base, pathname: `/${SLUG}/activate`, subscription: null }),
+    { kind: "open" },
+    "the activation landing must stay open, or the workspace can never be paid for",
+  );
 });
 
 test("the redirect target is itself exempt, so the hold cannot loop", () => {
   assert.equal(isPaywallExemptPath(paywallRedirectPath(SLUG), SLUG), true);
 });
 
-test("settings is gated too — WT-570 holds the buyer on the payment page", () => {
+test("the in-portal plans page is NOT the escape hatch any more", () => {
+  // Reversed from WT-570, and this is the whole point of the landing. `payment/plans` lives in
+  // the (app) route group, so holding an unpaid buyer there drew the entire portal around them —
+  // sidebar, tabs, header, every destination bouncing back. It is the plan-MANAGEMENT screen for
+  // a workspace that already pays; an unpaid one is redirected to /activate like any other page.
+  for (const pathname of [`/${SLUG}/payment/plans`, `/${SLUG}/payment`]) {
+    assert.equal(isPaywallExemptPath(pathname, SLUG), false, `${pathname} must be gated`);
+  }
+});
+
+test("settings is gated too — the unpaid workspace has exactly one page", () => {
   // Deliberately reversed from WT-515, where settings was exempt so the "Choose a plan" button
-  // had somewhere to go. The buyer is now put ON the checkout instead of being handed a link to
+  // had somewhere to go. The buyer is now put ON the landing instead of being handed a link to
   // it, so an open Settings would just be somewhere to wander unpaid.
   for (const pathname of [
     `/${SLUG}/settings`,
@@ -154,4 +163,12 @@ test("a path outside this workspace is none of the paywall's business", () => {
 test("a settings-like prefix on another segment is not exempt", () => {
   // Matched on the whole segment, not as a prefix, so /settingsomething cannot slip through.
   assert.equal(isPaywallExemptPath(`/${SLUG}/settingsomething`, SLUG), false);
+  assert.equal(isPaywallExemptPath(`/${SLUG}/activated`, SLUG), false);
+});
+
+test("the landing the paywall redirects to is the one the shell renders bare", () => {
+  // Two separate rules, in two files, that must name the same route: this one decides what stays
+  // open, and isWorkspaceActivationPath decides what the app shell draws no portal around. If
+  // they ever disagree, the paywall redirects into the portal — which is the bug this replaced.
+  assert.equal(isWorkspaceActivationPath(paywallRedirectPath(SLUG)), true);
 });
