@@ -15,21 +15,13 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Button } from "@/components/ui/button";
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
-import { ArtifactReader } from "@/components/artifacts/artifact-reader";
-import { useArtifactLibrary, useDrawUpMinutes } from "@/hooks/use-artifact-library";
+import { useArtifactLibrary } from "@/hooks/use-artifact-library";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import {
-  countByKind,
-  groupEntriesByMeeting,
-  narrowLibrary,
-  preferredEntry,
-} from "@/lib/meeting/artifact-library";
+import { countByKind, groupEntriesByMeeting, narrowLibrary } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind } from "@/lib/meeting/artifact-library";
-import { toast } from "sonner";
 
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { cn } from "@/lib/utils";
 
 /**
  * Artifacts — everything WarpTalk wrote down, in one place.
@@ -76,16 +68,6 @@ export default function ArtifactsPage() {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
   const [mineOnly, setMineOnly] = useState(false);
-  /**
-   * The MEETING being read, and which of its records.
-   *
-   * Two fields rather than one artifact id, because they change independently: switching tabs
-   * inside a meeting must not close it, and opening another meeting must not carry the previous
-   * one's tab onto a meeting that has no record of that kind.
-   */
-  const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [selectedKind, setSelectedKind] = useState<ArtifactKind | null>(null);
-
   const library = useArtifactLibrary(activeWorkspaceId, { search: query });
 
   const entries = useMemo(
@@ -106,55 +88,16 @@ export default function ArtifactsPage() {
   // surfaces the meeting whose body matched.
   const groups = useMemo(() => groupEntriesByMeeting(entries), [entries]);
 
-  const selectedGroup = groups.find((group) => group.roomId === selectedRoomId) ?? null;
   /**
-   * Falls back to `preferredEntry` whenever the chosen kind is not in this meeting.
+   * No ambient context from the LIST.
    *
-   * Not only for the first open: narrowing to Minutes while reading a transcript would otherwise
-   * leave the panel pointing at a record the group no longer holds, and it would render nothing
-   * while the card beside it stayed selected.
+   * The assistant's ambient context must name a real entity — the sibling rule "@mention options
+   * always carry a real entity" is the same requirement from the other side. This page no longer
+   * has one: reading a record happens at `/artifacts/{roomId}`, and that page registers the
+   * meeting it is showing. Registering a context here with a count and a filter name would hand
+   * WarpBot something it cannot answer questions about.
    */
-  const selected = selectedGroup
-    ? selectedGroup.entries.find((entry) => entry.kind === selectedKind) ??
-      preferredEntry(selectedGroup)
-    : null;
-
-  const drawUpMinutes = useDrawUpMinutes(activeWorkspaceId);
-
-  /**
-   * Whether the record being read is a summary this viewer could turn into a biên bản.
-   *
-   * All three conditions are answered from the UNNARROWED library, because "does this meeting
-   * already have minutes?" must not change with the filter chips — a Summary-only view would
-   * otherwise offer to draw up minutes that exist and are simply hidden.
-   *
-   * The last condition is the one worth keeping. A summary with no body is a meeting nobody spoke
-   * in, and drawing minutes from it consumes a number from the workspace's yearly sequence to
-   * produce an attendance list with nothing under it. The server refuses that too; this is so the
-   * product does not offer it and then explain itself afterwards.
-   */
-  const canDrawUpMinutes =
-    selected?.kind === "summary" &&
-    Boolean(selected.body) &&
-    selected.hostId === viewerId &&
-    !library.entries.some(
-      (entry) => entry.kind === "minutes" && entry.roomId === selected.roomId,
-    );
-
-  useRegisterAssistantContext(
-    selected
-      ? {
-          pageType: "history",
-          entityId: selected.roomId,
-          workspaceId: activeWorkspaceId ?? "",
-          snapshot: {
-            title: selected.roomTitle,
-            record: selected.title,
-            status: selected.statusLabel,
-          },
-        }
-      : null,
-  );
+  useRegisterAssistantContext(null);
 
   return (
     <WorkspacePage>
@@ -217,63 +160,13 @@ export default function ArtifactsPage() {
           ) : entries.length === 0 ? (
             <EmptyState hasFilters={Boolean(query) || kind !== "all" || mineOnly} />
           ) : (
-            <div
-              className={cn(
-                "grid min-h-[560px]",
-                selected && "lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_540px]",
-              )}
-            >
-              <div className="min-w-0 overflow-y-auto pb-4 pr-4">
-                {/* One column narrower than a plain gallery once the reader is open, so the cards
-                    keep their proportions instead of squashing into letterboxes. */}
-                <div
-                  className={cn(
-                    "grid gap-3.5 sm:grid-cols-2",
-                    selected ? "xl:grid-cols-3" : "lg:grid-cols-3 xl:grid-cols-4",
-                  )}
-                >
-                  {groups.map((group) => (
-                    <ArtifactCard
-                      key={group.roomId}
-                      group={group}
-                      selected={selectedGroup?.roomId === group.roomId}
-                      onSelect={() =>
-                        setSelectedRoomId((current) => {
-                          // Re-opening a meeting starts from its most readable record rather than
-                          // from whichever tab the last meeting was left on.
-                          setSelectedKind(null);
-                          return current === group.roomId ? null : group.roomId;
-                        })
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {selectedGroup && selected ? (
-                <ArtifactReader
-                  group={selectedGroup}
-                  entry={selected}
-                  onSelectKind={setSelectedKind}
-                  workspaceSlug={workspaceSlug}
-                  onClose={() => {
-                    setSelectedRoomId(null);
-                    setSelectedKind(null);
-                  }}
-                  onDrawUpMinutes={
-                    canDrawUpMinutes
-                      ? () =>
-                          drawUpMinutes.mutate(selected.roomId, {
-                            onSuccess: (minutes) =>
-                              toast.success(`Minutes ${minutes.minutesNo} drawn up.`),
-                            onError: () =>
-                              toast.error("Could not draw up the minutes for this meeting."),
-                          })
-                      : undefined
-                  }
-                  drawingUpMinutes={drawUpMinutes.isPending}
-                />
-              ) : null}
+            /* One column, always. The second used to hold the reader; a record opens at its own
+               URL now, so the grid gets the whole width back and the cards stop having two sets
+               of proportions depending on whether something is selected. */
+            <div className="grid gap-3.5 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {groups.map((group) => (
+                <ArtifactCard key={group.roomId} group={group} workspaceSlug={workspaceSlug} />
+              ))}
             </div>
           )}
         </section>
