@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IMAGE_EXTENSIONS,
   WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL,
   WORKSPACE_DOCUMENT_INGESTION_STATUS,
   WORKSPACE_DOCUMENT_SOURCE_TYPE,
@@ -76,7 +77,6 @@ const uploadSchema = z.object({
   isAiAllowed: z.boolean(),
 });
 
-const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
 const ACCEPTED_UPLOAD_EXTENSIONS =
   ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
 

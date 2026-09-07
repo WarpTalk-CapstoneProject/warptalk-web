@@ -164,6 +164,51 @@ test("records every merged segment id so a suggestion can find its bubble", () =
   assert.deepEqual(groups[0].mergedSegmentIds, ["segment-1", "segment-2", "segment-3"]);
 });
 
+test("keeps a sentence in one bubble when its two chunks overlap in time", () => {
+  // The exact production shape: a turn that hit the 6s chunk_duration_ms cap, followed by the
+  // short chunk carrying the rest of the same sentence. Before the STT worker stopped stamping
+  // segments by their PUBLISH time, the second one started ~4.8s BEFORE the first one ended, and
+  // the old `gapMs >= 0` clause read that as a new utterance — so the sentences that had been cut
+  // mid-word were exactly the ones split across two bubbles.
+  const groups = groupTranscriptSegments([
+    segment({ originalText: "chúng ta sẽ bắt đầu bằng", startTimeMs: 10_000, endTimeMs: 16_000 }),
+    segment({
+      segmentId: "segment-2",
+      originalText: "phần tổng quan",
+      startTimeMs: 11_200,
+      endTimeMs: 12_400,
+    }),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].originalText, "chúng ta sẽ bắt đầu bằng phần tổng quan");
+});
+
+test("keeps a breath pause inside one bubble", () => {
+  // ~860ms is the vad_short_turn_hangover_ms boundary — i.e. a chunk edge, not a sentence end.
+  // A Vietnamese speaker draws breath there constantly; a bubble per breath is the complaint.
+  const groups = groupTranscriptSegments([
+    segment({ startTimeMs: 1_000, endTimeMs: 2_000 }),
+    segment({ segmentId: "segment-2", originalText: "à khoan", startTimeMs: 2_860, endTimeMs: 3_500 }),
+  ]);
+
+  assert.equal(groups.length, 1);
+});
+
+test("starts a new bubble once the speaker has genuinely stopped", () => {
+  const groups = groupTranscriptSegments([
+    segment({ startTimeMs: 1_000, endTimeMs: 2_000 }),
+    segment({
+      segmentId: "segment-2",
+      originalText: "Sang phần tiếp theo",
+      startTimeMs: 2_000 + 2_501,
+      endTimeMs: 9_000,
+    }),
+  ]);
+
+  assert.equal(groups.length, 2);
+});
+
 test("starts a fresh merged id list for each separate utterance", () => {
   const groups = groupTranscriptSegments([
     segment(),
