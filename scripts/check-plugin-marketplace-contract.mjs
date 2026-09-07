@@ -93,6 +93,99 @@ if (!page.includes("withEffectiveConnectionStatus")) {
   );
 }
 
+// ---------------------------------------------------------------------------------------------
+// SILENT DATA LOSS: one disconnect ends the grant behind several plugins
+//
+// A connection is keyed by provider, not by plugin key, so DisconnectAsync ends the Google grant
+// and Drive, Calendar and Meet all go with it. A user disconnecting Drive to tidy up used to lose
+// the other two without ever being told. This block is a guard against that warning being
+// refactored away in a tidy-up of its own — the dialog looks perfectly reasonable without it.
+// ---------------------------------------------------------------------------------------------
+for (const token of ["pluginsSharingConnection", "sharedConnectionWarning"]) {
+  if (!page.includes(token)) {
+    throw new Error(
+      `Plugins page must call '${token}': disconnecting one plugin ends the shared OAuth grant, and the other plugins behind it have to be named before the user confirms, not discovered afterwards.`,
+    );
+  }
+}
+if (!page.includes("sharedConnectionPlugins={sharedConnectionPlugins}")) {
+  throw new Error(
+    "The disconnect dialog must be handed the sibling list; computing it and not passing it warns nobody.",
+  );
+}
+if (!page.includes('data-testid="shared-connection-warning"')) {
+  throw new Error(
+    "The disconnect/remove confirmation must render the shared-connection warning, not merely compute it.",
+  );
+}
+// The grouping is catalog data. A key or a provider name spelled out here is the frontend
+// re-deciding something the catalog already knows, and it is wrong the day a second multi-product
+// provider is added or these three rows are renamed.
+for (const token of ['"google"', "'google'", "google_drive", "google_calendar", "google_meet"]) {
+  if (page.includes(token)) {
+    throw new Error(
+      `Plugins page must not hardcode '${token}'. Which plugins share a connection is derived from the catalog, by provider.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// WORKSPACE PLUGIN POLICY
+//
+// A blocked row is returned by the catalog rather than hidden, deliberately: it may be holding a
+// live OAuth grant, and this page is where it gets revoked. So the row stays, adding it goes dead,
+// and disconnect and remove do not.
+// ---------------------------------------------------------------------------------------------
+if (!page.includes("pluginWorkspaceBlock")) {
+  throw new Error(
+    "Plugins page must read workspacePolicyBlockReason through pluginWorkspaceBlock; a row the workspace refuses cannot look like a row that works.",
+  );
+}
+if (!page.includes('data-testid="workspace-policy-block"')) {
+  throw new Error("A row refused by workspace policy must state the reason on the page.");
+}
+if (!page.includes("isBlockedFromAdding")) {
+  throw new Error(
+    "The primary action on a row refused by workspace policy must be disabled, not left to fail at the API.",
+  );
+}
+// The one thing this must not do is take away the way out. If either handler stops being reachable
+// on a blocked row, a user whose workspace narrowed its allowlist is left holding a grant with no
+// button that revokes it.
+for (const token of ["onDisconnect={", "onRemove={"]) {
+  if (!page.includes(token)) {
+    throw new Error(
+      `Plugins page must keep '${token}' wired unconditionally — disconnect and remove are never gated by workspace policy.`,
+    );
+  }
+}
+// Connecting is the only action in the dialog that workspace policy gates. Spelled out so that
+// widening it to the disconnect/remove buttons has to be a deliberate edit here as well.
+if (!page.includes("disabled={isConnecting || workspaceBlock !== null}")) {
+  throw new Error(
+    "In the plugin dialog, workspace policy must gate the connect button and nothing else.",
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// The heading has to be true
+//
+// "Featured" sat above the whole catalog and nothing selected the rows under it. isFeatured,
+// sortOrder and category are on the admin catalog DTOs only, so the user-facing page cannot know
+// which rows are featured — and a heading that claims a distinction the data cannot make gets more
+// wrong with every row added.
+// ---------------------------------------------------------------------------------------------
+if (/<h2[^>]*>Featured<\/h2>/.test(page)) {
+  throw new Error(
+    "Plugins page must not head the whole catalog 'Featured'. isFeatured is not on the user-facing catalog DTO, so nothing selects those rows.",
+  );
+}
+if (!page.includes("localeCompare")) {
+  throw new Error(
+    "The catalog must be ordered by something stable rather than by whatever order the query returned.",
+  );
+}
+
 if (!personalRoute.includes("@/components/assistant/plugins/plugins-page")) {
   throw new Error("Personal /settings/plugins route must render the plugins page component.");
 }

@@ -7,9 +7,11 @@ import {
   MagnifyingGlass,
   Plugs,
   PlugsConnected,
+  Prohibit,
   PuzzlePiece,
   Spinner,
   Trash,
+  Warning,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -26,7 +28,14 @@ import {
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
-import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import {
+  formatPluginLabelList,
+  pluginWorkspaceBlock,
+  pluginsSharingConnection,
+  sharedConnectionWarning,
+  withEffectiveConnectionStatus,
+  type PluginWorkspaceBlock,
+} from "@/lib/assistant/plugin-connection";
 import { cn } from "@/lib/utils";
 import type { AssistantPluginCatalogItemDto } from "@/types/assistant";
 
@@ -44,9 +53,53 @@ const CATALOG_TWO_COLUMN_MINIMUM = 4;
 function pluginActionLabel(plugin: AssistantPluginCatalogItemDto) {
   if (plugin.installationStatus === "disabled") return "Enable";
   if (plugin.installationStatus !== "installed") return "Install";
+  // An installed row the workspace refuses cannot be connected or reconnected, so offering either
+  // word would be an instruction that leads to a refusal. "Manage" is the honest one: the dialog
+  // it opens still lets the plugin be disconnected and removed.
+  if (pluginWorkspaceBlock(plugin)) return "Manage";
   if (plugin.connectionStatus === "connected") return "Manage";
   if (plugin.connectionStatus === "expired" || plugin.connectionStatus === "revoked") return "Reconnect";
   return "Connect";
+}
+
+/**
+ * A row the workspace's plugin policy refuses.
+ *
+ * The row stays on the page rather than disappearing, which is the backend's choice as much as
+ * this page's: a user whose workspace narrowed its allowlist under an already-connected plugin
+ * still holds a live OAuth grant, and hiding the row would leave them no way to revoke it. So
+ * install and connect are refused here and disconnect and remove are not.
+ *
+ * `block.reason` is the backend's own sentence, printed verbatim. `block.remedy` is the part a
+ * member can act on, and it differs by refusal: a workspace that permits some plugins but not this
+ * one is fixed by an admin adding one key, and a workspace with personal plugins switched off
+ * entirely is not. It is null when the reason could not be classified, in which case nobody is
+ * told to go and ask for something that would not help.
+ */
+function WorkspaceBlockNotice({
+  block,
+  className,
+}: {
+  block: PluginWorkspaceBlock;
+  className?: string;
+}) {
+  return (
+    <div
+      data-testid="workspace-policy-block"
+      className={cn(
+        "flex items-start gap-2 rounded-xl border border-border bg-surface-1 px-3 py-2 text-left",
+        className,
+      )}
+    >
+      <Prohibit size={16} weight="fill" className="mt-0.5 shrink-0 text-ink-subtle" />
+      <div className="min-w-0">
+        <p className="text-xs font-medium leading-5 text-ink">{block.reason}</p>
+        {block.remedy ? (
+          <p className="mt-0.5 text-xs leading-5 text-ink-muted">{block.remedy}</p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function ConnectionNotice({
@@ -87,6 +140,7 @@ function ConnectionNotice({
 
 function ConnectPluginDialog({
   plugin,
+  sharedConnectionPlugins,
   isConnecting,
   isDisconnecting,
   isRemoving,
@@ -96,6 +150,8 @@ function ConnectPluginDialog({
   onRemove,
 }: {
   plugin: AssistantPluginCatalogItemDto;
+  /** The other installed rows this plugin's OAuth grant also backs. */
+  sharedConnectionPlugins: AssistantPluginCatalogItemDto[];
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
@@ -108,6 +164,10 @@ function ConnectPluginDialog({
   const isConnected = plugin.connectionStatus === "connected";
   const isInstalled = plugin.installationStatus === "installed";
   const isPendingBusy = isDisconnecting || isRemoving;
+  const workspaceBlock = pluginWorkspaceBlock(plugin);
+  // Both confirmations need it: "Remove" disconnects on its way out, so it ends the shared grant
+  // for exactly the same set of plugins that "Disconnect" does.
+  const sharedWarning = sharedConnectionWarning(sharedConnectionPlugins);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
@@ -159,11 +219,17 @@ function ConnectPluginDialog({
           </div>
         </div>
 
+        {workspaceBlock ? (
+          <WorkspaceBlockNotice block={workspaceBlock} className="mt-6" />
+        ) : null}
+
         <Button
           type="button"
-          disabled={isConnecting}
+          // Connecting is what workspace policy actually refuses. Disconnect and Remove below stay
+          // live on a blocked row on purpose — see WorkspaceBlockNotice.
+          disabled={isConnecting || workspaceBlock !== null}
           onClick={onContinue}
-          className="mt-6 h-10 w-full"
+          className={cn("h-10 w-full", workspaceBlock ? "mt-3" : "mt-6")}
         >
           {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
           Continue to {plugin.label}
@@ -186,6 +252,18 @@ function ConnectPluginDialog({
                     ? `Disconnect ${plugin.label}? WarpBot loses access to it until you connect the account again.`
                     : `Remove ${plugin.label}? Its tools disappear from WarpBot and any connected account is disconnected.`}
                 </p>
+                {/* The collateral this dialog used to keep to itself. A connection is keyed by
+                    provider, so ending it ends every plugin behind the same grant — a user
+                    disconnecting Drive to tidy up silently lost Calendar and Meet with it. */}
+                {sharedWarning ? (
+                  <p
+                    data-testid="shared-connection-warning"
+                    className="flex items-start gap-2 text-sm leading-6 text-amber-700 dark:text-amber-500"
+                  >
+                    <Warning size={16} weight="fill" className="mt-1 shrink-0" />
+                    <span>{sharedWarning}</span>
+                  </p>
+                ) : null}
                 <div className="flex justify-end gap-2">
                   <Button
                     type="button"
@@ -257,14 +335,37 @@ export default function PluginsPage() {
   // One pass over the catalog, so the action label, the connect dialog's "Connected as ..." line
   // and everything below read the same status — see plugin-connection.ts for why a connected
   // Google account can still leave an individual plugin unusable.
+  //
+  // ORDERING
+  //   The catalog gained `isFeatured`, `sortOrder` and `category` in WT-646, and none of the three
+  //   reaches this page: they are on PluginCatalogAdminListItemDto and
+  //   PluginCatalogAdminDetailDto only. PluginCatalogItemMapper.ToCatalogItem does not copy them
+  //   onto PluginCatalogItemDto, so the user-facing catalog cannot say which rows are featured,
+  //   what order an operator put them in, or what category a row belongs to.
+  //
+  //   Sorting by label is therefore not a placeholder for an ordering we have and ignore — it is
+  //   the only stable ordering this page can honestly produce. It replaces the backend's row order,
+  //   which is whatever the query returned. Once those fields ship, this is where featured-first,
+  //   then sortOrder, then label belongs, and the "Featured" heading can come back meaning it.
+  //
   const catalogPlugins = useMemo(
-    () => plugins.map(withEffectiveConnectionStatus),
+    () =>
+      plugins
+        .map(withEffectiveConnectionStatus)
+        .sort((a, b) => a.label.localeCompare(b.label)),
     [plugins],
   );
 
   const installedPlugins = useMemo(
     () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
     [catalogPlugins],
+  );
+
+  // Which other installed plugins go down with this one, because a connection is keyed by provider
+  // and one grant backs several rows. Derived from the catalog, never from a list of Google keys.
+  const sharedConnectionPlugins = useMemo(
+    () => (selectedPlugin ? pluginsSharingConnection(selectedPlugin, catalogPlugins) : []),
+    [selectedPlugin, catalogPlugins],
   );
 
   // Purely local: it narrows the catalog already fetched above. There is no marketplace search
@@ -278,6 +379,12 @@ export default function PluginsPage() {
   }, [catalogPlugins, query]);
 
   async function handlePrimaryAction(plugin: AssistantPluginCatalogItemDto) {
+    // Second lock on the one thing workspace policy refuses, so a stale render cannot fire an
+    // install the backend is going to reject. Deliberately narrow: a blocked row that IS installed
+    // still opens the dialog, because that dialog is where Disconnect and Remove live and a
+    // blocked plugin may be holding a live OAuth grant the user needs to revoke.
+    if (plugin.installationStatus !== "installed" && pluginWorkspaceBlock(plugin)) return;
+
     if (plugin.installationStatus !== "installed") {
       try {
         await installPlugin.mutateAsync({ pluginKey: plugin.key });
@@ -306,7 +413,14 @@ export default function PluginsPage() {
   async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
       await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
-      toast.success(`${plugin.label} disconnected`);
+      // The confirmation named the siblings; the receipt names them too, so the record of what
+      // just happened is not narrower than what happened.
+      const alsoDisconnected = sharedConnectionPlugins.map((sibling) => sibling.label);
+      toast.success(
+        alsoDisconnected.length
+          ? `${plugin.label} disconnected, along with ${formatPluginLabelList(alsoDisconnected)}`
+          : `${plugin.label} disconnected`,
+      );
       setSelectedPlugin(null);
     } catch {
       toast.error(`Could not disconnect ${plugin.label}.`);
@@ -383,7 +497,11 @@ export default function PluginsPage() {
 
       <section className="flex flex-col gap-3">
         <div className="border-b border-border pb-3">
-          <h2 className="text-sm font-semibold text-ink">Featured</h2>
+          {/* Was "Featured", above the entire catalog. Nothing selected those rows and nothing
+              could: `isFeatured` is an admin-DTO field the user-facing catalog does not carry, so
+              the heading named a distinction that did not exist and got less true with every row
+              added. This says what the section actually is. */}
+          <h2 className="text-sm font-semibold text-ink">All plugins</h2>
         </div>
 
         {isLoading ? (
@@ -428,35 +546,47 @@ export default function PluginsPage() {
               filteredPlugins.length >= CATALOG_TWO_COLUMN_MINIMUM && "md:grid-cols-2",
             )}
           >
-            {filteredPlugins.map((plugin) => (
-              <div
-                key={plugin.key}
-                className={cn(
-                  "grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2",
-                  filteredPlugins.length < CATALOG_TWO_COLUMN_MINIMUM &&
-                    "rounded-xl border border-border bg-surface-1 px-3 py-3",
-                )}
-              >
-                <PluginGlyph plugin={plugin} />
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlugin(plugin)}
-                  className="min-w-0 text-left"
+            {filteredPlugins.map((plugin) => {
+              const workspaceBlock = pluginWorkspaceBlock(plugin);
+              // Blocked rows are still listed and still openable — the dialog behind them is the
+              // only way to revoke a grant this workspace no longer permits. What policy refuses
+              // is adding the plugin, so that is the only button that goes dead.
+              const isInstalled = plugin.installationStatus === "installed";
+              const isBlockedFromAdding = workspaceBlock !== null && !isInstalled;
+
+              return (
+                <div
+                  key={plugin.key}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-lg px-1 py-2",
+                    filteredPlugins.length < CATALOG_TWO_COLUMN_MINIMUM &&
+                      "rounded-xl border border-border bg-surface-1 px-3 py-3",
+                  )}
                 >
-                  <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
-                  <div className="truncate text-xs text-ink-muted">{plugin.description}</div>
-                </button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={installPlugin.isPending || connectUrl.isPending}
-                  onClick={() => void handlePrimaryAction(plugin)}
-                >
-                  {pluginActionLabel(plugin)}
-                </Button>
-              </div>
-            ))}
+                  <div className="grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3">
+                    <PluginGlyph plugin={plugin} />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPlugin(plugin)}
+                      className="min-w-0 text-left"
+                    >
+                      <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
+                      <div className="truncate text-xs text-ink-muted">{plugin.description}</div>
+                    </button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
+                      onClick={() => void handlePrimaryAction(plugin)}
+                    >
+                      {pluginActionLabel(plugin)}
+                    </Button>
+                  </div>
+                  {workspaceBlock ? <WorkspaceBlockNotice block={workspaceBlock} /> : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -464,6 +594,7 @@ export default function PluginsPage() {
       {selectedPlugin ? (
         <ConnectPluginDialog
           plugin={selectedPlugin}
+          sharedConnectionPlugins={sharedConnectionPlugins}
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
