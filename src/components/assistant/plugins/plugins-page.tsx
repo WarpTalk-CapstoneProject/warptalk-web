@@ -26,7 +26,7 @@ import {
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
-import { type PluginDisplayTile, toDisplayTiles } from "@/lib/assistant/plugin-tiles";
+import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import { cn } from "@/lib/utils";
 import type { AssistantPluginCatalogItemDto } from "@/types/assistant";
 
@@ -95,7 +95,7 @@ function ConnectPluginDialog({
   onDisconnect,
   onRemove,
 }: {
-  plugin: PluginDisplayTile;
+  plugin: AssistantPluginCatalogItemDto;
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
@@ -157,14 +157,6 @@ function ConnectPluginDialog({
               You can disconnect this plugin from your personal settings. Write actions require confirmation before execution.
             </p>
           </div>
-          {plugin.sharedConnectionWith.length ? (
-            <div className="py-4">
-              <h3 className="text-sm font-semibold text-ink">Shares a connection with {plugin.sharedConnectionWith.join(", ")}</h3>
-              <p className="mt-1 text-sm leading-6 text-ink-muted">
-                One sign-in covers both. Google&apos;s consent screen lets you grant only what you need — decline the rest there and reconnect later to add it.
-              </p>
-            </div>
-          ) : null}
         </div>
 
         <Button
@@ -258,25 +250,34 @@ export default function PluginsPage() {
   const disablePlugin = useDisableAssistantPlugin();
 
   const [query, setQuery] = useState("");
-  const [selectedPlugin, setSelectedPlugin] = useState<PluginDisplayTile | null>(null);
-  const [browserConnect, setBrowserConnect] = useState<{ plugin: PluginDisplayTile; url: string } | null>(null);
+  const [selectedPlugin, setSelectedPlugin] = useState<AssistantPluginCatalogItemDto | null>(null);
+  const [browserConnect, setBrowserConnect] =
+    useState<{ plugin: AssistantPluginCatalogItemDto; url: string } | null>(null);
 
-  const displayPlugins = useMemo(() => plugins.flatMap(toDisplayTiles), [plugins]);
-
-  const installedPlugins = useMemo(
-    () => displayPlugins.filter((plugin) => plugin.installationStatus === "installed"),
-    [displayPlugins],
+  // One pass over the catalog, so the action label, the connect dialog's "Connected as ..." line
+  // and everything below read the same status — see plugin-connection.ts for why a connected
+  // Google account can still leave an individual plugin unusable.
+  const catalogPlugins = useMemo(
+    () => plugins.map(withEffectiveConnectionStatus),
+    [plugins],
   );
 
+  const installedPlugins = useMemo(
+    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    [catalogPlugins],
+  );
+
+  // Purely local: it narrows the catalog already fetched above. There is no marketplace search
+  // behind it, and the empty state must not pretend otherwise.
   const filteredPlugins = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return displayPlugins;
-    return displayPlugins.filter((plugin) =>
+    if (!normalized) return catalogPlugins;
+    return catalogPlugins.filter((plugin) =>
       [plugin.label, plugin.description, plugin.key].join(" ").toLowerCase().includes(normalized),
     );
-  }, [displayPlugins, query]);
+  }, [catalogPlugins, query]);
 
-  async function handlePrimaryAction(plugin: PluginDisplayTile) {
+  async function handlePrimaryAction(plugin: AssistantPluginCatalogItemDto) {
     if (plugin.installationStatus !== "installed") {
       try {
         await installPlugin.mutateAsync({ pluginKey: plugin.key });
@@ -292,7 +293,7 @@ export default function PluginsPage() {
     setSelectedPlugin(plugin);
   }
 
-  async function continueToProvider(plugin: PluginDisplayTile) {
+  async function continueToProvider(plugin: AssistantPluginCatalogItemDto) {
     try {
       const result = await connectUrl.mutateAsync({ pluginKey: plugin.key });
       setBrowserConnect({ plugin, url: result.url });
@@ -302,7 +303,7 @@ export default function PluginsPage() {
     }
   }
 
-  async function disconnectSelected(plugin: PluginDisplayTile) {
+  async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
       await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
       toast.success(`${plugin.label} disconnected`);
@@ -312,7 +313,7 @@ export default function PluginsPage() {
     }
   }
 
-  async function removeSelected(plugin: PluginDisplayTile) {
+  async function removeSelected(plugin: AssistantPluginCatalogItemDto) {
     // Disabling the installation leaves the stored provider tokens behind, which is
     // not what "Remove" reads like to the person clicking it.
     try {
@@ -349,7 +350,7 @@ export default function PluginsPage() {
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search plugins"
+          placeholder="Filter plugins"
           className="h-9 rounded-full bg-surface-1 pl-9 text-sm"
         />
       </div>
@@ -363,7 +364,7 @@ export default function PluginsPage() {
             {installedPlugins.map((plugin) => (
               <button
                 type="button"
-                key={plugin.tileId}
+                key={plugin.key}
                 onClick={() => setSelectedPlugin(plugin)}
                 className="rounded-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 title={plugin.label}
@@ -404,13 +405,20 @@ export default function PluginsPage() {
             <div className="flex items-center gap-2 text-sm text-ink-muted">
               <PuzzlePiece size={16} weight="duotone" />
               {query.trim()
-                ? `No plugins match "${query.trim()}".`
+                ? `No plugin in this catalog matches "${query.trim()}".`
                 : "No plugins are available yet."}
             </div>
             {query.trim() ? (
-              <Button type="button" size="sm" variant="ghost" onClick={() => setQuery("")}>
-                Clear search
-              </Button>
+              <>
+                {/* The box above narrows the list on this page. Saying "no results" alone would
+                    read as "WarpTalk has searched and found nothing", which it has not done. */}
+                <p className="text-xs text-ink-subtle">
+                  This filters the plugins WarpTalk offers today. It does not search a wider marketplace.
+                </p>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setQuery("")}>
+                  Clear filter
+                </Button>
+              </>
             ) : null}
           </div>
         ) : (
@@ -422,7 +430,7 @@ export default function PluginsPage() {
           >
             {filteredPlugins.map((plugin) => (
               <div
-                key={plugin.tileId}
+                key={plugin.key}
                 className={cn(
                   "grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2",
                   filteredPlugins.length < CATALOG_TWO_COLUMN_MINIMUM &&

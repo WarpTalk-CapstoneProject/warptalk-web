@@ -59,14 +59,6 @@ export interface McpToolDescriptorDto {
   effect: "read" | "write";
   requiredScopes: string[];
   parameters: Record<string, unknown>;
-  /**
-   * Groups this tool with its siblings for catalog display (e.g. a plugin whose single OAuth
-   * connection covers two distinct products can render one tile per product). Absent when the
-   * plugin's tools are not grouped.
-   */
-  resourceKey?: string | null;
-  resourceLabel?: string | null;
-  resourceAvatarUrl?: string | null;
 }
 
 export interface AssistantPluginCatalogItemDto {
@@ -106,9 +98,9 @@ export interface AssistantPageContextDto {
  * ambient, automatic page context. No workspaceId here: the backend scopes every mention to the
  * conversation's own workspace server-side.
  *
- * A "plugin" mention's entityId is the plugin's catalog key, or `${pluginKey}:${resourceKey}`
- * for a split tile (e.g. "google_workspace:drive") — see PluginDisplayTile.tileId. It names a
- * capability the user wants used for this turn, not a record to look up.
+ * A "plugin" mention's entityId is the plugin's catalog key (e.g. "google_drive") — the same key
+ * every install/connect/disconnect call takes. It names a capability the user wants used for this
+ * turn, not a record to look up.
  */
 export interface AssistantMentionDto {
   entityType: "room" | "document" | "member" | "plugin";
