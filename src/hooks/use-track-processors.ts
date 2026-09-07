@@ -184,7 +184,7 @@ export function useTrackProcessors({
         return;
       }
 
-      if (!shouldAttemptKrispNoiseFilter()) {
+      if (!shouldAttemptKrispNoiseFilter(process.env.NEXT_PUBLIC_LIVEKIT_URL)) {
         // Krisp's browser support check says whether WASM can run; it does not say whether the
         // connected LiveKit project has Krisp enabled. Local self-hosted LiveKit returns 404 for
         // that entitlement request, so skip construction entirely and keep the browser fallback.
