@@ -46,6 +46,7 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
+  useJoinLanguagePolicy,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -54,6 +55,14 @@ import { holdsSeat } from "@/lib/meeting/room-occupancy";
 import { playNotificationCue } from "@/lib/notifications/notification-sounds";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  useSetTranscriptPaused,
+  useTranscriptPauseWindows,
+} from "@/hooks/use-transcripts";
+import {
+  resolveTranscriptPause,
+  type TranscriptPauseState,
+} from "@/lib/meeting/transcript-pause";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -104,6 +113,7 @@ import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL, INBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
+import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -152,6 +162,7 @@ import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
 import { translationRoomService } from "@/services/translation-room.service";
 import { getErrorMessage } from "@/lib/api/errors";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
@@ -227,7 +238,31 @@ export function PersistentMeetingSession({
 
   // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
   // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  //
+  // Kept as the FALLBACK only. It is keyed on the workspace the user currently has SELECTED, which
+  // is not necessarily the workspace that owns this room, and it is a members-only endpoint: an
+  // external guest is not a member, so it answers 403, the data comes back undefined, and the
+  // "empty means unrestricted" rule below turns a refusal into the full language list. That is how
+  // a workspace limited to two languages still offered Japanese in the meeting.
   const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+  // The room's OWN policy, resolved from its code by the same endpoint /join and the setup modal
+  // use. Public, so it answers for guests too, and it is about this room's workspace rather than
+  // whichever one happens to be selected — both of the reasons the line above cannot be trusted
+  // alone. It is the primary source; the settings read stays for the moment the room (and so its
+  // code) has not loaded yet.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(
+    roomQuery.data?.translationRoomCode ?? "",
+  );
+  /**
+   * The allowed-language list to apply, or undefined when we genuinely do not know one.
+   *
+   * `undefined` and `[]` mean the same thing downstream — unrestricted — which is correct for a
+   * workspace that never set a policy and wrong for a request that failed. Preferring the public
+   * per-room answer is what removes the failing request from the common path rather than trying to
+   * tell its two meanings apart after the fact.
+   */
+  const allowedTargetLanguages =
+    joinLanguagePolicy?.allowedTargetLanguages ?? workspaceSettings?.allowedTargetLanguages;
 
   // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
   // meant for the far side has to leave through the virtual microphone Meet is listening to
@@ -238,6 +273,7 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+  const transcriptPopupOpenedRef = useRef<string | null>(null);
 
   // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
   // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
@@ -274,6 +310,12 @@ export function PersistentMeetingSession({
       cancelled = true;
     };
   }, [isBridgeRoom]);
+
+  useEffect(() => {
+    if (!isBridgeRoom || transcriptPopupOpenedRef.current === roomId) return;
+    transcriptPopupOpenedRef.current = roomId;
+    void openDesktopTranscriptWindow(roomId);
+  }, [isBridgeRoom, roomId]);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
   // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
   // rejections with a bodyless 503 that reads exactly like an outage. An idle-reaped session
@@ -659,6 +701,21 @@ export function PersistentMeetingSession({
   // RoomLockChanged/RecordingStateChanged broadcasts (see the SignalR effect below).
   const [isRoomLocked, setIsRoomLocked] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  /**
+   * WT-605 — the last TranscriptPaused/TranscriptResumed broadcast, or null.
+   *
+   * Null is not "running": it means nothing has told this client yet, and the pause-window query
+   * below answers instead. `resolveTranscriptPause` owns that precedence, and the reason it is a
+   * tested rule rather than an `if` here is written in its header — a pause-window response that
+   * was already in flight when the host pressed Pause arrives LATER and is OLDER, and following
+   * it would tell the room the transcript is running while it is not.
+   *
+   * Cleared on reconnect, deliberately: events that fired while the socket was down were never
+   * delivered, so a held one is a claim this client can no longer make.
+   */
+  const [transcriptPauseEvent, setTranscriptPauseEvent] = useState<{
+    paused: boolean;
+  } | null>(null);
   // WT-272: mute-on-entry is READ from the room's persisted setting, which the join response
   // already carries, and only overridden once this host actually toggles it (null = untouched).
   // It used to be plain `useState(false)`, so the flyout always opened claiming "off" no matter
@@ -677,6 +734,15 @@ export function PersistentMeetingSession({
   const setLockMutation = useSetRoomLock(roomId);
   const setMuteOnEntryMutation = useSetMuteOnEntry(roomId);
   const setRecordingMutation = useSetRecording(roomId);
+  // Unlike the room lock a few lines up — whose own comment records that it "can only be learned
+  // from a RoomLockChanged broadcast that fires after somebody toggles it" — the transcript pause
+  // HAS a read, so somebody who joins mid-pause is not left believing it is running.
+  const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  const setTranscriptPausedMutation = useSetTranscriptPaused(roomId);
+  const transcriptPause: TranscriptPauseState = resolveTranscriptPause({
+    windows: pauseWindowsQuery.data,
+    event: transcriptPauseEvent,
+  });
 
   // WT-357: the session as it is right now, for handlers registered once on the hub connection.
   const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
@@ -1295,7 +1361,7 @@ export function PersistentMeetingSession({
     // Empty means unrestricted, matching the server's own whitelist check — so an absent or
     // still-loading settings response must NOT be read as "nothing is allowed", or the picker
     // would empty itself while the query is in flight.
-    const allowed = workspaceSettings?.allowedTargetLanguages;
+    const allowed = allowedTargetLanguages;
     if (!allowed || allowed.length === 0) return Array.from(codes);
 
     const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
@@ -1304,7 +1370,7 @@ export function PersistentMeetingSession({
     // them no way to move off it — the policy is enforced by what they can move TO.
     const current = normalizeLanguageCode(targetLanguage);
     return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
-  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
+  }, [room, targetLanguage, addedLanguages, allowedTargetLanguages]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -2055,6 +2121,35 @@ export function PersistentMeetingSession({
         return recording;
       });
     });
+    // WT-605. Two events rather than one flag, and NOT folded into TranslationStopped above:
+    // the backend introduced this pair precisely so the two cannot be confused. Translation,
+    // dubbing, subtitles and LiveKit keep running through a transcript pause; only the written
+    // record stops growing.
+    //
+    // Broadcast to the whole room group, so this fires on every participant — the notice in the
+    // transcript panel is for all of them, not only the host who pressed it.
+    //
+    // Like RecordingStateChanged above, the toast announces the TRANSITION and only to people who
+    // did not ask for it: the host's own mutation has already set the state by the time this
+    // arrives, so `wasPaused === paused` and they are not told twice.
+    const applyTranscriptPause = (paused: boolean) => {
+      setTranscriptPauseEvent((previous) => {
+        if (previous?.paused !== paused) {
+          toast[paused ? "info" : "success"](
+            paused
+              ? "The transcript is paused. Translation and dubbing keep running."
+              : "The transcript is being written down again.",
+          );
+        }
+        return { paused };
+      });
+      // Fills in WHEN the pause began, which the broadcast does not carry — and re-reads the
+      // truth after a resume. Never the other way round: the event is what decides the state.
+      void pauseWindowsQuery.refetch();
+    };
+    connection.on("TranscriptPaused", () => applyTranscriptPause(true));
+    connection.on("TranscriptResumed", () => applyTranscriptPause(false));
+
     // WT-08
     connection.on("HostChanged", (newHostUserId: string) => {
       setLiveHostUserId(newHostUserId);
@@ -2143,6 +2238,14 @@ export function PersistentMeetingSession({
 
     connection.onreconnected(() => {
       setIsSignalRReconnecting(false);
+      // WT-605 — forget the last transcript-pause broadcast, and re-read the windows.
+      //
+      // This is the obligation resolveTranscriptPause's header hands to its caller, and it is not
+      // theoretical: a pause or resume that happened while this socket was down was never
+      // delivered, so the event this client is still holding is a claim it can no longer make.
+      // Dropping it returns the answer to the window list, which the refetch below refreshes.
+      setTranscriptPauseEvent(null);
+      void pauseWindowsQuery.refetch();
       void (async () => {
         await joinCurrentRoom();
 
@@ -2301,6 +2404,15 @@ export function PersistentMeetingSession({
         useTranslationRoomStore
           .getState()
           .noteAssistantReasoning(payload?.title ?? null, payload?.body ?? null);
+      },
+    );
+
+    chatConnection.on(
+      "ChatAssistantQuestion",
+      (payload: { questionsJson?: string }) => {
+        useTranslationRoomStore
+          .getState()
+          .setAssistantQuestionsJson(payload?.questionsJson ?? null);
       },
     );
 
@@ -2608,6 +2720,36 @@ export function PersistentMeetingSession({
 
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
+  /**
+   * WT-605, host-only. Deliberately no optimistic flip: the state comes back as a broadcast the
+   * whole room receives, so this client reads the same source as everybody else. Flipping locally
+   * would put the host's screen a beat ahead of the room, and would survive a 409 saying the
+   * transcript was never in the state we assumed.
+   */
+  function handleToggleTranscriptPause() {
+    const nextPaused = !transcriptPause.paused;
+    setTranscriptPausedMutation.mutate(nextPaused, {
+      onError: (error) => {
+        // 409 INVALID_STATE is not a failure of ours — somebody else moved the switch first, and
+        // the refetch this mutation always runs has already corrected the button.
+        const status = getErrorStatus(error);
+        if (status === 409) {
+          toast.info(
+            nextPaused
+              ? "The transcript was already paused."
+              : "The transcript was already running.",
+          );
+          return;
+        }
+        toast.error(
+          nextPaused
+            ? "Could not pause the transcript."
+            : "Could not resume the transcript.",
+        );
+      },
+    });
+  }
+
   function handleToggleRecording() {
     const action = isRecording ? "stop" : "start";
     setRecordingMutation.mutate(action, {
@@ -3015,7 +3157,7 @@ export function PersistentMeetingSession({
                     // WT-497: the policy itself, not only the room list it already narrowed.
                     // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
                     // exactly what availableListenLanguages excluded.
-                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
+                    allowedTargetLanguages={allowedTargetLanguages}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
@@ -3093,6 +3235,8 @@ export function PersistentMeetingSession({
                     muteOnEntry={muteOnEntryEnabled}
                     isRecording={isRecording}
                     recordingPending={setRecordingMutation.isPending}
+                    transcriptPaused={transcriptPause.paused}
+                    transcriptPausePending={setTranscriptPausedMutation.isPending}
                     onToggleLock={isHost ? handleToggleLock : undefined}
                     onToggleMuteOnEntry={
                       isHost ? handleToggleMuteOnEntry : undefined
@@ -3107,6 +3251,13 @@ export function PersistentMeetingSession({
                     // stops by the RecordingStateChanged toast above — that notice, not the
                     // permission check, is what makes this safe to open up.
                     onToggleRecording={handleToggleRecording}
+                    // isRoomHost, not isHost, for the reason the flash-mode and Stop Translation
+                    // props above give: TranscriptRecordingService gates on IsRoomHostAsync, so a
+                    // workspace admin — host-like everywhere else in this bar — would be handed a
+                    // button that answers 403. Omitting the prop hides the control instead.
+                    onToggleTranscriptPause={
+                      isRoomHost ? handleToggleTranscriptPause : undefined
+                    }
                   />
                 </div>
                 <div data-meeting-exit-control className="shrink-0">
@@ -3133,6 +3284,19 @@ export function PersistentMeetingSession({
               activeCount={activeCount}
               segments={panelSegments}
               missedCount={catchUp.missedCount}
+              // WT-605. The notice goes to EVERY participant, which is why it rides the side
+              // panel rather than the host controls: a transcript that quietly stops growing is
+              // indistinguishable from a room that has gone quiet, and only one of those is
+              // worth reacting to.
+              //
+              // Passed only once it is known — before the window list has landed and with no
+              // broadcast seen, this client has been told nothing, and asserting "running" would
+              // be a claim it cannot make.
+              transcriptPause={
+                transcriptPause.known
+                  ? { paused: transcriptPause.paused, since: transcriptPause.since }
+                  : undefined
+              }
               onCopyText={copyText}
               joinLink={joinLink}
               chatTargetLanguage={targetLanguage}
