@@ -1177,7 +1177,7 @@ function MeetingRecordSection({
           /* The record exists, so there is something to put beside the transcript: a summary with
              citations in it, or at the very least who did the talking. A meeting still in progress
              has neither, and gets the reading column on its own rather than an empty rail
-             occupying 380px of it. */
+             occupying 420px of it. */
           <TranscriptReadingLayout
             transcript={transcript}
             sections={endedRecord?.summary?.sections ?? null}

@@ -83,7 +83,7 @@ assert.ok(
 
 // 4. Every shape of the record.
 //
-// `<TranscriptDocumentRow` was `<TranscriptDocumentTurn` before Option C, and the rename is the
+// `<TranscriptDocumentTurn` was `<TranscriptDocumentRow` before Option C, and the rename is the
 // change rather than a tidy-up, so it is written down instead of quietly swapped. The document
 // view used to draw one row per utterance — which for one person talking for two minutes is
 // twenty rows, each repeating their name, their face and their timestamp around one paragraph of

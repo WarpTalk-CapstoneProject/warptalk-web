@@ -11,11 +11,16 @@
  *   three has to stop being a column, and the video is the one that can: it shrinks to a 16:9 pip
  *   at the top of the rail and loses nothing, while the other two are text and text does not shrink.
  *
- * WHY 380px AND NOT HALF
+ * WHY A FIXED RAIL AND NOT HALF
  *   A summary is about fifteen lines and takes thirty seconds to read. The transcript beside it is
  *   six hundred lines and takes ten minutes. Splitting the screen down the middle divides it by
- *   nominal importance; 380px divides it by how much reading each side actually holds, which is the
- *   division that leaves both of them usable.
+ *   nominal importance; a fixed rail divides it by how much reading each side actually holds, which
+ *   is the division that leaves both of them usable.
+ *
+ *   The number is 420px, and it started at 380px. It grew when the rail stopped being a filtered
+ *   extract of the summary and began carrying every point of it, including the ones with no
+ *   recorded moment — more to hold than the first number was chosen for. The principle did not
+ *   move, and the principle is what check-reading-rail-contract.mjs pins.
  *
  * WHY THE SYNC RUNS BOTH WAYS
  *   Hovering a claim to light up its paragraph is the obvious direction and the less valuable one.
@@ -111,7 +116,7 @@ export function TranscriptReadingLayout({
       <div
         className={cn(
           /* The three breakpoints, and they are three genuinely different layouts rather than one
-             layout squeezed. ≥1280px: two regions, rail at 380px. 1024–1280px: rail at 320px and
+             layout squeezed. ≥1280px: two regions, rail at 420px. 1024–1280px: rail at 360px and
              the pip collapsed to its transport bar (see MeetingRecordingPlayer's `pip` variant).
              <1024px: stacked, and the SUMMARY GOES FIRST — on a small screen people read the
              summary and then decide whether the transcript is worth their next ten minutes, so
