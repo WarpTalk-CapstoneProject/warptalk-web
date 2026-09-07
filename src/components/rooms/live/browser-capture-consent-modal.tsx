@@ -80,9 +80,17 @@ export function BrowserCaptureConsentModal({
 
         <p className="text-sm font-medium text-foreground">{WINDOWS_CAPTURE_CONSENT.action}</p>
 
+        {/*
+          These labels said "window" while the consent paragraph above them says "browser", and the
+          paragraph is the one that is true: picking a window does not narrow the capture. Every
+          window of one browser resolves to the same process, and the capture takes that process and
+          its children — so this control chooses WHICH BROWSER, and nothing finer. Naming it
+          "Meeting window" promised a precision the capture does not have, four lines under a
+          sentence that correctly warns about other tabs.
+        */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="browser-capture-source">
-            Meeting window
+            Browser to capture
           </label>
           <Select
             value={selectedSourceId ?? ""}
@@ -93,7 +101,7 @@ export function BrowserCaptureConsentModal({
           >
             <SelectTrigger id="browser-capture-source" className="w-full">
               <SelectValue
-                placeholder={loadingSources ? "Finding meeting windows..." : "Choose the Meet browser window"}
+                placeholder={loadingSources ? "Finding open windows..." : "Choose the browser your meeting is in"}
               />
             </SelectTrigger>
             <SelectContent>
@@ -106,7 +114,7 @@ export function BrowserCaptureConsentModal({
           </Select>
           {!loadingSources && sources.length === 0 ? (
             <p className="text-xs leading-5 text-muted-foreground">
-              Open the meeting window in your browser, then start translation again.
+              Open your meeting in a browser, then start translation again.
             </p>
           ) : null}
         </div>
