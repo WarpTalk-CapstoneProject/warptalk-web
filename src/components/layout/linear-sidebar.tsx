@@ -228,7 +228,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       ]
     },
     { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
-    { icon: Archive, label: "History", href: `/${slug}/history` },
+    // No History row: /history was a second, worse answer to the question Artifacts answers —
+    // it listed meetings, which Meetings above already does, and its outputs rail could not show
+    // minutes at all. Past meetings are still browsable on Meetings, which asks for ENDED.
     // Artifacts, not "Transcripts". This entry used to be absent on purpose — "a meeting's
     // transcript, summary and files live on that meeting's own page, below its description" —
     // and that is still true: the record lives on the meeting, and this page links back to it.
