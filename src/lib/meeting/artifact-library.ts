@@ -416,3 +416,105 @@ export function countByKind(entries: LibraryEntry[]): Record<ArtifactKind, numbe
   for (const entry of entries) counts[entry.kind] += 1;
   return counts;
 }
+
+/** One meeting, with everything WarpTalk wrote down about it. */
+export type MeetingRecordGroup = {
+  roomId: string;
+  roomTitle: string;
+  roomCode: string;
+  hostId: string;
+  hostName: string;
+  meetingEndedAt: string;
+  durationSeconds: number;
+  participantCount: number;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  /** This meeting's records. Never empty — a group exists because a record does. */
+  entries: LibraryEntry[];
+  /** Which kinds this meeting actually produced, for the marks on the card. */
+  kinds: ArtifactKind[];
+  /** The most recent change across the whole group. */
+  changedAt: string | null;
+  /** How many of them this viewer can actually open. Zero is a meaningful answer. */
+  readableCount: number;
+};
+
+/**
+ * One card per MEETING, not one per document.
+ *
+ * WHY THIS EXISTS
+ *   The library listed every record as its own card, so a meeting with a transcript and a summary
+ *   appeared twice, side by side, under the same title and the same room code. At 101 meetings
+ *   that is 202 cards in which the only difference between two neighbours is an eight-point
+ *   label — and the reported experience was exactly that: "bị rời rạc quá, tôi không biết combo
+ *   transcript, summary, minutes là của meeting nào khi nhìn vào".
+ *
+ *   The fix is not tighter labelling. Somebody looking for what a meeting produced is asking
+ *   about the MEETING; the three documents are its contents, not three peers of it. So the
+ *   meeting is the card, and opening it is what shows the three.
+ *
+ * ORDER IS INHERITED, NEVER RECOMPUTED
+ *   Groups come out in the order their first record appeared, and entries keep the order they
+ *   arrived in. `byMeetingThenKind` has already put them newest-meeting-first with one meeting's
+ *   records adjacent and in transcript → summary → minutes order — pinned by the test "newest
+ *   meeting first, and one meeting's records keep their produced order". Sorting again here would
+ *   be a second opinion that can drift from the first.
+ *
+ * GROUPED AFTER NARROWING, ALWAYS
+ *   The caller filters first and groups second, so "Transcripts" means "meetings that have one"
+ *   and a body search surfaces the meeting whose body matched. Grouping first would force every
+ *   filter to be re-expressed as a question about groups.
+ */
+export function groupEntriesByMeeting(entries: LibraryEntry[]): MeetingRecordGroup[] {
+  const byRoom = new Map<string, MeetingRecordGroup>();
+
+  for (const entry of entries) {
+    let group = byRoom.get(entry.roomId);
+    if (!group) {
+      group = {
+        roomId: entry.roomId,
+        roomTitle: entry.roomTitle,
+        roomCode: entry.roomCode,
+        hostId: entry.hostId,
+        hostName: entry.hostName,
+        meetingEndedAt: entry.meetingEndedAt,
+        durationSeconds: entry.durationSeconds,
+        participantCount: entry.participantCount,
+        sourceLanguage: entry.sourceLanguage,
+        targetLanguages: entry.targetLanguages,
+        entries: [],
+        kinds: [],
+        changedAt: null,
+        readableCount: 0,
+      };
+      byRoom.set(entry.roomId, group);
+    }
+
+    group.entries.push(entry);
+    if (!group.kinds.includes(entry.kind)) group.kinds.push(entry.kind);
+    if (entry.body) group.readableCount += 1;
+    // The LATEST change, not the last one seen. A meeting's records arrive in produced order,
+    // which is not the order they were edited in — minutes signed today sit after a transcript
+    // that has not changed since the meeting ended.
+    if (entry.changedAt && (!group.changedAt || entry.changedAt > group.changedAt)) {
+      group.changedAt = entry.changedAt;
+    }
+  }
+
+  return Array.from(byRoom.values());
+}
+
+/**
+ * Which of a meeting's records to open first.
+ *
+ * The first one somebody can actually READ, rather than the first in reading order. Opening a
+ * meeting onto a withheld transcript shows a lock while the summary beside it was readable all
+ * along — the reader has to discover the tabs to find that out, and most would conclude the
+ * meeting holds nothing.
+ *
+ * Falls back to the first record when none is readable, because the panel still has to render
+ * something, and `describeAbsence` is that something.
+ */
+export function preferredEntry(group: MeetingRecordGroup): LibraryEntry {
+  return group.entries.find((entry) => entry.body) ?? group.entries[0];
+}
