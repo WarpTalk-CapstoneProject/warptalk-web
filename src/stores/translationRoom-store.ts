@@ -97,6 +97,7 @@ interface TranslationRoomStoreState {
    * one arrives. Anyone who reloads or joins late sees the persisted message and never this.
    */
   assistantDraft: string;
+  assistantQuestionsJson: string | null;
   /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
@@ -174,6 +175,7 @@ interface TranslationRoomStoreState {
    * these concatenate rather than replace.
    */
   appendAssistantDraft: (delta?: string | null) => void;
+  setAssistantQuestionsJson: (questionsJson: string | null) => void;
   sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
@@ -194,6 +196,7 @@ const initialState = {
   assistantSteps: [] as AssistantStep[],
   assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
   assistantDraft: "",
+  assistantQuestionsJson: null as string | null,
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -441,6 +444,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       // A turn that died without an answer leaves its half-written draft behind; the next
       // question must not open under somebody else's unfinished sentence.
       assistantDraft: "",
+      assistantQuestionsJson: null,
       assistantActivityAt: Date.now(),
     })),
 
@@ -584,6 +588,12 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       };
     }),
 
+  setAssistantQuestionsJson: (assistantQuestionsJson) =>
+    set({
+      assistantQuestionsJson,
+      assistantActivityAt: Date.now(),
+    }),
+
   sealAssistantTrail: (messageId) =>
     set((state) => {
       // Nothing to attach, or this answer already has its trail. Either way, leave it alone:
@@ -620,6 +630,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         // final answer, so a client that kept its own accumulation would keep a sentence the
         // server never saved.
         assistantDraft: "",
+        assistantQuestionsJson: null,
       };
     }),
 

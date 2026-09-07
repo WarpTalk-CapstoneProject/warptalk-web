@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   ArrowUp,
+  ArrowSquareOut,
   ClockCounterClockwise,
   ArrowsOutSimple,
+  CheckCircle,
   CornersIn,
   Plus,
   PaperPlaneTilt,
@@ -20,6 +22,7 @@ import {
   Paperclip,
   FileText,
   BookBookmark,
+  PlugsConnected,
   VideoCamera,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -48,9 +51,12 @@ import {
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import {
   useAssistantConversations,
+  useAssistantPlugins,
   useAssistantSkills,
   useCreateAssistantConversation,
+  useInstallAssistantPlugin,
   useLoadAssistantConversation,
+  usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -59,13 +65,25 @@ import type {
   AssistantConversationDto,
   AssistantMentionDto,
   AssistantPageContextDto,
+  AssistantPluginCatalogItemDto,
 } from "@/types/assistant";
 import {
   AssistantQuestionCard,
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+  type PluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
+import {
+  PluginOperatorSetupCard,
+  parsePluginOperatorSetupAction,
+  type PluginOperatorSetupAction,
+} from "@/components/layout/plugin-operator-setup-card";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import {
@@ -79,8 +97,10 @@ import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { toast } from "sonner";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
+import { toDisplayTiles } from "@/lib/assistant/plugin-tiles";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -362,6 +382,19 @@ export function GlobalChatbot() {
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
+  const [pendingPluginConnection, setPendingPluginConnection] =
+    useState<PluginConnectionAction | null>(null);
+  const [pendingPluginSetup, setPendingPluginSetup] =
+    useState<PluginOperatorSetupAction | null>(null);
+  // Both plugin cards are turn-scoped. Nothing but a click used to clear them, so a Connect
+  // card outlived the turn that raised it: still there under a successful answer, still there
+  // after New chat - where pressing Connect opened an OAuth flow the current turn never asked
+  // for - and two of them could stack up, one per error code. The meeting panel already gets
+  // this right by clearing in beginAssistantTurn; this is the same rule.
+  const clearPluginCards = useCallback(() => {
+    setPendingPluginConnection(null);
+    setPendingPluginSetup(null);
+  }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
    * A question handed over from somewhere else on the page — today, the "Research this term"
@@ -388,8 +421,24 @@ export function GlobalChatbot() {
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
   const { data: skills } = useAssistantSkills();
+  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } = useAssistantPlugins();
+  const installPlugin = useInstallAssistantPlugin();
+  const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
+  // Same per-resource split as the Plugins settings page (see toDisplayTiles), so Drive and
+  // Calendar show as their own rows here too instead of one combined "Google Drive & Calendar".
+  const pluginTiles = useMemo(() => assistantPlugins.flatMap(toDisplayTiles), [assistantPlugins]);
+  const installedAssistantPlugins = useMemo(
+    () => pluginTiles.filter((plugin) => plugin.installationStatus === "installed"),
+    [pluginTiles],
+  );
+  // Only a tile that's actually usable can be @mentioned — mentioning a disconnected plugin
+  // would just tell WarpBot to call a tool that fails with connection_required.
+  const mentionablePlugins = useMemo(
+    () => installedAssistantPlugins.filter((plugin) => plugin.connectionStatus === "connected"),
+    [installedAssistantPlugins],
+  );
 
   // Only fetch the conversation list while the history menu is actually open.
   const conversationsQuery = useAssistantConversations(
@@ -398,6 +447,55 @@ export function GlobalChatbot() {
   const visibleConversations = (conversationsQuery.data ?? []).filter(
     (conversation) => !conversation.isArchived,
   );
+
+  const handlePluginAction = async (plugin: AssistantPluginCatalogItemDto) => {
+    try {
+      if (plugin.installationStatus !== "installed") {
+        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        toast.success(`${plugin.label} installed`);
+        return;
+      }
+
+      if (plugin.connectionStatus !== "connected") {
+        const result = await connectPlugin.mutateAsync({ pluginKey: plugin.key });
+        if (openProviderConsent(result.url)) {
+          toast.message(`Finish connecting ${plugin.label} in your browser.`);
+        } else {
+          // The toast action is a real click, so the open it makes is not blocked.
+          toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
+            action: {
+              label: "Open it",
+              onClick: () => openProviderConsent(result.url),
+            },
+          });
+        }
+        return;
+      }
+
+      toast.message(`${plugin.label} is connected.`);
+    } catch {
+      toast.error(`Could not update ${plugin.label}.`);
+    }
+  };
+
+  const handlePluginConnectionAction = async (pluginKey: string) => {
+    try {
+      const result = await connectPlugin.mutateAsync({ pluginKey });
+      if (openProviderConsent(result.url)) {
+        toast.message("Finish connecting this plugin in your browser.");
+      } else {
+        toast.error("Your browser blocked the consent window.", {
+          action: {
+            label: "Open it",
+            onClick: () => openProviderConsent(result.url),
+          },
+        });
+      }
+      void refetchAssistantPlugins();
+    } catch {
+      toast.error("Could not open the plugin connection flow.");
+    }
+  };
 
   /** Conversation id this client is currently *joined to* on the hub, not merely talking about. */
   const joinedConversationIdRef = useRef<string | null>(null);
@@ -445,6 +543,7 @@ export function GlobalChatbot() {
     setSteps([]);
     setIsSlow(false);
     setIsMinimized(false);
+    clearPluginCards();
     shouldAutoScrollRef.current = true;
   };
 
@@ -477,6 +576,7 @@ export function GlobalChatbot() {
       setSelectedContexts([]);
       setIsMinimized(false);
       setHistoryMenuOpen(false);
+      clearPluginCards();
       shouldAutoScrollRef.current = true;
       setIsOpen(true);
     } catch {
@@ -539,8 +639,24 @@ export function GlobalChatbot() {
       entityType: "document",
       entityId: d.id,
     }));
-    return [...memberOptions, ...roomOptions, ...documentOptions];
-  }, [memberResults, roomResults, documentResults]);
+    // WT-565: an installed, connected plugin is mentionable so the user can point WarpBot at
+    // it directly instead of only reaching it through the Skills popover. entityId is the tile
+    // id (plugin key, or "pluginKey:resourceKey" for a split tile) — see AssistantMentionDto.
+    // Not query-filtered here like the three fetches above: mentionablePlugins is already the
+    // full local list, and filteredOptions below re-filters every option by title anyway.
+    const pluginOptions: AssistantContextOption[] = mentionablePlugins.map((plugin) => ({
+      id: `plugin-${plugin.tileId}`,
+      title: plugin.label,
+      type: "Plugins",
+      // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
+      // handling, and the avatar contract forbids bypassing the primitives with a bare <img>.
+      icon: <PluginGlyph plugin={plugin} size="xs" />,
+      description: plugin.description,
+      entityType: "plugin",
+      entityId: plugin.tileId,
+    }));
+    return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
+  }, [memberResults, roomResults, documentResults, mentionablePlugins]);
 
   // Only offer commands relevant to the page the widget was opened from — e.g. "/summarize"
   // only makes sense with a room in ambient context (see chat_worker.py's page-context
@@ -700,9 +816,22 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== conversationId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
+        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
         // A malformed payload leaves the card absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
+        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
+        // Enforced here rather than assumed of the worker. "Press Connect" and "no button
+        // will help" cannot both be true, but they are two independent keys on one payload,
+        // and two unconditional setters rendered both cards the moment anything emitted both.
+        // Setup wins: it is the one saying the registration ladder is already exhausted.
+        if (pluginSetup) {
+          setPendingPluginSetup(pluginSetup);
+          setPendingPluginConnection(null);
+        } else if (pluginConnection) {
+          setPendingPluginConnection(pluginConnection);
+          setPendingPluginSetup(null);
+        }
         armResponseTimeout();
       },
     );
@@ -735,6 +864,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
+        clearPluginCards();
 
         // Folded onto the answer, not deleted.
         //
@@ -772,6 +902,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
+        clearPluginCards();
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
         const failedSteps = steps.map((step) => ({ ...step, done: true }));
         const failedStartedAt = turnStartedAtRef.current;
@@ -1176,6 +1307,7 @@ export function GlobalChatbot() {
       { id: `local-${Date.now()}`, role: "user", content },
     ]);
     setIsAiTyping(true);
+    clearPluginCards();
     shouldAutoScrollRef.current = true;
     armResponseTimeout();
 
@@ -1401,6 +1533,24 @@ export function GlobalChatbot() {
                         setPendingQuestions(null);
                         void sendMessage(answer);
                       }}
+                    />
+                  </div>
+                ) : null}
+                {pendingPluginConnection ? (
+                  <div className="pl-4">
+                    <PluginConnectionActionCard
+                      action={pendingPluginConnection}
+                      disabled={connectPlugin.isPending}
+                      onDismiss={() => setPendingPluginConnection(null)}
+                      onConnect={handlePluginConnectionAction}
+                    />
+                  </div>
+                ) : null}
+                {pendingPluginSetup ? (
+                  <div className="pl-4">
+                    <PluginOperatorSetupCard
+                      action={pendingPluginSetup}
+                      onDismiss={() => setPendingPluginSetup(null)}
                     />
                   </div>
                 ) : null}
@@ -1720,35 +1870,100 @@ export function GlobalChatbot() {
                         align="start"
                         side="top"
                         sideOffset={8}
-                        className="p-1.5 w-[260px] bg-surface-1 border border-border shadow-xl rounded-xl"
+                        className="p-1.5 w-[300px] bg-surface-1 border border-border shadow-xl rounded-xl"
                       >
-                        {skills && skills.length > 0 ? (
-                          // Read-only capability list: skills are the assistant's own
-                          // tools, picked by the model mid-turn — there is nothing for a
-                          // click to do, so these rows no longer pretend to be buttons.
-                          <ul className="flex flex-col">
-                            <li className="px-2.5 pt-1 pb-1.5 text-[11px] text-ink-subtle">
-                              WarpBot uses these automatically when a question needs them.
-                            </li>
-                            {skills.map((skill) => (
-                              <li
-                                key={skill.name}
-                                className="flex cursor-default flex-col gap-0.5 px-2.5 py-1.5"
+                        <div className="flex flex-col gap-2">
+                          <section>
+                            <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
+                              Skills
+                            </div>
+                            {skills && skills.length > 0 ? (
+                              <ul className="flex flex-col">
+                                {skills.map((skill) => (
+                                  <li
+                                    key={skill.name}
+                                    className="flex cursor-default flex-col gap-0.5 rounded-md px-2.5 py-1.5"
+                                  >
+                                    <span className="text-[12px] font-medium text-ink">
+                                      {skill.label}
+                                    </span>
+                                    <span className="text-[11px] text-ink-subtle">
+                                      {skill.description}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
+                                Loading skills…
+                              </div>
+                            )}
+                          </section>
+
+                          <section className="border-t border-border pt-2">
+                            <div className="flex items-center justify-between px-2.5 pb-1.5">
+                              <span className="text-[11px] font-medium text-ink-subtle">
+                                Plugins
+                              </span>
+                              <a
+                                href={
+                                  activeWorkspaceSlug
+                                    ? "/settings/plugins"
+                                    : "/workspace"
+                                }
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink"
                               >
-                                <span className="text-[12px] font-medium text-ink">
-                                  {skill.label}
-                                </span>
-                                <span className="text-[11px] text-ink-subtle">
-                                  {skill.description}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                            Loading skills…
-                          </div>
-                        )}
+                                Manage
+                                <ArrowSquareOut size={11} />
+                              </a>
+                            </div>
+                            {installedAssistantPlugins.length > 0 ? (
+                              <ul className="flex flex-col gap-1">
+                                {installedAssistantPlugins.map((plugin) => {
+                                  const connected = plugin.connectionStatus === "connected";
+                                  return (
+                                    <li
+                                      key={plugin.key}
+                                      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1.5"
+                                    >
+                                      <PluginGlyph plugin={plugin} size="xs" />
+                                      <div className="min-w-0">
+                                        <div className="truncate text-[12px] font-medium text-ink">
+                                          {plugin.label}
+                                        </div>
+                                        <div className="truncate text-[11px] text-ink-subtle">
+                                          {connected
+                                            ? plugin.connectedAccountEmail ?? "Connected"
+                                            : "Connect to use in WarpBot"}
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        disabled={installPlugin.isPending || connectPlugin.isPending}
+                                        onClick={() => void handlePluginAction(plugin)}
+                                        className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                                      >
+                                        {connected ? (
+                                          <>
+                                            <CheckCircle size={12} weight="fill" />
+                                            Ready
+                                          </>
+                                        ) : (
+                                          "Connect"
+                                        )}
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : (
+                              <div className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-ink-subtle">
+                                <PlugsConnected size={14} weight="duotone" />
+                                Install plugins from Personal Settings.
+                              </div>
+                            )}
+                          </section>
+                        </div>
                       </PopoverContent>
                     </Popover>
                     </div>

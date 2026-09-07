@@ -1,10 +1,18 @@
 "use client";
 
-import { type ElementType, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  type ElementType,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { enGB } from "date-fns/locale";
 import {
-  ArrowRight,
   CalendarBlank,
   CaretLeft,
   CaretRight,
@@ -15,7 +23,9 @@ import {
   SpinnerGap,
   Translate,
   Users,
+  VideoCamera,
   WarningCircle,
+  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -35,6 +45,7 @@ import {
   canDownloadArtifact,
 } from "@/lib/meeting/meeting-artifacts";
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
+import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
@@ -43,11 +54,28 @@ import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { MyMeetingItem } from "@/types/myMeetings";
+import type { MeetingTimeState, MyMeetingItem } from "@/types/myMeetings";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
-import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
-type TimeFilter = "all" | "upcoming" | "past";
+/**
+ * WT-538 — exactly three chips, and `missed` is in none of them.
+ *
+ * `past` was renamed to `joined` rather than merely relabelled: the value now has to mean "the
+ * viewer was in this room", and a filter called `past` holding meetings selected by attendance is
+ * the kind of name that invites the next person to widen it back.
+ *
+ * There is no Missed chip, deliberately. A missed meeting is something you have already lost; a
+ * standing tab counting them is a scoreboard nobody asked for. They appear under All, in amber, and
+ * that is the whole of their presence.
+ *
+ * The consequence is accepted and is not a bug: All ≠ Upcoming + Joined, because the missed rows
+ * are in All and in neither of the others. Do not "fix" the arithmetic by inventing a fourth chip
+ * or by folding missed into one of these two.
+ */
+type TimeFilter = "all" | "upcoming" | "joined";
+
+/** One meeting with its state resolved for this viewer, at this minute. See `timedMeetings`. */
+type TimedMeeting = MyMeetingItem & { timeState: MeetingTimeState };
 
 /**
  * Month or week.
@@ -62,9 +90,34 @@ type CalendarView = "month" | "week";
 const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "all", label: "All" },
   { value: "upcoming", label: "Upcoming" },
-  { value: "past", label: "Attended" },
+  { value: "joined", label: "Joined" },
 ];
-const EMPTY_MEETINGS: MyMeetingItem[] = [];
+const EMPTY_MEETINGS: TimedMeeting[] = [];
+const APP_CALENDAR_LOCALE = "en-GB";
+
+/**
+ * The geometry a month cell packs its chips with — NOT a chip limit.
+ *
+ * There used to be a `MONTH_CELL_CHIP_LIMIT = 3` here, and it was a bug: the grid is `h-full` with
+ * stretched rows, so a cell is whatever height the window gives it — 110px on a laptop, 250px on a
+ * tall screen — while the constant stayed at three 20px chips. A cell twice as tall as it needed to
+ * be still drew three rows and then "+4 more" under half a cell of white space.
+ *
+ * So the count is measured instead (see `useMeasuredHeight`): these are the sizes the arithmetic
+ * needs, and they must stay in step with the classes on `MonthChip` (h-5), the list's `space-y-0.5`
+ * and the overflow row (h-4).
+ */
+const MONTH_CHIP_HEIGHT = 20;
+const MONTH_CHIP_GAP = 2;
+const MONTH_OVERFLOW_ROW_HEIGHT = 16;
+
+/**
+ * What a cell draws before the first measurement lands — server render and the first client paint.
+ *
+ * Three is the number that fits the 110px minimum cell, so the common case starts correct and the
+ * measurement only ever adds rows. Never used once a real height is in hand.
+ */
+const MONTH_CELL_CHIP_FALLBACK = 3;
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
@@ -79,7 +132,26 @@ export default function MyMeetingsPage() {
   const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+
+  /**
+   * WT-538 — who is looking, and what time it is.
+   *
+   * `timeState` is resolved HERE rather than in the mapper that fills the React Query cache, and
+   * that placement is the decision, not an accident of where the code fit:
+   *
+   *  - The cache key is `["my-meetings", workspaceId, monthKey, search]` and carries no user id.
+   *    Baking a viewer-dependent field into the cached rows would make that key a lie. (The cache
+   *    is emptied on both sign-in and sign-out — see lib/auth/session-scoped-state — so nothing is
+   *    actually served across accounts today; this keeps it that way without depending on it.)
+   *  - `missed` decays out of `upcoming` as the clock passes. A value computed inside `queryFn` is
+   *    frozen at fetch time, so a tab left open would keep showing a meeting as upcoming for as
+   *    long as the query stayed fresh — the very bug this ticket is about, reintroduced one layer
+   *    down. `useNowMinute` already ticks for the week view's now-line, so re-deriving is free.
+   *
+   * It is still ONE rule in ONE place — `resolveMeetingTimeState` — just called instead of stored.
+   */
   const viewerUserId = useAuthStore((state) => state.user?.id ?? null);
+  const now = useNowMinute();
 
   const [view, setView] = useState<CalendarView>("month");
   // One anchor for both views. Switching from week to month keeps you in the month you were
@@ -90,6 +162,13 @@ export default function MyMeetingsPage() {
   const [filter, setFilter] = useState<TimeFilter>("all");
   const [dialogMeetingId, setDialogMeetingId] = useState<string | null>(null);
   const [busyArtifactId, setBusyArtifactId] = useState<string | null>(null);
+  /**
+   * The day whose detail panel is open, as the same `startOfDay` key the cells are grouped by.
+   *
+   * A key rather than a Date so "is this the selected cell?" is a string compare in the render
+   * loop, and so the state cannot hold two different Dates that mean the same day.
+   */
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
 
   const weekDays = useMemo(() => weekOf(monthAnchor), [monthAnchor]);
 
@@ -107,7 +186,7 @@ export default function MyMeetingsPage() {
   const fetched = meetings.data?.meetings ?? EMPTY_MEETINGS;
 
   // The months are fetched whole, so a week view holds up to two months of rows it must not show.
-  const allMeetings = useMemo(() => {
+  const windowed = useMemo(() => {
     if (view === "month") return fetched;
     const from = rangeFrom.getTime();
     const to = rangeTo.getTime();
@@ -117,15 +196,28 @@ export default function MyMeetingsPage() {
     });
   }, [fetched, view, rangeFrom, rangeTo]);
 
+  // One derivation for the whole page, so the chip counts, the colours and the badge can never
+  // disagree about the same meeting. `now` is null until after hydration and is passed through as
+  // null rather than papered over with `Date.now()`: reading the clock inside a `useMemo` is
+  // impure, and the resolver has a defined answer for "no clock yet".
+  const allMeetings = useMemo<TimedMeeting[]>(() => {
+    const nowMs = now === null ? null : now.getTime();
+    return windowed.map((meeting) => ({
+      ...meeting,
+      timeState: resolveMeetingTimeState(meeting, { viewerUserId, now: nowMs }),
+    }));
+  }, [windowed, viewerUserId, now]);
+
+  // `missed` is in neither bucket. Upcoming holds what is still ahead (and what is running now);
+  // Joined holds what the viewer was actually in. A meeting that is over and was never attended is
+  // in neither, which is why the three numbers do not add up — see `TimeFilter`.
   const visible = useMemo(() => {
     return allMeetings.filter((meeting) => {
-      if (filter === "upcoming") return meeting.timeState !== "past";
-      if (filter === "past") return meeting.timeState === "past";
+      if (filter === "upcoming") return isAhead(meeting.timeState);
+      if (filter === "joined") return meeting.timeState === "joined";
       return true;
     });
   }, [allMeetings, filter]);
-
-  const groups = useMemo(() => groupByDay(visible), [visible]);
 
   // Marked from everything fetched rather than from the visible window: in week view the little
   // calendar is how you find the week that holds something, so it must still show the whole month.
@@ -136,45 +228,65 @@ export default function MyMeetingsPage() {
 
   const counts = useMemo(() => {
     return {
-      upcoming: allMeetings.filter((meeting) => meeting.timeState !== "past").length,
-      past: allMeetings.filter((meeting) => meeting.timeState === "past").length,
+      all: allMeetings.length,
+      upcoming: allMeetings.filter((meeting) => isAhead(meeting.timeState)).length,
+      joined: allMeetings.filter((meeting) => meeting.timeState === "joined").length,
     };
   }, [allMeetings]);
 
   const dialogMeeting = allMeetings.find((meeting) => meeting.id === dialogMeetingId) ?? null;
 
-  const dayRefs = useRef(new Map<string, HTMLDivElement>());
-  const todayRef = useRef<HTMLDivElement>(null);
+  const selectedDay = useMemo(
+    () => (selectedDayKey === null ? null : new Date(Number(selectedDayKey))),
+    [selectedDayKey],
+  );
 
-  const anchoredMonth = useRef<string | null>(null);
-  const monthLabel = `${monthAnchor.getFullYear()}-${monthAnchor.getMonth()}`;
-  useEffect(() => {
-    // Week view is seven columns with nothing to scroll to, so the agenda's jump-to-today does not
-    // apply — and running it there would scroll the page out from under a grid that fits.
-    if (view !== "month" || meetings.isLoading || anchoredMonth.current === monthLabel) return;
-    anchoredMonth.current = monthLabel;
-    todayRef.current?.scrollIntoView({ block: "center" });
-  }, [view, meetings.isLoading, monthLabel]);
+  // The panel lists the day out of the SAME filtered rows the cells are drawn from, keyed the same
+  // way, so "3 meetings" in the cell and the panel's list cannot disagree about what a day holds.
+  const selectedDayMeetings = useMemo(() => {
+    if (selectedDayKey === null) return EMPTY_MEETINGS;
+    return visible
+      .filter((meeting) => dayKey(meeting.occursAt) === selectedDayKey)
+      .sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt));
+  }, [visible, selectedDayKey]);
 
-  /** Picking a day in the sidebar means "take me there" — which is a different move per view. */
+  /**
+   * Clicking a day opens its panel; clicking the day that is already open closes it again.
+   *
+   * The toggle is the third way out, next to the close button and Escape — a selected cell that
+   * does nothing when you click it again reads as stuck.
+   */
+  function toggleDay(date: Date) {
+    const key = String(startOfDay(date));
+    setSelectedDayKey((current) => (current === key ? null : key));
+  }
+
+  /** Picking a day in the sidebar re-anchors the visible calendar range. */
   function goToDay(date: Date) {
-    if (view === "week") {
-      setMonthAnchor(date);
-      return;
-    }
-
-    const target = dayRefs.current.get(String(startOfDay(date)));
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    toast.info("No meetings on that day.");
+    setMonthAnchor(date);
+    setSelectedDayKey(null);
   }
 
   function stepRange(delta: number) {
     setMonthAnchor((current) =>
       view === "week" ? shiftWeeks(current, delta) : addMonths(current, delta),
     );
+    // The selected day belonged to the month you just left; keeping it would leave a panel open
+    // describing a date that is no longer on the grid behind it.
+    setSelectedDayKey(null);
+  }
+
+  /**
+   * One rule for what a meeting row does, wherever it is drawn.
+   *
+   * The chip in the cell and the same meeting listed in the day panel go through this single
+   * function, so the two cannot drift apart. It asks `hasFinished` — the ROOM's status — not
+   * `timeState`: `missed` covers both a room that ended without you (a recap to read) and a slot
+   * nobody ever opened (a room still sitting there), and those two want opposite destinations.
+   */
+  function openMeeting(meeting: TimedMeeting) {
+    if (hasFinished(meeting)) setDialogMeetingId(meeting.id);
+    else router.push(`/${workspaceSlug}/rooms/${meeting.id}`);
   }
 
   async function downloadArtifact(artifact: RoomHistoryArtifact) {
@@ -198,7 +310,6 @@ export default function MyMeetingsPage() {
     }
   }
 
-  const todayKey = String(startOfDay(new Date()));
   // Compared against everything the months returned, not against the visible week: truncation
   // happens at the month fetch, so that is the number the server's total describes.
   const truncated = (meetings.data?.total ?? 0) > fetched.length;
@@ -212,7 +323,9 @@ export default function MyMeetingsPage() {
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
           open straight onto their content and this now does too. */}
-      <header className="flex border-b border-border px-5 py-3 lg:items-center lg:justify-end lg:px-8">
+      <header className="flex flex-col gap-3 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-8">
+        <ScheduleMetricTabs counts={counts} filter={filter} onFilterChange={setFilter} />
+
         <div className="flex w-full items-center gap-2 lg:w-auto">
           {/* See history/page.tsx: one search affordance across the list pages. */}
           <ExpandingSearchDock
@@ -233,7 +346,12 @@ export default function MyMeetingsPage() {
                 type="button"
                 role="tab"
                 aria-selected={view === value}
-                onClick={() => setView(value)}
+                onClick={() => {
+                  setView(value);
+                  // The panel is a month-view affordance; leaving its state set would spring it
+                  // back open on the way back from the week.
+                  setSelectedDayKey(null);
+                }}
                 className={cn(
                   "h-8 rounded px-3 text-[12px] font-medium capitalize transition-colors",
                   view === value
@@ -248,8 +366,16 @@ export default function MyMeetingsPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5 lg:flex">
+      {/* `relative`, so the day panel can fall back to an overlay INSIDE the calendar area rather
+          than over the whole viewport: below xl it is positioned against this box, which leaves the
+          workspace's own top bar and rail reachable while a day is open. */}
+      <div className="relative flex min-h-0 flex-1">
+        <aside
+          className={cn(
+            "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5",
+            view === "week" && "lg:flex",
+          )}
+        >
           <div>
             <div className="mb-2 flex items-center justify-between px-1">
               <button
@@ -263,7 +389,7 @@ export default function MyMeetingsPage() {
               <span className="text-[12px] font-medium">
                 {view === "week"
                   ? formatWeekRange(weekDays)
-                  : monthAnchor.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  : monthAnchor.toLocaleDateString(APP_CALENDAR_LOCALE, { month: "long", year: "numeric" })}
               </span>
               <button
                 type="button"
@@ -279,6 +405,8 @@ export default function MyMeetingsPage() {
               <Calendar
                 mode="single"
                 month={monthAnchor}
+                locale={enGB}
+                weekStartsOn={1}
                 onMonthChange={setMonthAnchor}
                 onSelect={(date) => date && goToDay(date)}
                 className="w-full p-0.5 [--cell-size:1.8rem]"
@@ -300,38 +428,6 @@ export default function MyMeetingsPage() {
               />
             </div>
           </div>
-
-          {/* 3 Filter Tabs positioned above Statistics Count Cards */}
-          <div className="flex items-center justify-around gap-1 rounded-lg border border-border bg-surface-2/50 p-1" role="tablist" aria-label="Timeline filters">
-            {timeFilters.map((item) => (
-              <button
-                key={item.value}
-                type="button"
-                role="tab"
-                aria-selected={filter === item.value}
-                onClick={() => setFilter(item.value)}
-                className={cn(
-                  "flex-1 rounded-md py-1.5 text-center text-[11px] font-medium transition-colors",
-                  filter === item.value
-                    ? "bg-surface-1 text-ink font-semibold shadow-xs"
-                    : "text-ink-muted hover:text-ink",
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-
-          <dl className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-sky-500/15 bg-sky-500/[0.05] px-3 py-2">
-              <dt className="text-[10px] text-ink-subtle">Upcoming</dt>
-              <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.upcoming}</dd>
-            </div>
-            <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/[0.05] px-3 py-2">
-              <dt className="text-[10px] text-ink-subtle">Attended</dt>
-              <dd className="mt-0.5 text-[16px] font-semibold tabular-nums">{counts.past}</dd>
-            </div>
-          </dl>
 
           {meetings.isPartial ? (
             <p className="text-[10px] leading-4 text-amber-700">
@@ -357,6 +453,7 @@ export default function MyMeetingsPage() {
           ) : view === "week" ? (
             <WeekGrid
               days={weekDays}
+              now={now}
               meetings={visible}
               workspaceSlug={workspaceSlug}
               onOpenPast={setDialogMeetingId}
@@ -366,14 +463,27 @@ export default function MyMeetingsPage() {
             <MonthGrid
               monthAnchor={monthAnchor}
               meetings={visible}
-              workspaceSlug={workspaceSlug}
-              viewerUserId={viewerUserId}
               hasQuery={Boolean(query)}
-              onOpenPast={setDialogMeetingId}
-              onNavigate={(id) => router.push(`/${workspaceSlug}/rooms/${id}`)}
+              selectedDayKey={selectedDayKey}
+              onSelectDay={toggleDay}
+              onOpenMeeting={openMeeting}
             />
           )}
         </div>
+
+        {view === "month" && selectedDay ? (
+          <DayDetailPanel
+            day={selectedDay}
+            meetings={selectedDayMeetings}
+            workspaceSlug={workspaceSlug}
+            narrowed={filter !== "all" || Boolean(query)}
+            // Escape belongs to the topmost thing on screen. While the recap dialog is up it is
+            // the dialog's key, and the panel must not close underneath it.
+            closeOnEscape={!dialogMeeting}
+            onOpenMeeting={openMeeting}
+            onClose={() => setSelectedDayKey(null)}
+          />
+        ) : null}
       </div>
 
       <PastMeetingDialog
@@ -390,6 +500,51 @@ export default function MyMeetingsPage() {
   );
 }
 
+function ScheduleMetricTabs({
+  counts,
+  filter,
+  onFilterChange,
+}: {
+  counts: { all: number; upcoming: number; joined: number };
+  filter: TimeFilter;
+  onFilterChange: (filter: TimeFilter) => void;
+}) {
+  return (
+    <div
+      className="grid w-full grid-cols-3 gap-2 rounded-lg border border-border bg-surface-2/40 p-1 sm:max-w-[390px]"
+      role="tablist"
+      aria-label="Timeline filters"
+    >
+      {timeFilters.map((item) => {
+        const value =
+          item.value === "all"
+            ? counts.all
+            : item.value === "upcoming"
+              ? counts.upcoming
+              : counts.joined;
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={filter === item.value}
+            onClick={() => onFilterChange(item.value)}
+            className={cn(
+              "min-w-0 rounded-md px-3 py-2 text-left transition-colors",
+              filter === item.value
+                ? "bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                : "text-ink-muted hover:bg-surface-1/60 hover:text-ink",
+            )}
+          >
+            <span className="block truncate text-[10px] font-medium">{item.label}</span>
+            <span className="mt-0.5 block text-[16px] font-semibold tabular-nums">{value}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * The month, as a 7-column calendar grid (Google Calendar style).
  *
@@ -399,19 +554,17 @@ export default function MyMeetingsPage() {
 function MonthGrid({
   monthAnchor,
   meetings,
-  workspaceSlug,
-  viewerUserId,
   hasQuery,
-  onOpenPast,
-  onNavigate,
+  selectedDayKey,
+  onSelectDay,
+  onOpenMeeting,
 }: {
   monthAnchor: Date;
-  meetings: MyMeetingItem[];
-  workspaceSlug: string;
-  viewerUserId: string | null;
+  meetings: TimedMeeting[];
   hasQuery: boolean;
-  onOpenPast: (id: string) => void;
-  onNavigate: (id: string) => void;
+  selectedDayKey: string | null;
+  onSelectDay: (day: Date) => void;
+  onOpenMeeting: (meeting: TimedMeeting) => void;
 }) {
   const monthDays = useMemo(() => {
     const start = startOfMonth(monthAnchor);
@@ -431,7 +584,7 @@ function MonthGrid({
   }, [monthAnchor]);
 
   const byDay = useMemo(() => {
-    const map = new Map<string, MyMeetingItem[]>();
+    const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
       const key = dayKey(meeting.occursAt);
       const bucket = map.get(key);
@@ -447,6 +600,20 @@ function MonthGrid({
   const todayKey = String(startOfDay(new Date()));
   const currentMonth = monthAnchor.getMonth();
 
+  /**
+   * How many chips fit, from the cell's REAL height.
+   *
+   * Measured on the first cell's list area and applied to all of them, because every row in this
+   * grid is exactly as tall as every other: the rows are auto-sized, the cells all carry the same
+   * `min-h-[110px]`, and the list is `flex-1` (`flex: 1 1 0%`) with `min-h-0`, so its content
+   * contributes nothing to the row's own height. That last part is what makes the measurement
+   * safe rather than circular — drawing more chips cannot make the box we just measured taller,
+   * so there is no observe → grow → observe loop and no layout shift, only more of the cell used.
+   */
+  const [listRef, listHeight] = useMeasuredHeight();
+  const chipsIfNoOverflow = fitsInList(listHeight, 0);
+  const chipsWithOverflowRow = fitsInList(listHeight, MONTH_OVERFLOW_ROW_HEIGHT + MONTH_CHIP_GAP);
+
   return (
     <div className="flex h-full flex-col">
       {meetings.length === 0 ? (
@@ -454,7 +621,7 @@ function MonthGrid({
           <FileText size={14} />
           {hasQuery
             ? "No meetings match this search."
-            : "Nothing on your timeline this month. Upcoming invites and attended meetings appear here."}
+            : "Nothing on your timeline this month. Upcoming invites and meetings you joined appear here."}
         </div>
       ) : null}
 
@@ -469,22 +636,59 @@ function MonthGrid({
             </div>
           ))}
 
-          {monthDays.map((day) => {
+          {monthDays.map((day, index) => {
             const key = String(startOfDay(day));
             const dayMeetings = byDay.get(key) ?? EMPTY_MEETINGS;
             const isToday = key === todayKey;
+            const isSelected = key === selectedDayKey;
             const isCurrentMonth = day.getMonth() === currentMonth;
+
+            // Everything fits, or it does not and the last row has to be spent on the count.
+            const shown =
+              dayMeetings.length <= chipsIfNoOverflow ? dayMeetings.length : chipsWithOverflowRow;
+            const hiddenCount = dayMeetings.length - shown;
 
             return (
               <div
                 key={key}
                 className={cn(
-                  "flex min-h-[110px] min-w-0 flex-col border-b border-r border-border p-1.5 transition-colors last:border-r-0",
+                  "relative flex min-h-[110px] min-w-0 flex-col overflow-hidden border-b border-r border-border p-1.5 transition-colors last:border-r-0",
                   !isCurrentMonth && "bg-surface-2/30 text-ink-subtle",
-                  isToday && "bg-primary/[0.04]",
+                  // Selected and today are two different questions and must not answer in the same
+                  // colour. Today is the primary ring it has always been; the selected day — the one
+                  // the panel on the right is describing — is a heavier NEUTRAL ring, so a selected
+                  // Tuesday cannot be misread as "today" from across the room. They are exclusive
+                  // rather than stacked: on a day that is both, the filled primary date pill below
+                  // still says "today", and one ring per cell keeps the grid lines even.
+                  isSelected
+                    ? "bg-ink/[0.05] ring-2 ring-inset ring-ink/55 dark:bg-ink/[0.10] dark:ring-ink/45"
+                    : isToday
+                      ? // Today has to be findable at a glance in a grid of 35 identical boxes, and
+                        // the 4% wash it used to carry was invisible in both themes. The weight is
+                        // in the inset ring rather than the fill: the ring reads as an outline at
+                        // any distance, while the fill stays light enough that the rose/sky/emerald
+                        // chips keep their own hue instead of sitting in a violet bath. Inset, so it
+                        // draws inside the cell's own box and cannot escape overflow-hidden or
+                        // thicken the grid lines it shares with its neighbours.
+                        "bg-primary/[0.07] ring-1 ring-inset ring-primary/45 dark:bg-primary/[0.14] dark:ring-primary/55"
+                      : null,
                 )}
               >
-                <div className="flex items-center justify-between px-1">
+                {/* The whole cell selects the day, as a real button filling it rather than an
+                    onClick on the div: the chips above it are buttons too, and a <button> cannot
+                    contain one. It sits underneath — the rows that follow are `relative`, so they
+                    paint over it — and the content layers are pointer-transparent except for the
+                    chips themselves, so a click on bare cell background lands here and a click on a
+                    chip opens that meeting without either having to swallow the other's event. */}
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  aria-label={`${formatDayHeading(day)}, ${describeCount(dayMeetings.length)}`}
+                  onClick={() => onSelectDay(day)}
+                  className="absolute inset-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
+                />
+
+                <div className="pointer-events-none relative flex h-5 shrink-0 items-center justify-between px-1">
                   <span
                     className={cn(
                       "grid size-5 place-items-center rounded-full text-[11px] font-medium tabular-nums",
@@ -504,41 +708,28 @@ function MonthGrid({
                   ) : null}
                 </div>
 
-                <div className="mt-1 flex-1 space-y-1">
-                  {dayMeetings.slice(0, 3).map((meeting) => (
-                    <div
+                <div
+                  // Measured on cell 0 only; see `chipsIfNoOverflow` above for why one reading
+                  // describes every cell. `min-h-0` + `flex-1` is load-bearing, not decoration.
+                  ref={index === 0 ? listRef : undefined}
+                  className="pointer-events-none relative mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
+                >
+                  {dayMeetings.slice(0, shown).map((meeting) => (
+                    <MonthChip
                       key={meeting.id}
-                      onClick={() =>
-                        meeting.timeState === "past"
-                          ? onOpenPast(meeting.id)
-                          : onNavigate(meeting.id)
-                      }
-                      title={meeting.title}
-                      className={cn(
-                        "group cursor-pointer rounded border px-1.5 py-1 text-[10px] transition-colors",
-                        rowToneClass(meeting),
-                      )}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span className={cn("truncate font-medium", meeting.status === "cancelled" && "line-through text-ink-muted")}>
-                          {meeting.title}
-                        </span>
-                        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
-                          {formatTime(meeting.occursAt)}
-                        </span>
-                        {meeting.timeState === "live" ? (
-                          <span className="relative flex size-1.5 shrink-0">
-                            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-                            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
+                      meeting={meeting}
+                      onOpen={() => onOpenMeeting(meeting)}
+                    />
                   ))}
-                  {dayMeetings.length > 3 ? (
-                    <div className="px-1 text-[9px] font-medium text-ink-subtle">
-                      +{dayMeetings.length - 3} more
-                    </div>
+                  {hiddenCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectDay(day)}
+                      aria-label={`Show all ${dayMeetings.length} meetings on ${formatDayHeading(day)}`}
+                      className="pointer-events-auto block h-4 w-full cursor-pointer truncate rounded-sm px-1 text-left text-[9px] font-medium leading-4 text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
+                    >
+                      +{hiddenCount} more
+                    </button>
                   ) : null}
                 </div>
               </div>
@@ -548,6 +739,222 @@ function MonthGrid({
       </div>
     </div>
   );
+}
+
+/**
+ * One meeting on a month cell.
+ *
+ * A `<button>` rather than the clickable `<div>` this used to be, so a chip is tabbable and opens
+ * on Enter like everything else on the page. `pointer-events-auto` puts it back on top of the
+ * cell-wide select-this-day button it sits over — see the cell for why that layering exists.
+ *
+ * `h-5` is not free styling: `MONTH_CHIP_HEIGHT` is this number, and the cell counts chips with it.
+ */
+function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={meeting.title}
+      className={cn(
+        "group pointer-events-auto block h-5 w-full cursor-pointer overflow-hidden rounded-sm border px-1.5 text-left text-[10px] leading-5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+        monthChipToneClass(meeting),
+      )}
+    >
+      <div className="flex h-full min-w-0 items-center gap-1">
+        <span
+          className={cn(
+            "truncate font-medium",
+            meeting.status === "cancelled" && "text-ink-muted",
+          )}
+        >
+          {meeting.title}
+        </span>
+        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
+          {formatTime(meeting.occursAt)}
+        </span>
+        {meeting.timeState === "live" && meeting.status !== "cancelled" ? (
+          <span className="relative flex size-1.5 shrink-0">
+            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
+          </span>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
+/**
+ * The selected day, in full, beside the grid — Outlook's day pane, not Google's overflow bubble.
+ *
+ * What was here before was a popover dropped BELOW the cell it came from, listing the whole day
+ * while the cell's own chips stayed visible two centimetres above it: the same three meetings
+ * printed twice, side by side, with the second copy floating over the days underneath. This is the
+ * same list in a place where repeating the cell is not a repetition — the pane is understood as
+ * "the day you selected, in detail", and the grid it details stays whole and untouched to its left.
+ *
+ * Rows are `WeekCard`s, the same component the week view builds a column out of. A detail pane
+ * should say more than the chip it expands — the time, the host, the state badge, a Join button on
+ * a live room — and the week view already had that row, so this cannot drift away from it either.
+ */
+function DayDetailPanel({
+  day,
+  meetings,
+  workspaceSlug,
+  narrowed,
+  closeOnEscape,
+  onOpenMeeting,
+  onClose,
+}: {
+  day: Date;
+  meetings: TimedMeeting[];
+  workspaceSlug: string;
+  /** A search or a filter chip is on, so an empty day may only be empty of MATCHING meetings. */
+  narrowed: boolean;
+  closeOnEscape: boolean;
+  onOpenMeeting: (meeting: TimedMeeting) => void;
+  onClose: () => void;
+}) {
+  const heading = formatDayHeading(day);
+
+  useEffect(() => {
+    if (!closeOnEscape) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [closeOnEscape, onClose]);
+
+  return (
+    <>
+      {/* Below xl the pane covers part of the grid, so it needs a scrim to say so and to give the
+          click-anywhere-out dismissal somewhere to land. At xl the pane is a real column and there
+          is nothing to dim. */}
+      <div
+        aria-hidden
+        onClick={onClose}
+        className="absolute inset-0 z-20 bg-ink/20 dark:bg-black/45 xl:hidden"
+      />
+
+      {/*
+        The month grid asks for 860px before it starts scrolling sideways, and this pane costs 340.
+        1180 of the two together is why the split becomes a real two-column layout at xl (1280) and
+        not at lg (1024): at lg the pane would have taken a fifth of the grid's width away and left
+        every month view permanently scrolling horizontally, which is a worse trade than an overlay.
+        So below xl it is an overlay pinned to the right of the calendar area — a 380px drawer on a
+        tablet, the full width on a phone, where 375px has no room for two things at once.
+
+        It also stays CLOSED until a day is picked, in every size. Nothing is taken from the grid
+        until somebody actually asks a question about a day.
+      */}
+      <aside
+        aria-label={`Meetings on ${heading}`}
+        className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[380px] flex-col border-l border-border bg-surface-1 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-2 motion-safe:duration-150 xl:static xl:z-auto xl:w-[340px] xl:max-w-none xl:shrink-0 xl:shadow-none xl:motion-safe:animate-none"
+      >
+        <header className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <h2 className="truncate text-[13px] font-semibold text-ink">{heading}</h2>
+            <p className="mt-0.5 text-[11px] text-ink-subtle">{describeCount(meetings.length)}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close day details"
+            className="-mr-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <X size={12} />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+          {meetings.length ? (
+            meetings.map((meeting) => (
+              <WeekCard
+                key={meeting.id}
+                meeting={meeting}
+                workspaceSlug={workspaceSlug}
+                onOpen={() => onOpenMeeting(meeting)}
+              />
+            ))
+          ) : (
+            // An empty day still opens, and still says which kind of empty it is. A pane that went
+            // blank would read as broken, and "nothing here" is a different fact from "nothing here
+            // that matches what you typed".
+            <div className="grid h-full place-items-center px-4 text-center">
+              <div>
+                <CalendarBlank size={20} className="mx-auto text-ink-subtle" />
+                <p className="mt-2 text-[11px] font-medium text-ink-muted">
+                  {narrowed ? "Nothing on this day matches" : "Nothing on this day"}
+                </p>
+                <p className="mt-1 text-[10px] leading-4 text-ink-subtle">
+                  {narrowed
+                    ? "Clear the search or switch back to All to see everything booked here."
+                    : "Meetings you host or are invited to will show up here."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
+    </>
+  );
+}
+
+/**
+ * The height of an element, kept current by a `ResizeObserver`.
+ *
+ * The first reading is taken synchronously inside the ref callback rather than waiting for the
+ * observer: ref callbacks run in the commit phase, before paint, so the cells are drawn at their
+ * measured size on the very first frame. The observer that follows is what keeps the count honest
+ * when the window is resized, when the month goes from five rows to six, or when the "no meetings"
+ * banner above the grid appears and takes a slice of the height away.
+ */
+function useMeasuredHeight() {
+  const [height, setHeight] = useState<number | null>(null);
+
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    setHeight(node.getBoundingClientRect().height);
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver((entries) => {
+      const box = entries[0]?.contentRect;
+      if (box) setHeight(box.height);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, height] as const;
+}
+
+/**
+ * How many `MONTH_CHIP_HEIGHT` rows fit in `height`, once `reserved` pixels are spoken for.
+ *
+ * `reserved` is the "+N more" line: a cell that cannot show everything has to keep room for the
+ * count, or the count is the thing that gets clipped and the day silently loses meetings again.
+ * Returns the fallback while nothing has been measured yet, and never returns a negative.
+ */
+function fitsInList(height: number | null, reserved: number) {
+  if (height === null) return MONTH_CELL_CHIP_FALLBACK;
+  const usable = height - reserved + MONTH_CHIP_GAP;
+  return Math.max(0, Math.floor(usable / (MONTH_CHIP_HEIGHT + MONTH_CHIP_GAP)));
+}
+
+/** "Tuesday, 8 September 2026" — the panel's title and the cells' accessible names. */
+function formatDayHeading(day: Date) {
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(day);
+}
+
+function describeCount(count: number) {
+  if (count === 0) return "no meetings";
+  return `${count} ${count === 1 ? "meeting" : "meetings"}`;
 }
 
 /**
@@ -563,19 +970,22 @@ function MonthGrid({
  */
 function WeekGrid({
   days,
+  now,
   meetings,
   workspaceSlug,
   onOpenPast,
   onNavigate,
 }: {
   days: Date[];
-  meetings: MyMeetingItem[];
+  /** The same minute the page resolved `timeState` against — not a second reading of the clock. */
+  now: Date | null;
+  meetings: TimedMeeting[];
   workspaceSlug: string;
   onOpenPast: (id: string) => void;
   onNavigate: (id: string) => void;
 }) {
   const byDay = useMemo(() => {
-    const map = new Map<string, MyMeetingItem[]>();
+    const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
       const key = dayKey(meeting.occursAt);
       const bucket = map.get(key);
@@ -602,6 +1012,14 @@ function WeekGrid({
             const isToday = key === todayKey;
             const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
+            // The column is sorted by start time, so "now" has an insertion point even without an
+            // hour axis: before the first meeting that has not started. -1 means the whole day has
+            // already begun, and the line belongs at the bottom. Null on every day that is not today.
+            const nowIndex =
+              isToday && now
+                ? dayMeetings.findIndex((meeting) => Date.parse(meeting.occursAt) > now.getTime())
+                : null;
+
             return (
               <div
                 key={key}
@@ -617,7 +1035,7 @@ function WeekGrid({
                   )}
                 >
                   <div className="text-[10px] uppercase tracking-wide text-ink-subtle">
-                    {day.toLocaleDateString(undefined, { weekday: "short" })}
+                    {day.toLocaleDateString(APP_CALENDAR_LOCALE, { weekday: "short" })}
                   </div>
                   <div
                     className={cn(
@@ -633,20 +1051,29 @@ function WeekGrid({
 
                 <div className="flex-1 space-y-1.5 p-1.5">
                   {dayMeetings.length === 0 ? (
-                    <div className="pt-6 text-center text-[10px] text-ink-subtle/60">—</div>
+                    nowIndex !== null && now ? (
+                      <NowLine now={now} />
+                    ) : (
+                      <div className="pt-6 text-center text-[10px] text-ink-subtle/60">—</div>
+                    )
                   ) : (
-                    dayMeetings.map((meeting) => (
-                      <WeekCard
-                        key={meeting.id}
-                        meeting={meeting}
-                        workspaceSlug={workspaceSlug}
-                        onOpen={() =>
-                          meeting.timeState === "past"
-                            ? onOpenPast(meeting.id)
-                            : onNavigate(meeting.id)
-                        }
-                      />
-                    ))
+                    <>
+                      {dayMeetings.map((meeting, index) => (
+                        <Fragment key={meeting.id}>
+                          {now && nowIndex === index ? <NowLine now={now} /> : null}
+                          <WeekCard
+                            meeting={meeting}
+                            workspaceSlug={workspaceSlug}
+                            onOpen={() =>
+                              hasFinished(meeting)
+                                ? onOpenPast(meeting.id)
+                                : onNavigate(meeting.id)
+                            }
+                          />
+                        </Fragment>
+                      ))}
+                      {now && nowIndex === -1 ? <NowLine now={now} /> : null}
+                    </>
                   )}
                 </div>
               </div>
@@ -664,15 +1091,69 @@ function WeekGrid({
   );
 }
 
+const MINUTE_MS = 60_000;
+
+function subscribeToMinute(onChange: () => void) {
+  const timer = setInterval(onChange, MINUTE_MS);
+  return () => clearInterval(timer);
+}
+
+/**
+ * The wall clock at minute resolution.
+ *
+ * Null on the server and through hydration, so the markup React checks matches what it rendered;
+ * the line appears on the first client pass afterwards. The snapshot is a minute bucket rather than
+ * a timestamp, so a tab left open re-renders once a minute instead of on every tick.
+ */
+function useNowMinute(): Date | null {
+  const bucket = useSyncExternalStore(
+    subscribeToMinute,
+    () => Math.floor(Date.now() / MINUTE_MS),
+    () => null,
+  );
+
+  return useMemo(() => (bucket === null ? null : new Date(bucket * MINUTE_MS)), [bucket]);
+}
+
+/**
+ * Google Calendar's red "now" rule, adapted to a column that has no hour axis.
+ *
+ * It cannot sit at a clock position, because vertical space here is list order rather than time.
+ * It sits at the boundary instead: everything above it has started, everything below has not. That
+ * is the question the line actually answers on a page of thirty-minute meetings.
+ */
+function NowLine({ now }: { now: Date }) {
+  const label = formatTime(now.toISOString());
+
+  return (
+    <div
+      role="separator"
+      aria-label={`Current time, ${label}`}
+      className="flex items-center gap-1 py-0.5"
+    >
+      <span className="size-1.5 shrink-0 rounded-full bg-rose-500" />
+      <span className="h-px flex-1 bg-rose-500" />
+      <span className="shrink-0 text-[9px] font-medium tabular-nums text-rose-600 dark:text-rose-400">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function WeekCard({
   meeting,
   workspaceSlug,
   onOpen,
 }: {
-  meeting: MyMeetingItem;
+  meeting: TimedMeeting;
   workspaceSlug: string;
   onOpen: () => void;
 }) {
+  // A cancelled meeting is not live, whatever the clock says about its slot: the pulsing dot and
+  // the Join button are affordances for a room that is actually open.
+  const isCancelled = meeting.status === "cancelled";
+  const isLive = meeting.timeState === "live" && !isCancelled;
+
   return (
     <div
       role="button"
@@ -700,13 +1181,9 @@ function WeekCard({
             stateBadgeClass(meeting),
           )}
         >
-          {meeting.timeState === "live"
-            ? "Live"
-            : meeting.timeState === "upcoming"
-            ? "Upcoming"
-            : "Attended"}
+          {stateBadgeLabel(meeting)}
         </span>
-        {meeting.timeState === "live" ? (
+        {isLive ? (
           <span className="relative flex size-1.5 shrink-0">
             <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
             <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
@@ -717,7 +1194,7 @@ function WeekCard({
       <p
         className={cn(
           "mt-1 line-clamp-2 text-[11px] font-medium leading-snug text-ink",
-          meeting.status === "cancelled" && "text-ink-muted line-through",
+          isCancelled && "text-ink-muted",
         )}
       >
         {meeting.title}
@@ -725,7 +1202,7 @@ function WeekCard({
 
       <p className="mt-0.5 truncate text-[9px] text-ink-subtle">{meeting.hostName}</p>
 
-      {meeting.timeState === "live" ? (
+      {isLive ? (
         <Link
           href={`/${workspaceSlug}/rooms/${meeting.id}`}
           onClick={(event) => event.stopPropagation()}
@@ -734,149 +1211,19 @@ function WeekCard({
           Join
         </Link>
       ) : null}
-    </div>
-  );
-}
 
-function AgendaRow({
-  meeting,
-  workspaceSlug,
-  viewerUserId,
-  onOpenPast,
-  onNavigate,
-}: {
-  meeting: MyMeetingItem;
-  workspaceSlug: string;
-  viewerUserId: string | null;
-  onOpenPast: () => void;
-  onNavigate: () => void;
-}) {
-  const isPast = meeting.timeState === "past";
-  const stateLabel =
-    meeting.timeState === "live"
-      ? "Live now"
-      : meeting.timeState === "upcoming"
-        ? "Upcoming"
-        : "Past";
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => {
-        if (isPast) onOpenPast();
-        else onNavigate();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          if (isPast) onOpenPast();
-          else onNavigate();
-        }
-      }}
-      className={cn(
-        "flex cursor-pointer gap-3 rounded-xl border px-3 py-3 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
-        rowToneClass(meeting),
-      )}
-    >
-      <div className="w-[52px] shrink-0 pt-0.5 text-right">
-        <div className="text-[12px] font-medium tabular-nums text-ink">{formatTime(meeting.occursAt)}</div>
-        <div className="mt-0.5 text-[10px] tabular-nums text-ink-subtle">
-          {formatDuration(meeting.durationSeconds)}
-        </div>
-      </div>
-
-      <span className={cn("mt-1 w-0.5 shrink-0 self-stretch rounded-full", spineClass(meeting))} />
-
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span
-            className={cn(
-              "truncate text-[13px] font-medium text-ink",
-              meeting.status === "cancelled" && "text-ink-muted line-through",
-            )}
-          >
-            {meeting.title}
-          </span>
-
-          {meeting.isHost ? (
-            <span className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-muted">
-              Host
-            </span>
-          ) : null}
-
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase",
-              stateBadgeClass(meeting),
-            )}
-          >
-            {meeting.timeState === "live" ? (
-              <span className="inline-flex items-center gap-1.5">
-                <span className="relative flex size-2">
-                  <span className="absolute inline-flex size-2 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-                  <span className="relative inline-flex size-2 rounded-full bg-rose-500" />
-                </span>
-                {stateLabel}
-              </span>
-            ) : (
-              stateLabel
-            )}
-          </span>
-        </div>
-
-        <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-2 text-[10px] text-ink-subtle">
-          <span className="truncate">{meeting.translationRoomCode}</span>
-          <span>&middot;</span>
-          <span className="truncate">{meeting.hostName}</span>
-          <span>&middot;</span>
-          <span className="truncate">
-            {formatLanguageRoute(meeting.sourceLanguage, meeting.targetLanguages)}
-          </span>
-        </div>
-
-        {isPast ? (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="rounded border border-emerald-500/15 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700">
-              {meeting.artifacts.length ? `${meeting.artifacts.length} artifacts` : "No artifacts"}
-            </span>
-            <span className="text-[10px] text-ink-subtle">Open popup for room info and outputs.</span>
-            {meeting.artifacts.length ? (
-              <div className="flex flex-wrap gap-1.5">
-                {meeting.artifacts.slice(0, 2).map((artifact) => (
-                  <span
-                    key={artifact.id}
-                    className="flex items-center gap-1.5 rounded border border-border bg-surface-1 px-2 py-1 text-[10px] text-ink-muted"
-                  >
-                    <ArtifactIcon artifact={artifact} />
-                    {artifactLabel(artifact.type)}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            <span className="rounded border border-border px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-muted">
-              {meetingAudienceLabel(meeting, viewerUserId)}
-            </span>
-
-            <Link
-              href={`/${workspaceSlug}/rooms/${meeting.id}`}
-              onClick={(event) => event.stopPropagation()}
-              className="inline-flex items-center gap-1.5 rounded border border-border bg-surface-1 px-2 py-1 text-[10px] font-medium text-ink transition-colors hover:border-ink/30"
-            >
-              {meeting.timeState === "live" ? "Join" : "Open"}
-              <ArrowRight size={11} />
-            </Link>
-          </div>
-        )}
-      </div>
-
-      <div className="hidden shrink-0 items-start gap-1 pt-1 text-[10px] tabular-nums text-ink-subtle sm:flex">
-        <Users size={12} />
-        {meeting.participantCount}
-      </div>
+      {isGoogleMeetMeeting(meeting) ? (
+        <a
+          href={meeting.externalMeetingUrl ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+          className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700"
+        >
+          <VideoCamera size={10} />
+          <span className="truncate">Google Meet</span>
+        </a>
+      ) : null}
     </div>
   );
 }
@@ -987,22 +1334,6 @@ function PastMeetingDialog({
   );
 }
 
-function GapNotice({ previous, current }: { previous?: string; current: string }) {
-  if (!previous) return null;
-
-  const days = Math.round(Math.abs(Number(previous) - Number(current)) / 86_400_000);
-  if (days < 8) return null;
-
-  const weeks = Math.floor(days / 7);
-  return (
-    <div className="my-3 flex items-center gap-3 px-1 text-[10px] text-ink-subtle">
-      <span className="h-px flex-1 bg-border" />
-      {weeks === 1 ? "1 week with no meetings" : `${weeks} weeks with no meetings`}
-      <span className="h-px flex-1 bg-border" />
-    </div>
-  );
-}
-
 function Detail({
   icon: Icon,
   label,
@@ -1064,42 +1395,6 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function EmptyState({ hasQuery }: { hasQuery: boolean }) {
-  return (
-    <PagePlaceholder
-      kind="schedules"
-      className="min-h-[420px]"
-      title={hasQuery ? "No meetings match this search" : "Nothing on your timeline this month"}
-      description={
-        hasQuery
-          ? "Try a different title, code, or description."
-          : "Upcoming invites and attended meetings appear here."
-      }
-    />
-  );
-}
-
-type DayGroup = { key: string; date: Date; meetings: MyMeetingItem[] };
-
-function groupByDay(meetings: MyMeetingItem[]): DayGroup[] {
-  const byDay = new Map<string, MyMeetingItem[]>();
-
-  for (const meeting of meetings) {
-    const key = dayKey(meeting.occursAt);
-    const bucket = byDay.get(key);
-    if (bucket) bucket.push(meeting);
-    else byDay.set(key, [meeting]);
-  }
-
-  return [...byDay.entries()]
-    .map(([key, items]) => ({
-      key,
-      date: new Date(Number(key)),
-      meetings: items.sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt)),
-    }))
-    .sort((a, b) => Number(b.key) - Number(a.key));
-}
-
 function addMonths(date: Date, delta: number) {
   return new Date(date.getFullYear(), date.getMonth() + delta, 1);
 }
@@ -1119,11 +1414,11 @@ function formatWeekRange(days: Date[]) {
   const last = days[days.length - 1];
   const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
 
-  const start = new Intl.DateTimeFormat(undefined, {
+  const start = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     day: "numeric",
     ...(sameMonth ? {} : { month: "short" }),
   }).format(first);
-  const end = new Intl.DateTimeFormat(undefined, {
+  const end = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -1132,22 +1427,47 @@ function formatWeekRange(days: Date[]) {
   return `${start} – ${end}`;
 }
 
-function meetingAudienceLabel(meeting: MyMeetingItem, viewerUserId: string | null) {
-  if (meeting.isHost) return "Host";
-  if (viewerUserId && meeting.participants.some((participant) => participant.userId === viewerUserId)) {
-    return "Going";
-  }
-  return "Invited";
+/**
+ * Whether this meeting is still ahead of the viewer — the Upcoming bucket.
+ *
+ * `live` is in it because a meeting happening right now is the most "upcoming" thing there is.
+ * `missed` is NOT, and that is the entire point of WT-538: this used to be `timeState !== "past"`,
+ * which is why a room booked for last Tuesday and never opened was counted here forever.
+ */
+function isAhead(timeState: MeetingTimeState) {
+  return timeState === "upcoming" || timeState === "live";
 }
 
-function spineClass(meeting: MyMeetingItem) {
-  if (meeting.timeState === "live") return "bg-rose-500 motion-safe:animate-pulse";
-  if (meeting.timeState === "upcoming") return "bg-sky-500";
-  if (meeting.status === "cancelled") return "bg-slate-400";
-  return "bg-emerald-500";
+/**
+ * Whether the room is over, and therefore has a recap to open instead of a room to enter.
+ *
+ * Asked of the ROOM's status, not of `timeState`: `missed` covers both a meeting that ended
+ * without the viewer and a booked slot that never happened at all, and those two want opposite
+ * destinations. The first has artifacts; the second still has a room sitting there unopened.
+ */
+function hasFinished(meeting: MyMeetingItem) {
+  return !["scheduled", "waiting", "in_progress", "paused"].includes(meeting.status);
 }
 
-function rowToneClass(meeting: MyMeetingItem) {
+function isGoogleMeetMeeting(meeting: MyMeetingItem) {
+  return (
+    meeting.externalProvider?.toUpperCase() === "GOOGLE_MEET" &&
+    Boolean(meeting.externalMeetingUrl)
+  );
+}
+
+/**
+ * WT-538 — amber is `missed`, and it is deliberately nothing like the other four.
+ *
+ * The palette is the whole signal on this page: rose is happening, sky is coming, emerald is you
+ * were there, slate is called off. Amber had to be legible against all four at chip size, and it
+ * had to avoid reading as a dimmer emerald or a warmer rose — a missed meeting confused for an
+ * attended one is exactly the confusion this ticket exists to remove.
+ *
+ * And it is colour ONLY. No strike-through, on anything: `line-through` was removed from this file
+ * in 8953691 at the user's request, and it does not come back for this state or any other.
+ */
+function rowToneClass(meeting: TimedMeeting) {
   if (meeting.status === "cancelled") {
     return "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
   }
@@ -1157,25 +1477,66 @@ function rowToneClass(meeting: MyMeetingItem) {
   if (meeting.timeState === "upcoming") {
     return "border-l-4 border-l-sky-500 border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
   }
+  if (meeting.timeState === "missed") {
+    return "border-l-4 border-l-amber-500 border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20";
+  }
   return "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
 }
 
-function stateBadgeClass(meeting: MyMeetingItem) {
+function monthChipToneClass(meeting: TimedMeeting) {
+  if (meeting.status === "cancelled") {
+    return "border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
+  }
+  if (meeting.timeState === "live") {
+    return "border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20";
+  }
+  if (meeting.timeState === "upcoming") {
+    return "border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
+  }
+  if (meeting.timeState === "missed") {
+    return "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20";
+  }
+  return "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
+}
+
+/**
+ * Cancellation outranks the clock, exactly as it already does in rowToneClass and
+ * monthChipToneClass. Without this first branch a cancelled meeting wore a green "Joined" or a
+ * blue "Upcoming" pill next to its own greyed-out title on a grey card — three signals, three
+ * different answers to "what happened to this meeting?".
+ *
+ * That branch is also why a cancelled meeting resolving to `missed` changes nothing on screen: it
+ * never reaches the state branches below. "Cancelled" is the more specific answer and it wins.
+ */
+function stateBadgeClass(meeting: TimedMeeting) {
+  if (meeting.status === "cancelled") return "bg-surface-3 text-ink-muted";
   if (meeting.timeState === "live") return "bg-rose-500/10 text-rose-700";
   if (meeting.timeState === "upcoming") return "bg-sky-500/10 text-sky-700";
+  if (meeting.timeState === "missed") return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
   return "bg-emerald-500/10 text-emerald-700";
+}
+
+/** The label half of the same decision — kept beside the colour so the two cannot drift apart. */
+function stateBadgeLabel(meeting: TimedMeeting) {
+  if (meeting.status === "cancelled") return "Cancelled";
+  if (meeting.timeState === "live") return "Live";
+  if (meeting.timeState === "upcoming") return "Upcoming";
+  // "Missed", not "Not attended": the shorter word is the one people use, and the badge has room
+  // for one word. It says nothing about fault — a meeting that never happened is missed too.
+  if (meeting.timeState === "missed") return "Missed";
+  return "Joined";
 }
 
 function formatTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 function formatDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -1186,16 +1547,12 @@ function formatDateTime(value: string) {
 function formatCompactDateTime(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Unknown time";
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-}
-
-function formatDayHeading(date: Date) {
-  return new Intl.DateTimeFormat(undefined, { month: "long", day: "numeric" }).format(date);
 }
 
 function formatDuration(seconds: number | null) {
