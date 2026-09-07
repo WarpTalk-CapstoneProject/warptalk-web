@@ -65,7 +65,8 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-  CheckSquare,} from "@phosphor-icons/react/dist/ssr";
+  CheckSquare,
+  Files,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -228,8 +229,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     },
     { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
     { icon: Archive, label: "History", href: `/${slug}/history` },
-    // No Transcripts entry: a meeting's transcript, summary and files live on that
-    // meeting's own page, below its description.
+    // Artifacts, not "Transcripts". This entry used to be absent on purpose — "a meeting's
+    // transcript, summary and files live on that meeting's own page, below its description" —
+    // and that is still true: the record lives on the meeting, and this page links back to it.
+    // What was missing was the INDEX. Every question a record is kept to answer ("which meeting
+    // decided the budget?", "which meetings have a signed biên bản?") is a question about the
+    // documents, and answering it meant opening meetings one at a time.
+    //
+    // Directly under History because the two are one archive read two ways: History lists the
+    // MEETINGS, this lists what they wrote down.
+    { icon: Files, label: "Artifacts", href: `/${slug}/artifacts` },
     { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
   ];
 

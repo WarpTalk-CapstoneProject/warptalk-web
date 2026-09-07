@@ -58,6 +58,10 @@ import {
 } from "@/hooks/use-transcripts";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+// WT-605. The pause-window read lives with the other transcript hooks, not with the room
+// ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
+// existed, and two hooks of the same name over the same endpoint is how they drift.
+import { useTranscriptPauseWindows } from "@/hooks/use-transcripts";
 import {
   TranscriptSpeakerAvatar,
   TranscriptSpeakerStripe,
@@ -81,7 +85,10 @@ import {
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
   pendingCorrections,
+  resolveTranscriptPauseGaps,
+  splitSegmentsAroundPauseGaps,
   type GroupedSavedTranscriptSegment,
+  type TranscriptPauseGap,
 } from "@/lib/transcript/transcript-display";
 import {
   AS_SPOKEN,
@@ -230,6 +237,10 @@ export function MeetingTranscriptArtifact({
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
   const showSessionLabels = blocks.length > 1;
+  // WT-605. Independent of the translation-session grouping above — pausing the transcript and
+  // pausing translation are different, unrelated actions.
+  const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  const pauseGaps = resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime);
   const totalCount = grouped.length;
   const absence = describeTranscriptAbsence({
     lineCount: totalCount,
@@ -979,78 +990,93 @@ export function MeetingTranscriptArtifact({
               {showSessionLabels ? (
                 <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
               ) : null}
-              {layout === "timeline"
-                ? // One dot per stretch of the meeting a person held, so the rail shows who had
-                  // the floor and when — the thing neither of the other two layouts can show at
-                  // a glance, because both of them draw one row per utterance.
-                  groupIntoSpeakerTurns(block.segments).map((turn, index) => (
-                    <TranscriptTimelineTurn
-                      key={turn.key}
-                      speaker={resolveTranscriptSpeaker(
-                        turn.speakerId,
-                        turn.speakerName,
-                        speakerDirectory,
-                      )}
-                      speakerName={turn.speakerName}
-                      time={base ? segmentTime(turn.startTimeMs) : null}
-                      onSeek={
-                        onSeekToRecording
-                          ? () => onSeekToRecording(turn.startTimeMs)
-                          : undefined
-                      }
-                      // The rail starts AT the first dot rather than above it — a line hanging
-                      // off the top of the transcript reads as content scrolled out of view.
-                      isFirst={index === 0}
-                      rows={turn.lines.map(buildRow)}
-                    />
-                  ))
-                : layout === "document"
-                  ? // One block per TURN, not per utterance: the name, the face and the timestamp
-                    // are printed once for a stretch of talking rather than once per STT chunk.
-                    groupIntoSpeakerTurns(block.segments).map((turn) => (
-                      <TranscriptDocumentTurn
-                        key={turn.key}
-                        turnKey={turn.key}
-                        startTimeMs={turn.startTimeMs}
-                        endTimeMs={turn.lines[turn.lines.length - 1].endTimeMs}
-                        speaker={resolveTranscriptSpeaker(
-                          turn.speakerId,
-                          turn.speakerName,
-                          speakerDirectory,
-                        )}
-                        // No "You" here. A document names the people in it, and a record that
-                        // reads differently depending on who opened it is not a record.
-                        speakerName={turn.speakerName}
-                        elapsed={formatCitationTime(turn.startTimeMs)}
-                        clock={base ? segmentTime(turn.startTimeMs) : null}
-                        onSeek={
-                          onSeekToRecording
-                            ? () => onSeekToRecording(turn.startTimeMs)
-                            : undefined
-                        }
-                        marked={sync?.markedKey === turn.key}
-                        reading={sync?.readingKey === turn.key}
-                        query={query}
-                        rows={turn.lines.map((line) => {
-                          const row = buildRow(line);
-                          return languageChipLineIds
-                            ? { ...row, showLanguage: languageChipLineIds.has(line.id) }
-                            : row;
-                        })}
-                      />
-                    ))
-                  : block.segments.map((segment) => {
-                      const row = buildRow(segment);
-                      return (
-                        <TranscriptChatRow
-                          key={segment.id}
-                          {...row}
-                          speakerName={
-                            row.isSelf ? "You" : segment.speakerName || "Unknown speaker"
+              {/* Two changes met here and both are kept. WT-605 splits a session wherever the
+                  host paused the transcript, so a divider can say the record stops and restarts
+                  rather than leaving an unexplained jump in the timestamps; Option C draws the
+                  document as one block per speaker TURN instead of one row per utterance. They
+                  compose: the pause split is the outer loop, and each run between pauses is laid
+                  out in whichever of the three shapes the reader chose. Every layout reads
+                  `sub.segments`, never `block.segments` — grouping turns across a pause would
+                  merge speech from either side of it into one block and hide the very gap the
+                  divider is there to announce. */}
+              {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
+                <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`}>
+                  {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
+                  {layout === "timeline"
+                    ? // One dot per stretch of the meeting a person held, so the rail shows who had
+                      // the floor and when — the thing neither of the other two layouts can show at
+                      // a glance, because both of them draw one row per utterance.
+                      groupIntoSpeakerTurns(sub.segments).map((turn, index) => (
+                        <TranscriptTimelineTurn
+                          key={turn.key}
+                          speaker={resolveTranscriptSpeaker(
+                            turn.speakerId,
+                            turn.speakerName,
+                            speakerDirectory,
+                          )}
+                          speakerName={turn.speakerName}
+                          time={base ? segmentTime(turn.startTimeMs) : null}
+                          onSeek={
+                            onSeekToRecording
+                              ? () => onSeekToRecording(turn.startTimeMs)
+                              : undefined
                           }
+                          // The rail starts AT the first dot rather than above it — a line hanging
+                          // off the top of the transcript reads as content scrolled out of view.
+                          isFirst={index === 0}
+                          rows={turn.lines.map(buildRow)}
                         />
-                      );
-                    })}
+                      ))
+                    : layout === "document"
+                      ? // One block per TURN, not per utterance: the name, the face and the
+                        // timestamp are printed once for a stretch of talking rather than once per
+                        // STT chunk.
+                        groupIntoSpeakerTurns(sub.segments).map((turn) => (
+                          <TranscriptDocumentTurn
+                            key={turn.key}
+                            turnKey={turn.key}
+                            startTimeMs={turn.startTimeMs}
+                            endTimeMs={turn.lines[turn.lines.length - 1].endTimeMs}
+                            speaker={resolveTranscriptSpeaker(
+                              turn.speakerId,
+                              turn.speakerName,
+                              speakerDirectory,
+                            )}
+                            // No "You" here. A document names the people in it, and a record that
+                            // reads differently depending on who opened it is not a record.
+                            speakerName={turn.speakerName}
+                            elapsed={formatCitationTime(turn.startTimeMs)}
+                            clock={base ? segmentTime(turn.startTimeMs) : null}
+                            onSeek={
+                              onSeekToRecording
+                                ? () => onSeekToRecording(turn.startTimeMs)
+                                : undefined
+                            }
+                            marked={sync?.markedKey === turn.key}
+                            reading={sync?.readingKey === turn.key}
+                            query={query}
+                            rows={turn.lines.map((line) => {
+                              const row = buildRow(line);
+                              return languageChipLineIds
+                                ? { ...row, showLanguage: languageChipLineIds.has(line.id) }
+                                : row;
+                            })}
+                          />
+                        ))
+                      : sub.segments.map((segment) => {
+                          const row = buildRow(segment);
+                          return (
+                            <TranscriptChatRow
+                              key={segment.id}
+                              {...row}
+                              speakerName={
+                                row.isSelf ? "You" : segment.speakerName || "Unknown speaker"
+                              }
+                            />
+                          );
+                        })}
+                </div>
+              ))}
             </div>
           ))}
           </div>
@@ -1085,6 +1111,27 @@ function TranscriptSessionDivider({
         Translation {sessionNumber}
         {started ? ` · ${started}–${ended}` : ""}
       </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/**
+ * WT-605. The gap left by a Pause Transcript window — no line was recorded here, only
+ * translation/dubbing/subtitles were still running. Same visual language as
+ * TranscriptSessionDivider above, deliberately distinct wording so the two are never mistaken
+ * for one another.
+ */
+function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
+  const started = new Date(gap.window.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const ended = gap.window.endedAt
+    ? new Date(gap.window.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "now";
+
+  return (
+    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <div className="h-px flex-1 bg-border" />
+      <span>Transcript paused · {started}–{ended}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );

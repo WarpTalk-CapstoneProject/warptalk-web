@@ -24,7 +24,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { parseSummarySections } from "@/lib/meeting/meeting-summary";
+import { readableArtifactBody } from "@/lib/meeting/artifact-content";
 // Imported rather than restated. This file had its own one-line copies of artifactLabel and
 // artifactStatusLabel, identical to the ones in lib/meeting — which is how the archive and the
 // room page came to disagree about what a row says.
@@ -364,38 +364,6 @@ function ArtifactPreview({ state, onClose }: { state: ArtifactPreviewState | nul
       </div>
     </section>
   );
-}
-
-/**
- * Turns an artifact's stored content into something a person can read.
- *
- * Never throws: an artifact that is not JSON (transcript exports are markdown) is returned as it
- * is, which is exactly right for them.
- */
-function readableArtifactBody(raw: string): string {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return raw;
-  }
-
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return raw;
-  const record = parsed as Record<string, unknown>;
-  if (typeof record.summary !== "string") return raw;
-
-  if (record.insufficientData === true) {
-    return record.summary || "The assistant could not generate a summary for this meeting.";
-  }
-
-  const lines: string[] = [record.summary.trim()];
-
-  for (const section of parseSummarySections(record)) {
-    const items = section.items.map((item) => `• ${item.owner ? `${item.owner}: ` : ""}${item.text}`);
-    if (items.length) lines.push("", section.title, ...items);
-  }
-
-  return lines.join("\n");
 }
 
 function Detail({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string }) {

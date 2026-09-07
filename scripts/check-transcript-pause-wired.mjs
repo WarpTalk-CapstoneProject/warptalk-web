@@ -34,6 +34,8 @@ const session = read("src/components/rooms/live/persistent-meeting-session.tsx")
 const controlBar = read("src/components/rooms/live/meeting-control-bar.tsx");
 const sidePanel = read("src/components/rooms/live/side-panel/meeting-side-panel.tsx");
 const panel = read("src/components/rooms/live/side-panel/transcript-panel.tsx");
+const savedPanel = read("src/components/rooms/meeting-transcript-panel.tsx");
+const display = read("src/lib/transcript/transcript-display.ts");
 
 // ── hop 1: the endpoints exist, keyed by ROOM as the controller declares them ──
 
@@ -151,6 +153,41 @@ for (const [source, name] of [
   );
 }
 
+// ── the pause is legible AFTERWARDS, not only while it is on ───────────────
+//
+// The live banner says "paused, right now". It says nothing to somebody reading the transcript
+// back tomorrow, and a transcript with a silent hole in it is the thing that makes a record
+// untrustworthy — you cannot tell a pause from nobody having spoken. So each window is also
+// drawn INTO the transcript, on both panels: the live one and the saved one.
+assert.match(
+  display,
+  /export function resolveTranscriptPauseGaps\(/,
+  "Pause windows must be resolvable to meeting-relative positions, or no panel can place a divider.",
+);
+assert.match(
+  display,
+  /export function splitSegmentsAroundPauseGaps[<(]/,
+  "Segments must be splittable around the gaps — this is the transcript-pause counterpart to groupSegmentsByTranslationSession.",
+);
+for (const [name, source] of [
+  ["the live transcript panel", panel],
+  ["the saved transcript panel", savedPanel],
+]) {
+  assert.match(
+    source,
+    /splitSegmentsAroundPauseGaps\(/,
+    `${name} must draw the pause dividers. A pause that leaves no mark in the record is indistinguishable from silence.`,
+  );
+}
+// Distinct wording from the "Translation N" divider beside it. A room can pause translation and
+// pause the transcript at unrelated moments, and two dividers reading alike would merge in the
+// reader's mind into one thing that happened once.
+assert.match(
+  panel,
+  /Transcript paused ·/,
+  "The divider must name itself as a TRANSCRIPT pause, distinct from the translation-session divider it sits among.",
+);
+
 // The rule stays a tested module rather than an if in the page: its two inputs disagree in a way
 // that has a direction, and getting it backwards claims words are being written down that are not.
 assert.match(
@@ -164,4 +201,4 @@ assert.doesNotMatch(
   "The meeting page must go through resolveTranscriptPause, not read the windows itself — reading them directly is exactly the race the module exists to settle.",
 );
 
-console.log("Transcript pause contract OK (5 hops + meaning checked)");
+console.log("Transcript pause contract OK (5 hops + meaning + dividers checked)");
