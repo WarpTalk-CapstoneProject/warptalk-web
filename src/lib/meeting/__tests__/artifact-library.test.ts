@@ -371,8 +371,8 @@ test("two meetings stay two groups, newest first", () => {
 
   const groups = groupEntriesByMeeting(entries);
 
-  // Order is inherited from buildArtifactLibrary rather than recomputed here, so this pins that
-  // grouping does not quietly reshuffle the list.
+  // Ordered here, by the meeting's own end date — see the split-minutes test below for why this
+  // can no longer be inherited from the flat list.
   assert.deepEqual(
     groups.map((group) => group.roomId),
     ["room-2", "room-1"],
@@ -471,5 +471,99 @@ test("grouping a narrowed list answers \"meetings that have one\"", () => {
   assert.deepEqual(
     groups.map((group) => group.roomId),
     ["room-2"],
+  );
+});
+
+
+// ── a meeting's records stay together, and the meeting is dated by its END ───────
+
+/**
+ * The case that made adjacency structural rather than inherited.
+ *
+ * `buildArtifactLibrary` orders by `meetingEndedAt` first, and the two sources of that field
+ * disagree for one room: an artifact carries `room.endedAt`, a minutes carries
+ * `roomEndedAt ?? minutes.createdAt`. A minutes filed with no `roomEndedAt` takes the day it was
+ * DRAWN UP — later than the meeting — so it sorted away from its own transcript with other
+ * meetings in between.
+ */
+function splitMeetingFixture() {
+  return buildArtifactLibrary({
+    rooms: [
+      room({
+        id: "room-old",
+        translationRoomCode: "WARP-OLD",
+        endedAt: "2026-09-01T10:00:00Z",
+        artifacts: [artifact({ id: "t-old" })],
+      }),
+      room({
+        id: "room-new",
+        translationRoomCode: "WARP-NEW",
+        endedAt: "2026-09-06T10:00:00Z",
+        artifacts: [artifact({ id: "t-new" })],
+      }),
+    ],
+    minutes: [
+      minutesItem({
+        minutes: minutesDto({
+          translationRoomId: "room-old",
+          createdAt: "2026-09-07T08:00:00Z",
+          updatedAt: "2026-09-07T08:00:00Z",
+        }),
+        roomCode: "WARP-OLD",
+        // The whole point: the minutes row does not say when the meeting ended.
+        roomEndedAt: null,
+      }),
+    ],
+  });
+}
+
+test("the flat list really can separate a meeting's records", () => {
+  // Guards the premise of the three tests below. If this ever stops being true the grouping is
+  // still correct, but the reason it was made structural would have quietly disappeared.
+  const entries = splitMeetingFixture();
+  const positions = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => entry.roomId === "room-old")
+    .map(({ index }) => index);
+
+  assert.equal(positions.length, 2);
+  assert.notEqual(positions[1] - positions[0], 1, "the fixture no longer reproduces the split");
+});
+
+test("a meeting's records are one group even when the flat list splits them", () => {
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+  const old = groups.find((group) => group.roomId === "room-old");
+
+  assert.ok(old);
+  assert.deepEqual(old.kinds, ["transcript", "minutes"]);
+});
+
+test("a meeting is dated by when it ENDED, not by when its minutes were filed", () => {
+  // 2026-09-07 is the day somebody drew the minutes up. Dating the meeting by it would put a
+  // meeting from the 1st at the top of a list sorted by end date.
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+  const old = groups.find((group) => group.roomId === "room-old");
+
+  assert.equal(old?.meetingEndedAt, "2026-09-01T10:00:00Z");
+});
+
+test("groups are ordered by the meeting's end date, newest first", () => {
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+
+  assert.deepEqual(
+    groups.map((group) => group.roomCode),
+    ["WARP-NEW", "WARP-OLD"],
+  );
+});
+
+test("a group's records read transcript, summary, minutes whatever order they arrived in", () => {
+  // The panel's first tab is entries[0]. A minutes that sorted ahead of its own transcript put
+  // "Minutes" there, which is the last thing produced and the first thing shown.
+  const groups = groupEntriesByMeeting(splitMeetingFixture());
+  const old = groups.find((group) => group.roomId === "room-old");
+
+  assert.deepEqual(
+    old?.entries.map((entry) => entry.kind),
+    ["transcript", "minutes"],
   );
 });

@@ -453,12 +453,18 @@ export type MeetingRecordGroup = {
  *   about the MEETING; the three documents are its contents, not three peers of it. So the
  *   meeting is the card, and opening it is what shows the three.
  *
- * ORDER IS INHERITED, NEVER RECOMPUTED
- *   Groups come out in the order their first record appeared, and entries keep the order they
- *   arrived in. `byMeetingThenKind` has already put them newest-meeting-first with one meeting's
- *   records adjacent and in transcript → summary → minutes order — pinned by the test "newest
- *   meeting first, and one meeting's records keep their produced order". Sorting again here would
- *   be a second opinion that can drift from the first.
+ * ADJACENCY IS STRUCTURAL, NOT INHERITED
+ *   This function used to lean on `byMeetingThenKind` having already placed a meeting's records
+ *   together, and that is not something the flat sort can guarantee. It orders by
+ *   `meetingEndedAt` FIRST, and the two sources of that field do not always agree for one room:
+ *   artifacts carry `room.endedAt`, while a minutes carries `roomEndedAt ?? minutes.createdAt`.
+ *   A minutes filed with no `roomEndedAt` therefore takes the date it was DRAWN UP, which is
+ *   later than the meeting — so it sorted away from its own transcript, with other meetings in
+ *   between, and the group it formed was dated and ordered by that wrong date.
+ *
+ *   Grouping by room makes the adjacency true by construction, and the group is then dated and
+ *   sorted here rather than borrowed. "Ba output của một meeting phải nằm cạnh nhau, rồi sort
+ *   theo end date của meeting" is the requirement, and both halves are now enforced in one place.
  *
  * GROUPED AFTER NARROWING, ALWAYS
  *   The caller filters first and groups second, so "Transcripts" means "meetings that have one"
@@ -491,8 +497,19 @@ export function groupEntriesByMeeting(entries: LibraryEntry[]): MeetingRecordGro
     }
 
     group.entries.push(entry);
-    if (!group.kinds.includes(entry.kind)) group.kinds.push(entry.kind);
     if (entry.body) group.readableCount += 1;
+
+    // THE EARLIEST date any of this meeting's records claims for it.
+    //
+    // Not the latest, and not the first seen. Where the two sources disagree, the minutes'
+    // fallback is `minutes.createdAt` — the day somebody drew the document up, which is always
+    // AFTER the meeting ended. The minimum therefore recovers the real end whenever any
+    // artifact is present, and degrades to the minutes' own date only for a meeting that is not
+    // on the loaded page at all, where it is the best fact available.
+    if (entry.meetingEndedAt && entry.meetingEndedAt < group.meetingEndedAt) {
+      group.meetingEndedAt = entry.meetingEndedAt;
+    }
+
     // The LATEST change, not the last one seen. A meeting's records arrive in produced order,
     // which is not the order they were edited in — minutes signed today sit after a transcript
     // that has not changed since the meeting ended.
@@ -501,7 +518,26 @@ export function groupEntriesByMeeting(entries: LibraryEntry[]): MeetingRecordGro
     }
   }
 
-  return Array.from(byRoom.values());
+  const groups = Array.from(byRoom.values());
+
+  for (const group of groups) {
+    // Reading order — the evidence, then what read it, then what was signed off it — rather than
+    // the order the two sources happened to arrive in. Without this a minutes that sorted ahead
+    // of its transcript put "Minutes" in the first tab of the panel.
+    group.entries.sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+    group.kinds = group.entries.map((entry) => entry.kind).filter((kind, at, all) => all.indexOf(kind) === at);
+  }
+
+  // Newest meeting first, by the meeting's own END date. Explicit, because the flat order this
+  // used to inherit could place a meeting by the date its minutes were filed.
+  return groups.sort((a, b) => {
+    const left = Date.parse(a.meetingEndedAt) || 0;
+    const right = Date.parse(b.meetingEndedAt) || 0;
+    if (left !== right) return right - left;
+    // Deterministic rather than arbitrary: two meetings that ended in the same millisecond must
+    // not swap places between renders of the same list.
+    return a.roomId < b.roomId ? -1 : 1;
+  });
 }
 
 /**
