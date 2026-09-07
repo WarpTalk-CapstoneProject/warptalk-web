@@ -170,15 +170,27 @@ if (!page.includes("disabled={isConnecting || workspaceBlock !== null}")) {
 // ---------------------------------------------------------------------------------------------
 // The heading has to be true
 //
-// "Featured" sat above the whole catalog and nothing selected the rows under it. isFeatured,
-// sortOrder and category are on the admin catalog DTOs only, so the user-facing page cannot know
-// which rows are featured — and a heading that claims a distinction the data cannot make gets more
-// wrong with every row added.
+// "Featured" sat above the whole catalog and nothing selected the rows under it. isFeatured and
+// sortOrder reach the user-facing DTO since WT-646, so the ordering can be curated — but the page
+// still renders one list, and heading all of it "Featured" would be the same untrue claim.
+//
+// The ordering assertions are the point: if a refactor drops isFeatured or sortOrder from the sort,
+// an operator's curation silently stops having any effect, which is invisible on screen.
 // ---------------------------------------------------------------------------------------------
 if (/<h2[^>]*>Featured<\/h2>/.test(page)) {
   throw new Error(
-    "Plugins page must not head the whole catalog 'Featured'. isFeatured is not on the user-facing catalog DTO, so nothing selects those rows.",
+    "Plugins page must not head the whole catalog 'Featured' — it lists every row, featured or not.",
   );
+}
+// Matched as a property read off the comparator's own arguments, not as a bare word: the field
+// names appear in the prose above the sort too, and `page.includes("isFeatured")` was satisfied by
+// that comment even with the comparison deleted — an assertion that cannot fail.
+for (const field of ["isFeatured", "sortOrder"]) {
+  if (!new RegExp(`[ab]\\.${field}\\b`).test(page)) {
+    throw new Error(
+      `The catalog ordering must honour \`${field}\` in the comparator; without it an operator's curation is stored and silently ignored.`,
+    );
+  }
 }
 if (!page.includes("localeCompare")) {
   throw new Error(

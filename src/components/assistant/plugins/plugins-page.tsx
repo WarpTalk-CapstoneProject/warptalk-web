@@ -337,22 +337,23 @@ export default function PluginsPage() {
   // Google account can still leave an individual plugin unusable.
   //
   // ORDERING
-  //   The catalog gained `isFeatured`, `sortOrder` and `category` in WT-646, and none of the three
-  //   reaches this page: they are on PluginCatalogAdminListItemDto and
-  //   PluginCatalogAdminDetailDto only. PluginCatalogItemMapper.ToCatalogItem does not copy them
-  //   onto PluginCatalogItemDto, so the user-facing catalog cannot say which rows are featured,
-  //   what order an operator put them in, or what category a row belongs to.
+  //   Operator curation first (`isFeatured`, then `sortOrder`), label last. All three arrive from
+  //   the catalog now; before WT-646 they stopped at the admin DTO, and this page sorted by label
+  //   alone because that was the only ordering it could honestly produce.
   //
-  //   Sorting by label is therefore not a placeholder for an ordering we have and ignore — it is
-  //   the only stable ordering this page can honestly produce. It replaces the backend's row order,
-  //   which is whatever the query returned. Once those fields ship, this is where featured-first,
-  //   then sortOrder, then label belongs, and the "Featured" heading can come back meaning it.
+  //   Every field is still read defensively: a server older than WT-646 sends none of them, and
+  //   `undefined` must degrade to "not featured, unordered" rather than to NaN comparisons that
+  //   scramble the list. `category` is null on every row today, so nothing groups by it yet.
   //
   const catalogPlugins = useMemo(
     () =>
       plugins
         .map(withEffectiveConnectionStatus)
-        .sort((a, b) => a.label.localeCompare(b.label)),
+        .sort((a, b) => {
+          if ((a.isFeatured ?? false) !== (b.isFeatured ?? false)) return a.isFeatured ? -1 : 1;
+          const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+          return order !== 0 ? order : a.label.localeCompare(b.label);
+        }),
     [plugins],
   );
 
@@ -497,10 +498,12 @@ export default function PluginsPage() {
 
       <section className="flex flex-col gap-3">
         <div className="border-b border-border pb-3">
-          {/* Was "Featured", above the entire catalog. Nothing selected those rows and nothing
-              could: `isFeatured` is an admin-DTO field the user-facing catalog does not carry, so
-              the heading named a distinction that did not exist and got less true with every row
-              added. This says what the section actually is. */}
+          {/* Was "Featured", above the entire catalog, when nothing selected the rows under it.
+              `isFeatured` reaches this page now and drives the ordering, so featured rows really
+              do come first — but they are still every row in one list, and heading the whole list
+              "Featured" would be the same untrue claim as before. A separate featured band is a
+              layout change (it has its own empty, filtered and two-column cases) and belongs with
+              whoever designs it, not smuggled in behind a sort. */}
           <h2 className="text-sm font-semibold text-ink">All plugins</h2>
         </div>
 

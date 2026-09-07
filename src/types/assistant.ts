@@ -85,6 +85,15 @@ export interface AssistantPluginCatalogItemDto {
    */
   provider?: string | null;
   /**
+   * Operator curation, set from the admin catalog surface. Optional on the type because a server
+   * older than WT-646 sends none of them, in which case ordering falls back to label alone.
+   */
+  isFeatured?: boolean;
+  /** Ascending. Ties are broken by label. */
+  sortOrder?: number;
+  /** Null on every row today; grouping by it is only worth doing once rows carry one. */
+  category?: string | null;
+  /**
    * Why the active workspace's plugin policy refuses this row, or absent when nothing refuses it.
    *
    * A blocked row is still returned rather than hidden, deliberately: a user whose workspace
