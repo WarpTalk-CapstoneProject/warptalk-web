@@ -79,27 +79,6 @@ export interface WorkspaceSettingsDto {
   aiUsagePolicy?: AiUsagePolicyDto | null;
   isProfanityFilterEnabled: boolean;
   allowAnyPlugins: boolean;
-  /**
-   * WT-646. Which plugin keys this workspace permits. Owner and Admin may both set it.
-   *
-   * NULL IS NOT AN EMPTY ALLOWLIST, and the two must survive every round trip through this
-   * client. Null means no allowlist was ever configured and the decision falls back to
-   * `allowAnyPlugins` — which is what every workspace predating the field looks like. An empty
-   * array is a configured allowlist that permits nothing. A `?? []` anywhere on the read path
-   * turns the first into the second and hands the workspace a silent plugin outage; a `|| null`
-   * on the write path turns the second back into the first and quietly re-permits everything.
-   *
-   * Optional here only because a server older than the field omits it; treat absent as null.
-   */
-  allowedPluginKeys?: string[] | null;
-  /** Whether a plain Member may install a plugin. Owner and Admin may both set it. */
-  allowMemberPluginInstall?: boolean;
-  /**
-   * Whether an installed plugin needs Owner/Admin approval before it may be invoked.
-   * OWNER-ONLY to change — WorkspaceService.UpdateWorkspaceSettingsAsync gates it alongside
-   * `allowExternalCollaboration` and answers an Admin with 403.
-   */
-  requirePluginApproval?: boolean;
 }
 
 export interface AiUsagePolicyDto {
