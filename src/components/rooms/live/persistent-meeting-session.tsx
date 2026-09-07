@@ -46,6 +46,7 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
+  useJoinLanguagePolicy,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -156,10 +157,6 @@ import {
   shouldAskForLanguages,
   suggestLanguageProfile,
 } from "@/lib/language/language-profile";
-import {
-  fetchMyBreakoutAssignment,
-} from "@/hooks/use-breakouts";
-import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
@@ -241,7 +238,31 @@ export function PersistentMeetingSession({
 
   // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
   // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  //
+  // Kept as the FALLBACK only. It is keyed on the workspace the user currently has SELECTED, which
+  // is not necessarily the workspace that owns this room, and it is a members-only endpoint: an
+  // external guest is not a member, so it answers 403, the data comes back undefined, and the
+  // "empty means unrestricted" rule below turns a refusal into the full language list. That is how
+  // a workspace limited to two languages still offered Japanese in the meeting.
   const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+  // The room's OWN policy, resolved from its code by the same endpoint /join and the setup modal
+  // use. Public, so it answers for guests too, and it is about this room's workspace rather than
+  // whichever one happens to be selected — both of the reasons the line above cannot be trusted
+  // alone. It is the primary source; the settings read stays for the moment the room (and so its
+  // code) has not loaded yet.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(
+    roomQuery.data?.translationRoomCode ?? "",
+  );
+  /**
+   * The allowed-language list to apply, or undefined when we genuinely do not know one.
+   *
+   * `undefined` and `[]` mean the same thing downstream — unrestricted — which is correct for a
+   * workspace that never set a policy and wrong for a request that failed. Preferring the public
+   * per-room answer is what removes the failing request from the common path rather than trying to
+   * tell its two meanings apart after the fact.
+   */
+  const allowedTargetLanguages =
+    joinLanguagePolicy?.allowedTargetLanguages ?? workspaceSettings?.allowedTargetLanguages;
 
   // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
   // meant for the far side has to leave through the virtual microphone Meet is listening to
@@ -723,37 +744,7 @@ export function PersistentMeetingSession({
     event: transcriptPauseEvent,
   });
 
-  // Breakout rooms (scoped-down): `breakoutState` describes THIS viewer's own current
-  // assignment/connection (drives the LiveKit token swap + top-bar countdown chip below).
-  // The host-facing breakout controls are gone with the feature; these handlers stay only so a
-  // client already in a breakout still follows a BreakoutsEnded back to the main room.
-  // `breakoutState` is per-viewer — it describes THIS viewer's own current
-  // last BreakoutsEnded one, regardless of whether THIS viewer has an assignment (e.g. the
-  // host, who stays in the main room) — drives the host-controls flyout's active state.
-  const [breakoutState, setBreakoutState] = useState<{
-    active: boolean;
-    label: string | null;
-    startedAt: string | null;
-    durationSeconds: number | null;
-  }>({ active: false, label: null, startedAt: null, durationSeconds: null });
-  const breakoutActiveRef = useRef(false);
-  useEffect(() => {
-    breakoutActiveRef.current = breakoutState.active;
-  }, [breakoutState.active]);
-  // The main room's own LiveKit session, remembered so BreakoutsEnded can reconnect back to
-  // it — only updated while NOT in a breakout (see the LiveKitRoom's token-swap comment
-  // further down for why simply swapping `meetingSession.token` is enough to move the
-  // LiveKitRoom component between provider rooms without a full remount).
-  const mainMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
-  useEffect(() => {
-    if (!breakoutState.active) {
-      mainMeetingSessionRef.current = meetingSession;
-    }
-  }, [meetingSession, breakoutState.active]);
   // WT-357: the session as it is right now, for handlers registered once on the hub connection.
-  // Distinct from mainMeetingSessionRef above, which deliberately freezes at the MAIN room's
-  // session while a breakout is active — a handler asking "do I already hold a live session"
-  // must be told about the session it actually holds.
   const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
   useEffect(() => {
     currentMeetingSessionRef.current = meetingSession;
@@ -1370,7 +1361,7 @@ export function PersistentMeetingSession({
     // Empty means unrestricted, matching the server's own whitelist check — so an absent or
     // still-loading settings response must NOT be read as "nothing is allowed", or the picker
     // would empty itself while the query is in flight.
-    const allowed = workspaceSettings?.allowedTargetLanguages;
+    const allowed = allowedTargetLanguages;
     if (!allowed || allowed.length === 0) return Array.from(codes);
 
     const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
@@ -1379,7 +1370,7 @@ export function PersistentMeetingSession({
     // them no way to move off it — the policy is enforced by what they can move TO.
     const current = normalizeLanguageCode(targetLanguage);
     return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
-  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
+  }, [room, targetLanguage, addedLanguages, allowedTargetLanguages]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -2182,69 +2173,6 @@ export function PersistentMeetingSession({
       toast.error("You have been permanently removed from this room.");
       onMeetingClosed();
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
-    });
-
-    // Breakout rooms (scoped-down) — BreakoutsStarted/BreakoutsEnded are relayed by
-    // BreakoutsService through TranslationRoomRedisSubscriberService on the Gateway.
-    // Assignments carries no LiveKit
-    // token (see BreakoutAssignmentRelayDto's doc on the backend) — an assigned client mints
-    // its own via GET .../breakouts/my-assignment, then swaps meetingSession.token to move
-    // the already-mounted <LiveKitRoom> from the main room to the sub-room in place (see
-    // useLiveKitRoom's connect/token effect: changing `token` while `connect` stays true
-    // just calls room.connect() again with the new token, no remount needed).
-    connection.on(
-      "BreakoutsStarted",
-      (
-        assignments: BreakoutAssignmentRelay[] | null,
-        durationSeconds: number | null,
-        startedAt: string | null,
-      ) => {
-        const mine = user?.id
-          ? (assignments ?? []).find((a) => a.userId === user.id)
-          : undefined;
-        if (!mine) return;
-
-        setBreakoutState({
-          active: true,
-          label: mine.label,
-          startedAt,
-          durationSeconds,
-        });
-        void fetchMyBreakoutAssignment(roomId)
-          .then((info) => {
-            setMeetingSession({
-              token: info.token,
-              providerRoomName: info.providerRoomName,
-              participantIdentity: info.participantIdentity,
-              isWaitingRoom: false,
-              muteOnEntry: false,
-            });
-            toast.success(`You've been moved to ${mine.label}.`);
-          })
-          .catch(() => {
-            toast.error("Could not join your breakout room.");
-            setBreakoutState({
-              active: false,
-              label: null,
-              startedAt: null,
-              durationSeconds: null,
-            });
-          });
-      },
-    );
-    connection.on("BreakoutsEnded", () => {
-      if (!breakoutActiveRef.current) return;
-
-      setBreakoutState({
-        active: false,
-        label: null,
-        startedAt: null,
-        durationSeconds: null,
-      });
-      if (mainMeetingSessionRef.current) {
-        setMeetingSession(mainMeetingSessionRef.current);
-      }
-      toast.success("Breakout rooms ended — you're back in the main room.");
     });
 
     let cancelled = false;
@@ -3229,7 +3157,7 @@ export function PersistentMeetingSession({
                     // WT-497: the policy itself, not only the room list it already narrowed.
                     // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
                     // exactly what availableListenLanguages excluded.
-                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
+                    allowedTargetLanguages={allowedTargetLanguages}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
