@@ -3,8 +3,10 @@ type SavedVoiceProfile = {
   provider?: string | null;
   providerVoiceId?: string | null;
   language?: string | null;
-  /** Null on a library PICK, always set on a voice of the person's own — the only field that
-   *  still separates the two. See profile-status.ts `isLibraryVoicePointer`. */
+  /** "library" on a PICK. See profile-status.ts `isLibraryVoicePointer`. */
+  source?: string | null;
+  /** Was null on every pick until the backend started storing the catalogue voice's name, and
+   *  is the fallback test for rows written before then. */
   displayName?: string | null;
 };
 
@@ -31,12 +33,25 @@ export type SavedVoiceLabel =
   | { state: "none" }
   | { state: "loading" }
   | { state: "named"; name: string }
-  | { state: "unavailable" };
+  /** Known by name when the row carries one, and still not in effect. Both halves matter. */
+  | { state: "unavailable"; name?: string };
 
 export function describeSavedVoice(
   voiceId: string | null | undefined,
   catalog: NamedCatalogVoice[],
   catalogLoading: boolean,
+  /**
+   * The name stored ON THE ROW when the pick was made, if there is one.
+   *
+   * The backend captures it from the catalogue at that moment — the one moment the cache is
+   * guaranteed warm, because the person is choosing from a list they can see. It is what lets
+   * this say "Linh - Soft Presence" months later instead of a UUID.
+   *
+   * It does NOT promote the voice to "named". A cold catalogue still means the pick is not
+   * being applied (see resolveSavedVoiceForLanguage), so naming it outright would go back to
+   * implying a setting is in effect when it is not. It names the unavailable state instead.
+   */
+  savedName?: string | null,
 ): SavedVoiceLabel {
   if (!voiceId) return { state: "none" };
 
@@ -46,7 +61,10 @@ export function describeSavedVoice(
   // Loading is checked AFTER the lookup, not before: a warm react-query cache hands the
   // catalogue over while a background refetch is still in flight, and flashing "Loading…"
   // over a name we already have reads as the setting flickering.
-  return catalogLoading ? { state: "loading" } : { state: "unavailable" };
+  if (catalogLoading) return { state: "loading" };
+
+  const stored = savedName?.trim();
+  return stored ? { state: "unavailable", name: stored } : { state: "unavailable" };
 }
 
 /** In-room pick for one language. `voiceId: null` means "cleared here, use no voice pick". */
@@ -87,7 +105,10 @@ export function resolveSavedVoiceForLanguage(
     (profile) =>
       profile.provider === "cartesia" &&
       profile.providerVoiceId &&
-      !profile.displayName?.trim() &&
+      // Source first, name second — the same two-step as isLibraryVoicePointer, and for the
+      // same reason: a pick now carries the catalogue voice's name, so "no name" only still
+      // identifies rows written before that.
+      (profile.source === "library" || !profile.displayName?.trim()) &&
       bare(profile.language ?? "") === bare(language),
   );
   if (!saved?.providerVoiceId) return null;

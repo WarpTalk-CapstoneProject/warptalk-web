@@ -81,3 +81,34 @@ test("Your voices keeps every voice the person made and drops the pointer", () =
     ["1", "3", "2"],
   );
 });
+
+/**
+ * Once the backend carries an explicit source, that is the answer and the name test is only
+ * the transition for rows written before it.
+ */
+const NAMED_LIBRARY_PICK = {
+  id: "5",
+  displayName: "Linh - Soft Presence",
+  language: "vi",
+  provider: "cartesia",
+  providerVoiceId: "935a9060-373c-49e4-b078-f4ea6326987a",
+  source: "library",
+} as never;
+
+test("a pick that now carries the catalogue voice's name is still a pick", () => {
+  // The whole reason source had to exist: storing the name kills the old test.
+  assert.equal(isLibraryVoicePointer(NAMED_LIBRARY_PICK), true);
+});
+
+test("source wins over a name, and an own voice with a source is still own", () => {
+  const ownWithSource = { ...(OWN_UPLOAD as object), source: "upload" } as never;
+
+  assert.equal(isLibraryVoicePointer(ownWithSource), false);
+});
+
+test("an un-backfilled pick is still caught by the name test", () => {
+  // Rows written before the migration carry source "upload" and no name.
+  const legacy = { ...(LIBRARY_PICK as object), source: "upload" } as never;
+
+  assert.equal(isLibraryVoicePointer(legacy), true);
+});

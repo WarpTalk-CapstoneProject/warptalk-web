@@ -150,3 +150,34 @@ test("a voice a populated catalogue does not offer is still discarded", () => {
 
   assert.equal(resolveSavedVoiceForLanguage(retired, "vi", VI_CATALOG), null);
 });
+
+const NAMED_PICK_VI = [
+  {
+    provider: "cartesia",
+    providerVoiceId: LINH,
+    language: "vi",
+    displayName: "Linh - Soft Presence",
+    source: "library",
+  },
+];
+
+test("a named pick is still resolved once source identifies it", () => {
+  // Storing the catalogue name on the row removed the old "no name" test, so without the
+  // source clause this preference would silently stop being sent to the hub.
+  assert.equal(resolveSavedVoiceForLanguage(NAMED_PICK_VI, "vi", VI_CATALOG), LINH);
+});
+
+test("an unavailable voice is named from the row when the row knows it", () => {
+  // The point of storing the name: a UUID is never shown, and after a cache expiry the reader
+  // still learns WHICH voice is not being applied.
+  assert.deepEqual(describeSavedVoice(LINH, [], false, "Linh - Soft Presence"), {
+    state: "unavailable",
+    name: "Linh - Soft Presence",
+  });
+});
+
+test("naming an unavailable voice does not promote it to applied", () => {
+  // Both halves have to stay true at once, or the readout goes back to implying a setting is
+  // in effect when the resolver has dropped it.
+  assert.equal(resolveSavedVoiceForLanguage(NAMED_PICK_VI, "vi", []), null);
+});

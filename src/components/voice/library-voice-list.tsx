@@ -46,16 +46,22 @@ const LANGUAGES = languagesInScope("voiceCatalog");
  * "stand-in", a UUID it had no way to name because a personal clone is not in the public
  * catalogue. See profile-status.ts for why a missing name is the marker.
  */
+function usePreferredVoice(profiles: VoiceProfileDto[], language: string) {
+  return useMemo(
+    () =>
+      profiles.find(
+        (profile) =>
+          isLibraryVoicePointer(profile) &&
+          profile.provider === "cartesia" &&
+          bareLanguage(profile.language ?? "") === language,
+      ) ?? null,
+    [profiles, language],
+  );
+}
+
+/** Just the id, for the callers that only need to know which row is active. */
 function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
-  return useMemo(() => {
-    const match = profiles.find(
-      (profile) =>
-        isLibraryVoicePointer(profile) &&
-        profile.provider === "cartesia" &&
-        bareLanguage(profile.language ?? "") === language,
-    );
-    return match?.providerVoiceId ?? null;
-  }, [profiles, language]);
+  return usePreferredVoice(profiles, language)?.providerVoiceId ?? null;
 }
 
 /**
@@ -204,13 +210,22 @@ export function ListeningVoiceSummary({
   profiles: VoiceProfileDto[];
   language: string;
 }) {
-  const currentVoiceId = usePreferredVoiceId(profiles, language);
+  const current = usePreferredVoice(profiles, language);
+  const currentVoiceId = current?.providerVoiceId ?? null;
   const catalogQuery = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
 
+  // The name stored on the row is the fallback the catalogue cannot provide once its cache has
+  // expired — captured when the pick was made, which is the one moment it was warm.
   const label = useMemo(
-    () => describeSavedVoice(currentVoiceId, catalogQuery.data ?? [], catalogQuery.isLoading),
-    [currentVoiceId, catalogQuery.data, catalogQuery.isLoading],
+    () =>
+      describeSavedVoice(
+        currentVoiceId,
+        catalogQuery.data ?? [],
+        catalogQuery.isLoading,
+        current?.displayName,
+      ),
+    [currentVoiceId, catalogQuery.data, catalogQuery.isLoading, current?.displayName],
   );
 
   const headline =
@@ -219,7 +234,7 @@ export function ListeningVoiceSummary({
       : label.state === "loading"
         ? "Loading…"
         : label.state === "unavailable"
-          ? "Saved voice"
+          ? (label.name ?? "Saved voice")
           : "Automatic";
 
   return (
