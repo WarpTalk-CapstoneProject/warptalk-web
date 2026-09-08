@@ -6,6 +6,7 @@ import { adminPluginCatalogService } from "@/services/admin-plugin-catalog.servi
 import type {
   AdminPluginCatalogDetailDto,
   AdminPluginToolAuditQuery,
+  CreateAdminMcpPluginRequest,
   ReplaceAdminPluginToolsRequest,
   SetAdminPluginOAuthClientRequest,
   UpdateAdminPluginRequest,
@@ -59,6 +60,26 @@ export function useAdminPluginAudits(
     enabled: Boolean(pluginKey),
     placeholderData: (previous) => previous,
     staleTime: 15_000,
+  });
+}
+
+/**
+ * Adds a catalog row.
+ *
+ * The only write here that does not seed the detail cache, because it is the only one that cannot:
+ * the create endpoint answers with the user-facing catalog item, not the admin detail row, and
+ * writing that shape into the detail cache would leave the detail page rendering a row whose OAuth
+ * and tool fields are simply absent. The list is invalidated and the caller routes to the new row,
+ * which fetches it properly.
+ */
+export function useCreateAdminPlugin() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: CreateAdminMcpPluginRequest) =>
+      adminPluginCatalogService.create(request),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ADMIN_PLUGIN_CATALOG_KEYS.list });
+    },
   });
 }
 

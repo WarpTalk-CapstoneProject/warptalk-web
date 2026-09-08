@@ -23,6 +23,16 @@
  *     it save, and believe the problem fixed — which is a worse outcome than the button not being
  *     there, and close to how the outage this screen exists for went unnoticed.
  *
+ *  4. THE EDITABLE FIELDS FOLLOW THE ROW. Every write on this page re-seeds the detail cache in
+ *     place, and the sections stay mounted, so a field initialised with `useState(detail.x)` keeps
+ *     the value the row held when the page opened. "Re-run discovery" made that visible and
+ *     dangerous: the summary above showed the endpoints discovery had found while the boxes below
+ *     still held the old ones, and pressing Save wrote the old ones back over them.
+ *
+ *  5. NO ROW CAN BE EDITED THAT COULD NOT BE CREATED. The screen claimed create/edit/retire while
+ *     having no create at all, which left "adding an MCP app is one INSERT, not a deploy" true of
+ *     the API and false of the product.
+ *
  * Plus the one thing the list is for: the row that cannot connect is visible without opening it,
  * and a retired row is visibly not a live one.
  */
@@ -40,10 +50,11 @@ const DETAIL_PAGE = "src/app/(app)/admin/plugins/[pluginKey]/page.tsx";
 const TYPES = "src/types/admin-plugin-catalog.ts";
 const SERVICE = "src/services/admin-plugin-catalog.service.ts";
 const HELPERS = "src/lib/admin/plugin-catalog.ts";
+const HOOKS = "src/hooks/use-admin-plugin-catalog.ts";
 const ENDPOINTS = "src/lib/api/endpoints.ts";
 
-const [listPage, detailPage, types, service, helpers, endpoints] = await Promise.all(
-  [LIST_PAGE, DETAIL_PAGE, TYPES, SERVICE, HELPERS, ENDPOINTS].map(read),
+const [listPage, detailPage, types, service, helpers, hooks, endpoints] = await Promise.all(
+  [LIST_PAGE, DETAIL_PAGE, TYPES, SERVICE, HELPERS, HOOKS, ENDPOINTS].map(read),
 );
 
 // ── 1 · No secret can be read back, so none can be rendered ──────────────────
@@ -172,6 +183,113 @@ assert.match(
   service,
   /remove:[\s\S]{0,400}?params: hard \? \{ hard: true \} : undefined/,
   "a hard delete must be asked for explicitly; a soft delete must not carry the flag at all",
+);
+
+// ── 7 · The editable fields follow a re-seeded row ───────────────────────────
+//
+// Source-level because it is wiring: every unit test and the typechecker pass with the OAuth
+// endpoints frozen at whatever the row held when the page opened.
+
+assert.match(
+  detailPage,
+  /function useSeededField/,
+  "the editable fields must be seeded through a helper that can re-seed: useState(initialValue) reads its argument once, so a re-seeded detail cache never reaches the boxes below the summary that shows it",
+);
+for (const [field, seed] of [
+  ["clientId", /detail\.oAuthClientId \?\? ""/],
+  ["authorizationEndpoint", /detail\.oAuthAuthorizationEndpoint \?\? ""/],
+  ["tokenEndpoint", /detail\.oAuthTokenEndpoint \?\? ""/],
+  ["revokeEndpoint", /detail\.oAuthRevokeEndpoint \?\? ""/],
+]) {
+  assert.ok(
+    new RegExp(`const ${field} = useSeededField\\(${seed.source}\\)`).test(detailPage),
+    `the OAuth '${field}' box must follow the loaded row — otherwise "Re-run discovery" leaves it holding the pre-discovery value and Save writes that straight back over what discovery found`,
+  );
+}
+assert.match(
+  detailPage,
+  /const manifest = useSeededField\(stored\)/,
+  "the manifest editor must follow the loaded row too: a discovery run that reads a new tools/list must not leave the textarea showing the tools it replaced",
+);
+// The other half of the trade-off. A field somebody is typing into must NOT be overwritten, which
+// is only safe to promise if the section can tell the operator its text and the row disagree.
+assert.ok(
+  /dirty: value !== serverValue/.test(detailPage) && /dirtyCount/.test(detailPage),
+  "a field the operator has edited must keep their text and report itself dirty — following the row silently over half-typed input trades one silent data loss for another",
+);
+
+// ── 8 · Nothing is left to SQL that the screen claims to do ──────────────────
+
+assert.match(
+  service,
+  /create:[\s\S]{0,600}?apiClient\.post<RawRecord>\(\s*API\.adminPluginCatalog\.base/,
+  "the catalog service must be able to create a row — POST to the same path the listing GETs, which is the endpoint that makes 'adding an MCP app is one INSERT' true",
+);
+assert.match(
+  hooks,
+  /export function useCreateAdminPlugin/,
+  "a create hook must exist, and must not be a useCatalogWrite: the create endpoint answers with the user-facing catalog item, so there is no detail row to seed the cache with",
+);
+assert.ok(
+  /Add MCP app/.test(listPage) && /NewPluginDialog/.test(listPage),
+  "the listing must offer the create action — an admin screen that can edit, re-credential and retire a row it cannot create sends the operator back to psql for the one step that started it all",
+);
+assert.match(
+  helpers,
+  /export const RESERVED_PLUGIN_KEYS = \["mcp", "catalog"\]/,
+  "the reserved plugin keys must be mirrored from PluginConstants.ReservedPluginKeys so the form refuses them at the box; the server answers them with the same undifferentiated 400 it answers a duplicate key with",
+);
+assert.match(
+  helpers,
+  /export function validateNewPlugin/,
+  "the create draft must be validated before it is sent, for the same reason the tool manifest is",
+);
+assert.ok(
+  /errorFor\("pluginKey"\)/.test(listPage),
+  "the plugin key's refusal must be rendered under the plugin key box, not only as a toast",
+);
+
+// ── 9 · The split-era resource fields stay gone ──────────────────────────────
+//
+// google_workspace was one row the frontend split into a Drive tile and a Calendar tile off
+// `tool.resourceKey`. WT-646 replaced that with three real catalog rows and migration
+// 20260907100000 deleted the three keys from every stored tool. The C# tool record still declares
+// them with a null default, so the wire still carries three nulls per tool — which is exactly how
+// they creep back: a field on the manifest type is enough for every save to write them again.
+// check-plugin-mention-contract.mjs bans them from the user-facing DTO; this is the admin half.
+
+const toolDto = types.match(/interface AdminPluginToolDto \{([\s\S]*?)\n\}/)?.[1] ?? "";
+const manifestEntry =
+  types.match(/interface AdminPluginToolManifestEntry \{([\s\S]*?)\n\}/)?.[1] ?? "";
+assert.ok(toolDto.length > 100, "AdminPluginToolDto could not be located in the types");
+assert.ok(
+  manifestEntry.length > 100,
+  "AdminPluginToolManifestEntry could not be located in the types",
+);
+
+// What parseToolManifest actually emits, rather than what the file mentions in prose.
+const emittedTool = helpers.match(/tools\.push\(\{([\s\S]*?)\n {4}\}\);/)?.[1] ?? "";
+assert.ok(emittedTool.length > 50, "the tool parseToolManifest emits could not be located");
+
+for (const token of ["resourceKey", "resourceLabel", "resourceAvatarUrl"]) {
+  for (const [name, body] of [
+    ["AdminPluginToolDto", toolDto],
+    ["AdminPluginToolManifestEntry", manifestEntry],
+  ]) {
+    assert.ok(
+      !body.includes(token),
+      `${name} must not declare '${token}': the split it grouped for is gone, and a field here is how a dead key gets stamped back onto every tool the manifest editor saves`,
+    );
+  }
+  assert.ok(
+    !emittedTool.includes(token),
+    `parseToolManifest must not emit '${token}' — the server accepts it and would write it straight back into tools_json`,
+  );
+}
+assert.match(
+  helpers,
+  /MANIFEST_KEYS_NOT_AUTHORED[\s\S]{0,200}?"resourceKey"/,
+  "the manifest editor must strip the dead resource keys as it strips pluginKey: the wire still carries them as nulls, and showing an operator three meaningless fields invites one of them to be filled in",
 );
 
 console.log("Admin plugin catalog contract passed.");
