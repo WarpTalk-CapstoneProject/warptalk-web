@@ -69,36 +69,33 @@ export function isMinutesTemplate(value: unknown): value is MinutesTemplateId {
 /**
  * Which layout to open the document in.
  *
- * WHY THE DEFAULT IS THE MEETING'S OWN LANGUAGE
- *   No workspace setting stores this preference yet — `stored` is here for the day one does, and
- *   until then it is always absent. Something still has to choose, and the best evidence available
- *   about who will read the record is the language the meeting was held in: a meeting conducted in
- *   Vietnamese is one whose minutes a Vietnamese reader will file, and the wide binding margin and
- *   Roman-numeral parts are exactly what tells that reader the document was drawn up properly.
+ * WHY THE DEFAULT IS THE INTERNATIONAL LAYOUT, FOR EVERY MEETING
+ *   This used to guess from the language the meeting was held in, so a Vietnamese meeting opened
+ *   in the Nghị định 30 form. The guess was reasonable and is no longer made: the layout is now
+ *   the sender's choice, and a default that changes shape depending on the meeting makes the
+ *   choice harder to see — a reader who never noticed the switcher would find one document laid
+ *   out one way and the next another, with nothing on screen explaining why.
  *
- *   Everything else falls to `global-en`, and deliberately in that direction rather than the other:
- *   decimal clause numbering and ISO dates are legible to a Vietnamese reader too, whereas a page
- *   laid out to the Vietnamese convention reads as a foreign form everywhere else. When the guess
- *   is going to be wrong, it should be wrong in the direction that is still readable — and the
- *   reader can switch templates in one click regardless.
+ *   `global-en` is the direction to be wrong in. Decimal clause numbering and ISO dates are
+ *   legible to a Vietnamese reader too, whereas a page laid out to the Vietnamese convention reads
+ *   as a foreign form everywhere else. The Vietnamese layout stays one click away and is the
+ *   correct choice for a domestic filing — it is a choice now, not a fallback.
+ *
+ *   The language is still used, just not here: `MeetingMinutesContent.primaryLanguage` labels
+ *   which half of a bilingual record is the original.
+ *
+ *   Matches MinutesTemplates.Default in warptalk-backend, so the page and the .docx that
+ *   downloads from it agree when nobody has chosen.
  */
+export const DEFAULT_MINUTES_TEMPLATE: MinutesTemplateId = "global-en";
+
 export function resolveMinutesTemplate(input: {
   /** A workspace-level preference, once one exists. Anything unrecognised is ignored, not obeyed. */
   stored?: string | null;
-  /** `MeetingMinutesContent.primaryLanguage` — the language the meeting was actually held in. */
-  primaryLanguage?: string | null;
-  /** The workspace's default language, used only when the meeting itself does not say. */
-  workspaceDefaultLanguage?: string | null;
-}): MinutesTemplateId {
+} = {}): MinutesTemplateId {
   if (isMinutesTemplate(input.stored)) return input.stored;
 
-  const language = (input.primaryLanguage || input.workspaceDefaultLanguage || "")
-    .trim()
-    .toLowerCase();
-  // Prefix, not equality: the wire carries "vi", "vi-VN" and "vi_VN" depending on who wrote it.
-  return language === "vi" || language.startsWith("vi-") || language.startsWith("vi_")
-    ? "vn-nd30"
-    : "global-en";
+  return DEFAULT_MINUTES_TEMPLATE;
 }
 
 /* ─────────────────────────── Section routing ─────────────────────────── */

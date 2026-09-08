@@ -145,7 +145,8 @@ export const API = {
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
-    exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+    exportDocx: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.docx` + (template ? `?template=${encodeURIComponent(template)}` : ""),
     /**
      * Every current biên bản in the workspace this caller may read.
      *

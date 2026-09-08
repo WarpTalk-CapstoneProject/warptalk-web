@@ -2,6 +2,7 @@ import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { MeetingMinutesDto } from "@/types/meetingMinutes";
 import type { WorkspaceMinutesResponse } from "@/types/workspaceMinutes";
+import type { MinutesTemplateId } from "@/lib/meeting/minutes-document";
 
 /**
  * Biên bản họp — maps to MeetingMinutesController.
@@ -55,14 +56,18 @@ export const meetingMinutesService = {
   },
 
   /**
-   * The .docx, rendered by the server.
+   * The .docx, rendered by the server, in the layout the reader is looking at.
    *
    * The file is built server-side so an approved document does not become a function of the
    * reader's browser, and so a document library is not shipped to every visitor to produce
    * something only the host ever asks for.
+   *
+   * `template` is passed rather than left to the server's own default: the page has a switcher, so
+   * downloading without it produced a file that did not match what was on screen — the reader had
+   * chosen a layout and the file ignored the choice.
    */
-  async downloadDocx(roomId: string) {
-    const response = await apiClient.get<Blob>(API.minutes.exportDocx(roomId), {
+  async downloadDocx(roomId: string, template?: MinutesTemplateId) {
+    const response = await apiClient.get<Blob>(API.minutes.exportDocx(roomId, template), {
       responseType: "blob",
     });
     return response;
