@@ -15,14 +15,13 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { Button } from "@/components/ui/button";
 import { ArtifactCard } from "@/components/artifacts/artifact-card";
-import { ArtifactReader } from "@/components/artifacts/artifact-reader";
 import { useArtifactLibrary } from "@/hooks/use-artifact-library";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
-import { countByKind, narrowLibrary } from "@/lib/meeting/artifact-library";
+import { countByKind, groupEntriesByMeeting, narrowLibrary } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind } from "@/lib/meeting/artifact-library";
+
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { cn } from "@/lib/utils";
 
 /**
  * Artifacts — everything WarpTalk wrote down, in one place.
@@ -69,8 +68,6 @@ export default function ArtifactsPage() {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
   const [mineOnly, setMineOnly] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-
   const library = useArtifactLibrary(activeWorkspaceId, { search: query });
 
   const entries = useMemo(
@@ -87,22 +84,20 @@ export default function ArtifactsPage() {
   // "how much survived the filter I am already looking through".
   const counts = useMemo(() => countByKind(library.entries), [library.entries]);
 
-  const selected = entries.find((entry) => entry.id === selectedId) ?? null;
+  // Grouped AFTER narrowing, so "Transcripts" means "meetings that have one" and a body search
+  // surfaces the meeting whose body matched.
+  const groups = useMemo(() => groupEntriesByMeeting(entries), [entries]);
 
-  useRegisterAssistantContext(
-    selected
-      ? {
-          pageType: "history",
-          entityId: selected.roomId,
-          workspaceId: activeWorkspaceId ?? "",
-          snapshot: {
-            title: selected.roomTitle,
-            record: selected.title,
-            status: selected.statusLabel,
-          },
-        }
-      : null,
-  );
+  /**
+   * No ambient context from the LIST.
+   *
+   * The assistant's ambient context must name a real entity — the sibling rule "@mention options
+   * always carry a real entity" is the same requirement from the other side. This page no longer
+   * has one: reading a record happens at `/artifacts/{roomId}`, and that page registers the
+   * meeting it is showing. Registering a context here with a count and a filter name would hand
+   * WarpBot something it cannot answer questions about.
+   */
+  useRegisterAssistantContext(null);
 
   return (
     <WorkspacePage>
@@ -126,8 +121,10 @@ export default function ArtifactsPage() {
         }
         actions={
           <>
+            {/* Meetings, because meetings are what the grid lists now. Saying "202 records"
+                over 101 cards invited exactly one question — which card is the other 101? */}
             <span className="shrink-0 text-[12px] text-ink-subtle tabular-nums">
-              {entries.length} {entries.length === 1 ? "record" : "records"}
+              {groups.length} {groups.length === 1 ? "meeting" : "meetings"}
             </span>
             {/* Ownership is a second axis, so it gets its own control rather than a fifth chip in
                 a group that means "kind". Mixing the two in one row makes "Minutes" and "Mine"
@@ -151,10 +148,11 @@ export default function ArtifactsPage() {
       />
 
       <WorkspaceBody>
-        <section
-          className="overflow-hidden rounded-lg border border-border bg-surface-1"
-          aria-label="Meeting records"
-        >
+        {/* No frame around the grid. The cards are already bordered surfaces, so the section's
+            own border, radius and background were a second box drawn around boxes — and its
+            `overflow-hidden` was clipping the reader's own scroll region to it. The landmark and
+            its label stay; only the decoration went. */}
+        <section aria-label="Meeting records">
           {library.isLoading ? (
             <LoadingState />
           ) : library.isError ? (
@@ -162,41 +160,13 @@ export default function ArtifactsPage() {
           ) : entries.length === 0 ? (
             <EmptyState hasFilters={Boolean(query) || kind !== "all" || mineOnly} />
           ) : (
-            <div
-              className={cn(
-                "grid min-h-[560px]",
-                selected && "lg:grid-cols-[minmax(0,1fr)_460px] xl:grid-cols-[minmax(0,1fr)_540px]",
-              )}
-            >
-              <div className="min-w-0 overflow-y-auto p-4">
-                {/* One column narrower than a plain gallery once the reader is open, so the cards
-                    keep their proportions instead of squashing into letterboxes. */}
-                <div
-                  className={cn(
-                    "grid gap-3.5 sm:grid-cols-2",
-                    selected ? "xl:grid-cols-3" : "lg:grid-cols-3 xl:grid-cols-4",
-                  )}
-                >
-                  {entries.map((entry) => (
-                    <ArtifactCard
-                      key={entry.id}
-                      entry={entry}
-                      selected={selected?.id === entry.id}
-                      onSelect={() =>
-                        setSelectedId((current) => (current === entry.id ? null : entry.id))
-                      }
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {selected ? (
-                <ArtifactReader
-                  entry={selected}
-                  workspaceSlug={workspaceSlug}
-                  onClose={() => setSelectedId(null)}
-                />
-              ) : null}
+            /* One column, always. The second used to hold the reader; a record opens at its own
+               URL now, so the grid gets the whole width back and the cards stop having two sets
+               of proportions depending on whether something is selected. */
+            <div className="grid gap-3.5 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {groups.map((group) => (
+                <ArtifactCard key={group.roomId} group={group} workspaceSlug={workspaceSlug} />
+              ))}
             </div>
           )}
         </section>

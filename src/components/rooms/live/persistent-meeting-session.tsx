@@ -46,6 +46,7 @@ import {
   useTranslationRoom,
   useTranslationRoomParticipants,
   useJoinTranslationRoomByCode,
+  useJoinLanguagePolicy,
   useTranslationRoomSessions,
 } from "@/hooks/use-translationRooms";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -108,11 +109,21 @@ import {
   type MeetingLayoutMode,
 } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
+import { ExternalBridgeWidget } from "@/components/rooms/live/external-bridge-widget";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
-import { findBridgeDeviceIds, OUTBOUND_DEVICE_LABEL, INBOUND_DEVICE_LABEL } from "@/lib/audio/virtual-bridge-check";
+import { findBridgeDeviceIds, currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
-import { openDesktopTranscriptWindow } from "@/lib/desktop/bridge";
+import { deviceInboundSource, openLoopbackInboundSource } from "@/lib/audio/bridge-inbound-source";
+import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
+import { BrowserCaptureConsentModal } from "./browser-capture-consent-modal";
+import {
+  listWindowsLoopbackSources,
+  openDesktopTranscriptWindow,
+  readVirtualAudioStatus,
+  type WindowsLoopbackSource,
+} from "@/lib/desktop/bridge";
+import { selectBridgeTier } from "@/lib/desktop/bridge-tiers";
 import {
   TrackProcessorsController,
   writeTrackEffectsPreferences,
@@ -156,10 +167,6 @@ import {
   shouldAskForLanguages,
   suggestLanguageProfile,
 } from "@/lib/language/language-profile";
-import {
-  fetchMyBreakoutAssignment,
-} from "@/hooks/use-breakouts";
-import type { BreakoutAssignmentRelay } from "@/types/breakout";
 import { MeetingTimer } from "@/components/rooms/live/meeting-timer";
 import { describeLiveKitError } from "@/lib/meeting/livekit-error";
 import { meetingService } from "@/services/meeting.service";
@@ -241,7 +248,31 @@ export function PersistentMeetingSession({
 
   // WT-497: the workspace's language policy, read live so the in-meeting picker cannot offer
   // what the workspace has since forbidden. Same source the create dialog uses (WT-271).
+  //
+  // Kept as the FALLBACK only. It is keyed on the workspace the user currently has SELECTED, which
+  // is not necessarily the workspace that owns this room, and it is a members-only endpoint: an
+  // external guest is not a member, so it answers 403, the data comes back undefined, and the
+  // "empty means unrestricted" rule below turns a refusal into the full language list. That is how
+  // a workspace limited to two languages still offered Japanese in the meeting.
   const { data: workspaceSettings } = useWorkspaceSettings(activeWorkspaceId || "");
+  // The room's OWN policy, resolved from its code by the same endpoint /join and the setup modal
+  // use. Public, so it answers for guests too, and it is about this room's workspace rather than
+  // whichever one happens to be selected — both of the reasons the line above cannot be trusted
+  // alone. It is the primary source; the settings read stays for the moment the room (and so its
+  // code) has not loaded yet.
+  const { data: joinLanguagePolicy } = useJoinLanguagePolicy(
+    roomQuery.data?.translationRoomCode ?? "",
+  );
+  /**
+   * The allowed-language list to apply, or undefined when we genuinely do not know one.
+   *
+   * `undefined` and `[]` mean the same thing downstream — unrestricted — which is correct for a
+   * workspace that never set a policy and wrong for a request that failed. Preferring the public
+   * per-room answer is what removes the failing request from the common path rather than trying to
+   * tell its two meanings apart after the fact.
+   */
+  const allowedTargetLanguages =
+    joinLanguagePolicy?.allowedTargetLanguages ?? workspaceSettings?.allowedTargetLanguages;
 
   // WT-525. An external-bridge meeting runs on Google Meet with WarpTalk beside it, so the dub
   // meant for the far side has to leave through the virtual microphone Meet is listening to
@@ -252,6 +283,28 @@ export function PersistentMeetingSession({
   const isBridgeRoom = isExternalBridge(roomQuery.data?.translationRoomType);
   const [bridgeOutboundDeviceId, setBridgeOutboundDeviceId] = useState<string | null>(null);
   const [bridgeInboundDeviceId, setBridgeInboundDeviceId] = useState<string | null>(null);
+  /** Windows only: the far side can be captured from the browser even with no inbound device. */
+  const [bridgeInboundLoopback, setBridgeInboundLoopback] = useState(false);
+  /**
+   * What the user said about listening to their browser, for THIS meeting.
+   *
+   * Not remembered across meetings on purpose: what gets captured depends on which tabs they have
+   * open, so a permanent yes would be a promise made for sittings they have not seen yet.
+   */
+  // Stamped with the room it was given for, rather than cleared by an effect when the room
+  // changes. A different meeting is a different set of open tabs, so the previous answer says
+  // nothing about this one — but resetting it in an effect is a synchronous setState that costs a
+  // cascading render, and an answer that belongs to another room is simply not this room's answer.
+  const [browserCaptureAnswer, setBrowserCaptureAnswer] = useState<{
+    roomId: string;
+    granted: boolean;
+  } | null>(null);
+  const [loopbackSources, setLoopbackSources] = useState<WindowsLoopbackSource[]>([]);
+  const [loopbackSourcesLoading, setLoopbackSourcesLoading] = useState(false);
+  const [loopbackSourceSelection, setLoopbackSourceSelection] = useState<{
+    roomId: string;
+    sourceId: string;
+  } | null>(null);
   const transcriptPopupOpenedRef = useRef<string | null>(null);
 
   // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
@@ -260,6 +313,14 @@ export function PersistentMeetingSession({
   const handleBridgeOutboundError = useCallback((message: string) => {
     toast.error("The far side is not hearing the translation.", { description: message });
   }, []);
+
+  // The floating transcript window is NOT opened here any more.
+  //
+  // It used to be, and that tied it to this subtree: the window appeared because the user had the
+  // room open in WarpTalk, and vanished when they navigated away - during a meeting they are
+  // watching in Google Meet, which is the one time they are guaranteed not to be looking at this
+  // page. `useBridgeTrigger` in the app shell owns it now, and opens it when the meeting is near
+  // and a Meet window is on screen. One owner, or two writers fight over one window.
 
   useEffect(() => {
     // Not cleared on the way out: the value is only ever READ through `isBridgeRoom` below, so
@@ -273,9 +334,20 @@ export function PersistentMeetingSession({
         if (cancelled) return;
         setBridgeOutboundDeviceId(outboundDeviceId);
         setBridgeInboundDeviceId(inboundDeviceId);
+
+        // Windows has a second way in. Where there is no second virtual device, process loopback
+        // pulls the far side out of the browser itself — so the absence of an inbound device id is
+        // no longer the same thing as no inbound leg. Asked through the tier picker rather than by
+        // re-deriving the rules here: it already owns the question of what this machine can run.
+        const status = await readVirtualAudioStatus();
+        if (cancelled) return;
+        setBridgeInboundLoopback(selectBridgeTier(status)?.id === "loopback-bridge");
         if (!outboundDeviceId) {
           toast.error("This meeting cannot reach Google Meet yet.", {
-            description: `${OUTBOUND_DEVICE_LABEL} is not installed, so the far side will not hear the translation.`,
+            // Named for THIS platform. It used to be the macOS constant unconditionally, so a
+            // Windows user missing VB-CABLE was told to install BlackHole — a device that does
+            // not exist for their machine, sending them off to fix the wrong thing.
+            description: `${currentBridgeDeviceLabels().outboundSink} is not installed, so the far side will not hear the translation.`,
           });
         }
       } catch {
@@ -581,6 +653,45 @@ export function PersistentMeetingSession({
   // WT-428: read inside the hub's ParticipantWaiting callback, which is registered once and
   // would otherwise close over the first render's value — where isHost is still false because
   // the room query has not resolved. Same reasoning as currentUserIdRef.
+  // Placed here, below `isHost` and `translationStarted`, because it reads both. The state it
+  // depends on is declared with the other bridge state far above; only the derivation has to wait.
+  const consentState = browserCaptureConsentState({
+    isBridgeRoom,
+    isHost,
+    translationStarted,
+    hasInboundDevice: Boolean(bridgeInboundDeviceId),
+    loopbackAvailable: bridgeInboundLoopback,
+    answer: browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null,
+  });
+  const selectedLoopbackSourceId =
+    loopbackSourceSelection?.roomId === roomId ? loopbackSourceSelection.sourceId : null;
+
+  useEffect(() => {
+    if (consentState !== "required") return;
+
+    let cancelled = false;
+    setLoopbackSourcesLoading(true);
+    void (async () => {
+      const sources = await listWindowsLoopbackSources();
+      if (cancelled) return;
+
+      const candidates = sources ?? [];
+      setLoopbackSources(candidates);
+
+      const currentSelection = candidates.find((source) => source.id === selectedLoopbackSourceId);
+      const bestDefault =
+        currentSelection ?? candidates.find((source) => source.likelyMeetingWindow) ?? candidates[0];
+      if (bestDefault && !currentSelection) {
+        setLoopbackSourceSelection({ roomId, sourceId: bestDefault.id });
+      }
+      setLoopbackSourcesLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [consentState, roomId, selectedLoopbackSourceId]);
+
   const isHostRef = useRef(isHost);
   useEffect(() => {
     isHostRef.current = isHost;
@@ -600,7 +711,13 @@ export function PersistentMeetingSession({
   const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
 
   useEffect(() => {
-    const wanted = isBridgeRoom && isHost && translationStarted && Boolean(bridgeInboundDeviceId);
+    // A device endpoint may start straight away; the loopback path may not start until the user has
+    // actually said yes. `mayCaptureBrowser` is checked rather than "not declined" because on the
+    // render before the answer arrives those two differ, and one of them starts listening.
+    const hasInboundSource =
+      Boolean(bridgeInboundDeviceId) ||
+      (bridgeInboundLoopback && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
+    const wanted = isBridgeRoom && isHost && translationStarted && hasInboundSource;
     if (!wanted) {
       // Covers Stop Translation and leaving the room. Not awaited: teardown is fire-and-forget by
       // nature and an effect cleanup cannot await anyway.
@@ -620,35 +737,66 @@ export function PersistentMeetingSession({
         );
         if (!serverUrl) throw new Error("No LiveKit server is configured for this deployment.");
 
+        // A device id wins when there is one: it is the path both platforms share, and the one the
+        // user can point at in a settings dialog. Loopback is the answer only where no second
+        // virtual device exists.
+        const inbound = bridgeInboundDeviceId
+          ? deviceInboundSource(bridgeInboundDeviceId)
+          : await openLoopbackInboundSource({
+              consentGranted: true,
+              sourceId: selectedLoopbackSourceId ?? undefined,
+            });
+        if (cancelled) {
+          await inbound.dispose();
+          return;
+        }
+
         const handles = await openBridgeInbound({
           serverUrl,
           token: data.token,
-          inboundDeviceId: bridgeInboundDeviceId!,
+          source: inbound.source,
           onDisconnected: () => {
             bridgeInboundRef.current = null;
+            void inbound.dispose();
             toast.error("The external call was disconnected.", {
               description: "WarpTalk has stopped hearing the other side of the meeting.",
             });
           },
         });
 
+        // Stopping has to release both halves. The publisher owns the connection and, on the
+        // device path, the track it opened; the source owns whatever it set up to produce a track
+        // in the first place — on the loopback path that is a capture running in the main process,
+        // which nothing else can reach.
+        const release = async () => {
+          await handles.stop();
+          await inbound.dispose();
+        };
+
         // The effect can be torn down while connect() is in flight. Without this the handles
         // would be unreachable and the second connection would stay in the room, publishing a
         // device nobody is releasing.
         if (cancelled) {
-          void handles.stop();
+          void release();
           return;
         }
-        bridgeInboundRef.current = handles;
+        bridgeInboundRef.current = { stop: release };
       } catch (error) {
         if (cancelled) return;
         // Said out loud rather than logged: with the outbound leg working, the far side can hear
         // the user perfectly while the user hears nothing back — which reads as the other person
         // having gone quiet, not as a broken bridge.
+        // Two different fallbacks, because the inbound leg is two different mechanisms. Where a
+        // second virtual device carries it there is a device to name; where process loopback does,
+        // there is no device at all and naming one would send the user hunting for a picker entry
+        // that is not there.
+        const { inboundCapture } = currentBridgeDeviceLabels();
         toast.error("WarpTalk cannot hear the external call.", {
           description: getErrorMessage(
             error,
-            `${INBOUND_DEVICE_LABEL} could not be opened, so the other side will not be translated.`,
+            inboundCapture
+              ? `${inboundCapture} could not be opened, so the other side will not be translated.`
+              : "WarpTalk could not capture the meeting's audio from your browser, so the other side will not be translated.",
           ),
         });
       }
@@ -657,7 +805,16 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [isBridgeRoom, isHost, translationStarted, bridgeInboundDeviceId, roomId]);
+  }, [
+    isBridgeRoom,
+    isHost,
+    translationStarted,
+    bridgeInboundDeviceId,
+    bridgeInboundLoopback,
+    consentState,
+    roomId,
+    selectedLoopbackSourceId,
+  ]);
 
   // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
   // the capture device, neither of which the room teardown above knows about.
@@ -723,37 +880,7 @@ export function PersistentMeetingSession({
     event: transcriptPauseEvent,
   });
 
-  // Breakout rooms (scoped-down): `breakoutState` describes THIS viewer's own current
-  // assignment/connection (drives the LiveKit token swap + top-bar countdown chip below).
-  // The host-facing breakout controls are gone with the feature; these handlers stay only so a
-  // client already in a breakout still follows a BreakoutsEnded back to the main room.
-  // `breakoutState` is per-viewer — it describes THIS viewer's own current
-  // last BreakoutsEnded one, regardless of whether THIS viewer has an assignment (e.g. the
-  // host, who stays in the main room) — drives the host-controls flyout's active state.
-  const [breakoutState, setBreakoutState] = useState<{
-    active: boolean;
-    label: string | null;
-    startedAt: string | null;
-    durationSeconds: number | null;
-  }>({ active: false, label: null, startedAt: null, durationSeconds: null });
-  const breakoutActiveRef = useRef(false);
-  useEffect(() => {
-    breakoutActiveRef.current = breakoutState.active;
-  }, [breakoutState.active]);
-  // The main room's own LiveKit session, remembered so BreakoutsEnded can reconnect back to
-  // it — only updated while NOT in a breakout (see the LiveKitRoom's token-swap comment
-  // further down for why simply swapping `meetingSession.token` is enough to move the
-  // LiveKitRoom component between provider rooms without a full remount).
-  const mainMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
-  useEffect(() => {
-    if (!breakoutState.active) {
-      mainMeetingSessionRef.current = meetingSession;
-    }
-  }, [meetingSession, breakoutState.active]);
   // WT-357: the session as it is right now, for handlers registered once on the hub connection.
-  // Distinct from mainMeetingSessionRef above, which deliberately freezes at the MAIN room's
-  // session while a breakout is active — a handler asking "do I already hold a live session"
-  // must be told about the session it actually holds.
   const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
   useEffect(() => {
     currentMeetingSessionRef.current = meetingSession;
@@ -1370,7 +1497,7 @@ export function PersistentMeetingSession({
     // Empty means unrestricted, matching the server's own whitelist check — so an absent or
     // still-loading settings response must NOT be read as "nothing is allowed", or the picker
     // would empty itself while the query is in flight.
-    const allowed = workspaceSettings?.allowedTargetLanguages;
+    const allowed = allowedTargetLanguages;
     if (!allowed || allowed.length === 0) return Array.from(codes);
 
     const allowedSet = new Set(allowed.map((code: string) => normalizeLanguageCode(code)));
@@ -1379,7 +1506,7 @@ export function PersistentMeetingSession({
     // them no way to move off it — the policy is enforced by what they can move TO.
     const current = normalizeLanguageCode(targetLanguage);
     return Array.from(codes).filter((code) => allowedSet.has(code) || code === current);
-  }, [room, targetLanguage, addedLanguages, workspaceSettings]);
+  }, [room, targetLanguage, addedLanguages, allowedTargetLanguages]);
 
   /** Remember a pick that the room itself does not offer, so it stays in the menu. */
   const rememberAddedLanguage = useCallback(
@@ -2184,69 +2311,6 @@ export function PersistentMeetingSession({
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
-    // Breakout rooms (scoped-down) — BreakoutsStarted/BreakoutsEnded are relayed by
-    // BreakoutsService through TranslationRoomRedisSubscriberService on the Gateway.
-    // Assignments carries no LiveKit
-    // token (see BreakoutAssignmentRelayDto's doc on the backend) — an assigned client mints
-    // its own via GET .../breakouts/my-assignment, then swaps meetingSession.token to move
-    // the already-mounted <LiveKitRoom> from the main room to the sub-room in place (see
-    // useLiveKitRoom's connect/token effect: changing `token` while `connect` stays true
-    // just calls room.connect() again with the new token, no remount needed).
-    connection.on(
-      "BreakoutsStarted",
-      (
-        assignments: BreakoutAssignmentRelay[] | null,
-        durationSeconds: number | null,
-        startedAt: string | null,
-      ) => {
-        const mine = user?.id
-          ? (assignments ?? []).find((a) => a.userId === user.id)
-          : undefined;
-        if (!mine) return;
-
-        setBreakoutState({
-          active: true,
-          label: mine.label,
-          startedAt,
-          durationSeconds,
-        });
-        void fetchMyBreakoutAssignment(roomId)
-          .then((info) => {
-            setMeetingSession({
-              token: info.token,
-              providerRoomName: info.providerRoomName,
-              participantIdentity: info.participantIdentity,
-              isWaitingRoom: false,
-              muteOnEntry: false,
-            });
-            toast.success(`You've been moved to ${mine.label}.`);
-          })
-          .catch(() => {
-            toast.error("Could not join your breakout room.");
-            setBreakoutState({
-              active: false,
-              label: null,
-              startedAt: null,
-              durationSeconds: null,
-            });
-          });
-      },
-    );
-    connection.on("BreakoutsEnded", () => {
-      if (!breakoutActiveRef.current) return;
-
-      setBreakoutState({
-        active: false,
-        label: null,
-        startedAt: null,
-        durationSeconds: null,
-      });
-      if (mainMeetingSessionRef.current) {
-        setMeetingSession(mainMeetingSessionRef.current);
-      }
-      toast.success("Breakout rooms ended — you're back in the main room.");
-    });
-
     let cancelled = false;
     const retryDelays = [0, 500, 1500, 3000];
 
@@ -2966,7 +3030,22 @@ export function PersistentMeetingSession({
             screen. Consent is a moment, not a permanent state: people are told once, by toast,
             when recording starts, and the badge is the standing reminder. */}
 
-        {compact ? (
+        {isBridgeRoom ? (
+          <ExternalBridgeWidget
+            room={room}
+            isHost={isRoomHost}
+            isConnecting={isMeetingJoining || !meetingSession}
+            meetingError={meetingError}
+            microphoneEnabled={microphoneEnabled}
+            translationStarted={translationStarted}
+            bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
+            bridgeInboundLoopback={bridgeInboundLoopback}
+            onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
+            onStartTranslation={() => void handleStartWarptalk()}
+            onStopTranslation={handleStopWarptalk}
+            onExit={handleExit}
+          />
+        ) : compact ? (
           // The whole window drags, not just a strip across the top. That strip existed
           // because it had to: it was the only thing carrying [data-mini-drag-handle], so it
           // could never be hidden or the window could never be moved again. The dock now
@@ -3229,7 +3308,7 @@ export function PersistentMeetingSession({
                     // WT-497: the policy itself, not only the room list it already narrowed.
                     // The bar's "Other languages" disclosure needs the ceiling, or it re-offers
                     // exactly what availableListenLanguages excluded.
-                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
+                    allowedTargetLanguages={allowedTargetLanguages}
                     voicePreference={voicePreference}
                     voiceCatalog={voiceCatalog}
                     voiceCloneEnabled={voiceCloneEnabled}
@@ -3393,6 +3472,33 @@ export function PersistentMeetingSession({
           // the room's default listen language) IS the existing pre-modal behavior.
         }}
       /> : null}
+
+      {/*
+        Asked only where the capture would reach past the meeting — see browser-capture-consent.ts.
+        Rendered next to the other modals rather than inside the bridge effect so that opening it
+        is a render, not a side effect: an effect that pops a dialog fires again on every dependency
+        change, and a consent prompt that reappears is one people click through.
+      */}
+      <BrowserCaptureConsentModal
+        open={consentState === "required"}
+        sources={loopbackSources}
+        selectedSourceId={selectedLoopbackSourceId}
+        loadingSources={loopbackSourcesLoading}
+        onSelectedSourceIdChange={(sourceId) => {
+          setLoopbackSourceSelection({ roomId, sourceId });
+        }}
+        onDecision={(granted) => {
+          setBrowserCaptureAnswer({ roomId, granted });
+          if (!granted) {
+            // Not an error, and not silence either: the far side simply will not be translated,
+            // and the meeting continues. The bridge panel's captions button is the way back.
+            toast.info("WarpTalk will not listen to your browser.", {
+              description:
+                "The other side of the meeting will not be translated. You can still follow it with live captions.",
+            });
+          }
+        }}
+      />
       </MeetingIdentityProvider>
     </div>
   );
