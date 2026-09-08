@@ -70,6 +70,8 @@ export default function DocumentDetailPage({ params }: PageProps) {
     allowUser,
     blockUser,
     removePolicy,
+    memberAccess,
+    setMemberAccess,
   } = useDocumentAccessPolicy(activeWorkspaceId || "", documentId);
 
   // Mutations
@@ -316,6 +318,8 @@ export default function DocumentDetailPage({ params }: PageProps) {
             allowUser={allowUser}
             blockUser={blockUser}
             removePolicy={removePolicy}
+            memberAccess={memberAccess}
+            setMemberAccess={setMemberAccess}
             onToggleAiIndexing={handleToggleAiIndexing}
             isAiIndexingBusy={patchMetadataMutation.isPending}
           />
