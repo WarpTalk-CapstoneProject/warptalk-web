@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowSquareOut,
   CheckCircle,
@@ -410,6 +410,24 @@ function ConnectPluginDialog({
  * breath is not somebody returning from Google — it is somebody who has not left yet. Settling on it
  * would stamp "did not receive a connection" over a flow that has not started.
  */
+/**
+ * What the assistant service says happened, for the tab that comes back from the provider.
+ *
+ * Consent opens in a second tab, so the callback's redirect lands THERE, not in the tab the user
+ * started in. That tab mounts this page fresh, with no `consent` state and nothing to settle — so
+ * before WT-646's callback contract it could only show the catalog and let the user infer the rest.
+ * The service now redirects to /settings/plugins?plugin=<key>&connected=1 on success, or
+ * ?plugin=<key>&error=<slug> when it could not finish, and these are those slugs. The original tab
+ * still settles on focus; the two mechanisms answer different tabs and neither replaces the other.
+ */
+const CONSENT_CALLBACK_ERRORS: Record<string, string> = {
+  access_denied: "You cancelled the sign-in, so nothing was connected.",
+  invalid_state: "That sign-in link had already been used or expired. Start the connection again.",
+  unknown_plugin: "That plugin is no longer available.",
+  provider_error: "The provider could not complete the sign-in. Try again in a moment.",
+  exchange_failed: "The provider could not complete the sign-in. Try again in a moment.",
+};
+
 const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
 
 export default function PluginsPage() {
@@ -544,11 +562,10 @@ export default function PluginsPage() {
   /**
    * Read the outcome of a consent round trip off the catalog, once the user is back.
    *
-   * The assistant service's OAuth callback answers Google with a 302 to this page and carries
-   * nothing on it — no `?connected=`, no `?error=` (see AssistantPluginsController: every callback
-   * redirects to a bare `{AppBaseUrl}/settings/plugins`). Its own remark says the page is expected
-   * to re-read connection status instead, which it never did. So there is no search param worth
-   * reading, and the catalog is the only source of truth about what happened.
+   * The callback's redirect DOES say what happened — `?plugin=<key>&connected=1`, or
+   * `?plugin=<key>&error=<slug>` — but it says it to the tab consent opened, not to this one. See
+   * CONSENT_CALLBACK_ERRORS above for that half. In THIS tab nothing navigates and no parameter
+   * ever arrives, so the catalog is the only source of truth about what happened.
    *
    * `refetch` rather than `invalidateQueries`, because `staleTime: 60_000` is exactly the window a
    * consent round trip fits inside: a user who connects and returns within the minute would
@@ -581,6 +598,51 @@ export default function PluginsPage() {
     },
     [refetch],
   );
+
+  // Announced once, in the tab the provider redirected. No state: the outcome is read straight
+  // out of the address bar and spoken, so holding it would only invite a second render to say it
+  // twice. The ref is what stops a re-render re-announcing it before the URL has been stripped.
+  const consentCallbackAnnounced = useRef(false);
+
+  useEffect(() => {
+    if (consentCallbackAnnounced.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get("error");
+    const connected = params.get("connected") === "1";
+    if (!error && !connected) {
+      consentCallbackAnnounced.current = true;
+      return;
+    }
+    // Wait for the catalog: the message names the plugin, and on a cold mount that name is not
+    // known yet. A failed load falls through to the generic wording rather than staying silent.
+    if (isLoading) return;
+
+    consentCallbackAnnounced.current = true;
+    const pluginKey = params.get("plugin");
+    const row = plugins.find((plugin) => plugin.key === pluginKey);
+    const label = row?.label ?? "The plugin";
+
+    if (error) {
+      toast.error(
+        CONSENT_CALLBACK_ERRORS[error] ??
+          `${label} could not be connected. Start the connection again.`,
+      );
+    } else if (row && !scopesSatisfied(row.requiredScopes, row.grantedScopes)) {
+      // Connected, but the consent screen declined a permission this plugin needs. Saying
+      // "connected" here would be the same lie the card takes care not to tell.
+      toast.warning(`${label} is connected, but a permission it needs was not approved.`);
+    } else {
+      toast.success(`${label} connected`);
+    }
+
+    // Strip it, so a reload does not re-announce an outcome the user has seen and the slug does
+    // not travel on if they share the URL.
+    params.delete("plugin");
+    params.delete("connected");
+    params.delete("error");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [isLoading, plugins]);
 
   useEffect(() => {
     if (consent?.phase !== "awaiting") return;
