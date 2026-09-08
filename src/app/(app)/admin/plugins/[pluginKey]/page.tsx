@@ -47,6 +47,7 @@ import {
   MISSING_CLIENT_ID_EXPLANATION,
   OAUTH_CLIENT_SOURCE_LABELS,
   OAUTH_CLIENT_SOURCE_NOTES,
+  parseScopeList,
   parseToolManifest,
   PLUGIN_KIND_LABELS,
   supportsRediscovery,
@@ -143,6 +144,50 @@ function SectionHeading({
       {note ? <span className="text-[11px] text-ink-muted">{note}</span> : null}
     </div>
   );
+}
+
+/**
+ * One editable field, seeded from the loaded row and kept following it until somebody types.
+ *
+ * `useState(detail.oAuthTokenEndpoint ?? "")` reads its argument once. That is why "Re-run
+ * discovery" used to leave these boxes holding the endpoints from before discovery ran while the
+ * read-only summary directly above them showed the ones discovery had just found — and why
+ * pressing "Save OAuth client" then wrote the stale values back over them. The sections are
+ * mounted for the life of the row, and `useCatalogWrite` re-seeds the detail cache in place, so
+ * nothing ever re-ran the initialiser.
+ *
+ * THE TRADE-OFF, since there are only two honest options. Remounting the section on every re-seed
+ * makes the fields correct and deletes whatever the operator was halfway through typing. Leaving
+ * them alone keeps the typing and lets a save write values the row no longer holds. So the choice
+ * is made per field instead of per section: a field nobody has touched adopts the new server
+ * value, and a field somebody has edited keeps their text and reports itself `dirty`, which is
+ * what the section renders its unsaved-changes note and its Discard button from. Nothing is thrown
+ * away silently, and nothing goes quietly stale either.
+ *
+ * The identity case is still handled by a `key` on the section: routing from one plugin to another
+ * is a different subject, not a fresher version of this one, and edits must not follow.
+ */
+function useSeededField<T>(serverValue: T) {
+  // The state is the EDIT, not the value — which is what makes the untouched case free: with no
+  // edit there is no copy of the row to go stale, so the field simply renders whatever the row
+  // currently holds. An edit remembers what the row held when it was made, so "has this operator
+  // diverged from the row" is answerable without a second effect or a render-phase setState.
+  const [edit, setEdit] = useState<{ base: T; value: T } | null>(null);
+
+  const diverged = edit !== null && edit.value !== edit.base;
+  const value = diverged ? edit.value : serverValue;
+
+  return {
+    value,
+    set: (next: T) => setEdit({ base: serverValue, value: next }),
+    dirty: value !== serverValue,
+    /**
+     * Back to following the row. Used for Discard AND after a successful save: the write re-seeds
+     * the detail cache with the row the server actually stored, so dropping the edit is how the
+     * form comes to show the server's trimming and de-duplication rather than what was typed.
+     */
+    reset: () => setEdit(null),
+  };
 }
 
 export default function AdminPluginDetailPage() {
@@ -341,6 +386,11 @@ export default function AdminPluginDetailPage() {
         </AdminPanel>
       ) : null}
 
+      {/* Keyed on the plugin key so routing to a DIFFERENT row starts these sections over — an
+          edit to google_drive must not follow the operator to google_calendar. Freshness within
+          one row is not this key's job and never was: the key never changes while the row is open,
+          so a re-seeded detail was invisible to fields initialised with useState. That is what
+          useSeededField above handles, per field. */}
       <MetadataSection key={`meta-${detail.pluginKey}`} detail={detail} />
       <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
       <ToolsSection key={`tools-${detail.pluginKey}`} detail={detail} />
@@ -467,23 +517,16 @@ export default function AdminPluginDetailPage() {
 function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
   const mutation = useUpdateAdminPlugin(detail.pluginKey);
 
-  const [label, setLabel] = useState(detail.label);
-  const [description, setDescription] = useState(detail.description);
-  const [avatarUrl, setAvatarUrl] = useState(detail.avatarUrl ?? "");
-  const [mcpServerUrl, setMcpServerUrl] = useState(detail.mcpServerUrl ?? "");
-  const [category, setCategory] = useState(detail.category ?? "");
-  const [sortOrder, setSortOrder] = useState(String(detail.sortOrder));
-  const [scopes, setScopes] = useState(detail.requiredScopes.join("\n"));
-  const [isFeatured, setIsFeatured] = useState(detail.isFeatured);
+  const label = useSeededField(detail.label);
+  const description = useSeededField(detail.description);
+  const avatarUrl = useSeededField(detail.avatarUrl ?? "");
+  const mcpServerUrl = useSeededField(detail.mcpServerUrl ?? "");
+  const category = useSeededField(detail.category ?? "");
+  const sortOrder = useSeededField(String(detail.sortOrder));
+  const scopes = useSeededField(detail.requiredScopes.join("\n"));
+  const isFeatured = useSeededField(detail.isFeatured);
 
-  const scopeList = useMemo(
-    () =>
-      scopes
-        .split(/[\n,]/)
-        .map((scope) => scope.trim())
-        .filter((scope) => scope.length > 0),
-    [scopes],
-  );
+  const scopeList = useMemo(() => parseScopeList(scopes.value), [scopes.value]);
 
   /**
    * PATCH means "only what is here changes", so only what actually changed is sent. Sending the
@@ -492,51 +535,62 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
    */
   const changes = useMemo(() => {
     const next: UpdateAdminPluginRequest = {};
-    if (label.trim() !== detail.label) next.label = label.trim();
-    if (description.trim() !== detail.description) next.description = description.trim();
-    if (avatarUrl.trim() !== (detail.avatarUrl ?? "")) next.avatarUrl = avatarUrl.trim();
-    if (detail.kind === "mcp" && mcpServerUrl.trim() !== (detail.mcpServerUrl ?? "")) {
-      next.mcpServerUrl = mcpServerUrl.trim();
+    if (label.value.trim() !== detail.label) next.label = label.value.trim();
+    if (description.value.trim() !== detail.description) {
+      next.description = description.value.trim();
     }
-    if (category.trim() !== (detail.category ?? "")) next.category = category.trim();
-    const parsedSortOrder = Number.parseInt(sortOrder, 10);
+    if (avatarUrl.value.trim() !== (detail.avatarUrl ?? "")) {
+      next.avatarUrl = avatarUrl.value.trim();
+    }
+    if (detail.kind === "mcp" && mcpServerUrl.value.trim() !== (detail.mcpServerUrl ?? "")) {
+      next.mcpServerUrl = mcpServerUrl.value.trim();
+    }
+    if (category.value.trim() !== (detail.category ?? "")) next.category = category.value.trim();
+    const parsedSortOrder = Number.parseInt(sortOrder.value, 10);
     if (Number.isFinite(parsedSortOrder) && parsedSortOrder !== detail.sortOrder) {
       next.sortOrder = parsedSortOrder;
     }
     if (scopeList.join(",") !== detail.requiredScopes.join(",")) {
       next.requiredScopes = scopeList;
     }
-    if (isFeatured !== detail.isFeatured) next.isFeatured = isFeatured;
+    if (isFeatured.value !== detail.isFeatured) next.isFeatured = isFeatured.value;
     return next;
   }, [
-    avatarUrl,
-    category,
-    description,
+    avatarUrl.value,
+    category.value,
+    description.value,
     detail,
-    isFeatured,
-    label,
-    mcpServerUrl,
+    isFeatured.value,
+    label.value,
+    mcpServerUrl.value,
     scopeList,
-    sortOrder,
+    sortOrder.value,
   ]);
 
   const changeCount = Object.keys(changes).length;
-  const sortOrderIsNumber = Number.isFinite(Number.parseInt(sortOrder, 10));
+  const sortOrderIsNumber = Number.isFinite(Number.parseInt(sortOrder.value, 10));
+
+  /** Drops every edit so the form follows the loaded row again. Discard and save both want this. */
+  const followRow = () => {
+    label.reset();
+    description.reset();
+    avatarUrl.reset();
+    mcpServerUrl.reset();
+    category.reset();
+    sortOrder.reset();
+    scopes.reset();
+    isFeatured.reset();
+  };
 
   const submit = async () => {
     if (changeCount === 0) return;
     try {
-      const saved = await mutation.mutateAsync(changes);
-      // Re-seeded from the response rather than left as typed: the server trims, de-duplicates
-      // scopes and can normalise a value, and a form still showing what was typed would hide that.
-      setLabel(saved.label);
-      setDescription(saved.description);
-      setAvatarUrl(saved.avatarUrl ?? "");
-      setMcpServerUrl(saved.mcpServerUrl ?? "");
-      setCategory(saved.category ?? "");
-      setSortOrder(String(saved.sortOrder));
-      setScopes(saved.requiredScopes.join("\n"));
-      setIsFeatured(saved.isFeatured);
+      await mutation.mutateAsync(changes);
+      // Every field goes back to following the row, which the write has just re-seeded from its
+      // response. That is not the same as leaving the boxes as typed: the server trims, de-
+      // duplicates scopes and can normalise a value, and a form still showing what was typed would
+      // hide all three.
+      followRow();
       toast.success("Plugin updated.");
     } catch (error) {
       reportFailure(error, "Could not save the plugin.");
@@ -555,9 +609,9 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
           <Field label="Label" htmlFor="plugin-label">
             <Input
               id="plugin-label"
-              value={label}
+              value={label.value}
               maxLength={150}
-              onChange={(event) => setLabel(event.target.value)}
+              onChange={(event) => label.set(event.target.value)}
             />
           </Field>
           <Field
@@ -567,19 +621,19 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
           >
             <Input
               id="plugin-category"
-              value={category}
+              value={category.value}
               maxLength={50}
-              onChange={(event) => setCategory(event.target.value)}
+              onChange={(event) => category.set(event.target.value)}
             />
           </Field>
           <div className="md:col-span-2">
             <Field label="Description" htmlFor="plugin-description">
               <Textarea
                 id="plugin-description"
-                value={description}
+                value={description.value}
                 maxLength={500}
                 rows={3}
-                onChange={(event) => setDescription(event.target.value)}
+                onChange={(event) => description.set(event.target.value)}
               />
             </Field>
           </div>
@@ -590,8 +644,8 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
           >
             <Input
               id="plugin-avatar"
-              value={avatarUrl}
-              onChange={(event) => setAvatarUrl(event.target.value)}
+              value={avatarUrl.value}
+              onChange={(event) => avatarUrl.set(event.target.value)}
             />
           </Field>
           <Field
@@ -601,10 +655,10 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
           >
             <Input
               id="plugin-sort-order"
-              value={sortOrder}
+              value={sortOrder.value}
               inputMode="numeric"
               aria-invalid={!sortOrderIsNumber}
-              onChange={(event) => setSortOrder(event.target.value)}
+              onChange={(event) => sortOrder.set(event.target.value)}
             />
           </Field>
           {detail.kind === "mcp" ? (
@@ -616,8 +670,8 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
               >
                 <Input
                   id="plugin-mcp-url"
-                  value={mcpServerUrl}
-                  onChange={(event) => setMcpServerUrl(event.target.value)}
+                  value={mcpServerUrl.value}
+                  onChange={(event) => mcpServerUrl.set(event.target.value)}
                 />
               </Field>
             </div>
@@ -637,18 +691,18 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             >
               <Textarea
                 id="plugin-scopes"
-                value={scopes}
+                value={scopes.value}
                 rows={4}
                 className="font-mono text-[12px]"
-                onChange={(event) => setScopes(event.target.value)}
+                onChange={(event) => scopes.set(event.target.value)}
               />
             </Field>
           </div>
           <div className="flex items-center gap-3 md:col-span-2">
             <Switch
               id="plugin-featured"
-              checked={isFeatured}
-              onCheckedChange={(checked: boolean) => setIsFeatured(checked)}
+              checked={isFeatured.value}
+              onCheckedChange={(checked: boolean) => isFeatured.set(checked)}
             />
             <Label htmlFor="plugin-featured" className="text-[12px]">
               Featured in the user-facing catalog
@@ -660,16 +714,7 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             variant="outline"
             size="sm"
             disabled={changeCount === 0 || mutation.isPending}
-            onClick={() => {
-              setLabel(detail.label);
-              setDescription(detail.description);
-              setAvatarUrl(detail.avatarUrl ?? "");
-              setMcpServerUrl(detail.mcpServerUrl ?? "");
-              setCategory(detail.category ?? "");
-              setSortOrder(String(detail.sortOrder));
-              setScopes(detail.requiredScopes.join("\n"));
-              setIsFeatured(detail.isFeatured);
-            }}
+            onClick={followRow}
           >
             Discard
           </Button>
@@ -698,19 +743,40 @@ type SecretMode = "keep" | "replace" | "clear";
 function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
   const mutation = useSetAdminPluginOAuthClient(detail.pluginKey);
 
-  const [clientId, setClientId] = useState(detail.oAuthClientId ?? "");
+  // Every one of these follows a re-seeded row while it is untouched, which is the whole of the
+  // "Re-run discovery" fix: discovery writes the endpoints, the cache is re-seeded, and the boxes
+  // an operator has not typed into show what was found instead of what was there before.
+  const clientId = useSeededField(detail.oAuthClientId ?? "");
+  const authorizationEndpoint = useSeededField(detail.oAuthAuthorizationEndpoint ?? "");
+  const tokenEndpoint = useSeededField(detail.oAuthTokenEndpoint ?? "");
+  const revokeEndpoint = useSeededField(detail.oAuthRevokeEndpoint ?? "");
+
+  // Not a seeded field, and could not be: nothing seeds a secret, because no endpoint returns one.
   const [secretMode, setSecretMode] = useState<SecretMode>("keep");
   const [secret, setSecret] = useState("");
-  const [authorizationEndpoint, setAuthorizationEndpoint] = useState(
-    detail.oAuthAuthorizationEndpoint ?? "",
-  );
-  const [tokenEndpoint, setTokenEndpoint] = useState(detail.oAuthTokenEndpoint ?? "");
-  const [revokeEndpoint, setRevokeEndpoint] = useState(detail.oAuthRevokeEndpoint ?? "");
 
   const catalogOwns = catalogOwnsOAuthClient(detail.kind);
+  const dirtyCount = [clientId, authorizationEndpoint, tokenEndpoint, revokeEndpoint].filter(
+    (field) => field.dirty,
+  ).length;
+
+  /**
+   * Drops every edit so the panel follows the loaded row again, and puts the secret back to
+   * "keep". Discard and a successful save both want exactly this.
+   */
+  const followRow = () => {
+    clientId.reset();
+    authorizationEndpoint.reset();
+    tokenEndpoint.reset();
+    revokeEndpoint.reset();
+    // Dropped the moment it has been sent. Nothing on this page keeps a secret alive in memory
+    // longer than the request that carried it.
+    setSecret("");
+    setSecretMode("keep");
+  };
 
   const submit = async () => {
-    const trimmedId = clientId.trim();
+    const trimmedId = clientId.value.trim();
     if (trimmedId.length === 0) {
       toast.error("A client id is required. Clearing one is not something this endpoint does.");
       return;
@@ -721,24 +787,20 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
     }
 
     try {
-      const saved = await mutation.mutateAsync({
+      await mutation.mutateAsync({
         clientId: trimmedId,
         // Tri-state. `undefined` is stripped from the body before it is sent, so "keep" is a
         // genuinely absent property rather than a null the server would read the same way but a
         // reader of the request would not.
         clientSecret: secretMode === "replace" ? secret : secretMode === "clear" ? "" : undefined,
-        authorizationEndpoint: authorizationEndpoint.trim() || undefined,
-        tokenEndpoint: tokenEndpoint.trim() || undefined,
-        revokeEndpoint: revokeEndpoint.trim() || undefined,
+        authorizationEndpoint: authorizationEndpoint.value.trim() || undefined,
+        tokenEndpoint: tokenEndpoint.value.trim() || undefined,
+        revokeEndpoint: revokeEndpoint.value.trim() || undefined,
       });
-      setClientId(saved.oAuthClientId ?? "");
-      setAuthorizationEndpoint(saved.oAuthAuthorizationEndpoint ?? "");
-      setTokenEndpoint(saved.oAuthTokenEndpoint ?? "");
-      setRevokeEndpoint(saved.oAuthRevokeEndpoint ?? "");
-      // Dropped the moment it has been sent. Nothing on this page keeps a secret alive in memory
-      // longer than the request that carried it.
-      setSecret("");
-      setSecretMode("keep");
+      // Back to following the row the write just re-seeded, rather than to what was typed: the
+      // server normalises endpoints, and this is also the response that reports whether the client
+      // source actually moved to `preregistered`.
+      followRow();
       toast.success(
         secretMode === "clear"
           ? "OAuth client saved and the stored secret cleared."
@@ -828,10 +890,10 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                 >
                   <Input
                     id="oauth-client-id"
-                    value={clientId}
+                    value={clientId.value}
                     className="font-mono text-[12px]"
                     autoComplete="off"
-                    onChange={(event) => setClientId(event.target.value)}
+                    onChange={(event) => clientId.set(event.target.value)}
                   />
                 </Field>
               </div>
@@ -904,34 +966,52 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
               >
                 <Input
                   id="oauth-authorization-endpoint"
-                  value={authorizationEndpoint}
+                  value={authorizationEndpoint.value}
                   className="font-mono text-[12px]"
-                  onChange={(event) => setAuthorizationEndpoint(event.target.value)}
+                  onChange={(event) => authorizationEndpoint.set(event.target.value)}
                 />
               </Field>
               <Field label="Token endpoint" htmlFor="oauth-token-endpoint" hint="Optional.">
                 <Input
                   id="oauth-token-endpoint"
-                  value={tokenEndpoint}
+                  value={tokenEndpoint.value}
                   className="font-mono text-[12px]"
-                  onChange={(event) => setTokenEndpoint(event.target.value)}
+                  onChange={(event) => tokenEndpoint.set(event.target.value)}
                 />
               </Field>
               <div className="md:col-span-2">
                 <Field label="Revoke endpoint" htmlFor="oauth-revoke-endpoint" hint="Optional.">
                   <Input
                     id="oauth-revoke-endpoint"
-                    value={revokeEndpoint}
+                    value={revokeEndpoint.value}
                     className="font-mono text-[12px]"
-                    onChange={(event) => setRevokeEndpoint(event.target.value)}
+                    onChange={(event) => revokeEndpoint.set(event.target.value)}
                   />
                 </Field>
               </div>
             </div>
-            <div className="flex items-center justify-end border-t border-hairline/60 px-4 py-3">
-              <Button size="sm" disabled={mutation.isPending} onClick={() => void submit()}>
-                {mutation.isPending ? "Saving…" : "Save OAuth client"}
-              </Button>
+            <div className="flex items-center justify-between gap-2 border-t border-hairline/60 px-4 py-3">
+              {/* What the operator's boxes hold that the row does not — which after a discovery
+                  run is how they learn a field they had typed into is now contradicted by what the
+                  server found, rather than learning it by overwriting it. */}
+              <span className="text-[11px] text-ink-muted">
+                {dirtyCount > 0
+                  ? `${dirtyCount} field${dirtyCount === 1 ? "" : "s"} differ${dirtyCount === 1 ? "s" : ""} from the stored row.`
+                  : ""}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={dirtyCount === 0 || mutation.isPending}
+                  onClick={followRow}
+                >
+                  Discard
+                </Button>
+                <Button size="sm" disabled={mutation.isPending} onClick={() => void submit()}>
+                  {mutation.isPending ? "Saving…" : "Save OAuth client"}
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -945,20 +1025,23 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
 function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
   const mutation = useReplaceAdminPluginTools(detail.pluginKey);
   const stored = useMemo(() => formatToolManifest(detail.tools), [detail.tools]);
-  const [manifest, setManifest] = useState(stored);
+  // Follows a re-seeded row while untouched: after "Re-run discovery" reads a new tools/list, an
+  // editor nobody has typed into shows the tools that were found rather than the ones that were
+  // there before — which the "N tools stored" line beneath it was already reporting.
+  const manifest = useSeededField(stored);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const dirty = manifest !== stored;
+  const dirty = manifest.dirty;
 
   const validate = (): boolean => {
-    const result = parseToolManifest(manifest);
+    const result = parseToolManifest(manifest.value);
     setErrors(result.ok ? [] : result.errors);
     if (result.ok) toast.success("The manifest is valid.");
     return result.ok;
   };
 
   const submit = async () => {
-    const result = parseToolManifest(manifest);
+    const result = parseToolManifest(manifest.value);
     if (!result.ok) {
       setErrors(result.errors);
       // Checked here as well as on the server because PUT replaces the manifest wholesale: one bad
@@ -973,7 +1056,10 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
     setErrors([]);
     try {
       const saved = await mutation.mutateAsync({ tools: result.tools });
-      setManifest(formatToolManifest(saved.tools));
+      // Follows the re-seeded row rather than keeping the submitted text: the server stamps
+      // pluginKey back on and can reorder or normalise an entry, and the editor should show what
+      // is stored rather than what was sent.
+      manifest.reset();
       toast.success(
         saved.tools.length === 0
           ? "Manifest replaced. This plugin now advertises no tools."
@@ -1008,14 +1094,14 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             successful <span className="font-mono">tools/list</span> and should not look like one.
           </p>
           <Textarea
-            value={manifest}
+            value={manifest.value}
             rows={16}
             spellCheck={false}
             aria-label="Tool manifest JSON"
             aria-invalid={errors.length > 0}
             className="font-mono text-[12px] leading-5"
             onChange={(event) => {
-              setManifest(event.target.value);
+              manifest.set(event.target.value);
               if (errors.length > 0) setErrors([]);
             }}
           />
@@ -1030,6 +1116,7 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
         <div className="flex items-center justify-between gap-2 border-t border-hairline/60 px-4 py-3">
           <span className="text-[11px] text-ink-muted">
             {detail.tools.length} tool{detail.tools.length === 1 ? "" : "s"} stored
+            {dirty ? " — the editor differs from them" : ""}
           </span>
           <div className="flex gap-2">
             <Button
@@ -1037,7 +1124,7 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
               size="sm"
               disabled={!dirty || mutation.isPending}
               onClick={() => {
-                setManifest(stored);
+                manifest.reset();
                 setErrors([]);
               }}
             >

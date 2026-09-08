@@ -6,6 +6,8 @@ import type {
   AdminPluginDeleteResultDto,
   AdminPluginToolAuditPageDto,
   AdminPluginToolAuditQuery,
+  CreateAdminMcpPluginRequest,
+  CreatedAdminPluginDto,
   ReplaceAdminPluginToolsRequest,
   SetAdminPluginOAuthClientRequest,
   UpdateAdminPluginRequest,
@@ -81,6 +83,29 @@ export const adminPluginCatalogService = {
   list: async (): Promise<AdminPluginCatalogListItemDto[]> => {
     const { data } = await apiClient.get<RawRecord[]>(API.adminPluginCatalog.base);
     return (data ?? []).map((row) => withOAuthAliases<AdminPluginCatalogListItemDto>(row));
+  },
+
+  /**
+   * Adds an MCP row. `POST` to the same path the listing `GET`s.
+   *
+   * The odd one out in this file, in two ways worth knowing before reading the return type. It is
+   * served by the USER-FACING plugins controller — which carries its own system-admin policy on
+   * this one action — rather than by the admin catalog controller, so it answers `201` with a
+   * `PluginCatalogItemDto` instead of the admin detail row every other write here returns. There is
+   * therefore nothing in the response worth seeding a cache with: the caller navigates to the new
+   * row and loads its real detail.
+   */
+  create: async (request: CreateAdminMcpPluginRequest): Promise<CreatedAdminPluginDto> => {
+    const { data } = await apiClient.post<RawRecord>(
+      API.adminPluginCatalog.base,
+      withoutUndefined(request),
+    );
+    // Read back rather than echoed from the request: the server trims the key it stored, and the
+    // caller is about to route to it.
+    const key = data?.key;
+    return {
+      key: typeof key === "string" && key.length > 0 ? key : request.pluginKey.trim(),
+    };
   },
 
   get: async (pluginKey: string): Promise<AdminPluginCatalogDetailDto> => {

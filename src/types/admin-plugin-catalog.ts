@@ -33,7 +33,19 @@ export type AdminPluginKind = "native" | "mcp";
  */
 export type AdminPluginOAuthClientSource = "unresolved" | "preregistered" | "cimd" | "dcr";
 
-/** One tool in a row's manifest, as `tools_json` stores it. */
+/**
+ * One tool in a row's manifest, as `tools_json` stores it.
+ *
+ * There is no `resourceKey`/`resourceLabel`/`resourceAvatarUrl` here, and their absence is the
+ * point. They existed to group the tools of the single `google_workspace` row into a Drive tile
+ * and a Calendar tile at display time; the catalog now ships `google_drive`, `google_calendar` and
+ * `google_meet` as three real rows, and migration 20260907100000 stripped the three keys out of
+ * every stored tool. Nothing reads them any more. The C# record still declares them as nullable
+ * with a default, so the wire still carries three nulls per tool — which is exactly why they must
+ * not be declared here: a field on this type is how they get re-stamped onto every manifest save
+ * and grow a reader again. `check-plugin-mention-contract.mjs` bans them from the user-facing DTO
+ * for the same reason.
+ */
 export interface AdminPluginToolDto {
   name: string;
   pluginKey: string;
@@ -42,9 +54,6 @@ export interface AdminPluginToolDto {
   effect: "read" | "write";
   requiredScopes: string[];
   parameters: Record<string, unknown>;
-  resourceKey?: string | null;
-  resourceLabel?: string | null;
-  resourceAvatarUrl?: string | null;
 }
 
 /**
@@ -112,6 +121,66 @@ export interface AdminPluginCatalogDetailDto {
   updatedAt: string;
 }
 
+/**
+ * Everything needed to add an MCP-backed app to the catalog.
+ *
+ * This is the request that makes "adding an MCP app is one INSERT, not a deploy" true from a
+ * screen rather than from psql. It mirrors the server's `CreateMcpPluginRequest`, which is NOT on
+ * the admin catalog controller — it hangs off the user-facing plugins controller at
+ * `POST /assistant/plugins/catalog` with its own system-admin policy, which is why it is the one
+ * write in this file whose response is not an `AdminPluginCatalogDetailDto`.
+ *
+ * The server derives more than it is given: `kind` is always `mcp`, `provider` is the plugin key
+ * itself (each MCP server is a separate authorization server, so sharing a provider would hand a
+ * new row somebody else's refresh token), `toolsJson` starts empty because tools arrive from
+ * `tools/list`, and `oAuthClientSource` starts `unresolved` so the registration ladder can choose.
+ * None of those are settable here, and none should be.
+ */
+export interface CreateAdminMcpPluginRequest {
+  pluginKey: string;
+  label: string;
+  description: string;
+  /** Absolute `https://`. The server refuses anything else, including http on localhost. */
+  mcpServerUrl: string;
+  avatarUrl?: string;
+  requiredScopes?: string[];
+  /**
+   * Only for a server that supports neither Client ID Metadata Documents nor dynamic registration.
+   * Omitted — the usual case — the row stays `unresolved` and the ladder chooses on first connect.
+   *
+   * `oAuth`, not `oauth`: the same `JsonSerializerDefaults.Web` rule that produces
+   * `oAuthClientSource` on the way back produces `oAuth` on the way in.
+   */
+  oAuth?: CreateAdminMcpPluginOAuthRequest;
+}
+
+/**
+ * Pre-registered client credentials supplied at create time.
+ *
+ * Write-only like every other secret on this surface: it goes in with the row and no endpoint ever
+ * hands it back, so there is no matching field on any response type.
+ */
+export interface CreateAdminMcpPluginOAuthRequest {
+  clientId: string;
+  clientSecret?: string;
+  authorizationEndpoint?: string;
+  tokenEndpoint?: string;
+  revokeEndpoint?: string;
+}
+
+/**
+ * What `POST /assistant/plugins/catalog` answers with.
+ *
+ * Deliberately one field. The endpoint answers with the USER-FACING catalog item — the new row as
+ * an ordinary member would see it, carrying an installation status, a connection status and a
+ * granted-scope list that a row created two milliseconds ago cannot meaningfully have. The admin
+ * screen reads the key, navigates to the row's own page and loads the real detail from there.
+ * Declaring the rest would be declaring fields this surface has no business believing.
+ */
+export interface CreatedAdminPluginDto {
+  key: string;
+}
+
 /** A partial edit. Only the properties present are written; see the field notes. */
 export interface UpdateAdminPluginRequest {
   label?: string;
@@ -142,7 +211,13 @@ export interface SetAdminPluginOAuthClientRequest {
   revokeEndpoint?: string;
 }
 
-/** One entry of a submitted manifest. `pluginKey` is stamped from the route, never sent. */
+/**
+ * One entry of a submitted manifest. `pluginKey` is stamped from the route, never sent.
+ *
+ * Carries no `resource…` fields for the reason given on `AdminPluginToolDto`: the server still
+ * accepts them and would write them straight back into `tools_json`, so every manifest save from
+ * this screen used to re-create three dead keys the split migration had just deleted.
+ */
 export interface AdminPluginToolManifestEntry {
   name: string;
   label: string;
@@ -150,9 +225,6 @@ export interface AdminPluginToolManifestEntry {
   effect: string;
   requiredScopes: string[];
   parameters: Record<string, unknown>;
-  resourceKey?: string | null;
-  resourceLabel?: string | null;
-  resourceAvatarUrl?: string | null;
 }
 
 /** Replaces `tools_json` wholesale. An empty array means "this row advertises no tools". */

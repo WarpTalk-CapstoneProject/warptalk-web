@@ -15,6 +15,11 @@
  * wholesale, so an operator who pastes a manifest with one bad entry should be told which entry
  * before the whole thing is submitted. The server remains the authority — this only saves the
  * trip.
+ *
+ * `validateNewPlugin` mirrors `CreateMcpPluginAsync` for a harder reason: that endpoint answers a
+ * reserved key, a duplicate key and a provider collision with one 400 and one error code, so a
+ * refusal arrives as a sentence with no field attached. Checking here is what lets the form point
+ * at the box that is wrong.
  */
 
 import type {
@@ -22,6 +27,7 @@ import type {
   AdminPluginKind,
   AdminPluginOAuthClientSource,
   AdminPluginToolManifestEntry,
+  CreateAdminMcpPluginRequest,
 } from "@/types/admin-plugin-catalog";
 
 export const PLUGIN_KIND_LABELS: Record<AdminPluginKind, string> = {
@@ -195,6 +201,11 @@ export function parseToolManifest(text: string): ToolManifestParseResult {
     const scopes = validateScopes(raw.requiredScopes, position, errors);
     const parameters = validateParameters(raw.parameters, position, errors);
 
+    // Only these six. `resourceKey`, `resourceLabel` and `resourceAvatarUrl` used to be copied
+    // across here, which meant every manifest save wrote three dead keys back into `tools_json` —
+    // the last trace of the client-side tile split, whose grouping migration 20260907100000
+    // deleted when google_workspace became three real rows. The server still accepts them, so
+    // nothing would have failed; the manifest would simply have kept regrowing them.
     tools.push({
       name,
       label,
@@ -202,17 +213,10 @@ export function parseToolManifest(text: string): ToolManifestParseResult {
       effect,
       requiredScopes: scopes,
       parameters: parameters ?? {},
-      resourceKey: optionalString(raw.resourceKey),
-      resourceLabel: optionalString(raw.resourceLabel),
-      resourceAvatarUrl: optionalString(raw.resourceAvatarUrl),
     });
   });
 
   return errors.length > 0 ? { ok: false, errors } : { ok: true, tools };
-}
-
-function optionalString(value: unknown): string | null {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
 function validateScopes(value: unknown, position: string, errors: string[]): string[] {
@@ -301,17 +305,250 @@ function validateParameters(
 }
 
 /**
- * The manifest as the editor should first show it: the stored tools minus `pluginKey`, which the
- * server stamps from the route and refuses to take from the body.
+ * Keys the editor never shows and never sends.
+ *
+ * `pluginKey` because the server stamps it from the route and refuses to take it from the body.
+ * The three `resource…` keys because they are dead: the C# tool record still declares them with a
+ * null default, so the wire carries `"resourceKey": null` on every tool, and rendering those in
+ * the textarea would show an operator three fields that mean nothing and invite them to fill one
+ * in.
  */
+const MANIFEST_KEYS_NOT_AUTHORED = new Set([
+  "pluginKey",
+  "resourceKey",
+  "resourceLabel",
+  "resourceAvatarUrl",
+]);
+
+/** The manifest as the editor should first show it: the stored tools, minus what nobody authors. */
 export function formatToolManifest(tools: readonly unknown[]): string {
   const stripped = tools.map((tool) => {
     if (!isPlainRecord(tool)) return tool;
     const rest: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(tool)) {
-      if (key !== "pluginKey") rest[key] = value;
+      if (!MANIFEST_KEYS_NOT_AUTHORED.has(key)) rest[key] = value;
     }
     return rest;
   });
   return `${JSON.stringify(stripped, null, 2)}\n`;
+}
+
+// ── Adding a row ─────────────────────────────────────────────────────────────
+
+/**
+ * Plugin keys the server refuses outright, and the reason it refuses them.
+ *
+ * `mcp` and `catalog` are literal route segments sitting where `{pluginKey}` sits, and ASP.NET
+ * gives a literal precedence over a parameter. A row keyed either one is not rejected by routing —
+ * it is silently answered by the wrong controller, so an ordinary member asking for their
+ * connection status gets a 403 from an admin endpoint. The list is mirrored from
+ * `PluginConstants.ReservedPluginKeys`, and there is a `plugins_plugin_key_not_reserved` CHECK
+ * behind both.
+ */
+export const RESERVED_PLUGIN_KEYS = ["mcp", "catalog"] as const;
+
+export function isReservedPluginKey(pluginKey: string): boolean {
+  const trimmed = pluginKey.trim().toLowerCase();
+  return RESERVED_PLUGIN_KEYS.some((reserved) => reserved === trimmed);
+}
+
+/** Mirrors the `plugin_key` column. */
+const MAX_PLUGIN_KEY = 100;
+const MAX_PLUGIN_LABEL = 150;
+const MAX_PLUGIN_DESCRIPTION = 500;
+const MAX_AVATAR_URL = 1000;
+const MAX_MCP_SERVER_URL = 1000;
+
+/**
+ * Stricter than the server, on purpose and only here.
+ *
+ * The server takes any 100 characters the CHECK constraint allows. But the key becomes the row's
+ * route segment AND its `provider` — the identity a user's OAuth grant is keyed by — so a key with
+ * a slash or a space in it is a row whose own admin URL has to be escaped to be addressed and
+ * whose provider reads as a typo forever. Every row in the catalog is already `[a-z0-9_]`. This is
+ * the one place the form is narrower than the API, and it is narrower in the direction an operator
+ * would have wanted anyway.
+ */
+const PLUGIN_KEY_PATTERN = /^[a-z0-9][a-z0-9_.-]*$/;
+
+/** What the create form holds. Every field is a string because every field is an input. */
+export interface NewPluginDraft {
+  pluginKey: string;
+  label: string;
+  description: string;
+  mcpServerUrl: string;
+  avatarUrl: string;
+  /** One scope per line, or comma-separated. */
+  requiredScopes: string;
+  /** Blank unless the operator is hand-registering a client; see `toCreatePluginRequest`. */
+  clientId: string;
+  clientSecret: string;
+  authorizationEndpoint: string;
+  tokenEndpoint: string;
+  revokeEndpoint: string;
+}
+
+export const EMPTY_NEW_PLUGIN_DRAFT: NewPluginDraft = {
+  pluginKey: "",
+  label: "",
+  description: "",
+  mcpServerUrl: "",
+  avatarUrl: "",
+  requiredScopes: "",
+  clientId: "",
+  clientSecret: "",
+  authorizationEndpoint: "",
+  tokenEndpoint: "",
+  revokeEndpoint: "",
+};
+
+export type NewPluginFieldErrors = Partial<Record<keyof NewPluginDraft, string>>;
+
+/** Splits a scope box into scopes. Shared by the form and the request builder. */
+export function parseScopeList(text: string): string[] {
+  const scopes: string[] = [];
+  for (const entry of text.split(/[\n,]/)) {
+    const scope = entry.trim();
+    if (scope.length > 0 && !scopes.includes(scope)) scopes.push(scope);
+  }
+  return scopes;
+}
+
+/**
+ * Every reason the server would refuse a new row, checked before the row is sent.
+ *
+ * Not politeness: the create endpoint answers a duplicate key, a reserved key and a provider
+ * collision with the same 400 and the same `unknown_plugin` error code, so a rejected create is a
+ * single red sentence with no field attached to it. An operator typing `catalog` should be told at
+ * the box, not after pressing the button.
+ *
+ * `existing` is the catalog listing the screen already has loaded. The collision checks are
+ * therefore only as fresh as that list — the server remains the authority and will still refuse a
+ * row someone else created a second ago. Catching the common case here costs nothing and turns the
+ * uncommon one into the same message either way.
+ */
+export function validateNewPlugin(
+  draft: NewPluginDraft,
+  existing: readonly Pick<AdminPluginCatalogListItemDto, "pluginKey" | "provider" | "label">[] = [],
+): NewPluginFieldErrors {
+  const errors: NewPluginFieldErrors = {};
+
+  const key = draft.pluginKey.trim();
+  if (key.length === 0) {
+    errors.pluginKey = "A plugin key is required. It is the row's identity everywhere else.";
+  } else if (isReservedPluginKey(key)) {
+    errors.pluginKey = `'${key}' is a reserved key: it is a literal route segment, so a row named it would have its own calls answered by the wrong endpoint. Reserved: ${RESERVED_PLUGIN_KEYS.join(", ")}.`;
+  } else if (key.length > MAX_PLUGIN_KEY) {
+    errors.pluginKey = `A plugin key must be at most ${MAX_PLUGIN_KEY} characters.`;
+  } else if (!PLUGIN_KEY_PATTERN.test(key)) {
+    errors.pluginKey =
+      "Use lower-case letters, digits, '_', '.' or '-', starting with a letter or digit. The key becomes this row's URL and its OAuth provider name.";
+  } else if (existing.some((row) => row.pluginKey.toLowerCase() === key.toLowerCase())) {
+    errors.pluginKey = `A plugin keyed '${key}' already exists.`;
+  } else if (existing.some((row) => row.provider.toLowerCase() === key.toLowerCase())) {
+    // An MCP row takes its key as its provider, and a provider is the identity of a user's OAuth
+    // grant. A row keyed 'google' would be handed the existing Google connection — refresh token
+    // and all — and would run its tools against that grant.
+    const owner = existing.find((row) => row.provider.toLowerCase() === key.toLowerCase());
+    errors.pluginKey = `'${key}' is already in use as a provider by ${owner?.label ?? "another plugin"}. An MCP row takes its key as its provider, and a provider owns an OAuth grant — sharing one would hand this row that connection.`;
+  }
+
+  const label = draft.label.trim();
+  if (label.length === 0) {
+    errors.label = "A label is required — it is what every user sees in the plugin catalog.";
+  } else if (label.length > MAX_PLUGIN_LABEL) {
+    errors.label = `A label must be at most ${MAX_PLUGIN_LABEL} characters.`;
+  }
+
+  const description = draft.description.trim();
+  if (description.length === 0) {
+    errors.description = "A description is required.";
+  } else if (description.length > MAX_PLUGIN_DESCRIPTION) {
+    errors.description = `A description must be at most ${MAX_PLUGIN_DESCRIPTION} characters.`;
+  }
+
+  const serverUrl = draft.mcpServerUrl.trim();
+  if (serverUrl.length === 0) {
+    errors.mcpServerUrl = "An MCP server URL is required.";
+  } else if (!isAbsoluteHttpsUrl(serverUrl)) {
+    // The server checks the scheme, not just the shape: http is refused even on localhost,
+    // because the OAuth tokens this row will carry travel over it.
+    errors.mcpServerUrl = "An MCP plugin needs an absolute https:// server URL.";
+  } else if (serverUrl.length > MAX_MCP_SERVER_URL) {
+    errors.mcpServerUrl = `An MCP server URL must be at most ${MAX_MCP_SERVER_URL} characters.`;
+  }
+
+  const avatarUrl = draft.avatarUrl.trim();
+  if (avatarUrl.length > MAX_AVATAR_URL) {
+    errors.avatarUrl = `An avatar URL must be at most ${MAX_AVATAR_URL} characters.`;
+  }
+
+  // The OAuth block is optional as a whole, and any part of it filled in commits to the client id:
+  // endpoints without one would be written and then ignored, because only a client id moves the
+  // row off `unresolved`.
+  const clientId = draft.clientId.trim();
+  const oauthTouched =
+    clientId.length > 0
+    || draft.clientSecret.length > 0
+    || draft.authorizationEndpoint.trim().length > 0
+    || draft.tokenEndpoint.trim().length > 0
+    || draft.revokeEndpoint.trim().length > 0;
+  if (oauthTouched && clientId.length === 0) {
+    errors.clientId =
+      "A client id is required once anything else in this section is filled in — without one the row stays 'unresolved' and everything typed here is ignored.";
+  }
+
+  for (const field of ["authorizationEndpoint", "tokenEndpoint", "revokeEndpoint"] as const) {
+    const value = draft[field].trim();
+    if (value.length > 0 && !isAbsoluteHttpsUrl(value)) {
+      errors[field] = "An OAuth endpoint must be an absolute https:// URL.";
+    }
+  }
+
+  return errors;
+}
+
+function isAbsoluteHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The draft as the API takes it.
+ *
+ * Blank optional fields are dropped rather than sent as empty strings: `avatarUrl: ""` would be
+ * stored as an empty avatar rather than as no avatar, and an empty `oAuth.clientId` is the exact
+ * value that put a `client_id=` consent URL into production.
+ */
+export function toCreatePluginRequest(draft: NewPluginDraft): CreateAdminMcpPluginRequest {
+  const clientId = draft.clientId.trim();
+  const avatarUrl = draft.avatarUrl.trim();
+  const scopes = parseScopeList(draft.requiredScopes);
+
+  const request: CreateAdminMcpPluginRequest = {
+    pluginKey: draft.pluginKey.trim(),
+    label: draft.label.trim(),
+    description: draft.description.trim(),
+    mcpServerUrl: draft.mcpServerUrl.trim(),
+  };
+
+  if (avatarUrl.length > 0) request.avatarUrl = avatarUrl;
+  if (scopes.length > 0) request.requiredScopes = scopes;
+
+  if (clientId.length > 0) {
+    request.oAuth = {
+      clientId,
+      // Unlike the edit screen's tri-state, there is nothing to keep or clear on a row that does
+      // not exist yet: a blank box simply means this client has no secret.
+      clientSecret: draft.clientSecret.length > 0 ? draft.clientSecret : undefined,
+      authorizationEndpoint: draft.authorizationEndpoint.trim() || undefined,
+      tokenEndpoint: draft.tokenEndpoint.trim() || undefined,
+      revokeEndpoint: draft.revokeEndpoint.trim() || undefined,
+    };
+  }
+
+  return request;
 }
