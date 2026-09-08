@@ -117,3 +117,36 @@ test("a catalogue entry with a blank name is treated as unnamed, not as an empty
     state: "unavailable",
   });
 });
+
+/**
+ * The two ways this resolver used to discard, or steal, a preference.
+ */
+const OWN_CLONE_VI = [
+  { provider: "cartesia", providerVoiceId: "clone-abc", language: "vi-VN", displayName: "My presenting voice" },
+];
+const SAVED_PICK_VI = [
+  { provider: "cartesia", providerVoiceId: LINH, language: "vi", displayName: null },
+];
+
+test("a person's own finished clone is not read as their library pick", () => {
+  // Provider is "cartesia" for both once an upload finishes cloning, so this predicate used to
+  // match the clone and hand its id back as a listener preference.
+  assert.equal(resolveSavedVoiceForLanguage(OWN_CLONE_VI, "vi", VI_CATALOG), null);
+});
+
+test("a cold catalogue still discards the pick, and the readout says so", () => {
+  // Pinned twice on purpose. Dropping an unverifiable id is the deliberate behaviour — see
+  // "nothing is applied while the catalog is still cold" above — and the bug was never that
+  // rule, it was a rail that named the voice confidently while this returned null. The two
+  // now agree: nothing is applied, and describeSavedVoice reports "unavailable".
+  assert.equal(resolveSavedVoiceForLanguage(SAVED_PICK_VI, "vi", []), null);
+  assert.deepEqual(describeSavedVoice(LINH, [], false), { state: "unavailable" });
+});
+
+test("a voice a populated catalogue does not offer is still discarded", () => {
+  // The case the check exists for stays intact: a real list that does not contain the id is
+  // evidence the voice is gone, and passing it on would dub in some other voice silently.
+  const retired = [{ provider: "cartesia", providerVoiceId: SKYLAR, language: "vi", displayName: null }];
+
+  assert.equal(resolveSavedVoiceForLanguage(retired, "vi", VI_CATALOG), null);
+});

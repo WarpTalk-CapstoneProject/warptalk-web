@@ -20,6 +20,7 @@ import {
 import { getErrorMessage } from "@/lib/api/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
 import { describeSavedVoice } from "@/lib/voice/voice-preference";
+import { isLibraryVoicePointer } from "@/lib/voice/profile-status";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
@@ -35,13 +36,22 @@ function bareLanguage(language: string) {
 
 const LANGUAGES = languagesInScope("voiceCatalog");
 
-/** The stand-in voice this person picked for speakers who chose none, for one language. */
+/**
+ * The stand-in voice this person picked for speakers who chose none, for one language.
+ *
+ * `isLibraryVoicePointer` is the whole correctness of this hook. Without it the predicate below
+ * — provider "cartesia", has a provider voice, right language — also matches this person's OWN
+ * finished clone, because a clone lives in the Cartesia account too and the collect path writes
+ * the same provider. The rail then showed somebody their own voice's raw provider id as their
+ * "stand-in", a UUID it had no way to name because a personal clone is not in the public
+ * catalogue. See profile-status.ts for why a missing name is the marker.
+ */
 function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
   return useMemo(() => {
     const match = profiles.find(
       (profile) =>
+        isLibraryVoicePointer(profile) &&
         profile.provider === "cartesia" &&
-        profile.providerVoiceId &&
         bareLanguage(profile.language ?? "") === language,
     );
     return match?.providerVoiceId ?? null;
