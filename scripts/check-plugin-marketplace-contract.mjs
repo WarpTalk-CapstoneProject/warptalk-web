@@ -16,7 +16,6 @@ const legacyWorkspaceRoute = readFileSync(
 );
 
 const forbidden = [
-  "activeWorkspaceId",
   "Public",
   "Personal",
   "const plugins = [",
@@ -130,12 +129,115 @@ for (const token of ['"google"', "'google'", "google_drive", "google_calendar", 
 }
 
 // ---------------------------------------------------------------------------------------------
+// THE CONSENT ROUND TRIP HAS TO COME BACK
+//
+// The assistant service's OAuth callbacks 302 the browser to a bare `{AppBaseUrl}/settings/plugins`
+// — no ?connected=, no ?error=, nothing to read (AssistantPluginsController). Their own remark says
+// the page re-reads connection status instead, and for a while the page did not: the connect-url
+// mutation invalidated nothing, `staleTime: 60_000` meant the global refetchOnWindowFocus stayed
+// quiet for a minute, and the "Finish connecting" banner had exactly one state. A user who
+// cancelled at Google saw the same screen as a user who succeeded, indefinitely.
+// ---------------------------------------------------------------------------------------------
+for (const token of ["visibilitychange", '"focus"']) {
+  if (!page.includes(token)) {
+    throw new Error(
+      `Plugins page must notice the user coming back from the provider ('${token}'). The redirect carries no query string, so returning to this tab is the only signal there is.`,
+    );
+  }
+}
+if (!/await refetch\(\)/.test(page)) {
+  throw new Error(
+    "The return from consent must refetch the catalog, not invalidate it: staleTime is 60s and a consent round trip fits comfortably inside that, so a cached pre-consent answer would be served back.",
+  );
+}
+if (!page.includes('data-testid="plugin-consent-notice"')) {
+  throw new Error("The connect banner must be findable, so its terminal states can be asserted.");
+}
+// The banner's terminal states are the point. Without them a cancelled consent is indistinguishable
+// from a successful one, which is where this started.
+for (const phase of ["unconfirmed", "partial", "blocked"]) {
+  if (!page.includes(`"${phase}"`)) {
+    throw new Error(
+      `The connect banner must be able to end in '${phase}'. A banner that only ever says "finish this in your browser" tells a user who cancelled nothing at all.`,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// THE DIALOG READS THE LIVE ROW, NOT A SNAPSHOT OF IT
+//
+// Holding the plugin OBJECT in state froze the dialog at the moment it opened: the catalog could
+// refetch underneath it and the dialog would still offer "Continue to ..." for a plugin that was
+// now connected, with no Disconnect button. The key is the identity; the row is looked up.
+// ---------------------------------------------------------------------------------------------
+if (!page.includes("plugin.key === selectedPluginKey")) {
+  throw new Error(
+    "The plugin dialog must look its row up in the live catalog by key. Storing the row itself makes the dialog a snapshot that no refetch can update.",
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
+// DISCONNECT READS THE GRANT, NOT THE PLUGIN'S USABILITY
+//
+// withEffectiveConnectionStatus downgrades a row to not_connected when the user declined one of its
+// scopes at the consent screen. That is right for labels and wrong for revocation: the grant is
+// still live, and reading the downgraded status is what took the Disconnect button — and the
+// disconnect inside Remove — away from the one user who most needs them.
+// ---------------------------------------------------------------------------------------------
+if (!page.includes("providerConnectionStatus={selectedPlugin.connectionStatus}")) {
+  throw new Error(
+    "The dialog must be handed the RAW connectionStatus for the Disconnect button; the effective status hides a live OAuth grant from the user holding it.",
+  );
+}
+if (!page.includes("plugin={withEffectiveConnectionStatus(selectedPlugin)}")) {
+  throw new Error(
+    "The dialog's labels must still read the effective status: a plugin whose own scope was declined must not claim it is connected.",
+  );
+}
+if (!page.includes("hasProviderGrant ? (")) {
+  throw new Error(
+    "The Disconnect button must be gated on the grant existing, not on the plugin being usable.",
+  );
+}
+
+// ---------------------------------------------------------------------------------------------
 // WORKSPACE PLUGIN POLICY
 //
 // A blocked row is returned by the catalog rather than hidden, deliberately: it may be holding a
 // live OAuth grant, and this page is where it gets revoked. So the row stays, adding it goes dead,
 // and disconnect and remove do not.
 // ---------------------------------------------------------------------------------------------
+// The whole branch below is dead unless the LISTING names a workspace. `workspacePolicyBlockReason`
+// is populated only when `GET /assistant/plugins` is called with a workspaceId; without one the
+// server applies no policy at all, every row comes back with the field absent, and the notice, the
+// disabled Add button and the "Manage" label are unreachable code that reads as a shipped feature.
+//
+// `activeWorkspaceId` used to be a FORBIDDEN token here, from when the fix was to stop scoping the
+// catalog to a workspace — the [workspaceSlug] route redirects to /settings/plugins for that
+// reason, and it still does. Naming the workspace is not scoping the list to it: the catalog stays
+// personal, the rows are the same rows, and the workspace only supplies its verdict on them.
+if (!page.includes("state.activeWorkspaceId")) {
+  throw new Error(
+    "Plugins page must read the active workspace from the workspace store; without it every row's workspacePolicyBlockReason is absent and the policy branch below can never render.",
+  );
+}
+if (!page.includes("useAssistantPlugins(workspaceId)")) {
+  throw new Error(
+    "Plugins page must pass the active workspace to useAssistantPlugins — an unscoped listing carries no policy verdict.",
+  );
+}
+// Install and connect must be sent under the same workspace the refusal was read from, or the page
+// disables a button the server would have happily honoured, and honours one it would have refused.
+for (const token of [
+  "installPlugin.mutateAsync({ pluginKey: plugin.key, workspaceId })",
+  "connectUrl.mutateAsync({ pluginKey: plugin.key, workspaceId })",
+]) {
+  if (!page.includes(token)) {
+    throw new Error(
+      `Plugins page must send the workspace with the actions the workspace can refuse ('${token}'), so its own guard and the server's agree.`,
+    );
+  }
+}
 if (!page.includes("pluginWorkspaceBlock")) {
   throw new Error(
     "Plugins page must read workspacePolicyBlockReason through pluginWorkspaceBlock; a row the workspace refuses cannot look like a row that works.",
