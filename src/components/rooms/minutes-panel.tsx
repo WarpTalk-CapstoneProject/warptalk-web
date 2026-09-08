@@ -383,11 +383,24 @@ export function MinutesPanel({
               <Printer size={13} />
               Print
             </Button>
+            {/* WT-654: the .docx says which layout it is, because it only has one.
+                MeetingMinutesDocxWriter is a single Vietnamese writer — no template argument, no
+                second implementation — while the switch above and Print both honour the reader's
+                choice. Two buttons side by side, one of them quietly ignoring the control next to
+                them, is the part that had to stop. Naming the layout on the button costs a reader
+                nothing when it is the layout they wanted, and stops the download being a surprise
+                when it is not. The alternative was a second OpenXML writer duplicating a 1300-line
+                renderer by hand, which is what WT-637 and WT-639 were cancelled for. */}
             <Button
               size="sm"
               variant="outline"
               onClick={downloadDocx}
               disabled={downloading}
+              title={
+                template === "global-en"
+                  ? "The Word export is only available in the Vietnamese layout. Use Print to keep the international layout."
+                  : "Downloads this document in the Vietnamese layout."
+              }
               className="h-8 rounded-md text-[11px] shadow-none"
             >
               {downloading ? (
@@ -395,10 +408,19 @@ export function MinutesPanel({
               ) : (
                 <DownloadSimple size={13} />
               )}
-              Download Word
+              Download Word (Vietnamese layout)
             </Button>
           </div>
         </div>
+
+        {/* Only when the two disagree. On the Vietnamese layout the button already says what the
+            file will be, and a line explaining that it matches would be noise. */}
+        {template === "global-en" ? (
+          <p className="text-[11px] leading-relaxed text-ink-subtle">
+            You are reading the international layout. The Word file is produced in the Vietnamese
+            layout — use Print to keep this one.
+          </p>
+        ) : null}
 
         {canManage ? (
           <div className="flex flex-wrap items-center gap-2">
