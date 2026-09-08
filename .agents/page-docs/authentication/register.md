@@ -54,9 +54,27 @@ Name input sits on step 2, so the person was told something was wrong on a scree
 fix. The second had no validation rule at all in front of it and failed inside the database, coming
 back as a generic server error.
 
-The API cannot help with field attribution: its 400 body is `{ error, code }` with every message
-space-joined into one string and the field names discarded, so there is nothing for the client to
-map onto a form field. Catching it client-side is what makes the error land on the input.
+**Correction, from running the stack rather than reading it.** The first version of this note said
+the API flattened field names away. That was backwards. A FluentValidation failure does not return
+`{ error, code }` at all — it returns ASP.NET's ValidationProblemDetails:
+
+```json
+{ "title": "One or more validation errors occurred.",
+  "errors": { "FullName": ["Full name cannot exceed 150 characters."] } }
+```
+
+The field name and the reason were both there. What was missing was a client that read them:
+`getErrorMessage` looked only at `message` / `Message` / `error`, none of which exist on that
+shape, so it fell through to the caller's fallback — in **every** feature of the app, not only on
+this form. `{ error, code }` is what a SERVICE failure returns ("Email already registered"); both
+are 400s from the same endpoint.
+
+`src/lib/api/errors.ts` now reads `errors` too. The generic `title` is deliberately never shown:
+swapping one meaningless sentence for another is not a fix.
+
+Catching it client-side is still right — it puts the error on the input at step 2 instead of in a
+toast at step 3 — but it is no longer the only thing standing between a validation failure and a
+readable message.
 
 The hand-rolled `catch` only ever looked at a response body, so every transport failure — offline,
 502, 504, a rate limit — read as "Registration failed. Please try again.", telling the person to
