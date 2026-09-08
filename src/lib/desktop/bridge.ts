@@ -12,7 +12,7 @@
  * implements it. The types below mirror warptalk-desktop/src/shared/types.ts.
  */
 
-/** Which side of the bridge a virtual device carries. See virtual-audio.ts for why it takes two. */
+/** Which side of the bridge a virtual device carries when that leg uses a virtual device. */
 export type BridgeLeg = "outbound" | "inbound";
 
 export interface VirtualAudioDevice {
@@ -21,6 +21,9 @@ export interface VirtualAudioDevice {
   /** What the device is called in Google Meet's picker — the string the user has to hunt for. */
   deviceName: string;
   installed: boolean;
+  providerId?: string;
+  providerName?: string;
+  providerRole?: "primary" | "backup";
 }
 
 export interface VirtualAudioStatus {
@@ -32,12 +35,65 @@ export interface VirtualAudioStatus {
   supported: boolean;
   devices: VirtualAudioDevice[];
   ready: boolean;
+  bridgeMode?: "full" | "outbound-only" | "installed-not-running" | "caption-only";
+  recommendedProviderId?: string;
+  capabilities?: {
+    fullBridge: boolean;
+    outboundOnly: boolean;
+    captionOnly: boolean;
+    processLoopback: boolean;
+    processLoopbackRuntime?: "available" | "not-wired";
+    minWindowsProcessLoopbackBuild?: number;
+  };
+  riskControls?: VirtualAudioRiskControl[];
   foreignDrivers: string[];
+}
+
+export interface VirtualAudioRiskControl {
+  id: "R1" | "R2" | "R3" | "R4" | "R5" | "R6" | "R7" | "R8" | "R9" | "B1" | "B2" | "X1";
+  status: "mitigated" | "guarded" | "implemented" | "known-limitation" | "requires-runtime";
+  control: string;
 }
 
 export interface VirtualAudioInstallResult {
   started: boolean;
   reason?: string;
+}
+
+export interface WindowsLoopbackSource {
+  id: string;
+  name: string;
+  windowHandle?: number;
+  ownerProcessId?: number;
+  likelyMeetingWindow: boolean;
+}
+
+export interface WindowsLoopbackCaptureRequest {
+  sourceId?: string;
+  targetProcessId?: number;
+  /** The user agreed to WarpTalk listening to the whole browser. See WINDOWS_CAPTURE_CONSENT. */
+  consentGranted?: boolean;
+  /** Must be true. `false` is the OS's EXCLUDE mode, which captures everything BUT the target. */
+  includeTargetProcessTree?: boolean;
+}
+
+/**
+ * Why a refusal carries a `riskId`.
+ *
+ * The desktop side gates the start behind the risk register rather than a single boolean, so a
+ * refusal can say which control stopped it — R5 for missing consent, R8 for an unresolved window,
+ * R2 for a capture path that is not wired. A caller that only sees "false" can only apologise.
+ */
+export type WindowsLoopbackStartResult =
+  | { started: true }
+  | { started: false; riskId: string; reason: string };
+
+export interface WindowsLoopbackPcmChunk {
+  data: Uint8Array;
+  format: "s16le";
+  sampleRate: 48000;
+  channelCount: 2;
+  capturedAtMs: number;
 }
 
 /**
@@ -52,9 +108,33 @@ export interface DesktopBridge {
   getVersion?: () => Promise<string>;
   getPlatform?: () => string;
   openExternal?: (url: string) => Promise<void>;
-  openTranscriptWindow?: (roomId: string) => Promise<void>;
   getVirtualAudioStatus?: () => Promise<VirtualAudioStatus>;
   installVirtualAudio?: () => Promise<VirtualAudioInstallResult>;
+  openTranscriptWindow?: (roomId: string | null) => Promise<void>;
+  activateRoom?: (roomId: string) => Promise<void>;
+  onRoomActivated?: (callback: (roomId: string) => void) => () => void;
+  closeTranscriptWindow?: () => Promise<void>;
+  listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
+  onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
+  startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
+  stopAudioCapture?: () => Promise<void>;
+  watchMeetPresence?: () => Promise<void>;
+  unwatchMeetPresence?: () => Promise<void>;
+  onMeetPresence?: (callback: (presence: MeetPresence) => void) => () => void;
+}
+
+/**
+ * One observation of whether a Google Meet call is on screen, as the desktop app saw it.
+ *
+ * Mirrors the desktop repo's own type rather than importing it, for the same reason the rest of
+ * this file does: the two repos ship separately, and a build older than this field simply never
+ * sends one.
+ */
+export interface MeetPresence {
+  meetWindowVisible: boolean;
+  /** Present only when the window title carried a room code. A named meeting has none. */
+  meetCode?: string;
+  observedAtMs: number;
 }
 
 /**
@@ -89,18 +169,16 @@ export async function openInSystemBrowser(url: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Kept as a name, not as a second implementation.
+ *
+ * Two functions arrived here from either side of a merge with the same body: this one and
+ * `openTranscriptWindow` below, which differs only by accepting null for the offer window that has
+ * no room yet. A wider signature subsumes a narrower one, so there is one implementation and this
+ * delegates to it — its callers and its tests keep the name they already use.
+ */
 export async function openDesktopTranscriptWindow(roomId: string): Promise<boolean> {
-  const bridge = getDesktopBridge();
-  if (!bridge?.openTranscriptWindow) return false;
-  try {
-    await bridge.openTranscriptWindow(roomId);
-    return true;
-  } catch {
-    // Same contract as its siblings below: false means "no window", whether the shell said no or
-    // never answered. The call site fires this with a bare `void`, so a rejection escaping here
-    // would surface as an unhandled promise rejection and nothing else.
-    return false;
-  }
+  return openTranscriptWindow(roomId);
 }
 
 /**
@@ -133,6 +211,116 @@ export async function requestVirtualAudioInstall(): Promise<VirtualAudioInstallR
   if (!bridge?.installVirtualAudio) return null;
   try {
     return await bridge.installVirtualAudio();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Show the small always-on-top transcript window over the user's meeting app.
+ *
+ * This is the whole of the caption-only rung of the fallback ladder, which is why it gets a helper
+ * rather than an inline `window.warptalk?.` reach: on a machine with no virtual audio device it is
+ * the only thing WarpTalk can offer, and a silent no-op there would be indistinguishable from the
+ * state this ladder was built to remove.
+ *
+ * Returns false when there was no bridge to take it — a browser tab, or a desktop build older than
+ * the window — so the caller can say so instead of leaving a button that appears to do nothing.
+ */
+export async function openTranscriptWindow(roomId: string | null): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.openTranscriptWindow) return false;
+  try {
+    await bridge.openTranscriptWindow(roomId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Subscribes to "is a Google Meet window on screen", and starts the desktop app looking.
+ *
+ * Arming is the caller's job to undo: the watcher enumerates every window on the machine on a
+ * timer, so leaving it armed after the meeting is over spends the user's battery on a question
+ * nobody is asking. The returned function disarms and unsubscribes together, which is what makes
+ * it safe to hand straight to an effect cleanup.
+ *
+ * Returns null on a browser tab or a desktop build without the sensor. Callers fall back to the
+ * schedule-only trigger there, which needs no window knowledge at all.
+ */
+export function watchMeetPresence(
+  onPresence: (presence: MeetPresence) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.watchMeetPresence || !bridge.onMeetPresence) return null;
+
+  const unsubscribe = bridge.onMeetPresence(onPresence);
+  void bridge.watchMeetPresence().catch(() => undefined);
+
+  return () => {
+    unsubscribe();
+    void bridge.unwatchMeetPresence?.().catch(() => undefined);
+  };
+}
+
+/**
+ * Flow 2: tells the main window to make this room the active meeting.
+ *
+ * The offer window can create a room but cannot start translating in it - the pipeline lives in
+ * the main window's meeting session, keyed off a store in sessionStorage, which is per-window. So
+ * the popup asks main to pass the message on rather than writing state the other window will never
+ * read.
+ */
+export async function activateBridgeRoom(roomId: string): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.activateRoom) return false;
+  try {
+    await bridge.activateRoom(roomId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The other end of activateBridgeRoom, for the main window. Null off the desktop shell. */
+export function onBridgeRoomActivated(
+  callback: (roomId: string) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onRoomActivated) return null;
+  return bridge.onRoomActivated(callback);
+}
+
+/** Closes the transcript window if one is open. Safe to call when there is none. */
+export async function closeTranscriptWindow(): Promise<boolean> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.closeTranscriptWindow) return false;
+  try {
+    await bridge.closeTranscriptWindow();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function listWindowsLoopbackSources(): Promise<WindowsLoopbackSource[] | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.listWindowsLoopbackSources) return null;
+  try {
+    return await bridge.listWindowsLoopbackSources();
+  } catch {
+    return null;
+  }
+}
+
+export function onWindowsLoopbackPcmChunk(
+  callback: (chunk: WindowsLoopbackPcmChunk) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onWindowsLoopbackPcmChunk) return null;
+  try {
+    return bridge.onWindowsLoopbackPcmChunk(callback);
   } catch {
     return null;
   }

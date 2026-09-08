@@ -20,6 +20,76 @@
 export const OUTBOUND_DEVICE_LABEL = "BlackHole 2ch";
 export const INBOUND_DEVICE_LABEL = "BlackHole 16ch";
 
+/** Windows exposes the free VB-CABLE as two endpoints with opposite names.
+ * WarpTalk writes to CABLE Input; the meeting app reads that signal as CABLE Output.
+ */
+export const WINDOWS_OUTBOUND_SINK_LABEL = "CABLE Input (VB-Audio Virtual Cable)";
+export const WINDOWS_OUTBOUND_CAPTURE_LABEL = "CABLE Output (VB-Audio Virtual Cable)";
+
+/**
+ * Four names, because a device has a different name depending on who is being told about it.
+ *
+ * On macOS the distinction is invisible: BlackHole is one duplex device, so what WarpTalk writes
+ * into and what the user picks in Meet are the same string, and it was reasonable to keep a single
+ * label per leg. Windows breaks that. The free VB-CABLE is one cable with two endpoint names, and
+ * they are the opposite way round from what the routing does — WarpTalk plays into `CABLE Input`
+ * and Meet reads that signal as `CABLE Output`. A single label per leg has to be wrong for one of
+ * the two audiences, and the one it was wrong for was the user, who was being shown the name of a
+ * device they must not select.
+ *
+ * So the routing names and the instruction names are separate fields. Anything calling `setSinkId`
+ * or `getUserMedia` wants the first pair; anything printing a sentence for a human wants the
+ * second.
+ */
+export type BridgeDeviceLabels = {
+  /** The device WarpTalk plays the dub INTO. Looked up as an output. */
+  outboundSink: string;
+  /** The device WarpTalk records the far side FROM, or null where loopback does that job. */
+  inboundCapture: string | null;
+  /** What the user selects as the meeting app's MICROPHONE. */
+  meetMicrophone: string;
+  /** What the user selects as the meeting app's SPEAKER, or null where they change nothing. */
+  meetSpeaker: string | null;
+};
+
+export function bridgeDeviceLabelsForPlatform(platform: string): BridgeDeviceLabels {
+  if (/windows|win32|win64/i.test(platform)) {
+    return {
+      outboundSink: WINDOWS_OUTBOUND_SINK_LABEL,
+      // The free VB-CABLE has one cable. Windows captures the far side with process loopback.
+      inboundCapture: null,
+      meetMicrophone: WINDOWS_OUTBOUND_CAPTURE_LABEL,
+      // Nothing to change: process loopback reads the browser's own output, so the user keeps
+      // their real speakers and can still hear the meeting. Telling them to point Meet at a
+      // virtual device here would make the call inaudible for no gain.
+      meetSpeaker: null,
+    };
+  }
+
+  return {
+    outboundSink: OUTBOUND_DEVICE_LABEL,
+    inboundCapture: INBOUND_DEVICE_LABEL,
+    meetMicrophone: OUTBOUND_DEVICE_LABEL,
+    meetSpeaker: INBOUND_DEVICE_LABEL,
+  };
+}
+
+/**
+ * The labels for the machine this is running on.
+ *
+ * Exported because the copy in toasts and in the setup wizard has to match the platform too — it
+ * used to name the macOS devices unconditionally, so a Windows user with no VB-CABLE was told to
+ * install BlackHole, which does not exist for Windows. Callers that render this during SSR must
+ * resolve it after mount: `navigator` is absent on the server and the fallback below is macOS.
+ */
+export function currentBridgeDeviceLabels(): BridgeDeviceLabels {
+  if (typeof navigator === "undefined") {
+    return bridgeDeviceLabelsForPlatform("");
+  }
+
+  return bridgeDeviceLabelsForPlatform(`${navigator.userAgent} ${navigator.platform}`);
+}
+
 /** Well clear of speech formants and of mains hum, so a false pass is unlikely. */
 const PROBE_FREQUENCY_HZ = 440;
 const PROBE_DURATION_MS = 700;
@@ -84,9 +154,12 @@ export async function findBridgeDeviceIds(): Promise<{
     return { outboundDeviceId: null, inboundDeviceId: null };
   }
   const devices = await navigator.mediaDevices.enumerateDevices();
+  const labels = currentBridgeDeviceLabels();
   return {
-    outboundDeviceId: findDeviceId(devices, OUTBOUND_DEVICE_LABEL, "audiooutput"),
-    inboundDeviceId: findDeviceId(devices, INBOUND_DEVICE_LABEL, "audioinput"),
+    outboundDeviceId: findDeviceId(devices, labels.outboundSink, "audiooutput"),
+    inboundDeviceId: labels.inboundCapture
+      ? findDeviceId(devices, labels.inboundCapture, "audioinput")
+      : null,
   };
 }
 
@@ -166,35 +239,55 @@ async function probeLoopback(outputDeviceId: string, inputDeviceId: string): Pro
 }
 
 export async function checkVirtualBridge(): Promise<BridgeCheckResult> {
-  const legs: Array<{ leg: BridgeLeg; label: string }> = [
-    { leg: "outbound", label: OUTBOUND_DEVICE_LABEL },
-    { leg: "inbound", label: INBOUND_DEVICE_LABEL },
-  ];
+  const labels = currentBridgeDeviceLabels();
+  const legs = labels.inboundCapture
+    ? [
+        {
+          leg: "outbound" as const,
+          expectedLabel: labels.outboundSink,
+          outputLabel: labels.outboundSink,
+          inputLabel: labels.outboundSink,
+        },
+        {
+          leg: "inbound" as const,
+          expectedLabel: labels.inboundCapture,
+          outputLabel: labels.inboundCapture,
+          inputLabel: labels.inboundCapture,
+        },
+      ]
+    : [
+        {
+          leg: "outbound" as const,
+          expectedLabel: WINDOWS_OUTBOUND_CAPTURE_LABEL,
+          outputLabel: labels.outboundSink,
+          inputLabel: WINDOWS_OUTBOUND_CAPTURE_LABEL,
+        },
+      ];
 
   const devices = await navigator.mediaDevices.enumerateDevices();
   const needsPermission = devices.every((device) => device.label === "");
 
   const probes: DeviceProbe[] = [];
-  for (const { leg, label } of legs) {
-    const outputId = findDeviceId(devices, label, "audiooutput");
-    const inputId = findDeviceId(devices, label, "audioinput");
+  for (const { leg, expectedLabel, outputLabel, inputLabel } of legs) {
+    const outputId = findDeviceId(devices, outputLabel, "audiooutput");
+    const inputId = findDeviceId(devices, inputLabel, "audioinput");
 
     if (!outputId || !inputId) {
-      probes.push({ leg, expectedLabel: label, present: false, carriesSignal: null });
+      probes.push({ leg, expectedLabel, present: false, carriesSignal: null });
       continue;
     }
 
     try {
       probes.push({
         leg,
-        expectedLabel: label,
+        expectedLabel,
         present: true,
         carriesSignal: await probeLoopback(outputId, inputId),
       });
     } catch (error) {
       probes.push({
         leg,
-        expectedLabel: label,
+        expectedLabel,
         present: true,
         carriesSignal: null,
         error: error instanceof Error ? error.message : String(error),

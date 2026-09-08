@@ -19,6 +19,8 @@ import {
 } from "@/components/workspace/page-chrome";
 import { getErrorMessage } from "@/lib/api/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
+import { describeSavedVoice } from "@/lib/voice/voice-preference";
+import { isLibraryVoicePointer } from "@/lib/voice/profile-status";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
@@ -34,17 +36,32 @@ function bareLanguage(language: string) {
 
 const LANGUAGES = languagesInScope("voiceCatalog");
 
-/** Which catalogue voice this person currently hears other people in, for one language. */
+/**
+ * The stand-in voice this person picked for speakers who chose none, for one language.
+ *
+ * `isLibraryVoicePointer` is the whole correctness of this hook. Without it the predicate below
+ * — provider "cartesia", has a provider voice, right language — also matches this person's OWN
+ * finished clone, because a clone lives in the Cartesia account too and the collect path writes
+ * the same provider. The rail then showed somebody their own voice's raw provider id as their
+ * "stand-in", a UUID it had no way to name because a personal clone is not in the public
+ * catalogue. See profile-status.ts for why a missing name is the marker.
+ */
+function usePreferredVoice(profiles: VoiceProfileDto[], language: string) {
+  return useMemo(
+    () =>
+      profiles.find(
+        (profile) =>
+          isLibraryVoicePointer(profile) &&
+          profile.provider === "cartesia" &&
+          bareLanguage(profile.language ?? "") === language,
+      ) ?? null,
+    [profiles, language],
+  );
+}
+
+/** Just the id, for the callers that only need to know which row is active. */
 function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
-  return useMemo(() => {
-    const match = profiles.find(
-      (profile) =>
-        profile.provider === "cartesia" &&
-        profile.providerVoiceId &&
-        bareLanguage(profile.language ?? "") === language,
-    );
-    return match?.providerVoiceId ?? null;
-  }, [profiles, language]);
+  return usePreferredVoice(profiles, language)?.providerVoiceId ?? null;
 }
 
 /**
@@ -89,11 +106,11 @@ export function LibraryVoiceList({
         onSuccess: () =>
           toast.success(
             voiceId
-              ? "Set as the voice you hear for this language."
+              ? "Saved — used for speakers in this language who have no voice of their own."
               : "Cleared — back to the automatic voice.",
           ),
         onError: (error) =>
-          toast.error(getErrorMessage(error, "Could not save the voice you hear.")),
+          toast.error(getErrorMessage(error, "Could not save the stand-in voice.")),
       },
     );
   }
@@ -145,9 +162,9 @@ export function LibraryVoiceList({
               key={voice.id}
               tone="library"
               name={voice.name}
-              badge={active ? <VoiceChip tone="active">You hear this</VoiceChip> : undefined}
+              badge={active ? <VoiceChip tone="active">Stand-in</VoiceChip> : undefined}
               secondary={voice.gender ? capitalise(voice.gender) : "—"}
-              statusText={active ? "Your default" : undefined}
+              statusText={active ? "Your stand-in" : undefined}
               actions={
                 <>
                   <VoicePreviewButton voiceId={voice.id} language={language} label={voice.name} />
@@ -171,7 +188,16 @@ export function LibraryVoiceList({
 }
 
 /**
- * What this person hears other people in, for the language the catalogue is showing.
+ * The stand-in voice: what a speaker who has chosen nothing sounds like TO THIS READER.
+ *
+ * WHY IT IS NOT CALLED "VOICES YOU HEAR" ANY MORE
+ *     That title promised something the product deliberately does not do, and a reader who
+ *     believed it would conclude the feature was broken. Whose voice a dub is spoken in is the
+ *     SPEAKER's decision — TTSWorker._resolve_voice_variants returns early on a speaker who
+ *     cloned their voice or picked one, and never renders a listener's alternative for them.
+ *     Only the LANGUAGE is the listener's. What is set here replaces the automatic
+ *     hashed-from-speaker-id stand-in, and only for people who have expressed no preference at
+ *     all. The old title read as a veto over everyone.
  *
  * A readout, not a second picker: the list on the left is the editor, and giving the same
  * setting two controls is how the page ended up with three independent language dropdowns that
@@ -184,29 +210,64 @@ export function ListeningVoiceSummary({
   profiles: VoiceProfileDto[];
   language: string;
 }) {
-  const currentVoiceId = usePreferredVoiceId(profiles, language);
-  const { data: catalog = [] } = useVoiceCatalog(language);
+  const current = usePreferredVoice(profiles, language);
+  const currentVoiceId = current?.providerVoiceId ?? null;
+  const catalogQuery = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
 
-  const name = useMemo(() => {
-    if (!currentVoiceId) return null;
-    return catalog.find((voice) => voice.id === currentVoiceId)?.name ?? currentVoiceId;
-  }, [catalog, currentVoiceId]);
+  // The name stored on the row is the fallback the catalogue cannot provide once its cache has
+  // expired — captured when the pick was made, which is the one moment it was warm.
+  const label = useMemo(
+    () =>
+      describeSavedVoice(
+        currentVoiceId,
+        catalogQuery.data ?? [],
+        catalogQuery.isLoading,
+        current?.displayName,
+      ),
+    [currentVoiceId, catalogQuery.data, catalogQuery.isLoading, current?.displayName],
+  );
+
+  const headline =
+    label.state === "named"
+      ? label.name
+      : label.state === "loading"
+        ? "Loading…"
+        : label.state === "unavailable"
+          ? (label.name ?? "Saved voice")
+          : "Automatic";
 
   return (
     <WorkspaceRailModule
-      title="Voices you hear"
-      description={`Used for a speaker in ${getLanguageName(language)} who has not picked a voice of their own.`}
+      title="Stand-in voice"
+      description={`Used for a speaker in ${getLanguageName(language)} who has not picked a voice of their own. Anyone who has, you hear as themselves.`}
     >
-      <p className="text-[13px] font-medium text-ink">{name ?? "Automatic"}</p>
+      <p className="text-[13px] font-medium text-ink">{headline}</p>
+      {label.state === "unavailable" ? (
+        // Said plainly instead of shown as a name, because it is not one and because the
+        // preference genuinely is not being applied — resolveSavedVoiceForLanguage drops an id
+        // the catalogue does not currently offer rather than sending a voice that would
+        // silently fall back. The id itself is not shown: a UUID is not an answer to "which
+        // voice is this".
+        <p className="text-[11.5px] leading-snug text-ink-subtle">
+          Not offered for {getLanguageName(language)} right now, so the automatic voice is used
+          until it is. The catalogue fills after the first translation into this language.
+        </p>
+      ) : null}
       {currentVoiceId ? (
         <div className="flex items-center justify-between gap-2">
-          <VoicePreviewButton
-            voiceId={currentVoiceId}
-            language={language}
-            label="the voice you hear"
-            variant="inline"
-          />
+          {/* Only when the catalogue can name it: previewing an id the catalogue does not
+              offer is refused by IsVoiceChoosableByAsync, so the button could only fail. */}
+          {label.state === "named" ? (
+            <VoicePreviewButton
+              voiceId={currentVoiceId}
+              language={language}
+              label="the stand-in voice"
+              variant="inline"
+            />
+          ) : (
+            <span />
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -218,7 +279,7 @@ export function ListeningVoiceSummary({
                 {
                   onSuccess: () => toast.success("Cleared — back to the automatic voice."),
                   onError: (error) =>
-                    toast.error(getErrorMessage(error, "Could not clear the voice you hear.")),
+                    toast.error(getErrorMessage(error, "Could not clear the stand-in voice.")),
                 },
               )
             }

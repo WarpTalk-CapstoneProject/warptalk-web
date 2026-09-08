@@ -34,6 +34,39 @@ const MAC_DEVICES = [
   },
 ];
 
+const WINDOWS_CABLE_DEVICES = [
+  {
+    leg: "outbound" as const,
+    driverBundle: "VB-CABLE",
+    deviceName: "CABLE Output (VB-Audio Virtual Cable)",
+    installed: true,
+    providerId: "vbcable-free",
+    providerName: "VB-CABLE",
+    providerRole: "primary" as const,
+  },
+];
+
+const WINDOWS_VOICEMEETER_DEVICES = [
+  {
+    leg: "outbound" as const,
+    driverBundle: "Voicemeeter AUX",
+    deviceName: "VoiceMeeter Aux Output (VB-Audio VoiceMeeter AUX VAIO)",
+    installed: true,
+    providerId: "voicemeeter-banana",
+    providerName: "Voicemeeter Banana",
+    providerRole: "backup" as const,
+  },
+  {
+    leg: "inbound" as const,
+    driverBundle: "Voicemeeter VAIO",
+    deviceName: "VoiceMeeter Input (VB-Audio VoiceMeeter VAIO)",
+    installed: true,
+    providerId: "voicemeeter-banana",
+    providerName: "Voicemeeter Banana",
+    providerRole: "backup" as const,
+  },
+];
+
 const SCENARIOS: Array<{
   key: string;
   label: string;
@@ -45,6 +78,26 @@ const SCENARIOS: Array<{
     label: "Browser (no bridge)",
     note: "The panel must render nothing at all — not an empty card, not a heading.",
     status: null,
+  },
+  {
+    key: "windows-cable-old-build",
+    label: "Windows · CABLE free · old build",
+    note: "Free cable is installed, but this Windows build cannot run per-process loopback.",
+    status: {
+      platform: "win32",
+      supported: true,
+      ready: false,
+      bridgeMode: "caption-only",
+      recommendedProviderId: "vbcable-free",
+      capabilities: {
+        fullBridge: false,
+        outboundOnly: false,
+        captionOnly: true,
+        processLoopback: false,
+      },
+      devices: WINDOWS_CABLE_DEVICES,
+      foreignDrivers: [],
+    },
   },
   {
     key: "ready",
@@ -93,6 +146,46 @@ const SCENARIOS: Array<{
       supported: false,
       ready: false,
       devices: [],
+      foreignDrivers: [],
+    },
+  },
+  {
+    key: "windows-cable",
+    label: "Windows · CABLE free",
+    note: "After C1a PASS this is the T3 floor: outbound can run, inbound waits for loopback.",
+    status: {
+      platform: "win32",
+      supported: true,
+      ready: false,
+      bridgeMode: "outbound-only",
+      recommendedProviderId: "vbcable-free",
+      capabilities: {
+        fullBridge: false,
+        outboundOnly: true,
+        captionOnly: true,
+        processLoopback: true,
+      },
+      devices: WINDOWS_CABLE_DEVICES,
+      foreignDrivers: [],
+    },
+  },
+  {
+    key: "windows-voicemeeter",
+    label: "Windows · Voicemeeter",
+    note: "Driver is present, but Phase 2B still has to own engine start/restore before use.",
+    status: {
+      platform: "win32",
+      supported: true,
+      ready: false,
+      bridgeMode: "installed-not-running",
+      recommendedProviderId: "vbcable-free",
+      capabilities: {
+        fullBridge: false,
+        outboundOnly: false,
+        captionOnly: true,
+        processLoopback: false,
+      },
+      devices: WINDOWS_VOICEMEETER_DEVICES,
       foreignDrivers: [],
     },
   },

@@ -12,6 +12,18 @@ async function source(relativePath) {
   });
 }
 
+/**
+ * The rule below is about code, so it has to be checked against code.
+ *
+ * Matching the bare word caught a COMMENT explaining why the offer popup cannot own the active
+ * room — `activeRoomId` lives in sessionStorage, which is per-window — and failed the build for
+ * prose that describes the very rule it was enforcing. Stripping comments first keeps the rule
+ * exactly as strict about real access and stops it policing English.
+ */
+function withoutComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
 const [appLayout, roomRoute, meetingSession, meetingStore, lifecycle, miniDock] =
   await Promise.all([
     source("src/app/(app)/layout.tsx"),
@@ -37,10 +49,22 @@ assert.doesNotMatch(
   /LiveKitRoom|createHubConnection|useLeaveTranslationRoom/,
   "the route wrapper must not own connections that disappear during navigation",
 );
+// The invariant is that the session keeps one identity while its PRESENTATION follows the route:
+// a stable key so it never remounts, and a `compact` bound to route state rather than a constant.
+// This used to assert the literal `compact={!isLiveMeetingRoute}`, which pinned the expression
+// rather than the rule and broke the moment an external-bridge meeting needed a wider condition —
+// there the user is inside Google Meet, so the widget must keep floating even on a live route.
+// Split in two so the chain is still provable end to end: the JSX binds `compact` to the flag, and
+// the flag is derived from the route. A single loosened regex would have proved neither.
 assert.match(
   appLayout,
-  /<PersistentMeetingSession[\s\S]*key=\{activeMeetingRoomId\}[\s\S]*compact=\{!isLiveMeetingRoute\}/,
+  /<PersistentMeetingSession[\s\S]*key=\{activeMeetingRoomId\}[\s\S]*compact=\{meetingWidgetFloating\}/,
   "the persistent session must stay mounted while its presentation changes",
+);
+assert.match(
+  appLayout,
+  /const meetingWidgetFloating =[^;]*isLiveMeetingRoute/,
+  "the compact presentation must still be derived from the route, not set to a constant",
 );
 // The floating window used to be pinned to bottom-right in this file, and that literal was
 // asserted here. It is draggable now, so the position lives in MiniMeetingDock and the thing
@@ -48,7 +72,10 @@ assert.match(
 // the page permanently or cannot be grabbed again.
 assert.match(
   appLayout,
-  /<MiniMeetingDock floating=\{!isLiveMeetingRoute\}/,
+  // Same flag as the session's `compact` above, and derived from the route by the assertion there.
+  // Binding both to one expression is the point: the dock and the thing inside it must not be able
+  // to disagree about whether the meeting is being watched or merely kept alive.
+  /<MiniMeetingDock floating=\{meetingWidgetFloating\}/,
   "the floating presentation must be owned by the dock, which keeps it inside the viewport",
 );
 assert.match(
@@ -207,7 +234,7 @@ assert.match(
   "a restored room id that no longer resolves must retire the session, not mount a dead panel",
 );
 assert.doesNotMatch(
-  appLayout,
+  withoutComments(appLayout),
   /sessionStorage/,
   "the layout must not read browser storage during render — the store owns rehydration",
 );
