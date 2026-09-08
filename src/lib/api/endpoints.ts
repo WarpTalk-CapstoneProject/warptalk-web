@@ -288,8 +288,14 @@ export const API = {
       `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
     pluginConnection: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
-    pluginConnectUrl: (pluginKey: string) =>
-      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
+    /**
+     * `client` tells the API which surface is asking, so it can seal that into the OAuth state.
+     * The desktop app opens consent in the system browser, and by the time the callback runs
+     * nothing on that request remembers which app started it.
+     */
+    pluginConnectUrl: (pluginKey: string, client?: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url` +
+      (client ? `?client=${encodeURIComponent(client)}` : ""),
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to

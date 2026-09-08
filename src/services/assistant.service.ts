@@ -69,8 +69,8 @@ export const assistantService = {
     return apiClient.post<AssistantPluginCatalogItemDto>(API.assistant.installPlugin(pluginKey));
   },
 
-  getPluginConnectUrl(pluginKey: string) {
-    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey));
+  getPluginConnectUrl(pluginKey: string, client?: string) {
+    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey, client));
   },
 
   disconnectPlugin(pluginKey: string) {

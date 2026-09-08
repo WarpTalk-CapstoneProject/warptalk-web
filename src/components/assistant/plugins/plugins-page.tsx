@@ -1,21 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  type ReadonlyURLSearchParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowSquareOut,
+  Check,
   CheckCircle,
+  Lock,
   MagnifyingGlass,
   Plugs,
   PlugsConnected,
+  Prohibit,
   PuzzlePiece,
+  ShieldCheck,
   Spinner,
   Trash,
+  WarningCircle,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,6 +38,12 @@ import {
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
+import {
+  type ConnectOutcome,
+  connectNotice,
+  parseConnectStatus,
+} from "@/lib/assistant/connect-outcome";
+import { isDesktopApp } from "@/lib/desktop/bridge";
 import { type PluginDisplayTile, toDisplayTiles } from "@/lib/assistant/plugin-tiles";
 import { cn } from "@/lib/utils";
 import type { AssistantPluginCatalogItemDto } from "@/types/assistant";
@@ -85,6 +103,67 @@ function ConnectionNotice({
   );
 }
 
+/**
+ * What this plugin will be able to do, one line per tool.
+ *
+ * Built from the catalog rather than written per plugin: every tool already carries a human
+ * `label` and an `effect`, so the list stays true to what the plugin can actually call and a new
+ * catalog row needs no copy. Read tools come first and write tools last, which puts the heaviest
+ * permission closest to the button that grants it.
+ *
+ * An MCP row has an empty tool list until its first successful connect - `tools_json` is a cache
+ * of `tools/list` - so there is a real case where this can say nothing, and it says that instead
+ * of rendering an empty box.
+ */
+function PermissionList({ plugin }: { plugin: PluginDisplayTile }) {
+  const permissions = useMemo(() => {
+    const seen = new Set<string>();
+    return plugin.tools
+      .map((tool) => ({ label: tool.label || tool.name, effect: tool.effect }))
+      .filter((permission) => {
+        if (seen.has(permission.label)) return false;
+        seen.add(permission.label);
+        return true;
+      })
+      .sort((a, b) => Number(a.effect === "write") - Number(b.effect === "write"));
+  }, [plugin.tools]);
+
+  if (!permissions.length) {
+    return (
+      <p className="mt-6 rounded-xl border border-border bg-surface-1 px-4 py-3 text-sm leading-6 text-ink-muted">
+        This plugin publishes its permissions when you connect. The provider&apos;s consent screen lists
+        exactly what it is asking for before you approve.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-6 flex flex-col gap-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+        Authorizing allows this plugin to
+      </h3>
+      <ul className="flex flex-col gap-2.5">
+        {permissions.map((permission) => (
+          <li key={permission.label} className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3">
+            <Check size={15} weight="bold" className="mt-1 text-emerald-600" />
+            <span className="text-sm leading-6 text-ink">{permission.label}</span>
+            <span
+              className={cn(
+                "mt-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                permission.effect === "write"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  : "border-border bg-surface-1 text-ink-subtle",
+              )}
+            >
+              {permission.effect}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ConnectPluginDialog({
   plugin,
   isConnecting,
@@ -123,47 +202,47 @@ function ConnectPluginDialog({
           <X size={16} />
         </Button>
 
-        <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex flex-col items-center gap-5 text-center">
           <div className="flex items-center gap-4">
-            <div className="grid size-14 place-items-center rounded-xl border border-border bg-surface-2 text-ink">
-              <PlugsConnected size={26} weight="duotone" />
+            <div className="grid size-14 place-items-center rounded-xl border border-border bg-surface-1">
+              <WarpTalkBrand compact className="h-6 w-[27px]" />
             </div>
-            <span className="text-ink-subtle">...</span>
+            <span aria-hidden className="flex w-12 items-center gap-1.5 text-ink-subtle">
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+              <ShieldCheck size={15} />
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+            </span>
             <PluginGlyph plugin={plugin} size="lg" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Connect {plugin.label}</h2>
-            <p className="mt-1 text-sm text-ink-muted">Developed for WarpTalk</p>
+            <h2 className="text-lg font-medium leading-snug tracking-tight">
+              <span className="font-semibold">WarpBot</span> by WarpTalk wants access to your{" "}
+              {plugin.label}
+            </h2>
+            <p className="mt-1.5 text-sm text-ink-muted">
+              You will sign in and confirm this on the provider&apos;s own page.
+            </p>
           </div>
         </div>
 
-        <div className="mt-6 divide-y divide-border rounded-xl border border-border bg-surface-1 px-4">
-          <div className="py-4">
-            <h3 className="text-sm font-semibold text-ink">This page will redirect to your provider</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              You will sign in and confirm permissions on the provider page.
-            </p>
-          </div>
-          <div className="py-4">
-            <h3 className="text-sm font-semibold text-ink">Private and secure</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              WarpBot uses connected app data only to answer your request or perform the action you confirm.
-              OAuth credentials stay encrypted in WarpTalk backend services.
-            </p>
-          </div>
-          <div className="py-4">
-            <h3 className="text-sm font-semibold text-ink">You are in control of your data</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              You can disconnect this plugin from your personal settings. Write actions require confirmation before execution.
-            </p>
-          </div>
+        <PermissionList plugin={plugin} />
+
+        <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
+          <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
+            <Prohibit size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+            WarpTalk is not owned or operated by this provider.
+          </p>
+          <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
+            <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+            Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks you first.
+          </p>
           {plugin.sharedConnectionWith.length ? (
-            <div className="py-4">
-              <h3 className="text-sm font-semibold text-ink">Shares a connection with {plugin.sharedConnectionWith.join(", ")}</h3>
-              <p className="mt-1 text-sm leading-6 text-ink-muted">
-                One sign-in covers both. Google&apos;s consent screen lets you grant only what you need — decline the rest there and reconnect later to add it.
-              </p>
-            </div>
+            <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
+              <PlugsConnected size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+              One sign-in also covers{" "}
+              <span className="font-medium text-ink">{plugin.sharedConnectionWith.join(", ")}</span>. You can
+              grant only part of it and come back for the rest.
+            </p>
           ) : null}
         </div>
 
@@ -250,6 +329,24 @@ function ConnectPluginDialog({
   );
 }
 
+/**
+ * The outcome a finished connect carried back on the URL, or null when this is an ordinary visit.
+ *
+ * None of it is trusted as the connection's state - the catalog query decides that. It only picks
+ * which sentence, if any, is worth showing.
+ */
+function readConnectOutcome(params: URLSearchParams | ReadonlyURLSearchParams): ConnectOutcome | null {
+  const status = parseConnectStatus(params.get("status"));
+  if (!status) return null;
+
+  return {
+    status,
+    reason: params.get("reason"),
+    pluginKey: params.get("plugin"),
+    reference: params.get("ref"),
+  };
+}
+
 export default function PluginsPage() {
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins();
   const installPlugin = useInstallAssistantPlugin();
@@ -260,6 +357,18 @@ export default function PluginsPage() {
   const [query, setQuery] = useState("");
   const [selectedPlugin, setSelectedPlugin] = useState<PluginDisplayTile | null>(null);
   const [browserConnect, setBrowserConnect] = useState<{ plugin: PluginDisplayTile; url: string } | null>(null);
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // A finished connect arrives as a full page load carrying what happened, so the query is read
+  // once at mount and held from there. The effect below then strips it: left in the URL it would
+  // replay the message on every refresh, and ride along in any link copied out of the address bar.
+  const [outcome, setOutcome] = useState<ConnectOutcome | null>(() => readConnectOutcome(searchParams));
+
+  useEffect(() => {
+    if (searchParams.has("status")) router.replace(pathname);
+  }, [pathname, router, searchParams]);
 
   const displayPlugins = useMemo(() => plugins.flatMap(toDisplayTiles), [plugins]);
 
@@ -294,7 +403,12 @@ export default function PluginsPage() {
 
   async function continueToProvider(plugin: PluginDisplayTile) {
     try {
-      const result = await connectUrl.mutateAsync({ pluginKey: plugin.key });
+      const result = await connectUrl.mutateAsync({
+        pluginKey: plugin.key,
+        // Sealed into the OAuth state by the API. The desktop app hands consent to the system
+        // browser, so this is the only moment the flow still knows where it started.
+        client: isDesktopApp() ? "desktop" : "web",
+      });
       setBrowserConnect({ plugin, url: result.url });
       openProviderConsent(result.url);
     } catch {
@@ -329,8 +443,55 @@ export default function PluginsPage() {
     }
   }
 
+  const outcomePlugin = outcome?.pluginKey
+    ? displayPlugins.find((plugin) => plugin.key === outcome.pluginKey) ?? null
+    : null;
+  const notice = outcome ? connectNotice(outcome, outcomePlugin?.label ?? "This plugin") : null;
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-ink">
+      {notice ? (
+        <div
+          role="status"
+          className={cn(
+            "grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border px-4 py-3",
+            notice.tone === "error"
+              ? "border-destructive/30 bg-destructive/10 text-destructive"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+          )}
+        >
+          <WarningCircle size={17} weight="fill" className="mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-semibold">{notice.title}</p>
+            <p className="text-sm leading-6 opacity-90">{notice.detail}</p>
+            {outcome?.reference ? (
+              <p className="font-mono text-[11px] opacity-80">ref {outcome.reference}</p>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-1">
+            {notice.action && outcomePlugin ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setSelectedPlugin(outcomePlugin)}
+              >
+                {notice.action === "grant" ? "Grant access" : "Try again"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Dismiss message"
+              onClick={() => setOutcome(null)}
+            >
+              <X size={14} />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       {browserConnect ? (
         <ConnectionNotice
           plugin={browserConnect.plugin}

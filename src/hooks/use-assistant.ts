@@ -100,10 +100,12 @@ export function usePluginConnectUrl() {
   return useMutation({
     mutationFn: async ({
       pluginKey,
+      client,
     }: {
       pluginKey: string;
+      client?: string;
     }) => {
-      const { data } = await assistantService.getPluginConnectUrl(pluginKey);
+      const { data } = await assistantService.getPluginConnectUrl(pluginKey, client);
       return data;
     },
   });
