@@ -3,6 +3,7 @@
 // imports here get away with it only because they are `import type` and erase before runtime —
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
+import { joinTranscriptText } from "./sentence-flow.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
@@ -709,11 +710,15 @@ export function pendingCorrections<T extends { id: string; originalText: string 
   });
 }
 
+/**
+ * How two halves of one utterance become one line.
+ *
+ * The rule moved to `sentence-flow.ts` when it grew a partial-overlap case: this used to catch
+ * only a TOTAL overlap and glue everything else with a space, so "chúng ta sẽ" followed by
+ * "ta sẽ bắt đầu" rendered as "chúng ta sẽ ta sẽ bắt đầu". Kept exported here because
+ * transcript-language.ts joins a merged utterance's per-language translations and has to do it
+ * the same way — two copies of "how do two halves become one" is one copy too many.
+ */
 export function appendText(current?: string, incoming?: string): string {
-  const left = current?.trim() || "";
-  const right = incoming?.trim() || "";
-  if (!left) return right;
-  if (!right || left === right || left.endsWith(right)) return left;
-  if (right.startsWith(left)) return right;
-  return `${left} ${right}`;
+  return joinTranscriptText(current, incoming);
 }

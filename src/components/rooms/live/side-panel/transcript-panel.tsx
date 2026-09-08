@@ -18,6 +18,7 @@ import {
   type TranscriptPauseGap,
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
+import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
@@ -384,14 +385,31 @@ function TranscriptBubble({
               : "rounded-tl-sm border border-border bg-surface-2/60"
           }`}
         >
-          <p className={`text-[13px] leading-relaxed ${isSelf ? "text-white" : "text-ink-muted"}`}>
-            <AnimatedWords text={segment.originalText} />
-          </p>
-          {translation ? (
-            <p className={`mt-1.5 text-[13px] font-medium leading-relaxed ${isSelf ? "text-white" : "text-ink"}`}>
-              <AnimatedWords text={translation} />
+          {/* One line per SENTENCE, not one paragraph per turn.
+              A bubble is a speaking turn — three sentences used to arrive as one wall of text
+              with the sentence ends buried inside it. Splitting into bubbles instead would undo
+              the merge that puts a turn together in the first place, so the turn stays whole and
+              its sentences are laid out inside it. A turn with no terminal punctuation, which
+              Vietnamese STT produces constantly, comes back as a single line and renders exactly
+              as it did before. */}
+          {splitIntoSentences(segment.originalText).map((sentence, at) => (
+            <p
+              key={`${segment.segmentId}-o-${at}`}
+              className={`text-[13px] leading-relaxed ${at > 0 ? "mt-1" : ""} ${isSelf ? "text-white" : "text-ink-muted"}`}
+            >
+              <AnimatedWords text={sentence} />
             </p>
-          ) : null}
+          ))}
+          {translation
+            ? splitIntoSentences(translation).map((sentence, at) => (
+                <p
+                  key={`${segment.segmentId}-t-${at}`}
+                  className={`text-[13px] font-medium leading-relaxed ${at === 0 ? "mt-1.5" : "mt-1"} ${isSelf ? "text-white" : "text-ink"}`}
+                >
+                  <AnimatedWords text={sentence} />
+                </p>
+              ))
+            : null}
           <p className={`mt-2 flex items-center gap-1.5 text-[10px] font-medium ${isSelf ? "text-white/70" : "text-ink-subtle"}`}>
             {/* WT-371 Bug 4: the arrow points at the READER's language, not at whichever
                 translation happened to arrive last. Every line in the panel therefore ends the
