@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
+  DOCUMENT_POLICY_ROLE,
   isExternalViewPolicy,
+  isRolePolicy,
   isUserPolicy,
   type DocumentPermission,
 } from "@/lib/workspace/document-access-policy";
@@ -23,6 +25,17 @@ export interface DocumentAccessPolicyHookReturn {
   allowUser: (userId: string, userName?: string, permission?: DocumentPermission) => Promise<void>;
   blockUser: (userId: string, userName?: string, permission?: DocumentPermission) => Promise<void>;
   removePolicy: (policyId: string) => Promise<void>;
+  /**
+   * The rule for ordinary MEMBERS of this workspace, for one permission.
+   *
+   * `null` clears it and lets the document's own status decide again — which is not the same as
+   * DENY. The three states are distinct and a two-way switch cannot say all of them.
+   */
+  memberAccess: (permission: DocumentPermission) => "allow" | "deny" | null;
+  setMemberAccess: (
+    permission: DocumentPermission,
+    effect: "allow" | "deny" | null,
+  ) => Promise<void>;
 }
 
 function errorMessage(err: unknown, fallback: string): string {
@@ -173,6 +186,67 @@ export function useDocumentAccessPolicy(
     permission: DocumentPermission = "view",
   ) => writeUserPolicy(userId, userName, permission, "DENY");
 
+  /**
+   * What the Member role is currently allowed, denied, or not told, for one permission.
+   *
+   * Three states, deliberately. "Nothing said" is the default every document starts in and it is
+   * NOT the same as DENY: without a rule the document's own status and the workspace's inherited
+   * rules decide, and an explicit DENY overrides those. Collapsing the two would make clearing a
+   * rule look like forbidding it.
+   */
+  const memberAccess = (permission: DocumentPermission): "allow" | "deny" | null => {
+    if (policiesList.some((p) => isRolePolicy(p, DOCUMENT_POLICY_ROLE, permission, "allow"))) {
+      return "allow";
+    }
+    if (policiesList.some((p) => isRolePolicy(p, DOCUMENT_POLICY_ROLE, permission, "deny"))) {
+      return "deny";
+    }
+    return null;
+  };
+
+  /**
+   * Write, flip, or clear the Member rule.
+   *
+   * Clears the opposite rule first, for the reason writeUserPolicy documents: the server refuses
+   * a second policy for the same (subject, permission) pair with a 409, so flipping a role from
+   * allowed to blocked in one gesture would otherwise fail while the panel still showed the old
+   * state.
+   */
+  const setMemberAccess = async (
+    permission: DocumentPermission,
+    effect: "allow" | "deny" | null,
+  ) => {
+    const existing = policiesList.filter(
+      (p) =>
+        isRolePolicy(p, DOCUMENT_POLICY_ROLE, permission, "allow") ||
+        isRolePolicy(p, DOCUMENT_POLICY_ROLE, permission, "deny"),
+    );
+
+    try {
+      for (const policy of existing) {
+        await removePolicyMutation.mutateAsync(policy.id);
+      }
+
+      if (effect === null) {
+        toast.success("Members follow the document's own status again.");
+        return;
+      }
+
+      await addPolicyMutation.mutateAsync({
+        subjectType: "Role",
+        subjectId: null,
+        subjectKey: DOCUMENT_POLICY_ROLE,
+        permission,
+        effect: effect === "allow" ? "ALLOW" : "DENY",
+      });
+      toast.success(
+        effect === "allow" ? "Members allowed." : "Members blocked.",
+      );
+    } catch (err: unknown) {
+      toast.error(errorMessage(err, "Failed to change access for members."));
+    }
+  };
+
   const isSubmitting = addPolicyMutation.isPending || removePolicyMutation.isPending;
   const isLoading = policiesQuery.isLoading || membersQuery.isLoading;
 
@@ -186,5 +260,7 @@ export function useDocumentAccessPolicy(
     allowUser,
     blockUser,
     removePolicy,
+    memberAccess,
+    setMemberAccess,
   };
 }
