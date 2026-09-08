@@ -23,6 +23,7 @@ import {
 } from "@/components/workspace/page-chrome";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { getLanguageLocale } from "@/lib/language/languages";
+import { ownVoiceProfiles } from "@/lib/voice/profile-status";
 
 type VoiceView = "all" | "mine" | "library" | "attention";
 
@@ -62,9 +63,14 @@ export default function VoiceProfilesPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const profiles = useMemo(() => data ?? [], [data]);
+  // "Your voices" and the "Mine" count mean voices this person MADE. A library pick is stored
+  // in the same table as a nameless pointer row, and unfiltered it showed up beside their own
+  // recordings as "Untitled profile", counted as one of theirs, and could be chosen as the
+  // voice they are dubbed in. See profile-status.ts.
+  const ownProfiles = useMemo(() => ownVoiceProfiles(profiles), [profiles]);
   const needingAttention = useMemo(
-    () => profiles.filter((profile) => profileState(profile).tone !== "ready").length,
-    [profiles],
+    () => ownProfiles.filter((profile) => profileState(profile).tone !== "ready").length,
+    [ownProfiles],
   );
 
   const showMine = view !== "library";
@@ -82,7 +88,7 @@ export default function VoiceProfilesPage() {
             />
             <WorkspaceFilterPill
               label="Mine"
-              count={profiles.length}
+              count={ownProfiles.length}
               selected={view === "mine"}
               onClick={() => setView("mine")}
             />
@@ -129,15 +135,15 @@ export default function VoiceProfilesPage() {
           <>
             {/* Permission first: it is what the rest of the rail is allowed to do. */}
             <VoiceConsentCard />
-            <MyDubVoicePicker profiles={profiles} language={language} />
+            <MyDubVoicePicker profiles={ownProfiles} language={language} />
             <ListeningVoiceSummary profiles={profiles} language={language} />
-            <VoiceProfileSummary profiles={profiles} />
+            <VoiceProfileSummary profiles={ownProfiles} />
           </>
         }
       >
         {showMine ? (
           <VoiceProfileList
-            profiles={profiles}
+            profiles={ownProfiles}
             isLoading={isLoading}
             search={search}
             onlyNeedingAttention={view === "attention"}

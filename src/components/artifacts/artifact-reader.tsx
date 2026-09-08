@@ -16,7 +16,6 @@ import {
   Translate,
   Users,
   WarningCircle,
-  X,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -42,17 +41,24 @@ import { roomDetailPath } from "@/lib/workspace/workspace-routes";
  *   burying them under a transcript means scrolling past the answer to look for it.
  *
  * ONE MEETING, THREE DOCUMENTS
- *   The panel opens on a MEETING and switches between what it produced. The facts above the text
+ *   The view opens on a MEETING and switches between what it produced. The facts above the text
  *   belong to the meeting, so they do not move when the reader changes document — which is what
  *   makes the three read as one meeting's contents rather than as three unrelated files that
  *   happen to share a title.
+ *
+ * A PAGE, NOT A PANEL
+ *   This used to be an `aside` in a second column of the library, with its own header and a close
+ *   button. Reading a transcript in a 460px rail beside a grid of cards is reading it through a
+ *   letterbox, and the library's own filters stayed on screen doing nothing for the reader. The
+ *   records now open at their own URL, the way a document does — so a record can be linked to,
+ *   opened in a tab, and returned to with Back. The page owns the header and the way out; this
+ *   owns the record.
  */
-export function ArtifactReader({
+export function ArtifactRecordView({
   group,
   entry,
   onSelectKind,
   workspaceSlug,
-  onClose,
   onDrawUpMinutes,
   drawingUpMinutes = false,
 }: {
@@ -61,7 +67,6 @@ export function ArtifactReader({
   entry: LibraryEntry;
   onSelectKind: (kind: ArtifactKind) => void;
   workspaceSlug: string;
-  onClose: () => void;
   /**
    * Draw this meeting's biên bản up from the summary being read.
    *
@@ -89,30 +94,10 @@ export function ArtifactReader({
   }
 
   return (
-    <aside className="flex min-h-0 flex-col border-t border-border bg-surface-1 lg:border-l lg:border-t-0">
-      <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-5 py-4">
-        <div className="min-w-0">
-          <h2 className="truncate text-[17px] font-semibold leading-6 text-ink" title={group.roomTitle}>
-            {group.roomTitle}
-          </h2>
-          <p className="mt-0.5 truncate text-[11px] text-ink-muted">
-            {group.roomCode}
-            {group.hostName ? ` · ${group.hostName}` : ""}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close record"
-          className="shrink-0 rounded p-1 text-ink-subtle transition-colors hover:text-ink"
-        >
-          <X size={15} />
-        </button>
-      </header>
-
+    <div className="flex min-h-0 flex-col">
       <RecordTabs group={group} current={entry} onSelectKind={onSelectKind} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+      <div className="min-h-0 flex-1 px-5 py-4">
         <dl className="grid grid-cols-2 gap-x-4 border-b border-border pb-4">
           <Fact icon={CalendarBlank} label="Meeting ended" value={formatDateTime(entry.meetingEndedAt)} />
           <Fact icon={Clock} label="Duration" value={formatDuration(entry.durationSeconds)} />
@@ -198,7 +183,7 @@ export function ArtifactReader({
           <Unreadable entry={entry} />
         )}
       </div>
-    </aside>
+    </div>
   );
 }
 

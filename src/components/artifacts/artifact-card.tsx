@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   FileText,
   LockSimple,
@@ -18,6 +19,7 @@ import {
   relativeTime,
 } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
+import { recordDetailPath } from "@/lib/workspace/workspace-routes";
 
 /**
  * One MEETING, and what it left behind.
@@ -64,25 +66,23 @@ const KIND_ACCENTS: Record<ArtifactKind, string> = {
 
 export function ArtifactCard({
   group,
-  selected,
-  onSelect,
+  workspaceSlug,
 }: {
   group: MeetingRecordGroup;
-  selected: boolean;
-  onSelect: () => void;
+  workspaceSlug: string;
 }) {
   const lead = preferredEntry(group);
   const excerpt = entryExcerpt(lead);
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
+    /* A link, not a button. The records open at their own URL now, so this has to be the thing a
+       browser already knows how to do with one — middle-click into a tab, copy the address, or
+       simply show it on hover. A button with a router.push does none of that. */
+    <Link
+      href={recordDetailPath(workspaceSlug, group.roomId)}
       className={cn(
         "group flex h-full flex-col overflow-hidden rounded-lg border border-border bg-surface-1 text-left outline-none transition-colors",
         "hover:border-border hover:bg-surface-2/40 focus-visible:ring-2 focus-visible:ring-ring/40",
-        selected && "border-ink bg-surface-2/60",
       )}
     >
       {/* The thumbnail: the document, in miniature. `select-none` because this is a picture of
@@ -118,7 +118,7 @@ export function ArtifactCard({
           <span className="shrink-0">{relativeTime(group.changedAt ?? group.meetingEndedAt)}</span>
         </span>
       </div>
-    </button>
+    </Link>
   );
 }
 
