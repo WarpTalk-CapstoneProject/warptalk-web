@@ -109,16 +109,45 @@ describe("WT-646 — disconnecting one plugin ends the grant behind all of them"
   });
 
   test("the fallback refuses to guess rather than grouping the wrong rows", () => {
-    // Opaque scope strings, a scheme that is not http(s), no scopes at all, and two issuers in one
-    // row all mean "cannot tell" — and cannot-tell must mean no siblings, not all siblings.
+    // Nothing that names an issuer, and two issuers in one row, both mean "cannot tell" — and
+    // cannot-tell must mean no siblings, not all siblings.
     for (const requiredScopes of [
       ["mcp:read"],
       ["drive.readonly"],
       [],
+      ["openid", "email", "profile"],
       [DRIVE_SCOPE, "https://api.example.com/auth/thing"],
     ]) {
       assert.equal(pluginConnectionGroupKey(plugin({ requiredScopes })), null, requiredScopes.join());
     }
+  });
+
+  test("an identity scope does not collapse the group it sits in", () => {
+    // The regression this exists for. `openid`, `email` and `profile` are bare words —
+    // GoogleWorkspaceOAuthClient asks Google for all three — and requiring EVERY scope to parse as
+    // an http(s) URL meant one of them appearing on a row returned null. A collapsed group means
+    // the disconnect confirmation warns about nobody, which is the silent data loss the whole
+    // grouping exists to prevent, arriving by the path that looks safest.
+    const identityFirst = plugin({
+      key: "google_drive",
+      label: "Google Drive",
+      requiredScopes: ["openid", "email", DRIVE_SCOPE],
+    });
+    assert.equal(pluginConnectionGroupKey(identityFirst), pluginConnectionGroupKey(drive));
+
+    const siblings = pluginsSharingConnection(identityFirst, [identityFirst, calendar, meet]);
+    assert.deepEqual(
+      siblings.map((item) => item.key),
+      ["google_calendar", "google_meet"],
+    );
+  });
+
+  test("an opaque scope beside one issuer over-warns rather than under-warns", () => {
+    // Ignoring a scope that names no issuer can over-group two rows that share a host. That is the
+    // direction to fail in: an extra name in the confirmation is noise, a missing one is data the
+    // user loses without being asked.
+    const mixed = plugin({ key: "mixed", requiredScopes: ["mcp:read", DRIVE_SCOPE] });
+    assert.equal(pluginConnectionGroupKey(mixed), pluginConnectionGroupKey(drive));
   });
 
   test("siblings are the other INSTALLED rows behind the same grant", () => {

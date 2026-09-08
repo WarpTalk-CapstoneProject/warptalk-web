@@ -68,9 +68,9 @@ export function withEffectiveConnectionStatus(
 /**
  * The grant a row's connection is keyed by, or null when the row cannot be grouped with any other.
  *
- * `provider` is the real answer and is preferred whenever the catalog sends it. It is not on the
- * user-facing `PluginCatalogItemDto` yet (only on the admin DTOs), so until it is threaded through
- * the fallback below stands in — see `scopeIssuerGroupKey`.
+ * `provider` is the real answer and is preferred whenever the catalog sends it, which since WT-646
+ * it does. The fallback below is for a server older than that — `provider` is optional on the type
+ * for exactly that reason — and for any row an operator adds without one; see `scopeIssuerGroupKey`.
  */
 export function pluginConnectionGroupKey(plugin: AssistantPluginCatalogItemDto): string | null {
   const provider = plugin.provider?.trim();
@@ -79,31 +79,43 @@ export function pluginConnectionGroupKey(plugin: AssistantPluginCatalogItemDto):
 }
 
 /**
- * Interim stand-in for `provider`: the single https origin every one of a row's required scopes is
- * issued by.
+ * Stand-in for `provider` on a row that does not carry one: the single http(s) origin that issues
+ * a row's required scopes.
  *
- * Deliberately conservative. It returns null unless EVERY required scope is an absolute http(s)
- * URL and they all share one origin, so an opaque scope string (`"mcp:read"`), a scopeless row, or
- * a row mixing two issuers is treated as ungrouped and warns about nobody. The failure it can
- * still make is over-grouping two unrelated rows that happen to be issued by the same host, which
- * over-warns rather than under-warns — the right direction for a guard against silent data loss.
+ * IDENTITY SCOPES DO NOT VOTE, AND THEY DO NOT VETO
  *
- * This disappears on its own the moment the catalog carries `provider`.
+ *   An earlier revision required EVERY scope to be an absolute http(s) URL, which is a rule the
+ *   data does not obey. `openid`, `email` and `profile` are bare words — `GoogleWorkspaceOAuthClient`
+ *   asks for all three alongside the API scopes — and one of them appearing in a row's
+ *   `requiredScopes` was enough to make this return null. That collapses the group, and a collapsed
+ *   group means the disconnect confirmation warns about nobody: precisely the silent data loss the
+ *   warning exists to prevent, arriving through the path that looks safest.
+ *
+ *   So a scope that is not an absolute http(s) URL is now ignored rather than fatal. It names a
+ *   capability, not an issuer, and it has nothing to say about which grant backs the row. The
+ *   grouping is decided by the URL-shaped scopes alone, and a row with none of those is still
+ *   ungrouped — there is no issuer to read out of `["mcp:read"]`, and inventing one would group
+ *   rows that share nothing.
+ *
+ * Still deliberately conservative in the other direction: two issuers in one row means "cannot
+ * tell", and cannot-tell means no siblings. The failure it can still make is over-grouping two
+ * unrelated rows issued by the same host, which over-warns rather than under-warns — the right
+ * direction for a guard against silent data loss.
  */
 function scopeIssuerGroupKey(requiredScopes: readonly string[]): string | null {
-  if (requiredScopes.length === 0) return null;
-
   let issuer: string | null = null;
+
   for (const scope of requiredScopes) {
     let parsed: URL;
     try {
       parsed = new URL(scope);
     } catch {
-      return null;
+      // `openid`, `email`, `profile` — a capability name, not an issuer. Skipped, not fatal.
+      continue;
     }
     // `new URL("mcp:read")` parses happily with protocol "mcp:", so the scheme has to be checked
     // rather than inferred from the parse succeeding.
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return null;
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") continue;
     if (issuer === null) issuer = parsed.origin;
     else if (issuer !== parsed.origin) return null;
   }
@@ -158,10 +170,10 @@ export function sharedConnectionWarning(
 /* ---------------------------------------------------------------------------------------------
  * WORKSPACE PLUGIN POLICY
  *
- *   A workspace can run an allowlist. A blocked row is still RETURNED by the catalog rather than
- *   hidden, so a user whose workspace narrowed its policy under an already-connected plugin can
- *   still see the row and revoke the grant. Install and connect are refused; disconnect and
- *   disable never are.
+ *   A workspace decides one thing: whether its members may use plugins at all. A blocked row is
+ *   still RETURNED by the catalog rather than hidden, so a user whose workspace switched plugins
+ *   off under an already-connected one can still see the row and revoke the grant. Install and
+ *   connect are refused; disconnect and disable never are.
  * ------------------------------------------------------------------------------------------- */
 
 export interface PluginWorkspaceBlock {
