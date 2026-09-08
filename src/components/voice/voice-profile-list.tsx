@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { VoiceChip, VoiceLine, type VoiceLineTone } from "@/components/voice/voice-line";
-import { VoicePreviewButton } from "@/components/voice/voice-preview-button";
+import { VoiceSampleButton } from "@/components/voice/voice-sample-button";
 import {
   WorkspaceListModule,
   WorkspaceRailModule,
@@ -163,14 +163,21 @@ export function VoiceProfileList({
               actions={
                 <>
                   {/*
-                    Only once there is a voice behind the profile. An uploaded recording has none
-                    until it has been cloned, and offering a play button that cannot play is the
-                    same silent nothing this page keeps having to remove.
+                    THE ORIGINAL, not the clone.
+                
+                    This row is "Your voices" — the recordings this person made. The clone built
+                    from them is played by "Voices you hear", and the two together are what makes
+                    the question answerable: a clone on its own cannot be judged, because there is
+                    nothing to compare it against. Playing the clone in BOTH places, which is what
+                    this did, meant the original was never audible anywhere in the product.
+                
+                    Offered whenever the profile has a recording behind it — hasSample, not
+                    providerVoiceId, because the recording exists from the moment of upload and
+                    does not wait for the clone to finish.
                   */}
-                  {profile.providerVoiceId && profile.language ? (
-                    <VoicePreviewButton
-                      voiceId={profile.providerVoiceId}
-                      language={profile.language}
+                  {profile.hasSample ? (
+                    <VoiceSampleButton
+                      profileId={profile.id}
                       label={profile.displayName || "this voice profile"}
                     />
                   ) : null}

@@ -82,29 +82,50 @@ if (!endpoints) {
 const SURFACES = [
   [
     "src/components/voice/voice-profile-list.tsx",
-    "the voice profile list — where somebody checks an uploaded recording before trusting it",
+    "VoiceSampleButton",
+    "the voice profile list — where somebody hears the recording they made, so the clone has something to be compared against",
   ],
   [
     "src/components/voice/library-voice-list.tsx",
+    "VoicePreviewButton",
     "the voice library — where somebody picks the voice they hear other people in",
   ],
   [
     "src/components/voice/my-dub-voice-picker.tsx",
+    "VoicePreviewButton",
     "the dub-voice picker — where somebody decides how they will sound",
   ],
 ];
 
-for (const [path, why] of SURFACES) {
+/*
+ * The profile list plays the ORIGINAL, the other two play the CLONE, and that difference is the
+ * feature rather than an inconsistency.
+ *
+ * The list used to render VoicePreviewButton like the others, which meant the recording somebody
+ * uploaded was not audible anywhere in the product — only the clone made from it. "Is this a good
+ * clone of me?" is a question about the distance between two sounds, and one of them was missing.
+ * If a refactor puts VoicePreviewButton back on this row, that is the regression, not a tidy-up.
+ */
+for (const [path, expected, why] of SURFACES) {
   const source = read(path);
   if (!source) {
     failures.push(`${path} is missing.`);
     continue;
   }
-  if (!source.includes("VoicePreviewButton")) {
+  if (!source.includes(expected)) {
     failures.push(
-      `${path} no longer renders VoicePreviewButton, so ${why} has no way to hear anything.`,
+      `${path} no longer renders ${expected}, so ${why} has no way to hear anything.`,
     );
   }
+}
+
+// The list must play the original and nothing else: rendering the clone here too is how the two
+// halves of the comparison collapse back into one.
+const listSource = read("src/components/voice/voice-profile-list.tsx");
+if (listSource && listSource.includes("VoicePreviewButton")) {
+  failures.push(
+    "src/components/voice/voice-profile-list.tsx renders VoicePreviewButton. That row is the ORIGINAL recording; the clone belongs to the rail modules, and playing it in both places leaves the original inaudible.",
+  );
 }
 
 /**
