@@ -89,11 +89,20 @@ export function joinTranscriptText(current?: string, incoming?: string): string 
 /**
  * Terminal punctuation, and the shapes that only look like it.
  *
- * `\d[.,]\d` is a decimal — "3.14" and Vietnamese "3,14" both split mid-number without this.
+ * TWO ALTERNATIVES, BECAUSE TWO WRITING SYSTEMS PUNCTUATE DIFFERENTLY
+ *   A Latin stop only ends a sentence when whitespace or the end of the string follows it. That
+ *   lookahead is what keeps "3.14" whole without any other check, and it is why the Vietnamese
+ *   and English half of a meeting behaves.
+ *
+ *   CJK stops (。！？) take no such lookahead, because Japanese is written WITHOUT SPACES. The
+ *   requirement would never be satisfied mid-line, and a Japanese turn came back as one
+ *   undivided run — which is exactly what the rendered preview showed:
+ *   "はじめまして、私はトゥアンです。よろしくお願いします。" arrived as a single line.
+ *
  * A single letter before the stop is an initial ("A. Nguyễn"), and the common Vietnamese titles
  * are abbreviations that end in a full stop mid-sentence.
  */
-const SENTENCE_END = /([.!?…]+)(\s+|$)/g;
+const SENTENCE_END = /([.!?…]+(?=\s|$)|[。！？]+)(\s*)/g;
 
 /** Abbreviations that end in a stop without ending a sentence. Lower-cased at the comparison. */
 const ABBREVIATIONS = new Set([
@@ -156,4 +165,65 @@ export function splitIntoSentences(text: string): string[] {
   if (tail) sentences.push(tail);
 
   return sentences;
+}
+
+/**
+ * How long a speaker must stop before the next thing they say starts a new paragraph.
+ *
+ * WHY A PAUSE AND NOT A MODEL
+ *   Restoring punctuation the recogniser never produced is the obvious answer and the wrong one
+ *   at this budget: any model call — remote or local — is orders of magnitude over 10ms, and
+ *   `transcription.prompt` is closed by decision after a production echo incident. But the
+ *   pipeline has ALREADY measured where the speaker stopped. VAD closed a chunk because of a
+ *   silence; the segment timestamps carry its length; and nobody was reading it. Comparing two
+ *   numbers already in the payload costs nothing and is not a guess — it is what the person
+ *   actually did.
+ *
+ * WHY 1000ms AND NOT LESS
+ *   The numbers around it are what fix this value, and every one of them is load-bearing:
+ *
+ *     ~0ms          the 6s `chunk_duration_ms` cap cutting mid-word. NEVER a boundary — this is
+ *                   the exact case the utterance merge exists to repair.
+ *     300–700ms     a Vietnamese speaker drawing breath MID-sentence.
+ *     576 / 864ms   `vad_silence_hangover_ms` / `vad_short_turn_hangover_ms` — what closes a
+ *                   chunk. A cross-chunk seam is at least this by construction, so a threshold
+ *                   under it would break a paragraph at every chunk edge and undo the merge.
+ *     2500ms        `MAX_UTTERANCE_GAP_MS` — past this it is a new bubble, not a new paragraph.
+ *
+ *   1000ms is the first value clear of the breath range and of the hangovers, and comfortably
+ *   inside the bubble. A stop of over a second is somebody finishing a thought.
+ */
+export const SENTENCE_PAUSE_MS = 1_000;
+
+/**
+ * Whether the silence between two segments is long enough to read as an end of thought.
+ *
+ * A NEGATIVE gap is not a pause. Overlapping segments are one continuous stretch of speech —
+ * that is why the utterance merge accepts them — so they can never start a paragraph.
+ */
+export function startsNewParagraph(previousEndMs: number, nextStartMs: number): boolean {
+  const gap = nextStartMs - previousEndMs;
+  return gap >= SENTENCE_PAUSE_MS;
+}
+
+/**
+ * Add `text` to the last paragraph, or start a new one when the speaker had stopped.
+ *
+ * Returns a NEW array; the caller replaces its grouped utterance wholesale, and mutating the
+ * previous one's paragraphs would edit an object React may already have rendered.
+ */
+export function appendParagraph(
+  paragraphs: readonly string[],
+  text: string,
+  isNewParagraph: boolean,
+): string[] {
+  const incoming = text?.trim() ?? "";
+  if (!incoming) return [...paragraphs];
+  if (paragraphs.length === 0) return [incoming];
+
+  if (isNewParagraph) return [...paragraphs, incoming];
+
+  const next = [...paragraphs];
+  next[next.length - 1] = joinTranscriptText(next[next.length - 1], incoming);
+  return next;
 }

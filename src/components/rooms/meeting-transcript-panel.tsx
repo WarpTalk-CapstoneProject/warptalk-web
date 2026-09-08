@@ -1398,6 +1398,24 @@ function TranscriptLayoutToggle({
 }
 
 /**
+ * The lines one transcript row renders.
+ *
+ * `paragraphs` describe where the SPEAKER stopped, so they only apply to what the speaker said.
+ * A row showing a TRANSLATION is a different text with its own sentence structure — MT writes
+ * proper stops, so punctuation alone is the right and only signal there. Using the spoken turn's
+ * pauses to break a translated line would cut it at positions that mean nothing in that language.
+ */
+function transcriptLines(
+  segment: GroupedSavedTranscriptSegment,
+  resolved: ResolvedTranscriptLine,
+): string[] {
+  if (resolved.isTranslated) return splitIntoSentences(resolved.text);
+
+  const paragraphs = segment.paragraphs?.length ? segment.paragraphs : [resolved.text];
+  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
+}
+
+/**
  * Everything a transcript line needs, whichever way it is laid out.
  *
  * The speaker's name is NOT here: the chat and document layouts print it per line and disagree
@@ -1496,7 +1514,7 @@ function TranscriptChatRow({
                   changes is that the sentences inside it stop running together. A turn with no
                   terminal punctuation — which Vietnamese STT produces constantly — comes back as
                   a single line and renders exactly as it did before. */}
-              {splitIntoSentences(resolved.text).map((sentence, at) => (
+              {transcriptLines(segment, resolved).map((sentence, at) => (
                 <p
                   key={`${segment.id}-s-${at}`}
                   className={cn(
@@ -1745,7 +1763,7 @@ function TranscriptDocumentLine({
         {/* Sentences, not one block. The reading rail is where a whole meeting is read end to
             end, so a turn that runs three sentences together is the hardest place to follow.
             Highlighting still runs per sentence, so a search match inside any of them is found. */}
-        {splitIntoSentences(resolved.text).map((sentence, at) => (
+        {transcriptLines(segment, resolved).map((sentence, at) => (
           <p
             key={`${segment.id}-r-${at}`}
             className={cn(

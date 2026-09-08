@@ -310,6 +310,26 @@ function formatSessionWindow(session: TranslationSessionBlock<unknown>["session"
   return ` · ${started}–${ended}`;
 }
 
+/**
+ * The lines one bubble renders, in the order the speaker produced them.
+ *
+ * TWO SIGNALS, AND THE SECOND ONE IS FREE
+ *   `paragraphs` are the turn split where the SPEAKER stopped for more than a second — measured
+ *   by VAD, carried in the timestamps, and previously thrown away. `splitIntoSentences` then
+ *   splits each of those on punctuation the recogniser actually produced.
+ *
+ *   The order matters. Punctuation alone leaves a Vietnamese turn as one line, because the
+ *   recogniser rarely emits a terminal stop; the pause alone would run two written sentences
+ *   together whenever they were spoken without a break. Together they cover both.
+ */
+function transcriptLines(segment: GroupedTranscriptSegment): string[] {
+  const paragraphs = segment.paragraphs?.length
+    ? segment.paragraphs
+    : [segment.originalText];
+
+  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
+}
+
 function TranscriptBubble({
   segment,
   isSelf,
@@ -317,7 +337,9 @@ function TranscriptBubble({
   suggestion,
   onDismissSuggestion,
 }: {
-  segment: TranscriptSegmentDto;
+  // The GROUPED segment, not a raw one: `paragraphs` is what the merge worked out about where
+  // the speaker stopped, and the bubble is the only thing that renders it.
+  segment: GroupedTranscriptSegment;
   isSelf: boolean;
   /** The language THIS viewer reads in. Every bubble in the panel resolves against it. */
   readerLanguage?: string;
@@ -392,12 +414,12 @@ function TranscriptBubble({
               its sentences are laid out inside it. A turn with no terminal punctuation, which
               Vietnamese STT produces constantly, comes back as a single line and renders exactly
               as it did before. */}
-          {splitIntoSentences(segment.originalText).map((sentence, at) => (
+          {transcriptLines(segment).map((line, at) => (
             <p
               key={`${segment.segmentId}-o-${at}`}
               className={`text-[13px] leading-relaxed ${at > 0 ? "mt-1" : ""} ${isSelf ? "text-white" : "text-ink-muted"}`}
             >
-              <AnimatedWords text={sentence} />
+              <AnimatedWords text={line} />
             </p>
           ))}
           {translation

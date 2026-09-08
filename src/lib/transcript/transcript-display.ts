@@ -3,7 +3,7 @@
 // imports here get away with it only because they are `import type` and erase before runtime —
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
-import { joinTranscriptText } from "./sentence-flow.ts";
+import { appendParagraph, joinTranscriptText, startsNewParagraph } from "./sentence-flow.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
 import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
@@ -171,6 +171,16 @@ export function dedupeTranscriptSegments(
  */
 export type GroupedTranscriptSegment = TranscriptSegmentDto & {
   mergedSegmentIds: string[];
+  /**
+   * The turn's text broken where the SPEAKER stopped, not where a chunk ended.
+   *
+   * `originalText` stays the whole thing — search, copy and corrections all read it, and a
+   * correction has to be diffed against what was said, not against how it was laid out. This is
+   * the same text, split at the silences long enough to be an end of thought
+   * (`SENTENCE_PAUSE_MS`), which is the only sentence signal available for free: Vietnamese STT
+   * routinely returns no terminal punctuation, and the pause was measured either way.
+   */
+  paragraphs: string[];
 };
 
 export function groupTranscriptSegments(
@@ -191,13 +201,22 @@ export function groupTranscriptSegments(
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
-      utterances.push({ ...segment, mergedSegmentIds: [segment.segmentId] });
+      utterances.push({
+        ...segment,
+        mergedSegmentIds: [segment.segmentId],
+        paragraphs: segment.originalText?.trim() ? [segment.originalText.trim()] : [],
+      });
       continue;
     }
 
     utterances[utterances.length - 1] = {
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
+      paragraphs: appendParagraph(
+        previous.paragraphs,
+        segment.originalText,
+        startsNewParagraph(previous.endTimeMs, segment.startTimeMs),
+      ),
       translatedText: appendText(previous.translatedText, segment.translatedText) || undefined,
       // Merged per language. Concatenating into one slot the way translatedText does would
       // splice a Vietnamese sentence onto an English one whenever the two bubbles carried
@@ -262,6 +281,8 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
  */
 export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
   mergedSegmentIds: string[];
+  /** See GroupedTranscriptSegment.paragraphs — the same text, split at the speaker's own stops. */
+  paragraphs: string[];
 };
 
 /**
@@ -282,13 +303,22 @@ export function groupSavedTranscriptSegments(
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
-      utterances.push({ ...segment, mergedSegmentIds: [segment.id] });
+      utterances.push({
+        ...segment,
+        mergedSegmentIds: [segment.id],
+        paragraphs: segment.originalText?.trim() ? [segment.originalText.trim()] : [],
+      });
       continue;
     }
 
     utterances[utterances.length - 1] = {
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
+      paragraphs: appendParagraph(
+        previous.paragraphs,
+        segment.originalText,
+        startsNewParagraph(previous.endTimeMs, segment.startTimeMs),
+      ),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
       mergedSegmentIds: [...previous.mergedSegmentIds, segment.id],
     };

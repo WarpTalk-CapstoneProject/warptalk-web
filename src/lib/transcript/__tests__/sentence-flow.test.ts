@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { joinTranscriptText, splitIntoSentences } from "../sentence-flow.ts";
+import {
+  appendParagraph,
+  joinTranscriptText,
+  splitIntoSentences,
+  startsNewParagraph,
+} from "../sentence-flow.ts";
 
 // ── joining two halves of one utterance ─────────────────────────────────────────
 
@@ -102,4 +107,81 @@ test("a turn cut off mid-sentence keeps its tail", () => {
 test("empty input is no sentences rather than one empty one", () => {
   assert.deepEqual(splitIntoSentences(""), []);
   assert.deepEqual(splitIntoSentences("   "), []);
+});
+
+// ── the pause the speaker actually made ─────────────────────────────────────────
+
+test("the 6s cap cutting mid-word is never a paragraph break", () => {
+  // Gap ~0: the chunk_duration_ms cap ended the chunk while the speaker was still talking. This
+  // is the exact case the utterance merge exists to repair, so breaking here would undo it.
+  assert.equal(startsNewParagraph(6_000, 6_010), false);
+});
+
+test("a breath is not a paragraph break", () => {
+  // A Vietnamese speaker draws breath mid-sentence at 300–700ms. A threshold inside that range
+  // would put a line break in the middle of every sentence.
+  assert.equal(startsNewParagraph(1_000, 1_300), false);
+  assert.equal(startsNewParagraph(1_000, 1_700), false);
+});
+
+test("a VAD hangover alone is not a paragraph break", () => {
+  // vad_silence_hangover_ms (576) and vad_short_turn_hangover_ms (864) are what CLOSE a chunk, so
+  // a cross-chunk seam is at least that long by construction. Breaking there would mean one
+  // paragraph per chunk — the fragmentation this whole line of work removed.
+  assert.equal(startsNewParagraph(1_000, 1_576), false);
+  assert.equal(startsNewParagraph(1_000, 1_864), false);
+});
+
+test("stopping for over a second is a paragraph break", () => {
+  assert.equal(startsNewParagraph(1_000, 2_000), true);
+  assert.equal(startsNewParagraph(1_000, 2_400), true);
+});
+
+test("an overlap is one continuous stretch of speech, never a break", () => {
+  // Overlapping segments are why the merge accepts a negative gap at all.
+  assert.equal(startsNewParagraph(6_000, 1_200), false);
+});
+
+test("a paragraph absorbs a continuation and dedupes its overlap", () => {
+  // The two mechanisms compose: continuing a paragraph goes through the same overlap-aware join.
+  assert.deepEqual(
+    appendParagraph(["chúng ta sẽ"], "ta sẽ bắt đầu", false),
+    ["chúng ta sẽ bắt đầu"],
+  );
+});
+
+test("a real stop starts a paragraph instead of extending one", () => {
+  assert.deepEqual(
+    appendParagraph(["Xong phần một"], "Giờ sang phần hai", true),
+    ["Xong phần một", "Giờ sang phần hai"],
+  );
+});
+
+test("appending returns a new array rather than editing the old one", () => {
+  // The caller replaces its grouped utterance wholesale; mutating would edit an object React may
+  // already have rendered.
+  const before = ["một"];
+  const after = appendParagraph(before, "hai", true);
+  assert.deepEqual(before, ["một"]);
+  assert.deepEqual(after, ["một", "hai"]);
+});
+
+test("empty incoming text neither starts nor extends a paragraph", () => {
+  assert.deepEqual(appendParagraph(["một"], "   ", true), ["một"]);
+  assert.deepEqual(appendParagraph([], "   ", false), []);
+});
+
+test("Japanese sentences split without needing a space after the stop", () => {
+  // Found by looking at the rendered preview, not by reading the regex: Japanese is written
+  // without spaces, so a Latin-style "stop followed by whitespace" rule never fires and a whole
+  // turn came back as one undivided line.
+  // i18n-allow: Japanese speech is the DATA — the writing system is the thing under test.
+  assert.deepEqual(
+    splitIntoSentences("はじめまして、私はトゥアンです。よろしくお願いします。"),
+    ["はじめまして、私はトゥアンです。", "よろしくお願いします。"],
+  );
+});
+
+test("a Latin stop still needs whitespace after it, which is what keeps a decimal whole", () => {
+  assert.deepEqual(splitIntoSentences("Ngân sách 3.14 tỷ"), ["Ngân sách 3.14 tỷ"]);
 });
