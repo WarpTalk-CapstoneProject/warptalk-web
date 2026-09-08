@@ -147,8 +147,7 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
         toast.success("Google sign-in successful!");
         router.replace(callbackUrl);
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+        toast.error(getErrorMessage(err, "Google sign-in failed. Please try again."));
       }
     },
     onError: () => toast.error("Google authentication failed or popup was closed."),

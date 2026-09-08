@@ -47,3 +47,26 @@ This document maintains the state, changes, and logic for the Login Page.
 - [ ] Open `/login` below `lg` width and verify the form remains usable.
 - [ ] Submit invalid values to confirm validation messages render cleanly.
 - [ ] Confirm successful login redirects to the callback URL or `/workspace`.
+
+## WT-649 — Transport failures no longer read as "wrong password"
+
+The catch block reached into `response.data.error` by hand, so it only ever saw a response BODY.
+An API that was unreachable, rate-limited, or 502/504 therefore produced "Login failed. Please try
+again." — which, on a sign-in form, reads as *your credentials are wrong*. The person retries the
+one thing that cannot work, and may reset a password that was never the problem.
+
+It now uses the shared `getErrorMessage` from `src/lib/api/errors.ts`, which already distinguishes
+offline / 429 / 503 / 502 / 504 / 500 from a real refusal. The Google sign-in path had the same
+shape and got the same fix.
+
+The `ACCOUNT_PENDING` branch above it is untouched — it reads `code`, not the message, and is
+still the first thing checked.
+
+Found while sweeping Flow 1 for the defect class WT-649 reported on the registration screen.
+
+**Testing checklist**
+
+- [x] `npm run lint`, `npm run typecheck`, `npm run test:contracts` — clean.
+- [ ] Stop the API, attempt sign-in → a transport message, not "Login failed".
+- [ ] Sign in with a genuinely wrong password → still the server's own refusal message.
+- [ ] Sign in with an unverified account → still redirects to /verify-email.

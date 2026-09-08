@@ -23,6 +23,7 @@ import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import { Checkbox } from "@/components/ui/checkbox";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { WorkspaceService } from "@/services/workspace.service";
@@ -100,11 +101,7 @@ function GoogleLoginButton({ callbackUrl }: { callbackUrl: string }) {
           router.replace(callbackUrl);
         }
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(
-          error?.response?.data?.error ||
-            "Google login failed. Please try again.",
-        );
+        toast.error(getErrorMessage(err, "Google login failed. Please try again."));
       }
     },
     onError: () => {
@@ -226,9 +223,10 @@ function LoginForm() {
         return;
       }
 
-      toast.error(
-        error?.response?.data?.error || "Login failed. Please try again.",
-      );
+      // getErrorMessage, not response.data.error: the hand-rolled read saw only a body, so an API
+      // that was simply unreachable came back as "Login failed" — which on a sign-in form reads as
+      // "your password is wrong". WT-649 reported the same shape on registration.
+      toast.error(getErrorMessage(err, "Login failed. Please try again."));
     }
   };
 
