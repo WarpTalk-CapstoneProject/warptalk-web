@@ -31,14 +31,17 @@ function bareLanguage(language: string) {
  * The voice this person is DUBBED IN — how they sound to everybody else.
  *
  * WHY THIS IS NOT THE LIST BESIDE IT
- *     The catalogue on the left sets the voice you HEAR other people in. This one sets how YOU
- *     sound. Until WT-396 those were the same stored thing, so somebody who uploaded a recording
- *     of their own voice changed neither: the profile was listed as active, and the dub still
- *     came back in a stock catalogue voice because nothing in the pipeline read the choice.
+ *     The catalogue on the left sets the STAND-IN voice — what somebody who has chosen nothing
+ *     sounds like to this reader. This one sets how YOU sound, to everybody. Until WT-396 those
+ *     were the same stored thing, so somebody who uploaded a recording of their own voice
+ *     changed neither: the profile was listed as active, and the dub still came back in a stock
+ *     catalogue voice because nothing in the pipeline read the choice.
  *
  *     The two are therefore worded around the direction, not around the word "voice". "You are
- *     dubbed in" and "voices you hear" is a distinction somebody can act on; two controls both
- *     labelled "Voice" is the bug in UI form.
+ *     dubbed in" and "stand-in voice" is a distinction somebody can act on; two controls both
+ *     labelled "Voice" is the bug in UI form. The rail said "Voices you hear", which was worse
+ *     than vague — it claimed a veto the listener does not have, because a speaker who cloned
+ *     or picked a voice is always heard as themselves (TTSWorker._resolve_voice_variants).
  *
  * WHY THE LANGUAGE IS NOT CHOSEN HERE
  *     It is the page's language — the one the catalogue on the left is showing. This module had

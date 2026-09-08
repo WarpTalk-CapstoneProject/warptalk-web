@@ -7,6 +7,45 @@ type SavedVoiceProfile = {
 
 type CatalogVoice = { id: string };
 
+/** A catalogue entry carries a name. An id is not one, and must never stand in for one. */
+type NamedCatalogVoice = { id: string; name?: string | null };
+
+/**
+ * What a saved voice id can honestly be called on screen.
+ *
+ * "unavailable" is the one that matters and the one that was missing. The catalogue is a
+ * TTL'd cache the AI worker fills on its first synthesis into a language, so an empty or
+ * expired catalogue is a NORMAL state, not a failure — and while it lasts, a saved id cannot
+ * be named. The readout used to fall back to printing the id, so a person's settings page
+ * showed them a raw UUID.
+ *
+ * It is also not merely cosmetic. `resolveSavedVoiceForLanguage` below treats an id the
+ * catalogue does not currently offer as ABSENT and does not send it to the hub at all. So the
+ * exact moment the name cannot be resolved is the exact moment the preference is not in
+ * effect, and a readout that implies otherwise is telling the reader something untrue.
+ */
+export type SavedVoiceLabel =
+  | { state: "none" }
+  | { state: "loading" }
+  | { state: "named"; name: string }
+  | { state: "unavailable" };
+
+export function describeSavedVoice(
+  voiceId: string | null | undefined,
+  catalog: NamedCatalogVoice[],
+  catalogLoading: boolean,
+): SavedVoiceLabel {
+  if (!voiceId) return { state: "none" };
+
+  const name = catalog.find((voice) => voice.id === voiceId)?.name?.trim();
+  if (name) return { state: "named", name };
+
+  // Loading is checked AFTER the lookup, not before: a warm react-query cache hands the
+  // catalogue over while a background refetch is still in flight, and flashing "Loading…"
+  // over a name we already have reads as the setting flickering.
+  return catalogLoading ? { state: "loading" } : { state: "unavailable" };
+}
+
 /** In-room pick for one language. `voiceId: null` means "cleared here, use no voice pick". */
 type InRoomSelection = { language: string; voiceId: string | null } | null;
 
