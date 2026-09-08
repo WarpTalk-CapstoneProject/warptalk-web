@@ -293,6 +293,31 @@ export const API = {
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
   },
   /**
+   * The system-admin half of the plugin catalog (assistant service, WT-646).
+   *
+   * Separate from `assistant.plugins` above because the audiences are separate: those routes are
+   * what a signed-in user's plugins page calls, these write the global catalog every user reads
+   * and are gated on the platform-admin policy. Keeping them apart is what stops a user-facing
+   * component reaching for an admin URL by autocomplete.
+   *
+   * `catalog` is a RESERVED plugin key on the server for the reason this shape makes visible: it
+   * is a literal route segment sitting where `{pluginKey}` sits, and ASP.NET gives the literal
+   * precedence.
+   */
+  adminPluginCatalog: {
+    base: "/assistant/plugins/catalog",
+    detail: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}`,
+    oauth: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/oauth`,
+    tools: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/tools`,
+    rediscover: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/rediscover`,
+    audits: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
+  },
+  /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
    * the workspace service's audit store — the transport that can refuse — which is what ended
    * the "no bus, so no privileged actions" era.

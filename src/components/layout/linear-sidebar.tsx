@@ -419,6 +419,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
           { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
+          // Beside Platform config because it is the same kind of thing: reference data the whole
+          // platform runs on. Unlike that page it is writable, which is the point of WT-646 — the
+          // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
+          // a SQL job rather than a screen.
+          { icon: PlugsConnected, label: "Plugins", href: "/admin/plugins" },
           { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
         ],
       },
