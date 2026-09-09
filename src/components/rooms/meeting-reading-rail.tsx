@@ -101,7 +101,19 @@ type RailClaim = {
   atMs: number | null;
 };
 
-type RailTab = "summary" | "attendees";
+/**
+ * The rail's two tabs.
+ *
+ * The second one was called "attendees" and labelled "Attendees", which promised a roster and
+ * delivered something else: it is built from `speakingShares`, so it lists only the people the
+ * transcript caught talking, ranks them by how much, and says "Nobody was recorded speaking in
+ * this meeting" when there is no transcript to read it from. Somebody who sat through the whole
+ * hour without a word did not appear in it. RailTalkTime's own comment had this right all along —
+ * "attendance says who was in the room, which is a different question" — and the name now agrees
+ * with it. The actual roster lives in the page's People panel, 300px away, which is exactly why
+ * the two must not share a word.
+ */
+type RailTab = "summary" | "talk";
 
 export function TranscriptReadingLayout({
   transcript,
@@ -129,7 +141,7 @@ export function TranscriptReadingLayout({
    * who wanted both had to keep swapping. So the rail takes the record and renders all of it.
    */
   record: EndedRoomHistoryItem | null;
-  /** The persisted transcript, for the attendees tab. Control markers are dropped here, not by
+  /** The persisted transcript, for the talk-time tab. Control markers are dropped here, not by
    *  the caller — see the note on `shares`. */
   segments: readonly TranscriptSegmentDto[];
   /** Whether the meeting captured any transcript at all, once the page knows. `undefined` means
@@ -364,9 +376,9 @@ function ReadingRail({
           count={claims.length || undefined}
         />
         <RailTabButton
-          active={tab === "attendees"}
-          onClick={() => setTab("attendees")}
-          label="Attendees"
+          active={tab === "talk"}
+          onClick={() => setTab("talk")}
+          label="Talk time"
           count={shares.length || undefined}
         />
       </div>
@@ -391,7 +403,7 @@ function ReadingRail({
             onRewrite={onRewrite}
           />
         ) : (
-          <RailAttendees shares={shares} speakerDirectory={speakerDirectory} />
+          <RailTalkTime shares={shares} speakerDirectory={speakerDirectory} />
         )}
       </div>
     </aside>
@@ -762,7 +774,7 @@ function RailClaimButton({
  * five people shared in every roster the product has. The transcript is the only record of it —
  * see speakingShares.
  */
-function RailAttendees({
+function RailTalkTime({
   shares,
   speakerDirectory,
 }: {
