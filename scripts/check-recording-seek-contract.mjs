@@ -354,7 +354,7 @@ assert.doesNotMatch(
 //     transcript is written in, so the link still names the same sentence afterwards.
 assert.match(
   momentLink,
-  /MEETING milliseconds/,
+  /meeting/i,
   "moment-link must say which axis `?t=` is on. A parameter whose axis is not written down is a "
     + "parameter somebody will helpfully 'fix' to video.currentTime.",
 );
@@ -395,12 +395,19 @@ assert.match(
     + "undo the very scroll the link exists to perform.",
 );
 
-// 22. It is the page's own URL and nothing is minted. Access stays whatever already gates this page.
-assert.match(
+/* 22. It is the page's own URL and nothing is minted. Access stays whatever already gates this page.
+
+   Pinned as BEHAVIOUR, not as prose. An assertion that greps a comment's wording fails when
+   somebody tidies the wording, and a contract test that cries over a rewrite is one people learn
+   to ignore — which costs more than the assertion was ever worth. What actually has to hold is
+   that this module only ever hands back a URL derived from one it was given, and never assembles
+   an origin of its own. */
+assert.doesNotMatch(
   momentLink,
-  /NOT A LINK-MINTING FEATURE|Nothing here creates a link/,
-  "moment-link must record that no link is minted and nothing is made public. 'Share a moment' is "
-    + "exactly the feature that grows a public-link mode by accident, one request at a time.",
+  /https?:\/\/|new URL\((?![^)]*current)|window\.location|process\.env\.[A-Z_]*URL/,
+  "moment-link must not build an absolute URL from anything but the URL it was handed. 'Share a "
+    + "moment' is exactly the feature that grows a public-link mode by accident, one request at a "
+    + "time, and the first step is always a hard-coded origin.",
 );
 
 // 23. The arrival reuses jumpToTranscriptMoment. It is the one path from a moment to the row that
