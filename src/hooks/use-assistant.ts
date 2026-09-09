@@ -120,12 +120,14 @@ export function usePluginConnectUrl() {
   return useMutation({
     mutationFn: async ({
       pluginKey,
+      client,
       workspaceId,
     }: {
       pluginKey: string;
+      client?: string;
       workspaceId?: string | null;
     }) => {
-      const { data } = await assistantService.getPluginConnectUrl(pluginKey, workspaceId);
+      const { data } = await assistantService.getPluginConnectUrl(pluginKey, client, workspaceId);
       return data;
     },
     // Nothing has changed on the server yet — this only obtained a URL — but the catalog is about

@@ -57,7 +57,11 @@ import {
   type MinutesPolicyFacts,
   type MinutesTemplateId,
 } from "@/lib/meeting/minutes-document";
-import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import {
+  MINUTES_WITHHELD,
+  useMeetingMinutes,
+  useMeetingMinutesActions,
+} from "@/hooks/use-meeting-minutes";
 import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspace, useWorkspaceSettings } from "@/hooks/use-workspace";
@@ -117,7 +121,11 @@ export function MinutesPanel({
   /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
   onSeek?: (atMs: number) => void;
 }) {
-  const { data: minutes, isLoading } = useMeetingMinutes(roomId);
+  const { data: read, isLoading } = useMeetingMinutes(roomId);
+  // WT-651: an unapproved document follows the room's artifactAccess policy, so "not shared with
+  // you" is one of the three normal answers here rather than a failure.
+  const withheld = read === MINUTES_WITHHELD;
+  const minutes = withheld ? null : read;
   const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
 
   /*
@@ -195,6 +203,28 @@ export function MinutesPanel({
       <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted">
         <Spinner size={14} className="animate-spin" />
         Loading minutes…
+      </div>
+    );
+  }
+
+  if (withheld) {
+    return (
+      <div className="p-6">
+        <div className="max-w-lg space-y-3">
+          <h3 className="text-[14px] font-semibold text-ink">Still a draft</h3>
+          {/* The same distinction summary-absence.ts draws, in this document's own words: the
+              minutes exist and are being worked on, and what is missing is permission rather than
+              the document. A flat "unauthorized" here would send somebody who WAS at the meeting
+              looking for a broken page instead of asking the host.
+
+              Says what changes it, in the terms the server uses: signing is the act that publishes
+              a biên bản, so "once it is signed" is the answer, not "once it is shared". */}
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            These minutes have been drawn up but nobody has signed them yet. A draft stays with the
+            people who can act on it; you will be able to read it here once the host or the
+            secretary signs it.
+          </p>
+        </div>
       </div>
     );
   }
@@ -383,11 +413,24 @@ export function MinutesPanel({
               <Printer size={13} />
               Print
             </Button>
+            {/* WT-654: the .docx says which layout it is, because it only has one.
+                MeetingMinutesDocxWriter is a single Vietnamese writer — no template argument, no
+                second implementation — while the switch above and Print both honour the reader's
+                choice. Two buttons side by side, one of them quietly ignoring the control next to
+                them, is the part that had to stop. Naming the layout on the button costs a reader
+                nothing when it is the layout they wanted, and stops the download being a surprise
+                when it is not. The alternative was a second OpenXML writer duplicating a 1300-line
+                renderer by hand, which is what WT-637 and WT-639 were cancelled for. */}
             <Button
               size="sm"
               variant="outline"
               onClick={downloadDocx}
               disabled={downloading}
+              title={
+                template === "global-en"
+                  ? "The Word export is only available in the Vietnamese layout. Use Print to keep the international layout."
+                  : "Downloads this document in the Vietnamese layout."
+              }
               className="h-8 rounded-md text-[11px] shadow-none"
             >
               {downloading ? (
@@ -395,10 +438,19 @@ export function MinutesPanel({
               ) : (
                 <DownloadSimple size={13} />
               )}
-              Download Word
+              Download Word (Vietnamese layout)
             </Button>
           </div>
         </div>
+
+        {/* Only when the two disagree. On the Vietnamese layout the button already says what the
+            file will be, and a line explaining that it matches would be noise. */}
+        {template === "global-en" ? (
+          <p className="text-[11px] leading-relaxed text-ink-subtle">
+            You are reading the international layout. The Word file is produced in the Vietnamese
+            layout — use Print to keep this one.
+          </p>
+        ) : null}
 
         {canManage ? (
           <div className="flex flex-wrap items-center gap-2">
