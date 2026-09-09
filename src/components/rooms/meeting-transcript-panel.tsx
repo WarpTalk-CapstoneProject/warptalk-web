@@ -75,7 +75,6 @@ import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   READING_LINE_OFFSET_PX,
-  anchorForMs,
   readingAnchorAt,
   shouldShowLanguageChip,
   splitOnQuery,
@@ -587,7 +586,7 @@ export function MeetingTranscriptArtifact({
   /* One field at a time, for the reason spelled out above `publishAnchors`: the context value now
      also changes identity about four times a second while the recording plays, so anything closing
      over the whole `sync` would be rebuilt at that rate. */
-  const playingMs = sync?.playingMs ?? null;
+  const syncPlayingKey = sync?.playingKey ?? null;
   const isPlaying = sync?.isPlaying ?? false;
   const isFollowing = sync?.isFollowing ?? false;
   const setFollowing = sync?.setFollowing;
@@ -597,20 +596,19 @@ export function MeetingTranscriptArtifact({
   /**
    * Which block the recording is playing, or null.
    *
-   * `anchorForMs` — the same function the rail resolves a citation with, deliberately not a second
-   * implementation. The transcript has no end times to work with, so a line stays marked through
-   * the silence after it until the next one begins; that is correct, and blanking the mark during
-   * gaps would make it flicker on every breath the speaker took.
+   * The moment is resolved to a block by the sync provider, with `anchorForMs` — the same function
+   * the rail resolves a citation with, deliberately not a second implementation. The transcript has
+   * no end times to work with, so a line stays marked through the silence after it until the next
+   * one begins; that is correct, and blanking the mark during gaps would make it flicker on every
+   * breath the speaker took.
    *
-   * Gated on `onSeekToRecording` as well as on the playhead. A meeting with no recording, or one
-   * whose clocks cannot be reconciled, offers no seek — and by exactly the same rule nothing in it
-   * may light up as playing, because there is nothing playing it could honestly refer to.
+   * Gated here on `onSeekToRecording`, which is a fact about this column rather than about the
+   * playhead. A meeting with no recording, or one whose clocks cannot be reconciled, offers no
+   * seek — and by exactly the same rule nothing in it may light up as playing, because there is
+   * nothing playing it could honestly refer to.
    */
   const canFollowPlayback = Boolean(onSeekToRecording);
-  const playingKey = useMemo(() => {
-    if (!canFollowPlayback || playingMs === null || !anchors?.length) return null;
-    return anchorForMs(anchors, playingMs)?.key ?? null;
-  }, [canFollowPlayback, playingMs, anchors]);
+  const playingKey = canFollowPlayback ? syncPlayingKey : null;
 
   /**
    * Keep the playing block in view.

@@ -61,6 +61,7 @@ import {
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
 import {
+  anchorForMs,
   anchorsEqual,
   readingShortcut,
   type ReadingAnchor,
@@ -107,7 +108,19 @@ export type ReadingSync = {
    */
   publishPlaybackSeconds: (seconds: number | null) => void;
   /** The same instant on the MEETING axis, or null when the two clocks cannot be reconciled. */
-  playingMs: number | null;
+  /**
+   * The block the recording is playing, or null.
+   *
+   * A KEY AND NOT A MILLISECOND, DELIBERATELY. The playhead arrives about four times a second, and
+   * this context value's identity is what every consumer re-renders on — publishing the raw moment
+   * meant the whole transcript column re-rendered at 4 Hz to change one line's colour, and the
+   * column is six hundred rows on a long meeting. Resolved here instead, the value changes when the
+   * SPEAKER LINE changes: once every twenty seconds or so, which is the actual rate of the news.
+   *
+   * It is resolved with `anchorForMs`, the same function the rail resolves a citation with, so the
+   * "which block does this moment belong to" rule keeps exactly one implementation.
+   */
+  playingKey: string | null;
   /** Whether the recording is actually moving. Published by the player; see THE PLAYHEAD above. */
   isPlaying: boolean;
   publishPlaying: (playing: boolean) => void;
@@ -257,6 +270,18 @@ export function ReadingSyncProvider({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  /**
+   * The playhead as a block key. See `playingKey` on ReadingSync for why the conversion lands here
+   * rather than in the column that draws the mark.
+   */
+  const playingKey = useMemo(
+    () =>
+      playingMs === null || anchors.length === 0
+        ? null
+        : (anchorForMs(anchors, playingMs)?.key ?? null),
+    [anchors, playingMs],
+  );
+
   const value = useMemo<ReadingSync>(
     () => ({
       anchors,
@@ -268,7 +293,7 @@ export function ReadingSyncProvider({
       registerNavigator,
       playbackRequest,
       publishPlaybackSeconds,
-      playingMs,
+      playingKey,
       isPlaying,
       publishPlaying: setIsPlaying,
       isFollowing,
@@ -282,7 +307,7 @@ export function ReadingSyncProvider({
       registerNavigator,
       playbackRequest,
       publishPlaybackSeconds,
-      playingMs,
+      playingKey,
       isPlaying,
       isFollowing,
     ],

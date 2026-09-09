@@ -147,10 +147,25 @@ assert.doesNotMatch(
 //    resolver was called out in transcript-reading-sync.tsx as the likeliest way for this feature
 //    to end up quietly off by one turn.
 assert.match(
-  transcript,
+  sync,
   /anchorForMs\(/,
   "The playing line must be resolved with anchorForMs — the rule the rail already uses. A second " +
     "implementation drifts by a turn and nothing on screen says which one is right.",
+);
+// And resolved in the PROVIDER, which is also what keeps the column still. The playhead arrives at
+// 4 Hz and this context's value identity is what every consumer re-renders on: publishing the raw
+// moment re-rendered six hundred transcript rows four times a second to recolour one of them.
+// A key changes when the speaker line changes — once every twenty seconds or so.
+assert.match(
+  sync,
+  /playingKey: string \| null/,
+  "The sync must publish the playing BLOCK, not the playing millisecond — a 4 Hz value identity " +
+    "re-renders the whole transcript column to change one line's colour.",
+);
+assert.doesNotMatch(
+  sync,
+  /^\s*playingMs,$/m,
+  "playingMs must not be in the context value; it is an implementation detail of the conversion.",
 );
 
 // 9. The mark is a TEXT COLOUR. Background is spoken for twice over in this column already (hover,
