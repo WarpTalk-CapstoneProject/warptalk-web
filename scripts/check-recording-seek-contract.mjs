@@ -111,4 +111,121 @@ assert.match(
     "does nothing at all.",
 );
 
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   WAVE 2 — the transcript follows the recording as it plays.
+
+   Wave 1 was transcript → video. This is video → transcript, and everything below is a rule about
+   RESTRAINT rather than about capability: the feature is easy to build and easy to make hateful.
+   Each assertion pins a decision that a later, reasonable-looking edit would undo.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const sync = read("src/components/rooms/transcript-reading-sync.tsx");
+
+// 7. Two clocks, two functions, one file. An inverse computed at a call site is an inverse that
+//    drifts — and a drifting one renders as a highlight a sentence behind the audio, which reads as
+//    sloppy timings rather than as a bug and so never gets reported.
+assert.match(
+  seek,
+  /export function meetingMsFromRecordingSeconds/,
+  "The file→meeting conversion must live beside its inverse in recording-seek.ts, so the pair " +
+    "cannot drift apart.",
+);
+assert.match(
+  sync,
+  /meetingMsFromRecordingSeconds\(/,
+  "The playhead must be converted inside the provider — one conversion site, for the same reason " +
+    "the ms→block rule has one.",
+);
+assert.doesNotMatch(
+  transcript,
+  /meetingMsFromRecordingSeconds|currentTime/,
+  "The transcript column must receive a MEETING moment, never do the clock arithmetic itself. Two " +
+    "places subtracting two origins is how one of them ends up subtracting them the wrong way round.",
+);
+
+// 8. The playing line resolves through the SAME rule as a summary citation. A second ms→line
+//    resolver was called out in transcript-reading-sync.tsx as the likeliest way for this feature
+//    to end up quietly off by one turn.
+assert.match(
+  transcript,
+  /anchorForMs\(/,
+  "The playing line must be resolved with anchorForMs — the rule the rail already uses. A second " +
+    "implementation drifts by a turn and nothing on screen says which one is right.",
+);
+
+// 9. The mark is a TEXT COLOUR. Background is spoken for twice over in this column already (hover,
+//    and the row a citation jumped to), and a mark that moves every twenty seconds is a strobe.
+assert.match(
+  transcript,
+  /playing \? "text-primary/,
+  "The playing line must be marked with a text colour. A third meaning on the background is how a " +
+    "reader stops being able to tell any of them apart.",
+);
+assert.doesNotMatch(
+  transcript,
+  /playing \? "bg-|playing \?\s*\n?\s*"bg-/,
+  "The playing line must NOT take a background — that property already carries hover and the " +
+    "citation landing.",
+);
+
+// 10. Nothing runs while the recording is paused, and the player is what knows.
+assert.match(
+  player,
+  /onTimeUpdate=\{\(event\) => \{\s*\n\s*if \(event\.currentTarget\.paused\) return;/,
+  "The playhead must not be published while the element is paused. `timeupdate` also fires for a " +
+    "seek made while paused, and honouring it drags a reader who paused and scrolled away back.",
+);
+assert.match(
+  player,
+  /onPause=\{\(\) => onPlayingChange\?\.\(false\)\}/,
+  "The player must publish that it stopped. Following, and the pill that offers it back, both hang " +
+    "off a fact only the media element has.",
+);
+
+// 11. A manual scroll takes following off — and it must listen for a HAND, not for `scroll`. The
+//     auto-scroll fires `scroll` itself, so listening for that switches following off the first
+//     time it works.
+assert.match(
+  transcript,
+  /addEventListener\("wheel", stopFollowing[\s\S]{0,160}?addEventListener\("touchmove", stopFollowing/,
+  "Following must be cancelled by wheel and touchmove. `scroll` is fired by the auto-scroll " +
+    "itself and would cancel following the moment it succeeded.",
+);
+assert.doesNotMatch(
+  transcript,
+  /addEventListener\("scroll", stopFollowing/,
+  "Do not cancel following on `scroll` — the feature's own scrolling raises it.",
+);
+
+// 12. The pill is gated on BOTH conditions. Off-and-paused has nothing to catch up with, and a
+//     control offering to chase a stopped playhead is a control that appears to do nothing.
+assert.match(
+  transcript,
+  /!isFollowing && isPlaying/,
+  "The follow pill must require following to be OFF and the recording to be PLAYING. Either " +
+    "condition alone offers a chase after a playhead that is not moving.",
+);
+assert.match(
+  transcript,
+  /Follow playback/,
+  "The pill must say what it does, in the English every other string in this panel is written in.",
+);
+
+// 13. A meeting with no recording has nothing playing in it, so nothing in it may light up. Same
+//     rule as the plain-span timestamp above, one direction later.
+assert.match(
+  transcript,
+  /const canFollowPlayback = Boolean\(onSeekToRecording\)/,
+  "Following must be gated on the same answer the seek is. A meeting read as a document must not " +
+    "have a line light up as 'playing' when there is nothing behind it to play.",
+);
+
+// 14. Reduced motion. This surface scrolls itself, unprompted, every twenty seconds while a
+//     recording plays — the one place in the record where the setting is not a nicety.
+assert.match(
+  transcript,
+  /prefersReducedMotion\(\) \? "auto" : "smooth"/,
+  "Auto-scrolling must honour prefers-reduced-motion.",
+);
+
 console.log("Recording seek contract: PASS");

@@ -75,6 +75,7 @@ import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   READING_LINE_OFFSET_PX,
+  anchorForMs,
   readingAnchorAt,
   shouldShowLanguageChip,
   splitOnQuery,
@@ -130,6 +131,62 @@ function TranscriptChip({ children, icon }: { children: ReactNode; icon?: ReactN
 
 /** How the transcript is laid out: as the conversation, as a document, or on a timeline. */
 type TranscriptLayout = "chat" | "document" | "timeline";
+
+/**
+ * Whether this reader has asked the system not to animate.
+ *
+ * Read at the moment of the scroll rather than held in state: the setting can change while a record
+ * page is open, and a stale answer here means a surface that keeps animating itself after somebody
+ * has just turned animation off. The guard is for SSR and for the jsdom-shaped environments that
+ * have `window` but not `matchMedia`.
+ */
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * WT-655(C3) — "Follow playback", after the reader has scrolled away from it.
+ *
+ * Same floating shape as ScrollToLatestChip, deliberately: they answer the same kind of question
+ * ("take me back to the thing that is moving") and appear in the same corner of the same scroller,
+ * so two different shapes would read as two unrelated systems. Filled rather than outlined, because
+ * unlike Latest this one is offered rarely and is the more specific of the two answers.
+ *
+ * `tabIndex`/`aria-hidden` while invisible for the same reason the Latest chip carries them: a
+ * focusable invisible button is a trap that scrolls the page for no visible reason.
+ */
+function FollowPlaybackChip({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center transition-opacity duration-150 print:hidden",
+        visible ? "opacity-100" : "opacity-0",
+      )}
+    >
+      <button
+        type="button"
+        tabIndex={visible ? 0 : -1}
+        aria-hidden={!visible}
+        onClick={onClick}
+        title="Scroll with the recording again"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full bg-ink py-1.5 pl-2.5 pr-3.5 text-[12px] font-medium text-canvas shadow-[0_2px_10px_rgba(0,0,0,0.14)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1",
+          visible ? "pointer-events-auto" : "pointer-events-none",
+        )}
+      >
+        <Play className="size-3.5 fill-current" />
+        Follow playback
+      </button>
+    </div>
+  );
+}
 
 /**
  * The saved meeting transcript, rendered as a distinct artifact participants can read
@@ -478,21 +535,138 @@ export function MeetingTranscriptArtifact({
     });
   }
 
-  const scrollToTurn = useCallback((key: string) => {
+  const scrollToTurn = useCallback((key: string, options?: { center?: boolean }) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
     const node = scroller.querySelector<HTMLElement>(
       `[data-reading-turn="${CSS.escape(key)}"]`,
     );
     if (!node) return;
-    const offset =
-      node.getBoundingClientRect().top
-      - scroller.getBoundingClientRect().top
-      + scroller.scrollTop;
-    // Just above the reading line, not at the very top edge: landing a block flush against the
-    // top puts it exactly where readingAnchorAt stops counting it as the one being read.
-    scroller.scrollTo({ top: Math.max(0, offset - 24), behavior: "smooth" });
+    const box = node.getBoundingClientRect();
+    const offset = box.top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    /* CENTRED for a block the recording is playing, just under the top edge for one the reader
+       jumped to. Different jobs: a jump is "start reading here", and the answer is at the top with
+       the rest of the meeting below it. Following playback is "keep this in view while it moves",
+       and a line pinned to the top edge has the next thirty seconds of talking below it and no
+       context above — which is exactly what a reader following an argument needs. Centred also
+       means the block does not have to move again the instant the speaker changes. */
+    const top = options?.center
+      ? offset - Math.max(0, (scroller.clientHeight - box.height) / 2)
+      // Just above the reading line, not at the very top edge: landing a block flush against the
+      // top puts it exactly where readingAnchorAt stops counting it as the one being read.
+      : offset - 24;
+    scroller.scrollTo({
+      top: Math.max(0, top),
+      // Somebody who asked the system not to animate has asked that of a surface which, while
+      // following a recording, animates itself every twenty seconds unprompted. Honouring it here
+      // is not a nicety.
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
   }, []);
+
+  /* ─────────────────────────────────────────────────────────────────────────────────────────
+     WT-655(C) — the transcript follows the recording.
+
+     Wave 1 gave the reader transcript → video: click a timestamp and the recording seeks. This is
+     the other direction, and it is the one that makes a record watchable rather than merely
+     searchable: while the recording plays, the line being spoken is marked and the column scrolls
+     to keep it in view.
+
+     THE THREE RULES THAT KEEP IT FROM BEING ANNOYING
+       1. The mark is a TEXT COLOUR, never a background. Background is already spoken for twice over
+          here — hover, and the row a summary citation jumped to (`highlighted`). A third meaning on
+          the same property is how a reader stops being able to read any of them.
+       2. A manual scroll switches following off, and only the reader switches it back on. Being
+          dragged back to the playhead after deliberately scrolling away is the single worst thing a
+          surface like this can do.
+       3. Nothing moves while the recording is paused. No polling, no highlight, no scrolling —
+          which is why `isPlaying` is published by the player rather than inferred from the playhead
+          having stopped changing.
+     ───────────────────────────────────────────────────────────────────────────────────────── */
+
+  /* One field at a time, for the reason spelled out above `publishAnchors`: the context value now
+     also changes identity about four times a second while the recording plays, so anything closing
+     over the whole `sync` would be rebuilt at that rate. */
+  const playingMs = sync?.playingMs ?? null;
+  const isPlaying = sync?.isPlaying ?? false;
+  const isFollowing = sync?.isFollowing ?? false;
+  const setFollowing = sync?.setFollowing;
+  // The scroller only exists once there is a transcript to put in it — see `absence`.
+  const hasScroller = !absence;
+
+  /**
+   * Which block the recording is playing, or null.
+   *
+   * `anchorForMs` — the same function the rail resolves a citation with, deliberately not a second
+   * implementation. The transcript has no end times to work with, so a line stays marked through
+   * the silence after it until the next one begins; that is correct, and blanking the mark during
+   * gaps would make it flicker on every breath the speaker took.
+   *
+   * Gated on `onSeekToRecording` as well as on the playhead. A meeting with no recording, or one
+   * whose clocks cannot be reconciled, offers no seek — and by exactly the same rule nothing in it
+   * may light up as playing, because there is nothing playing it could honestly refer to.
+   */
+  const canFollowPlayback = Boolean(onSeekToRecording);
+  const playingKey = useMemo(() => {
+    if (!canFollowPlayback || playingMs === null || !anchors?.length) return null;
+    return anchorForMs(anchors, playingMs)?.key ?? null;
+  }, [canFollowPlayback, playingMs, anchors]);
+
+  /**
+   * Keep the playing block in view.
+   *
+   * Keyed on `playingKey` rather than on the playhead, so this fires once when the line CHANGES
+   * instead of four times a second — a smooth scroll restarted every 250ms never arrives anywhere,
+   * and the column would crawl.
+   */
+  useEffect(() => {
+    if (!isReading || !isFollowing || !isPlaying || !playingKey) return;
+    scrollToTurn(playingKey, { center: true });
+  }, [isReading, isFollowing, isPlaying, playingKey, scrollToTurn]);
+
+  /**
+   * The reader taking the scroll back.
+   *
+   * `wheel` and `touchmove`, NOT `scroll`. The auto-scroll above fires `scroll` itself, so listening
+   * for that would have following switch itself off the first time it worked — and the reader would
+   * be left with a pill they never asked for after a single line. These two events only happen when
+   * a hand is on the wheel or the glass.
+   *
+   * Keyboard scrolling (Page Down, arrows) is not caught here, deliberately: J and K move the
+   * reading position through the navigator, which is a different gesture with its own behaviour.
+   */
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !setFollowing || !isReading) return;
+    const stopFollowing = () => setFollowing(false);
+    scroller.addEventListener("wheel", stopFollowing, { passive: true });
+    scroller.addEventListener("touchmove", stopFollowing, { passive: true });
+    return () => {
+      scroller.removeEventListener("wheel", stopFollowing);
+      scroller.removeEventListener("touchmove", stopFollowing);
+    };
+    // `hasScroller`, because the element does not exist while the panel is explaining an absent
+    // transcript — the listeners have to be attached when it appears rather than only on mount.
+  }, [setFollowing, isReading, hasScroller]);
+
+  /** Both conditions, and it is the AND that matters — see the chip's own note below. */
+  const showFollowPill = Boolean(isReading && canFollowPlayback && !isFollowing && isPlaying);
+
+  /**
+   * Seeking is also a request to follow.
+   *
+   * Somebody who clicked 07:16 wants to hear what happened at 07:16 — and then what happened next.
+   * Leaving following off there would mark the line they picked, play past it, and leave the mark
+   * behind on a sentence that has finished.
+   */
+  const seekToMoment = useCallback(
+    (atMs: number) => {
+      if (!onSeekToRecording) return;
+      setFollowing?.(true);
+      onSeekToRecording(atMs);
+    },
+    [onSeekToRecording, setFollowing],
+  );
 
   // J, K and `/` are handled by the provider — it is the only thing that can see a keypress aimed
   // at nothing in particular — and it needs this column to carry them out. Registered while
@@ -531,7 +705,10 @@ export function MeetingTranscriptArtifact({
       ),
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
-      onSeek: onSeekToRecording ? () => onSeekToRecording(segment.startTimeMs) : undefined,
+      // The gate stays on `onSeekToRecording`, not on the wrapper: `seekToMoment` exists whether or
+      // not a seek is possible, and gating on it would make every timestamp look clickable on a
+      // meeting with no recording. See TranscriptLineTime.
+      onSeek: onSeekToRecording ? () => seekToMoment(segment.startTimeMs) : undefined,
       highlighted: highlightedSegmentId === segment.id,
       // A chip on every line of a transcript that IS in one language is noise. Shown when the
       // line is not simply "spoken in the language you asked for", which makes its absence
@@ -1020,7 +1197,7 @@ export function MeetingTranscriptArtifact({
                           time={base ? segmentTime(turn.startTimeMs) : null}
                           onSeek={
                             onSeekToRecording
-                              ? () => onSeekToRecording(turn.startTimeMs)
+                              ? () => seekToMoment(turn.startTimeMs)
                               : undefined
                           }
                           // The rail starts AT the first dot rather than above it — a line hanging
@@ -1051,11 +1228,14 @@ export function MeetingTranscriptArtifact({
                             clock={base ? segmentTime(turn.startTimeMs) : null}
                             onSeek={
                               onSeekToRecording
-                                ? () => onSeekToRecording(turn.startTimeMs)
+                                ? () => seekToMoment(turn.startTimeMs)
                                 : undefined
                             }
                             marked={sync?.markedKey === turn.key}
                             reading={sync?.readingKey === turn.key}
+                            // Only ever true for the block the recording is actually playing —
+                            // `playingKey` is null without a recording behind this record.
+                            playing={playingKey === turn.key}
                             query={query}
                             rows={turn.lines.map((line) => {
                               const row = buildRow(line);
@@ -1084,8 +1264,28 @@ export function MeetingTranscriptArtifact({
           </div>
         </div>
         {/* A record of an hour-long meeting is hundreds of rows. Somebody reading the middle of it
-            had no way back to the end but dragging the scrollbar the length of the room. */}
-        <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
+            had no way back to the end but dragging the scrollbar the length of the room.
+            Lifted a row when the follow pill is out: two floating chips in the same place is one
+            chip covering the other, and which one wins would depend on render order. */}
+        <ScrollToLatestChip
+          visible={isAway}
+          onClick={scrollToLatest}
+          className={showFollowPill ? "bottom-12" : undefined}
+        />
+        {/* WT-655(C3). Offered only while following is OFF and the recording is PLAYING — the two
+            conditions together. Off-and-paused needs no pill: nothing is moving, so there is
+            nothing to catch up with, and a control offering to chase a stopped playhead is a
+            control that appears to do nothing. */}
+        <FollowPlaybackChip
+          visible={showFollowPill}
+          onClick={() => {
+            setFollowing?.(true);
+            // Recentre immediately rather than waiting for the playhead to cross into the next
+            // block: from where the reader is standing, pressing this and watching nothing happen
+            // for twenty seconds is the button not working.
+            if (playingKey) scrollToTurn(playingKey, { center: true });
+          }}
+        />
         </div>
       )}
     </div>
@@ -1658,6 +1858,7 @@ function TranscriptDocumentTurn({
   onSeek,
   marked,
   reading,
+  playing,
   query,
   rows,
 }: {
@@ -1675,6 +1876,15 @@ function TranscriptDocumentTurn({
   marked: boolean;
   /** This is the block under the reader's eye — the direction of the sync people forget. */
   reading: boolean;
+  /**
+   * WT-655(C1) — the recording is playing THIS block right now.
+   *
+   * Rendered as a change of TEXT COLOUR and nothing else. The three background marks below are
+   * already three states on one property, and a fourth would be unreadable; more importantly, a
+   * playing line moves every twenty seconds or so, and a moving background is a strobe. Colour on
+   * the words themselves puts the mark where the reader is already looking.
+   */
+  playing: boolean;
   query: string;
   rows: TranscriptRowBase[];
 }) {
@@ -1714,7 +1924,15 @@ function TranscriptDocumentTurn({
           the box rather than from a synthesized baseline. The play mark goes LEFT of the digits:
           their right edge is the straight edge this column exists to draw, and nothing may move
           it. */}
-      <div className="flex items-start justify-end pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none text-ink-subtle">
+      <div
+        className={cn(
+          "flex items-start justify-end pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none",
+          // The gutter takes the playing colour too. It is the one part of this block that reads as
+          // a position in the recording, so leaving it grey while the words beside it are marked
+          // would separate the mark from the clock it is about.
+          playing ? "text-primary" : "text-ink-subtle",
+        )}
+      >
         {onSeek ? (
           <button
             type="button"
@@ -1747,7 +1965,12 @@ function TranscriptDocumentTurn({
         </p>
         <div className="mt-1.5 space-y-2">
           {rows.map((row) => (
-            <TranscriptDocumentLine key={row.segment.id} {...row} query={query} />
+            <TranscriptDocumentLine
+              key={row.segment.id}
+              {...row}
+              query={query}
+              playing={playing}
+            />
           ))}
         </div>
       </div>
@@ -1767,7 +1990,8 @@ function TranscriptDocumentLine({
   onStartEdit,
   editor,
   query,
-}: TranscriptRowBase & { query: string }) {
+  playing,
+}: TranscriptRowBase & { query: string; playing: boolean }) {
   if (isEditing) {
     return <div id={`transcript-segment-${segment.id}`}>{editor}</div>;
   }
@@ -1782,7 +2006,11 @@ function TranscriptDocumentLine({
           <p
             key={`${segment.id}-r-${at}`}
             className={cn(
-              "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] text-ink",
+              "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] transition-colors",
+              // WT-655(C1): the playing line, and the ONLY thing that changes is the colour of the
+              // words. Printed pages get the ink colour whatever the player is doing — a mark about
+              // a video means nothing on paper.
+              playing ? "text-primary print:text-ink" : "text-ink",
               at > 0 && "mt-1",
             )}
           >

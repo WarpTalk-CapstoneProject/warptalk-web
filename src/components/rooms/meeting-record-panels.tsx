@@ -210,6 +210,8 @@ export function MeetingRecordingPlayer({
   onConsentGranted,
   seek,
   playbackRequest,
+  onPlaybackSeconds,
+  onPlayingChange,
   unavailableReason,
   variant = "section",
 }: {
@@ -227,6 +229,22 @@ export function MeetingRecordingPlayer({
    * done that they have a mouse in their hand and no use for a keyboard shortcut.
    */
   playbackRequest?: { token: number } | null;
+  /**
+   * WT-655 — where the playhead is, so the transcript beside this can follow it.
+   *
+   * FILE SECONDS, VERBATIM: whatever `video.currentTime` says, unconverted. This player has no idea
+   * when the meeting began and must not acquire one — the recording and the transcript are on
+   * different clocks, and the arithmetic between them belongs in the one module that owns it (see
+   * recording-seek.ts). Given a raw number, the caller can be the only place the two clocks meet.
+   *
+   * Null means "no playhead": nothing loaded, the element replaced by a failure notice, or this
+   * player gone from the page. The transcript retracts its highlight rather than leaving it on a
+   * line that stopped playing.
+   */
+  onPlaybackSeconds?: (seconds: number | null) => void;
+  /** Whether the recording is moving. The follow-along pill and the "do nothing while paused" rule
+   *  both hang off this, and only the media element knows it. */
+  onPlayingChange?: (playing: boolean) => void;
   /**
    * Why there is no playable recording, when the CALLER knows and this player cannot.
    *
@@ -385,6 +403,31 @@ export function MeetingRecordingPlayer({
     video.pause();
   }, [playbackRequest, sourceUrl, loadRecording]);
 
+  /**
+   * WT-655 — no element, no playhead.
+   *
+   * The <video> is not merely hidden in the failure and not-yet-loaded states, it is unmounted, so
+   * no `pause` event ever fires on the way out. Without this the transcript would keep the last
+   * line it saw lit up — and, on a link that expired mid-sentence, would keep it lit up beside a
+   * frame explaining that nothing can play. Folding the pip away with "Hide" unmounts this whole
+   * component, which is what the cleanup is for.
+   */
+  const hasPlayhead = Boolean(sourceUrl) && !playbackFailure;
+  useEffect(() => {
+    if (hasPlayhead) return;
+    onPlaybackSeconds?.(null);
+    onPlayingChange?.(false);
+  }, [hasPlayhead, onPlaybackSeconds, onPlayingChange]);
+  useEffect(
+    () => () => {
+      onPlaybackSeconds?.(null);
+      onPlayingChange?.(false);
+    },
+    // Both are the provider's own stable functions. An inline arrow at the call site would make
+    // this cleanup run on every render of the caller and retract the highlight continuously.
+    [onPlaybackSeconds, onPlayingChange],
+  );
+
   const isPip = variant === "pip";
   /* One element at both sizes, not two mounted in parallel: a second <video> would be a second
      fetch of a short-lived link, a second consent decision, and a playhead that jumps when the
@@ -511,6 +554,22 @@ export function MeetingRecordingPlayer({
             event.currentTarget.currentTime = queued.seconds;
             void event.currentTarget.play().catch(() => {});
           }}
+          /* WT-655 — the playhead, for the transcript to follow.
+             `timeupdate` fires roughly four times a second while playing, and the provider throttles
+             to about that rate whatever this browser's rate turns out to be. The `paused` guard is
+             the "nothing runs while paused" rule at its source: the event also fires for a SEEK made
+             while paused, and honouring that would drag a reader who paused deliberately and
+             scrolled away back to the playhead they had just left. */
+          onTimeUpdate={(event) => {
+            if (event.currentTarget.paused) return;
+            onPlaybackSeconds?.(event.currentTarget.currentTime);
+          }}
+          onPlay={() => onPlayingChange?.(true)}
+          onPause={() => onPlayingChange?.(false)}
+          // Ended is not paused as far as the element's own events go, and a recording that ran to
+          // the end must stop being "playing" or the follow pill would hang around over a finished
+          // video offering to chase a playhead that has stopped.
+          onEnded={() => onPlayingChange?.(false)}
           /* WT-655: without this the frame just went black. The surrounding code only ever
              reported a missing `url` FIELD, which says nothing about whether that url opens —
              and a fifteen-minute presigned link on a page people keep open will routinely stop
