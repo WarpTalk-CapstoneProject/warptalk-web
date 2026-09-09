@@ -24,6 +24,22 @@ const pills = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx",
 );
 const roomsList = read("src/app/(app)/[workspaceSlug]/rooms/page.tsx");
+
+/**
+ * Comments stripped, for the "this must not come back" checks below.
+ *
+ * Not optional, and the same reason check-summary-state-wired.mjs gives for its copy: a fix's
+ * comment quotes the line it replaced so the next reader knows what went wrong, and a plain
+ * source scan cannot tell that note from the code. A contract that fails on the explanation
+ * punishes writing it — and the WT-641 comment in page.tsx names `occupancy.seated` verbatim.
+ */
+function stripComments(source) {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "") // block comments, including the {/* … */} JSX bodies
+    .replace(/^\s*\/\/.*$/gm, ""); // whole-line // comments
+}
+
+const roomDetailCode = stripComments(roomDetail);
 const createRoomDialog = read("src/components/rooms/create-room-dialog.tsx");
 const waitingRoom = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/waiting/page.tsx",
@@ -78,6 +94,28 @@ assert.match(
   roomDetail,
   /Participants: \$\{occupancy\.label\}/,
   "The Tracking panel must render the shared occupancy label.",
+);
+// WT-641 — the two halves the label alone does not cover.
+//
+// The panel rendering the shared label says its NUMBER cannot drift. It says nothing about which
+// PEOPLE sit under it, and that is where the defect was: the rows came from `occupancy.seated`,
+// which is CONNECTED-only. On a finished room the service moves everyone CONNECTED ->
+// DISCONNECTED, so that set was empty under a heading reading 8, and every real attendee fell
+// through into a group headed "Invited" — next to a status of "Removed" for the ones who were.
+//
+// So: the roster must not be built from the seat set, and it must resolve each row's state
+// through the shared rule rather than an if/else of its own — the same `participantPresence`
+// people-panel.tsx reads, which is what stops the app's two rosters meaning different things by
+// the same word.
+assert.doesNotMatch(
+  roomDetailCode,
+  /occupancy\.seated/,
+  "WT-641: the roster must group by each row's own status, not by the CONNECTED seat set.",
+);
+assert.match(
+  roomDetailCode,
+  /participantPresence\(/,
+  "WT-641: the roster must resolve presence through the shared rule, as people-panel.tsx does.",
 );
 // Scoped to the rendered label, not the word. Two comments still say "Attendees" on purpose:
 // they are WT-274's account of the three surfaces that disagreed ("the Tracking panel said
@@ -230,6 +268,44 @@ assert.match(
   /\.\.\.\(participantsCanStartTranslation\s*\n?\s*\?\s*\{ participantsCanStartTranslation: true \}/,
   "participantsCanStartTranslation must be sent only when the host turned it on.",
 );
+// ── An instant meeting opens the meeting, not a page about it ───────────────
+//
+// A meeting with no start time and no repeat rule is one the host wants NOW. Creating it used to
+// end on a success screen, whose "Join" led to the room's information page, whose CTA was the
+// Start button — three screens between the click and the call, for the one flow that is defined
+// by not wanting any. The rule pinned here is that the dialog itself starts it and lands on the
+// live route.
+assert.match(
+  createRoomDialog,
+  /const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;/,
+  "Instant means: not an edit, no start time, no repeat rule — the same split the server " +
+    'draws when it seeds a room WAITING rather than SCHEDULED.',
+);
+assert.match(
+  createRoomDialog,
+  /if \(isInstantMeeting\) \{[\s\S]{0,1200}?startRoomMutation\.mutateAsync\(room\.id\)/,
+  "Creating an instant meeting must START it — the same mutation the room page's own CTA uses.",
+);
+assert.match(
+  createRoomDialog,
+  /if \(isInstantMeeting\) \{[\s\S]{0,3000}?router\.push\(liveMeetingPath\(activeWorkspaceSlug, room\.id\)\)/,
+  "Creating an instant meeting must land on the live meeting, not on the room detail page.",
+);
+// The success screen is what a BOOKING gets, and its whole value is the link. Nothing may
+// redirect out of it automatically — that would take the link away at the moment it is wanted.
+// The route out is the room's own page, offered as a link the host clicks (owner's call,
+// 2026-09-09), never a push.
+assert.match(
+  createRoomDialog,
+  /roomDetailPath\(activeWorkspaceSlug, createdRoomId\)/,
+  "The completion screen must offer the room page for a meeting booked for later.",
+);
+assert.doesNotMatch(
+  createRoomDialog,
+  /router\.push\(\s*roomDetailPath/,
+  "Creating a meeting for later must not navigate away from the link it just produced.",
+);
+
 assert.match(
   access,
   /mode: "host_start",\s*label: "Start meeting"/,
