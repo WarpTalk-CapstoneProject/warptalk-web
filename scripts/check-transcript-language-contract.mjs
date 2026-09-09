@@ -135,8 +135,12 @@ for (const [hook, call] of [
 const display = read("src/lib/transcript/transcript-display.ts");
 const groupingAt = display.indexOf("export function groupSavedTranscriptSegments");
 assert.ok(groupingAt > 0, "groupSavedTranscriptSegments must exist.");
+// Bounded by the next export, not by a character count. The window was 1200, and the line it
+// looks for sat at 1001 — so any comment added inside the function pushed it out and failed a
+// check about behaviour that had not changed. A function ends where the next one begins.
+const groupingEnd = display.indexOf("\nexport ", groupingAt + 1);
 assert.match(
-  display.slice(groupingAt, groupingAt + 1200),
+  display.slice(groupingAt, groupingEnd > 0 ? groupingEnd : undefined),
   /mergedSegmentIds: \[\.\.\.previous\.mergedSegmentIds, segment\.id\]/,
   "A merged saved utterance must record every segment id it absorbed.",
 );
