@@ -1706,23 +1706,22 @@ function PersonPopover({ user }: { user: UserIdentity }) {
           </div>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
-        <div>
-          <p>Speaks</p>
-          <p className="mt-0.5 font-medium text-ink">
-            {user.speakLanguage
-              ? getLanguageName(user.speakLanguage)
-              : "Not set"}
-          </p>
-        </div>
-        <div>
-          <p>Listens</p>
-          <p className="mt-0.5 font-medium text-ink">
-            {user.listenLanguage
-              ? getLanguageName(user.listenLanguage)
-              : "Not set"}
-          </p>
-        </div>
+      {/* One language, and it is the one this person chose: what they want to hear the meeting in.
+          The card used to print "Speaks" beside "Listens", which read as a setting with two halves
+          — and on most rows the two halves were the same word, since a monolingual participant in
+          a bilingual room speaks and hears the same language. The speak side is also on its way to
+          being detected rather than chosen, and a card that presents a guess in the same type as a
+          choice invites the reader to trust both equally.
+
+          It still routes: FilteredRoomAudio picks dub-or-microphone from the SPEAK language, which
+          is untouched here. This is what the card SAYS, not what the meeting does. */}
+      <div className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
+        <p>Listens in</p>
+        <p className="mt-0.5 font-medium text-ink">
+          {user.listenLanguage
+            ? getLanguageName(user.listenLanguage)
+            : "Not set"}
+        </p>
       </div>
     </PopoverContent>
   );
