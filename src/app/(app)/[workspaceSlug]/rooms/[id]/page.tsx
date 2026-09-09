@@ -846,6 +846,17 @@ export default function RoomInformationPage() {
                  chaining is what keeps this from trapping the page's scroll at its end. */
               bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-auto xl:pr-1"
             >
+              {/* THE SHARED NUMBER, STILL SAID OUT LOUD.
+                  The groups below each carry their own count, which is what a grouped roster
+                  needs — but the header chip and this panel once showed "1/100" and
+                  "Attendees: 0" at the same moment, and they stopped doing that by both
+                  reading `occupancy` rather than filtering for themselves. Rendering the
+                  shared label here keeps that guarantee visible: if a group's arithmetic ever
+                  drifts from occupancy, the two numbers sit one above the other. */}
+              <p className="mb-2 text-[12px] text-muted-foreground">
+                {`Participants: ${occupancy.label}`}
+              </p>
+
               {rosterGroups.length === 0 ? (
                 <p className="text-[12px] text-muted-foreground">
                   {/* Not "Nobody is in the room right now" — that sentence answers a question

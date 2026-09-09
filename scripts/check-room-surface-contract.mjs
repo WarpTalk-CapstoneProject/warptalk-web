@@ -402,21 +402,32 @@ assert.doesNotMatch(
   /<aside[^>]*xl:overflow-y-auto/,
   "The right column must not scroll as one block; only the roster region may scroll (WT-330(8)).",
 );
-// Tracking flexes and owns the single scroll region; Actions stays pinned.
+// The roster panel flexes and owns the single scroll region; Actions stays pinned.
+// Titled "People" now — it was "Tracking" when WT-330(8) was written, and the six remaining
+// mentions in page.tsx are comments. The guarantee is unchanged and is what this asserts: the
+// panel holding the invitee list is the one that scrolls, so Actions and Meeting access stay
+// reachable however many invitees there are.
 assert.match(
   roomDetail,
-  /title="Tracking"[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
-  "The Tracking panel's body must be the one bounded, flexing scroll region (WT-330(8)).",
+  /title="People"[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
+  "The People panel's body must be the one bounded, flexing scroll region (WT-330(8)).",
 );
 // "Meeting access" was pinned alongside Actions and is now deleted, on the owner's call. It
 // held a hardcoded "WarpTalk Session" over the room code, and the pills row under the title
 // already shows that code AND lets you click it to copy — the panel was the same fact with
 // less to do. WT-330 had already taken its entry button; nothing unique was left to bury.
-for (const panel of ["Actions"]) {
-  assert.match(
-    roomDetail,
-    new RegExp(`title="${panel}" className="xl:shrink-0"`),
-    `The ${panel} panel must stay pinned so no invitee count can push it off screen.`,
+// "Actions" is gone too, and its three live entries are in the `···` menu beside the primary
+// button — the room code was already copyable from the pill under the title, and
+// "Add to favorites" was wired to nothing (WT-642). WT-330(8) asked that no invitee count can
+// push these off screen; sitting in the header, ABOVE the scrolling aside entirely, is a
+// stronger answer than a pinned panel inside it. So assert the position, which is the promise,
+// rather than a panel title, which was only how it used to be kept.
+{
+  const menuAt = roomDetail.indexOf("<RoomActionsMenu");
+  const asideAt = roomDetail.indexOf("<aside");
+  assert.ok(
+    menuAt !== -1 && asideAt !== -1 && menuAt < asideAt,
+    "The room actions menu must render outside the scrolling right column, so no invitee count can push it off screen (WT-330(8)).",
   );
 }
 assert.doesNotMatch(
