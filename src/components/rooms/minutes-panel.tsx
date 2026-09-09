@@ -614,7 +614,12 @@ export function MinutesPanel({
           and a link should come into being when somebody opens this dialog, not when a page
           renders. */}
       {sharing ? (
-        <MinutesShareDialog roomId={roomId} open={sharing} onOpenChange={setSharing} />
+        <MinutesShareDialog
+          roomId={roomId}
+          open={sharing}
+          onOpenChange={setSharing}
+          documentStatus={minutes.status}
+        />
       ) : null}
     </div>
   );
