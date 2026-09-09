@@ -85,6 +85,7 @@ export function TranscriptReadingLayout({
   sections,
   segments,
   recording,
+  recordingUnavailableReason,
   seek,
   onConsentGranted,
   onJumpToMoment,
@@ -99,6 +100,8 @@ export function TranscriptReadingLayout({
    *  the caller — see the note on `shares`. */
   segments: readonly TranscriptSegmentDto[];
   recording: RoomHistoryArtifact | null;
+  /** Why nothing is playable, when the meeting did record something. See MeetingRecordingPlayer. */
+  recordingUnavailableReason?: "processing" | "multiple" | null;
   seek: SeekRequest | null;
   onConsentGranted: () => void;
   onJumpToMoment: (atMs: number) => void;
@@ -138,6 +141,7 @@ export function TranscriptReadingLayout({
           sections={sections}
           segments={segments}
           recording={recording}
+          recordingUnavailableReason={recordingUnavailableReason}
           seek={seek}
           pipOpen={pipOpen}
           onTogglePip={() => setPipOpen((current) => !current)}
@@ -155,6 +159,7 @@ function ReadingRail({
   sections,
   segments,
   recording,
+  recordingUnavailableReason,
   seek,
   pipOpen,
   onTogglePip,
@@ -166,6 +171,8 @@ function ReadingRail({
   sections: readonly MeetingSummarySectionView[] | null;
   segments: readonly TranscriptSegmentDto[];
   recording: RoomHistoryArtifact | null;
+  /** Why there is nothing to play, when the meeting did record something. See MeetingRecordingPlayer. */
+  recordingUnavailableReason?: "processing" | "multiple" | null;
   seek: SeekRequest | null;
   pipOpen: boolean;
   onTogglePip: () => void;
@@ -269,7 +276,12 @@ function ReadingRail({
        transcript is the document and the summary is a different document. A record that printed
        both interleaved would be neither. */
     <aside className="order-1 flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface-2 lg:order-none print:hidden">
-      {recording ? (
+      {/* WT-655: a recording that is still being processed has no playable artifact, so `recording`
+          is null and this whole block used to vanish — indistinguishable from a meeting nobody
+          recorded, for the reader most likely to be waiting on it. `"multiple"` deliberately does
+          NOT open this block: the transcript tab already carries a line explaining that case, and
+          saying it twice on one screen reads as two different problems. */}
+      {recording || recordingUnavailableReason === "processing" ? (
         <div className="border-b border-border p-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-subtle">
@@ -295,6 +307,7 @@ function ReadingRail({
             <MeetingRecordingPlayer
               variant="pip"
               artifact={recording}
+              unavailableReason={recordingUnavailableReason}
               seek={seek}
               playbackRequest={sync?.playbackRequest ?? null}
               onConsentGranted={onConsentGranted}

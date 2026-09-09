@@ -269,6 +269,18 @@ export function MeetingRecordingPlayer({
   } | null>(null);
   const playbackFailure =
     sourceUrl && failure?.url === sourceUrl ? failure.kind : null;
+  /**
+   * Whether the link now loaded was fetched to replace one that had just failed.
+   *
+   * `MEDIA_ERR_SRC_NOT_SUPPORTED` is what a browser reports both for a presigned link that has
+   * aged out AND for a file it genuinely cannot decode, and `MediaError` carries no HTTP status to
+   * tell them apart — so the first failure is read as the likelier of the two, an expired link.
+   * That guess is only safe once. A file that fails again on a link fetched seconds ago is not
+   * expiring; offering "load a new one" a second time would be a loop with no exit, and each turn
+   * of it teaches the reader that the button does nothing. The reload IS the experiment, and this
+   * ref carries its result.
+   */
+  const reloadedAfterFailureRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
   // dropped — the first click on a transcript line is exactly that case, since the player waits
@@ -343,6 +355,8 @@ export function MeetingRecordingPlayer({
    * takes.
    */
   const reloadRecording = useCallback(() => {
+    // A reload is the experiment that settles what MediaError could not. See the ref below.
+    reloadedAfterFailureRef.current = true;
     setFailure(null);
     setLoaded(null);
     void loadRecording();
@@ -486,6 +500,11 @@ export function MeetingRecordingPlayer({
           preload="metadata"
           className={frameClass}
           onLoadedMetadata={(event) => {
+            // Metadata arrived, so this link opens: whatever the previous one's failure was, it is
+            // settled and spent. Without this reset the very first expiry would mark the player
+            // for the rest of its life, and the NEXT genuine expiry — an hour of reading later —
+            // would be reported as an unplayable file with no reload offered.
+            reloadedAfterFailureRef.current = false;
             const queued = pendingSeekRef.current;
             if (!queued) return;
             pendingSeekRef.current = null;
@@ -498,9 +517,13 @@ export function MeetingRecordingPlayer({
              opening. Every failure to play was therefore silent, which is why the whole seek
              feature looked broken rather than merely stale. */
           onError={(event) => {
-            const kind = classifyPlaybackFailure(event.currentTarget.error);
+            const classified = classifyPlaybackFailure(event.currentTarget.error);
             // Aborted playback is us, not a failure — nothing happened worth saying.
-            if (!kind) return;
+            if (!classified) return;
+            // A second failure on a link fetched to replace a failed one settles it: the file is
+            // the problem, not the link's age.
+            const kind =
+              classified === "expired" && reloadedAfterFailureRef.current ? "broken" : classified;
             setFailure({ url: sourceUrl, kind });
             // The frame says both cases, so only the genuine fault also toasts: below 1280px the
             // pip is a strip in the corner of the rail, and a broken FILE is worth knowing about

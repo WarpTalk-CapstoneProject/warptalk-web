@@ -1330,6 +1330,7 @@ function MeetingRecordSection({
             sections={endedRecord?.summary?.sections ?? null}
             segments={segments}
             recording={recording}
+            recordingUnavailableReason={recordingUnavailableReason}
             seek={seek}
             onConsentGranted={onRecordChanged}
             onJumpToMoment={onJumpToMoment}
