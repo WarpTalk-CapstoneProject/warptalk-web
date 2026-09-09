@@ -230,6 +230,51 @@ assert.match(
   /\.\.\.\(participantsCanStartTranslation\s*\n?\s*\?\s*\{ participantsCanStartTranslation: true \}/,
   "participantsCanStartTranslation must be sent only when the host turned it on.",
 );
+// ── An instant meeting opens the meeting, not a page about it ───────────────
+//
+// A meeting with no start time and no repeat rule is one the host wants NOW. Creating it used to
+// end on a success screen, whose "Join" led to the room's information page, whose CTA was the
+// Start button — three screens between the click and the call, for the one flow that is defined
+// by not wanting any. The rule pinned here is that the dialog itself starts it and lands on the
+// live route. WT-592.
+assert.match(
+  createRoomDialog,
+  /const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;/,
+  "Instant means: not an edit, no start time, no repeat rule — the same split the server " +
+    'draws when it seeds a room WAITING rather than SCHEDULED.',
+);
+assert.match(
+  createRoomDialog,
+  /if \(isInstantMeeting\) \{[\s\S]{0,1200}?startRoomMutation\.mutateAsync\(room\.id\)/,
+  "Creating an instant meeting must START it — the same mutation the room page's own CTA uses.",
+);
+assert.match(
+  createRoomDialog,
+  /if \(isInstantMeeting\) \{[\s\S]{0,3000}?router\.push\(liveMeetingPath\(activeWorkspaceSlug, room\.id\)\)/,
+  "Creating an instant meeting must land on the live meeting, not on the room detail page.",
+);
+// The success screen is what a BOOKING gets, and it must not lead back to the room page. That
+// page's host CTA is "Start meeting" (see the access assertion below), so offering it here
+// invites the host to open, on the day they booked it, a meeting scheduled for another day —
+// which is instant-meeting behaviour, and the instant path does not come through this screen.
+assert.match(
+  createRoomDialog,
+  /schedulesPath\(activeWorkspaceSlug\)/,
+  "The completion screen must offer the calendar, where a meeting booked for later shows up.",
+);
+assert.doesNotMatch(
+  createRoomDialog,
+  /roomDetailPath/,
+  "The booking CTA must not route to the room page — its CTA there is Start meeting.",
+);
+// And still never automatic: this screen exists for the join link above the button, and a push
+// would take that link away at the moment it is wanted.
+assert.doesNotMatch(
+  createRoomDialog,
+  /router\.push\(\s*schedulesPath/,
+  "Creating a meeting for later must not navigate away from the link it just produced.",
+);
+
 assert.match(
   access,
   /mode: "host_start",\s*label: "Start meeting"/,

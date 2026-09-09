@@ -38,7 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useMyMeetingsInRange } from "@/hooks/use-my-meetings";
+import { useMeetingsInRange } from "@/hooks/use-my-meetings";
 import {
   artifactLabel,
   artifactStatusLabel,
@@ -127,7 +127,7 @@ function dayKey(iso: string) {
   return String(startOfDay(new Date(iso)));
 }
 
-export default function MyMeetingsPage() {
+export default function CalendarPage() {
   const params = useParams();
   const router = useRouter();
   const workspaceSlug = params?.workspaceSlug as string;
@@ -182,7 +182,7 @@ export default function MyMeetingsPage() {
     return [startOfMonth(monthAnchor), endOfMonth(monthAnchor)] as const;
   }, [view, weekDays, monthAnchor]);
 
-  const meetings = useMyMeetingsInRange(activeWorkspaceId, rangeFrom, rangeTo, query);
+  const meetings = useMeetingsInRange(activeWorkspaceId, rangeFrom, rangeTo, query);
   const fetched = meetings.data?.meetings ?? EMPTY_MEETINGS;
 
   // The months are fetched whole, so a week view holds up to two months of rows it must not show.

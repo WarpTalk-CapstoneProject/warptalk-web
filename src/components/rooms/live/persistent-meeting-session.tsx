@@ -109,6 +109,8 @@ import {
   type MeetingLayoutMode,
 } from "@/components/rooms/live/meeting-control-bar";
 import { LiveKitMeetingStage } from "@/components/rooms/live/meeting-stage";
+import { MeetingReadyCard } from "@/components/rooms/live/meeting-ready-card";
+import { consumeInstantMeetingStart } from "@/lib/meeting/instant-meeting-handoff";
 import { ExternalBridgeWidget } from "@/components/rooms/live/external-bridge-widget";
 import { FilteredRoomAudio } from "@/components/rooms/live/filtered-room-audio";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
@@ -436,6 +438,14 @@ export function PersistentMeetingSession({
   const [meetingError, setMeetingError] = useState<string | null>(null);
   const [sidePanelMode, setSidePanelMode] =
     useState<SidePanelMode>("transcript");
+  // "Your meeting's ready": shown only to whoever just started an instant meeting in this tab,
+  // because they are the only person who skipped the screen that used to carry the join link.
+  // Everyone else arrived through a link or the room page and has no missing step to make up.
+  const [showMeetingReadyCard, setShowMeetingReadyCard] = useState(false);
+  // The handoff is consumed EXACTLY once per mount. Without this guard React's development
+  // double-invoked effect reads the mark on the first pass and the cleared slot on the second,
+  // so the card would appear and immediately un-appear in dev only.
+  const instantHandoffReadRef = useRef(false);
   // Whether THIS participant is publishing a screen share. Previously a MediaStream held
   // in state, which was only ever a local preview: the stage renders everyone's share —
   // including our own — from the subscribed LiveKit track, so a second local copy served no
@@ -499,6 +509,16 @@ export function PersistentMeetingSession({
     setNoiseSuppressionEnabled(preferences.noiseSuppressionEnabled);
     setBackgroundBlurEnabled(preferences.backgroundBlurEnabled);
     setMediaPreferencesHydrated(true);
+  }, [roomId]);
+
+  // Same shape as the media preferences above, and for the same reason: sessionStorage is an
+  // external browser source and must be read after hydration, never during render.
+  useEffect(() => {
+    if (instantHandoffReadRef.current) return;
+    instantHandoffReadRef.current = true;
+    setShowMeetingReadyCard(
+      consumeInstantMeetingStart(window.sessionStorage, roomId),
+    );
   }, [roomId]);
 
   function handleToggleNoiseSuppression() {
@@ -3265,6 +3285,32 @@ export function PersistentMeetingSession({
               <MeetingEphemeralBadge
                 saveTranscript={room.settings?.saveTranscript}
               />
+              {/* Not in `compact`: the minimised dock is 300-odd pixels of video and a tray,
+                  and this branch is the full meeting. The card is rendered inside the stage
+                  frame so it is clipped by the same rounding as the video under it. */}
+              {showMeetingReadyCard ? (
+                <MeetingReadyCard
+                  joinLink={joinLink}
+                  roomCode={room.translationRoomCode}
+                  onCopy={() =>
+                    void copyText(
+                      joinLink || room.translationRoomCode,
+                      joinLink ? "Join link" : "Room code",
+                    )
+                  }
+                  onInvite={() => {
+                    // The People panel owns the Invite dialog; opening the panel is what puts
+                    // that button in reach without lifting its state up through three
+                    // components for one shortcut.
+                    setSidePanelMode("participants");
+                    // Both, in that order — the panel is only rendered while the right sidebar
+                    // is open, so setting the mode alone changes a tab nobody can see.
+                    setRightSidebarOpen(true);
+                    setShowMeetingReadyCard(false);
+                  }}
+                  onDismiss={() => setShowMeetingReadyCard(false)}
+                />
+              ) : null}
               {/* The minimise button sat here. Removed on the owner's call — the floating
                   window still appears on its own when you navigate away from the room, which
                   is how it worked before WT-246 added a button for it. */}
