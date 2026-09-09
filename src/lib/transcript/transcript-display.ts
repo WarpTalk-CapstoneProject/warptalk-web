@@ -189,7 +189,7 @@ export function groupTranscriptSegments(
   const utterances: GroupedTranscriptSegment[] = [];
 
   for (const segment of segments) {
-    // Control markers are dropped here, not only in the saved-transcript path. The filter used
+    // Rows nobody said are dropped here, not only in the saved-transcript path. The filter used
     // to live solely in groupSavedTranscriptSegments, so `__MEETING_END__` was invisible on the
     // room detail page and perfectly visible in the LIVE panel during the meeting — attributed
     // to "System", timestamped 0:00, with a 100% confidence badge beside it.
@@ -197,7 +197,13 @@ export function groupTranscriptSegments(
     // Dropping before the merge matters as much as dropping at all: a marker absorbed into a
     // neighbouring utterance stops being a segment of its own and becomes part of a real line's
     // text, where no later filter can find it.
+    //
+    // BOTH guards run, and they catch different things. isRenderableTranscriptSegment reads only
+    // the TEXT — it adds the empty-row case and misses a marker whose text was mangled on the
+    // way, and production holds a `__MEETING_END__a`. That one still arrives as speaker
+    // `system`, which is the tell only isTranscriptSystemSegment reads.
     if (isTranscriptSystemSegment(segment)) continue;
+    if (!isRenderableTranscriptSegment(segment.originalText)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
@@ -324,6 +330,35 @@ export function firstTranslationStart<T extends { startedAt?: string | null }>(
 }
 
 /**
+ * Whether a stored row is a line of the meeting at all — the client's copy of the rule the
+ * backend translates by (TranscriptTranslationBackfillService.IsTranslatableSegment).
+ *
+ * Two kinds of row get written into a transcript that nobody said. Control markers are one, and
+ * they were already filtered here. The other is a row with NO TEXT: stt_worker publishes a
+ * trailing `text=""` marker when an audio chunk finishes, and until the ingress consumer grew a
+ * guard for it (TranscriptRedisConsumerService, "silently accumulating stray empty rows over a
+ * long conversation") every chunk of every meeting left one behind. Those rows are still in every
+ * transcript recorded before that guard.
+ *
+ * WHY THIS HAS TO BE THE SAME RULE ON BOTH SIDES (2026-09-09)
+ *   The backend excludes an empty row from BOTH halves of its translation coverage: it is not
+ *   counted in `totalSegments` and it is never queued into `missing`, because there is nothing to
+ *   translate. This side kept it — as a blank bubble of its own, or, when it fell between two
+ *   chunks of one person talking, absorbed into that utterance's `mergedSegmentIds`.
+ *
+ *   An id in that list is a promise that a translation exists for it. resolveTranscriptLine reads
+ *   `covered < segmentIds.length` off it, so an utterance that swallowed one empty row was
+ *   PERMANENTLY `isPartial`: the panel marked it incomplete, the language picker refused to say
+ *   "The whole meeting", and the "N entries are not in English yet — Translate them" line could
+ *   never reach zero, because the only thing standing between it and zero was a row the server
+ *   will not translate and no reader can see.
+ */
+export function isRenderableTranscriptSegment(text: string | null | undefined): boolean {
+  const trimmed = (text ?? "").trim();
+  return trimmed.length > 0 && !isTranscriptControlMarker(trimmed);
+}
+
+/**
  * A saved utterance. `id` is the FIRST segment folded into it — the same partial identity
  * `GroupedTranscriptSegment` carries on the live side, and for the same reason: anything keyed
  * by the segment ids the backend emitted has to read `mergedSegmentIds` instead.
@@ -343,8 +378,10 @@ export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
  * stream) so consecutive segments from the same speaker render as one continuous
  * block instead of a new line per finalized STT chunk.
  *
- * Control markers are dropped first, so they can never be merged into a neighbouring
- * utterance and become part of a real line's text.
+ * Rows nobody said — control markers, and rows with no text at all — are dropped first, so they
+ * can never be merged into a neighbouring utterance: as part of a real line's text in the first
+ * case, and as an id in `mergedSegmentIds` that no translation will ever cover in the second.
+ * See isRenderableTranscriptSegment.
  */
 export function groupSavedTranscriptSegments(
   segments: SavedTranscriptSegmentDto[],
@@ -352,7 +389,11 @@ export function groupSavedTranscriptSegments(
   const utterances: GroupedSavedTranscriptSegment[] = [];
 
   for (const segment of segments) {
+    // Both guards. isRenderableTranscriptSegment reads only the text, and the text is not the
+    // only tell: a marker mangled on the way — production holds a `__MEETING_END__a` — still
+    // arrives as speaker `system`, which only isTranscriptSystemSegment catches.
     if (isTranscriptSystemSegment(segment)) continue;
+    if (!isRenderableTranscriptSegment(segment.originalText)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
