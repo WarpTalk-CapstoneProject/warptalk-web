@@ -39,12 +39,15 @@ import {
   XSquare,
   ClockCounterClockwise,
   DownloadSimple,
+  FilePdf,
   FileText,
   PencilSimple,
   Printer,
   Ruler,
+  ShareNetwork,
   Spinner,
 } from "@phosphor-icons/react/dist/ssr";
+import { isAxiosError } from "axios";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -57,7 +60,12 @@ import {
   type MinutesPolicyFacts,
   type MinutesTemplateId,
 } from "@/lib/meeting/minutes-document";
-import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import { MinutesShareDialog } from "@/components/rooms/minutes-share-dialog";
+import {
+  MINUTES_WITHHELD,
+  useMeetingMinutes,
+  useMeetingMinutesActions,
+} from "@/hooks/use-meeting-minutes";
 import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspace, useWorkspaceSettings } from "@/hooks/use-workspace";
@@ -117,7 +125,11 @@ export function MinutesPanel({
   /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
   onSeek?: (atMs: number) => void;
 }) {
-  const { data: minutes, isLoading } = useMeetingMinutes(roomId);
+  const { data: read, isLoading } = useMeetingMinutes(roomId);
+  // WT-651: an unapproved document follows the room's artifactAccess policy, so "not shared with
+  // you" is one of the three normal answers here rather than a failure.
+  const withheld = read === MINUTES_WITHHELD;
+  const minutes = withheld ? null : read;
   const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
 
   /*
@@ -131,14 +143,14 @@ export function MinutesPanel({
    */
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
-  const workspaceLanguage = useWorkspaceStore((state) => state.defaultLanguage);
   const { data: workspace } = useWorkspace(workspaceId ?? "");
   const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
   const { data: room } = useTranslationRoom(roomId);
 
   const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
   const [editing, setEditing] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<"docx" | "pdf" | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   /**
    * The reader's template choice for this sitting, or null to follow the default.
@@ -200,6 +212,28 @@ export function MinutesPanel({
     );
   }
 
+  if (withheld) {
+    return (
+      <div className="p-6">
+        <div className="max-w-lg space-y-3">
+          <h3 className="text-[14px] font-semibold text-ink">Still a draft</h3>
+          {/* The same distinction summary-absence.ts draws, in this document's own words: the
+              minutes exist and are being worked on, and what is missing is permission rather than
+              the document. A flat "unauthorized" here would send somebody who WAS at the meeting
+              looking for a broken page instead of asking the host.
+
+              Says what changes it, in the terms the server uses: signing is the act that publishes
+              a biên bản, so "once it is signed" is the answer, not "once it is shared". */}
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            These minutes have been drawn up but nobody has signed them yet. A draft stays with the
+            people who can act on it; you will be able to read it here once the host or the
+            secretary signs it.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!minutes) {
     return (
       <div className="p-6">
@@ -243,12 +277,10 @@ export function MinutesPanel({
 
   const editable = isEditable(minutes) && canManage;
 
-  const template =
-    chosenTemplate
-    ?? resolveMinutesTemplate({
-      primaryLanguage: view.primaryLanguage,
-      workspaceDefaultLanguage: workspaceLanguage,
-    });
+  // The reader's pick, else the default. No longer derived from the meeting's language: the
+  // layout is the sender's choice, and a default that changed shape per meeting made the choice
+  // harder to notice than it was worth.
+  const template = chosenTemplate ?? resolveMinutesTemplate();
 
   /*
    * The policy block, assembled from what the product genuinely holds.
@@ -279,25 +311,45 @@ export function MinutesPanel({
     setEditing(true);
   }
 
-  async function downloadDocx() {
-    setDownloading(true);
+  /**
+   * Download the document in one of its two formats.
+   *
+   * The PDF is a conversion of the very .docx the other button hands over, made server-side — not
+   * a second layout rendered from the same data. Two renderers would drift, and a signed record
+   * whose Word copy and PDF copy differ is worse than having no PDF.
+   */
+  async function download(format: "docx" | "pdf") {
+    setDownloading(format);
     try {
-      const response = await meetingMinutesService.downloadDocx(roomId);
-      // The server names the file after the minutes number, which is what the recipient files it
-      // under. Falling back to the number here rather than to something generic keeps that true
-      // even if a proxy strips the header.
+      // The layout on screen, in both formats, so the file the reader gets is the document they
+      // were looking at. Without this the server renders its own default and the switcher
+      // silently does not apply to the download.
+      const response =
+        format === "pdf"
+          ? await meetingMinutesService.downloadPdf(roomId, template)
+          : await meetingMinutesService.downloadDocx(roomId, template);
+      // The server names the file after the minutes number and the meeting, which is what the
+      // recipient files it under. Falling back to the number here rather than to something
+      // generic keeps that true even if a proxy strips the header.
       const disposition = String(response.headers?.["content-disposition"] ?? "");
       const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
-      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.docx`;
+      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.${format}`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Could not download the minutes.");
+    } catch (error) {
+      // 503 is this deployment having no converter, which is a different sentence from a failed
+      // download: the Word file still works, and the person should be told to take that instead.
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      toast.error(
+        status === 503
+          ? "PDF conversion is unavailable here. The Word file still downloads."
+          : "Could not download the minutes.",
+      );
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -383,20 +435,55 @@ export function MinutesPanel({
               <Printer size={13} />
               Print
             </Button>
+            {/* WT-654: the .docx says which layout it is, because it only has one.
+                MeetingMinutesDocxWriter is a single Vietnamese writer — no template argument, no
+                second implementation — while the switch above and Print both honour the reader's
+                choice. Two buttons side by side, one of them quietly ignoring the control next to
+                them, is the part that had to stop. Naming the layout on the button costs a reader
+                nothing when it is the layout they wanted, and stops the download being a surprise
+                when it is not. The alternative was a second OpenXML writer duplicating a 1300-line
+                renderer by hand, which is what WT-637 and WT-639 were cancelled for. */}
             <Button
               size="sm"
               variant="outline"
-              onClick={downloadDocx}
-              disabled={downloading}
+              onClick={() => download("docx")}
+              disabled={downloading !== null}
               className="h-8 rounded-md text-[11px] shadow-none"
             >
-              {downloading ? (
+              {downloading === "docx" ? (
                 <Spinner size={13} className="animate-spin" />
               ) : (
                 <DownloadSimple size={13} />
               )}
-              Download Word
+              Download Word (Vietnamese layout)
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => download("pdf")}
+              disabled={downloading !== null}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              {downloading === "pdf" ? (
+                <Spinner size={13} className="animate-spin" />
+              ) : (
+                <FilePdf size={13} />
+              )}
+              Download PDF
+            </Button>
+            {/* Sharing is the host's to decide, so the button is theirs alone — a reader who
+                could hand the document on would be deciding for them. */}
+            {canManage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSharing(true)}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                <ShareNetwork size={13} />
+                Share
+              </Button>
+            ) : null}
           </div>
         </div>
 
@@ -522,6 +609,13 @@ export function MinutesPanel({
       <div className="px-6 print:hidden">
         <ApprovedWork roomId={roomId} />
       </div>
+
+      {/* Mounted only while it is open: asking for the sharing state is what CREATES the link,
+          and a link should come into being when somebody opens this dialog, not when a page
+          renders. */}
+      {sharing ? (
+        <MinutesShareDialog roomId={roomId} open={sharing} onOpenChange={setSharing} />
+      ) : null}
     </div>
   );
 }

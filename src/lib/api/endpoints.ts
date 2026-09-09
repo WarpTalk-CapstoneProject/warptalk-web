@@ -153,7 +153,20 @@ export const API = {
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
-    exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+    exportDocx: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.docx` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    /**
+     * The same document, converted from that .docx — never a second layout, so `template` means
+     * exactly what it means above.
+     */
+    exportPdf: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.pdf` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    /** The share dialog's state. GET creates the link, restricted, on first ask. */
+    share: (roomId: string) => `/rooms/${roomId}/minutes/share`,
+    /** Email travels in the query string: an address contains characters a route segment does not. */
+    sharePerson: (roomId: string, email: string) =>
+      `/rooms/${roomId}/minutes/share/people?email=${encodeURIComponent(email)}`,
+    sharePeople: (roomId: string) => `/rooms/${roomId}/minutes/share/people`,
     /**
      * Every current biên bản in the workspace this caller may read.
      *
@@ -163,6 +176,22 @@ export const API = {
      * catch-all — see workspace-minutes-route.
      */
     forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
+  },
+  /**
+   * Reading a biên bản from a share link.
+   *
+   * The only unauthenticated routes the web calls. The token IS the credential, so these are
+   * requested through publicApiClient — which never refreshes a session or redirects to /login
+   * on a 401, because a visitor with no account is not an expired session.
+   */
+  sharedMinutes: {
+    byToken: (token: string) => `/shared/minutes/${encodeURIComponent(token)}`,
+    exportDocx: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.docx`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    exportPdf: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.pdf`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
@@ -296,8 +325,39 @@ export const API = {
       `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
     pluginConnection: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
-    pluginConnectUrl: (pluginKey: string) =>
-      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
+    /**
+     * `client` tells the API which surface is asking, so it can seal that into the OAuth state.
+     * The desktop app opens consent in the system browser, and by the time the callback runs
+     * nothing on that request remembers which app started it.
+     */
+    pluginConnectUrl: (pluginKey: string, client?: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url` +
+      (client ? `?client=${encodeURIComponent(client)}` : ""),
+  },
+  /**
+   * The system-admin half of the plugin catalog (assistant service, WT-646).
+   *
+   * Separate from `assistant.plugins` above because the audiences are separate: those routes are
+   * what a signed-in user's plugins page calls, these write the global catalog every user reads
+   * and are gated on the platform-admin policy. Keeping them apart is what stops a user-facing
+   * component reaching for an admin URL by autocomplete.
+   *
+   * `catalog` is a RESERVED plugin key on the server for the reason this shape makes visible: it
+   * is a literal route segment sitting where `{pluginKey}` sits, and ASP.NET gives the literal
+   * precedence.
+   */
+  adminPluginCatalog: {
+    base: "/assistant/plugins/catalog",
+    detail: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}`,
+    oauth: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/oauth`,
+    tools: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/tools`,
+    rediscover: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/rediscover`,
+    audits: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to

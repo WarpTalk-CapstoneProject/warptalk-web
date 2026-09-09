@@ -51,6 +51,8 @@ export default function DocumentSidePanelPreviewPage() {
       id: string;
       subjectType: string;
       subjectId?: string | null;
+      /** Roles and membership types are named by key, not by id. */
+      subjectKey?: string | null;
       permission?: string | null;
       effect: string;
     }[]
@@ -98,6 +100,51 @@ export default function DocumentSidePanelPreviewPage() {
               isSubmitting={false}
               policiesList={policies}
               toggleExternalAccess={async (checked) => setExternal(checked)}
+              // The Member rule, held in the same fixture state the rest of the panel uses so the
+              // three-way control can actually be clicked through here.
+              memberAccess={(permission) =>
+                policies.some(
+                  (p) =>
+                    p.subjectType === "Role" &&
+                    p.subjectKey === "Member" &&
+                    p.permission === permission &&
+                    p.effect === "ALLOW",
+                )
+                  ? "allow"
+                  : policies.some(
+                        (p) =>
+                          p.subjectType === "Role" &&
+                          p.subjectKey === "Member" &&
+                          p.permission === permission &&
+                          p.effect === "DENY",
+                      )
+                    ? "deny"
+                    : null
+              }
+              setMemberAccess={async (permission, effect) =>
+                setPolicies((current) => [
+                  ...current.filter(
+                    (p) =>
+                      !(
+                        p.subjectType === "Role" &&
+                        p.subjectKey === "Member" &&
+                        p.permission === permission
+                      ),
+                  ),
+                  ...(effect
+                    ? [
+                        {
+                          id: `r-${permission}-${effect}`,
+                          subjectType: "Role",
+                          subjectKey: "Member",
+                          subjectId: null,
+                          permission,
+                          effect: effect === "allow" ? "ALLOW" : "DENY",
+                        },
+                      ]
+                    : []),
+                ])
+              }
               allowUser={async (userId, _name, permission) =>
                 setPolicies((current) => [
                   ...current,

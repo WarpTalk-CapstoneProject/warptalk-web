@@ -70,6 +70,7 @@ import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
 import { getFlagEmoji } from "@/lib/language/language-flag";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
   READING_LINE_OFFSET_PX,
@@ -1397,6 +1398,24 @@ function TranscriptLayoutToggle({
 }
 
 /**
+ * The lines one transcript row renders.
+ *
+ * `paragraphs` describe where the SPEAKER stopped, so they only apply to what the speaker said.
+ * A row showing a TRANSLATION is a different text with its own sentence structure — MT writes
+ * proper stops, so punctuation alone is the right and only signal there. Using the spoken turn's
+ * pauses to break a translated line would cut it at positions that mean nothing in that language.
+ */
+function transcriptLines(
+  segment: GroupedSavedTranscriptSegment,
+  resolved: ResolvedTranscriptLine,
+): string[] {
+  if (resolved.isTranslated) return splitIntoSentences(resolved.text);
+
+  const paragraphs = segment.paragraphs?.length ? segment.paragraphs : [resolved.text];
+  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
+}
+
+/**
  * Everything a transcript line needs, whichever way it is laid out.
  *
  * The speaker's name is NOT here: the chat and document layouts print it per line and disagree
@@ -1491,9 +1510,22 @@ function TranscriptChatRow({
               {/* Only on the incoming side. The reader's own bubble is already the one solid
                   colour on the page, and a second stripe on it would compete with that. */}
               {isSelf ? null : <TranscriptSpeakerStripe speaker={speaker} />}
-              <p className={cn("text-[13px] leading-6", isSelf ? "text-white" : "text-ink")}>
-                {resolved.text}
-              </p>
+              {/* One line per sentence. The bubble is a speaking TURN, so it stays whole; what
+                  changes is that the sentences inside it stop running together. A turn with no
+                  terminal punctuation — which Vietnamese STT produces constantly — comes back as
+                  a single line and renders exactly as it did before. */}
+              {transcriptLines(segment, resolved).map((sentence, at) => (
+                <p
+                  key={`${segment.id}-s-${at}`}
+                  className={cn(
+                    "text-[13px] leading-6",
+                    at > 0 && "mt-1",
+                    isSelf ? "text-white" : "text-ink",
+                  )}
+                >
+                  {sentence}
+                </p>
+              ))}
               {canCorrect ? (
                 <button
                   type="button"
@@ -1728,9 +1760,20 @@ function TranscriptDocumentLine({
   return (
     <div id={`transcript-segment-${segment.id}`} className="group/line flex scroll-mt-4 gap-2">
       <div className="min-w-0 flex-1">
-        <p className="max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] text-ink">
-          <TranscriptReadingText text={resolved.text} query={query} />
-        </p>
+        {/* Sentences, not one block. The reading rail is where a whole meeting is read end to
+            end, so a turn that runs three sentences together is the hardest place to follow.
+            Highlighting still runs per sentence, so a search match inside any of them is found. */}
+        {transcriptLines(segment, resolved).map((sentence, at) => (
+          <p
+            key={`${segment.id}-r-${at}`}
+            className={cn(
+              "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] text-ink",
+              at > 0 && "mt-1",
+            )}
+          >
+            <TranscriptReadingText text={sentence} query={query} />
+          </p>
+        ))}
         {revealed && resolved.isTranslated ? (
           <TranscriptSpokenOriginal resolved={resolved} />
         ) : null}

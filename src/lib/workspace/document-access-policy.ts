@@ -91,6 +91,37 @@ export function isUserPolicy(
   );
 }
 
+/**
+ * The workspace role a document rule may name.
+ *
+ * ONLY "Member", and that is a product decision rather than a technical limit.
+ * `DocumentAccessEvaluator` matches a Role policy against the caller's role name whoever they
+ * are, so a DENY on Owner would genuinely lock every owner out of the document. It is
+ * recoverable — `CanManagePoliciesAsync` answers from role and ownership and never reads
+ * policies, so an owner can still delete the rule — but a control whose obvious use is to lock
+ * yourself out is a control that should not exist. Owners and admins already reach every
+ * document in the workspace, so a rule naming them has no use case to weigh against that.
+ *
+ * "Member" is the one that answers the question people actually ask: may ordinary members of
+ * this workspace see this document.
+ */
+export const DOCUMENT_POLICY_ROLE = "Member";
+
+/** A rule attached to a workspace ROLE rather than to one named person. */
+export function isRolePolicy(
+  policy: DocumentAccessPolicyLike,
+  roleName: string,
+  permission: DocumentPermission,
+  effect: "allow" | "deny",
+): boolean {
+  return (
+    normalize(policy.subjectType) === "role" &&
+    normalize(policy.subjectKey) === normalize(roleName) &&
+    policyPermission(policy) === permission &&
+    isEffect(policy, effect)
+  );
+}
+
 /** A rule attached to a membership type — Internal or External — rather than to a person. */
 export function isMembershipPolicy(
   policy: DocumentAccessPolicyLike,
