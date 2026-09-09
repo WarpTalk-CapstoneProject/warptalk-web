@@ -27,6 +27,7 @@ import {
   Loader2,
   MessageSquare,
   Pencil,
+  Play,
   Search,
   X,
 } from "lucide-react";
@@ -1704,7 +1705,16 @@ function TranscriptDocumentTurn({
           whole block, so it draws exactly the boundary the reader is looking for. */}
       <TranscriptSpeakerStripe speaker={speaker} className="my-1.5 left-[-2px] print:hidden" />
 
-      <div className="pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none text-ink-subtle">
+      {/* The gutter is this layout's seek target, and the rule TranscriptLineTime spells out
+          applies here for the same reason: the block beside it stays selectable prose, so the
+          timestamp grows and the block is not a button. 10.5px is the smallest type on the page —
+          6.75px above and below its leading-none line box makes exactly 24px of height, and -my
+          returns all of it, so the digits stay on the 5px of top padding this column was measured
+          with. Flex, not a line of text, so the target is a flex item and takes its position from
+          the box rather than from a synthesized baseline. The play mark goes LEFT of the digits:
+          their right edge is the straight edge this column exists to draw, and nothing may move
+          it. */}
+      <div className="flex items-start justify-end pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none text-ink-subtle">
         {onSeek ? (
           <button
             type="button"
@@ -1714,11 +1724,16 @@ function TranscriptDocumentTurn({
                 ? `Play the recording from here — ${clock}`
                 : "Play the recording from here"
             }
-            className="rounded underline-offset-2 hover:text-ink hover:underline"
+            className="group/seek -mx-1 -my-[6.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[6.75px] hover:text-ink"
           >
-            {elapsed}
+            <Play
+              aria-hidden
+              className="size-3 shrink-0 fill-current opacity-0 transition-opacity motion-reduce:transition-none group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"
+            />
+            <span className="underline-offset-2 group-hover/seek:underline">{elapsed}</span>
           </button>
         ) : (
+          // No recording behind this record: the gutter is a printed time, not a control.
           <span title={clock ?? undefined}>{elapsed}</span>
         )}
       </div>
@@ -1833,8 +1848,15 @@ function TranscriptTimelineTurn({
   return (
     <div className="grid grid-cols-[58px_16px_minmax(0,1fr)] gap-x-1">
       {/* Wide enough for "07:16 AM" on one line. At 46px it wrapped the meridiem onto a second
-          row, which put a two-line label beside a one-line name on every single turn. */}
-      <div className="whitespace-nowrap pt-[7px] text-right">
+          row, which put a two-line label beside a one-line name on every single turn.
+
+          A flex column rather than a line of text, so the enlarged timestamp target is a flex
+          item: an inline-flex box in a line of text takes its baseline from its own bottom edge
+          and would drop the digits below the name beside them. `items-start` because the grid
+          stretches this cell to the height of the whole turn. The reserved play mark can reach
+          past the 58px on a locale that prints a meridiem — it reaches into the scroller's own
+          padding, which is why nothing is clipped and the digits stay where they were. */}
+      <div className="flex items-start justify-end whitespace-nowrap pt-[7px] text-right">
         {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
       </div>
 
@@ -1934,7 +1956,31 @@ function TranscriptTimelineLine({
   );
 }
 
+/**
+ * The timestamp on a line, and — when there is a recording behind it — the way into it.
+ *
+ * The target is the TIMESTAMP and deliberately not the row. Every other product that does this
+ * makes the whole line clickable, and every other product's line carries nothing else; ours also
+ * carries inline correction editing, the way back to what was spoken, and the thing every reader
+ * of a transcript does without being told, which is drag across the words to quote them. A row
+ * that is a <button> cannot be selected with a mouse, so making it one would buy a bigger seek
+ * target with the reading.
+ *
+ * So the target does not move, it grows. What was ~11px of mono text — a target under half the
+ * 24px a pointer can be expected to hit — is padded out to 24px tall, and the negative margin
+ * hands that height straight back to the line box so no row it sits in is a pixel taller than it
+ * was. The visible text is untouched: only the area that answers a click changes.
+ *
+ * The play mark is what says the label DOES something; a timestamp on its own reads as a label.
+ * It is always in the layout and only ever fades in, because a mark that appeared at hover width
+ * would shove the timestamp sideways exactly as the pointer arrived at it. It sits to the LEFT of
+ * the digits: both callers right-align this column, and the digits' right edge is the straight
+ * edge the eye runs down.
+ */
 function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => void }) {
+  // No recording, no target. A meeting whose record has no video is read as a document, and
+  // nothing in a document may look clickable — so this stays a plain span with no hit area to
+  // enlarge and no mark to reveal, exactly as it was.
   if (!onSeek) {
     return <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{time}</span>;
   }
@@ -1944,9 +1990,17 @@ function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => voi
       type="button"
       onClick={onSeek}
       title="Play the recording from here"
-      className="shrink-0 rounded font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-ink hover:underline"
+      // 3.75px above and below an 11px/1.5 line box is 24px of height, and -my gives all of it
+      // back. -mx does the same for the 4px of horizontal reach.
+      className="group/seek -mx-1 -my-[3.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[3.75px] font-mono text-[11px] text-muted-foreground hover:text-ink"
     >
-      {time}
+      <Play
+        aria-hidden
+        className="size-3 shrink-0 fill-current opacity-0 transition-opacity motion-reduce:transition-none group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"
+      />
+      {/* Underlined on the span rather than the button: the mark is a mark, not a word, and an
+          underline running under it reads as a broken glyph. */}
+      <span className="underline-offset-2 group-hover/seek:underline">{time}</span>
     </button>
   );
 }
