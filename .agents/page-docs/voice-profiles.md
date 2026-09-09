@@ -7,7 +7,7 @@ State, changes and logic for the Voice Profiles page.
 - Route: `/[workspaceSlug]/voice-profiles`
 - Page: `src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx`
 - List column: `src/components/voice/voice-profile-list.tsx` ("Your voices"),
-  `src/components/voice/library-voice-list.tsx` (library rows + "Voices you hear")
+  `src/components/voice/library-voice-list.tsx` (library rows + "Stand-in voice")
 - Rail: `src/components/voice/my-dub-voice-picker.tsx` ("You are dubbed in")
 - Buttons: `src/components/voice/voice-sample-button.tsx` (the ORIGINAL),
   `src/components/voice/voice-preview-button.tsx` (the CLONE)
@@ -20,7 +20,7 @@ This is the thing to understand before changing anything on this page.
 | Where | Plays | Answers |
 |---|---|---|
 | **Your voices** | the recording you uploaded | "what did I record?" |
-| **Voices you hear** / **You are dubbed in** | the clone speaking a fixed sentence | "how do I sound to other people?" |
+| **Stand-in voice** / **You are dubbed in** | the clone speaking a fixed sentence | "how do I sound to other people?" |
 
 Both used to play the **clone**. That meant the recording somebody uploaded was not audible
 anywhere in the product, and the question they actually have — *is this a good clone of me?* — had
@@ -61,7 +61,7 @@ sentence.
 ## Known limitations
 
 - The Cartesia catalogue only warms after a real meeting's first synthesis for a language, so on a
-  fresh environment "Voices you hear" resolves names from the profile's own `displayName` rather
+  fresh environment "Stand-in voice" resolves names from the profile's own `displayName` rather
   than the catalogue. That is the designed cold path, not a failure.
 - There is no waveform or duration shown for the original, so a very short recording is only
   discoverable by playing it.
@@ -72,7 +72,7 @@ sentence.
 - [x] Owner fetches their own sample → 200 with the uploaded bytes and the right content type.
 - [x] Another account fetches the same profile → 404.
 - [ ] Upload a recording, press play on the "Your voices" row → you hear **yourself**.
-- [ ] Press play under "Voices you hear" → you hear the **clone** of you.
+- [ ] Press play under "Stand-in voice" → you hear the **clone** of you.
 - [ ] Press play while the clone is still building → the original still plays.
 
 ## Notes for future maintainers

@@ -166,7 +166,7 @@ export function VoiceProfileList({
                     THE ORIGINAL, not the clone.
                 
                     This row is "Your voices" — the recordings this person made. The clone built
-                    from them is played by "Voices you hear", and the two together are what makes
+                    from them is played by "Stand-in voice", and the two together are what makes
                     the question answerable: a clone on its own cannot be judged, because there is
                     nothing to compare it against. Playing the clone in BOTH places, which is what
                     this did, meant the original was never audible anywhere in the product.

@@ -14,7 +14,7 @@ import { VoiceProfileService } from "@/services/voice-profile.service";
  *
  * WHY IT SITS BESIDE VoicePreviewButton RATHER THAN REPLACING IT
  *     They answer different questions, and the answer is only useful as a pair. "Your voices"
- *     plays what you recorded; "Voices you hear" plays what the clone made of it. Somebody judging
+ *     plays what you recorded; "Stand-in voice" plays what the clone made of it. Somebody judging
  *     whether the system works is judging the DISTANCE between the two, and the page previously
  *     offered no way to hear the first one at all — so the clone had nothing to be compared
  *     against and "is this good?" had no answer.
