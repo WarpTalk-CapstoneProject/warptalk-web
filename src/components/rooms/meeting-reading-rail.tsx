@@ -35,16 +35,40 @@
  *   sources. They are counted and pointed at instead, so nothing is silently dropped.
  */
 
-import { useMemo, useState } from "react";
-import { CaretDown, CaretUp, VideoCamera } from "@phosphor-icons/react/dist/ssr";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CaretDown,
+  CaretUp,
+  ChatCircleText,
+  Copy,
+  DownloadSimple,
+  SpinnerGap,
+  VideoCamera,
+} from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
 
-import { MeetingRecordingPlayer, type SeekRequest } from "@/components/rooms/meeting-record-panels";
+import {
+  MeetingRecordingPlayer,
+  SummaryStalenessNotice,
+  useRecentlyEnded,
+  type SeekRequest,
+} from "@/components/rooms/meeting-record-panels";
 import {
   ReadingSyncProvider,
   useReadingSync,
 } from "@/components/rooms/transcript-reading-sync";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
-import { formatCitationTime } from "@/lib/meeting/meeting-summary";
+import {
+  DEFAULT_SUMMARY_TEMPLATE,
+  SUMMARY_TEMPLATES,
+  formatCitationTime,
+} from "@/lib/meeting/meeting-summary";
+import {
+  describeSummaryAbsence,
+  summaryAbsenceMessage,
+} from "@/lib/meeting/summary-absence";
+import { resolveSummaryState } from "@/lib/meeting/room-history-mapping";
+import { isSummaryStale, type StalenessSegment } from "@/lib/meeting/summary-staleness";
 import {
   anchorForMs,
   groupCitationsByAnchor,
@@ -54,8 +78,7 @@ import {
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
-import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
-import type { RoomHistoryArtifact } from "@/types/roomHistory";
+import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 
 /** One line of the rail, and the moment in the meeting it is answerable to. */
@@ -82,28 +105,44 @@ type RailTab = "summary" | "attendees";
 
 export function TranscriptReadingLayout({
   transcript,
-  sections,
+  record,
   segments,
+  hasTranscript,
   recording,
   seek,
+  busyArtifactId,
   onConsentGranted,
   onJumpToMoment,
-  onOpenSummaryTab,
+  onDownload,
+  onRewrite,
   speakerDirectory,
 }: {
   /** Built by the room page — see the note in transcript-reading-sync.tsx on why it arrives whole. */
   transcript: React.ReactNode;
-  /** The summary as the assistant shaped it, or null when the meeting has no summary yet. */
-  sections: readonly MeetingSummarySectionView[] | null;
+  /**
+   * The whole ended record, because the rail now holds the whole summary.
+   *
+   * It used to take `sections` alone, which was all a list of citations needed. The summary had
+   * its own tab for everything else — the overview paragraph, the shape picker, Copy, Download,
+   * and the four different reasons a summary can be absent. That tab is gone: it was a second
+   * place to read the same summary, one click away from the transcript it is about, and a reader
+   * who wanted both had to keep swapping. So the rail takes the record and renders all of it.
+   */
+  record: EndedRoomHistoryItem | null;
   /** The persisted transcript, for the attendees tab. Control markers are dropped here, not by
    *  the caller — see the note on `shares`. */
   segments: readonly TranscriptSegmentDto[];
+  /** Whether the meeting captured any transcript at all, once the page knows. `undefined` means
+   *  "not loaded yet" and nothing is concluded from it. */
+  hasTranscript?: boolean;
   recording: RoomHistoryArtifact | null;
   seek: SeekRequest | null;
+  busyArtifactId?: string | null;
   onConsentGranted: () => void;
   onJumpToMoment: (atMs: number) => void;
-  /** Where the claims this rail refuses to render can be read in full. */
-  onOpenSummaryTab: () => void;
+  onDownload?: (artifact: RoomHistoryArtifact) => void;
+  /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
+  onRewrite?: (templateKey: string) => Promise<void>;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -135,15 +174,18 @@ export function TranscriptReadingLayout({
       >
         <div className="order-2 min-w-0 lg:order-none">{transcript}</div>
         <ReadingRail
-          sections={sections}
+          record={record}
           segments={segments}
+          hasTranscript={hasTranscript}
           recording={recording}
           seek={seek}
+          busyArtifactId={busyArtifactId ?? null}
           pipOpen={pipOpen}
           onTogglePip={() => setPipOpen((current) => !current)}
           onConsentGranted={onConsentGranted}
           onJumpToMoment={onJumpToMoment}
-          onOpenSummaryTab={onOpenSummaryTab}
+          onDownload={onDownload}
+          onRewrite={onRewrite}
           speakerDirectory={speakerDirectory}
         />
       </div>
@@ -152,32 +194,39 @@ export function TranscriptReadingLayout({
 }
 
 function ReadingRail({
-  sections,
+  record,
   segments,
+  hasTranscript,
   recording,
   seek,
+  busyArtifactId,
   pipOpen,
   onTogglePip,
   onConsentGranted,
   onJumpToMoment,
-  onOpenSummaryTab,
+  onDownload,
+  onRewrite,
   speakerDirectory,
 }: {
-  sections: readonly MeetingSummarySectionView[] | null;
+  record: EndedRoomHistoryItem | null;
   segments: readonly TranscriptSegmentDto[];
+  hasTranscript?: boolean;
   recording: RoomHistoryArtifact | null;
   seek: SeekRequest | null;
+  busyArtifactId: string | null;
   pipOpen: boolean;
   onTogglePip: () => void;
   onConsentGranted: () => void;
   onJumpToMoment: (atMs: number) => void;
-  onOpenSummaryTab: () => void;
+  onDownload?: (artifact: RoomHistoryArtifact) => void;
+  onRewrite?: (templateKey: string) => Promise<void>;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
+  const sections = record?.summary?.sections ?? null;
 
   /**
    * The whole summary, in the summary's own order.
@@ -329,13 +378,17 @@ function ReadingRail({
       <div className="max-h-[420px] min-h-[180px] overflow-y-auto p-2 xl:max-h-[560px]">
         {tab === "summary" ? (
           <RailSummary
+            record={record}
+            segments={segments}
+            hasTranscript={hasTranscript}
+            busyArtifactId={busyArtifactId}
             claims={claims}
             litKeys={litKeys}
             uncitedCount={uncitedCount}
-            hasSummary={Boolean(sections?.length)}
             onMark={markClaim}
             onJumpToMoment={onJumpToMoment}
-            onOpenSummaryTab={onOpenSummaryTab}
+            onDownload={onDownload}
+            onRewrite={onRewrite}
           />
         ) : (
           <RailAttendees shares={shares} speakerDirectory={speakerDirectory} />
@@ -375,69 +428,260 @@ function RailTabButton({
   );
 }
 
+/**
+ * The whole summary, in the rail — overview, points, controls and every reason there is none.
+ *
+ * This used to be the citation list and nothing else, with a button sending the reader to a
+ * Summary tab for the rest. Two places to read one summary is one too many when the second is a
+ * click away from the transcript the summary is about: the reader ended up bouncing between them
+ * to check a claim, and the rail's whole argument — that a summary has a source you can see —
+ * only works while both are on screen at once.
+ *
+ * So everything the tab carried is here. The controls are a single compact row rather than a
+ * panel header, because at 420px a header that wraps costs more than the reading it protects.
+ */
 function RailSummary({
+  record,
+  segments,
+  hasTranscript,
+  busyArtifactId,
   claims,
   litKeys,
   uncitedCount,
-  hasSummary,
   onMark,
   onJumpToMoment,
-  onOpenSummaryTab,
+  onDownload,
+  onRewrite,
 }: {
+  record: EndedRoomHistoryItem | null;
+  segments: readonly StalenessSegment[];
+  hasTranscript?: boolean;
+  busyArtifactId: string | null;
   claims: readonly RailClaim[];
   /** The claims covering the block being read right now. */
   litKeys: readonly string[];
   uncitedCount: number;
-  hasSummary: boolean;
   onMark: (atMs: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
-  onOpenSummaryTab: () => void;
+  onDownload?: (artifact: RoomHistoryArtifact) => void;
+  onRewrite?: (templateKey: string) => Promise<void>;
 }) {
-  if (claims.length === 0) {
+  const summary = record?.summary;
+  const artifact = record?.artifacts.find((item) => item.type === "summary_export");
+  const ready = artifact?.status === "ready";
+  const downloading = busyArtifactId !== null && busyArtifactId === artifact?.id;
+  const hasContent = Boolean(
+    summary
+      && !summary.insufficientData
+      && (summary.summary || summary.decisions.length || summary.actionItems.length),
+  );
+  const recentlyEnded = useRecentlyEnded(record?.endedAt);
+
+  const summaryState = resolveSummaryState({
+    artifactStatus: artifact?.status,
+    hasStructuredContent: hasContent,
+    insufficientData: summary?.insufficientData,
+    recentlyEnded,
+    hasTranscript,
+  });
+  const isGenerating = summaryState === "generating";
+
+  // "Not shared with you" is not "does not exist": room artifacts default to HOST_ONLY and the
+  // history projection omits `content` for anyone the policy refuses while still listing the row.
+  const absence = describeSummaryAbsence({
+    isGenerating,
+    summaryState,
+    hasSummaryArtifact: Boolean(artifact),
+    hasParsedSummary: Boolean(summary),
+    insufficientData: summary?.insufficientData,
+    hasTranscript,
+  });
+
+  const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
+  const stale = isSummaryStale(segments, artifact);
+  const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
+
+  useEffect(() => {
+    // A rewrite that never lands must not leave the picker spinning forever — the summary
+    // arrives on the artifact asynchronously, and "still waiting" and "never coming" look
+    // identical without a deadline.
+    if (!isRewriting) return;
+    const timer = window.setTimeout(() => {
+      setRequestedTemplate(null);
+      toast.error("The rewritten summary has not arrived. Try again.");
+    }, 90_000);
+    return () => window.clearTimeout(timer);
+  }, [isRewriting]);
+
+  async function copyAsText() {
+    if (!summary || !record) return;
+    const lines = [
+      `${record.title} — AI meeting summary`,
+      "",
+      summary.summary || "(no overview)",
+      "",
+      ...(summary.sections ?? []).flatMap((section) => [
+        section.title,
+        ...(section.items.length
+          ? section.items.map((item) => `- ${item.owner ? `${item.owner}: ` : ""}${item.text}`)
+          : ["(none recorded)"]),
+        "",
+      ]),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      toast.success("Summary copied.");
+    } catch {
+      toast.error("Could not copy the summary.");
+    }
+  }
+
+  if (!hasContent) {
     return (
-      <p className="px-2 py-6 text-center text-[12px] leading-5 text-ink-muted">
-        {hasSummary
-          ? "This summary was written before citations were recorded, so none of it can be traced back to the transcript. It is readable in full on the Summary tab."
-          : "Nothing has been summarised for this meeting yet. The summary is written after a meeting ends and appears here on its own."}
-      </p>
+      <div className="px-2 py-8 text-center">
+        {isGenerating ? (
+          <SpinnerGap size={22} className="mx-auto animate-spin text-ink-muted" />
+        ) : (
+          <ChatCircleText size={22} className="mx-auto text-ink-muted" />
+        )}
+        <h5 className="mt-3 text-[13px] font-semibold text-ink">
+          {isGenerating
+            ? "Generating summary…"
+            : absence === "withheld"
+              ? "Summary not shared with you"
+              : absence === "no-transcript"
+                ? "Nothing was said to summarise"
+                : "No summary yet"}
+        </h5>
+        <p className="mt-1.5 text-[11.5px] leading-5 text-ink-muted">
+          {summaryAbsenceMessage(absence)}
+        </p>
+      </div>
     );
   }
 
   return (
     <div>
-      {claims.map((claim) => (
-        <div key={claim.key}>
-          {claim.heading ? (
-            <h5 className="mb-1.5 mt-3 px-2 font-mono text-[10px] uppercase tracking-[0.09em] text-ink-subtle first:mt-0">
-              {claim.heading}
-            </h5>
-          ) : null}
-          <RailClaimButton
-            claim={claim}
-            lit={litKeys.includes(claim.key)}
-            onMark={onMark}
-            onJumpToMoment={onJumpToMoment}
+      {/* One row, and it is the summary's own controls rather than the record's: the shape it was
+          written in, a copy of it, and the file it was written to. */}
+      <div className="mb-1 flex items-center gap-1.5 border-b border-border pb-2">
+        {onRewrite ? (
+          <select
+            value={isRewriting ? (requestedTemplate as string) : currentTemplate}
+            disabled={isRewriting}
+            onChange={async (event) => {
+              const templateKey = event.target.value;
+              if (templateKey === currentTemplate) return;
+              setRequestedTemplate(templateKey);
+              try {
+                await onRewrite(templateKey);
+              } catch {
+                setRequestedTemplate(null);
+              }
+            }}
+            aria-label="Summary shape"
+            title="Rewrite this summary in a different shape"
+            className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
+          >
+            {SUMMARY_TEMPLATES.map((template) => (
+              <option key={template.key} value={template.key} title={template.description}>
+                {template.label}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        {isRewriting ? (
+          <SpinnerGap size={12} className="animate-spin text-ink-subtle" />
+        ) : null}
+        <button
+          type="button"
+          onClick={copyAsText}
+          title="Copy the summary as text"
+          aria-label="Copy the summary as text"
+          className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
+        >
+          <Copy size={13} />
+        </button>
+        {/* WT-369: offered only when there is a summary to download. The artifact ROW existing is
+            not the summary existing — the finalizer writes one even when the AI produced nothing. */}
+        {artifact && summaryState === "ready" && onDownload ? (
+          <button
+            type="button"
+            onClick={() => onDownload(artifact)}
+            disabled={!ready || downloading}
+            title="Download the summary file"
+            aria-label="Download the summary file"
+            className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink disabled:opacity-60"
+          >
+            {downloading ? (
+              <SpinnerGap size={13} className="animate-spin" />
+            ) : (
+              <DownloadSimple size={13} />
+            )}
+          </button>
+        ) : null}
+      </div>
+
+      {stale && onRewrite ? (
+        <div className="px-1 pt-2">
+          <SummaryStalenessNotice
+            busy={regenerating}
+            onRegenerate={async () => {
+              setRegenerating(true);
+              try {
+                await onRewrite(currentTemplate);
+              } finally {
+                // Cleared when the REQUEST is accepted, not when the summary lands.
+                setRegenerating(false);
+              }
+            }}
           />
         </div>
-      ))}
+      ) : null}
 
-      {/* A footnote about the summary as a whole, not a door out of it. Every point above is
-          readable here; this only says how much of it the transcript can vouch for. The Summary
-          tab is still offered because it carries what the rail does not — the download and the
-          rewrite controls — but nobody has to go there to finish reading. */}
+      {/* The overview, which the rail did not carry at all while the Summary tab existed — the
+          reader got the citable points and not the paragraph that says what the meeting was. */}
+      {summary?.summary ? (
+        <p className="border-b border-border px-2 pb-2.5 pt-2 text-[12.5px] leading-[1.55] text-ink">
+          {summary.summary}
+        </p>
+      ) : null}
+
+      {claims.length === 0 ? (
+        <p className="px-2 py-6 text-center text-[12px] leading-5 text-ink-muted">
+          This summary was written before citations were recorded, so none of its points can be
+          traced back to the transcript.
+        </p>
+      ) : (
+        claims.map((claim) => (
+          <div key={claim.key}>
+            {claim.heading ? (
+              <h5 className="mb-1.5 mt-3 px-2 font-mono text-[10px] uppercase tracking-[0.09em] text-ink-subtle first:mt-0">
+                {claim.heading}
+              </h5>
+            ) : null}
+            <RailClaimButton
+              claim={claim}
+              lit={litKeys.includes(claim.key)}
+              onMark={onMark}
+              onJumpToMoment={onJumpToMoment}
+            />
+          </div>
+        ))
+      )}
+
+      {/* A footnote about the summary as a whole. Every point above is readable here; this only
+          says how much of it the transcript can vouch for. It no longer offers a way out to
+          another tab, because there is no longer another tab to go to. */}
       {uncitedCount > 0 ? (
         <div className="mt-3 border-t border-border px-2 pt-2.5">
           <p className="text-[11px] leading-5 text-ink-muted">
             {uncitedCount} of these {uncitedCount === 1 ? "points has" : "points have"} no moment
             recorded, so {uncitedCount === 1 ? "it" : "they"} cannot be checked against the
-            transcript.{" "}
-            <button
-              type="button"
-              onClick={onOpenSummaryTab}
-              className="underline underline-offset-2 transition-colors hover:text-ink"
-            >
-              Open the Summary tab
-            </button>
+            transcript.
           </p>
         </div>
       ) : null}

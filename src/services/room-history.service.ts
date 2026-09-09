@@ -1,5 +1,4 @@
 import { translationRoomService } from "@/services/translation-room.service";
-import { calculateMeetingDurationSeconds } from "@/lib/meeting/meeting-duration";
 import type { EndedRoomHistoryItem, RoomArtifactStatus, RoomHistoryResponse, TranslationRoomSummaryArtifact } from "@/types/roomHistory";
 import {
   resolveArtifactStatus,
@@ -9,19 +8,6 @@ import {
 } from "@/lib/meeting/room-history-mapping";
 import type { TranslationRoomArtifactDto, TranslationRoomHistoryItemDto } from "@/types/translationRoom";
 import { parseMeetingSummaryContent } from "@/types/meetingSummary";
-
-function normalizeArtifactStatus(status: string): RoomArtifactStatus {
-  const normalized = status.toLowerCase();
-  if (["ready", "processing", "expired", "missing", "failed", "deleted"].includes(normalized)) {
-    return normalized as RoomArtifactStatus;
-  }
-  // Backend TranslationRoomArtifact.Status is set from ArtifactStatus/"COMPLETED" (see
-  // ArtifactMapper.ToEntity), never "active" or "ready" directly — without this mapping
-  // every finished artifact fell into the `processing` fallback below and never showed as
-  // ready, leaving downloads (and the AI summary) stuck looking like they never finished.
-  if (normalized === "active" || normalized === "completed") return "ready";
-  return "processing";
-}
 
 function normalizeArtifactType(type: string): EndedRoomHistoryItem["artifacts"][number]["type"] {
   const normalized = type.toLowerCase();
@@ -50,7 +36,11 @@ export function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHist
     type,
     title: artifact.title,
     description: artifact.fileUrl ? "Generated room artifact." : "Artifact metadata is available, but no file is linked yet.",
-    status: normalizeArtifactStatus(artifact.status),
+    // resolveArtifactStatus, not a copy of it. This file carried its own byte-identical
+    // implementation of the same rule while importing the shared one and never calling it —
+    // directly beneath room-history-mapping's comment explaining that a second copy is exactly
+    // how the rule gets lost.
+    status: resolveArtifactStatus(artifact.status),
     format: artifact.fileFormat?.toUpperCase(),
     fileUrl: artifact.fileUrl,
     fileSizeBytes: artifact.fileSizeBytes,
@@ -59,7 +49,9 @@ export function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHist
     recordingStartedAt: artifact.recordingStartedAt ?? null,
     expiresAt: artifact.retentionUntil,
     consentRequired: artifact.consentRequired,
-    consentStatus: artifact.consentRequired ? "granted" : "not_required",
+    // Not "granted". The DTO says consent is REQUIRED, never that it was given — see
+    // RoomConsentStatus.
+    consentStatus: artifact.consentRequired ? "required" : "not_required",
     content: artifact.content ?? undefined,
     backendSource,
   };
@@ -135,7 +127,7 @@ function mapHistoryItem(item: TranslationRoomHistoryItemDto): EndedRoomHistoryIt
     // ends <the moment it ended>" for every meeting ever held.
     retention: resolveRetention(artifacts),
     consent: {
-      recording: artifacts.some((artifact) => artifact.consentRequired) ? "granted" : "not_required",
+      recording: artifacts.some((artifact) => artifact.consentRequired) ? "required" : "not_required",
       transcript: "not_required",
       summary: "not_required",
     },

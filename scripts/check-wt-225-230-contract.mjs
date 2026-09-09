@@ -43,9 +43,12 @@ const checks = [
     // Transcripts page behind it, are gone — a meeting's transcript, AI summary and files
     // are three tabs on that meeting's own page, below its description. What WT-225/228
     // actually needs is that the saved record is reachable, and it is reachable there.
+    // The summary no longer has a tab of its own either: it is rendered by the reading rail
+    // beside the transcript it cites, which is what <TranscriptReadingLayout brings. Same rule,
+    // one fewer place to read the same summary.
     "WT-225/228 the saved meeting record is reachable from the meeting",
     roomDetailPage.includes("<MeetingRecordSection") &&
-      roomDetailPage.includes("<SummaryPanel") &&
+      roomDetailPage.includes("<TranscriptReadingLayout") &&
       roomDetailPage.includes("<ArtifactsPanel"),
   ],
   [

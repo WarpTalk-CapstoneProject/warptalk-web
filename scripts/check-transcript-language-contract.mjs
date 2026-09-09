@@ -39,6 +39,13 @@
  *      somebody said invalidates every translation of that line; redoing them happens in
  *      warptalk-ai and lands seconds later, so a page that only refetches segments shows the
  *      corrected sentence beside translations of the one it replaced and never resolves it.
+ *   8. Every count printed to the reader is in ONE unit: rendered rows. The server's coverage
+ *      counts stored STT segments; this panel merges the consecutive segments of one utterance
+ *      into a single row. Printing the server's numbers under the word "entries" gave one
+ *      finished meeting "Transcript (7)", "Saved · 7 entries" and "1 of 13 entries is not in
+ *      English yet" at the same moment — three true numbers, two units, and nothing on screen
+ *      saying so. The server still decides the STATE (running, failed, nothing left); it does
+ *      not supply the arithmetic.
  */
 
 import assert from "node:assert/strict";
@@ -188,5 +195,49 @@ assert.ok(
   "Saving a correction must trigger that refresh, or the reader keeps the translation of a"
     + " sentence that was just replaced.",
 );
+
+// 8. One unit for every number the reader is shown.
+const statusAt = panel.indexOf("function TranscriptLanguageStatus");
+assert.ok(statusAt > 0, "TranscriptLanguageStatus must exist.");
+const status = panel.slice(statusAt, statusAt + 3_500);
+
+assert.ok(
+  !/coverage\??\.(totalSegments|missing)/.test(status),
+  "The language-status line must not print the server's coverage counts. Those are per stored"
+    + " STT segment; this panel's 'entries' are the merged rows it draws, and the same sentence"
+    + " swapped between the two units the moment the coverage query resolved — '1 of 7' before,"
+    + " '1 of 13' after, over a transcript showing 7 rows.",
+);
+assert.ok(
+  /const\s+missing\s*=\s*incompleteCount;/.test(status)
+    && /const\s+total\s*=\s*totalCount;/.test(status),
+  "The numbers in that line must be the row counts (incompleteCount of totalCount) — the same"
+    + " unit as the 'Saved · N entries' chip above it and the 'Transcript (N)' tab label.",
+);
+assert.ok(
+  /coverage\??\.status\s*===\s*"running"/.test(status) && /"failed"/.test(status),
+  "The server must still decide WHICH state this is — only it knows a backfill is running or"
+    + " failed. What was removed is its arithmetic, not its authority.",
+);
+
+// The count is only honest if it can reach zero. A row with no text is one the backend's coverage
+// refuses to count or to translate (IsTranslatableSegment), so keeping it here — as a row of its
+// own, or as an id in a merged utterance's mergedSegmentIds — is a shortfall no backfill can ever
+// close: "1 entry is not in English yet" with a Translate button that does nothing, forever.
+const displaySource = read("src/lib/transcript/transcript-display.ts");
+assert.ok(
+  /export function isRenderableTranscriptSegment/.test(displaySource),
+  "The rule for 'this row is not a line of the meeting' must exist in one place.",
+);
+for (const grouping of ["groupTranscriptSegments", "groupSavedTranscriptSegments"]) {
+  const at = displaySource.indexOf(`export function ${grouping}`);
+  assert.ok(at > 0, `${grouping} must exist.`);
+  assert.match(
+    displaySource.slice(at, at + 1_500),
+    /if \(!isRenderableTranscriptSegment\(segment\.originalText\)\) continue;/,
+    `${grouping} must drop blank rows and control markers BEFORE the merge — absorbed into a`
+      + " neighbour, a blank row becomes an id that demands a translation nobody will ever write.",
+  );
+}
 
 console.log("Transcript language contract: PASS");
