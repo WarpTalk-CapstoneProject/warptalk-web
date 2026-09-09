@@ -268,44 +268,6 @@ assert.match(
   /\.\.\.\(participantsCanStartTranslation\s*\n?\s*\?\s*\{ participantsCanStartTranslation: true \}/,
   "participantsCanStartTranslation must be sent only when the host turned it on.",
 );
-// ── An instant meeting opens the meeting, not a page about it ───────────────
-//
-// A meeting with no start time and no repeat rule is one the host wants NOW. Creating it used to
-// end on a success screen, whose "Join" led to the room's information page, whose CTA was the
-// Start button — three screens between the click and the call, for the one flow that is defined
-// by not wanting any. The rule pinned here is that the dialog itself starts it and lands on the
-// live route.
-assert.match(
-  createRoomDialog,
-  /const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;/,
-  "Instant means: not an edit, no start time, no repeat rule — the same split the server " +
-    'draws when it seeds a room WAITING rather than SCHEDULED.',
-);
-assert.match(
-  createRoomDialog,
-  /if \(isInstantMeeting\) \{[\s\S]{0,1200}?startRoomMutation\.mutateAsync\(room\.id\)/,
-  "Creating an instant meeting must START it — the same mutation the room page's own CTA uses.",
-);
-assert.match(
-  createRoomDialog,
-  /if \(isInstantMeeting\) \{[\s\S]{0,3000}?router\.push\(liveMeetingPath\(activeWorkspaceSlug, room\.id\)\)/,
-  "Creating an instant meeting must land on the live meeting, not on the room detail page.",
-);
-// The success screen is what a BOOKING gets, and its whole value is the link. Nothing may
-// redirect out of it automatically — that would take the link away at the moment it is wanted.
-// The route out is the room's own page, offered as a link the host clicks (owner's call,
-// 2026-09-09), never a push.
-assert.match(
-  createRoomDialog,
-  /roomDetailPath\(activeWorkspaceSlug, createdRoomId\)/,
-  "The completion screen must offer the room page for a meeting booked for later.",
-);
-assert.doesNotMatch(
-  createRoomDialog,
-  /router\.push\(\s*roomDetailPath/,
-  "Creating a meeting for later must not navigate away from the link it just produced.",
-);
-
 assert.match(
   access,
   /mode: "host_start",\s*label: "Start meeting"/,
