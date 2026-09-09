@@ -130,6 +130,16 @@ export interface MeetingMinutesDto {
   id: string;
   translationRoomId: string;
   minutesNo: string;
+  /**
+   * A DISPLAY name: the title the meeting was held under when this version was drawn up, read by
+   * the server out of the document's own body.
+   *
+   * The record's identity is `minutesNo` — that is what the database keys on and what a reader
+   * files it under. This is deliberately NOT the room's current title: renaming a room must not
+   * retitle a document somebody has already signed. Null means not recorded; fall back to the
+   * room's title for display.
+   */
+  meetingTitle?: string | null;
   status: MinutesStatus;
   version: number;
   isCurrent: boolean;

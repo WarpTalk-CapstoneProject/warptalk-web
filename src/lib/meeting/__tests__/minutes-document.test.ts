@@ -24,6 +24,7 @@ import {
   provenanceLines,
   recordingNotice,
   referenceForAction,
+  DEFAULT_MINUTES_TEMPLATE,
   resolveMinutesTemplate,
   romanNumeral,
   translationLanguagesOf,
@@ -45,40 +46,29 @@ const emptyAttendance = (): MinutesAttendance => ({
 
 /* ── Template selection ── */
 
-test("a stored workspace preference wins over everything derived", () => {
-  assert.equal(
-    resolveMinutesTemplate({ stored: "global-en", primaryLanguage: "vi" }),
-    "global-en",
-  );
+test("a stored workspace preference is honoured", () => {
+  // `stored` is the seam a workspace-level setting will arrive through; nothing writes it yet.
+  assert.equal(resolveMinutesTemplate({ stored: "global-en" }), "global-en");
+  assert.equal(resolveMinutesTemplate({ stored: "vn-nd30" }), "vn-nd30");
 });
 
 test("a stored value this build does not recognise is ignored, not obeyed", () => {
-  assert.equal(
-    resolveMinutesTemplate({ stored: "nd-30-v2", primaryLanguage: "vi" }),
-    "vn-nd30",
-  );
+  assert.equal(resolveMinutesTemplate({ stored: "nd-30-v2" }), "global-en");
 });
 
-test("the meeting's own language chooses the layout when nothing is stored", () => {
-  assert.equal(resolveMinutesTemplate({ primaryLanguage: "vi" }), "vn-nd30");
-  assert.equal(resolveMinutesTemplate({ primaryLanguage: "vi-VN" }), "vn-nd30");
-  assert.equal(resolveMinutesTemplate({ primaryLanguage: "VI_vn" }), "vn-nd30");
-  assert.equal(resolveMinutesTemplate({ primaryLanguage: "en" }), "global-en");
-});
-
-test("the workspace default is only consulted when the meeting does not say", () => {
-  assert.equal(
-    resolveMinutesTemplate({ primaryLanguage: "en", workspaceDefaultLanguage: "vi" }),
-    "global-en",
-  );
-  assert.equal(
-    resolveMinutesTemplate({ primaryLanguage: null, workspaceDefaultLanguage: "vi" }),
-    "vn-nd30",
-  );
-});
-
-test("knowing nothing falls to the layout that is still readable to everyone", () => {
+test("the default is the international layout for every meeting", () => {
+  // It used to be derived from the meeting's language, so a Vietnamese meeting opened in the
+  // Nghị định 30 form. The layout is the sender's choice now, and a default that changed shape
+  // per meeting made that choice harder to notice than it was worth.
+  assert.equal(resolveMinutesTemplate(), "global-en");
   assert.equal(resolveMinutesTemplate({}), "global-en");
+  assert.equal(DEFAULT_MINUTES_TEMPLATE, "global-en");
+});
+
+test("the Vietnamese layout is a choice, never a fallback", () => {
+  // Reachable only by asking for it. For a domestic filing it is the correct form, so it must
+  // stay selectable — this pins that the id the switcher offers is the id the resolver honours.
+  assert.equal(resolveMinutesTemplate({ stored: "vn-nd30" }), "vn-nd30");
   assert.ok(isMinutesTemplate("vn-nd30"));
   assert.ok(!isMinutesTemplate("vn"));
 });

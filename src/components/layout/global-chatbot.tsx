@@ -99,7 +99,7 @@ import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
-import { toDisplayTiles } from "@/lib/assistant/plugin-tiles";
+import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -424,14 +424,18 @@ export function GlobalChatbot() {
   const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
-  // Same per-resource split as the Plugins settings page (see toDisplayTiles), so Drive and
-  // Calendar show as their own rows here too instead of one combined "Google Drive & Calendar".
-  const pluginTiles = useMemo(() => assistantPlugins.flatMap(toDisplayTiles), [assistantPlugins]);
-  const installedAssistantPlugins = useMemo(
-    () => pluginTiles.filter((plugin) => plugin.installationStatus === "installed"),
-    [pluginTiles],
+  // Read through the same helper the Plugins settings page uses, so the Ready/Connect chip below
+  // and the @mention list cannot claim a plugin is usable when its own scopes were declined on a
+  // shared Google connection — see plugin-connection.ts.
+  const catalogPlugins = useMemo(
+    () => assistantPlugins.map(withEffectiveConnectionStatus),
+    [assistantPlugins],
   );
-  // Only a tile that's actually usable can be @mentioned — mentioning a disconnected plugin
+  const installedAssistantPlugins = useMemo(
+    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    [catalogPlugins],
+  );
+  // Only a plugin that's actually usable can be @mentioned — mentioning a disconnected plugin
   // would just tell WarpBot to call a tool that fails with connection_required.
   const mentionablePlugins = useMemo(
     () => installedAssistantPlugins.filter((plugin) => plugin.connectionStatus === "connected"),
@@ -638,12 +642,12 @@ export function GlobalChatbot() {
       entityId: d.id,
     }));
     // WT-565: an installed, connected plugin is mentionable so the user can point WarpBot at
-    // it directly instead of only reaching it through the Skills popover. entityId is the tile
-    // id (plugin key, or "pluginKey:resourceKey" for a split tile) — see AssistantMentionDto.
+    // it directly instead of only reaching it through the Skills popover. entityId is the real
+    // catalog key — see AssistantMentionDto.
     // Not query-filtered here like the three fetches above: mentionablePlugins is already the
     // full local list, and filteredOptions below re-filters every option by title anyway.
     const pluginOptions: AssistantContextOption[] = mentionablePlugins.map((plugin) => ({
-      id: `plugin-${plugin.tileId}`,
+      id: `plugin-${plugin.key}`,
       title: plugin.label,
       type: "Plugins",
       // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
@@ -651,7 +655,7 @@ export function GlobalChatbot() {
       icon: <PluginGlyph plugin={plugin} size="xs" />,
       description: plugin.description,
       entityType: "plugin",
-      entityId: plugin.tileId,
+      entityId: plugin.key,
     }));
     return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
   }, [memberResults, roomResults, documentResults, mentionablePlugins]);

@@ -62,7 +62,13 @@ const checks = [
   // more. Reading it as "translation is running" showed Stop from the moment a meeting opened:
   // the host was never offered Start, no TranslationRoomSession was ever created, the audio
   // routes never left READY, and translation could not begin at all.
-  ["transcription follows the room being open, not translation", livePage.includes('const meetingLive = room?.status === "in_progress"') && livePage.includes("meetingLiveRef.current")],
+  // ...and transcription follows neither. `meetingLive` still exists and still means "the room
+  // is open", because that is the right question for the translation-session query below. It is
+  // NOT the right question for the transcript: participants join and talk before anybody presses
+  // Start, and gating the broadcast handlers on it is what left production with an empty caption
+  // lane and an empty transcript panel for the first half of a meeting. The transcript gate is
+  // now stated as a refusal — see TRANSCRIPT_CLOSED_STATUSES.
+  ["transcription follows the room being open, not translation", livePage.includes('const meetingLive = room?.status === "in_progress"') && livePage.includes("const TRANSCRIPT_CLOSED_STATUSES")],
   ["translation running is read from an active session, not room status", livePage.includes("useTranslationRoomSessions") && livePage.includes('session.status === "ACTIVE"') && livePage.includes("warptalkStarted={translationStarted}")],
   // Stop must end the translation SESSION, not pause the room. Pausing sets the room to PAUSED,
   // which the AI workers read as "ignore this room's microphone" — so the old Stop took the
@@ -73,13 +79,20 @@ const checks = [
   // `room.status === "paused" ? resumeRoom : startRoom` did — started nothing and said it had.
   ["start translation goes through resume, the only path that opens a session", livePage.includes("resumeRoom.mutateAsync(room.id)") && !livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
   ["starting translation opens the transcript side panel", livePage.includes("setRightSidebarOpen(true)") && livePage.includes('setSidePanelMode("transcript")')],
-  ["paused rooms reject transcript broadcasts", livePage.includes("if (!meetingLiveRef.current) return;")],
+  // A PAUSED room must still reject transcript broadcasts — pausing is a deliberate "stop reading
+  // my microphone" — and so must one that has ended. Both are in TRANSCRIPT_CLOSED_STATUSES, and
+  // the guard reads that rather than asking whether translation's sibling has been pressed.
+  ["paused and ended rooms reject transcript broadcasts", livePage.includes("if (!transcriptOpenRef.current) return;") && livePage.includes('"paused",') && livePage.includes('"ended",')],
   // The transcript belongs to everyone in the room, and the backend agrees — TranscriptReadAccess
   // is host OR participant. Starting and stopping TRANSLATION is host-only because it spends a
   // billed pipeline; the transcript panel and the caption lane must not pick up a host gate by
   // association with it.
   ["the live transcript panel is not host-gated", transcriptPanelCall.length > 0 && !transcriptPanelCall.includes("isHost")],
-  ["captions follow the meeting, not the viewer's role", livePage.includes("enabled={meetingLive && subtitlesEnabled}")],
+  // Captions follow the CC control and nothing else. This used to be pinned as
+  // `enabled={meetingLive && subtitlesEnabled}` — the role-free part was the point, and the
+  // meetingLive half rode along until it turned out to hide the lane for every minute before
+  // Start. check-caption-lane-not-gated-on-start.mjs owns that rule in full now.
+  ["captions follow the meeting, not the viewer's role", livePage.includes("enabled={subtitlesEnabled}") && !livePage.includes("enabled={isHost && subtitlesEnabled}")],
   // WT-371 splits the two halves of what used to be one rule.
   //
   // STOPPING stays strictly host-only, and the reason above is why: translation spends a billed

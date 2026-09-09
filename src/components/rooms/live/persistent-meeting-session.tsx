@@ -205,6 +205,27 @@ const MINI_TRAY_INSET = bottomChromeInset(MIN_DOCK_SIZE);
  */
 const EMPTY_WORKSPACE_ID = "00000000-0000-0000-0000-000000000000";
 
+/**
+ * Room statuses for which an arriving transcript broadcast has nowhere to land.
+ *
+ * Written as the refusal, not as the permission. The guard it replaces admitted only
+ * `in_progress`, which since WT-339 means "somebody pressed Start Translation's sibling", and a
+ * room full of people talking before that produced a transcript nobody in the browser ever saw.
+ * Listing what is CLOSED keeps every new or unfetched status transcribed by default, which is the
+ * safe direction: being wrong here loses a live meeting's words.
+ *
+ * PAUSED is in the list because pausing is a deliberate "stop reading my microphone" — the AI
+ * workers drop the room's audio for the same reason.
+ */
+const TRANSCRIPT_CLOSED_STATUSES = new Set<string>([
+  "paused",
+  "ended",
+  "cancelled",
+  "expired",
+  "failed",
+  "timeout",
+]);
+
 /** One page big enough for any meeting the plans allow, so the roster join never misses a face. */
 
 export function PersistentMeetingSession({
@@ -606,14 +627,25 @@ export function PersistentMeetingSession({
   );
 
   const room = roomQuery.data;
-  // The room is OPEN — somebody took the meeting live. This is what TRANSCRIPTION follows and
-  // the only thing it follows: a live meeting is transcribed whether or not anyone has started
-  // translation.
+  // The room is OPEN — somebody took the meeting live.
   const meetingLive = room?.status === "in_progress";
-  const meetingLiveRef = useRef(meetingLive);
+  // Whether a transcript broadcast arriving right now still has somewhere to land.
+  //
+  // THIS USED TO BE `meetingLive`, AND THAT IS WHAT KEPT A MEETING SILENT. The comment above it
+  // claimed a live meeting is transcribed whether or not translation has started, which is the
+  // right rule — but `status === "in_progress"` means "somebody pressed Start", not "people are
+  // in a call". Participants join and talk before that, so every TranscriptSegmentReceived for
+  // those minutes was dropped in the handler below and the caption lane was never rendered at
+  // all. Turning CC on did nothing until translation started, which is what production reported.
+  //
+  // Stated as a refusal instead, which is all the guard was ever for: a broadcast for a meeting
+  // that is over, or one that was deliberately paused, has nothing to attach to. Everything else
+  // — waiting, scheduled, in progress, a status not yet fetched — is a live room being heard.
+  const transcriptOpen = !TRANSCRIPT_CLOSED_STATUSES.has(room?.status ?? "");
+  const transcriptOpenRef = useRef(transcriptOpen);
   useEffect(() => {
-    meetingLiveRef.current = meetingLive;
-  }, [meetingLive]);
+    transcriptOpenRef.current = transcriptOpen;
+  }, [transcriptOpen]);
   // Translation is running exactly while the room has an ACTIVE translation session — the row
   // Start Translation opens and Stop closes.
   //
@@ -2003,9 +2035,10 @@ export function PersistentMeetingSession({
       "TranslationRoomStarted",
       (state: TranslationRoomStateDto) => {
         // The first STT result can arrive before the REST refetch below resolves. Flip the
-        // live gate synchronously so a participant who joined before the host does not drop
-        // those first transcript/translation events.
-        meetingLiveRef.current = true;
+        // gate synchronously so a participant who joined before the host does not drop
+        // those first transcript/translation events. (A room that was PAUSED and is being
+        // resumed is exactly the case this still has to cover.)
+        transcriptOpenRef.current = true;
         setLiveState(state);
         // Start Translation is room-wide, so every client — not just the host's — has to learn
         // that a translation session is now open. This is the same fact the session poll would
@@ -2071,7 +2104,7 @@ export function PersistentMeetingSession({
     connection.on(
       "TranscriptSegmentReceived",
       (segment: TranscriptSegmentDto) => {
-        if (!meetingLiveRef.current) return;
+        if (!transcriptOpenRef.current) return;
         addTranscriptSegment({
           ...segment,
           speakerName: resolveTranscriptSpeakerName(
@@ -2084,7 +2117,7 @@ export function PersistentMeetingSession({
     connection.on(
       "TranslationTextReceived",
       (translation: TranslationTextDto) => {
-        if (!meetingLiveRef.current) return;
+        if (!transcriptOpenRef.current) return;
         // Every language is kept, filed under its own key by addOrMergeTranslationText, and the
         // transcript panel renders the one matching this viewer's listen language.
         //
@@ -2105,7 +2138,7 @@ export function PersistentMeetingSession({
     connection.on("AiSuggestionReceived", (suggestion: AiSuggestionDto) => {
       // Same gate the transcript handlers use: a suggestion belongs to a live segment, so
       // it has nothing to attach to once translation has stopped.
-      if (!meetingLiveRef.current) return;
+      if (!transcriptOpenRef.current) return;
       // ...and the same language question the TranslationTextReceived handler above already
       // asks. Suggestions are fanned out to the whole room, so without this a viewer reading
       // in English was shown a suggestion written in Vietnamese because somebody else in the
@@ -3105,7 +3138,14 @@ export function PersistentMeetingSession({
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
                   // when there is one), so they follow the meeting being live, not translation.
-                  enabled={meetingLive && subtitlesEnabled}
+                  //
+                  // `meetingLive` used to be part of this and was the wrong test for it. It is
+                  // `room.status === "in_progress"`, which since WT-339 means "somebody pressed
+                  // Start", not "there is a meeting happening" — so a room where people had
+                  // joined and were already talking rendered no lane at all, and turning CC on
+                  // did nothing visible. Being on this side of the waiting-room branch above IS
+                  // being in the call; nothing further needs asking.
+                  enabled={subtitlesEnabled}
                   // The lane renders THIS reader's language, not the speaker's. Without it the
                   // dock shows whatever language was spoken, which is what it did.
                   readerLanguage={targetLanguage}
@@ -3272,7 +3312,14 @@ export function PersistentMeetingSession({
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
                   // when there is one), so they follow the meeting being live, not translation.
-                  enabled={meetingLive && subtitlesEnabled}
+                  //
+                  // `meetingLive` used to be part of this and was the wrong test for it. It is
+                  // `room.status === "in_progress"`, which since WT-339 means "somebody pressed
+                  // Start", not "there is a meeting happening" — so a room where people had
+                  // joined and were already talking rendered no lane at all, and turning CC on
+                  // did nothing visible. Being on this side of the waiting-room branch above IS
+                  // being in the call; nothing further needs asking.
+                  enabled={subtitlesEnabled}
                   // The lane renders THIS reader's language, not the speaker's.
                   readerLanguage={targetLanguage}
                   // ...but only once there IS another language. Before Start Translation the
