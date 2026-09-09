@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Archive,
+  ArrowsClockwise,
   ChatCircleText,
   CheckCircle,
   CheckSquare,
@@ -158,11 +159,58 @@ export interface SeekRequest {
   token: number;
 }
 
+/**
+ * What the media element's failure means for the person reading — the two cases that need
+ * different sentences, not the four codes MediaError happens to define.
+ *
+ * `expired` IS NOT AN ERROR and must not be dressed as one. `sourceUrl` is a presigned link into
+ * object storage with a fifteen-minute life, and a meeting record is a page people leave open
+ * while they read a transcript — so a link that has stopped opening is the ordinary outcome of
+ * reading for a quarter of an hour. Nobody made a mistake, nothing is broken, and there is nothing
+ * to apologise for: the only honest response is to say the link aged out and hand over a new one.
+ * Styling it as a fault would send the reader to the host, or to support, over a link doing exactly
+ * what it was minted to do.
+ *
+ * `broken` is the other case: the bytes were reached and could not be played. A fresh link does
+ * not fix that, so it does not offer one.
+ */
+type RecordingPlaybackFailure = "expired" | "broken";
+
+/**
+ * Read the media element's own verdict on why it went black.
+ *
+ * MEDIA_ERR_NETWORK is what a browser reports when the transfer dies part-way through, and
+ * MEDIA_ERR_SRC_NOT_SUPPORTED is what it reports when the src answers 403/404 — an expired
+ * presigned link produces one or the other depending on how far playback had got, and MediaError
+ * exposes no HTTP status, so from in here the two genuinely cannot be told apart. They do not need
+ * to be: a fresh link is the answer to both. MEDIA_ERR_DECODE means the file itself is unplayable,
+ * which is a different sentence. MEDIA_ERR_ABORTED means playback was stopped deliberately — not a
+ * failure, and nothing to report at all, hence `null`.
+ *
+ * A missing MediaError is treated as `broken`: something failed and we cannot say the link aged
+ * out, so we do not claim it did.
+ */
+function classifyPlaybackFailure(
+  error: MediaError | null,
+): RecordingPlaybackFailure | null {
+  if (!error) return "broken";
+  switch (error.code) {
+    case MediaError.MEDIA_ERR_ABORTED:
+      return null;
+    case MediaError.MEDIA_ERR_NETWORK:
+    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+      return "expired";
+    default:
+      return "broken";
+  }
+}
+
 export function MeetingRecordingPlayer({
   artifact,
   onConsentGranted,
   seek,
   playbackRequest,
+  unavailableReason,
   variant = "section",
 }: {
   artifact: RoomHistoryArtifact | null;
@@ -180,6 +228,25 @@ export function MeetingRecordingPlayer({
    */
   playbackRequest?: { token: number } | null;
   /**
+   * Why there is no playable recording, when the CALLER knows and this player cannot.
+   *
+   * Only a `ready` recording is handed down as `artifact`, and that filter happens upstream from
+   * the full artifact list — so a recording that exists but is still being encoded arrives here as
+   * `artifact: null` and, from in here, is indistinguishable from a meeting nobody recorded. The
+   * page rendered nothing at all, which is the wrong answer told confidently to the one person who
+   * just left the meeting and is waiting for the video. The caller holds the list, so the caller
+   * holds the answer; this is how it says it.
+   *
+   * `processing` mounts no <video>: there are no bytes behind it yet. `multiple` is the meeting
+   * with more than one recording, where no single frame can honestly claim to be THE recording a
+   * moment belongs to — the count is the caller's to phrase if it wants one, not this component's.
+   *
+   * Absent (or `null`) keeps the old behaviour exactly: no artifact and no reason renders nothing,
+   * because a meeting that simply was not recorded should get a plain reading page — no frame, no
+   * notice, nothing to dismiss.
+   */
+  unavailableReason?: "processing" | "multiple" | null;
+  /**
    * `pip` is the rail's corner of Option C: the recording stops being a column of its own and
    * becomes a 16:9 frame the width of the rail. Below 1280px even that is too much horizontal
    * budget for a picture nobody is watching while they read, so the frame collapses to the height
@@ -193,6 +260,15 @@ export function MeetingRecordingPlayer({
   const [loaded, setLoaded] = useState<{ artifactId: string; url: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const sourceUrl = artifact && loaded?.artifactId === artifact.id ? loaded.url : null;
+  // Paired with the url that produced it, for the same reason `loaded` is paired with its artifact:
+  // a failure belongs to ONE link. A fresh link must not inherit the dead one's message, and a
+  // change of artifact must not leave the previous recording's notice sitting over the new one.
+  const [failure, setFailure] = useState<{
+    url: string;
+    kind: RecordingPlaybackFailure;
+  } | null>(null);
+  const playbackFailure =
+    sourceUrl && failure?.url === sourceUrl ? failure.kind : null;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
   // dropped — the first click on a transcript line is exactly that case, since the player waits
@@ -252,6 +328,26 @@ export function MeetingRecordingPlayer({
     }
   }, [artifact, isLoading, onConsentGranted]);
 
+  /**
+   * Mint a new link for the same recording, after the last one stopped opening.
+   *
+   * `loaded` is dropped to null FIRST, and that is load-bearing rather than tidiness: object
+   * storage can perfectly well hand back a presigned url that is character-for-character the one we
+   * already hold, React would then see no change to `src`, and the element would never retry — the
+   * retry button would look broken in exactly the case it exists for. Clearing unmounts the
+   * <video>, so a fresh url mounts a fresh element that fetches again from scratch.
+   *
+   * `pendingSeekRef` is deliberately left alone. A reader who clicked a transcript line and hit a
+   * dead link still wants that moment; the queued seek survives the reload and is applied by
+   * onLoadedMetadata once the new element has metadata, which is the same path a first-ever load
+   * takes.
+   */
+  const reloadRecording = useCallback(() => {
+    setFailure(null);
+    setLoaded(null);
+    void loadRecording();
+  }, [loadRecording]);
+
   // Same shape as the seek effect above, and for the same reason: this drives a media element,
   // which is an external system, from a value React holds.
   useEffect(() => {
@@ -275,10 +371,6 @@ export function MeetingRecordingPlayer({
     video.pause();
   }, [playbackRequest, sourceUrl, loadRecording]);
 
-  // Nothing to watch is not an error state, and an empty player frame promising a video that does
-  // not exist is worse than no frame at all. The meeting simply was not recorded.
-  if (!artifact) return null;
-
   const isPip = variant === "pip";
   /* One element at both sizes, not two mounted in parallel: a second <video> would be a second
      fetch of a short-lived link, a second consent decision, and a playhead that jumps when the
@@ -287,7 +379,181 @@ export function MeetingRecordingPlayer({
   const frameClass = isPip
     ? "h-[56px] w-full bg-black xl:aspect-video xl:h-auto"
     : "aspect-video w-full bg-black";
+  /* Everything that is not a playing video sits in the same box at the same size, so the frame
+     never resizes the page underneath as it changes state.
 
+     A pip carrying WORDS is allowed to be taller than the 56px bar it becomes: the consent sentence
+     has to be readable BEFORE the press that records the consent, and an expired link has to be
+     readable at all — clipping either to the height of a transport bar would be hiding it. */
+  const noticeFrameClass = cn(
+    "flex w-full flex-col items-center justify-center gap-3 bg-surface-2/40 px-6 text-center",
+    isPip ? "gap-2 py-3 xl:aspect-video xl:py-0" : "aspect-video",
+  );
+
+  // Nothing to watch is not an error state, and an empty player frame promising a video that does
+  // not exist is worse than no frame at all. With no artifact AND no reason from the caller, the
+  // meeting simply was not recorded and this renders nothing — deliberately, so an unrecorded
+  // meeting gets a plain reading page. A reason is the caller saying it knows better; see the
+  // `unavailableReason` prop.
+  if (!artifact) {
+    if (!unavailableReason) return null;
+    return (
+      <RecordingFrame isPip={isPip}>
+        <div className={noticeFrameClass}>
+          {unavailableReason === "processing" ? (
+            <>
+              <SpinnerGap size={22} className="animate-spin text-ink-muted" />
+              <p className="text-[13px] font-medium text-ink">
+                Recording is being processed
+              </p>
+              <p className="text-[12px] leading-5 text-ink-muted">
+                The video is still being prepared. It will appear here once it is
+                ready — this page updates on its own.
+              </p>
+            </>
+          ) : (
+            <>
+              <WarningCircle size={22} className="text-ink-muted" />
+              <p className="text-[13px] font-medium text-ink">
+                More than one recording
+              </p>
+              <p className="text-[12px] leading-5 text-ink-muted">
+                This meeting has more than one recording, and this page cannot yet
+                tell which one a given moment belongs to. Download them from the
+                Artifacts tab to watch.
+              </p>
+            </>
+          )}
+        </div>
+      </RecordingFrame>
+    );
+  }
+
+  return (
+    <RecordingFrame isPip={isPip}>
+      {playbackFailure ? (
+        /* The video is replaced rather than covered: the element behind a failed src is a black
+           rectangle with a transport that goes nowhere, and leaving it mounted would be offering
+           controls for something that cannot play. */
+        <div className={noticeFrameClass}>
+          {playbackFailure === "expired" ? (
+            <>
+              <WarningCircle size={22} className="text-ink-muted" />
+              <p className="text-[13px] font-medium text-ink">
+                The link to this recording has expired
+              </p>
+              <p className="text-[12px] leading-5 text-ink-muted">
+                Links to the video last about fifteen minutes. Load a new one to
+                carry on watching.
+              </p>
+              <button
+                type="button"
+                onClick={reloadRecording}
+                disabled={isLoading}
+                className={cn(
+                  "flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60",
+                  isPip ? "px-3 py-1.5 text-[12px] xl:px-4 xl:py-2 xl:text-[13px]" : "",
+                )}
+              >
+                {isLoading ? (
+                  <SpinnerGap size={16} className="animate-spin" />
+                ) : (
+                  <ArrowsClockwise size={16} />
+                )}
+                {isLoading ? "Loading…" : "Reload recording"}
+              </button>
+            </>
+          ) : (
+            <>
+              <WarningCircle size={22} className="text-ink-muted" />
+              <p className="text-[13px] font-medium text-ink">
+                Could not play this recording
+              </p>
+              <p className="text-[12px] leading-5 text-ink-muted">
+                The file was reached but the browser could not play it. Downloading
+                it from the Artifacts tab may still work.
+              </p>
+            </>
+          )}
+        </div>
+      ) : sourceUrl ? (
+        // controls, and nothing else: autoplay on a page someone opened to read a transcript is
+        // a room full of unexpected sound.
+        <video
+          ref={videoRef}
+          src={sourceUrl}
+          controls
+          preload="metadata"
+          className={frameClass}
+          onLoadedMetadata={(event) => {
+            const queued = pendingSeekRef.current;
+            if (!queued) return;
+            pendingSeekRef.current = null;
+            event.currentTarget.currentTime = queued.seconds;
+            void event.currentTarget.play().catch(() => {});
+          }}
+          /* WT-655: without this the frame just went black. The surrounding code only ever
+             reported a missing `url` FIELD, which says nothing about whether that url opens —
+             and a fifteen-minute presigned link on a page people keep open will routinely stop
+             opening. Every failure to play was therefore silent, which is why the whole seek
+             feature looked broken rather than merely stale. */
+          onError={(event) => {
+            const kind = classifyPlaybackFailure(event.currentTarget.error);
+            // Aborted playback is us, not a failure — nothing happened worth saying.
+            if (!kind) return;
+            setFailure({ url: sourceUrl, kind });
+            // The frame says both cases, so only the genuine fault also toasts: below 1280px the
+            // pip is a strip in the corner of the rail, and a broken FILE is worth knowing about
+            // even if the reader never looks up at it. An expired link is ordinary and stays
+            // where the reload button is.
+            if (kind === "broken") toast.error("Could not play this recording.");
+          }}
+        />
+      ) : (
+        <div className={noticeFrameClass}>
+          <button
+            type="button"
+            onClick={() => void loadRecording()}
+            disabled={isLoading}
+            className={cn(
+              "flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60",
+              isPip ? "px-3 py-1.5 text-[12px] xl:px-4 xl:py-2 xl:text-[13px]" : "",
+            )}
+          >
+            {isLoading ? (
+              <SpinnerGap size={16} className="animate-spin" />
+            ) : (
+              <Play size={16} weight="fill" />
+            )}
+            {isLoading ? "Loading…" : "Play recording"}
+          </button>
+          {artifact.consentRequired && (
+            // Said before the click, not after: the first press records a consent decision, and
+            // a control that does that silently is the one thing this must not be.
+            <p className="text-[12px] text-ink-muted">
+              Playing this recording records your consent, the same as downloading it.
+            </p>
+          )}
+        </div>
+      )}
+    </RecordingFrame>
+  );
+}
+
+/**
+ * The box the recording lives in, whatever is inside it.
+ *
+ * Shared so the player, the expired-link notice and the not-yet-playable notices cannot drift
+ * apart: they are the same frame in different states, and a reader watching one become another
+ * should see the contents change, not the page reflow around a different-shaped box.
+ */
+function RecordingFrame({
+  isPip,
+  children,
+}: {
+  isPip: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <section className={isPip ? undefined : "mb-5"} aria-label="Meeting recording">
       <div
@@ -296,58 +562,7 @@ export function MeetingRecordingPlayer({
           isPip ? "rounded-[8px]" : "rounded-[10px]",
         )}
       >
-        {sourceUrl ? (
-          // controls, and nothing else: autoplay on a page someone opened to read a transcript is
-          // a room full of unexpected sound.
-          <video
-            ref={videoRef}
-            src={sourceUrl}
-            controls
-            preload="metadata"
-            className={frameClass}
-            onLoadedMetadata={(event) => {
-              const queued = pendingSeekRef.current;
-              if (!queued) return;
-              pendingSeekRef.current = null;
-              event.currentTarget.currentTime = queued.seconds;
-              void event.currentTarget.play().catch(() => {});
-            }}
-          />
-        ) : (
-          <div
-            className={cn(
-              "flex w-full flex-col items-center justify-center gap-3 bg-surface-2/40",
-              // The UNLOADED pip is allowed to be taller than the bar it will become: the
-              // consent sentence below has to be readable BEFORE the press that records the
-              // consent, and clipping it to 56px would be hiding it.
-              isPip ? "gap-2 py-3 xl:aspect-video xl:py-0" : "aspect-video",
-            )}
-          >
-            <button
-              type="button"
-              onClick={() => void loadRecording()}
-              disabled={isLoading}
-              className={cn(
-                "flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60",
-                isPip ? "px-3 py-1.5 text-[12px] xl:px-4 xl:py-2 xl:text-[13px]" : "",
-              )}
-            >
-              {isLoading ? (
-                <SpinnerGap size={16} className="animate-spin" />
-              ) : (
-                <Play size={16} weight="fill" />
-              )}
-              {isLoading ? "Loading…" : "Play recording"}
-            </button>
-            {artifact.consentRequired && (
-              // Said before the click, not after: the first press records a consent decision, and
-              // a control that does that silently is the one thing this must not be.
-              <p className="px-6 text-center text-[12px] text-ink-muted">
-                Playing this recording records your consent, the same as downloading it.
-              </p>
-            )}
-          </div>
-        )}
+        {children}
       </div>
     </section>
   );
