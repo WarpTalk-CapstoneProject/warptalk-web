@@ -212,6 +212,7 @@ export function MeetingRecordingPlayer({
   playbackRequest,
   onPlaybackSeconds,
   onPlayingChange,
+  onDurationSeconds,
   unavailableReason,
   variant = "section",
 }: {
@@ -245,6 +246,28 @@ export function MeetingRecordingPlayer({
   /** Whether the recording is moving. The follow-along pill and the "do nothing while paused" rule
    *  both hang off this, and only the media element knows it. */
   onPlayingChange?: (playing: boolean) => void;
+  /**
+   * WT-655 — how long the file runs, so a moment after the recording stopped can be refused.
+   *
+   * FILE SECONDS, like `onPlaybackSeconds`, and for the same reason: this is `video.duration`
+   * verbatim, and the caller is the only place it may meet the meeting's clock.
+   *
+   * WHY IT COMES FROM HERE AND NOT FROM THE DATABASE
+   *   `seekTargetSeconds` has always refused a target past the end of the recording, and that
+   *   branch had never executed: nothing supplied a duration, because there is no duration column
+   *   to supply one from. So a moment spoken after the host stopped recording produced a valid,
+   *   positive offset, the browser clamped `currentTime` to the end, and the reader was shown the
+   *   final frame — indistinguishable from a seek that worked. The media element knows the number;
+   *   asking it is enough for the refusal and deliberately not enough to pick between several
+   *   recordings, which needs every file's length known BEFORE any of them is loaded.
+   *
+   * NULL MEANS NOT KNOWN, AND NOT KNOWN IS NOT A NUMBER
+   *   `video.duration` is NaN until metadata arrives and `Infinity` for a stream or a container
+   *   with no length in its header. Publishing either as a number would make the guard reject
+   *   every moment (NaN comparisons are false, so it would in fact reject none — worse, it would
+   *   look guarded) so both become null and the guard stays dormant, which is the honest state.
+   */
+  onDurationSeconds?: (seconds: number | null) => void;
   /**
    * Why there is no playable recording, when the CALLER knows and this player cannot.
    *
@@ -417,15 +440,41 @@ export function MeetingRecordingPlayer({
     if (hasPlayhead) return;
     onPlaybackSeconds?.(null);
     onPlayingChange?.(false);
-  }, [hasPlayhead, onPlaybackSeconds, onPlayingChange]);
+    // The duration goes with the element. A number left standing after the <video> was replaced by
+    // a failure notice would keep the caller's past-the-end guard armed with the length of a file
+    // nothing can read any more — and after a reload of the SAME recording that is harmless, but
+    // after the reader folds the pip away and the page later mounts a different meeting's it is a
+    // refusal computed against the wrong file.
+    onDurationSeconds?.(null);
+  }, [hasPlayhead, onPlaybackSeconds, onPlayingChange, onDurationSeconds]);
   useEffect(
     () => () => {
       onPlaybackSeconds?.(null);
       onPlayingChange?.(false);
+      onDurationSeconds?.(null);
     },
-    // Both are the provider's own stable functions. An inline arrow at the call site would make
+    // All three are the caller's own stable functions. An inline arrow at the call site would make
     // this cleanup run on every render of the caller and retract the highlight continuously.
-    [onPlaybackSeconds, onPlayingChange],
+    [onPlaybackSeconds, onPlayingChange, onDurationSeconds],
+  );
+
+  /**
+   * WT-655 — the file's own length, on its way up to the caller.
+   *
+   * Read from the element rather than from an event field because there isn't one: `durationchange`
+   * and `loadedmetadata` both carry the element as their target and nothing else. Both are wired to
+   * this, because a duration is not a fact that arrives once — a fragmented MP4 reports `Infinity`
+   * first and revises it, and an element handed a fresh presigned url for the same recording starts
+   * over at NaN.
+   */
+  const publishDuration = useCallback(
+    (video: HTMLVideoElement) => {
+      const seconds = video.duration;
+      // `> 0` as well as finite: a zero-length duration is the element saying it has nothing, and a
+      // zero would make the guard refuse every moment in the meeting.
+      onDurationSeconds?.(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+    },
+    [onDurationSeconds],
   );
 
   const isPip = variant === "pip";
@@ -548,12 +597,42 @@ export function MeetingRecordingPlayer({
             // for the rest of its life, and the NEXT genuine expiry — an hour of reading later —
             // would be reported as an unplayable file with no reload offered.
             reloadedAfterFailureRef.current = false;
+            publishDuration(event.currentTarget);
             const queued = pendingSeekRef.current;
             if (!queued) return;
             pendingSeekRef.current = null;
+            /**
+             * WT-655 — the queued seek is the one the caller's guard could not see.
+             *
+             * A click that lands before the file has been fetched is held in `pendingSeekRef` and
+             * applied here. At the instant it was made the page had no duration to check it
+             * against — the player only fetches on demand, so nothing had loaded — which means the
+             * past-the-end refusal upstream cannot have run for exactly the first click of every
+             * visit. This is that refusal, made at the only moment the number exists: right now,
+             * on the element.
+             *
+             * FILE AXIS AGAINST FILE AXIS, AND NOTHING ELSE. `queued.seconds` is already an offset
+             * into this file, computed by recording-seek.ts; `duration` is this file's length. No
+             * meeting clock appears in this component and none may — see the header of
+             * recording-seek.ts for what a second subtraction of the two origins costs.
+             *
+             * Dropped rather than clamped, because the browser's own clamp is the bug: it parks the
+             * playhead on the last frame, which is a still picture of the meeting ending and looks
+             * exactly like a seek that worked.
+             */
+            const duration = event.currentTarget.duration;
+            if (Number.isFinite(duration) && duration > 0 && queued.seconds > duration) {
+              toast.info("This recording stopped before that moment.");
+              return;
+            }
             event.currentTarget.currentTime = queued.seconds;
             void event.currentTarget.play().catch(() => {});
           }}
+          /* A duration is revised, not announced once: a fragmented MP4 reports `Infinity` until
+             enough of it has been read to know better, and a caller that only ever heard
+             `loadedmetadata` would keep an unknown length forever on exactly the containers the
+             egress pipeline produces. */
+          onDurationChange={(event) => publishDuration(event.currentTarget)}
           /* WT-655 — the playhead, for the transcript to follow.
              `timeupdate` fires roughly four times a second while playing, and the provider throttles
              to about that rate whatever this browser's rate turns out to be. The `paused` guard is

@@ -243,4 +243,183 @@ assert.match(
   "Auto-scrolling must honour prefers-reduced-motion.",
 );
 
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   WAVE 3a — the past-the-end refusal, and where the number it needs comes from.
+
+   `seekTargetSeconds` has refused a target beyond the end of the recording since Wave 1, and that
+   branch had never executed. Nothing supplied a duration: there is no duration column, so
+   `SeekSources.durationSeconds` was always undefined and every comparison against it was skipped.
+   A moment spoken after the host stopped recording therefore produced a positive offset, the
+   browser clamped `currentTime` to the end, and the reader was shown the final frame — a still
+   picture of the meeting ending, indistinguishable from a seek that worked.
+
+   The number now comes from the media element. That is enough to arm the refusal and deliberately
+   not enough to pick between several recordings, which stays withheld (see 5 above).
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+
+// 15. The player publishes the file's length, in the shape its two siblings already use.
+assert.match(
+  player,
+  /onDurationSeconds\?:\s*\(seconds: number \| null\) => void/,
+  "The player must publish the recording's duration as file seconds or null. Without it "
+    + "seekTargetSeconds' past-the-end branch is unreachable, which is how a moment after the "
+    + "recording stopped came to render as the final frame.",
+);
+// A duration is REVISED. A fragmented MP4 reports Infinity until enough of it has been read, and a
+// fresh presigned url for the same recording starts over at NaN — so loadedmetadata alone leaves
+// the length permanently unknown on exactly the containers the egress pipeline writes.
+assert.match(
+  player,
+  /onDurationChange=\{/,
+  "The player must listen for durationChange as well as loadedMetadata. A duration that starts as "
+    + "Infinity and is corrected later would otherwise never reach the caller at all.",
+);
+assert.match(
+  player,
+  /Number\.isFinite\(seconds\) && seconds > 0 \? seconds : null/,
+  "NaN and Infinity mean NOT KNOWN and must publish null. A non-finite number handed to the guard "
+    + "makes every comparison false — the refusal looks armed and refuses nothing.",
+);
+
+// 16. The queued seek is checked by the PLAYER, because at that instant nothing else can.
+//     A click before the file is fetched is held in pendingSeekRef; the page had no duration to
+//     check it against, so the first click of every visit escapes the upstream guard entirely.
+assert.match(
+  player,
+  /Number\.isFinite\(duration\) && duration > 0 && queued\.seconds > duration/,
+  "A queued seek must be compared against the element's own duration before it is applied, or the "
+    + "first click of every visit lands on the last frame with the browser's clamp doing the lying.",
+);
+// And it is a comparison of two FILE-axis numbers. Meeting arithmetic in this component would be a
+// second subtraction of the two origins — see the header of recording-seek.ts for what that costs.
+// Calls and imports, not prose: the prop's own doc comment has to be able to NAME the function
+// upstream whose guard this one backs up.
+assert.doesNotMatch(
+  player,
+  /(seekTargetSeconds|meetingMsFromRecordingSeconds)\(|from "@\/lib\/meeting\/recording-seek"/,
+  "The player must never do meeting-axis arithmetic. It compares an offset into this file against "
+    + "this file's length; the two clocks meet in recording-seek.ts and nowhere else.",
+);
+// The two origins are the page's, and a player holding either of them is a player one edit away
+// from subtracting them.
+assert.doesNotMatch(
+  player,
+  /(sources|artifact)\.(timelineAnchorAt|recordingStartedAt)/,
+  "The player must not read either clock origin. Wave 2 kept the file axis on this side of the "
+    + "boundary on purpose; a highlight or a seek computed here would drift from the one that is not.",
+);
+
+// 17. The duration enters the ONE seekSources memo, not a second object built beside it.
+assert.match(
+  roomDetail,
+  /durationSeconds: recordingDurationSeconds/,
+  "The duration must land in the same seekSources the seek and the follow-along both read. A "
+    + "second sources object is two answers to where the recording starts and how long it runs.",
+);
+
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   WAVE 3b — `?t=`, a link to a moment.
+
+   There was no way to share a moment: seek state was React-local, so "look at the bit where we
+   decided X" was a sentence and a stopwatch. Everything below is a decision that a later,
+   reasonable-looking edit would undo — and three of them are decisions about RESTRAINT, which is
+   the kind that gets edited away first because nothing visibly breaks when it does.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const momentLink = read("src/lib/meeting/moment-link.ts");
+
+// 18. The parsing is pure and it is TESTED. This repo's runner cannot parse JSX, which is why
+//     anything worth testing lives in src/lib/** — a regex inlined in the page would be a rule
+//     nothing can exercise, and "what does a mangled ?t= do" is the whole risk of this feature.
+assert.match(
+  momentLink,
+  /export function parseMomentParam/,
+  "The `?t=` parsing must live in src/lib/meeting/moment-link.ts. Inlined in the page it cannot be "
+    + "unit-tested — the test runner cannot parse JSX — and the malformed-value cases are the point.",
+);
+assert.match(
+  roomDetail,
+  /parseMomentParam\(/,
+  "The page must read `?t=` through the tested parser rather than its own Number() call.",
+);
+assert.doesNotMatch(
+  roomDetail,
+  /Number\.parseInt\([^)]*MOMENT_PARAM|get\("t"\)/,
+  "The page must not hand-roll the parse. `Number()` accepts \"\", \"0x10\" and \"1e3\", and an "
+    + "empty string reading as 0 IS the jump-to-0:00 failure arriving through the front door.",
+);
+
+// 19. The MEETING axis, not the file axis. A file-axis number stops meaning anything the moment the
+//     recording is replaced, trimmed or joined by a second run; the meeting axis is the clock the
+//     transcript is written in, so the link still names the same sentence afterwards.
+assert.match(
+  momentLink,
+  /MEETING milliseconds/,
+  "moment-link must say which axis `?t=` is on. A parameter whose axis is not written down is a "
+    + "parameter somebody will helpfully 'fix' to video.currentTime.",
+);
+assert.doesNotMatch(
+  momentLink,
+  /currentTime|durationSeconds|seekTargetSeconds\(/,
+  "moment-link must not touch the file axis or the clock arithmetic. It parses and formats a moment; "
+    + "recording-seek.ts is the only place the two clocks meet.",
+);
+
+// 20. A malformed value does NOTHING. Not a toast, and above all not a jump to 0:00 — which is a
+//     real moment, and would tell the reader by the page's own behaviour that the link pointed there.
+assert.match(
+  momentLink,
+  /^const SECONDS_PATTERN = \/\^\\d\+\(\?:\\\.\\d\+\)\?\$\//m,
+  "The accepted shape must stay narrower than Number(). Widening it to Number() readmits \"\" as 0, "
+    + "which is the silent jump to the top of the meeting this refuses.",
+);
+assert.match(
+  roomDetail,
+  /if \(atMs === null\) return;/,
+  "A `?t=` that does not parse must leave the page exactly as it found it — no seek, no toast, no "
+    + "jump to 0:00. A bad parameter is a mangled copy-paste, not an error a reader can act on.",
+);
+
+// 21. Read once, then taken out of the URL. A parameter that lingers re-fires on every internal
+//     navigation back to this page — leave the record, come back, get yanked to a stale moment.
+assert.match(
+  roomDetail,
+  /withMomentParam\(window\.location\.search, null\)/,
+  "The parameter must be removed once it has been honoured, or returning to this page re-fires it.",
+);
+assert.match(
+  roomDetail,
+  /router\.replace\(\s*`\$\{window\.location\.pathname\}\$\{query \? `\?\$\{query\}` : ""\}`,\s*\{ scroll: false \},?\s*\)/,
+  "Both the write-back and the removal must be router.replace with scroll:false — push would make "
+    + "the back button walk through every timestamp clicked, and the default scroll-to-top would "
+    + "undo the very scroll the link exists to perform.",
+);
+
+// 22. It is the page's own URL and nothing is minted. Access stays whatever already gates this page.
+assert.match(
+  momentLink,
+  /NOT A LINK-MINTING FEATURE|Nothing here creates a link/,
+  "moment-link must record that no link is minted and nothing is made public. 'Share a moment' is "
+    + "exactly the feature that grows a public-link mode by accident, one request at a time.",
+);
+
+// 23. The arrival reuses jumpToTranscriptMoment. It is the one path from a moment to the row that
+//     actually exists in the DOM (see 6), and it is also what makes `?t=` work with no video at all:
+//     the seek half declines, the scroll half does not.
+assert.match(
+  roomDetail,
+  /arrivingFromMomentLinkRef\.current = true;\s*\n\s*try \{\s*\n\s*jumpToTranscriptMoment\(atMs\);/,
+  "The `?t=` arrival must go through jumpToTranscriptMoment. A second scroll path reintroduces the "
+    + "mid-group citation bug, and skipping it loses the scroll — which is the whole of the feature "
+    + "on a meeting with no recording.",
+);
+// And it must not write back the parameter it is consuming, or the removal above accomplishes
+// nothing and the link re-fires on every return to the page after all.
+assert.match(
+  roomDetail,
+  /if \(arrivingFromMomentLinkRef\.current\) return;/,
+  "The write-back must stand down while an arrival is being applied. Otherwise the arrival re-mints "
+    + "the parameter it just consumed and the removal is a no-op.",
+);
+
 console.log("Recording seek contract: PASS");

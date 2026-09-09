@@ -90,6 +90,7 @@ export function TranscriptReadingLayout({
   seek,
   seekSources,
   onConsentGranted,
+  onDurationSeconds,
   onJumpToMoment,
   onOpenSummaryTab,
   speakerDirectory,
@@ -114,6 +115,15 @@ export function TranscriptReadingLayout({
    */
   seekSources?: SeekSources;
   onConsentGranted: () => void;
+  /**
+   * WT-655 — the recording's own length, back UP to the page.
+   *
+   * Not routed through ReadingSyncProvider like the playhead is, and the asymmetry is the point:
+   * the playhead is consumed inside the provider, whereas the duration's only consumer is the
+   * `seekSources` the page builds and hands back DOWN to that provider. Publishing it into the
+   * context would be asking the provider to feed its own input.
+   */
+  onDurationSeconds?: (seconds: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
   /** Where the claims this rail refuses to render can be read in full. */
   onOpenSummaryTab: () => void;
@@ -156,6 +166,7 @@ export function TranscriptReadingLayout({
           pipOpen={pipOpen}
           onTogglePip={() => setPipOpen((current) => !current)}
           onConsentGranted={onConsentGranted}
+          onDurationSeconds={onDurationSeconds}
           onJumpToMoment={onJumpToMoment}
           onOpenSummaryTab={onOpenSummaryTab}
           speakerDirectory={speakerDirectory}
@@ -174,6 +185,7 @@ function ReadingRail({
   pipOpen,
   onTogglePip,
   onConsentGranted,
+  onDurationSeconds,
   onJumpToMoment,
   onOpenSummaryTab,
   speakerDirectory,
@@ -187,6 +199,9 @@ function ReadingRail({
   pipOpen: boolean;
   onTogglePip: () => void;
   onConsentGranted: () => void;
+  /** Passed straight to the pip player. See TranscriptReadingLayout for why it does not travel
+   *  through the sync context the playhead does. */
+  onDurationSeconds?: (seconds: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
   onOpenSummaryTab: () => void;
   speakerDirectory?: Readonly<
@@ -326,6 +341,10 @@ function ReadingRail({
                  lambda here would clear the playhead on every render of this rail. */
               onPlaybackSeconds={sync?.publishPlaybackSeconds}
               onPlayingChange={sync?.publishPlaying}
+              /* Stable for the same reason those two are: the player retracts the duration when
+                 this changes identity, so an arrow declared here would report "length unknown" on
+                 every render of the rail and disarm the past-the-end refusal. */
+              onDurationSeconds={onDurationSeconds}
               onConsentGranted={onConsentGranted}
             />
           ) : null}
