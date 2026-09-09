@@ -17,13 +17,13 @@ import {
   Bold,
   Maximize2,
   Minimize2,
+  MoreHorizontal,
   CalendarPlus,
   Check,
   ChevronDown,
   ClipboardList,
   Code,
   Code2,
-  Copy,
   Download,
   FileText,
   Pencil,
@@ -34,8 +34,6 @@ import {
   Loader2,
   Play,
   Quote,
-  Sparkles,
-  Star,
   StopCircle,
   Strikethrough,
   Repeat,
@@ -73,15 +71,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
 import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
 import {
   ArtifactsPanel,
   MeetingRecordTabButton,
-  MeetingRecordingPlayer,
   type SeekRequest,
-  SummaryPanel,
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
@@ -113,7 +111,11 @@ import {
 } from "@/lib/meeting/record-sharing";
 import type { EndedRoomHistoryItem } from "@/types/roomHistory";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
-import { isFinishedStatus } from "@/lib/meeting/room-occupancy";
+import {
+  isFinishedStatus,
+  participantPresence,
+  type ParticipantPresence,
+} from "@/lib/meeting/room-occupancy";
 import { looksLikeRoomId } from "@/lib/meeting/room-code-guess";
 import {
   useTranscriptByRoom,
@@ -157,12 +159,38 @@ import type { WorkspaceMemberDto } from "@/types/workspace";
 import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 
+/**
+ * The meeting record's tabs.
+ *
+ * Owned by the page rather than by MeetingRecordSection, because the page's right rail now
+ * depends on which one is open — see `readingLayoutOpen`.
+ */
+/**
+ * WHY THERE IS NO "SUMMARY" TAB, AND WHY THE FIRST ONE IS NOT CALLED "TRANSCRIPT".
+ *
+ * The first tab holds three things — the recording, the transcript, and (in the rail beside it)
+ * the summary. It was called Transcript, which named one of them, while a second tab offered the
+ * summary again on its own. So the summary had two homes: a rail that could not show all of it
+ * and a tab that could not show the transcript it cited. Checking a claim meant leaving the
+ * summary; reading the summary meant leaving the transcript.
+ *
+ * One tab now, named for what it actually contains.
+ */
+type MeetingRecordTab = "recap" | "minutes" | "artifacts";
+
 type UserIdentity = {
   id: string;
   name: string;
   email?: string;
   role?: string;
+  /** Already through `normalizeLabel` — a display string, e.g. "Connected", "Pending". */
   status?: string;
+  /**
+   * WT-641: the row's presence, resolved once through the shared rule rather than re-derived
+   * from `status` by each caller. Absent means this row is an invitation only — somebody who
+   * has never been a participant, so no participant status exists to resolve.
+   */
+  presence?: ParticipantPresence;
   avatarUrl?: string;
   speakLanguage?: string;
   listenLanguage?: string;
@@ -210,6 +238,9 @@ export default function RoomInformationPage() {
    * to look at the roster.
    */
   const [recordExpanded, setRecordExpanded] = useState(false);
+  // Lifted out of MeetingRecordSection: the right rail is rendered by this component and now
+  // has to know which record tab is open.
+  const [recordTab, setRecordTab] = useState<MeetingRecordTab>("recap");
 
   const transcriptQuery = useTranscriptByRoom(roomId);
   const segmentsQuery = useTranscriptSegments(transcriptQuery.data?.id);
@@ -626,6 +657,14 @@ export default function RoomInformationPage() {
   // what let them show 1/100 and "Attendees: 0" at the same moment.
   const occupancy = useRoomOccupancy(room, participantsQuery.data ?? null);
 
+  // One request for the whole roster instead of one per row, the same call people-panel.tsx
+  // makes. Read ABOVE the `if (!room)` guard for the reason spelled out on `activeRoomId`
+  // below: a hook after that early return runs on the second render and not the first, and
+  // React answers the changed hook count with error #310 — a blank page, not a degraded one.
+  // Keyed off the API rows because those exist before the room query resolves; an
+  // invitation-only row has no user id for presence to resolve anyway.
+  usePresence((participantsQuery.data ?? []).map((participant) => participant.userId));
+
   useRegisterAssistantContext(
     room
       ? {
@@ -795,17 +834,36 @@ export default function RoomInformationPage() {
     membersArray,
     user,
   );
-  const hostUser = getHostUser(room, participants, membersArray, user);
-  // WT-274: the Tracking panel's rows are the seat holders `occupancy` already resolved,
-  // mapped through the same identity resolver the rest of the page uses. It does not re-decide
-  // who counts.
-  const seatedIdentities = occupancy.seated.map((participant) =>
-    toUserIdentity(participant, membersArray, user),
-  );
-  const seatedIds = new Set(seatedIdentities.map((identity) => identity.id));
-  const notInRoom = participants.filter(
-    (participant) => !seatedIds.has(participant.id),
-  );
+  // WT-641: the roster is grouped by what each row's status actually says. It no longer asks
+  // `occupancy.seated` for the first group and sweeps the remainder under a heading that reads
+  // "Invited" — that split produced rows saying "Invited — Removed", and on a finished room
+  // (where the service moves everyone CONNECTED -> DISCONNECTED) an empty first group under a
+  // heading that said 8.
+  //
+  // WT-274 still holds: `occupancy` remains the only thing that COUNTS people, and the header
+  // pill is still the one place a seat total is rendered. This decides headings, not numbers.
+  const recordSectionShown = isEnded || transcriptSegments.length > 0;
+  /**
+   * The transcript tab renders TranscriptReadingLayout, which brings its own 420px rail.
+   *
+   * Two rails on one page is not a tidiness problem, it is a width one. That component's own
+   * opening comment sets the budget it was designed around — "620 for a transcript at a readable
+   * 66 characters" — and does the arithmetic against the full page width. This page's aside takes
+   * 300px plus a 32px gap before any of that, so on a 1280px window the reading column lands at
+   * 428px: about 46 characters, against the 66 the layout exists to protect. At 1440 it is 588px.
+   * Only from ~1536px up does the column reach its cap with both rails present.
+   *
+   * So the aside stands down while the record is being read. Nothing is lost: it answers "who was
+   * invited, who attended", which is not the question anyone has while reading a transcript, and
+   * any other tab brings it straight back.
+   */
+  const readingLayoutOpen =
+    recordSectionShown &&
+    recordTab === "recap" &&
+    Boolean(endedRecordQuery.data);
+  const railHidden = recordExpanded || readingLayoutOpen;
+
+  const rosterGroups = groupRoster(participants, isEnded);
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-1 text-ink">
       {copiedText ? (
@@ -822,7 +880,7 @@ export default function RoomInformationPage() {
             // hidden — a `display:none` rail keeps mounting its roster queries and its
             // collapsibles, and keeps them in the tab order for a keyboard user who cannot see
             // where focus went.
-            recordExpanded ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_300px]",
+            railHidden ? "xl:grid-cols-1" : "xl:grid-cols-[minmax(0,1fr)_300px]",
           )}
         >
           <main className="min-w-0">
@@ -910,20 +968,40 @@ export default function RoomInformationPage() {
                       reads as two different actions. The panel copy is gone, and `helpText`
                       came up here with it so the explanation stays attached to the control it
                       explains. */}
-                  {entryIntent.isActionable ? (
-                    <>
+                  {/* The `···` beside the primary button is where the right column's `Actions`
+                      panel went. Those five entries were: the room code (the pill under the
+                      title already copies it on click), `Add to favorites` (wired to nothing —
+                      WT-642), and three real ones. Three items do not earn a permanent 185px
+                      panel, and by WT-197's own logic a room's actions belong next to the
+                      control that acts on the room. The primary button is untouched. */}
+                  <div className="flex items-center gap-2">
+                    {entryIntent.isActionable ? (
                       <RoomEntryButton
                         intent={entryIntent}
                         pending={startRoomMutation.isPending}
                         onActivate={handleRoomEntry}
                         className="h-9 px-4"
                       />
-                      {entryIntent.helpText ? (
-                        <p className="text-right text-[12px] leading-relaxed text-muted-foreground">
-                          {entryIntent.helpText}
-                        </p>
-                      ) : null}
-                    </>
+                    ) : null}
+                    <RoomActionsMenu
+                      room={room}
+                      isHost={isHost}
+                      canEnd={isHost && !isEnded && room.status !== "cancelled"}
+                      endPending={endRoomMutation.isPending}
+                      onCopy={handleCopy}
+                      onEnd={async () => {
+                        try {
+                          await endRoomMutation.mutateAsync(room.id);
+                        } catch {
+                          // Mutation toast handles the error.
+                        }
+                      }}
+                    />
+                  </div>
+                  {entryIntent.isActionable && entryIntent.helpText ? (
+                    <p className="text-right text-[12px] leading-relaxed text-muted-foreground">
+                      {entryIntent.helpText}
+                    </p>
                   ) : null}
                 </div>
               </div>
@@ -948,7 +1026,7 @@ export default function RoomInformationPage() {
               }
             />
 
-            {isEnded || transcriptSegments.length > 0 ? (
+            {recordSectionShown ? (
               <MeetingRecordSection
                 roomId={room.id}
                 isHost={isHost}
@@ -987,6 +1065,10 @@ export default function RoomInformationPage() {
                     onCopy={handleCopy}
                     transcriptId={transcriptQuery.data?.id}
                     transcriptStatus={transcriptQuery.data?.status}
+                    // WT-311(c): the meeting's own clock, not the translation session's. A
+                    // host who never pressed Start Translation still held a meeting with a length.
+                    meetingStartedAt={room.startedAt}
+                    meetingEndedAt={room.endedAt}
                     // WT-516: the panel cannot tell "refused" from "empty" without this. The
                     // by-room lookup is where a non-participant is turned away (FORBIDDEN), and
                     // it is also the query whose failure leaves `transcriptId` undefined — so
@@ -1003,6 +1085,8 @@ export default function RoomInformationPage() {
                   />
                 }
                 transcriptCount={transcriptEntryCount}
+                tab={recordTab}
+                onTabChange={setRecordTab}
                 expanded={recordExpanded}
                 onToggleExpanded={() => setRecordExpanded((current) => !current)}
               />
@@ -1010,110 +1094,67 @@ export default function RoomInformationPage() {
 
           </main>
 
-          {/* WT-330(8): the column no longer scrolls as one block. It used to be a single
-              `xl:overflow-y-auto`, so the ONE thing that grows with the data — the invitee
-              list — drove the scroll of everything: six invitees already pushed `Actions`
-              215px below the fold, and thirty buried it entirely. The controls a host came
-              here for cannot be a function of how many people were invited.
+          {/* One panel, so the column holds one thing.
 
-              Now the column is a flex stack that fits the viewport: `Actions` and `Meeting
-              access` are fixed-size and pinned (`shrink-0`), and `Tracking` takes whatever
-              height is left and scrolls its own body. That gives the roster a bounded area
-              that GROWS on a tall screen instead of a hardcoded max-height that is wrong on
-              every screen but one. Below `xl` the column is a normal stacked block and the
-              page scrolls, so none of this applies — hence every class here is `xl:`. */}
-          {recordExpanded ? null : (
+              WT-330(8) built a bounded, flexing scroll region here because the invitee list
+              could push everything else off screen. That is kept — the roster is still the one
+              thing that grows with the data — but it now has the column to itself, so on any
+              ordinary meeting it never has to scroll at all.
+
+              WT-588, for whoever reads this next: that ticket deliberately put `Actions` ABOVE
+              the roster, so a long roster could not bury the controls. The panel is gone
+              entirely now and its three real entries live in the header's `···` menu, beside
+              the primary button — which is where WT-197 established that a room's actions
+              belong. The ordering problem WT-588 solved cannot recur, so do not "restore" it.
+
+              Still `xl:`-only. Below that the column is a normal stacked block and the page
+              scrolls, which is also where the roster's grid earns its keep: at that width it
+              lays out in several columns instead of one. */}
+          {railHidden ? null : (
           <aside className="flex min-w-0 flex-col gap-3 xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-hidden">
-            {/* WT-588: Actions ABOVE Tracking.
-                WT-330(8) already stopped the invitee list pushing this panel off screen, by
-                giving Tracking its own bounded scroll and pinning Actions below it. That fixed
-                the mechanism and left the order: the controls a host came here for still sit
-                under a roster, and on a short viewport they still sit under a roster that is
-                itself scrolling. Reading order is the remaining half — the thing you act on
-                goes above the thing you look at. */}
-            <PropertyPanel title="Actions" className="xl:shrink-0">
-              <ActionButton
-                icon={<Copy className="size-3.5" />}
-                onClick={() =>
-                  handleCopy(room.translationRoomCode, "Room code")
-                }
-              >
-                Copy room code
-              </ActionButton>
-              {isHost ? (
-                <ActionButton
-                  icon={<LinkIcon className="size-3.5" />}
-                  onClick={() =>
-                    handleCopy(
-                      `${window.location.origin}/join?code=${room.translationRoomCode}`,
-                      "Invite link",
-                    )
-                  }
-                >
-                  Copy invite link
-                </ActionButton>
-              ) : null}
-              {isUpcomingScheduledRoom(room) ? (
-                <AddToCalendarMenu room={room} />
-              ) : null}
-              <ActionButton icon={<Star className="size-3.5" />}>
-                Add to favorites
-              </ActionButton>
-              {isHost && !isEnded && room.status !== "cancelled" ? (
-                <ActionButton
-                  destructive
-                  icon={<StopCircle className="size-3.5" />}
-                  disabled={endRoomMutation.isPending}
-                  onClick={async () => {
-                    try {
-                      await endRoomMutation.mutateAsync(room.id);
-                    } catch {
-                      // Mutation toast handles the error.
-                    }
-                  }}
-                >
-                  End meeting
-                </ActionButton>
-              ) : null}
-            </PropertyPanel>
-
             <PropertyPanel
-              title="Tracking"
+              title="People"
               className="xl:flex xl:min-h-0 xl:flex-1 xl:flex-col xl:overflow-hidden"
               /* The one bounded scroll region. `overscroll-auto` is the default, restated:
                  chaining is what keeps this from trapping the page's scroll at its end. */
               bodyClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:overscroll-auto xl:pr-1"
             >
-              <PropertyLine label="Organizer">
-                <UserChip user={hostUser} compact />
-              </PropertyLine>
-              {/* WT-330(5): "Attendees" here was the page's only use of that word — every other
-                  surface, and the seat rule itself, says "participants". One word, everywhere. */}
-              <CollapsibleSection label={`Participants: ${occupancy.label}`}>
-                {seatedIdentities.length > 0 ? (
-                  seatedIdentities.map((participant) => (
-                    <UserRow key={participant.id} user={participant} />
-                  ))
-                ) : (
-                  <p className="text-[12px] text-muted-foreground">
-                    Nobody is in the room right now.
-                  </p>
-                )}
-              </CollapsibleSection>
-              {notInRoom.length > 0 ? (
-                <CollapsibleSection label={`Invited: ${notInRoom.length}`}>
-                  {notInRoom.map((participant) => (
-                    <UserRow key={participant.id} user={participant} />
-                  ))}
-                </CollapsibleSection>
-              ) : null}
+              {/* THE SHARED NUMBER, STILL SAID OUT LOUD.
+                  The groups below each carry their own count, which is what a grouped roster
+                  needs — but the header chip and this panel once showed "1/100" and
+                  "Attendees: 0" at the same moment, and they stopped doing that by both
+                  reading `occupancy` rather than filtering for themselves. Rendering the
+                  shared label here keeps that guarantee visible: if a group's arithmetic ever
+                  drifts from occupancy, the two numbers sit one above the other. */}
+              <p className="mb-2 text-[12px] text-muted-foreground">
+                {`Participants: ${occupancy.label}`}
+              </p>
+
+              {rosterGroups.length === 0 ? (
+                <p className="text-[12px] text-muted-foreground">
+                  {/* Not "Nobody is in the room right now" — that sentence answers a question
+                      about presence, and the situation here is that there is nobody to be
+                      present yet. */}
+                  No one else invited yet.
+                </p>
+              ) : (
+                rosterGroups.map((group) => (
+                  <CollapsibleSection
+                    key={group.label}
+                    label={`${group.label}: ${group.people.length}`}
+                    defaultOpen={group.defaultOpen}
+                  >
+                    {group.people.map((person) => (
+                      <UserRow
+                        key={person.id}
+                        user={person}
+                        isHost={person.id === room.hostId}
+                      />
+                    ))}
+                  </CollapsibleSection>
+                ))
+              )}
             </PropertyPanel>
-
-
-            {/* "Meeting access" stood here: a hardcoded "WarpTalk Session" over the room
-                code. The pills row under the title already shows that code and, unlike this
-                panel, lets you click it to copy — so the panel was the same fact with less
-                to do. WT-330 had already taken its entry button; this is the rest. */}
           </aside>
           )}
         </div>
@@ -1216,6 +1257,8 @@ function MeetingRecordSection({
   seekUnavailableReason,
   recordingUnavailableReason,
   speakerDirectory,
+  tab,
+  onTabChange,
   expanded,
   onToggleExpanded,
 }: {
@@ -1279,13 +1322,13 @@ function MeetingRecordSection({
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
+  /** Owned by the page: it decides the right rail's fate from this. */
+  tab: MeetingRecordTab;
+  onTabChange: (tab: MeetingRecordTab) => void;
   /** WT-588: whether the record has the page to itself, with the right rail dropped. */
   expanded?: boolean;
   onToggleExpanded?: () => void;
 }) {
-  const [tab, setTab] = useState<
-    "transcript" | "summary" | "minutes" | "artifacts"
-  >("transcript");
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
   // WT-492: null when the meeting was not recorded, or the file is not ready yet.
@@ -1322,10 +1365,47 @@ function MeetingRecordSection({
     [],
   );
 
+  /**
+   * Ask for the summary to be rewritten, and watch for it landing.
+   *
+   * Lifted out of the deleted Summary tab unchanged. The endpoint answers 202 — the summary lands
+   * on the artifact later — so this polls for it rather than trusting the response, stops the
+   * moment the new shape arrives, and gives up after 90 seconds either way.
+   */
+  const requestSummaryRewrite = useCallback(
+    async (templateKey: string) => {
+      if (!endedRecord) return;
+      await translationRoomService.regenerateSummary(endedRecord.id, templateKey);
+      toast.success("Rewriting the summary…");
+
+      if (rewritePollRef.current !== null) {
+        window.clearInterval(rewritePollRef.current);
+      }
+      const askedAt = summaryStampRef.current;
+      const stopAt = Date.now() + 90_000;
+      rewritePollRef.current = window.setInterval(() => {
+        // Any change to the stamp means something landed — a new shape or the same shape
+        // rewritten. An artifact predating updated_at whose shape did not change cannot be
+        // detected this way and falls through to the deadline, which is the honest degradation
+        // rather than a poll that claims success.
+        const arrived = summaryStampRef.current !== askedAt;
+        if (arrived || Date.now() > stopAt) {
+          if (rewritePollRef.current !== null) {
+            window.clearInterval(rewritePollRef.current);
+            rewritePollRef.current = null;
+          }
+          return;
+        }
+        onRecordChanged();
+      }, 4000);
+    },
+    [endedRecord, onRecordChanged],
+  );
+
   // No ended record means the meeting has not finished, so there is nothing to summarise and
   // no files to retain. Showing two permanently empty tabs would only invite clicking them.
   const hasRecord = Boolean(endedRecord);
-  const activeTab = hasRecord ? tab : "transcript";
+  const activeTab = hasRecord ? tab : "recap";
 
   return (
     <section className="mt-8 border-b border-border/60 pb-7">
@@ -1392,17 +1472,11 @@ function MeetingRecordSection({
           aria-label="Meeting record sections"
         >
           <MeetingRecordTabButton
-            active={activeTab === "transcript"}
-            onClick={() => setTab("transcript")}
+            active={activeTab === "recap"}
+            onClick={() => onTabChange("recap")}
             icon={FileText}
-            label="Transcript"
+            label="Recap"
             count={transcriptCount || undefined}
-          />
-          <MeetingRecordTabButton
-            active={activeTab === "summary"}
-            onClick={() => setTab("summary")}
-            icon={Sparkles}
-            label="Summary"
           />
           {/* Minutes came from the deleted `/ended` page, which was the only place they could be
               read or signed. They belong here for the reason the rest of the record does: the
@@ -1411,13 +1485,13 @@ function MeetingRecordSection({
               a moment and the reader can go and check it. */}
           <MeetingRecordTabButton
             active={activeTab === "minutes"}
-            onClick={() => setTab("minutes")}
+            onClick={() => onTabChange("minutes")}
             icon={ClipboardList}
             label="Minutes"
           />
           <MeetingRecordTabButton
             active={activeTab === "artifacts"}
-            onClick={() => setTab("artifacts")}
+            onClick={() => onTabChange("artifacts")}
             icon={Archive}
             label="Artifacts"
             count={endedRecord?.artifacts.length}
@@ -1476,28 +1550,17 @@ function MeetingRecordSection({
           of the record is the single biggest reason the transcript below it was being read a
           screenful at a time. The Summary tab keeps the block player, because there is no reading
           column beside it there to compete with. */}
-      {activeTab === "summary" ? (
-        <MeetingRecordingPlayer
-          artifact={recording}
-          onConsentGranted={onRecordChanged}
-          seek={seek}
-          onDurationSeconds={onDurationSeconds}
-          // WT-655: `artifact` is null both when the meeting was never recorded and when its file
-          // is still being written, and the player cannot tell those apart from a null. This says
-          // which — and says when several recordings are why no seek is on offer.
-          unavailableReason={recordingUnavailableReason}
-        />
-      ) : null}
       {/* WT-655: the one line that stops the transcript's timestamps going quiet without a reason.
-          Above the reading surface and on this tab only, because it is about the timestamps in it;
-          the Summary tab has its own player and its citations fail with a toast. A meeting with no
-          recording produces no reason at all and so renders nothing — see seekUnavailableReason. */}
-      {activeTab === "transcript" && seekUnavailableReason ? (
+          Above the reading surface, because it is about the timestamps in it. A meeting that was
+          simply never recorded produces no reason at all and so renders nothing — see
+          seekUnavailableReason. The player it used to sit beside is gone: Summary and Transcript
+          are one tab now, and the rail's pip is the only player on it. */}
+      {activeTab === "recap" && seekUnavailableReason ? (
         <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
           {SEEK_UNAVAILABLE_MESSAGES[seekUnavailableReason]}
         </div>
       ) : null}
-      {activeTab === "transcript" ? (
+      {activeTab === "recap" ? (
         // "Still writing this up" came from the deleted `/ended` page, and it has to come with
         // it: the host now lands HERE the moment they press End, which is the one minute when
         // the finalizer has not run and there is genuinely nothing to read. Without it the
@@ -1519,16 +1582,19 @@ function MeetingRecordSection({
              occupying 420px of it. */
           <TranscriptReadingLayout
             transcript={transcript}
-            sections={endedRecord?.summary?.sections ?? null}
+            record={endedRecord}
             segments={segments}
+            hasTranscript={hasTranscript}
             recording={recording}
             recordingUnavailableReason={recordingUnavailableReason}
             seek={seek}
             seekSources={seekSources}
+            busyArtifactId={busyArtifactId}
             onConsentGranted={onRecordChanged}
             onDurationSeconds={onDurationSeconds}
             onJumpToMoment={onJumpToMoment}
-            onOpenSummaryTab={() => setTab("summary")}
+            onDownload={downloadArtifact}
+            onRewrite={endedRecord ? requestSummaryRewrite : undefined}
             speakerDirectory={speakerDirectory}
           />
         ) : (
@@ -1545,54 +1611,8 @@ function MeetingRecordSection({
           // The same switch the summary's citations make: the moment being cited is a node in
           // the transcript, and that node only exists while the transcript tab is rendered.
           onSeek={(atMs) => {
-            setTab("transcript");
+            onTabChange("recap");
             onJumpToMoment(atMs);
-          }}
-        />
-      ) : null}
-      {activeTab === "summary" && endedRecord ? (
-        <SummaryPanel
-          room={endedRecord}
-          segments={segments}
-          hasTranscript={hasTranscript}
-          busyArtifactId={busyArtifactId}
-          onDownload={downloadArtifact}
-          // Checking a claim means leaving the summary, so the tab switches with it —
-          // scrolling the transcript while the reader is still looking at the summary
-          // would look like the button did nothing.
-          onJumpToMoment={(atMs) => {
-            setTab("transcript");
-            onJumpToMoment(atMs);
-          }}
-          onRewrite={async (templateKey) => {
-            await translationRoomService.regenerateSummary(
-              endedRecord.id,
-              templateKey,
-            );
-            toast.success("Rewriting the summary…");
-            // The endpoint answers 202 — the summary lands on the artifact later, so this
-            // polls for it rather than trusting the response. It stops the moment the new
-            // shape arrives, and gives up after 90 seconds either way.
-            if (rewritePollRef.current !== null) {
-              window.clearInterval(rewritePollRef.current);
-            }
-            const askedAt = summaryStampRef.current;
-            const stopAt = Date.now() + 90_000;
-            rewritePollRef.current = window.setInterval(() => {
-              // Any change to the stamp means something landed — a new shape or the same shape
-              // rewritten. An artifact predating updated_at whose shape did not change cannot be
-              // detected this way and falls through to the deadline, which is the honest
-              // degradation rather than a poll that claims success.
-              const arrived = summaryStampRef.current !== askedAt;
-              if (arrived || Date.now() > stopAt) {
-                if (rewritePollRef.current !== null) {
-                  window.clearInterval(rewritePollRef.current);
-                  rewritePollRef.current = null;
-                }
-                return;
-              }
-              onRecordChanged();
-            }, 4000);
           }}
         />
       ) : null}
@@ -1995,68 +2015,54 @@ function LinkToolbarButton({
   );
 }
 
-function UserChip({
-  user,
-  compact = false,
-}: {
-  user: UserIdentity;
-  compact?: boolean;
-}) {
+/**
+ * The card a person opens into, and the popover shell around it.
+ *
+ * Extracted from the capsule chip this page used to draw people with. The card's markup lived
+ * inside that chip, so the only way for a row to offer the card was to BE a chip — which is
+ * what kept the roster drawn as a column of capsules. With the card standing on its own, a
+ * plain row can open it, and the chip had nothing left to do.
+ */
+function PersonPopover({ user }: { user: UserIdentity }) {
   return (
-    <Popover>
-      <PopoverTrigger
-        className={cn(
-          "inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          compact
-            ? "h-6 px-1.5 pr-2 text-[11px]"
-            : "h-7 px-2 pr-2.5 text-[12px]",
-        )}
-      >
-        <PersonAvatar
-          user={user}
-          className={compact ? "size-4 text-[9px]" : "size-5 text-[10px]"}
-        />
-        <span className="truncate font-medium">{user.name}</span>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
-      >
-        <div className="flex items-start gap-3">
-          <PersonAvatar user={user} className="size-10 text-[14px]" />
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-semibold text-ink">
-              {user.name}
-            </p>
-            <p className="truncate text-[12px] text-muted-foreground">
-              {user.email ?? user.id}
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {user.role ? <InlineChip>{user.role}</InlineChip> : null}
-              {user.status ? <InlineChip>{user.status}</InlineChip> : null}
-            </div>
+    <PopoverContent
+      align="start"
+      className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
+    >
+      <div className="flex items-start gap-3">
+        <PersonAvatar user={user} className="size-10 text-[14px]" />
+        <div className="min-w-0">
+          <p className="truncate text-[14px] font-semibold text-ink">
+            {user.name}
+          </p>
+          <p className="truncate text-[12px] text-muted-foreground">
+            {user.email ?? user.id}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {user.role ? <InlineChip>{user.role}</InlineChip> : null}
+            {user.status ? <InlineChip>{user.status}</InlineChip> : null}
           </div>
         </div>
-        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
-          <div>
-            <p>Speaks</p>
-            <p className="mt-0.5 font-medium text-ink">
-              {user.speakLanguage
-                ? getLanguageName(user.speakLanguage)
-                : "Not set"}
-            </p>
-          </div>
-          <div>
-            <p>Listens</p>
-            <p className="mt-0.5 font-medium text-ink">
-              {user.listenLanguage
-                ? getLanguageName(user.listenLanguage)
-                : "Not set"}
-            </p>
-          </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
+        <div>
+          <p>Speaks</p>
+          <p className="mt-0.5 font-medium text-ink">
+            {user.speakLanguage
+              ? getLanguageName(user.speakLanguage)
+              : "Not set"}
+          </p>
         </div>
-      </PopoverContent>
-    </Popover>
+        <div>
+          <p>Listens</p>
+          <p className="mt-0.5 font-medium text-ink">
+            {user.listenLanguage
+              ? getLanguageName(user.listenLanguage)
+              : "Not set"}
+          </p>
+        </div>
+      </div>
+    </PopoverContent>
   );
 }
 
@@ -2075,8 +2081,12 @@ function buildUserList(
       id: room.hostId,
       name: resolveUserName(room.hostId, membersArray, currentUser),
       email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
-      role: "Organizer",
-      status: "Organizer",
+      role: "Host",
+      status: "Host",
+      // The service seeds a participant row for the host at creation, so reaching here means
+      // that row is missing rather than that the host declined anything. "Not in room" is the
+      // neutral answer; bucketing them as an unanswered invitation would be a claim.
+      presence: "not-in-room",
     });
   }
 
@@ -2123,7 +2133,7 @@ function toUserIdentity(
 ): UserIdentity {
   const role =
     participant.role.toLowerCase() === "host"
-      ? "Organizer"
+      ? "Host"
       : normalizeLabel(participant.role);
   return {
     id: participant.userId || participant.id,
@@ -2138,6 +2148,7 @@ function toUserIdentity(
     email: resolveUserEmail(participant.userId, membersArray, currentUser),
     role,
     status: normalizeLabel(participant.status),
+    presence: participantPresence(participant.status),
     // NOT participant.avatarUrl. The participants API has never returned one — the field on the
     // web DTO is a phantom that reads as "this person has no picture". The workspace member list
     // is the only place a face lives, and this page already has it.
@@ -2147,21 +2158,56 @@ function toUserIdentity(
   };
 }
 
-function getHostUser(
-  room: TranslationRoomDto,
-  participants: UserIdentity[],
-  membersArray: WorkspaceMemberDto[],
-  currentUser: UserDto | null,
-) {
-  return (
-    participants.find((participant) => participant.id === room.hostId) ?? {
-      id: room.hostId,
-      name: resolveUserName(room.hostId, membersArray, currentUser),
-      email: room.hostId === currentUser?.id ? currentUser?.email : undefined,
-      role: "Organizer",
-      status: "Organizer",
-    }
-  );
+/**
+ * WT-641 — which heading each row sits under.
+ *
+ * Presence comes from `participantPresence`, the shared resolver people-panel.tsx already uses,
+ * so the two rosters in this app cannot end up disagreeing about what a status means. Rows with
+ * no presence at all are invitation-only: they have never been a participant, so they are
+ * bucketed by whether the invitation was answered.
+ *
+ * Empty groups are dropped rather than rendered as "Declined: 0". Order is fixed and reads as a
+ * priority: the group with something to do first, then the room, then the record, then the
+ * people who never arrived.
+ */
+function groupRoster(people: UserIdentity[], isEnded: boolean) {
+  const byPresence = (...states: ParticipantPresence[]) =>
+    people.filter(
+      (person) => person.presence && states.includes(person.presence),
+    );
+  const invitedWith = (accepted: boolean) =>
+    people.filter(
+      (person) =>
+        !person.presence &&
+        (person.status?.toLowerCase() === "accepted") === accepted,
+    );
+
+  const groups = [
+    { label: "Waiting to be admitted", people: byPresence("lobby") },
+    { label: "In room", people: byPresence("in-room", "connected") },
+    {
+      // "Left" is wrong for a meeting that is over — everybody left, that is what ending is.
+      label: isEnded ? "Attended" : "Left",
+      people: byPresence("disconnected", "left"),
+    },
+    { label: "Accepted", people: invitedWith(true) },
+    { label: "Awaiting reply", people: invitedWith(false) },
+    {
+      label: isEnded ? "Did not attend" : "Not in room",
+      // The people who never arrived are the longest group on a big invite list and the least
+      // often read, so they start closed — the heading still carries the count, which is the
+      // part anyone actually scans for.
+      collapsed: true,
+      people: byPresence("not-in-room"),
+    },
+  ].filter((group) => group.people.length > 0);
+
+  // Unless it is all there is: a panel whose only group is shut looks like a panel with no
+  // data in it.
+  return groups.map((group, _index, all) => ({
+    ...group,
+    defaultOpen: all.length === 1 || !("collapsed" in group && group.collapsed),
+  }));
 }
 
 
@@ -2200,21 +2246,6 @@ function PropertyPanel({
   );
 }
 
-function PropertyLine({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[12px] font-medium text-muted-foreground">{label}</p>
-      {children}
-    </div>
-  );
-}
-
 /**
  * WT-330(6): a Tracking-panel section that actually opens and closes.
  *
@@ -2242,67 +2273,80 @@ function PropertyLine({
  */
 function CollapsibleSection({
   label,
+  defaultOpen = true,
   children,
 }: {
   label: string;
+  /** Terminal groups start closed — see groupRoster. */
+  defaultOpen?: boolean;
   children: ReactNode;
 }) {
   return (
-    <Collapsible defaultOpen className="space-y-2">
+    <Collapsible defaultOpen={defaultOpen} className="space-y-2">
       <CollapsibleTrigger className="group flex w-full items-center gap-1.5 rounded-md py-0.5 text-left text-[12px] font-medium text-muted-foreground transition-colors hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
         <ChevronDown className="size-3 shrink-0 transition-transform duration-200 group-data-[panel-open]:rotate-0 -rotate-90" />
         {label}
       </CollapsibleTrigger>
       <CollapsiblePanel>
-        <div className="space-y-1.5">{children}</div>
+        {/* Columns follow the width this list actually has, which is not always the rail's.
+            Below `xl` the whole column drops under the main one and spans the page — and the
+            roster used to keep stacking one name per row there, each row using ~300px of
+            ~1100px and paying for the rest in page length. `auto-fill` with a 260px floor
+            resolves to a single column inside the 276px rail, so one declaration serves both
+            placements: no `compact` variant, no second render path.
+
+            260px is the width at which a row still fits a 24px avatar, an average Vietnamese
+            name and its status label without truncating. Below that, another column would only
+            trade page length for ellipses. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-x-3">
+          {children}
+        </div>
       </CollapsiblePanel>
     </Collapsible>
   );
 }
 
-function UserRow({ user }: { user: UserIdentity }) {
+/**
+ * One person on the roster: a ROW, not a capsule.
+ *
+ * The two cost the same vertical space — an `h-6` chip inside a `py-1.5` row is 36px either
+ * way — so the capsule was not buying density with what it spent. What it spent was a border,
+ * a shadow and a pill shape that reads as a removable token in a "To:" field rather than as a
+ * row in a list, and it shrank the popover's hit target to the width of the name: 24px tall,
+ * which is exactly WCAG 2.2 SC 2.5.8's floor with no headroom. The row is the trigger now, so
+ * the target is the whole band, and the same padding doubles as visual rhythm.
+ *
+ * The presence dot keeps the meaning it already has everywhere else in the app (see
+ * people-panel.tsx): whether this person is reachable in WarpTalk at all — NOT whether they
+ * are in this room. Room presence is the label on the right and the group this row sits in.
+ * One mark, one meaning, or the same dot means two things on two screens.
+ */
+function UserRow({ user, isHost }: { user: UserIdentity; isHost?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md px-1 py-1.5 hover:bg-surface-2/70">
-      <UserChip user={user} compact />
-      {user.status ? (
-        <span className="truncate text-[11px] text-muted-foreground">
-          {user.status}
+    <Popover>
+      <PopoverTrigger className="grid w-full grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-surface-2/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30">
+        <span className="relative size-6">
+          <PersonAvatar user={user} className="size-6 text-[10px]" />
+          <AvatarPresenceDot userId={user.id} />
         </span>
-      ) : null}
-    </div>
-  );
-}
-
-function ActionButton({
-  children,
-  icon,
-  destructive,
-  disabled,
-  onClick,
-}: {
-  children: ReactNode;
-  icon: ReactNode;
-  destructive?: boolean;
-  disabled?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] transition-colors hover:bg-surface-2 disabled:opacity-50",
-        destructive
-          ? "text-red-500 hover:bg-red-500/10"
-          : "text-muted-foreground",
-      )}
-    >
-      {icon}
-      <span className={cn("text-foreground", destructive && "text-red-500")}>
-        {children}
-      </span>
-    </button>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="truncate text-[12.5px] font-medium text-ink">
+            {user.name}
+          </span>
+          {isHost ? (
+            <span className="shrink-0 rounded bg-primary/10 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-primary">
+              Host
+            </span>
+          ) : null}
+        </span>
+        {user.status ? (
+          <span className="shrink-0 text-[10.5px] text-muted-foreground">
+            {user.status}
+          </span>
+        ) : null}
+      </PopoverTrigger>
+      <PersonPopover user={user} />
+    </Popover>
   );
 }
 
@@ -2315,8 +2359,31 @@ function isUpcomingScheduledRoom(room: TranslationRoomDto): boolean {
   );
 }
 
-function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
+/**
+ * The room's secondary actions, in one menu beside the primary button.
+ *
+ * This replaces the right column's `Actions` panel. Of that panel's five entries, `Copy room
+ * code` duplicated the code pill under the title (which copies on click, WT-310(12)) and
+ * `Add to favorites` was wired to nothing at all (WT-642). The three that did something are
+ * here. Destructive last and marked, the way it was in the panel.
+ */
+function RoomActionsMenu({
+  room,
+  isHost,
+  canEnd,
+  endPending,
+  onCopy,
+  onEnd,
+}: {
+  room: TranslationRoomDto;
+  isHost: boolean;
+  canEnd: boolean;
+  endPending: boolean;
+  onCopy: (text: string, label: string) => void;
+  onEnd: () => void;
+}) {
   const joinLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
+  const showCalendar = isUpcomingScheduledRoom(room);
 
   async function handleDownloadIcs() {
     const { data } = await translationRoomService.downloadCalendarIcs(room.id);
@@ -2333,21 +2400,48 @@ function AddToCalendarMenu({ room }: { room: TranslationRoomDto }) {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
+  // Nothing to offer is not the same as an empty menu: a trigger that opens onto nothing is
+  // exactly the failure WT-310(7) cleaned up elsewhere on this page.
+  if (!isHost && !showCalendar) return null;
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex min-h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-[13px] text-muted-foreground outline-none transition-colors hover:bg-surface-2">
-        <CalendarPlus className="size-3.5" />
-        <span className="text-foreground">Add to calendar</span>
+      <DropdownMenuTrigger
+        aria-label="More actions"
+        title="More actions"
+        className="grid size-9 shrink-0 place-items-center rounded-md border border-border text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <MoreHorizontal className="size-4" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
-        <DropdownMenuItem onClick={() => void handleDownloadIcs()}>
-          <Download className="mr-2 size-3.5" />
-          Download .ics
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleAddToGoogleCalendar}>
-          <CalendarPlus className="mr-2 size-3.5" />
-          Add to Google Calendar
-        </DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-56">
+        {isHost ? (
+          <DropdownMenuItem onClick={() => onCopy(joinLink, "Invite link")}>
+            <LinkIcon className="mr-2 size-3.5" />
+            Copy invite link
+          </DropdownMenuItem>
+        ) : null}
+        {showCalendar ? (
+          <>
+            <DropdownMenuItem onClick={() => void handleDownloadIcs()}>
+              <Download className="mr-2 size-3.5" />
+              Download .ics
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleAddToGoogleCalendar}>
+              <CalendarPlus className="mr-2 size-3.5" />
+              Add to Google Calendar
+            </DropdownMenuItem>
+          </>
+        ) : null}
+        {canEnd ? (
+          <DropdownMenuItem
+            disabled={endPending}
+            onClick={onEnd}
+            className="text-red-500 focus:text-red-500"
+          >
+            <StopCircle className="mr-2 size-3.5" />
+            End meeting
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -2480,7 +2574,18 @@ function resolveUserName(
     return normalizedFallback;
   }
 
-  return "Organizer";
+  // A display NAME, and deliberately NOT a role word.
+  //
+  // The role rename (Organizer -> Host) does not reach here, and must not: the guard directly
+  // above exists because the service sends displayName "host" for the host's own row, and
+  // rendering a role where a person's name goes is the defect that guard was written for.
+  // Returning "Host" would land on exactly the label that ticket removed, by another route.
+  //
+  // "Organizer" had the same problem and one more: this fallback is generic — it answers for
+  // ANY user id that resolves to nobody, not just the host — so it was calling unresolvable
+  // members organizers. The role now travels as a badge on the row, which frees the name to
+  // say the only true thing left: we do not know it.
+  return "Unnamed participant";
 }
 
 function formatDateTime(value?: string) {

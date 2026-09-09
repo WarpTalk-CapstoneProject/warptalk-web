@@ -19,12 +19,15 @@ import {
   Check,
   CheckCircle,
   ChevronDown,
+  Clock,
   Copy,
   Download,
   FileText,
   GitCommitVertical,
+  History,
   Languages,
   Loader2,
+  Lock,
   MessageSquare,
   Pencil,
   Play,
@@ -45,6 +48,15 @@ import {
 } from "@/lib/meeting/transcript-absence";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,10 +65,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  useSegmentCorrections,
   useTranscriptLanguageBackfill,
   useTranslationRefreshAfterCorrection,
 } from "@/hooks/use-transcripts";
+import {
+  formatMeetingDuration,
+  resolveMeetingDurationSeconds,
+} from "@/lib/meeting/room-history-mapping";
+import { correctionAuthorName } from "@/lib/transcript/correction-history";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 // WT-605. The pause-window read lives with the other transcript hooks, not with the room
@@ -83,6 +102,7 @@ import {
   type ReadingAnchor,
 } from "@/lib/transcript/document-reading";
 import {
+  firstTranslationStart,
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
@@ -118,14 +138,34 @@ import type {
 } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
-/** The room page's InlineChip, in the one shape this panel uses it. */
-function TranscriptChip({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
+/** The room page's InlineChip, in the one shape this panel uses it.
+ *
+ *  12px, not 11: WT-311(d) — these chips ARE the transcript's header, and at 11px muted the
+ *  facts on it (how many entries, how long, when translation started) were the smallest text on
+ *  the page. The icon stays 14px so the chip does not grow with it. */
+function TranscriptChip({
+  children,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+  title?: string;
+}) {
   return (
-    <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+    <span
+      title={title}
+      className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+    >
       {icon}
       <span className="truncate">{children}</span>
     </span>
   );
+}
+
+/** A timestamp as the wall clock the reader keeps — "09:41", not the ISO string. */
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 /** How the transcript is laid out: as the conversation, as a document, or on a timeline. */
@@ -224,6 +264,8 @@ export function MeetingTranscriptArtifact({
   speakerDirectory,
   transcriptErrorCode,
   transcriptLoading,
+  meetingStartedAt,
+  meetingEndedAt,
 }: {
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
@@ -260,6 +302,14 @@ export function MeetingTranscriptArtifact({
    *  all, so this is the only place one exists. Omit it and every speaker is initials, which is
    *  what most of them are anyway. */
   speakerDirectory?: Readonly<Record<string, { fullName?: string | null; avatarUrl?: string | null }>>;
+  /**
+   * WT-311(c): when the MEETING ran — the room's own `startedAt`/`endedAt`, never the
+   * translation session's. A host who never pressed Start Translation still held a meeting, and
+   * its length was being read off a session that did not exist and coming out as "0m". A
+   * missing end renders as "—" rather than as a number.
+   */
+  meetingStartedAt?: string | null;
+  meetingEndedAt?: string | null;
 }) {
   // Memoised on the fetched rows rather than recomputed per render: the language options and
   // the translation index are derived from these, and rebuilding them on every keystroke of a
@@ -300,6 +350,19 @@ export function MeetingTranscriptArtifact({
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
   const pauseGaps = resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime);
   const totalCount = grouped.length;
+  // WT-311(d): when translation first started, from the sessions the meeting actually ran. Null
+  // when it never did, and then the header simply does not claim it.
+  const translationStartedAt = useMemo(
+    () => firstTranslationStart(sessionsQuery.data ?? []),
+    [sessionsQuery.data],
+  );
+  // WT-311(c): the meeting's own length. Only once it is over — a running meeting has no
+  // duration yet, and "—" beside "Live" would read as a broken clock rather than an open one.
+  const meetingDuration = isEnded
+    ? formatMeetingDuration(
+        resolveMeetingDurationSeconds({ startedAt: meetingStartedAt, endedAt: meetingEndedAt }),
+      )
+    : null;
   const absence = describeTranscriptAbsence({
     lineCount: totalCount,
     isEnded,
@@ -358,6 +421,11 @@ export function MeetingTranscriptArtifact({
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
   // with one part missing. Counted here and said out loud below, rather than left for the reader
   // to discover one line at a time.
+  //
+  // Counted over `grouped`, so it is in the same unit as `totalCount` and as the "Saved · N
+  // entries" chip: one per ROW the panel draws, not one per stored STT chunk. That is the whole
+  // reason TranscriptLanguageStatus prints this number instead of the server's — see the note
+  // there — and it is why anything added to this reduce has to be a fact about a rendered line.
   const incompleteCount = useMemo(() => {
     if (displayLanguage === AS_SPOKEN) return 0;
     return grouped.reduce((count, line) => {
@@ -715,6 +783,17 @@ export function MeetingTranscriptArtifact({
         displayLanguage === AS_SPOKEN || resolved.isTranslated || resolved.isUntranslated,
       revealed: Boolean(revealedOriginals[segment.id]),
       onToggleReveal: () => toggleOriginal(segment.id),
+      // WT-311(f): only a line somebody has corrected has a history, and only a SAVED transcript
+      // has an id to ask for it by — the live tab has neither, and renders nothing here.
+      history:
+        segment.isCorrected && transcriptId ? (
+          <TranscriptVersionHistory
+            transcriptId={transcriptId}
+            segmentIds={segment.mergedSegmentIds}
+            currentUserId={currentUserId}
+            speakerDirectory={speakerDirectory}
+          />
+        ) : null,
       canCorrect,
       // WT-589: in batch mode every line is open at once, so the three layouts need no changes —
       // they already ask "is this row being edited" and render `editor` when it is.
@@ -788,6 +867,10 @@ export function MeetingTranscriptArtifact({
   const batchContainerRef = useRef<HTMLDivElement>(null);
   const refreshTranslationsAfterCorrection = useTranslationRefreshAfterCorrection(transcriptId);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  // WT-311(a): finalizing is irreversible — it locks the wording for good — and a bare button
+  // called "Finalize" did it on one click with nothing on screen saying so. The dialog is the
+  // one place that sentence is said before it is too late to matter.
+  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
 
   const isFinalized = transcriptStatus === "finalized";
   const canCorrect = Boolean(canEdit && transcriptId) && !isFinalized;
@@ -926,7 +1009,7 @@ export function MeetingTranscriptArtifact({
     try {
       await transcriptService.finalize(transcriptId);
       onSegmentsChanged?.();
-      toast.success("Transcript finalized.");
+      toast.success("Transcript finalized and locked.");
     } catch {
       toast.error("Could not finalize the transcript.");
     } finally {
@@ -968,10 +1051,36 @@ export function MeetingTranscriptArtifact({
             {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
             {totalCount === 1 ? "entry" : "entries"}
           </TranscriptChip>
+          {/* WT-311(c): from the room's own start and end. It used to come off the translation
+              session, so a meeting whose host never pressed Start Translation read "0m". */}
+          {meetingDuration ? (
+            <TranscriptChip
+              icon={<Clock className="size-3.5" />}
+              title="How long the meeting ran, from when it was started to when it was ended"
+            >
+              Duration {meetingDuration}
+            </TranscriptChip>
+          ) : null}
+          {/* WT-311(d): translation is a thing the host switches on partway through, and when
+              they did is the fact that explains why the first stretch of a transcript has no
+              translations. Absent when translation never ran. */}
+          {translationStartedAt ? (
+            <TranscriptChip
+              icon={<Languages className="size-3.5" />}
+              title={new Date(translationStartedAt).toLocaleString()}
+            >
+              Translation started {clockTime(translationStartedAt)}
+            </TranscriptChip>
+          ) : null}
           {/* Said out loud, because after finalizing the pencils simply stop appearing and
               that on its own reads as the page having broken. */}
           {isFinalized ? (
-            <TranscriptChip icon={<CheckCircle className="size-3.5" />}>Finalized</TranscriptChip>
+            <TranscriptChip
+              icon={<Lock className="size-3.5" />}
+              title="The wording is approved and locked. No further edits are possible."
+            >
+              Finalized &amp; locked
+            </TranscriptChip>
           ) : null}
         </div>
         {totalCount > 0 ? (
@@ -1073,20 +1182,56 @@ export function MeetingTranscriptArtifact({
                 </button>
               )
             ) : null}
+            {/* WT-311(a): "Finalize & lock", with the lock in the label, because locking is what
+                it does — the old "Finalize" read as "mark done" and silently made the transcript
+                uneditable forever. The click opens the confirmation below; the request is sent
+                from there. */}
             {canCorrect && !isBatchEditing ? (
               <button
                 type="button"
-                onClick={() => void finalizeTranscript()}
+                onClick={() => setIsFinalizeDialogOpen(true)}
                 disabled={isFinalizing}
+                title="Approve the wording and lock it. No further edits are possible afterwards."
                 className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
               >
-                <CheckCircle className="size-3.5" />
-                {isFinalizing ? "Finalizing…" : "Finalize"}
+                <Lock className="size-3.5" />
+                {isFinalizing ? "Finalizing…" : "Finalize & lock"}
               </button>
             ) : null}
           </div>
         ) : null}
       </div>
+
+      <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+        <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Finalize and lock this transcript?</DialogTitle>
+            <DialogDescription className="pt-2 text-ink-subtle">
+              Once finalized, the transcript is approved and locked. No further edits are
+              possible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsFinalizeDialogOpen(false)}
+              className="border-border bg-surface-2 text-ink hover:bg-surface-3"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isFinalizing}
+              onClick={() => {
+                setIsFinalizeDialogOpen(false);
+                void finalizeTranscript();
+              }}
+            >
+              <Lock />
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* What is still not in the chosen language, and what is being done about it. This used to
           be a footnote and nothing more — an honest one, but a reader told that 113 of 285 lines
@@ -1297,15 +1442,13 @@ function TranscriptSessionDivider({
   sessionNumber: number;
   session: TranslationRoomSessionDto | null;
 }) {
-  const started = session?.startedAt
-    ? new Date(session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
-  const ended = session?.endedAt
-    ? new Date(session.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "now";
+  const started = session?.startedAt ? clockTime(session.startedAt) : null;
+  const ended = session?.endedAt ? clockTime(session.endedAt) : "now";
 
   return (
-    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    /* 11px, up from 10 (WT-311(d)): this divider is where a reader learns when translation
+       started and stopped, and it was the smallest text on the page. */
+    <div className="flex items-center gap-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       <div className="h-px flex-1 bg-border" />
       <span>
         Translation {sessionNumber}
@@ -1346,10 +1489,28 @@ function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
  * gap exists and nothing is filling it (the live tab, which has no saved transcript to work on);
  * or there is nothing to say.
  *
- * The counts come from the server when they are there, because the client only knows about the
- * translations it has fetched, and the whole point of a running backfill is that more are
- * arriving. `incompleteCount` is the fallback — it also catches a merged utterance with one part
- * translated, which the server's per-segment count cannot see.
+ * EVERY NUMBER PRINTED HERE IS A COUNT OF RENDERED ROWS (2026-09-09)
+ *   It used to print the server's counts when a coverage response had arrived
+ *   (`coverage?.missing ?? incompleteCount`, `coverage?.totalSegments ?? totalCount`) and the
+ *   client's when it had not — and those two are not the same unit. The server counts STORED
+ *   SEGMENTS, one per finalized STT chunk; this panel merges the consecutive chunks of one
+ *   continuous utterance into a single row, which is what "entry" means everywhere else on this
+ *   surface: the toolbar chip says "Saved · N entries" and the tab label says "Transcript (N)",
+ *   both of them `grouped.length`.
+ *
+ *   So one finished meeting read "Transcript (7)", "Saved · 7 entries" and "1 of 13 entries is
+ *   not in English yet" at the same moment. All three numbers were true; nothing on screen said
+ *   that the 13 was counted in a unit the reader cannot see, and the sentence read as though six
+ *   entries were hidden. Worse, the unit CHANGED under the reader: the same sentence said "of 7"
+ *   until the coverage query resolved and "of 13" after it.
+ *
+ *   The server's answer is not discarded — `coverage.status` is still what decides which of these
+ *   four states this is, and only the server can know that a backfill is running or has failed.
+ *   What is dropped is printing its per-segment arithmetic in a sentence about rows.
+ *
+ *   `incompleteCount` is also the stricter count of the two: it catches a merged utterance with
+ *   one part translated and one part missing, which the server sees as coverage for one segment
+ *   and a shortfall on another, and never as one line the reader cannot fully read.
  */
 function TranscriptLanguageStatus({
   language,
@@ -1377,8 +1538,8 @@ function TranscriptLanguageStatus({
   const name = getLanguageName(language);
   const running = coverage?.status === "running" || isStarting;
   const failed = coverage?.status === "failed";
-  const missing = coverage?.missing ?? incompleteCount;
-  const total = coverage?.totalSegments ?? totalCount;
+  const missing = incompleteCount;
+  const total = totalCount;
   const done = Math.max(0, total - missing);
 
   if (running) {
@@ -1633,6 +1794,8 @@ type TranscriptRowBase = {
   showLanguage: boolean;
   revealed: boolean;
   onToggleReveal: () => void;
+  /** WT-311(f): the "Version history" chip on a corrected line; null when it has none. */
+  history: ReactNode;
   canCorrect: boolean;
   isEditing: boolean;
   onStartEdit: () => void;
@@ -1654,6 +1817,7 @@ function TranscriptChatRow({
   showLanguage,
   revealed,
   onToggleReveal,
+  history,
   canCorrect,
   isEditing,
   onStartEdit,
@@ -1688,6 +1852,9 @@ function TranscriptChatRow({
             />
           ) : null}
           {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
+          {/* On the label line, not in the bubble: the bubble's corner already holds the pencil,
+              and a second control there would sit on top of the text it is about. */}
+          {history}
         </div>
         {isEditing ? (
           editor
@@ -1983,6 +2150,7 @@ function TranscriptDocumentLine({
   showLanguage,
   revealed,
   onToggleReveal,
+  history,
   canCorrect,
   isEditing,
   onStartEdit,
@@ -2020,6 +2188,10 @@ function TranscriptDocumentLine({
         ) : null}
       </div>
       <div className="flex shrink-0 items-start gap-1 pt-1.5 print:hidden">
+        {/* WT-311: the version-history entry point, which development does not have. Hidden while
+            editing — the editor is the history's own next entry, and offering to browse revisions
+            of a line you are mid-way through rewriting reads as a way to lose the rewrite. */}
+        {!isEditing ? history : null}
         {/* Only where the answer CHANGED — see shouldShowLanguageChip. Its absence is the message:
             no chip means this line is in the same language, said the same way, as the one above. */}
         {showLanguage ? (
@@ -2138,6 +2310,7 @@ function TranscriptTimelineLine({
   showLanguage,
   revealed,
   onToggleReveal,
+  history,
   canCorrect,
   isEditing,
   onStartEdit,
@@ -2159,6 +2332,7 @@ function TranscriptTimelineLine({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        {history}
         {showLanguage ? (
           <TranscriptLineLanguage
             resolved={resolved}
@@ -2300,6 +2474,117 @@ function TranscriptSpokenOriginal({ resolved }: { resolved: ResolvedTranscriptLi
       <span className="mr-1.5 font-medium uppercase">{resolved.spokenLanguage}</span>
       {resolved.spokenText}
     </p>
+  );
+}
+
+/**
+ * WT-311(f): a corrected line says so, and shows how it got there.
+ *
+ * A correction rewrites the line in place, so without this the reader had no way to tell an
+ * edited sentence from an original one, let alone see what it said before. The chip is visible
+ * at rest rather than on hover — "this was changed" is a fact about the record, not a control —
+ * and it is labelled by what it opens, because "Edited" alone reads as a status, not a door —
+ * and the history behind it is fetched only when somebody opens it: the list mounts with the
+ * popover, and the hook inside it does the asking.
+ *
+ * A popover rather than a modal: the reader is comparing a revision with the line it sits
+ * beside, and a modal would cover the line.
+ */
+function TranscriptVersionHistory({
+  transcriptId,
+  segmentIds,
+  currentUserId,
+  speakerDirectory,
+}: {
+  transcriptId: string;
+  /** Every stored segment behind this rendered line — corrections are recorded per segment. */
+  segmentIds: readonly string[];
+  currentUserId?: string;
+  speakerDirectory?: Readonly<Record<string, { fullName?: string | null }>>;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label="Version history"
+        title="This line was corrected — show its version history"
+        className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-border bg-surface-1 px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+      >
+        <History className="size-3" />
+        Version history
+      </PopoverTrigger>
+      {/* Portaled by the primitive, so the transcript's own scroll frame cannot clip it — the
+          frame is overflow-y-auto, which the browser computes as clipping on both axes. */}
+      <PopoverContent align="start" className="w-[340px] max-w-[calc(100vw-2rem)] p-0">
+        <TranscriptCorrectionList
+          transcriptId={transcriptId}
+          segmentIds={segmentIds}
+          currentUserId={currentUserId}
+          speakerDirectory={speakerDirectory}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** The revisions themselves, newest first. Mounted only while the popover is open. */
+function TranscriptCorrectionList({
+  transcriptId,
+  segmentIds,
+  currentUserId,
+  speakerDirectory,
+}: {
+  transcriptId: string;
+  segmentIds: readonly string[];
+  currentUserId?: string;
+  speakerDirectory?: Readonly<Record<string, { fullName?: string | null }>>;
+}) {
+  const query = useSegmentCorrections(transcriptId, segmentIds);
+
+  return (
+    <div className="max-h-[320px] overflow-y-auto">
+      <div className="border-b border-border px-3 py-2">
+        <p className="text-[12px] font-semibold text-ink">Version history</p>
+        <p className="text-[11px] text-muted-foreground">
+          Newest first. Each entry is one saved correction.
+        </p>
+      </div>
+      {query.isLoading ? (
+        <p className="flex items-center gap-2 px-3 py-3 text-[12px] text-muted-foreground">
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+          Loading…
+        </p>
+      ) : query.isError ? (
+        <p className="px-3 py-3 text-[12px] text-muted-foreground">
+          Could not load the version history. Close this and try again.
+        </p>
+      ) : !query.data?.length ? (
+        // The line is marked corrected and the server holds no rows for it. Say that rather than
+        // nothing: an empty popover reads as a request that never returned.
+        <p className="px-3 py-3 text-[12px] text-muted-foreground">
+          No corrections are recorded for this line.
+        </p>
+      ) : (
+        <ol className="divide-y divide-border">
+          {query.data.map((correction) => (
+            <li key={correction.id} className="space-y-1 px-3 py-2.5">
+              <p className="text-[12px] leading-5 text-ink">{correction.correctedText}</p>
+              <p className="text-[11px] leading-5 text-muted-foreground line-through decoration-muted-foreground/60">
+                {correction.originalText}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {correctionAuthorName(correction.userId, currentUserId, speakerDirectory)} ·{" "}
+                <time dateTime={correction.createdAt}>
+                  {new Date(correction.createdAt).toLocaleString([], {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </time>
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
 }
 

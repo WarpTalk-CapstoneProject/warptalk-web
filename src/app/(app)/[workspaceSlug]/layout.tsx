@@ -2,9 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
+import { rememberLastWorkspaceSlug } from "@/lib/workspace/last-workspace";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
@@ -21,6 +23,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const selectWorkspace = useSelectWorkspace();
   const syncedWorkspaceIdRef = useRef<string | null>(null);
 
@@ -101,6 +104,15 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       selectWorkspace.isPending ||
       activeWorkspaceSlug !== workspaceSlug ||
       activeWorkspaceId !== targetWorkspace.id);
+
+  // WT-347: this is the one moment at which "the workspace this account is in" is a confirmed
+  // fact — the server has just re-selected it for this user — so it is the one place the memory
+  // the login page reads is written. Not in the store: the store is session-scoped and is wiped
+  // by the very sign-in that needs the answer. See lib/workspace/last-workspace.ts.
+  useEffect(() => {
+    if (isSyncing || !workspaceSlug || !currentUserId) return;
+    rememberLastWorkspaceSlug(currentUserId, workspaceSlug);
+  }, [isSyncing, workspaceSlug, currentUserId]);
 
   // `workspaceSlug` is nullable and the effect above redirects when it is null — but the redirect
   // happens after this render, so without the guard the paywall below would be handed an empty

@@ -5,7 +5,8 @@ import { Pause, Play, SpinnerGap } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { getErrorMessage } from "@/lib/api/errors";
+import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
+import { PREVIEW_FALLBACK_MESSAGE, previewErrorMessageFor } from "@/lib/voice/preview-error";
 import { VoiceProfileService } from "@/services/voice-profile.service";
 
 /**
@@ -128,30 +129,40 @@ export function VoicePreviewButton({
  * The reason this is not just `getErrorMessage`.
  *
  * The request asks for `responseType: "blob"`, and axios honours that for FAILURE responses too
- * — so the server's `{ error, errorCode }` body arrives as a Blob and every message extractor
- * reads it as "[object Blob]". The body has to be read back as text before it says anything.
+ * — so the server's `{ error, code }` body arrives as a Blob and every message extractor reads it
+ * as "[object Blob]". The body has to be read back as text before it says anything.
  *
  * That matters here more than in most places: the named failures this endpoint returns ("the
  * preview is taking longer than expected", "that voice is not one you can preview") are the
  * whole difference between a button that explains itself and one that just does not work.
+ *
+ * WT-649 added the second half. Both fields are read now, not just the message, and the code
+ * decides the copy where we recognise it — see previewErrorMessageFor for why an unknown code
+ * deliberately keeps the server's own sentence.
  */
 async function previewErrorMessage(error: unknown): Promise<string> {
-  const fallback = "Could not play a preview of this voice.";
   const body: unknown = (error as { response?: { data?: unknown } })?.response?.data;
 
   if (body instanceof Blob) {
     try {
       const parsed: unknown = JSON.parse(await body.text());
-      const message = (parsed as { error?: unknown })?.error;
-      if (typeof message === "string" && message.trim()) {
-        return message;
-      }
+      const { error: message, code } = (parsed ?? {}) as { error?: unknown; code?: unknown };
+
+      return previewErrorMessageFor(
+        typeof code === "string" ? code : undefined,
+        typeof message === "string" ? message : undefined,
+      );
     } catch {
       // Not JSON, or unreadable. Fall through to the generic message rather than showing raw
       // bytes to somebody who pressed play.
     }
-    return fallback;
+    return PREVIEW_FALLBACK_MESSAGE;
   }
 
-  return getErrorMessage(error, fallback);
+  // Not a blob body: a transport failure, or a plain JSON error. apiErrorCode falls back to the
+  // HTTP status when there is no code, which is still enough to recognise a refusal.
+  return previewErrorMessageFor(
+    apiErrorCode(error),
+    getErrorMessage(error, PREVIEW_FALLBACK_MESSAGE),
+  );
 }

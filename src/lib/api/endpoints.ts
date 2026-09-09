@@ -38,6 +38,14 @@ export const API = {
     // voice does real work on the AI side; later calls for the same (voice, language) are
     // served from that render.
     preview: "/auth/voice-profiles/preview",
+    /**
+     * The recording somebody uploaded, played back to them — NOT the clone.
+     *
+     * Separate from `preview` because they answer different questions: preview is the clone
+     * speaking a fixed sentence, this is the original. Hearing one without the other says nothing
+     * about how good the clone is.
+     */
+    sample: (profileId: string) => `/auth/voice-profiles/${profileId}/sample`,
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
@@ -148,6 +156,18 @@ export const API = {
     exportDocx: (roomId: string, template?: string) =>
       `/rooms/${roomId}/minutes/export.docx` + (template ? `?template=${encodeURIComponent(template)}` : ""),
     /**
+     * The same document, converted from that .docx — never a second layout, so `template` means
+     * exactly what it means above.
+     */
+    exportPdf: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.pdf` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    /** The share dialog's state. GET creates the link, restricted, on first ask. */
+    share: (roomId: string) => `/rooms/${roomId}/minutes/share`,
+    /** Email travels in the query string: an address contains characters a route segment does not. */
+    sharePerson: (roomId: string, email: string) =>
+      `/rooms/${roomId}/minutes/share/people?email=${encodeURIComponent(email)}`,
+    sharePeople: (roomId: string) => `/rooms/${roomId}/minutes/share/people`,
+    /**
      * Every current biên bản in the workspace this caller may read.
      *
      * Anchored on the workspace rather than on a room because the Artifacts library asks a
@@ -156,6 +176,22 @@ export const API = {
      * catch-all — see workspace-minutes-route.
      */
     forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
+  },
+  /**
+   * Reading a biên bản from a share link.
+   *
+   * The only unauthenticated routes the web calls. The token IS the credential, so these are
+   * requested through publicApiClient — which never refreshes a session or redirects to /login
+   * on a 401, because a visitor with no account is not an expired session.
+   */
+  sharedMinutes: {
+    byToken: (token: string) => `/shared/minutes/${encodeURIComponent(token)}`,
+    exportDocx: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.docx`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    exportPdf: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.pdf`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
