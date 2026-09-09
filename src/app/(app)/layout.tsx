@@ -45,7 +45,7 @@ import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { useBridgeTrigger } from "@/hooks/use-bridge-trigger";
 import { onBridgeRoomActivated } from "@/lib/desktop/bridge";
-import type { TriggerMeeting } from "@/lib/meeting/bridge-trigger";
+import { extractMeetCodeFromUrl, type TriggerMeeting } from "@/lib/meeting/bridge-trigger";
 import {
   preferRememberedWorkspace,
   recallLastWorkspaceSlug,
@@ -281,7 +281,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       // yesterday eligible forever instead of letting it fall out of the window like any other.
       const startsAtMs = Date.parse(room.scheduledAt ?? room.createdAt);
       if (Number.isNaN(startsAtMs)) continue;
-      byRoomId.set(room.id, { roomId: room.id, startsAtMs });
+      // The code the sensor reads off the browser's own address bar, so a Meet call that is NOT
+      // this meeting cannot latch it. `nextBridgeTrigger` only ever uses it to REFUSE a sighting
+      // whose code disagrees; an absent one proves nothing either way and is left to the schedule
+      // — which is the common case, because Meet drops the code from a call that has a name.
+      // Without this the comparison had nothing to compare and every bridge room in its window
+      // accepted any Meet window on screen.
+      byRoomId.set(room.id, {
+        roomId: room.id,
+        startsAtMs,
+        meetCode: extractMeetCodeFromUrl(room.externalMeetingUrl),
+      });
     }
     return Array.from(byRoomId.values());
   }, [workspaceRoomsQuery.data, activeBridgeRoomQuery.data]);
