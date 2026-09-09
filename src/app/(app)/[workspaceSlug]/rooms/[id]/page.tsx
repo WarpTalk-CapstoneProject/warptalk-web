@@ -97,6 +97,11 @@ import {
 } from "@/lib/meeting/meeting-artifacts";
 import { resolveCitationRowId } from "@/lib/meeting/citation-target";
 import {
+  MOMENT_PARAM,
+  parseMomentParam,
+  withMomentParam,
+} from "@/lib/meeting/moment-link";
+import {
   canAlignToRecording,
   seekTargetSeconds,
   type SeekSources,
@@ -381,15 +386,58 @@ export default function RoomInformationPage() {
         ? "processing"
         : null;
 
+  /**
+   * WT-655 — true only for the instant a `?t=` arrival is being applied.
+   *
+   * The arrival runs through the same `jumpToTranscriptMoment` a click does, deliberately: one path
+   * from a moment to a scrolled row, so the row-resolution fix Wave 1 landed cannot be bypassed. But
+   * that path writes the moment back into the URL, which for a click is the whole point and for an
+   * arrival would put back the parameter we are about to strip — and the strip is what stops the
+   * link re-firing every time an internal navigation returns to this page. The apply is entirely
+   * synchronous, so a flag set around it is enough; nothing can interleave.
+   */
+  const arrivingFromMomentLinkRef = useRef(false);
+
+  /**
+   * Put the moment the reader is looking at into the address bar. WT-655.
+   *
+   * NOT A NEW LINK, AND NOTHING IS MADE PUBLIC. This is the page's own URL with one parameter added:
+   * whoever opens it meets exactly the access checks this page already applies, and a viewer with no
+   * right to the meeting sees what they would have seen without the parameter. Worth saying out loud,
+   * because "share a moment" is the kind of feature that grows a public-link mode by accident.
+   *
+   * `router.replace`, so the back button still goes back to wherever the reader came from rather
+   * than walking them through every timestamp they clicked. `scroll: false` because the default
+   * scrolls to the top — which would undo the scroll that is the reason we are here.
+   *
+   * THE CONSEQUENCE, STATED: after clicking a timestamp the URL shows that moment, so copying the
+   * address bar copies what is on screen. A refresh then honours it once and clears it again.
+   */
+  const rememberMomentInUrl = useCallback(
+    (atMs: number) => {
+      if (arrivingFromMomentLinkRef.current) return;
+      const query = withMomentParam(window.location.search, atMs);
+      router.replace(
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+        { scroll: false },
+      );
+    },
+    [router],
+  );
+
   /** Move the recording to a meeting moment. Silent when the clocks cannot be reconciled. */
   const requestSeek = useCallback(
     (atMs: number) => {
+      // Before the refusal below, not after it. The moment is on the MEETING axis and is what the
+      // reader is looking at whether or not the video can follow — a meeting with no recording, or
+      // with several, still deserves a shareable address bar.
+      rememberMomentInUrl(atMs);
       const seconds = seekTargetSeconds(seekSources, atMs);
       if (seconds === null) return;
       // A token, so clicking the SAME line twice seeks twice — the viewer has scrubbed away since.
       setSeek({ seconds, token: Date.now() });
     },
-    [seekSources],
+    [seekSources, rememberMomentInUrl],
   );
 
   /**
@@ -493,6 +541,85 @@ export default function RoomInformationPage() {
     },
     [transcriptSegments, transcriptRows, requestSeek],
   );
+
+  /** Whether this arrival's `?t=` has been dealt with. One shot per mount, malformed values too. */
+  const momentLinkAppliedRef = useRef(false);
+  /**
+   * Whether the answer carrying `recordingStartedAt` is in.
+   *
+   * `useEndedRoomRecord` is disabled until a workspace id is known, and a disabled query never
+   * leaves `pending` — so "settled" cannot be `!isPending` or an arrival on a meeting with no
+   * workspace resolved would wait forever for an answer that is not coming. A room whose own lookup
+   * has finished with no workspace behind it never had a record to fetch, and counts as answered.
+   */
+  const recordAnswerSettled =
+    endedRecordQuery.isSuccess ||
+    endedRecordQuery.isError ||
+    ((roomQuery.isSuccess || roomQuery.isError) && !validWorkspaceId);
+
+  /**
+   * `?t=` — someone shared a moment of this meeting. WT-655.
+   *
+   * WHY IT WAITS
+   *   Both answers have to be in first, and for different reasons. Without the transcript there is
+   *   no row to scroll to, and an empty list at this point is not "no line" but "not fetched" — the
+   *   difference between honouring the link and telling the reader their moment is not in the
+   *   transcript. Without the ended record there is no `recordingStartedAt`, so `requestSeek` would
+   *   refuse silently and the video would sit still on a link that should have moved it. Neither is
+   *   a race worth losing for the sake of firing a few hundred milliseconds earlier.
+   *
+   * WHY IT GOES THROUGH jumpToTranscriptMoment
+   *   Because that is the one path from a moment to the row a reader can see. It seeks AND scrolls,
+   *   and when the meeting cannot be seeked at all — no recording, clocks unreconcilable, several
+   *   recordings — the seek is the half that quietly declines and the scroll is the half that still
+   *   works. Reading the right sentence is most of the value of "look at this bit", and it is the
+   *   part that survives a meeting nobody recorded. A second scroll path would also reintroduce the
+   *   mid-group citation bug Wave 1 fixed; see resolveCitationRowId.
+   *
+   *   The recording being unloaded at this instant is not a problem: the player holds a seek that
+   *   arrives before its file does and applies it once metadata lands, so the moment is waiting for
+   *   the reader's first press of play rather than being dropped.
+   *
+   * WHY THE PARAMETER IS THEN REMOVED
+   *   A parameter that lingers re-fires on every internal navigation back to this page: leave the
+   *   record, come back to it, and the reader is yanked to a moment they visited ten minutes ago.
+   *   `router.replace`, so this leaves no history entry to press Back through.
+   */
+  useEffect(() => {
+    if (momentLinkAppliedRef.current) return;
+    if (hasTranscript === undefined || !recordAnswerSettled) return;
+
+    const atMs = parseMomentParam(
+      new URLSearchParams(window.location.search).get(MOMENT_PARAM),
+    );
+    momentLinkAppliedRef.current = true;
+
+    // Silence, deliberately. A malformed `?t=` is somebody's mangled copy-paste — broken across two
+    // lines in a chat client, or with an auto-linker's bracket stuck to the end — and there is no
+    // action the reader can take about it. No seek, no toast, and above all no jump to 0:00, which
+    // would be a confident answer to a question nobody asked. It is also left IN the URL: there is
+    // nothing to re-fire, and the reader may be about to fix it by hand.
+    if (atMs === null) return;
+
+    // See the ref: the arrival must not re-mint the parameter it is consuming.
+    arrivingFromMomentLinkRef.current = true;
+    try {
+      jumpToTranscriptMoment(atMs);
+    } finally {
+      arrivingFromMomentLinkRef.current = false;
+    }
+
+    const query = withMomentParam(window.location.search, null);
+    router.replace(
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+      { scroll: false },
+    );
+  }, [
+    hasTranscript,
+    recordAnswerSettled,
+    jumpToTranscriptMoment,
+    router,
+  ]);
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
   // Tracking panel both render off this object; neither one filters a status itself, which is

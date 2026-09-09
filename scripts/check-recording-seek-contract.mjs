@@ -317,4 +317,109 @@ assert.match(
     + "second sources object is two answers to where the recording starts and how long it runs.",
 );
 
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   WAVE 3b — `?t=`, a link to a moment.
+
+   There was no way to share a moment: seek state was React-local, so "look at the bit where we
+   decided X" was a sentence and a stopwatch. Everything below is a decision that a later,
+   reasonable-looking edit would undo — and three of them are decisions about RESTRAINT, which is
+   the kind that gets edited away first because nothing visibly breaks when it does.
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const momentLink = read("src/lib/meeting/moment-link.ts");
+
+// 18. The parsing is pure and it is TESTED. This repo's runner cannot parse JSX, which is why
+//     anything worth testing lives in src/lib/** — a regex inlined in the page would be a rule
+//     nothing can exercise, and "what does a mangled ?t= do" is the whole risk of this feature.
+assert.match(
+  momentLink,
+  /export function parseMomentParam/,
+  "The `?t=` parsing must live in src/lib/meeting/moment-link.ts. Inlined in the page it cannot be "
+    + "unit-tested — the test runner cannot parse JSX — and the malformed-value cases are the point.",
+);
+assert.match(
+  roomDetail,
+  /parseMomentParam\(/,
+  "The page must read `?t=` through the tested parser rather than its own Number() call.",
+);
+assert.doesNotMatch(
+  roomDetail,
+  /Number\.parseInt\([^)]*MOMENT_PARAM|get\("t"\)/,
+  "The page must not hand-roll the parse. `Number()` accepts \"\", \"0x10\" and \"1e3\", and an "
+    + "empty string reading as 0 IS the jump-to-0:00 failure arriving through the front door.",
+);
+
+// 19. The MEETING axis, not the file axis. A file-axis number stops meaning anything the moment the
+//     recording is replaced, trimmed or joined by a second run; the meeting axis is the clock the
+//     transcript is written in, so the link still names the same sentence afterwards.
+assert.match(
+  momentLink,
+  /MEETING milliseconds/,
+  "moment-link must say which axis `?t=` is on. A parameter whose axis is not written down is a "
+    + "parameter somebody will helpfully 'fix' to video.currentTime.",
+);
+assert.doesNotMatch(
+  momentLink,
+  /currentTime|durationSeconds|seekTargetSeconds\(/,
+  "moment-link must not touch the file axis or the clock arithmetic. It parses and formats a moment; "
+    + "recording-seek.ts is the only place the two clocks meet.",
+);
+
+// 20. A malformed value does NOTHING. Not a toast, and above all not a jump to 0:00 — which is a
+//     real moment, and would tell the reader by the page's own behaviour that the link pointed there.
+assert.match(
+  momentLink,
+  /^const SECONDS_PATTERN = \/\^\\d\+\(\?:\\\.\\d\+\)\?\$\//m,
+  "The accepted shape must stay narrower than Number(). Widening it to Number() readmits \"\" as 0, "
+    + "which is the silent jump to the top of the meeting this refuses.",
+);
+assert.match(
+  roomDetail,
+  /if \(atMs === null\) return;/,
+  "A `?t=` that does not parse must leave the page exactly as it found it — no seek, no toast, no "
+    + "jump to 0:00. A bad parameter is a mangled copy-paste, not an error a reader can act on.",
+);
+
+// 21. Read once, then taken out of the URL. A parameter that lingers re-fires on every internal
+//     navigation back to this page — leave the record, come back, get yanked to a stale moment.
+assert.match(
+  roomDetail,
+  /withMomentParam\(window\.location\.search, null\)/,
+  "The parameter must be removed once it has been honoured, or returning to this page re-fires it.",
+);
+assert.match(
+  roomDetail,
+  /router\.replace\(\s*`\$\{window\.location\.pathname\}\$\{query \? `\?\$\{query\}` : ""\}`,\s*\{ scroll: false \},?\s*\)/,
+  "Both the write-back and the removal must be router.replace with scroll:false — push would make "
+    + "the back button walk through every timestamp clicked, and the default scroll-to-top would "
+    + "undo the very scroll the link exists to perform.",
+);
+
+// 22. It is the page's own URL and nothing is minted. Access stays whatever already gates this page.
+assert.match(
+  momentLink,
+  /NOT A LINK-MINTING FEATURE|Nothing here creates a link/,
+  "moment-link must record that no link is minted and nothing is made public. 'Share a moment' is "
+    + "exactly the feature that grows a public-link mode by accident, one request at a time.",
+);
+
+// 23. The arrival reuses jumpToTranscriptMoment. It is the one path from a moment to the row that
+//     actually exists in the DOM (see 6), and it is also what makes `?t=` work with no video at all:
+//     the seek half declines, the scroll half does not.
+assert.match(
+  roomDetail,
+  /arrivingFromMomentLinkRef\.current = true;\s*\n\s*try \{\s*\n\s*jumpToTranscriptMoment\(atMs\);/,
+  "The `?t=` arrival must go through jumpToTranscriptMoment. A second scroll path reintroduces the "
+    + "mid-group citation bug, and skipping it loses the scroll — which is the whole of the feature "
+    + "on a meeting with no recording.",
+);
+// And it must not write back the parameter it is consuming, or the removal above accomplishes
+// nothing and the link re-fires on every return to the page after all.
+assert.match(
+  roomDetail,
+  /if \(arrivingFromMomentLinkRef\.current\) return;/,
+  "The write-back must stand down while an arrival is being applied. Otherwise the arrival re-mints "
+    + "the parameter it just consumed and the removal is a no-op.",
+);
+
 console.log("Recording seek contract: PASS");
