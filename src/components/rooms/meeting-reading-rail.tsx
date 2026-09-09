@@ -58,6 +58,7 @@ import {
   useReadingSync,
 } from "@/components/rooms/transcript-reading-sync";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
+import { languagesInScope } from "@/lib/language/languages";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
@@ -141,8 +142,9 @@ export function TranscriptReadingLayout({
   onConsentGranted: () => void;
   onJumpToMoment: (atMs: number) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
-  /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
-  onRewrite?: (templateKey: string) => Promise<void>;
+  /** Ask for the summary to be rewritten in another shape, another language, or both.
+   *  Omit to hide the pickers. */
+  onRewrite?: (templateKey: string, language?: string) => Promise<void>;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -219,7 +221,7 @@ function ReadingRail({
   onConsentGranted: () => void;
   onJumpToMoment: (atMs: number) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
-  onRewrite?: (templateKey: string) => Promise<void>;
+  onRewrite?: (templateKey: string, language?: string) => Promise<void>;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -464,7 +466,7 @@ function RailSummary({
   onMark: (atMs: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
-  onRewrite?: (templateKey: string) => Promise<void>;
+  onRewrite?: (templateKey: string, language?: string) => Promise<void>;
 }) {
   const summary = record?.summary;
   const artifact = record?.artifacts.find((item) => item.type === "summary_export");
@@ -498,11 +500,60 @@ function RailSummary({
   });
 
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  /**
+   * The language this summary was written in, or "" for one written before anybody could
+   * choose. Empty is a real answer and not a missing one — it says the model followed the
+   * transcript — so it is offered as its own option rather than being filled in with a guess
+   * about what the text looks like.
+   */
+  const currentLanguage = summary?.summaryLanguage ?? "";
   // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
   const stale = isSummaryStale(segments, artifact);
-  const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
+  /**
+   * What was asked for, as a PAIR.
+   *
+   * This tracked the shape alone, which stopped being enough the moment language became a
+   * second thing a rewrite can change: asking for the same shape in Japanese left the
+   * requested and current templates identical, so the picker read as "nothing is happening"
+   * while a rewrite was in flight — no spinner, no lock, and a second click would queue a
+   * duplicate.
+   */
+  const [requested, setRequested] = useState<{ template: string; language: string } | null>(null);
   const [regenerating, setRegenerating] = useState(false);
-  const isRewriting = requestedTemplate !== null && requestedTemplate !== currentTemplate;
+  const isRewriting =
+    requested !== null &&
+    (requested.template !== currentTemplate || requested.language !== currentLanguage);
+
+  /**
+   * Every language the product can translate into, not only the ones this meeting produced.
+   *
+   * The same rule the transcript picker follows, and for the same reason: a summary is
+   * rewritten from the transcript on demand, so a language this meeting never touched is an
+   * offer rather than a dead end. "As spoken" is listed only when that is what the current
+   * summary actually is — offering it against a summary already written in a chosen language
+   * would be offering to un-choose, which no request can express.
+   */
+  const languageOptions = useMemo(() => {
+    const offered = languagesInScope("chatTarget").map((language) => ({
+      code: language.code,
+      label: language.name,
+    }));
+    return currentLanguage
+      ? offered
+      : [{ code: "", label: "As spoken" }, ...offered];
+  }, [currentLanguage]);
+
+  async function requestRewrite(template: string, language: string) {
+    if (!onRewrite) return;
+    setRequested({ template, language });
+    try {
+      // Empty means "leave the language alone", and the service leaves the field off the
+      // request entirely rather than sending a blank one.
+      await onRewrite(template, language || undefined);
+    } catch {
+      setRequested(null);
+    }
+  }
 
   useEffect(() => {
     // A rewrite that never lands must not leave the picker spinning forever — the summary
@@ -510,7 +561,7 @@ function RailSummary({
     // identical without a deadline.
     if (!isRewriting) return;
     const timer = window.setTimeout(() => {
-      setRequestedTemplate(null);
+      setRequested(null);
       toast.error("The rewritten summary has not arrived. Try again.");
     }, 90_000);
     return () => window.clearTimeout(timer);
@@ -565,33 +616,51 @@ function RailSummary({
 
   return (
     <div>
-      {/* One row, and it is the summary's own controls rather than the record's: the shape it was
-          written in, a copy of it, and the file it was written to. */}
+      {/* One row, and it is the summary's own controls rather than the record's: the shape it
+          was written in, the language it was written in, a copy of it, and the file it was
+          written to. Shape and language sit side by side because they are the same kind of
+          decision — both are judgements only a reader of the finished meeting can make, and
+          both are answered by rewriting rather than by re-rendering. */}
       <div className="mb-1 flex items-center gap-1.5 border-b border-border pb-2">
         {onRewrite ? (
-          <select
-            value={isRewriting ? (requestedTemplate as string) : currentTemplate}
-            disabled={isRewriting}
-            onChange={async (event) => {
-              const templateKey = event.target.value;
-              if (templateKey === currentTemplate) return;
-              setRequestedTemplate(templateKey);
-              try {
-                await onRewrite(templateKey);
-              } catch {
-                setRequestedTemplate(null);
-              }
-            }}
-            aria-label="Summary shape"
-            title="Rewrite this summary in a different shape"
-            className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
-          >
-            {SUMMARY_TEMPLATES.map((template) => (
-              <option key={template.key} value={template.key} title={template.description}>
-                {template.label}
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              value={isRewriting ? (requested?.template ?? currentTemplate) : currentTemplate}
+              disabled={isRewriting}
+              onChange={(event) => {
+                const templateKey = event.target.value;
+                if (templateKey === currentTemplate) return;
+                void requestRewrite(templateKey, currentLanguage);
+              }}
+              aria-label="Summary shape"
+              title="Rewrite this summary in a different shape"
+              className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
+            >
+              {SUMMARY_TEMPLATES.map((template) => (
+                <option key={template.key} value={template.key} title={template.description}>
+                  {template.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={isRewriting ? (requested?.language ?? currentLanguage) : currentLanguage}
+              disabled={isRewriting}
+              onChange={(event) => {
+                const language = event.target.value;
+                if (language === currentLanguage) return;
+                void requestRewrite(currentTemplate, language);
+              }}
+              aria-label="Summary language"
+              title="Rewrite this summary in a different language"
+              className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
+            >
+              {languageOptions.map((language) => (
+                <option key={language.code || "as-spoken"} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </>
         ) : null}
         {isRewriting ? (
           <SpinnerGap size={12} className="animate-spin text-ink-subtle" />
@@ -632,7 +701,9 @@ function RailSummary({
             onRegenerate={async () => {
               setRegenerating(true);
               try {
-                await onRewrite(currentTemplate);
+                // Same shape AND same language: this button exists because the transcript
+                // moved on, not because anything about the summary was wrong.
+                await onRewrite(currentTemplate, currentLanguage || undefined);
               } finally {
                 // Cleared when the REQUEST is accepted, not when the summary lands.
                 setRegenerating(false);
