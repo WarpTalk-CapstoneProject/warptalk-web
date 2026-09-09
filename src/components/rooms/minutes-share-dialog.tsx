@@ -102,7 +102,7 @@ export function MinutesShareDialog({
         <DialogHeader>
           <DialogTitle className="text-sm">Share these minutes</DialogTitle>
           <DialogDescription className="text-[12px]">
-            A link opens this document — the biên bản and nothing else. It carries no access to the
+            A link opens this document — the minutes and nothing else. It carries no access to the
             transcript, the recording or the meeting itself.
           </DialogDescription>
         </DialogHeader>
