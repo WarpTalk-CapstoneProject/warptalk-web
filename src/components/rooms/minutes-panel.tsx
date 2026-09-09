@@ -435,14 +435,15 @@ export function MinutesPanel({
               <Printer size={13} />
               Print
             </Button>
-            {/* WT-654: the .docx says which layout it is, because it only has one.
-                MeetingMinutesDocxWriter is a single Vietnamese writer — no template argument, no
-                second implementation — while the switch above and Print both honour the reader's
-                choice. Two buttons side by side, one of them quietly ignoring the control next to
-                them, is the part that had to stop. Naming the layout on the button costs a reader
-                nothing when it is the layout they wanted, and stops the download being a surprise
-                when it is not. The alternative was a second OpenXML writer duplicating a 1300-line
-                renderer by hand, which is what WT-637 and WT-639 were cancelled for. */}
+            {/* WT-654 named the layout on this button because the server had only one writer to
+                render with, and a download that ignored the switcher above had to at least say so.
+                That is no longer the case: there are two writers now, the export takes ?template=,
+                and `download()` sends whatever layout is on screen. So the label goes back to
+                naming the FORMAT, which is the only thing that distinguishes it from the button
+                beside it — the layout is the switcher's business, and both files follow it.
+
+                Left as it was, the button was worse than imprecise: a reader on the international
+                layout was handed a global-en file under a promise of the Vietnamese one. */}
             <Button
               size="sm"
               variant="outline"
@@ -455,7 +456,7 @@ export function MinutesPanel({
               ) : (
                 <DownloadSimple size={13} />
               )}
-              Download Word (Vietnamese layout)
+              Download Word
             </Button>
             <Button
               size="sm"
