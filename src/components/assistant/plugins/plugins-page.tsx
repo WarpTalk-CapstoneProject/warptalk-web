@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  type ReadonlyURLSearchParams,
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowSquareOut,
@@ -39,9 +34,11 @@ import {
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
 import {
+  CONNECT_CHANNEL,
   type ConnectOutcome,
   connectNotice,
-  parseConnectStatus,
+  isConnectChannelMessage,
+  readConnectOutcome,
 } from "@/lib/assistant/connect-outcome";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { type PluginDisplayTile, toDisplayTiles } from "@/lib/assistant/plugin-tiles";
@@ -329,24 +326,6 @@ function ConnectPluginDialog({
   );
 }
 
-/**
- * The outcome a finished connect carried back on the URL, or null when this is an ordinary visit.
- *
- * None of it is trusted as the connection's state - the catalog query decides that. It only picks
- * which sentence, if any, is worth showing.
- */
-function readConnectOutcome(params: URLSearchParams | ReadonlyURLSearchParams): ConnectOutcome | null {
-  const status = parseConnectStatus(params.get("status"));
-  if (!status) return null;
-
-  return {
-    status,
-    reason: params.get("reason"),
-    pluginKey: params.get("plugin"),
-    reference: params.get("ref"),
-  };
-}
-
 export default function PluginsPage() {
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins();
   const installPlugin = useInstallAssistantPlugin();
@@ -369,6 +348,22 @@ export default function PluginsPage() {
   useEffect(() => {
     if (searchParams.has("status")) router.replace(pathname);
   }, [pathname, router, searchParams]);
+
+  // The consent finishes in a second tab, which cannot reach this one directly - it was opened
+  // with `noopener`. It broadcasts the outcome on its way to the plugins page, so the tab the
+  // user started from stops showing a plugin as unconnected the moment the other one finishes.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+
+    const channel = new BroadcastChannel(CONNECT_CHANNEL);
+    channel.onmessage = (event: MessageEvent<unknown>) => {
+      if (!isConnectChannelMessage(event.data)) return;
+      setOutcome(event.data.outcome);
+      void refetch();
+    };
+
+    return () => channel.close();
+  }, [refetch]);
 
   const displayPlugins = useMemo(() => plugins.flatMap(toDisplayTiles), [plugins]);
 

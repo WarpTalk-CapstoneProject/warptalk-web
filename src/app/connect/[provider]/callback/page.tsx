@@ -5,19 +5,19 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 
 import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { buttonVariants } from "@/components/ui/button";
+import { CONNECT_CHANNEL, readConnectOutcome } from "@/lib/assistant/connect-outcome";
 import { cn } from "@/lib/utils";
 
 /**
  * Where a provider's consent lands after the API has redeemed the code.
  *
- * This page exists for one case: the desktop app opens the provider's consent screen in the
- * system browser, so when consent finishes the browser is holding the result and the app that
- * asked for it cannot see it. Handing the user back across that gap needs a page in the browser,
- * and a `warptalk://` link is the only thing that reaches the app.
+ * In a browser this renders nothing: it forwards to the plugins page, which shows the plugin as
+ * connected. The user approved a request seconds ago, and a screen confirming it would be one
+ * more thing to read on the way to where they were already going.
  *
- * For an ordinary browser session there is nothing to hand back, so this forwards to the plugins
- * page without rendering - the user approved a request seconds ago and does not need to be told
- * about it twice.
+ * The desktop app is the case that needs a page. It hands consent to the system browser, so the
+ * browser is holding the result while the app that asked for it cannot see it, and a
+ * `warptalk://` link is the only thing that crosses back.
  */
 
 const PLUGINS_PATH = "/settings/plugins";
@@ -50,6 +50,7 @@ function ConnectCallback() {
 
   const provider = safeProvider(params?.provider);
   const isDesktopFlow = searchParams.get("client") === "desktop";
+  const outcome = useMemo(() => readConnectOutcome(searchParams), [searchParams]);
   const query = useMemo(
     () => outcomeQuery(new URLSearchParams(searchParams.toString())),
     [searchParams],
@@ -59,25 +60,36 @@ function ConnectCallback() {
   const pluginsUrl = `${PLUGINS_PATH}${queryString ? `?${queryString}` : ""}`;
   const deepLink = provider ? `warptalk://connect/${provider}/callback?${queryString}` : null;
 
-  // The page renders its fallback button from the first frame rather than after a timeout: a
-  // browser that silently refuses to open the scheme gives no event to wait for. Handing off is
-  // therefore a side effect with no visible state, and a ref keeps it to once per mount.
+  // Handing off is a side effect with nothing to render, so a ref keeps it to once per mount. The
+  // desktop page shows its fallback button from the first frame rather than after a timeout: a
+  // browser that silently refuses to open a scheme gives no event to wait for.
   const handedOff = useRef(false);
 
   useEffect(() => {
-    if (!isDesktopFlow) {
-      router.replace(pluginsUrl);
+    if (isDesktopFlow) {
+      if (!deepLink || handedOff.current) return;
+      handedOff.current = true;
+      window.location.href = deepLink;
       return;
     }
-    if (!deepLink || handedOff.current) return;
-    handedOff.current = true;
-    window.location.href = deepLink;
-  }, [deepLink, isDesktopFlow, pluginsUrl, router]);
+
+    // The consent was opened in a second tab with `noopener`, so the tab the user started from
+    // cannot be reached directly and would sit on a stale "Connect" until it happened to refetch.
+    // Telling it costs one message and needs no answer - this tab is going to the plugins page
+    // either way, so nothing here depends on whether anyone is listening.
+    if (outcome && typeof BroadcastChannel !== "undefined") {
+      const channel = new BroadcastChannel(CONNECT_CHANNEL);
+      channel.postMessage({ kind: "outcome", outcome });
+      channel.close();
+    }
+
+    router.replace(pluginsUrl);
+  }, [deepLink, isDesktopFlow, outcome, pluginsUrl, router]);
 
   if (!isDesktopFlow) return null;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-0 bg-surface-1 px-6 text-center text-ink">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-surface-1 px-6 text-center text-ink">
       <WarpTalkBrand className="h-8 w-[130px]" />
       <h1 className="mt-10 text-2xl font-semibold tracking-tight">Opening WarpTalk…</h1>
       <p className="mt-2 text-sm text-ink-muted">
@@ -89,9 +101,7 @@ function ConnectCallback() {
       >
         {deepLink ? "Open WarpTalk" : "Go to Plugins"}
       </a>
-      <p className="mt-7 text-xs text-ink-subtle">
-        You can close this tab once WarpTalk opens.
-      </p>
+      <p className="mt-7 text-xs text-ink-subtle">You can close this tab once WarpTalk opens.</p>
     </main>
   );
 }

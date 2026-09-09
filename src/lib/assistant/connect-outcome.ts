@@ -26,6 +26,49 @@ export interface ConnectOutcome {
   reference: string | null;
 }
 
+/**
+ * How the tab that finished a consent tells the tab that started it.
+ *
+ * The consent opens in a second tab (`window.open` with `noopener`), so the tab holding the
+ * result has no `window.opener` to talk through. The finishing tab goes to the plugins page on
+ * its own; this is what keeps the tab the user came from - and may well go back to - from sitting
+ * on a plugin that still says "Connect".
+ *
+ * The desktop app has the same gap for a different reason and solves it with a `warptalk://`
+ * link, because there the two sides are separate processes rather than two tabs of one origin.
+ */
+export const CONNECT_CHANNEL = "warptalk:plugin-connect";
+
+export type ConnectChannelMessage = { kind: "outcome"; outcome: ConnectOutcome };
+
+/**
+ * One-way and unacknowledged: the tab that finished the consent is on its way to the plugins page
+ * regardless, so nothing depends on whether another tab was listening.
+ */
+export function isConnectChannelMessage(value: unknown): value is ConnectChannelMessage {
+  return typeof value === "object" && value !== null && (value as { kind?: unknown }).kind === "outcome";
+}
+
+/**
+ * The outcome a finished connect carried on the URL, or null when this is an ordinary visit.
+ *
+ * None of it is trusted as the connection's own state - the catalog query decides that. It only
+ * picks which sentence, if any, is worth showing.
+ */
+export function readConnectOutcome(
+  params: Pick<URLSearchParams, "get">,
+): ConnectOutcome | null {
+  const status = parseConnectStatus(params.get("status"));
+  if (!status) return null;
+
+  return {
+    status,
+    reason: params.get("reason"),
+    pluginKey: params.get("plugin"),
+    reference: params.get("ref"),
+  };
+}
+
 export interface ConnectNotice {
   tone: "error" | "warning";
   title: string;
