@@ -1,31 +1,32 @@
 "use client";
 
 /**
- * What an unpaid workspace gets instead of the product. WT-515, WT-570.
+ * The gate that stands between an unpaid workspace and the product. WT-515, WT-570.
  *
  * The decision itself is not here — see `lib/billing/workspace-paywall`, which is where the three
- * ways a paywall can be wrong are written down and tested. This file is only what it looks like,
- * and who is being told.
+ * ways a paywall can be wrong are written down and tested. This file only carries the decision
+ * out: hold the product back, and send the person to the activation landing.
  *
- * OWNER AND MEMBER GET DIFFERENT TREATMENT, on purpose, and WT-570 widened the gap.
+ * IT NO LONGER RENDERS A SCREEN OF ITS OWN, and that is the point of the change.
  *
- *   The owner can pay, so they are not shown a screen ABOUT paying — they are put ON the payment
- *   page and kept there. Creating a workspace stays allowed (it has to be: Subscription.WorkspaceId
- *   is non-nullable, so the row must exist before checkout can attach to it); what is no longer
- *   allowed is wandering off unpaid. Every gated route bounces back to /payment/plans, so the only
- *   ways out of that page are buying a plan or leaving the workspace.
+ *   WT-570 sent buyers to `/{slug}/payment/plans` and showed everybody else a sentence. Both
+ *   halves were wrong in the same way. The plans page lives inside the `(app)` route group, so
+ *   "held on the payment page" drew the entire portal around it — sidebar, tabs, header — with
+ *   every destination in it bouncing straight back here; and the sentence shown to members was a
+ *   dead end that never named the workspace or what it would cost to open it.
  *
- *   A member cannot buy anything. Redirecting them to a plan grid whose every button 403s would be
- *   a trap, so they still get the sentence that names who to ask.
+ *   There is one destination now, `/{slug}/activate`, and it is a page rather than a fragment: it
+ *   names the workspace, lists the plans, and takes the payment. Who is looking at it — somebody
+ *   who can buy, or somebody who can only ask — is a question that page answers, because it is
+ *   the page that has the workspace's name and the plan grid to answer it with.
  */
 
 import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
-import { CreditCard, Spinner } from "@phosphor-icons/react";
+import { Spinner } from "@phosphor-icons/react";
 import axios from "axios";
 
-import { Button } from "@/components/ui/button";
 import { billingService } from "@/services/billing.service";
 import { decidePaywall, paywallRedirectPath } from "@/lib/billing/workspace-paywall";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -48,9 +49,6 @@ export function WorkspacePaywall({
   const router = useRouter();
   const pathname = usePathname() ?? "";
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const role = useWorkspaceStore((state) => state.role);
-  // Lowercase: the store normalises through normalizeWorkspaceRole before writing.
-  const canBuy = role === "owner" || role === "admin";
 
   const subscriptionQuery = useQuery<SubscriptionDto | null>({
     queryKey: ["subscription", workspaceId],
@@ -59,6 +57,10 @@ export function WorkspacePaywall({
     // "This workspace has not paid" is not a transient failure and retrying it three times only
     // delays the answer by a few seconds on every page load. A real outage is handled by the
     // decision rule instead, which treats an unrecognised error as "unknown", not "unpaid".
+    //
+    // These options are repeated verbatim on the activation landing, deliberately: identical
+    // observers share one cache entry, so the landing reads the answer this gate already has
+    // instead of asking again with slightly different semantics.
     retry: false,
     staleTime: 60_000,
   });
@@ -78,55 +80,24 @@ export function WorkspacePaywall({
     [pathname, workspaceSlug, workspaceId, subscriptionQuery.isPending, subscriptionQuery.data, subscriptionQuery.error],
   );
 
-  // WT-570 — the buyer is HELD on the payment page rather than shown a screen about it.
+  // Everybody goes to the same place, whatever their role.
   //
   // `replace`, not `push`: the gated route must not survive in history, or Back walks straight
   // into the paywall again and the user ping-pongs. And it is an effect rather than a redirect
   // during render because navigating while rendering is what produces React's
   // "Cannot update a component while rendering a different component" warning.
-  const holdOnPaymentPage = decision.kind === "blocked" && canBuy;
+  const blocked = decision.kind === "blocked";
   useEffect(() => {
-    if (holdOnPaymentPage) router.replace(paywallRedirectPath(workspaceSlug));
-  }, [holdOnPaymentPage, router, workspaceSlug]);
+    if (blocked) router.replace(paywallRedirectPath(workspaceSlug));
+  }, [blocked, router, workspaceSlug]);
 
   if (decision.kind === "open") return <>{children}</>;
 
   // The redirect above lands on the next tick; showing the product for that tick is exactly the
   // leak this gate exists to close, so the spinner covers both waits.
-  if (decision.kind === "checking" || holdOnPaymentPage) {
-    return (
-      <div className="flex h-dvh w-full items-center justify-center bg-canvas">
-        <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
-      </div>
-    );
-  }
-
   return (
-    <main className="flex min-h-dvh flex-col items-center justify-center bg-canvas px-4 text-ink">
-      <div className="w-full max-w-[420px] text-center">
-        <span className="mx-auto grid size-11 place-items-center rounded-full border border-border bg-surface-1 text-ink-muted">
-          <CreditCard size={20} />
-        </span>
-        <h1 className="mt-4 text-[22px] font-semibold tracking-tight">
-          This workspace has no plan yet
-        </h1>
-        {/* Only somebody who cannot buy reaches this screen — WT-570 sends everybody else to the
-            checkout instead — so there is one sentence here, and no button that would 403. */}
-        <p className="mt-2 text-[14px] leading-6 text-ink-muted">
-          The owner of this workspace has not activated a plan yet. Ask them to finish setting it
-          up, and everything here will open.
-        </p>
-
-        <div className="mt-6 flex flex-col gap-2">
-          <Button
-            variant="ghost"
-            className="h-9 w-full text-[13px] text-ink-muted"
-            onClick={() => router.push("/workspace")}
-          >
-            Switch workspace
-          </Button>
-        </div>
-      </div>
-    </main>
+    <div className="flex h-dvh w-full items-center justify-center bg-canvas">
+      <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
+    </div>
   );
 }

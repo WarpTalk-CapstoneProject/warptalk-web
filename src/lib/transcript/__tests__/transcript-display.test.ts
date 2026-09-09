@@ -18,6 +18,8 @@ import {
   isTranscriptSystemSegment,
   resolveSegmentTranslation,
   resolveTranscriptSpeakerName,
+  resolveTranscriptPauseGaps,
+  splitSegmentsAroundPauseGaps,
 } from "../transcript-display.ts";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "../../../types/realtime.ts";
 
@@ -162,6 +164,51 @@ test("records every merged segment id so a suggestion can find its bubble", () =
   // The bubble is still identified by the FIRST segment — the other two ids survive only here.
   assert.equal(groups[0].segmentId, "segment-1");
   assert.deepEqual(groups[0].mergedSegmentIds, ["segment-1", "segment-2", "segment-3"]);
+});
+
+test("keeps a sentence in one bubble when its two chunks overlap in time", () => {
+  // The exact production shape: a turn that hit the 6s chunk_duration_ms cap, followed by the
+  // short chunk carrying the rest of the same sentence. Before the STT worker stopped stamping
+  // segments by their PUBLISH time, the second one started ~4.8s BEFORE the first one ended, and
+  // the old `gapMs >= 0` clause read that as a new utterance — so the sentences that had been cut
+  // mid-word were exactly the ones split across two bubbles.
+  const groups = groupTranscriptSegments([
+    segment({ originalText: "chúng ta sẽ bắt đầu bằng", startTimeMs: 10_000, endTimeMs: 16_000 }),
+    segment({
+      segmentId: "segment-2",
+      originalText: "phần tổng quan",
+      startTimeMs: 11_200,
+      endTimeMs: 12_400,
+    }),
+  ]);
+
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].originalText, "chúng ta sẽ bắt đầu bằng phần tổng quan");
+});
+
+test("keeps a breath pause inside one bubble", () => {
+  // ~860ms is the vad_short_turn_hangover_ms boundary — i.e. a chunk edge, not a sentence end.
+  // A Vietnamese speaker draws breath there constantly; a bubble per breath is the complaint.
+  const groups = groupTranscriptSegments([
+    segment({ startTimeMs: 1_000, endTimeMs: 2_000 }),
+    segment({ segmentId: "segment-2", originalText: "à khoan", startTimeMs: 2_860, endTimeMs: 3_500 }),
+  ]);
+
+  assert.equal(groups.length, 1);
+});
+
+test("starts a new bubble once the speaker has genuinely stopped", () => {
+  const groups = groupTranscriptSegments([
+    segment({ startTimeMs: 1_000, endTimeMs: 2_000 }),
+    segment({
+      segmentId: "segment-2",
+      originalText: "Sang phần tiếp theo",
+      startTimeMs: 2_000 + 2_501,
+      endTimeMs: 9_000,
+    }),
+  ]);
+
+  assert.equal(groups.length, 2);
 });
 
 test("starts a fresh merged id list for each separate utterance", () => {
@@ -715,4 +762,97 @@ test("only the changed lines are posted, and in transcript order", () => {
   const pending = pendingCorrections(segments, { a: "Xin chào bạn", c: "Tạm biệt nhé" });
 
   assert.deepEqual(pending.map((segment) => segment.id), ["a", "c"]);
+});
+
+// ── WT-605: Pause Transcript dividers ────────────────────────────────────────────────────────
+//
+// A pause window's wall-clock StartedAt/EndedAt has to land at the right point among segments
+// whose own timestamps are meeting-RELATIVE ms (segment.startTimeMs) — the same conversion
+// groupSegmentsByTranslationSession already does for "Translation N" dividers, via `baseTime`.
+
+const BASE_TIME = "2026-09-03T10:00:00.000Z";
+
+function pauseWindow(startOffsetMs: number, endOffsetMs: number | null, id = "w1") {
+  const base = new Date(BASE_TIME).getTime();
+  return {
+    id,
+    translationRoomId: "room-1",
+    startedAt: new Date(base + startOffsetMs).toISOString(),
+    endedAt: endOffsetMs === null ? null : new Date(base + endOffsetMs).toISOString(),
+  };
+}
+
+test("resolveTranscriptPauseGaps is empty without a baseTime to anchor against", () => {
+  assert.deepEqual(resolveTranscriptPauseGaps([pauseWindow(1000, 2000)], undefined), []);
+});
+
+test("resolveTranscriptPauseGaps converts wall-clock windows into meeting-relative ms", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  assert.equal(gaps.length, 1);
+  assert.equal(gaps[0].startMs, 60_000);
+  assert.equal(gaps[0].endMs, 120_000);
+});
+
+test("resolveTranscriptPauseGaps leaves endMs null for a window still open", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  assert.equal(gaps[0].endMs, null);
+});
+
+test("splitSegmentsAroundPauseGaps is a no-op with no gaps", () => {
+  const segments = [{ startTimeMs: 0 }, { startTimeMs: 5000 }];
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, []);
+
+  assert.deepEqual(blocks, [{ gapBefore: null, segments }]);
+});
+
+test("splitSegmentsAroundPauseGaps splits cleanly at the gap boundary", () => {
+  // Spoken before the pause, then after it — nothing is ever spoken DURING the gap, since that
+  // is exactly what Pause Transcript means: those segments were never persisted at all.
+  const segments = [
+    { startTimeMs: 1000, id: "before" },
+    { startTimeMs: 200_000, id: "after" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 2);
+  assert.equal(blocks[0].gapBefore, null);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
+  assert.equal(blocks[1].gapBefore, gaps[0]);
+  assert.deepEqual(blocks[1].segments.map((s) => s.id), ["after"]);
+});
+
+test("splitSegmentsAroundPauseGaps handles a room still paused (no segments after)", () => {
+  const segments = [{ startTimeMs: 1000, id: "before" }];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 2);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
+  assert.equal(blocks[1].gapBefore?.endMs, null);
+  assert.deepEqual(blocks[1].segments, []);
+});
+
+test("splitSegmentsAroundPauseGaps handles two separate pauses in one meeting", () => {
+  const segments = [
+    { startTimeMs: 1000, id: "a" },
+    { startTimeMs: 200_000, id: "b" },
+    { startTimeMs: 400_000, id: "c" },
+  ];
+  const gaps = resolveTranscriptPauseGaps(
+    [pauseWindow(60_000, 120_000, "w1"), pauseWindow(250_000, 350_000, "w2")],
+    BASE_TIME,
+  );
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 3);
+  assert.deepEqual(blocks.map((b) => b.segments.map((s) => s.id)), [["a"], ["b"], ["c"]]);
+  assert.equal(blocks[1].gapBefore?.window.id, "w1");
+  assert.equal(blocks[2].gapBefore?.window.id, "w2");
 });

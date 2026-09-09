@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle, Microphone, Stop } from "@phosphor-icons/react";
+import { CheckCircle, Microphone, Pause, Play, Stop } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { LanguageLabel, languageLabelText } from "@/components/language/language-label";
@@ -109,11 +109,18 @@ export function CreateVoiceProfileDialog({
   const [consent, setConsent] = useState<Record<ConsentKey, boolean>>(EMPTY_CONSENT);
   const [isCheckingSample, setIsCheckingSample] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  // WT-632 — the clip itself, playable, held separately from `sampleFile` on purpose: a sample
+  // the quality check REFUSED is cleared from `sampleFile` but is exactly the one somebody needs
+  // to hear. "Too quiet" is an assertion until you play it back and hear that it is.
+  const [sampleUrl, setSampleUrl] = useState<string | null>(null);
+  const [isPlayingSample, setIsPlayingSample] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordingChunksRef = useRef<Blob[]>([]);
+  const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
+  const sampleUrlRef = useRef<string | null>(null);
 
   const outstandingConsent = CONSENT_ITEMS.filter((item) => !consent[item.key]).length;
   const canSave =
@@ -126,9 +133,54 @@ export function CreateVoiceProfileDialog({
   useEffect(
     () => () => {
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+      sampleAudioRef.current?.pause();
+      // An object URL is a live handle into the document, not a value. One is created per clip
+      // and every re-record makes another, so leaving them behind pins every take in memory for
+      // the life of the page.
+      if (sampleUrlRef.current) URL.revokeObjectURL(sampleUrlRef.current);
     },
     [],
   );
+
+  /** Point playback at a new clip, or at nothing, releasing whatever it held before. */
+  function holdForPlayback(file: File | null) {
+    sampleAudioRef.current?.pause();
+    sampleAudioRef.current = null;
+    setIsPlayingSample(false);
+    if (sampleUrlRef.current) {
+      URL.revokeObjectURL(sampleUrlRef.current);
+      sampleUrlRef.current = null;
+    }
+    const url = file ? URL.createObjectURL(file) : null;
+    sampleUrlRef.current = url;
+    setSampleUrl(url);
+  }
+
+  function playSample() {
+    if (!sampleUrl) return;
+    if (isPlayingSample) {
+      sampleAudioRef.current?.pause();
+      setIsPlayingSample(false);
+      return;
+    }
+
+    // A fresh element each press rather than a resumed one: the take is a few seconds long, and
+    // starting from wherever a previous stop landed is not what "play it back" means here.
+    const audio = new Audio(sampleUrl);
+    audio.onended = () => setIsPlayingSample(false);
+    audio.onerror = () => {
+      setIsPlayingSample(false);
+      toast.error("That recording could not be played back in this browser.");
+    };
+    sampleAudioRef.current = audio;
+    void audio
+      .play()
+      .then(() => setIsPlayingSample(true))
+      .catch(() => {
+        setIsPlayingSample(false);
+        toast.error("That recording could not be played back in this browser.");
+      });
+  }
 
   function resetForm() {
     if (mediaRecorderRef.current?.state === "recording") {
@@ -146,6 +198,7 @@ export function CreateVoiceProfileDialog({
     setSampleAssessment(null);
     setSampleAccepted(false);
     setConsent(EMPTY_CONSENT);
+    holdForPlayback(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -154,6 +207,7 @@ export function CreateVoiceProfileDialog({
       setSampleFile(null);
       setSampleAssessment(null);
       setSampleAccepted(false);
+      holdForPlayback(null);
       return false;
     }
     if (file.size > MAX_SAMPLE_SIZE_BYTES) {
@@ -161,8 +215,14 @@ export function CreateVoiceProfileDialog({
       setSampleFile(null);
       setSampleAssessment(null);
       setSampleAccepted(false);
+      holdForPlayback(null);
       return false;
     }
+
+    // Held before the check, not after it: the check is asynchronous and its verdict is about
+    // this clip, so the clip has to be playable while the verdict is still being formed and
+    // afterwards whichever way it goes.
+    holdForPlayback(file);
 
     setIsCheckingSample(true);
     const assessment = await analyzeVoiceSample(file);
@@ -337,6 +397,31 @@ export function CreateVoiceProfileDialog({
                   disabled={isCheckingSample || isRecording}
                 >
                   Upload a file
+                </Button>
+                {/*
+                  WT-632 — hearing what was just recorded, before it is sent anywhere.
+                  Nothing on this page could do that: the only play button lived on the row
+                  BEHIND this dialog and renders the CLONE, which does not exist until the
+                  profile has been saved and the AI side has finished with it. So the one moment
+                  where hearing the take is worth anything — while it can still be re-recorded —
+                  was the one moment it could not be heard.
+
+                  This plays the local file. No request, no synthesis, no waiting.
+                */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 p-0"
+                  onClick={playSample}
+                  disabled={!sampleUrl || isRecording}
+                  aria-label={isPlayingSample ? "Stop the sample" : "Play the sample back"}
+                >
+                  {isPlayingSample ? (
+                    <Pause size={13} weight="fill" />
+                  ) : (
+                    <Play size={13} weight="fill" />
+                  )}
                 </Button>
               </div>
               <input

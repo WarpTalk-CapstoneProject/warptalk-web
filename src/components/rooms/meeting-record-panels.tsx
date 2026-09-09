@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Archive,
@@ -162,12 +162,30 @@ export function MeetingRecordingPlayer({
   artifact,
   onConsentGranted,
   seek,
+  playbackRequest,
+  variant = "section",
 }: {
   artifact: RoomHistoryArtifact | null;
   onConsentGranted?: () => void;
   /** Move to a moment. Ignored when the caller could not align the two clocks — see
    *  recording-seek.ts, where an unalignable meeting yields no request at all. */
   seek?: SeekRequest | null;
+  /**
+   * Somebody pressed Space over the reading surface. A token, for the same reason SeekRequest
+   * carries one: two presses of the same key are two requests, and a boolean cannot say so.
+   *
+   * It plays a recording that has not been fetched yet, which is the case that makes the shortcut
+   * worth having — otherwise the reader has to find and click the button first, and once they have
+   * done that they have a mouse in their hand and no use for a keyboard shortcut.
+   */
+  playbackRequest?: { token: number } | null;
+  /**
+   * `pip` is the rail's corner of Option C: the recording stops being a column of its own and
+   * becomes a 16:9 frame the width of the rail. Below 1280px even that is too much horizontal
+   * budget for a picture nobody is watching while they read, so the frame collapses to the height
+   * of its own transport controls — a player bar, which is all the spec asks for in that band.
+   */
+  variant?: "section" | "pip";
 }) {
   // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
   // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
@@ -180,6 +198,10 @@ export function MeetingRecordingPlayer({
   // dropped — the first click on a transcript line is exactly that case, since the player waits
   // for a press before fetching anything.
   const pendingSeekRef = useRef<SeekRequest | null>(null);
+  // The last Space this player acted on. `loadRecording` is rebuilt on every render, so the effect
+  // below re-runs constantly; without a record of what it has already done, an unrelated keystroke
+  // three components away would pause the recording somebody had just started.
+  const handledPlaybackRef = useRef<number | null>(null);
 
   // Not setState: this drives an external system (the media element) from React state, which is
   // what an effect is actually for.
@@ -198,11 +220,10 @@ export function MeetingRecordingPlayer({
     });
   }, [seek, sourceUrl]);
 
-  // Nothing to watch is not an error state, and an empty player frame promising a video that does
-  // not exist is worse than no frame at all. The meeting simply was not recorded.
-  if (!artifact) return null;
-
-  async function loadRecording() {
+  /* Above the `if (!artifact)` below, and memoised, because Space now reaches it: the playback
+     effect has to be able to call it, effects have to be declared before that early return, and an
+     un-memoised function would rebuild the effect's dependencies on every render. */
+  const loadRecording = useCallback(async () => {
     if (!artifact || isLoading) return;
     setIsLoading(true);
     try {
@@ -229,11 +250,52 @@ export function MeetingRecordingPlayer({
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [artifact, isLoading, onConsentGranted]);
+
+  // Same shape as the seek effect above, and for the same reason: this drives a media element,
+  // which is an external system, from a value React holds.
+  useEffect(() => {
+    if (!playbackRequest || handledPlaybackRef.current === playbackRequest.token) return;
+    handledPlaybackRef.current = playbackRequest.token;
+
+    const video = videoRef.current;
+    if (!video || !sourceUrl) {
+      // Nothing fetched yet. Space means "start the recording", and the first press is the press
+      // that has to do the fetching — otherwise the shortcut is useless exactly when it is wanted,
+      // and the reader has to go and find the button, at which point they have a mouse in hand.
+      void loadRecording();
+      return;
+    }
+    if (video.paused) {
+      void video.play().catch(() => {
+        // Autoplay refused — nothing to report; the controls are right there.
+      });
+      return;
+    }
+    video.pause();
+  }, [playbackRequest, sourceUrl, loadRecording]);
+
+  // Nothing to watch is not an error state, and an empty player frame promising a video that does
+  // not exist is worse than no frame at all. The meeting simply was not recorded.
+  if (!artifact) return null;
+
+  const isPip = variant === "pip";
+  /* One element at both sizes, not two mounted in parallel: a second <video> would be a second
+     fetch of a short-lived link, a second consent decision, and a playhead that jumps when the
+     window crosses 1280px. The picture is removed by giving the element the height of its own
+     native controls — the frame goes, the transport stays. */
+  const frameClass = isPip
+    ? "h-[56px] w-full bg-black xl:aspect-video xl:h-auto"
+    : "aspect-video w-full bg-black";
 
   return (
-    <section className="mb-5" aria-label="Meeting recording">
-      <div className="overflow-hidden rounded-[10px] border border-border bg-black">
+    <section className={isPip ? undefined : "mb-5"} aria-label="Meeting recording">
+      <div
+        className={cn(
+          "overflow-hidden border border-border bg-black",
+          isPip ? "rounded-[8px]" : "rounded-[10px]",
+        )}
+      >
         {sourceUrl ? (
           // controls, and nothing else: autoplay on a page someone opened to read a transcript is
           // a room full of unexpected sound.
@@ -242,7 +304,7 @@ export function MeetingRecordingPlayer({
             src={sourceUrl}
             controls
             preload="metadata"
-            className="aspect-video w-full bg-black"
+            className={frameClass}
             onLoadedMetadata={(event) => {
               const queued = pendingSeekRef.current;
               if (!queued) return;
@@ -252,12 +314,23 @@ export function MeetingRecordingPlayer({
             }}
           />
         ) : (
-          <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 bg-surface-2/40">
+          <div
+            className={cn(
+              "flex w-full flex-col items-center justify-center gap-3 bg-surface-2/40",
+              // The UNLOADED pip is allowed to be taller than the bar it will become: the
+              // consent sentence below has to be readable BEFORE the press that records the
+              // consent, and clipping it to 56px would be hiding it.
+              isPip ? "gap-2 py-3 xl:aspect-video xl:py-0" : "aspect-video",
+            )}
+          >
             <button
               type="button"
               onClick={() => void loadRecording()}
               disabled={isLoading}
-              className="flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60"
+              className={cn(
+                "flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-medium text-surface-1 transition-opacity hover:opacity-90 disabled:opacity-60",
+                isPip ? "px-3 py-1.5 text-[12px] xl:px-4 xl:py-2 xl:text-[13px]" : "",
+              )}
             >
               {isLoading ? (
                 <SpinnerGap size={16} className="animate-spin" />

@@ -85,6 +85,7 @@ import {
   useArtifactDownload,
 } from "@/components/rooms/meeting-record-panels";
 import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
+import { TranscriptReadingLayout } from "@/components/rooms/meeting-reading-rail";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { MinutesPanel } from "@/components/rooms/minutes-panel";
@@ -697,6 +698,7 @@ export default function RoomInformationPage() {
                 seek={seek}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
+                speakerDirectory={speakerDirectory}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
@@ -920,6 +922,7 @@ function MeetingRecordSection({
   seek,
   onRecordChanged,
   onJumpToMoment,
+  speakerDirectory,
   expanded,
   onToggleExpanded,
 }: {
@@ -950,6 +953,11 @@ function MeetingRecordSection({
   seek: SeekRequest | null;
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
+  /** Faces for the reading rail's attendees tab, from the same workspace member list the
+   *  transcript's own speakers come from — the only place an avatar exists. */
+  speakerDirectory?: Readonly<
+    Record<string, { fullName?: string | null; avatarUrl?: string | null }>
+  >;
   /** WT-588: whether the record has the page to itself, with the right rail dropped. */
   expanded?: boolean;
   onToggleExpanded?: () => void;
@@ -1139,8 +1147,15 @@ function MeetingRecordSection({
           a transcript line, and it cannot move a player the reader cannot see — sending them to
           another tab to watch what they just clicked is the long way round. Artifacts still gets
           none: it is a list of files, and the player would push the list the reader came for down
-          the page. */}
-      {activeTab === "transcript" || activeTab === "summary" ? (
+          the page.
+
+          Option C: on the TRANSCRIPT tab the player is no longer here at all. It has stopped being
+          a full-width block above the reading column and become the pip at the top of the reading
+          rail — the same component, the same element, one `variant` apart. A 16:9 frame the width
+          of the record is the single biggest reason the transcript below it was being read a
+          screenful at a time. The Summary tab keeps the block player, because there is no reading
+          column beside it there to compete with. */}
+      {activeTab === "summary" ? (
         <MeetingRecordingPlayer
           artifact={recording}
           onConsentGranted={onRecordChanged}
@@ -1162,6 +1177,22 @@ function MeetingRecordSection({
               within a minute. This page updates on its own.
             </p>
           </div>
+        ) : hasRecord ? (
+          /* The record exists, so there is something to put beside the transcript: a summary with
+             citations in it, or at the very least who did the talking. A meeting still in progress
+             has neither, and gets the reading column on its own rather than an empty rail
+             occupying 420px of it. */
+          <TranscriptReadingLayout
+            transcript={transcript}
+            sections={endedRecord?.summary?.sections ?? null}
+            segments={segments}
+            recording={recording}
+            seek={seek}
+            onConsentGranted={onRecordChanged}
+            onJumpToMoment={onJumpToMoment}
+            onOpenSummaryTab={() => setTab("summary")}
+            speakerDirectory={speakerDirectory}
+          />
         ) : (
           transcript
         )

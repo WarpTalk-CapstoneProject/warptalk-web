@@ -29,6 +29,7 @@ import { cn } from "@/lib/utils";
 export type AssistantQuestionOption = {
   label: string;
   description?: string;
+  value?: string;
 };
 
 export type AssistantQuestion = {
@@ -70,7 +71,11 @@ export function formatAnswers(
     .map((question, index) => {
       const picked = answers[index] ?? [];
       if (!picked.length) return null;
-      return `${question.header}: ${picked.join(", ")}`;
+      const rendered = picked.map((answer) => {
+        const option = question.options.find((item) => item.label === answer);
+        return option?.value?.trim() || answer;
+      });
+      return `${question.header}: ${rendered.join(", ")}`;
     })
     .filter(Boolean)
     .join("\n");

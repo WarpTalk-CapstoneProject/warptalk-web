@@ -3,8 +3,9 @@
 // imports here get away with it only because they are `import type` and erase before runtime —
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
+import { appendParagraph, joinTranscriptText, startsNewParagraph } from "./sentence-flow.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
-import type { TranscriptSegmentDto as SavedTranscriptSegmentDto } from "@/types/transcript";
+import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
 type SpeakerParticipant = {
@@ -18,6 +19,20 @@ export type AnimatedWordToken = {
   index: number;
 };
 
+/**
+ * How long one person has to stop talking before the next thing they say is a NEW bubble.
+ *
+ * WHAT THIS NUMBER IS MEASURED AGAINST
+ *   A chunk boundary is not the end of a sentence. The ingress worker closes a chunk after
+ *   `vad_silence_hangover_ms` (576) or `vad_short_turn_hangover_ms` (864) of silence, and a
+ *   Vietnamese speaker draws breath mid-sentence at 300–700ms — so almost every chunk boundary
+ *   falls INSIDE a sentence, and a bubble per chunk is a bubble per breath.
+ *
+ *   This threshold therefore has to sit well clear of the hangover. 2.5s is a pause somebody
+ *   notices in a conversation: long enough that a breath, a "ừm", or a sentence cut by the 6s
+ *   `chunk_duration_ms` cap all stay in one bubble, short enough that genuinely finishing a
+ *   thought and starting another one reads as two.
+ */
 const MAX_UTTERANCE_GAP_MS = 2_500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -156,6 +171,16 @@ export function dedupeTranscriptSegments(
  */
 export type GroupedTranscriptSegment = TranscriptSegmentDto & {
   mergedSegmentIds: string[];
+  /**
+   * The turn's text broken where the SPEAKER stopped, not where a chunk ended.
+   *
+   * `originalText` stays the whole thing — search, copy and corrections all read it, and a
+   * correction has to be diffed against what was said, not against how it was laid out. This is
+   * the same text, split at the silences long enough to be an end of thought
+   * (`SENTENCE_PAUSE_MS`), which is the only sentence signal available for free: Vietnamese STT
+   * routinely returns no terminal punctuation, and the pause was measured either way.
+   */
+  paragraphs: string[];
 };
 
 export function groupTranscriptSegments(
@@ -176,13 +201,22 @@ export function groupTranscriptSegments(
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
-      utterances.push({ ...segment, mergedSegmentIds: [segment.segmentId] });
+      utterances.push({
+        ...segment,
+        mergedSegmentIds: [segment.segmentId],
+        paragraphs: segment.originalText?.trim() ? [segment.originalText.trim()] : [],
+      });
       continue;
     }
 
     utterances[utterances.length - 1] = {
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
+      paragraphs: appendParagraph(
+        previous.paragraphs,
+        segment.originalText,
+        startsNewParagraph(previous.endTimeMs, segment.startTimeMs),
+      ),
       translatedText: appendText(previous.translatedText, segment.translatedText) || undefined,
       // Merged per language. Concatenating into one slot the way translatedText does would
       // splice a Vietnamese sentence onto an English one whenever the two bubbles carried
@@ -300,6 +334,8 @@ export function firstTranslationStart<T extends { startedAt?: string | null }>(
  */
 export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
   mergedSegmentIds: string[];
+  /** See GroupedTranscriptSegment.paragraphs — the same text, split at the speaker's own stops. */
+  paragraphs: string[];
 };
 
 /**
@@ -320,13 +356,22 @@ export function groupSavedTranscriptSegments(
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
-      utterances.push({ ...segment, mergedSegmentIds: [segment.id] });
+      utterances.push({
+        ...segment,
+        mergedSegmentIds: [segment.id],
+        paragraphs: segment.originalText?.trim() ? [segment.originalText.trim()] : [],
+      });
       continue;
     }
 
     utterances[utterances.length - 1] = {
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
+      paragraphs: appendParagraph(
+        previous.paragraphs,
+        segment.originalText,
+        startsNewParagraph(previous.endTimeMs, segment.startTimeMs),
+      ),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
       // A correction to ANY chunk of the sentence is a correction to the sentence. Read off the
       // first chunk alone, an edit to the second half of a long utterance left the line showing
@@ -479,6 +524,81 @@ export function groupSegmentsByTranslationSession<T extends { startTimeMs: numbe
   return blocks;
 }
 
+/**
+ * WT-605. Where one [Pause Transcript, Resume Transcript] window falls in MEETING-RELATIVE time
+ * (the same units as `segment.startTimeMs`), so the panel can draw a "Transcript paused ·
+ * HH:MM–HH:MM" divider between the segments on either side of it — the transcript-pause
+ * counterpart to `groupSegmentsByTranslationSession`'s "Translation N" dividers.
+ */
+export type TranscriptPauseGap = {
+  window: TranscriptPauseWindowDto;
+  startMs: number;
+  /** null while the transcript is CURRENTLY paused for this room. */
+  endMs: number | null;
+};
+
+/**
+ * Converts each window's wall-clock StartedAt/EndedAt into meeting-relative ms. Returns []
+ * without a `baseTime` to anchor against — old data, or a room with no timeline anchor yet —
+ * same "nothing to compute a position with" fallback `groupSegmentsByTranslationSession` takes.
+ */
+export function resolveTranscriptPauseGaps(
+  windows: readonly TranscriptPauseWindowDto[],
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  if (Number.isNaN(baseMs) || !windows.length) return [];
+
+  return windows
+    .filter((window) => window.startedAt)
+    .map((window) => ({
+      window,
+      startMs: new Date(window.startedAt).getTime() - baseMs,
+      endMs: window.endedAt ? new Date(window.endedAt).getTime() - baseMs : null,
+    }))
+    .sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
+ * Splits an already-chronological list of segments into blocks around each pause gap. No
+ * segment is ever expected to fall INSIDE a gap — that is the entire point of Pause Transcript,
+ * the segments spoken during it were never persisted — so each gap lands cleanly on the boundary
+ * between the segment before it and the segment after.
+ *
+ * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
+ * translation and pause transcript at different, unrelated moments, so callers run this within
+ * each translation-session block rather than instead of that grouping.
+ */
+export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
+  segments: readonly T[],
+  gaps: readonly TranscriptPauseGap[],
+): Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> {
+  if (!gaps.length) return [{ gapBefore: null, segments: [...segments] }];
+
+  const blocks: Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> = [
+    { gapBefore: null, segments: [] },
+  ];
+  let gapIndex = 0;
+
+  for (const segment of segments) {
+    while (gapIndex < gaps.length && segment.startTimeMs >= gaps[gapIndex].startMs) {
+      blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+      gapIndex += 1;
+    }
+    blocks[blocks.length - 1].segments.push(segment);
+  }
+
+  // A gap with no segment after it — the room is still paused, or nobody has spoken since
+  // resuming — would otherwise vanish here instead of rendering its divider. Trailing blocks
+  // stay empty; the divider itself is drawn from `gapBefore`, not from having lines to hold.
+  while (gapIndex < gaps.length) {
+    blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+    gapIndex += 1;
+  }
+
+  return blocks;
+}
+
 export function resolveTranscriptSpeakerName(
   segment: TranscriptSegmentDto,
   participants: readonly SpeakerParticipant[],
@@ -596,6 +716,28 @@ export function formatTranscriptTimestamp(timeMs: number): string {
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * Whether two consecutive segments from one speaker are still the same utterance, by time alone.
+ *
+ * OVERLAP IS NOT A NEW UTTERANCE
+ *   The rule used to be `gapMs >= 0 && gapMs <= MAX`, and the lower bound is the bug. A NEGATIVE
+ *   gap means the second segment starts before the first one ended — segments that overlap are
+ *   the same person still talking, which is the strongest possible evidence for merging, and it
+ *   was being read as the strongest possible evidence for splitting.
+ *
+ *   It was not a rare edge either. Until the STT worker was corrected, every segment was stamped
+ *   late by the length of its own chunk, so a 6s chunk (the `chunk_duration_ms` cap) followed by
+ *   the short chunk carrying the rest of the same sentence produced a gap of about MINUS 4.8
+ *   seconds — reliably, on exactly the sentences that had been cut mid-word. That is why
+ *   transcripts broke "ở mỗi chunk".
+ *
+ *   Both halves are fixed: the stamps are right at the source now, and a negative gap here can no
+ *   longer split a sentence even if some other producer reintroduces one.
+ */
+function withinOneUtterance(previousEndMs: number, nextStartMs: number): boolean {
+  return nextStartMs - previousEndMs <= MAX_UTTERANCE_GAP_MS;
+}
+
 function belongsToSameUtterance(previous: TranscriptSegmentDto, next: TranscriptSegmentDto): boolean {
   if (previous.speakerId !== next.speakerId) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
@@ -608,8 +750,7 @@ function belongsToSameUtterance(previous: TranscriptSegmentDto, next: Transcript
   const hasTimeline = previous.endTimeMs > 0 && next.startTimeMs > 0;
   if (!hasTimeline) return true;
 
-  const gapMs = next.startTimeMs - previous.endTimeMs;
-  return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
+  return withinOneUtterance(previous.endTimeMs, next.startTimeMs);
 }
 
 function belongsToSameSavedUtterance(
@@ -621,8 +762,7 @@ function belongsToSameSavedUtterance(
   if (previousSpeaker !== nextSpeaker) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
 
-  const gapMs = next.startTimeMs - previous.endTimeMs;
-  return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
+  return withinOneUtterance(previous.endTimeMs, next.startTimeMs);
 }
 
 /**
@@ -657,11 +797,15 @@ export function pendingCorrections<T extends { id: string; originalText: string 
   });
 }
 
+/**
+ * How two halves of one utterance become one line.
+ *
+ * The rule moved to `sentence-flow.ts` when it grew a partial-overlap case: this used to catch
+ * only a TOTAL overlap and glue everything else with a space, so "chúng ta sẽ" followed by
+ * "ta sẽ bắt đầu" rendered as "chúng ta sẽ ta sẽ bắt đầu". Kept exported here because
+ * transcript-language.ts joins a merged utterance's per-language translations and has to do it
+ * the same way — two copies of "how do two halves become one" is one copy too many.
+ */
 export function appendText(current?: string, incoming?: string): string {
-  const left = current?.trim() || "";
-  const right = incoming?.trim() || "";
-  if (!left) return right;
-  if (!right || left === right || left.endsWith(right)) return left;
-  if (right.startsWith(left)) return right;
-  return `${left} ${right}`;
+  return joinTranscriptText(current, incoming);
 }

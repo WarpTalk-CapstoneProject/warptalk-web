@@ -26,7 +26,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 
 import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
+import { TranscriptReadingLayout } from "@/components/rooms/meeting-reading-rail";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
+import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
+import type { RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto, TranscriptTranslationDto } from "@/types/transcript";
 
 const TU = "019f0d00-0de0-7000-9000-000000000001";
@@ -128,6 +131,64 @@ const TRANSLATIONS: TranscriptTranslationDto[] = TRANSLATED.map(
   }),
 );
 
+/**
+ * A summary of the fixture above, with citations, so Option C's rail has something real to point
+ * at. The last item deliberately carries NO moment: the rail must refuse to render it and say so,
+ * and that refusal is the part worth looking at — it is the rule that stops an unverifiable claim
+ * appearing in a column whose whole argument is that claims have sources.
+ */
+const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
+  {
+    key: "decisions",
+    title: "Decisions",
+    items: [
+      {
+        text: "The demo will be read out in Japanese first, with the Vietnamese dub running behind it.",
+        atMs: 24_000,
+      },
+      {
+        text: "Both languages stay visible at once rather than the panel switching between them.",
+        atMs: 41_000,
+      },
+    ],
+  },
+  {
+    key: "actionItems",
+    title: "Action items",
+    items: [
+      {
+        owner: "Tuan",
+        text: "Check why the dub is running about a second behind the speaker.",
+        atMs: 54_000,
+      },
+      { owner: "Tu", text: "Keep the written summary in Vietnamese.", atMs: 70_000 },
+      // No moment recorded — the shape every summary written before citations existed still has.
+      { owner: "Tu", text: "Ask the team which language the export should default to.", atMs: null },
+    ],
+  },
+];
+
+/**
+ * A recording that exists as a row but cannot actually be fetched from a laptop.
+ *
+ * That is enough for the thing this page is for: the pip's frame, its 16:9 ratio at ≥1280px, its
+ * collapse to a bare transport bar below that, and the consent sentence that has to be readable
+ * BEFORE the press which records the consent. Pressing Play here fails with a toast, which is
+ * itself an honest thing to be able to look at.
+ */
+const RECORDING: RoomHistoryArtifact = {
+  id: "preview-recording",
+  type: "recording",
+  title: "Meeting recording",
+  description: "The meeting as it was held.",
+  status: "ready",
+  format: "mp4",
+  durationSeconds: 84,
+  consentRequired: true,
+  recordingStartedAt: "2026-08-21T00:16:00.000Z",
+  backendSource: "translation_room_recordings",
+};
+
 export default function TranscriptPreviewPage() {
   // ?theme=light / ?theme=dark. Both themes have to be looked at, and the machine doing the
   // looking follows the OS — which pins it to one of them and hides every regression in the
@@ -173,6 +234,46 @@ export default function TranscriptPreviewPage() {
         <div className="flex items-center gap-3 rounded-[14px] border border-border bg-surface-1 p-5">
           <MeetingFeedbackMenu roomId="unrated-room" meetingTitle="Sprint review — 20 Aug" />
           <MeetingFeedbackMenu roomId="rated-room" meetingTitle="Sprint review — 20 Aug" />
+        </div>
+      </section>
+
+      {/* Option C. Widen and narrow the window across 1024px and 1280px to see all three
+          breakpoints: two regions with a 16:9 pip, two regions with a 320px rail and the pip
+          collapsed to its transport bar, and the stacked layout with the summary on top. Hover a
+          claim to light its paragraph, scroll the transcript to watch the claims light themselves,
+          and press J / K / Space / `/` with focus on nothing in particular. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
+          Option C · the transcript beside what it amounts to
+        </h2>
+        <div className="rounded-[14px] border border-border bg-surface-1 p-5">
+          <TranscriptReadingLayout
+            sections={SUMMARY_SECTIONS}
+            segments={SEGMENTS}
+            recording={RECORDING}
+            seek={null}
+            onConsentGranted={() => {}}
+            onJumpToMoment={() => {}}
+            onOpenSummaryTab={() => {}}
+            speakerDirectory={SPEAKER_DIRECTORY}
+            transcript={
+              <MeetingTranscriptArtifact
+                segments={SEGMENTS}
+                translations={TRANSLATIONS}
+                preferredLanguage="vi-VN"
+                baseTime="2026-08-21T00:16:00.000Z"
+                roomId="preview-room"
+                currentUserId={TU}
+                isEnded
+                onCopy={() => {}}
+                onSeekToRecording={() => {}}
+                transcriptId="preview-transcript"
+                transcriptStatus="finalized"
+                canEdit
+                speakerDirectory={SPEAKER_DIRECTORY}
+              />
+            }
+          />
         </div>
       </section>
 

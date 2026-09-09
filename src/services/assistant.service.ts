@@ -6,7 +6,9 @@ import type {
   AssistantConversationDto,
   AssistantMentionDto,
   AssistantPageContextDto,
+  AssistantPluginCatalogItemDto,
   AssistantSkillDto,
+  PluginConnectUrlDto,
   SendAssistantMessageResponse,
 } from "@/types/assistant";
 
@@ -57,5 +59,48 @@ export const assistantService = {
 
   getSkills() {
     return apiClient.get<AssistantSkillDto[]>(API.assistant.skills);
+  },
+
+  /**
+   * WT-646 — `workspaceId` is optional at the endpoint and it changes what comes back, not which
+   * rows come back: supplied, every row carries that workspace's verdict in
+   * `workspacePolicyBlockReason`; omitted, no workspace policy is applied at all and the field is
+   * always absent.
+   *
+   * The catalog itself stays personal either way. A plugin is installed and connected by a person,
+   * not by a workspace, and the workspace only gets to say whether its members may use plugins here
+   * — so this names the workspace the user is browsing from rather than scoping the list to it.
+   */
+  listPlugins(workspaceId?: string | null) {
+    return apiClient.get<AssistantPluginCatalogItemDto[]>(API.assistant.plugins, {
+      params: workspaceId ? { workspaceId } : undefined,
+    });
+  },
+
+  /**
+   * `workspaceId` is what makes the refusal real rather than advisory: without it the server
+   * applies no policy and installs a plugin the page has just told the user their workspace does
+   * not permit.
+   */
+  installPlugin(pluginKey: string, workspaceId?: string | null) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(
+      API.assistant.installPlugin(pluginKey),
+      undefined,
+      { params: workspaceId ? { workspaceId } : undefined },
+    );
+  },
+
+  getPluginConnectUrl(pluginKey: string, client?: string, workspaceId?: string | null) {
+    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey, client), {
+      params: workspaceId ? { workspaceId } : undefined,
+    });
+  },
+
+  disconnectPlugin(pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.pluginConnection(pluginKey));
+  },
+
+  disablePlugin(pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
   },
 };

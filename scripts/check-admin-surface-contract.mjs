@@ -158,7 +158,13 @@ for (const href of hrefs) {
 
 // Conversely: a page that exists but is unreachable from the nav is a page nobody can find.
 // Nested detail routes are exempt — they are reached from their own list.
-const NAV_EXEMPT = new Set([`${ADMIN_ROOT}/layout.tsx`, `${ADMIN_ROOT}/workspaces/[workspaceRef]/page.tsx`]);
+const NAV_EXEMPT = new Set([
+  `${ADMIN_ROOT}/layout.tsx`,
+  `${ADMIN_ROOT}/workspaces/[workspaceRef]/page.tsx`,
+  // Reached from /admin/plugins, one row at a time. A nav row per catalog entry would be a nav
+  // that changes shape whenever someone adds a plugin.
+  `${ADMIN_ROOT}/plugins/[pluginKey]/page.tsx`,
+]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;
   const segment = rel.slice(ADMIN_ROOT.length + 1).replace(/\/?page\.tsx$/, "");

@@ -41,7 +41,7 @@ export function VoiceLine({
 }: {
   tone: VoiceLineTone;
   name: string;
-  /** "Dubbing you", "You hear this" — what this voice is currently doing for the reader. */
+  /** "Dubbing you", "Stand-in" — what this voice is currently doing for the reader. */
   badge?: ReactNode;
   /** Language for a profile, gender for a catalogue voice. */
   secondary?: ReactNode;
