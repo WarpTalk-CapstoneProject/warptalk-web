@@ -319,6 +319,8 @@ export function DocumentSidePanel({
   allowUser,
   blockUser,
   removePolicy,
+  memberAccess,
+  setMemberAccess,
   onToggleAiIndexing,
   isAiIndexingBusy,
 }: {
@@ -333,6 +335,11 @@ export function DocumentSidePanel({
   allowUser: (userId: string, userName: string, permission: DocumentPermission) => Promise<void>;
   blockUser: (userId: string, userName: string, permission: DocumentPermission) => Promise<void>;
   removePolicy: (policyId: string) => Promise<void>;
+  memberAccess: (permission: DocumentPermission) => "allow" | "deny" | null;
+  setMemberAccess: (
+    permission: DocumentPermission,
+    effect: "allow" | "deny" | null,
+  ) => Promise<void>;
   onToggleAiIndexing: (allowed: boolean) => Promise<void>;
   isAiIndexingBusy: boolean;
 }) {
@@ -454,6 +461,24 @@ export function DocumentSidePanel({
                 />
               </div>
 
+              {/* THE RULE FOR EVERYONE ELSE.
+                  The panel could name a person and it could name guests, and it could not say
+                  the thing most policies are actually about: whether ordinary members of this
+                  workspace may see this document. The server has always evaluated Role policies
+                  (DocumentAccessEvaluator matches SubjectKey against the caller's role name);
+                  nothing on any screen had ever written one.
+
+                  Three states, not a switch. "Not set" is the default every document starts in
+                  and it is NOT the same as Blocked: with no rule the document's own status
+                  decides, and an explicit DENY overrides that. A two-way control would make
+                  clearing a rule look like forbidding it. */}
+              <MemberAccessControl
+                permission={permission}
+                value={memberAccess(permission)}
+                disabled={isSubmitting}
+                onChange={(next) => void setMemberAccess(permission, next)}
+              />
+
               <PermissionTabs
                 value={permission}
                 onChange={setPermission}
@@ -492,6 +517,66 @@ export function DocumentSidePanel({
             </div>
           )}
         </Section>
+      </div>
+    </div>
+  );
+}
+
+
+/**
+ * Whether ordinary members may exercise one permission on this document.
+ *
+ * Only the Member role is offered — see DOCUMENT_POLICY_ROLE. A rule naming Owner or Admin would
+ * be evaluated too, which means it would work, which means the obvious thing to do with it is
+ * lock yourself out of your own document.
+ */
+function MemberAccessControl({
+  permission,
+  value,
+  disabled,
+  onChange,
+}: {
+  permission: DocumentPermission;
+  value: "allow" | "deny" | null;
+  disabled: boolean;
+  onChange: (next: "allow" | "deny" | null) => void;
+}) {
+  const options: Array<{ key: "allow" | "deny" | null; label: string }> = [
+    { key: null, label: "Not set" },
+    { key: "allow", label: "Allowed" },
+    { key: "deny", label: "Blocked" },
+  ];
+
+  return (
+    <div className="rounded-md border border-hairline bg-surface-2 p-2.5">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-xs font-medium text-ink">Workspace members</span>
+        <span className="text-[10px] leading-tight text-ink-muted">
+          {value === null
+            ? `Members follow the document's own status for ${DOCUMENT_PERMISSION_LABELS[permission].toLowerCase()}`
+            : value === "allow"
+              ? `Every member may ${DOCUMENT_PERMISSION_LABELS[permission].toLowerCase()} this`
+              : `No member may ${DOCUMENT_PERMISSION_LABELS[permission].toLowerCase()} this, whatever else allows it`}
+        </span>
+      </div>
+      <div className="mt-2 flex gap-1">
+        {options.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(option.key)}
+            aria-pressed={value === option.key}
+            className={cn(
+              "flex-1 rounded border px-2 py-1 text-[10px] transition-colors disabled:opacity-60",
+              value === option.key
+                ? "border-transparent bg-surface-3 font-medium text-ink"
+                : "border-hairline bg-surface-1 text-ink-muted hover:text-ink",
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
     </div>
   );

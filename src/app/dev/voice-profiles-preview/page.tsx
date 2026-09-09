@@ -164,7 +164,7 @@ function Frame({ width }: { width: string }) {
                 </WorkspaceRailModule>
 
                 <WorkspaceRailModule
-                  title="Voices you hear"
+                  title="Stand-in voice"
                   description="Used for a speaker in Vietnamese who has not picked a voice of their own."
                 >
                   <p className="text-[13px] font-medium text-ink">Ava</p>
@@ -262,7 +262,7 @@ function Frame({ width }: { width: string }) {
                   key={voice.name}
                   tone="library"
                   name={voice.name}
-                  badge={voice.listening ? <VoiceChip tone="active">You hear this</VoiceChip> : undefined}
+                  badge={voice.listening ? <VoiceChip tone="active">Stand-in</VoiceChip> : undefined}
                   secondary={voice.gender}
                   statusText={voice.listening ? "Your default" : undefined}
                   actions={

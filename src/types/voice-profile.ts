@@ -17,6 +17,15 @@ export interface VoiceProfileDto {
   consentStatus?: string | null;
   consentTextVersion?: string | null;
   consentGrantedAt?: string | null;
+  /**
+   * What this row IS: "upload" and "in_meeting" are voices of this person's; "library" is their
+   * PICK of a public catalogue voice, kept in the same table as a pointer.
+   *
+   * Nothing else here answers that. `provider` is "cartesia" for a pick AND for an upload once
+   * its clone has finished, because a clone lives in the Cartesia account too — which is how a
+   * person's own voice came to be listed as their library pick. See profile-status.ts.
+   */
+  source?: string | null;
 }
 
 export interface CreateVoiceProfileRequest {
