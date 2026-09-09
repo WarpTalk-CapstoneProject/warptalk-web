@@ -39,7 +39,12 @@ const roomDetail = read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx");
 for (const [needle, what] of [
   ["<MeetingRecordSection", "the record section"],
   ["<MeetingTranscriptArtifact", "the transcript"],
-  ["<SummaryPanel", "the AI summary"],
+  // The AI summary, which no longer has a tab of its own: it is rendered by the reading rail,
+  // beside the transcript it cites. `<SummaryPanel` used to be the needle here — a full-width
+  // tab that showed the whole summary but not the transcript, opposite a rail that showed the
+  // transcript but only part of the summary. One summary, one place. The rail's own half of
+  // this rule is asserted below, so the merge cannot quietly lose what the tab carried.
+  ["<TranscriptReadingLayout", "the transcript beside its summary"],
   ["<MinutesPanel", "the meeting minutes"],
   ["<ArtifactsPanel", "the retained files"],
   ["<MeetingFeedbackMenu", "the meeting rating"],
@@ -54,6 +59,45 @@ for (const [needle, what] of [
 const notesAt = roomDetail.indexOf("<RoomNotesEditor");
 const recordAt = roomDetail.indexOf("<MeetingRecordSection");
 assert.ok(notesAt > 0 && recordAt > notesAt, "The record must sit below the description.");
+
+// What the deleted Summary tab owned, in the rail that replaced it. Each of these was a control
+// or a message that existed nowhere else: the shape the summary is written in, a copy of it, the
+// file it was written to, the overview paragraph, and the four different reasons there may be no
+// summary to read. A merge that dropped any of them would look like a tidier page and be a
+// smaller product.
+const readingRail = read("src/components/rooms/meeting-reading-rail.tsx");
+for (const [needle, what] of [
+  ["SUMMARY_TEMPLATES", "the summary shape picker"],
+  ["copyAsText", "copying the summary as text"],
+  ["onDownload(artifact)", "downloading the summary file"],
+  ["summary.summary", "the summary's overview paragraph"],
+  ["summaryAbsenceMessage", "why there is no summary"],
+  ["SummaryStalenessNotice", "the notice that the transcript was corrected since"],
+]) {
+  assert.ok(
+    readingRail.includes(needle),
+    `The reading rail must still carry ${what} (${needle}).`,
+  );
+}
+
+// CONSENT IS REPORTED, NEVER INFERRED.
+//
+// `TranslationRoomArtifactDto` carries `consentRequired` and nothing that says whether the consent
+// it requires was given. The mapper answered that unanswerable question with
+// `consentRequired ? "granted" : "not_required"` — backwards, and backwards in the direction that
+// claims permission exists for exactly the artifacts still waiting on it. Nothing rendered the
+// field, which is why it survived; this is here so it cannot come back for something that does.
+const historyService = read("src/services/room-history.service.ts");
+assert.doesNotMatch(
+  historyService,
+  /consentRequired\s*\?\s*"granted"/,
+  'room-history.service.ts must not read `consentRequired` as consent GRANTED — see RoomConsentStatus.',
+);
+assert.doesNotMatch(
+  historyService,
+  /artifact\.consentRequired\)\s*\?\s*"granted"/,
+  "The room-level consent block must not infer a verdict from `consentRequired` either.",
+);
 
 // An hour of talking is hundreds of entries. Uncapped, the transcript set the page height
 // and pushed the sections below it — and the page's own scrollbar — out of reach.

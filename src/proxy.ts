@@ -29,6 +29,12 @@ const PUBLIC_ROUTES = [
   // same reason. Gating this behind the session would also make the page unreachable
   // from the marketing site, which is where most visitors arrive from.
   "/download",
+  // A biên bản opened from a share link. Public here in the sense that the GATE must not stop it:
+  // the token in the URL is the credential, and the server decides whether it opens — including
+  // answering 401 for a restricted link, which the page turns into a sign-in prompt. Bouncing the
+  // visitor to /login first would break the one flow this feature exists for, since the person
+  // holding the link may have no account at all.
+  "/minutes/shared",
   "/payment-cancelled",
   "/workspace/payment/plans",
   "/workspace/payment/success",

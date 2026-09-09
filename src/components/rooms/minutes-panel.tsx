@@ -39,12 +39,15 @@ import {
   XSquare,
   ClockCounterClockwise,
   DownloadSimple,
+  FilePdf,
   FileText,
   PencilSimple,
   Printer,
   Ruler,
+  ShareNetwork,
   Spinner,
 } from "@phosphor-icons/react/dist/ssr";
+import { isAxiosError } from "axios";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -57,6 +60,7 @@ import {
   type MinutesPolicyFacts,
   type MinutesTemplateId,
 } from "@/lib/meeting/minutes-document";
+import { MinutesShareDialog } from "@/components/rooms/minutes-share-dialog";
 import {
   MINUTES_WITHHELD,
   useMeetingMinutes,
@@ -145,7 +149,8 @@ export function MinutesPanel({
 
   const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
   const [editing, setEditing] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<"docx" | "pdf" | null>(null);
+  const [sharing, setSharing] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   /**
    * The reader's template choice for this sitting, or null to follow the default.
@@ -306,28 +311,45 @@ export function MinutesPanel({
     setEditing(true);
   }
 
-  async function downloadDocx() {
-    setDownloading(true);
+  /**
+   * Download the document in one of its two formats.
+   *
+   * The PDF is a conversion of the very .docx the other button hands over, made server-side — not
+   * a second layout rendered from the same data. Two renderers would drift, and a signed record
+   * whose Word copy and PDF copy differ is worse than having no PDF.
+   */
+  async function download(format: "docx" | "pdf") {
+    setDownloading(format);
     try {
-      // The layout on screen, so the file the reader gets is the document they were looking
-      // at. Without this the server rendered its own default and the switcher silently did
-      // not apply to the download.
-      const response = await meetingMinutesService.downloadDocx(roomId, template);
-      // The server names the file after the minutes number, which is what the recipient files it
-      // under. Falling back to the number here rather than to something generic keeps that true
-      // even if a proxy strips the header.
+      // The layout on screen, in both formats, so the file the reader gets is the document they
+      // were looking at. Without this the server renders its own default and the switcher
+      // silently does not apply to the download.
+      const response =
+        format === "pdf"
+          ? await meetingMinutesService.downloadPdf(roomId, template)
+          : await meetingMinutesService.downloadDocx(roomId, template);
+      // The server names the file after the minutes number and the meeting, which is what the
+      // recipient files it under. Falling back to the number here rather than to something
+      // generic keeps that true even if a proxy strips the header.
       const disposition = String(response.headers?.["content-disposition"] ?? "");
       const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
-      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.docx`;
+      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.${format}`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Could not download the minutes.");
+    } catch (error) {
+      // 503 is this deployment having no converter, which is a different sentence from a failed
+      // download: the Word file still works, and the person should be told to take that instead.
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      toast.error(
+        status === 503
+          ? "PDF conversion is unavailable here. The Word file still downloads."
+          : "Could not download the minutes.",
+      );
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
@@ -424,33 +446,46 @@ export function MinutesPanel({
             <Button
               size="sm"
               variant="outline"
-              onClick={downloadDocx}
-              disabled={downloading}
-              title={
-                template === "global-en"
-                  ? "The Word export is only available in the Vietnamese layout. Use Print to keep the international layout."
-                  : "Downloads this document in the Vietnamese layout."
-              }
+              onClick={() => download("docx")}
+              disabled={downloading !== null}
               className="h-8 rounded-md text-[11px] shadow-none"
             >
-              {downloading ? (
+              {downloading === "docx" ? (
                 <Spinner size={13} className="animate-spin" />
               ) : (
                 <DownloadSimple size={13} />
               )}
               Download Word (Vietnamese layout)
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => download("pdf")}
+              disabled={downloading !== null}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              {downloading === "pdf" ? (
+                <Spinner size={13} className="animate-spin" />
+              ) : (
+                <FilePdf size={13} />
+              )}
+              Download PDF
+            </Button>
+            {/* Sharing is the host's to decide, so the button is theirs alone — a reader who
+                could hand the document on would be deciding for them. */}
+            {canManage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSharing(true)}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                <ShareNetwork size={13} />
+                Share
+              </Button>
+            ) : null}
           </div>
         </div>
-
-        {/* Only when the two disagree. On the Vietnamese layout the button already says what the
-            file will be, and a line explaining that it matches would be noise. */}
-        {template === "global-en" ? (
-          <p className="text-[11px] leading-relaxed text-ink-subtle">
-            You are reading the international layout. The Word file is produced in the Vietnamese
-            layout — use Print to keep this one.
-          </p>
-        ) : null}
 
         {canManage ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -574,6 +609,13 @@ export function MinutesPanel({
       <div className="px-6 print:hidden">
         <ApprovedWork roomId={roomId} />
       </div>
+
+      {/* Mounted only while it is open: asking for the sharing state is what CREATES the link,
+          and a link should come into being when somebody opens this dialog, not when a page
+          renders. */}
+      {sharing ? (
+        <MinutesShareDialog roomId={roomId} open={sharing} onOpenChange={setSharing} />
+      ) : null}
     </div>
   );
 }
