@@ -682,9 +682,10 @@ export default function RoomInformationPage() {
                   {/* Rating a meeting used to live on `/ended`, which was the only door to it and
                       is gone. Here it is a control on the meeting itself, offered only once the
                       meeting is over — there is nothing to rate before that. */}
-                  {isEnded ? (
-                    <MeetingFeedbackMenu roomId={room.id} meetingTitle={room.title} />
-                  ) : null}
+                  {/* Moved into the button row below. On its own line it stacked above the
+                      `···`, and on an ENDED room — where there is no primary button — that left
+                      two lone icons floating one above the other at the page's right edge,
+                      reading as two unrelated controls rather than one cluster. */}
                   {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
                       the title. A second StatusChip stood here, so the same room announced
                       "Waiting" twice on one screen in two different visual languages — a grey
@@ -719,6 +720,15 @@ export default function RoomInformationPage() {
                         pending={startRoomMutation.isPending}
                         onActivate={handleRoomEntry}
                         className="h-9 px-4"
+                      />
+                    ) : null}
+                    {/* Rating a meeting used to live on `/ended`, which was the only door to it
+                        and is gone. Here it is a control on the meeting itself, offered only once
+                        the meeting is over — there is nothing to rate before that. */}
+                    {isEnded ? (
+                      <MeetingFeedbackMenu
+                        roomId={room.id}
+                        meetingTitle={room.title}
                       />
                     ) : null}
                     <RoomActionsMenu
