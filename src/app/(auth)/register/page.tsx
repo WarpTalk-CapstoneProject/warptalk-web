@@ -52,6 +52,7 @@ import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   getSafeCallbackUrl,
   resolvePostLoginDestination,
@@ -92,13 +93,38 @@ const MEETING_LANGUAGES = languagesInScope("meeting");
 const DEFAULT_SPEAK = "vi-VN";
 const DEFAULT_LISTEN = "en-US";
 
+/**
+ * Mirrors of the server's rules, kept here so a violation is answered where the field is.
+ *
+ * WT-649: a name of spaces, or one past the column width, was refused by the API and reported as
+ * an anonymous toast on the LAST step of the wizard — while the field it was about sits on step 2.
+ * The person is told something is wrong, on a screen with nothing to fix. Every limit below has a
+ * server-side counterpart in UserConstants; these exist to name the field, not to be the guard.
+ */
+const FULL_NAME_MAX = 150;
+const EMAIL_MAX = 255;
+const PASSWORD_MAX = 128;
+
 const getRegisterSchema = (hasToken: boolean) =>
   z.object({
     email: hasToken
       ? z.string().optional().or(z.literal(""))
-      : z.string().min(1, "Email is required").email("Invalid email address"),
-    fullName: z.string().min(1, "Please enter your name"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+      : z
+          .string()
+          .min(1, "Email is required")
+          .email("Invalid email address")
+          .max(EMAIL_MAX, `Email cannot exceed ${EMAIL_MAX} characters`),
+    // .trim() before .min(1), and the order is the whole point: reversed, a name of nothing but
+    // spaces passes and is only caught after a round trip.
+    fullName: z
+      .string()
+      .trim()
+      .min(1, "Please enter your name")
+      .max(FULL_NAME_MAX, `Full name cannot exceed ${FULL_NAME_MAX} characters`),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(PASSWORD_MAX, `Password cannot exceed ${PASSWORD_MAX} characters`),
   });
 
 type RegisterFormData = {
@@ -133,8 +159,7 @@ function RegisterGoogleButton({ rawCallbackUrl }: { rawCallbackUrl: string | nul
         toast.success("Google sign-in successful!");
         router.replace(postLoginDestination(user, rawCallbackUrl));
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+        toast.error(getErrorMessage(err, "Google sign-in failed. Please try again."));
       }
     },
     onError: () => toast.error("Google authentication failed or popup was closed."),
@@ -265,8 +290,11 @@ function RegisterForm() {
       toast.success("Registration successful!");
       router.replace(postLoginDestination(user, rawCallbackUrl));
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Registration failed. Please try again.");
+      // getErrorMessage rather than reaching into response.data.error by hand: the hand-rolled
+      // read saw only a body, so every transport failure — offline, 502, 504, a rate limit —
+      // arrived as "Registration failed. Please try again." and told the person to retry the one
+      // thing that could not work yet.
+      toast.error(getErrorMessage(err, "Registration failed. Please try again."));
     }
   };
 

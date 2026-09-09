@@ -83,3 +83,58 @@ test("a plain Error still shows its own message", () => {
 test("something that is not an error at all uses the fallback", () => {
   assert.equal(getErrorMessage("boom", "Could not save."), "Could not save.");
 });
+
+/**
+ * WT-649, the half that was diagnosed backwards until the stack was actually run.
+ *
+ * A FluentValidation failure does not return { error, code } like the rest of the API. It returns
+ * ASP.NET's ValidationProblemDetails, captured verbatim below from a live POST /auth/register.
+ * This client read only message / Message / error, so the one response that named the field and
+ * the reason was the one response nothing could read.
+ */
+test("a ValidationProblemDetails body is read, not swallowed", () => {
+  const error = axiosError(400, {
+    type: "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+    title: "One or more validation errors occurred.",
+    status: 400,
+    errors: { FullName: ["Full name cannot exceed 150 characters."] },
+    traceId: "00-abc-def-00",
+  });
+
+  assert.equal(
+    getErrorMessage(error, "Registration failed. Please try again."),
+    "Full name cannot exceed 150 characters.",
+  );
+});
+
+test("every field's messages survive, not just the first", () => {
+  const error = axiosError(400, {
+    title: "One or more validation errors occurred.",
+    errors: {
+      Email: ["Enter a valid email address."],
+      Password: ["Password must be at least 6 characters long."],
+    },
+  });
+
+  const message = getErrorMessage(error, "fallback");
+  assert.ok(message.includes("Enter a valid email address."));
+  assert.ok(message.includes("Password must be at least 6 characters long."));
+});
+
+test("the generic title is never shown", () => {
+  // "One or more validation errors occurred." is exactly as useless as the fallback it would
+  // replace, so an empty errors bag must fall through rather than surface it.
+  const error = axiosError(400, {
+    title: "One or more validation errors occurred.",
+    errors: {},
+  });
+
+  assert.equal(getErrorMessage(error, "fallback"), "fallback");
+});
+
+test("the { error, code } shape still wins where it is present", () => {
+  // A SERVICE failure still answers in the old shape, and must not regress.
+  const error = axiosError(400, { error: "Email already registered", code: "EMAIL_EXISTS" });
+
+  assert.equal(getErrorMessage(error, "fallback"), "Email already registered");
+});
