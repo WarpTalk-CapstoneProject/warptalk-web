@@ -20,7 +20,22 @@ export type RoomArtifactType =
 
 export type RoomArtifactStatus = "ready" | "processing" | "expired" | "missing" | "failed" | "deleted";
 
-export type RoomConsentStatus = "granted" | "limited" | "declined" | "not_required";
+/**
+ * `"required"` is here because the wire has no verdict to report.
+ *
+ * `TranslationRoomArtifactDto` carries ONE consent field — `consentRequired: bool` — and nothing
+ * that says whether the consent it requires was ever given. The mapper used to answer that
+ * unanswerable question with `consentRequired ? "granted" : "not_required"`, which is exactly
+ * backwards and backwards in the dangerous direction: it reported PERMISSION EXISTS for precisely
+ * the artifacts still waiting on it. Nothing renders this field today, which is why it went
+ * unnoticed — and why it had to be fixed before something does.
+ */
+export type RoomConsentStatus =
+  | "granted"
+  | "limited"
+  | "declined"
+  | "required"
+  | "not_required";
 
 import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
 

@@ -301,6 +301,11 @@ export function MeetingTranscriptArtifact({
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
   // with one part missing. Counted here and said out loud below, rather than left for the reader
   // to discover one line at a time.
+  //
+  // Counted over `grouped`, so it is in the same unit as `totalCount` and as the "Saved · N
+  // entries" chip: one per ROW the panel draws, not one per stored STT chunk. That is the whole
+  // reason TranscriptLanguageStatus prints this number instead of the server's — see the note
+  // there — and it is why anything added to this reduce has to be a fact about a rendered line.
   const incompleteCount = useMemo(() => {
     if (displayLanguage === AS_SPOKEN) return 0;
     return grouped.reduce((count, line) => {
@@ -1147,10 +1152,28 @@ function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
  * gap exists and nothing is filling it (the live tab, which has no saved transcript to work on);
  * or there is nothing to say.
  *
- * The counts come from the server when they are there, because the client only knows about the
- * translations it has fetched, and the whole point of a running backfill is that more are
- * arriving. `incompleteCount` is the fallback — it also catches a merged utterance with one part
- * translated, which the server's per-segment count cannot see.
+ * EVERY NUMBER PRINTED HERE IS A COUNT OF RENDERED ROWS (2026-09-09)
+ *   It used to print the server's counts when a coverage response had arrived
+ *   (`coverage?.missing ?? incompleteCount`, `coverage?.totalSegments ?? totalCount`) and the
+ *   client's when it had not — and those two are not the same unit. The server counts STORED
+ *   SEGMENTS, one per finalized STT chunk; this panel merges the consecutive chunks of one
+ *   continuous utterance into a single row, which is what "entry" means everywhere else on this
+ *   surface: the toolbar chip says "Saved · N entries" and the tab label says "Transcript (N)",
+ *   both of them `grouped.length`.
+ *
+ *   So one finished meeting read "Transcript (7)", "Saved · 7 entries" and "1 of 13 entries is
+ *   not in English yet" at the same moment. All three numbers were true; nothing on screen said
+ *   that the 13 was counted in a unit the reader cannot see, and the sentence read as though six
+ *   entries were hidden. Worse, the unit CHANGED under the reader: the same sentence said "of 7"
+ *   until the coverage query resolved and "of 13" after it.
+ *
+ *   The server's answer is not discarded — `coverage.status` is still what decides which of these
+ *   four states this is, and only the server can know that a backfill is running or has failed.
+ *   What is dropped is printing its per-segment arithmetic in a sentence about rows.
+ *
+ *   `incompleteCount` is also the stricter count of the two: it catches a merged utterance with
+ *   one part translated and one part missing, which the server sees as coverage for one segment
+ *   and a shortfall on another, and never as one line the reader cannot fully read.
  */
 function TranscriptLanguageStatus({
   language,
@@ -1178,8 +1201,8 @@ function TranscriptLanguageStatus({
   const name = getLanguageName(language);
   const running = coverage?.status === "running" || isStarting;
   const failed = coverage?.status === "failed";
-  const missing = coverage?.missing ?? incompleteCount;
-  const total = coverage?.totalSegments ?? totalCount;
+  const missing = incompleteCount;
+  const total = totalCount;
   const done = Math.max(0, total - missing);
 
   if (running) {

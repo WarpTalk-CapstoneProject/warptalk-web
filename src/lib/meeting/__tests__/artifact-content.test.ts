@@ -114,18 +114,21 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
   // looks like working code, so it is asserted against the pages themselves.
   //
   // Each page is pinned to the viewer it actually uses, rather than to "any of these": the
-  // meeting's own page renders the summary through SummaryPanel (which reads the same parsed shape
-  // and lays it out as summary, decisions and action items), and the archive renders it through
-  // readableArtifactBody. Requiring one named component of both would be requiring a mount that
-  // neither needs. What they owe the reader is identical, and that is what the second assertion
-  // holds: never the raw payload.
+  // meeting's own page renders the summary through the reading rail (which reads the same parsed
+  // shape and lays it out as an overview and its citable points, beside the transcript), and the
+  // archive renders it through readableArtifactBody. Requiring one named component of both would
+  // be requiring a mount that neither needs. What they owe the reader is identical, and that is
+  // what the second assertion holds: never the raw payload.
+  //
+  // The rail took this over from SummaryPanel when the Summary tab was merged into it — one
+  // summary, one place, beside the transcript it cites.
   //
   // The standalone artifacts page — the other half of the original WT-432 pair — is gone. It was
   // a second view of the Files tab both of these already carry, and nothing linked to it.
   const pages = [
     {
       path: "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
-      viewer: "SummaryPanel",
+      viewer: "TranscriptReadingLayout",
     },
     {
       // /history is deleted. The archive's reading moved into the library that builds every

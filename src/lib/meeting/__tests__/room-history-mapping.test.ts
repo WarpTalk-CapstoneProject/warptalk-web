@@ -265,6 +265,50 @@ test("STOPS polling once everything has resolved — no unbounded interval", () 
             { type: "transcript_export", status: "ready" },
             { type: "summary_export", status: "ready" },
           ],
+          summary: { summary: "We agreed to ship on Friday.", decisions: [], actionItems: [] },
+        },
+      ],
+      { nowMs: NOW },
+    ),
+    false,
+  );
+});
+
+test("keeps polling while the summary artifact is still the finalizer's placeholder", () => {
+  // The artifact exists and reads `ready`, and it says outright that it holds nothing. Two
+  // recoveries can still fill this same row in — the late-summary sweep and the fallback that
+  // summarises the saved transcript — and both replace CONTENT without touching the row's
+  // existence or status. Stopping here left the recovered summary invisible until a reload.
+  assert.ok(
+    shouldPollRoomHistory(
+      [
+        {
+          endedAt: "2026-08-07T09:59:00Z",
+          artifacts: [
+            { type: "transcript_export", status: "ready" },
+            { type: "summary_export", status: "ready" },
+          ],
+          summary: { summary: "", decisions: [], actionItems: [], insufficientData: true },
+        },
+      ],
+      { nowMs: NOW },
+    ),
+  );
+});
+
+test("an empty summary still stops polling once the window has closed", () => {
+  // Bounded by the same window as everything else: a summary that has not arrived an hour
+  // later is not on its way, and an idle tab must not sit on an interval forever.
+  assert.equal(
+    shouldPollRoomHistory(
+      [
+        {
+          endedAt: "2026-08-07T08:00:00Z",
+          artifacts: [
+            { type: "transcript_export", status: "ready" },
+            { type: "summary_export", status: "ready" },
+          ],
+          summary: { summary: "", decisions: [], actionItems: [], insufficientData: true },
         },
       ],
       { nowMs: NOW },
