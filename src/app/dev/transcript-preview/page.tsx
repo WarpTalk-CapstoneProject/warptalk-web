@@ -335,6 +335,8 @@ export default function TranscriptPreviewPage() {
             transcriptStatus="finalized"
             canEdit
             speakerDirectory={SPEAKER_DIRECTORY}
+            meetingStartedAt="2026-08-21T00:10:00.000Z"
+            meetingEndedAt="2026-08-21T00:52:00.000Z"
           />
         </div>
       </section>

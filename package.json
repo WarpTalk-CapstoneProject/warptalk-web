@@ -55,7 +55,7 @@
     "test:member-roles": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/member-role-change.test.ts && node scripts/check-member-roles-contract.mjs",
     "email:dev": "email dev --dir src/emails --port 3001",
     "email:render": "npx tsx scripts/render-email-templates.ts",
-    "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/transcript-display.test.ts src/lib/transcript/__tests__/transcript-history.test.ts src/lib/voice/__tests__/voice-sample-quality.test.ts",
+    "test:transcript-display": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/transcript-display.test.ts src/lib/transcript/__tests__/transcript-history.test.ts src/lib/transcript/__tests__/correction-history.test.ts src/lib/voice/__tests__/voice-sample-quality.test.ts",
     "test:transcript-language": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/transcript-language.test.ts && node scripts/check-transcript-language-contract.mjs",
     "test:transcript-workspace": "node scripts/check-transcript-workspace-isolation-contract.mjs",
     "test:wt-225-230": "node scripts/check-wt-225-230-contract.mjs",
