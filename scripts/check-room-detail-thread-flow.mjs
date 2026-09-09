@@ -21,7 +21,10 @@ const transcriptPanelCall = transcriptPanelStart < 0
   : sidePanel.slice(transcriptPanelStart, sidePanel.indexOf("/>", transcriptPanelStart));
 
 const checks = [
-  ["user chips open a popover profile dropdown", page.includes("function UserChip(") && page.includes("<PopoverContent")],
+  // The chip and the panel it opens were split into a trigger plus `PersonPopover`, so pinning
+  // the old `UserChip` name asserted a shape rather than the behaviour this line is named for.
+  // What must stay true is that a person's chip opens a popover — check that, not the symbol.
+  ["user chips open a popover profile dropdown", page.includes("function PersonPopover(") && page.includes("<PopoverTrigger") && page.includes("<PopoverContent")],
   ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
@@ -30,7 +33,11 @@ const checks = [
   // only the place it is written down changed.
   ["join meeting button keeps white text on purple primary", page.includes("function RoomEntryButton(") && page.includes("\"rounded-md text-[13px] !text-white [&_svg]:!text-white\"")],
   ["room detail uses a themed surface-1 background", page.includes("bg-surface-1 text-ink")],
-  ["visible host fallback label is removed", !page.includes("\"Host\"") && !page.includes(">Host<")],
+  // VISIBLE label, which is what the ticket removed and what this line is named for. Banning the
+  // string outright also banned `role: "Host"` -- the role as DATA, which the row now carries as
+  // a badge -- and even the comment explaining why the fallback must not return it. The defect
+  // was a role word rendered where a person's name goes, so guard the render and the return.
+  ["visible host fallback label is removed", !page.includes(">Host<") && !page.includes('return "Host"')],
   // WT-191: an invitee who already joined must appear once, not as a participant row
   // plus a duplicate "pending"/"accepted" invitation row. That needs toUserIdentity to
   // carry an email, and the dedupe to compare emails rather than an email against a UUID.
