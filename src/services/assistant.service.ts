@@ -90,8 +90,8 @@ export const assistantService = {
     );
   },
 
-  getPluginConnectUrl(pluginKey: string, workspaceId?: string | null) {
-    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey), {
+  getPluginConnectUrl(pluginKey: string, client?: string, workspaceId?: string | null) {
+    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey, client), {
       params: workspaceId ? { workspaceId } : undefined,
     });
   },

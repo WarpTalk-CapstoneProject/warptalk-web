@@ -228,13 +228,16 @@ if (!page.includes("useAssistantPlugins(workspaceId)")) {
 }
 // Install and connect must be sent under the same workspace the refusal was read from, or the page
 // disables a button the server would have happily honoured, and honours one it would have refused.
-for (const token of [
-  "installPlugin.mutateAsync({ pluginKey: plugin.key, workspaceId })",
-  "connectUrl.mutateAsync({ pluginKey: plugin.key, workspaceId })",
-]) {
-  if (!page.includes(token)) {
+//
+// Matched on the call rather than on one exact line: the connect call also carries which surface
+// asked for it, so it spans several lines now. Pinning the formatting would have made a second
+// argument a contract break, which is not what this check is about.
+for (const call of ["installPlugin.mutateAsync", "connectUrl.mutateAsync"]) {
+  const start = page.indexOf(`${call}({`);
+  const args = start < 0 ? "" : page.slice(start, page.indexOf("})", start));
+  if (!args.includes("workspaceId")) {
     throw new Error(
-      `Plugins page must send the workspace with the actions the workspace can refuse ('${token}'), so its own guard and the server's agree.`,
+      `Plugins page must send the workspace with the actions the workspace can refuse ('${call}' must pass workspaceId), so its own guard and the server's agree.`,
     );
   }
 }

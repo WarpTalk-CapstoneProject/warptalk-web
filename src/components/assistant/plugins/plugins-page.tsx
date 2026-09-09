@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowSquareOut,
+  Check,
   CheckCircle,
+  Lock,
   MagnifyingGlass,
   Plugs,
   PlugsConnected,
   Prohibit,
   PuzzlePiece,
+  ShieldCheck,
   Spinner,
   Trash,
   Warning,
@@ -18,6 +21,7 @@ import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,6 +41,7 @@ import {
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
+import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
@@ -193,6 +198,67 @@ function ConnectionNotice({
   );
 }
 
+/**
+ * What this plugin will be able to do, one line per tool.
+ *
+ * Built from the catalog rather than written per plugin: every tool already carries a human
+ * `label` and an `effect`, so the list stays true to what the plugin can actually call and a new
+ * catalog row needs no copy of its own. Read tools come first and write tools last, which puts the
+ * heaviest permission closest to the button that grants it.
+ *
+ * An MCP row has an empty tool list until its first successful connect - `tools_json` is a cache
+ * of `tools/list` - so there is a real case where this can say nothing, and it says that instead
+ * of rendering an empty box.
+ */
+function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
+  const permissions = useMemo(() => {
+    const seen = new Set<string>();
+    return plugin.tools
+      .map((tool) => ({ label: tool.label || tool.name, effect: tool.effect }))
+      .filter((permission) => {
+        if (seen.has(permission.label)) return false;
+        seen.add(permission.label);
+        return true;
+      })
+      .sort((a, b) => Number(a.effect === "write") - Number(b.effect === "write"));
+  }, [plugin.tools]);
+
+  if (!permissions.length) {
+    return (
+      <p className="mt-6 rounded-xl border border-border bg-surface-1 px-4 py-3 text-sm leading-6 text-ink-muted">
+        This plugin publishes its permissions when you connect. The provider&apos;s consent screen lists
+        exactly what it is asking for before you approve.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-6 flex flex-col gap-3">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+        Authorizing allows this plugin to
+      </h3>
+      <ul className="flex flex-col gap-2.5">
+        {permissions.map((permission) => (
+          <li key={permission.label} className="grid grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3">
+            <Check size={15} weight="bold" className="mt-1 text-emerald-600" />
+            <span className="text-sm leading-6 text-ink">{permission.label}</span>
+            <span
+              className={cn(
+                "mt-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                permission.effect === "write"
+                  ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                  : "border-border bg-surface-1 text-ink-subtle",
+              )}
+            >
+              {permission.effect}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
@@ -255,40 +321,51 @@ function ConnectPluginDialog({
           <X size={16} />
         </Button>
 
-        <div className="flex flex-col items-center gap-4 text-center">
+        <div className="flex flex-col items-center gap-5 text-center">
           <div className="flex items-center gap-4">
-            <div className="grid size-14 place-items-center rounded-xl border border-border bg-surface-2 text-ink">
-              <PlugsConnected size={26} weight="duotone" />
+            <div className="grid size-14 place-items-center rounded-xl border border-border bg-surface-1">
+              <WarpTalkBrand compact className="h-6 w-[27px]" />
             </div>
-            <span className="text-ink-subtle">...</span>
+            <span aria-hidden className="flex w-12 items-center gap-1.5 text-ink-subtle">
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+              <ShieldCheck size={15} />
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+            </span>
             <PluginGlyph plugin={plugin} size="lg" />
           </div>
           <div>
-            <h2 className="text-xl font-semibold tracking-tight">Connect {plugin.label}</h2>
-            <p className="mt-1 text-sm text-ink-muted">Developed for WarpTalk</p>
+            <h2 className="text-lg font-medium leading-snug tracking-tight">
+              <span className="font-semibold">WarpBot</span> by WarpTalk wants access to your{" "}
+              {plugin.label}
+            </h2>
+            <p className="mt-1.5 text-sm text-ink-muted">
+              You will sign in and confirm this on the provider&apos;s own page.
+            </p>
           </div>
         </div>
 
-        <div className="mt-6 divide-y divide-border rounded-xl border border-border bg-surface-1 px-4">
-          <div className="py-4">
-            <h3 className="text-sm font-semibold text-ink">This page will redirect to your provider</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              You will sign in and confirm permissions on the provider page.
+        <PermissionList plugin={plugin} />
+
+        <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
+          <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
+            <Prohibit size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+            WarpTalk is not owned or operated by this provider.
+          </p>
+          <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
+            <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+            Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks you
+            first.
+          </p>
+          {sharedConnectionPlugins.length ? (
+            <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
+              <PlugsConnected size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
+              One sign-in also covers{" "}
+              <span className="font-medium text-ink">
+                {formatPluginLabelList(sharedConnectionPlugins.map((sibling) => sibling.label))}
+              </span>
+              . You can grant only part of it and come back for the rest.
             </p>
-          </div>
-          <div className="py-4">
-            <h3 className="text-sm font-semibold text-ink">Private and secure</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              WarpBot uses connected app data only to answer your request or perform the action you confirm.
-              OAuth credentials stay encrypted in WarpTalk backend services.
-            </p>
-          </div>
-          <div className="py-4">
-            <h3 className="text-sm font-semibold text-ink">You are in control of your data</h3>
-            <p className="mt-1 text-sm leading-6 text-ink-muted">
-              You can disconnect this plugin from your personal settings. Write actions require confirmation before execution.
-            </p>
-          </div>
+          ) : null}
         </div>
 
         {workspaceBlock ? (
@@ -422,10 +499,15 @@ function ConnectPluginDialog({
  */
 const CONSENT_CALLBACK_ERRORS: Record<string, string> = {
   access_denied: "You cancelled the sign-in, so nothing was connected.",
-  invalid_state: "That sign-in link had already been used or expired. Start the connection again.",
+  permission_denied: "That sign-in link had already been used or expired. Start the connection again.",
   unknown_plugin: "That plugin is no longer available.",
-  provider_error: "The provider could not complete the sign-in. Try again in a moment.",
-  exchange_failed: "The provider could not complete the sign-in. Try again in a moment.",
+  plugin_not_installed: "That plugin is not installed for this account. Install it, then connect.",
+  connection_required: "The provider did not return lasting access. Connect again and approve the request.",
+  // Deliberately not "try again in a moment": no amount of retrying fixes a client secret that is
+  // not set, and saying otherwise sends the user round the consent screen for as long as they are
+  // willing. The reference is what turns this into something an operator can act on.
+  provider_configuration: "WarpTalk's connection to this provider is not configured correctly. Nothing is wrong with your account.",
+  provider_unavailable: "The provider could not complete the sign-in. Try again in a moment.",
 };
 
 const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
@@ -542,7 +624,13 @@ export default function PluginsPage() {
 
   async function continueToProvider(plugin: AssistantPluginCatalogItemDto) {
     try {
-      const result = await connectUrl.mutateAsync({ pluginKey: plugin.key, workspaceId });
+      const result = await connectUrl.mutateAsync({
+        pluginKey: plugin.key,
+        // Sealed into the OAuth state by the API. The desktop app hands consent to the system
+        // browser, so this is the only moment the flow still knows where it started.
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId,
+      });
       // `openProviderConsent` reports a blocked pop-up by returning false, and it is the whole
       // reason it has a return value: Safari and Firefox drop the user-gesture grant across the
       // await above. Telling the user to finish something in a window that never opened is the
@@ -607,8 +695,9 @@ export default function PluginsPage() {
   useEffect(() => {
     if (consentCallbackAnnounced.current) return;
     const params = new URLSearchParams(window.location.search);
-    const error = params.get("error");
-    const connected = params.get("connected") === "1";
+    const status = params.get("status");
+    const error = status === "error" ? (params.get("reason") ?? "provider_unavailable") : null;
+    const connected = status === "connected" || status === "partial";
     if (!error && !connected) {
       consentCallbackAnnounced.current = true;
       return;
@@ -623,11 +712,15 @@ export default function PluginsPage() {
     const label = row?.label ?? "The plugin";
 
     if (error) {
+      // The reference only exists on a failure, and only there is it worth reading out: it is the
+      // one string a user can quote that turns "it did not work" into a line an operator can find.
+      const reference = params.get("ref");
       toast.error(
-        CONSENT_CALLBACK_ERRORS[error] ??
-          `${label} could not be connected. Start the connection again.`,
+        (CONSENT_CALLBACK_ERRORS[error] ??
+          `${label} could not be connected. Start the connection again.`) +
+          (reference ? ` (ref ${reference})` : ""),
       );
-    } else if (row && !scopesSatisfied(row.requiredScopes, row.grantedScopes)) {
+    } else if (status === "partial" || (row && !scopesSatisfied(row.requiredScopes, row.grantedScopes))) {
       // Connected, but the consent screen declined a permission this plugin needs. Saying
       // "connected" here would be the same lie the card takes care not to tell.
       toast.warning(`${label} is connected, but a permission it needs was not approved.`);
@@ -638,8 +731,10 @@ export default function PluginsPage() {
     // Strip it, so a reload does not re-announce an outcome the user has seen and the slug does
     // not travel on if they share the URL.
     params.delete("plugin");
-    params.delete("connected");
-    params.delete("error");
+    params.delete("status");
+    params.delete("reason");
+    params.delete("ref");
+    params.delete("client");
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   }, [isLoading, plugins]);
