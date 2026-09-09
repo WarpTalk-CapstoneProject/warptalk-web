@@ -50,10 +50,13 @@ export function MinutesShareDialog({
   roomId,
   open,
   onOpenChange,
+  documentStatus,
 }: {
   roomId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** The minutes' own status. A draft is not published, so a link to one does not open yet. */
+  documentStatus?: string;
 }) {
   const { data: share, isLoading } = useMinutesShare(roomId, open);
   const { setMode, setAllowDownload, revoke, addPerson, removePerson } =
@@ -64,6 +67,9 @@ export function MinutesShareDialog({
 
   const isPublic = share?.accessMode === "ANYONE_WITH_LINK";
   const revoked = Boolean(share?.revokedAt);
+  // Said here rather than left for the recipient to discover: somebody who copies a link and
+  // sends it to a client should know, before they send it, that it opens on signature.
+  const unsigned = documentStatus === "DRAFT";
 
   async function copyLink() {
     if (!share?.url) return;
@@ -135,6 +141,14 @@ export function MinutesShareDialog({
                   This document is public to anyone holding the address. Revoking stops future
                   reads, but not a copy somebody already took — sharing it is your call to make.
                 </span>
+              </p>
+            ) : null}
+
+            {unsigned ? (
+              <p className="rounded-md border border-border bg-surface-2 p-2.5 text-[11px] leading-relaxed text-ink-subtle">
+                These minutes are still a draft, so the link does not open for anyone yet — a draft
+                is a machine’s first version and nobody has signed it. Sign the document and the
+                same address starts working; you do not have to share it again.
               </p>
             ) : null}
 
