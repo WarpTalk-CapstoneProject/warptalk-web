@@ -231,6 +231,17 @@ export default function RoomInformationPage() {
   );
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [seek, setSeek] = useState<SeekRequest | null>(null);
+  /**
+   * WT-655 — how long the recording runs, as the media element reports it. Null until it does.
+   *
+   * The setter is handed to the player unwrapped, which is why this is `useState` and not a ref:
+   * `useState` setters are referentially stable for the life of the component, and the player
+   * retracts the duration whenever the callback it was given changes identity. The same trick the
+   * reading sync already plays with `publishPlaying: setIsPlaying`.
+   */
+  const [recordingDurationSeconds, setRecordingDurationSeconds] = useState<number | null>(
+    null,
+  );
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
@@ -279,13 +290,38 @@ export default function RoomInformationPage() {
    */
   // The two origins WT-473 stored for exactly this. Either missing means the transcript cannot be
   // aligned to the recording at all, and recording-seek.ts refuses rather than guessing.
+  /**
+   * WT-655 — the third field, and the one with no column behind it.
+   *
+   * `durationSeconds` is what makes seekTargetSeconds refuse a moment that falls after the host
+   * stopped recording. Nothing supplied it before, so that refusal had never once executed in
+   * production: a late moment yielded a positive offset, the browser clamped `currentTime` to the
+   * end of the file, and the reader got the final frame — which is a still picture of the meeting
+   * ending and is indistinguishable from a seek that worked.
+   *
+   * IT ARRIVES LATE, ON PURPOSE, AND THE GUARD IS DORMANT UNTIL IT DOES
+   *   The player fetches its presigned url only when somebody presses play (a fifteen-minute link
+   *   spent on every visit to this page mostly expires unwatched), so before the first press there
+   *   is no media element, no metadata, and no length. Every timestamp clicked in that window is
+   *   checked against `null` and therefore against nothing. The refusal TIGHTENS once the file is
+   *   loaded rather than being in force from the start, and that is the ceiling of this approach —
+   *   a duration stored beside `recording_started_at` would arrive with the artifact and guard the
+   *   first click too. Until then the first click is covered one layer down instead: the player
+   *   compares a queued seek against its own `duration` before applying it, which is the only
+   *   moment the number exists for a click that arrived before the file did.
+   */
   const seekSources = useMemo(
     () => ({
       timelineAnchorAt: transcriptQuery.data?.timelineAnchorAt ?? null,
       recordingStartedAt:
         findPlayableRecording(endedRecordQuery.data?.artifacts)?.recordingStartedAt ?? null,
+      durationSeconds: recordingDurationSeconds,
     }),
-    [transcriptQuery.data?.timelineAnchorAt, endedRecordQuery.data?.artifacts],
+    [
+      transcriptQuery.data?.timelineAnchorAt,
+      endedRecordQuery.data?.artifacts,
+      recordingDurationSeconds,
+    ],
   );
 
   /**
@@ -797,6 +833,9 @@ export default function RoomInformationPage() {
                 seek={seek}
                 seekSources={seekSources}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
+                // WT-655: the media element is the only source of the recording's length, and this
+                // is the wire it comes back up. See the note on `seekSources` above.
+                onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
                 seekUnavailableReason={seekUnavailableReason}
                 recordingUnavailableReason={recordingUnavailableReason}
@@ -1045,6 +1084,7 @@ function MeetingRecordSection({
   seek,
   seekSources,
   onRecordChanged,
+  onDurationSeconds,
   onJumpToMoment,
   seekUnavailableReason,
   recordingUnavailableReason,
@@ -1087,6 +1127,15 @@ function MeetingRecordSection({
    */
   seekSources?: SeekSources;
   onRecordChanged: () => void;
+  /**
+   * WT-655 — the recording's length, going the other way from everything else here.
+   *
+   * Both players on this page report it to the same handler, and they cannot both be mounted: the
+   * pip belongs to the Transcript tab and the block player to Summary, so switching tabs unmounts
+   * one (which publishes null) and mounts the other (which publishes the number again once its own
+   * metadata lands). That is why the handler is a plain setter and not a merge of two sources.
+   */
+  onDurationSeconds?: (seconds: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
   /**
    * WT-655 — why a transcript timestamp does not open the recording, when it does not.
@@ -1305,6 +1354,7 @@ function MeetingRecordSection({
           artifact={recording}
           onConsentGranted={onRecordChanged}
           seek={seek}
+          onDurationSeconds={onDurationSeconds}
           // WT-655: `artifact` is null both when the meeting was never recorded and when its file
           // is still being written, and the player cannot tell those apart from a null. This says
           // which — and says when several recordings are why no seek is on offer.
@@ -1349,6 +1399,7 @@ function MeetingRecordSection({
             seek={seek}
             seekSources={seekSources}
             onConsentGranted={onRecordChanged}
+            onDurationSeconds={onDurationSeconds}
             onJumpToMoment={onJumpToMoment}
             onOpenSummaryTab={() => setTab("summary")}
             speakerDirectory={speakerDirectory}

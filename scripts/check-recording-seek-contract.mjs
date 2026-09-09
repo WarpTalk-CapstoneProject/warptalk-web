@@ -243,4 +243,78 @@ assert.match(
   "Auto-scrolling must honour prefers-reduced-motion.",
 );
 
+/* ───────────────────────────────────────────────────────────────────────────────────────────────
+   WAVE 3a — the past-the-end refusal, and where the number it needs comes from.
+
+   `seekTargetSeconds` has refused a target beyond the end of the recording since Wave 1, and that
+   branch had never executed. Nothing supplied a duration: there is no duration column, so
+   `SeekSources.durationSeconds` was always undefined and every comparison against it was skipped.
+   A moment spoken after the host stopped recording therefore produced a positive offset, the
+   browser clamped `currentTime` to the end, and the reader was shown the final frame — a still
+   picture of the meeting ending, indistinguishable from a seek that worked.
+
+   The number now comes from the media element. That is enough to arm the refusal and deliberately
+   not enough to pick between several recordings, which stays withheld (see 5 above).
+   ─────────────────────────────────────────────────────────────────────────────────────────────── */
+
+// 15. The player publishes the file's length, in the shape its two siblings already use.
+assert.match(
+  player,
+  /onDurationSeconds\?:\s*\(seconds: number \| null\) => void/,
+  "The player must publish the recording's duration as file seconds or null. Without it "
+    + "seekTargetSeconds' past-the-end branch is unreachable, which is how a moment after the "
+    + "recording stopped came to render as the final frame.",
+);
+// A duration is REVISED. A fragmented MP4 reports Infinity until enough of it has been read, and a
+// fresh presigned url for the same recording starts over at NaN — so loadedmetadata alone leaves
+// the length permanently unknown on exactly the containers the egress pipeline writes.
+assert.match(
+  player,
+  /onDurationChange=\{/,
+  "The player must listen for durationChange as well as loadedMetadata. A duration that starts as "
+    + "Infinity and is corrected later would otherwise never reach the caller at all.",
+);
+assert.match(
+  player,
+  /Number\.isFinite\(seconds\) && seconds > 0 \? seconds : null/,
+  "NaN and Infinity mean NOT KNOWN and must publish null. A non-finite number handed to the guard "
+    + "makes every comparison false — the refusal looks armed and refuses nothing.",
+);
+
+// 16. The queued seek is checked by the PLAYER, because at that instant nothing else can.
+//     A click before the file is fetched is held in pendingSeekRef; the page had no duration to
+//     check it against, so the first click of every visit escapes the upstream guard entirely.
+assert.match(
+  player,
+  /Number\.isFinite\(duration\) && duration > 0 && queued\.seconds > duration/,
+  "A queued seek must be compared against the element's own duration before it is applied, or the "
+    + "first click of every visit lands on the last frame with the browser's clamp doing the lying.",
+);
+// And it is a comparison of two FILE-axis numbers. Meeting arithmetic in this component would be a
+// second subtraction of the two origins — see the header of recording-seek.ts for what that costs.
+// Calls and imports, not prose: the prop's own doc comment has to be able to NAME the function
+// upstream whose guard this one backs up.
+assert.doesNotMatch(
+  player,
+  /(seekTargetSeconds|meetingMsFromRecordingSeconds)\(|from "@\/lib\/meeting\/recording-seek"/,
+  "The player must never do meeting-axis arithmetic. It compares an offset into this file against "
+    + "this file's length; the two clocks meet in recording-seek.ts and nowhere else.",
+);
+// The two origins are the page's, and a player holding either of them is a player one edit away
+// from subtracting them.
+assert.doesNotMatch(
+  player,
+  /(sources|artifact)\.(timelineAnchorAt|recordingStartedAt)/,
+  "The player must not read either clock origin. Wave 2 kept the file axis on this side of the "
+    + "boundary on purpose; a highlight or a seek computed here would drift from the one that is not.",
+);
+
+// 17. The duration enters the ONE seekSources memo, not a second object built beside it.
+assert.match(
+  roomDetail,
+  /durationSeconds: recordingDurationSeconds/,
+  "The duration must land in the same seekSources the seek and the follow-along both read. A "
+    + "second sources object is two answers to where the recording starts and how long it runs.",
+);
+
 console.log("Recording seek contract: PASS");
