@@ -96,7 +96,11 @@ import {
   hasPendingRecording,
 } from "@/lib/meeting/meeting-artifacts";
 import { resolveCitationRowId } from "@/lib/meeting/citation-target";
-import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
+import {
+  canAlignToRecording,
+  seekTargetSeconds,
+  type SeekSources,
+} from "@/lib/meeting/recording-seek";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -791,6 +795,7 @@ export default function RoomInformationPage() {
                 segments={transcriptSegments}
                 hasTranscript={hasTranscript}
                 seek={seek}
+                seekSources={seekSources}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
                 seekUnavailableReason={seekUnavailableReason}
@@ -1038,6 +1043,7 @@ function MeetingRecordSection({
   segments,
   hasTranscript,
   seek,
+  seekSources,
   onRecordChanged,
   onJumpToMoment,
   seekUnavailableReason,
@@ -1071,6 +1077,15 @@ function MeetingRecordSection({
   segments: TranscriptSegmentDto[];
   /** Where to move the recording, when a citation or a transcript line asked. */
   seek: SeekRequest | null;
+  /**
+   * WT-655 — the two clock origins, for the direction that runs the other way: the recording is
+   * playing, and the transcript has to know which line that is.
+   *
+   * The same object `requestSeek` measures against, threaded rather than rebuilt here. Two
+   * derivations of this pair would be two answers to where the meeting's timeline begins, and the
+   * second one is wrong in a way that renders as a highlight sitting a sentence behind the audio.
+   */
+  seekSources?: SeekSources;
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
   /**
@@ -1332,6 +1347,7 @@ function MeetingRecordSection({
             recording={recording}
             recordingUnavailableReason={recordingUnavailableReason}
             seek={seek}
+            seekSources={seekSources}
             onConsentGranted={onRecordChanged}
             onJumpToMoment={onJumpToMoment}
             onOpenSummaryTab={() => setTab("summary")}

@@ -54,6 +54,7 @@ import {
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
+import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -87,6 +88,7 @@ export function TranscriptReadingLayout({
   recording,
   recordingUnavailableReason,
   seek,
+  seekSources,
   onConsentGranted,
   onJumpToMoment,
   onOpenSummaryTab,
@@ -103,6 +105,14 @@ export function TranscriptReadingLayout({
   /** Why nothing is playable, when the meeting did record something. See MeetingRecordingPlayer. */
   recordingUnavailableReason?: "processing" | "multiple" | null;
   seek: SeekRequest | null;
+  /**
+   * WT-655 — the two origins that turn the recording's playhead into a moment in the meeting.
+   *
+   * Forwarded to ReadingSyncProvider and used nowhere in this file: it is passed through because the
+   * provider is mounted here, not because the rail has any business with it. The room page builds
+   * the value once and both directions of the conversion read the same object.
+   */
+  seekSources?: SeekSources;
   onConsentGranted: () => void;
   onJumpToMoment: (atMs: number) => void;
   /** Where the claims this rail refuses to render can be read in full. */
@@ -115,7 +125,7 @@ export function TranscriptReadingLayout({
   const [pipOpen, setPipOpen] = useState(true);
 
   return (
-    <ReadingSyncProvider>
+    <ReadingSyncProvider seekSources={seekSources}>
       <div
         className={cn(
           /* The three breakpoints, and they are three genuinely different layouts rather than one
@@ -310,6 +320,12 @@ function ReadingRail({
               unavailableReason={recordingUnavailableReason}
               seek={seek}
               playbackRequest={sync?.playbackRequest ?? null}
+              /* WT-655 — the wire the transcript follows the recording along. Handed the context's
+                 own functions rather than arrows closing over them: the player retracts the
+                 highlight when these change identity (see its unmount cleanup), so an inline
+                 lambda here would clear the playhead on every render of this rail. */
+              onPlaybackSeconds={sync?.publishPlaybackSeconds}
+              onPlayingChange={sync?.publishPlaying}
               onConsentGranted={onConsentGranted}
             />
           ) : null}

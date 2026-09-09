@@ -10,7 +10,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { canAlignToRecording, seekTargetSeconds } from "../recording-seek.ts";
+import {
+  canAlignToRecording,
+  meetingMsFromRecordingSeconds,
+  seekTargetSeconds,
+} from "../recording-seek.ts";
 
 // The host started recording 30 seconds before the first word was transcribed.
 const RECORDING_FIRST = {
@@ -87,6 +91,75 @@ test("a nonsense moment is refused", () => {
   assert.equal(seekTargetSeconds(RECORDING_FIRST, -1), null);
   assert.equal(seekTargetSeconds(RECORDING_FIRST, Number.NaN), null);
   assert.equal(seekTargetSeconds(RECORDING_FIRST, Number.POSITIVE_INFINITY), null);
+});
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────
+   The other direction: the recording is playing, and the transcript has to know which line that is.
+   ───────────────────────────────────────────────────────────────────────────────────────────── */
+
+test("a position in the recording maps back to the moment in the meeting", () => {
+  // 40s into a file that started 30s before the first transcribed word is 10s into the meeting.
+  assert.equal(meetingMsFromRecordingSeconds(RECORDING_FIRST, 40), 10_000);
+});
+
+test("the lead-in before the first transcribed word is not a moment in the meeting", () => {
+  // Null, never 0. Clamping would light up the meeting's first line for the whole half-minute of
+  // room noise before anybody spoke, which reads as a highlight stuck on the wrong sentence.
+  assert.equal(meetingMsFromRecordingSeconds(RECORDING_FIRST, 10), null);
+  // The exact instant the transcript's clock starts is the first moment that exists.
+  assert.equal(meetingMsFromRecordingSeconds(RECORDING_FIRST, 30), 0);
+});
+
+test("a playhead in a recording that started after the transcript maps back too", () => {
+  const transcriptFirst = {
+    timelineAnchorAt: "2026-08-20T10:00:00Z",
+    recordingStartedAt: "2026-08-20T10:00:30Z",
+  };
+
+  assert.equal(meetingMsFromRecordingSeconds(transcriptFirst, 15), 45_000);
+});
+
+test("a missing origin means no line is playing, not the first line", () => {
+  // Every meeting recorded before WT-473. The follow feature simply does not run for them; it must
+  // not run WRONGLY, which is what any substituted origin would produce.
+  assert.equal(
+    meetingMsFromRecordingSeconds(
+      { timelineAnchorAt: null, recordingStartedAt: "2026-08-20T10:00:00Z" },
+      40,
+    ),
+    null,
+  );
+  assert.equal(
+    meetingMsFromRecordingSeconds(
+      { timelineAnchorAt: "2026-08-20T10:00:00Z", recordingStartedAt: null },
+      40,
+    ),
+    null,
+  );
+  assert.equal(meetingMsFromRecordingSeconds({}, 40), null);
+});
+
+test("a nonsense playhead is refused", () => {
+  // `timeupdate` on an element with no metadata yet reports NaN, and a caller bug can hand over a
+  // negative. Neither is a position in the file.
+  assert.equal(meetingMsFromRecordingSeconds(RECORDING_FIRST, Number.NaN), null);
+  assert.equal(meetingMsFromRecordingSeconds(RECORDING_FIRST, Number.POSITIVE_INFINITY), null);
+  assert.equal(meetingMsFromRecordingSeconds(RECORDING_FIRST, -1), null);
+});
+
+test("the two directions are exact inverses of one another", () => {
+  // The point of keeping the pair in one file. A drift of even a second here is invisible in
+  // review and shows up as a highlight that lags the audio by a sentence.
+  for (const sources of [
+    RECORDING_FIRST,
+    { timelineAnchorAt: "2026-08-20T10:00:00Z", recordingStartedAt: "2026-08-20T10:00:30Z" },
+  ]) {
+    for (const atMs of [0, 1, 999, 45_000, 3_600_000]) {
+      const seconds = seekTargetSeconds(sources, atMs);
+      if (seconds === null) continue;
+      assert.equal(meetingMsFromRecordingSeconds(sources, seconds), atMs);
+    }
+  }
 });
 
 test("canAlignToRecording answers before any particular moment is chosen", () => {
