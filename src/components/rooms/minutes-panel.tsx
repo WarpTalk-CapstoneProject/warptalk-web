@@ -131,7 +131,6 @@ export function MinutesPanel({
    */
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
-  const workspaceLanguage = useWorkspaceStore((state) => state.defaultLanguage);
   const { data: workspace } = useWorkspace(workspaceId ?? "");
   const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
   const { data: room } = useTranslationRoom(roomId);
@@ -243,12 +242,10 @@ export function MinutesPanel({
 
   const editable = isEditable(minutes) && canManage;
 
-  const template =
-    chosenTemplate
-    ?? resolveMinutesTemplate({
-      primaryLanguage: view.primaryLanguage,
-      workspaceDefaultLanguage: workspaceLanguage,
-    });
+  // The reader's pick, else the default. No longer derived from the meeting's language: the
+  // layout is the sender's choice, and a default that changed shape per meeting made the choice
+  // harder to notice than it was worth.
+  const template = chosenTemplate ?? resolveMinutesTemplate();
 
   /*
    * The policy block, assembled from what the product genuinely holds.
@@ -282,7 +279,10 @@ export function MinutesPanel({
   async function downloadDocx() {
     setDownloading(true);
     try {
-      const response = await meetingMinutesService.downloadDocx(roomId);
+      // The layout on screen, so the file the reader gets is the document they were looking
+      // at. Without this the server rendered its own default and the switcher silently did
+      // not apply to the download.
+      const response = await meetingMinutesService.downloadDocx(roomId, template);
       // The server names the file after the minutes number, which is what the recipient files it
       // under. Falling back to the number here rather than to something generic keeps that true
       // even if a proxy strips the header.

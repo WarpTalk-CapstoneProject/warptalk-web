@@ -5,15 +5,15 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 
 import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { buttonVariants } from "@/components/ui/button";
-import { CONNECT_CHANNEL, readConnectOutcome } from "@/lib/assistant/connect-outcome";
 import { cn } from "@/lib/utils";
 
 /**
  * Where a provider's consent lands after the API has redeemed the code.
  *
- * In a browser this renders nothing: it forwards to the plugins page, which shows the plugin as
- * connected. The user approved a request seconds ago, and a screen confirming it would be one
- * more thing to read on the way to where they were already going.
+ * In a browser this renders nothing: it forwards to the plugins page, which announces the outcome
+ * from the same query and shows the plugin as connected. The user approved a request seconds ago,
+ * and a screen confirming it would be one more thing to read on the way to where they were already
+ * going.
  *
  * The desktop app is the case that needs a page. It hands consent to the system browser, so the
  * browser is holding the result while the app that asked for it cannot see it, and a
@@ -50,7 +50,6 @@ function ConnectCallback() {
 
   const provider = safeProvider(params?.provider);
   const isDesktopFlow = searchParams.get("client") === "desktop";
-  const outcome = useMemo(() => readConnectOutcome(searchParams), [searchParams]);
   const query = useMemo(
     () => outcomeQuery(new URLSearchParams(searchParams.toString())),
     [searchParams],
@@ -73,18 +72,8 @@ function ConnectCallback() {
       return;
     }
 
-    // The consent was opened in a second tab with `noopener`, so the tab the user started from
-    // cannot be reached directly and would sit on a stale "Connect" until it happened to refetch.
-    // Telling it costs one message and needs no answer - this tab is going to the plugins page
-    // either way, so nothing here depends on whether anyone is listening.
-    if (outcome && typeof BroadcastChannel !== "undefined") {
-      const channel = new BroadcastChannel(CONNECT_CHANNEL);
-      channel.postMessage({ kind: "outcome", outcome });
-      channel.close();
-    }
-
     router.replace(pluginsUrl);
-  }, [deepLink, isDesktopFlow, outcome, pluginsUrl, router]);
+  }, [deepLink, isDesktopFlow, pluginsUrl, router]);
 
   if (!isDesktopFlow) return null;
 

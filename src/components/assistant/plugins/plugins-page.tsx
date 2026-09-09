@@ -1,7 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowSquareOut,
   Check,
@@ -15,7 +14,7 @@ import {
   ShieldCheck,
   Spinner,
   Trash,
-  WarningCircle,
+  Warning,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
@@ -34,16 +33,21 @@ import {
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
 import {
-  CONNECT_CHANNEL,
-  type ConnectOutcome,
-  connectNotice,
-  isConnectChannelMessage,
-  readConnectOutcome,
-} from "@/lib/assistant/connect-outcome";
+  formatPluginLabelList,
+  pluginWorkspaceBlock,
+  pluginsSharingConnection,
+  scopesSatisfied,
+  sharedConnectionWarning,
+  withEffectiveConnectionStatus,
+  type PluginWorkspaceBlock,
+} from "@/lib/assistant/plugin-connection";
 import { isDesktopApp } from "@/lib/desktop/bridge";
-import { type PluginDisplayTile, toDisplayTiles } from "@/lib/assistant/plugin-tiles";
 import { cn } from "@/lib/utils";
-import type { AssistantPluginCatalogItemDto } from "@/types/assistant";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import type {
+  AssistantPluginCatalogItemDto,
+  AssistantPluginConnectionStatus,
+} from "@/types/assistant";
 
 /**
  * Rows needed before the catalog is laid out in two columns.
@@ -59,33 +63,127 @@ const CATALOG_TWO_COLUMN_MINIMUM = 4;
 function pluginActionLabel(plugin: AssistantPluginCatalogItemDto) {
   if (plugin.installationStatus === "disabled") return "Enable";
   if (plugin.installationStatus !== "installed") return "Install";
+  // An installed row the workspace refuses cannot be connected or reconnected, so offering either
+  // word would be an instruction that leads to a refusal. "Manage" is the honest one: the dialog
+  // it opens still lets the plugin be disconnected and removed.
+  if (pluginWorkspaceBlock(plugin)) return "Manage";
   if (plugin.connectionStatus === "connected") return "Manage";
   if (plugin.connectionStatus === "expired" || plugin.connectionStatus === "revoked") return "Reconnect";
   return "Connect";
 }
 
+/**
+ * A row the workspace's plugin policy refuses.
+ *
+ * The row stays on the page rather than disappearing, which is the backend's choice as much as
+ * this page's: a user whose workspace switched plugins off under an already-connected one still
+ * holds a live OAuth grant, and hiding the row would leave them no way to revoke it. So install
+ * and connect are refused here and disconnect and remove are not.
+ *
+ * `block.reason` is the backend's own sentence, printed verbatim. `block.remedy` is the part a
+ * member can act on: a workspace configures exactly one thing — whether its members may use
+ * plugins at all — so there is one refusal, and asking an Owner or Admin to switch plugins back on
+ * is the only next step there is. It is null when the reason could not be classified, in which
+ * case nobody is told to go and ask for something that would not help.
+ */
+function WorkspaceBlockNotice({
+  block,
+  className,
+}: {
+  block: PluginWorkspaceBlock;
+  className?: string;
+}) {
+  return (
+    <div
+      data-testid="workspace-policy-block"
+      className={cn(
+        "flex items-start gap-2 rounded-xl border border-border bg-surface-1 px-3 py-2 text-left",
+        className,
+      )}
+    >
+      <Prohibit size={16} weight="fill" className="mt-0.5 shrink-0 text-ink-subtle" />
+      <div className="min-w-0">
+        <p className="text-xs font-medium leading-5 text-ink">{block.reason}</p>
+        {block.remedy ? (
+          <p className="mt-0.5 text-xs leading-5 text-ink-muted">{block.remedy}</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * How far a consent round trip has got, as far as this page can honestly tell.
+ *
+ * Everything but `awaiting` is TERMINAL. The banner used to have only the first state, so a user
+ * who cancelled at Google — or who granted Drive and unticked Calendar — came back to a page still
+ * cheerfully telling them to finish something that had already finished. A dead end is worse than
+ * bad news, and "nothing arrived" is bad news we can actually state.
+ */
+type ConsentPhase =
+  /** Consent is open somewhere and we have not looked at the catalog since. */
+  | "awaiting"
+  /** `window.open` was refused, so nothing was ever opened. See openProviderConsent. */
+  | "blocked"
+  /** The user came back and the catalog still shows no connection: cancelled, or it failed. */
+  | "unconfirmed"
+  /** A grant exists, but this plugin's own scopes were declined on the consent screen. */
+  | "partial";
+
+const CONSENT_NOTICE_COPY: Record<
+  ConsentPhase,
+  { headline: (label: string) => string; detail: string | null; action: string }
+> = {
+  awaiting: {
+    headline: (label) => `Finish connecting ${label} in your browser`,
+    detail: null,
+    action: "Open browser",
+  },
+  blocked: {
+    headline: (label) => `Your browser blocked the ${label} sign-in window`,
+    detail: "Allow pop-ups for WarpTalk, or open it yourself.",
+    action: "Open browser",
+  },
+  unconfirmed: {
+    headline: (label) => `WarpTalk did not receive a ${label} connection`,
+    detail: "If you closed or cancelled the provider page, nothing was changed.",
+    action: "Try again",
+  },
+  partial: {
+    headline: (label) => `${label} is still missing a permission it needs`,
+    detail: "Your account is connected, but a permission this plugin asks for was not approved.",
+    action: "Try again",
+  },
+};
+
 function ConnectionNotice({
   plugin,
-  url,
+  phase,
+  onAct,
   onDismiss,
 }: {
   plugin: AssistantPluginCatalogItemDto;
-  url: string;
+  phase: ConsentPhase;
+  onAct: () => void;
   onDismiss: () => void;
 }) {
+  const copy = CONSENT_NOTICE_COPY[phase];
+
   return (
-    <div className="fixed left-1/2 top-3 z-[70] flex w-[min(520px,calc(100vw-24px))] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-popover px-3 py-2 text-ink shadow-lg">
+    <div
+      data-testid="plugin-consent-notice"
+      data-phase={phase}
+      className="fixed left-1/2 top-3 z-[70] flex w-[min(520px,calc(100vw-24px))] -translate-x-1/2 items-center gap-2 rounded-xl border border-border bg-popover px-3 py-2 text-ink shadow-lg"
+    >
       <PluginGlyph plugin={plugin} size="sm" />
-      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-        Finish connecting {plugin.label} in your browser
-      </span>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => openProviderConsent(url)}
-      >
-        Open browser
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{copy.headline(plugin.label)}</p>
+        {copy.detail ? (
+          <p className="truncate text-xs text-ink-muted">{copy.detail}</p>
+        ) : null}
+      </div>
+      <Button type="button" size="sm" variant="outline" onClick={onAct}>
+        {copy.action}
       </Button>
       <Button
         type="button"
@@ -105,14 +203,14 @@ function ConnectionNotice({
  *
  * Built from the catalog rather than written per plugin: every tool already carries a human
  * `label` and an `effect`, so the list stays true to what the plugin can actually call and a new
- * catalog row needs no copy. Read tools come first and write tools last, which puts the heaviest
- * permission closest to the button that grants it.
+ * catalog row needs no copy of its own. Read tools come first and write tools last, which puts the
+ * heaviest permission closest to the button that grants it.
  *
  * An MCP row has an empty tool list until its first successful connect - `tools_json` is a cache
  * of `tools/list` - so there is a real case where this can say nothing, and it says that instead
  * of rendering an empty box.
  */
-function PermissionList({ plugin }: { plugin: PluginDisplayTile }) {
+function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   const permissions = useMemo(() => {
     const seen = new Set<string>();
     return plugin.tools
@@ -163,6 +261,8 @@ function PermissionList({ plugin }: { plugin: PluginDisplayTile }) {
 
 function ConnectPluginDialog({
   plugin,
+  providerConnectionStatus,
+  sharedConnectionPlugins,
   isConnecting,
   isDisconnecting,
   isRemoving,
@@ -171,7 +271,22 @@ function ConnectPluginDialog({
   onDisconnect,
   onRemove,
 }: {
-  plugin: PluginDisplayTile;
+  /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
+  plugin: AssistantPluginCatalogItemDto;
+  /**
+   * The catalog row's own `connectionStatus`, undowngraded — whether an OAuth grant EXISTS.
+   *
+   * The two answers part company whenever a user ticks one Google product and unticks another:
+   * the grant is live, and the plugin whose scope was declined still reads `not_connected` because
+   * it genuinely does not work. Which question is being asked decides which one to read. "Can this
+   * plugin do anything?" is the effective status, and it drives the labels above. "Is there a grant
+   * to revoke?" is this one, and it drives Disconnect — because a user who unticked a box is
+   * exactly the user who most needs the button that ends the grant, and reading the downgraded
+   * status here took it away from them.
+   */
+  providerConnectionStatus: AssistantPluginConnectionStatus;
+  /** The other installed rows this plugin's OAuth grant also backs. */
+  sharedConnectionPlugins: AssistantPluginCatalogItemDto[];
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
@@ -182,8 +297,15 @@ function ConnectPluginDialog({
 }) {
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
   const isConnected = plugin.connectionStatus === "connected";
+  const hasProviderGrant = providerConnectionStatus === "connected";
+  /** Signed in, but this plugin's own permission was declined — the case Continue actually fixes. */
+  const isPartiallyGranted = hasProviderGrant && !isConnected;
   const isInstalled = plugin.installationStatus === "installed";
   const isPendingBusy = isDisconnecting || isRemoving;
+  const workspaceBlock = pluginWorkspaceBlock(plugin);
+  // Both confirmations need it: "Remove" disconnects on its way out, so it ends the shared grant
+  // for exactly the same set of plugins that "Disconnect" does.
+  const sharedWarning = sharedConnectionWarning(sharedConnectionPlugins);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
@@ -231,23 +353,32 @@ function ConnectPluginDialog({
           </p>
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
             <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
-            Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks you first.
+            Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks you
+            first.
           </p>
-          {plugin.sharedConnectionWith.length ? (
+          {sharedConnectionPlugins.length ? (
             <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
               <PlugsConnected size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
               One sign-in also covers{" "}
-              <span className="font-medium text-ink">{plugin.sharedConnectionWith.join(", ")}</span>. You can
-              grant only part of it and come back for the rest.
+              <span className="font-medium text-ink">
+                {formatPluginLabelList(sharedConnectionPlugins.map((sibling) => sibling.label))}
+              </span>
+              . You can grant only part of it and come back for the rest.
             </p>
           ) : null}
         </div>
 
+        {workspaceBlock ? (
+          <WorkspaceBlockNotice block={workspaceBlock} className="mt-6" />
+        ) : null}
+
         <Button
           type="button"
-          disabled={isConnecting}
+          // Connecting is what workspace policy actually refuses. Disconnect and Remove below stay
+          // live on a blocked row on purpose — see WorkspaceBlockNotice.
+          disabled={isConnecting || workspaceBlock !== null}
           onClick={onContinue}
-          className="mt-6 h-10 w-full"
+          className={cn("h-10 w-full", workspaceBlock ? "mt-3" : "mt-6")}
         >
           {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
           Continue to {plugin.label}
@@ -258,6 +389,16 @@ function ConnectPluginDialog({
           <div className="mt-4 flex items-center justify-center gap-2 text-xs text-emerald-600">
             <CheckCircle size={15} weight="fill" />
             Connected as {plugin.connectedAccountEmail ?? "this account"}
+          </div>
+        ) : isPartiallyGranted ? (
+          // Without this line the dialog is incoherent: it offers Disconnect, which only exists
+          // when there is something to disconnect, while claiming nothing is connected. Saying
+          // which half is true is also the only way the user learns that Continue re-runs consent
+          // rather than starting from nothing.
+          <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-amber-700 dark:text-amber-500">
+            <Warning size={15} weight="fill" className="shrink-0" />
+            Signed in as {plugin.connectedAccountEmail ?? "this account"}, but a permission{" "}
+            {plugin.label} needs was not approved. Continue to approve it.
           </div>
         ) : null}
 
@@ -270,6 +411,18 @@ function ConnectPluginDialog({
                     ? `Disconnect ${plugin.label}? WarpBot loses access to it until you connect the account again.`
                     : `Remove ${plugin.label}? Its tools disappear from WarpBot and any connected account is disconnected.`}
                 </p>
+                {/* The collateral this dialog used to keep to itself. A connection is keyed by
+                    provider, so ending it ends every plugin behind the same grant — a user
+                    disconnecting Drive to tidy up silently lost Calendar and Meet with it. */}
+                {sharedWarning ? (
+                  <p
+                    data-testid="shared-connection-warning"
+                    className="flex items-start gap-2 text-sm leading-6 text-amber-700 dark:text-amber-500"
+                  >
+                    <Warning size={16} weight="fill" className="mt-1 shrink-0" />
+                    <span>{sharedWarning}</span>
+                  </p>
+                ) : null}
                 <div className="flex justify-end gap-2">
                   <Button
                     type="button"
@@ -296,7 +449,8 @@ function ConnectPluginDialog({
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs text-ink-muted">Manage this plugin for your own account</span>
                 <div className="flex gap-2">
-                  {isConnected ? (
+                  {/* The grant, not the plugin's usability — see providerConnectionStatus. */}
+                  {hasProviderGrant ? (
                     <Button
                       type="button"
                       size="sm"
@@ -326,64 +480,136 @@ function ConnectPluginDialog({
   );
 }
 
+/**
+ * How long after opening consent a focus event is still assumed to be the browser's, not the user's.
+ *
+ * A tab that opens behind the current one hands focus straight back, and a focus event in that same
+ * breath is not somebody returning from Google — it is somebody who has not left yet. Settling on it
+ * would stamp "did not receive a connection" over a flow that has not started.
+ */
+/**
+ * What the assistant service says happened, for the tab that comes back from the provider.
+ *
+ * Consent opens in a second tab, so the callback's redirect lands THERE, not in the tab the user
+ * started in. That tab mounts this page fresh, with no `consent` state and nothing to settle — so
+ * before WT-646's callback contract it could only show the catalog and let the user infer the rest.
+ * The service now redirects to /settings/plugins?plugin=<key>&connected=1 on success, or
+ * ?plugin=<key>&error=<slug> when it could not finish, and these are those slugs. The original tab
+ * still settles on focus; the two mechanisms answer different tabs and neither replaces the other.
+ */
+const CONSENT_CALLBACK_ERRORS: Record<string, string> = {
+  access_denied: "You cancelled the sign-in, so nothing was connected.",
+  permission_denied: "That sign-in link had already been used or expired. Start the connection again.",
+  unknown_plugin: "That plugin is no longer available.",
+  plugin_not_installed: "That plugin is not installed for this account. Install it, then connect.",
+  connection_required: "The provider did not return lasting access. Connect again and approve the request.",
+  // Deliberately not "try again in a moment": no amount of retrying fixes a client secret that is
+  // not set, and saying otherwise sends the user round the consent screen for as long as they are
+  // willing. The reference is what turns this into something an operator can act on.
+  provider_configuration: "WarpTalk's connection to this provider is not configured correctly. Nothing is wrong with your account.",
+  provider_unavailable: "The provider could not complete the sign-in. Try again in a moment.",
+};
+
+const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
+
 export default function PluginsPage() {
-  const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins();
+  // The catalog is personal — a plugin is installed and connected by a person — but the workspace
+  // the user is browsing from decides whether its members may use plugins at all, and only a listing
+  // that NAMES that workspace comes back carrying its verdict. Without this the block notice, the
+  // disabled Add button and the "Manage" label below are all unreachable code, because
+  // `workspacePolicyBlockReason` is absent on every row of an unscoped listing.
+  //
+  // Read from the store rather than from the route: /settings/plugins is deliberately not
+  // workspace-shaped (the [workspaceSlug] route redirects here), and the store is where the rest of
+  // the shell reads the active workspace on routes like this one.
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+
+  const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();
   const connectUrl = usePluginConnectUrl();
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
 
   const [query, setQuery] = useState("");
-  const [selectedPlugin, setSelectedPlugin] = useState<PluginDisplayTile | null>(null);
-  const [browserConnect, setBrowserConnect] = useState<{ plugin: PluginDisplayTile; url: string } | null>(null);
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const router = useRouter();
+  // The KEY, not the row. Holding the object froze the dialog at the moment it opened: it kept
+  // rendering the pre-consent snapshot after the catalog had refetched, so a plugin the user had
+  // just connected still offered "Continue to ..." and no way to disconnect it.
+  const [selectedPluginKey, setSelectedPluginKey] = useState<string | null>(null);
+  const [consent, setConsent] = useState<
+    { pluginKey: string; url: string; phase: ConsentPhase; openedAt: number } | null
+  >(null);
 
-  // A finished connect arrives as a full page load carrying what happened, so the query is read
-  // once at mount and held from there. The effect below then strips it: left in the URL it would
-  // replay the message on every refresh, and ride along in any link copied out of the address bar.
-  const [outcome, setOutcome] = useState<ConnectOutcome | null>(() => readConnectOutcome(searchParams));
-
-  useEffect(() => {
-    if (searchParams.has("status")) router.replace(pathname);
-  }, [pathname, router, searchParams]);
-
-  // The consent finishes in a second tab, which cannot reach this one directly - it was opened
-  // with `noopener`. It broadcasts the outcome on its way to the plugins page, so the tab the
-  // user started from stops showing a plugin as unconnected the moment the other one finishes.
-  useEffect(() => {
-    if (typeof BroadcastChannel === "undefined") return;
-
-    const channel = new BroadcastChannel(CONNECT_CHANNEL);
-    channel.onmessage = (event: MessageEvent<unknown>) => {
-      if (!isConnectChannelMessage(event.data)) return;
-      setOutcome(event.data.outcome);
-      void refetch();
-    };
-
-    return () => channel.close();
-  }, [refetch]);
-
-  const displayPlugins = useMemo(() => plugins.flatMap(toDisplayTiles), [plugins]);
-
-  const installedPlugins = useMemo(
-    () => displayPlugins.filter((plugin) => plugin.installationStatus === "installed"),
-    [displayPlugins],
+  // One pass over the catalog, so the action label, the connect dialog's "Connected as ..." line
+  // and everything below read the same status — see plugin-connection.ts for why a connected
+  // Google account can still leave an individual plugin unusable.
+  //
+  // ORDERING
+  //   Operator curation first (`isFeatured`, then `sortOrder`), label last. All three arrive from
+  //   the catalog now; before WT-646 they stopped at the admin DTO, and this page sorted by label
+  //   alone because that was the only ordering it could honestly produce.
+  //
+  //   Every field is still read defensively: a server older than WT-646 sends none of them, and
+  //   `undefined` must degrade to "not featured, unordered" rather than to NaN comparisons that
+  //   scramble the list. `category` is null on every row today, so nothing groups by it yet.
+  //
+  const catalogPlugins = useMemo(
+    () =>
+      plugins
+        .map(withEffectiveConnectionStatus)
+        .sort((a, b) => {
+          if ((a.isFeatured ?? false) !== (b.isFeatured ?? false)) return a.isFeatured ? -1 : 1;
+          const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+          return order !== 0 ? order : a.label.localeCompare(b.label);
+        }),
+    [plugins],
   );
 
+  const installedPlugins = useMemo(
+    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    [catalogPlugins],
+  );
+
+  // Looked up in the live list every render, so the dialog moves with the catalog. It is the RAW
+  // row: the dialog needs both answers — see the ConnectPluginDialog props — and mapping the one it
+  // shows is cheaper than carrying two rows around.
+  const selectedPlugin = useMemo(
+    () => plugins.find((plugin) => plugin.key === selectedPluginKey) ?? null,
+    [plugins, selectedPluginKey],
+  );
+
+  const consentPluginKey = consent?.pluginKey ?? null;
+  const consentPlugin = useMemo(
+    () => plugins.find((plugin) => plugin.key === consentPluginKey) ?? null,
+    [plugins, consentPluginKey],
+  );
+
+  // Which other installed plugins go down with this one, because a connection is keyed by provider
+  // and one grant backs several rows. Derived from the catalog, never from a list of Google keys.
+  const sharedConnectionPlugins = useMemo(
+    () => (selectedPlugin ? pluginsSharingConnection(selectedPlugin, catalogPlugins) : []),
+    [selectedPlugin, catalogPlugins],
+  );
+
+  // Purely local: it narrows the catalog already fetched above. There is no marketplace search
+  // behind it, and the empty state must not pretend otherwise.
   const filteredPlugins = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return displayPlugins;
-    return displayPlugins.filter((plugin) =>
+    if (!normalized) return catalogPlugins;
+    return catalogPlugins.filter((plugin) =>
       [plugin.label, plugin.description, plugin.key].join(" ").toLowerCase().includes(normalized),
     );
-  }, [displayPlugins, query]);
+  }, [catalogPlugins, query]);
 
-  async function handlePrimaryAction(plugin: PluginDisplayTile) {
+  async function handlePrimaryAction(plugin: AssistantPluginCatalogItemDto) {
+    // Second lock on the one thing workspace policy refuses, so a stale render cannot fire an
+    // install the backend is going to reject. Deliberately narrow: a blocked row that IS installed
+    // still opens the dialog, because that dialog is where Disconnect and Remove live and a
+    // blocked plugin may be holding a live OAuth grant the user needs to revoke.
+    if (plugin.installationStatus !== "installed" && pluginWorkspaceBlock(plugin)) return;
+
     if (plugin.installationStatus !== "installed") {
       try {
-        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        await installPlugin.mutateAsync({ pluginKey: plugin.key, workspaceId });
         toast.success(`${plugin.label} installed`);
       } catch {
         // Without this the button simply does nothing on a 500: the label never changes, no
@@ -393,44 +619,182 @@ export default function PluginsPage() {
       return;
     }
 
-    setSelectedPlugin(plugin);
+    setSelectedPluginKey(plugin.key);
   }
 
-  async function continueToProvider(plugin: PluginDisplayTile) {
+  async function continueToProvider(plugin: AssistantPluginCatalogItemDto) {
     try {
       const result = await connectUrl.mutateAsync({
         pluginKey: plugin.key,
         // Sealed into the OAuth state by the API. The desktop app hands consent to the system
         // browser, so this is the only moment the flow still knows where it started.
         client: isDesktopApp() ? "desktop" : "web",
+        workspaceId,
       });
-      setBrowserConnect({ plugin, url: result.url });
-      openProviderConsent(result.url);
+      // `openProviderConsent` reports a blocked pop-up by returning false, and it is the whole
+      // reason it has a return value: Safari and Firefox drop the user-gesture grant across the
+      // await above. Telling the user to finish something in a window that never opened is the
+      // dead end that check exists to catch, so the phase says which of the two happened.
+      const opened = openProviderConsent(result.url);
+      setConsent({
+        pluginKey: plugin.key,
+        url: result.url,
+        phase: opened ? "awaiting" : "blocked",
+        openedAt: Date.now(),
+      });
     } catch {
       toast.error(`Could not start the ${plugin.label} connection.`);
     }
   }
 
-  async function disconnectSelected(plugin: PluginDisplayTile) {
+  /**
+   * Read the outcome of a consent round trip off the catalog, once the user is back.
+   *
+   * The callback's redirect DOES say what happened — `?plugin=<key>&connected=1`, or
+   * `?plugin=<key>&error=<slug>` — but it says it to the tab consent opened, not to this one. See
+   * CONSENT_CALLBACK_ERRORS above for that half. In THIS tab nothing navigates and no parameter
+   * ever arrives, so the catalog is the only source of truth about what happened.
+   *
+   * `refetch` rather than `invalidateQueries`, because `staleTime: 60_000` is exactly the window a
+   * consent round trip fits inside: a user who connects and returns within the minute would
+   * otherwise be handed the pre-consent answer out of cache.
+   */
+  const settleConsent = useCallback(
+    async (pluginKey: string) => {
+      const { data: rows } = await refetch();
+      // A refetch that failed says nothing about the consent. Reported as unsettled so the caller
+      // tries again on the next focus rather than announcing a failure nobody observed.
+      if (!rows) return false;
+
+      const settle = (phase: ConsentPhase | null) =>
+        setConsent((current) => {
+          if (current?.pluginKey !== pluginKey || current.phase !== "awaiting") return current;
+          return phase === null ? null : { ...current, phase };
+        });
+
+      const row = rows.find((plugin) => plugin.key === pluginKey);
+      // The row left the catalog while consent was open — deactivated by an operator, say. There
+      // is nothing left to report an outcome about.
+      if (!row) settle(null);
+      else if (row.connectionStatus !== "connected") settle("unconfirmed");
+      else if (!scopesSatisfied(row.requiredScopes, row.grantedScopes)) settle("partial");
+      else {
+        settle(null);
+        toast.success(`${row.label} connected`);
+      }
+      return true;
+    },
+    [refetch],
+  );
+
+  // Announced once, in the tab the provider redirected. No state: the outcome is read straight
+  // out of the address bar and spoken, so holding it would only invite a second render to say it
+  // twice. The ref is what stops a re-render re-announcing it before the URL has been stripped.
+  const consentCallbackAnnounced = useRef(false);
+
+  useEffect(() => {
+    if (consentCallbackAnnounced.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("status");
+    const error = status === "error" ? (params.get("reason") ?? "provider_unavailable") : null;
+    const connected = status === "connected" || status === "partial";
+    if (!error && !connected) {
+      consentCallbackAnnounced.current = true;
+      return;
+    }
+    // Wait for the catalog: the message names the plugin, and on a cold mount that name is not
+    // known yet. A failed load falls through to the generic wording rather than staying silent.
+    if (isLoading) return;
+
+    consentCallbackAnnounced.current = true;
+    const pluginKey = params.get("plugin");
+    const row = plugins.find((plugin) => plugin.key === pluginKey);
+    const label = row?.label ?? "The plugin";
+
+    if (error) {
+      // The reference only exists on a failure, and only there is it worth reading out: it is the
+      // one string a user can quote that turns "it did not work" into a line an operator can find.
+      const reference = params.get("ref");
+      toast.error(
+        (CONSENT_CALLBACK_ERRORS[error] ??
+          `${label} could not be connected. Start the connection again.`) +
+          (reference ? ` (ref ${reference})` : ""),
+      );
+    } else if (status === "partial" || (row && !scopesSatisfied(row.requiredScopes, row.grantedScopes))) {
+      // Connected, but the consent screen declined a permission this plugin needs. Saying
+      // "connected" here would be the same lie the card takes care not to tell.
+      toast.warning(`${label} is connected, but a permission it needs was not approved.`);
+    } else {
+      toast.success(`${label} connected`);
+    }
+
+    // Strip it, so a reload does not re-announce an outcome the user has seen and the slug does
+    // not travel on if they share the URL.
+    params.delete("plugin");
+    params.delete("status");
+    params.delete("reason");
+    params.delete("ref");
+    params.delete("client");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [isLoading, plugins]);
+
+  useEffect(() => {
+    if (consent?.phase !== "awaiting") return;
+    const { pluginKey, openedAt } = consent;
+    let settling = false;
+
+    function onReturn() {
+      if (settling || document.visibilityState !== "visible") return;
+      if (Date.now() - openedAt < CONSENT_ROUND_TRIP_FLOOR_MS) return;
+      settling = true;
+      void settleConsent(pluginKey).then((settled) => {
+        if (!settled) settling = false;
+      });
+    }
+
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onReturn);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onReturn);
+    };
+  }, [consent, settleConsent]);
+
+  async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
       await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
-      toast.success(`${plugin.label} disconnected`);
-      setSelectedPlugin(null);
+      // The confirmation named the siblings; the receipt names them too, so the record of what
+      // just happened is not narrower than what happened.
+      const alsoDisconnected = sharedConnectionPlugins.map((sibling) => sibling.label);
+      toast.success(
+        alsoDisconnected.length
+          ? `${plugin.label} disconnected, along with ${formatPluginLabelList(alsoDisconnected)}`
+          : `${plugin.label} disconnected`,
+      );
+      setSelectedPluginKey(null);
     } catch {
       toast.error(`Could not disconnect ${plugin.label}.`);
     }
   }
 
-  async function removeSelected(plugin: PluginDisplayTile) {
+  /** @param plugin The RAW catalog row — see the connectionStatus read below. */
+  async function removeSelected(plugin: AssistantPluginCatalogItemDto) {
     // Disabling the installation leaves the stored provider tokens behind, which is
     // not what "Remove" reads like to the person clicking it.
+    //
+    // Read off the raw row rather than the effective status on purpose. A user who unticked one
+    // product at Google's consent screen has a live grant and a plugin that reads not_connected,
+    // and taking the effective status here skipped the disconnect for exactly that user: "Remove"
+    // would disable the installation and leave the OAuth grant standing, which is the outcome the
+    // paragraph above says this code exists to prevent.
     try {
       if (plugin.connectionStatus === "connected") {
         await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
       }
       await disablePlugin.mutateAsync({ pluginKey: plugin.key });
       toast.success(`${plugin.label} removed`);
-      setSelectedPlugin(null);
+      setSelectedPluginKey(null);
     } catch {
       // Two calls, and the first can land while the second throws - which leaves the plugin
       // disconnected but still installed. Saying so beats a silent half-removal.
@@ -438,60 +802,21 @@ export default function PluginsPage() {
     }
   }
 
-  const outcomePlugin = outcome?.pluginKey
-    ? displayPlugins.find((plugin) => plugin.key === outcome.pluginKey) ?? null
-    : null;
-  const notice = outcome ? connectNotice(outcome, outcomePlugin?.label ?? "This plugin") : null;
-
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-ink">
-      {notice ? (
-        <div
-          role="status"
-          className={cn(
-            "grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 rounded-xl border px-4 py-3",
-            notice.tone === "error"
-              ? "border-destructive/30 bg-destructive/10 text-destructive"
-              : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-          )}
-        >
-          <WarningCircle size={17} weight="fill" className="mt-0.5" />
-          <div className="flex flex-col gap-1">
-            <p className="text-sm font-semibold">{notice.title}</p>
-            <p className="text-sm leading-6 opacity-90">{notice.detail}</p>
-            {outcome?.reference ? (
-              <p className="font-mono text-[11px] opacity-80">ref {outcome.reference}</p>
-            ) : null}
-          </div>
-          <div className="flex items-center gap-1">
-            {notice.action && outcomePlugin ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setSelectedPlugin(outcomePlugin)}
-              >
-                {notice.action === "grant" ? "Grant access" : "Try again"}
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label="Dismiss message"
-              onClick={() => setOutcome(null)}
-            >
-              <X size={14} />
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {browserConnect ? (
+      {consent && consentPlugin ? (
         <ConnectionNotice
-          plugin={browserConnect.plugin}
-          url={browserConnect.url}
-          onDismiss={() => setBrowserConnect(null)}
+          plugin={consentPlugin}
+          phase={consent.phase}
+          // Re-open the URL we already hold while the flow is still live; mint a fresh one to start
+          // over. A consent URL carries a one-shot `state`, so retrying a round trip that already
+          // came back is a new flow, not a second click on the old one.
+          onAct={() =>
+            consent.phase === "awaiting" || consent.phase === "blocked"
+              ? void openProviderConsent(consent.url)
+              : void continueToProvider(consentPlugin)
+          }
+          onDismiss={() => setConsent(null)}
         />
       ) : null}
 
@@ -505,7 +830,7 @@ export default function PluginsPage() {
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search plugins"
+          placeholder="Filter plugins"
           className="h-9 rounded-full bg-surface-1 pl-9 text-sm"
         />
       </div>
@@ -519,8 +844,8 @@ export default function PluginsPage() {
             {installedPlugins.map((plugin) => (
               <button
                 type="button"
-                key={plugin.tileId}
-                onClick={() => setSelectedPlugin(plugin)}
+                key={plugin.key}
+                onClick={() => setSelectedPluginKey(plugin.key)}
                 className="rounded-lg transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 title={plugin.label}
               >
@@ -538,7 +863,13 @@ export default function PluginsPage() {
 
       <section className="flex flex-col gap-3">
         <div className="border-b border-border pb-3">
-          <h2 className="text-sm font-semibold text-ink">Featured</h2>
+          {/* Was "Featured", above the entire catalog, when nothing selected the rows under it.
+              `isFeatured` reaches this page now and drives the ordering, so featured rows really
+              do come first — but they are still every row in one list, and heading the whole list
+              "Featured" would be the same untrue claim as before. A separate featured band is a
+              layout change (it has its own empty, filtered and two-column cases) and belongs with
+              whoever designs it, not smuggled in behind a sort. */}
+          <h2 className="text-sm font-semibold text-ink">All plugins</h2>
         </div>
 
         {isLoading ? (
@@ -560,13 +891,20 @@ export default function PluginsPage() {
             <div className="flex items-center gap-2 text-sm text-ink-muted">
               <PuzzlePiece size={16} weight="duotone" />
               {query.trim()
-                ? `No plugins match "${query.trim()}".`
+                ? `No plugin in this catalog matches "${query.trim()}".`
                 : "No plugins are available yet."}
             </div>
             {query.trim() ? (
-              <Button type="button" size="sm" variant="ghost" onClick={() => setQuery("")}>
-                Clear search
-              </Button>
+              <>
+                {/* The box above narrows the list on this page. Saying "no results" alone would
+                    read as "WarpTalk has searched and found nothing", which it has not done. */}
+                <p className="text-xs text-ink-subtle">
+                  This filters the plugins WarpTalk offers today. It does not search a wider marketplace.
+                </p>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setQuery("")}>
+                  Clear filter
+                </Button>
+              </>
             ) : null}
           </div>
         ) : (
@@ -576,46 +914,60 @@ export default function PluginsPage() {
               filteredPlugins.length >= CATALOG_TWO_COLUMN_MINIMUM && "md:grid-cols-2",
             )}
           >
-            {filteredPlugins.map((plugin) => (
-              <div
-                key={plugin.tileId}
-                className={cn(
-                  "grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-1 py-2",
-                  filteredPlugins.length < CATALOG_TWO_COLUMN_MINIMUM &&
-                    "rounded-xl border border-border bg-surface-1 px-3 py-3",
-                )}
-              >
-                <PluginGlyph plugin={plugin} />
-                <button
-                  type="button"
-                  onClick={() => setSelectedPlugin(plugin)}
-                  className="min-w-0 text-left"
+            {filteredPlugins.map((plugin) => {
+              const workspaceBlock = pluginWorkspaceBlock(plugin);
+              // Blocked rows are still listed and still openable — the dialog behind them is the
+              // only way to revoke a grant this workspace no longer permits. What policy refuses
+              // is adding the plugin, so that is the only button that goes dead.
+              const isInstalled = plugin.installationStatus === "installed";
+              const isBlockedFromAdding = workspaceBlock !== null && !isInstalled;
+
+              return (
+                <div
+                  key={plugin.key}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-lg px-1 py-2",
+                    filteredPlugins.length < CATALOG_TWO_COLUMN_MINIMUM &&
+                      "rounded-xl border border-border bg-surface-1 px-3 py-3",
+                  )}
                 >
-                  <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
-                  <div className="truncate text-xs text-ink-muted">{plugin.description}</div>
-                </button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={installPlugin.isPending || connectUrl.isPending}
-                  onClick={() => void handlePrimaryAction(plugin)}
-                >
-                  {pluginActionLabel(plugin)}
-                </Button>
-              </div>
-            ))}
+                  <div className="grid min-h-[58px] grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3">
+                    <PluginGlyph plugin={plugin} />
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPluginKey(plugin.key)}
+                      className="min-w-0 text-left"
+                    >
+                      <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
+                      <div className="truncate text-xs text-ink-muted">{plugin.description}</div>
+                    </button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
+                      onClick={() => void handlePrimaryAction(plugin)}
+                    >
+                      {pluginActionLabel(plugin)}
+                    </Button>
+                  </div>
+                  {workspaceBlock ? <WorkspaceBlockNotice block={workspaceBlock} /> : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
 
       {selectedPlugin ? (
         <ConnectPluginDialog
-          plugin={selectedPlugin}
+          plugin={withEffectiveConnectionStatus(selectedPlugin)}
+          providerConnectionStatus={selectedPlugin.connectionStatus}
+          sharedConnectionPlugins={sharedConnectionPlugins}
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
-          onClose={() => setSelectedPlugin(null)}
+          onClose={() => setSelectedPluginKey(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
