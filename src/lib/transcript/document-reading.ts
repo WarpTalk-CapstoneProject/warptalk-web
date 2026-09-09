@@ -28,10 +28,18 @@ export type ReadingAnchor = {
   offsetTop: number;
 };
 
-/** A summary claim and the moment it says it came from. Claims with no moment never get here. */
+/**
+ * A summary claim and the moments it says it came from. Claims with no moment never get here.
+ *
+ * `atMs` is the primary one — where a click on the claim lands. `alsoAtMs` is the rest, present
+ * when the claim summarises an exchange rather than a single turn: "Kenji carried on with the
+ * install" and the "ok, taking it" that answered it are two turns by two people, and one moment
+ * can only ever point at one of them.
+ */
 export type ReadingCitation = {
   key: string;
   atMs: number;
+  alsoAtMs?: readonly number[];
 };
 
 /**
@@ -95,12 +103,17 @@ export function anchorForMs(
 }
 
 /**
- * Every claim, filed under the block it came from.
+ * Every claim, filed under EVERY block it came from.
  *
  * Built once per (citations, anchors) pair rather than asked per scroll frame: the reverse lookup
  * runs on every animation frame while somebody is scrolling a transcript that can be a thousand
  * blocks long, and doing an O(claims x blocks) sweep in there is how a reading surface starts
  * dropping frames on exactly the meetings worth reading.
+ *
+ * Filing under all of a claim's moments and not just the primary one is what fixes this map in the
+ * REVERSE direction, which is the direction it is mostly read in: scrolling the transcript lights
+ * the claims covering what is on screen, and a claim resting on two turns used to light nothing at
+ * all once the reader reached the second one. It looked like the summary had simply run out.
  */
 export function groupCitationsByAnchor(
   citations: readonly ReadingCitation[],
@@ -108,9 +121,15 @@ export function groupCitationsByAnchor(
 ): Record<string, string[]> {
   const byAnchor: Record<string, string[]> = {};
   for (const citation of citations) {
-    const anchor = anchorForMs(anchors, citation.atMs);
-    if (!anchor) continue;
-    (byAnchor[anchor.key] ??= []).push(citation.key);
+    // Two of a claim's moments landing in the same turn is one claim about that turn, not two —
+    // filed twice it would be listed twice everywhere this map is counted or rendered.
+    const filed = new Set<string>();
+    for (const atMs of [citation.atMs, ...(citation.alsoAtMs ?? [])]) {
+      const anchor = anchorForMs(anchors, atMs);
+      if (!anchor || filed.has(anchor.key)) continue;
+      filed.add(anchor.key);
+      (byAnchor[anchor.key] ??= []).push(citation.key);
+    }
   }
   return byAnchor;
 }

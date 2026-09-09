@@ -145,10 +145,12 @@ const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
       {
         text: "The demo will be read out in Japanese first, with the Vietnamese dub running behind it.",
         atMs: 24_000,
+        alsoAtMs: [],
       },
       {
         text: "Both languages stay visible at once rather than the panel switching between them.",
         atMs: 41_000,
+        alsoAtMs: [],
       },
     ],
   },
@@ -160,10 +162,16 @@ const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
         owner: "Tuan",
         text: "Check why the dub is running about a second behind the speaker.",
         atMs: 54_000,
+        alsoAtMs: [],
       },
-      { owner: "Tu", text: "Keep the written summary in Vietnamese.", atMs: 70_000 },
+      { owner: "Tu", text: "Keep the written summary in Vietnamese.", atMs: 70_000, alsoAtMs: [] },
       // No moment recorded — the shape every summary written before citations existed still has.
-      { owner: "Tu", text: "Ask the team which language the export should default to.", atMs: null },
+      {
+        owner: "Tu",
+        text: "Ask the team which language the export should default to.",
+        atMs: null,
+        alsoAtMs: [],
+      },
     ],
   },
 ];

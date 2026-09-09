@@ -14,7 +14,9 @@
  * WHAT TRAVELS, AND IN WHICH DIRECTION
  *   Up, from the transcript:  the blocks it laid out (`anchors`), and which one the reader's eye
  *                             is on (`readingKey`).
- *   Down, from the rail:      which block a summary claim is pointing at right now (`markedKey`).
+ *   Down, from the rail:      which blocks a summary claim is pointing at right now (`markedKeys`)
+ *                             — a sentence that summarises an exchange rests on more than one turn,
+ *                             and marking only the first would leave the reply unlit.
  *   Sideways, once:           a navigator and a playback toggle, registered by whoever owns the
  *                             DOM for them, so the keymap can live in ONE place instead of being
  *                             re-implemented by every surface that has a key to handle.
@@ -62,13 +64,30 @@ export type ReadingSync = {
   /** The block under the reader's eye, or null before the first measurement. */
   readingKey: string | null;
   setReadingKey: (key: string | null) => void;
-  /** The block a rail item is pointing at while it is hovered or focused. */
+  /** The blocks a rail item is pointing at while it is hovered or focused. */
+  markedKeys: readonly string[];
+  setMarkedKeys: (keys: readonly string[]) => void;
+  /** The first of `markedKeys`, and the old single-key setter over it.
+   *
+   *  Here only so the rail and the transcript column still compile while this wave lands — a
+   *  contract branch nobody can typecheck is a contract nobody can verify. Both go once those two
+   *  are reading `markedKeys`, and nothing new should be written against them. */
   markedKey: string | null;
   setMarkedKey: (key: string | null) => void;
   registerNavigator: (navigator: ReadingNavigator | null) => void;
   /** A press of Space, as a token — see the same pattern on SeekRequest. */
   playbackRequest: { token: number } | null;
 };
+
+/**
+ * Nothing marked, as ONE value rather than a new one every time.
+ *
+ * The context value is what every consumer re-renders on, and the transcript column is several
+ * hundred rows on a meeting anybody bothers to read. A fresh `[]` on each clear is a new identity,
+ * which is a new context value, which is that whole column re-rendering because a pointer left a
+ * rail item — the same trap `anchorsEqual` is written against, one field shallower.
+ */
+const NO_MARKED_KEYS: readonly string[] = Object.freeze([]);
 
 const ReadingSyncContext = createContext<ReadingSync | null>(null);
 
@@ -109,7 +128,7 @@ function isBusyTarget(target: EventTarget | null): boolean {
 export function ReadingSyncProvider({ children }: { children: ReactNode }) {
   const [anchors, setAnchors] = useState<readonly ReadingAnchor[]>([]);
   const [readingKey, setReadingKey] = useState<string | null>(null);
-  const [markedKey, setMarkedKey] = useState<string | null>(null);
+  const [markedKeys, setMarkedKeysState] = useState<readonly string[]>(NO_MARKED_KEYS);
   const [playbackRequest, setPlaybackRequest] = useState<{ token: number } | null>(null);
 
   // A ref, not state: the key handler is registered once and would otherwise close over whatever
@@ -122,6 +141,27 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
     // which measures again — see anchorsEqual.
     setAnchors((current) => (anchorsEqual(current, next) ? current : next));
   }, []);
+
+  const setMarkedKeys = useCallback((next: readonly string[]) => {
+    // The rail re-resolves the same claim to the same keys on every pointer event inside one item,
+    // so this arrives equal-but-new constantly. Publishing those would re-render the transcript
+    // column for a value that did not change — the reason publishAnchors goes through anchorsEqual,
+    // and the reason a clear collapses back to the one frozen empty array instead of a fresh one.
+    const incoming = next.length === 0 ? NO_MARKED_KEYS : next;
+    setMarkedKeysState((current) =>
+      current.length === incoming.length && current.every((key, index) => key === incoming[index])
+        ? current
+        : incoming,
+    );
+  }, []);
+
+  // The compatibility pair. See ReadingSync — both are gone once the rail and the column speak in
+  // sets of keys, and neither carries anything markedKeys does not.
+  const markedKey = markedKeys.length > 0 ? markedKeys[0] : null;
+  const setMarkedKey = useCallback(
+    (key: string | null) => setMarkedKeys(key === null ? NO_MARKED_KEYS : [key]),
+    [setMarkedKeys],
+  );
 
   const registerNavigator = useCallback((next: ReadingNavigator | null) => {
     navigatorRef.current = next;
@@ -163,12 +203,24 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
       publishAnchors,
       readingKey,
       setReadingKey,
+      markedKeys,
+      setMarkedKeys,
       markedKey,
       setMarkedKey,
       registerNavigator,
       playbackRequest,
     }),
-    [anchors, publishAnchors, readingKey, markedKey, registerNavigator, playbackRequest],
+    [
+      anchors,
+      publishAnchors,
+      readingKey,
+      markedKeys,
+      setMarkedKeys,
+      markedKey,
+      setMarkedKey,
+      registerNavigator,
+      playbackRequest,
+    ],
   );
 
   return <ReadingSyncContext.Provider value={value}>{children}</ReadingSyncContext.Provider>;

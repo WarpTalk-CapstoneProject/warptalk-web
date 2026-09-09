@@ -80,6 +80,46 @@ test("claims are filed under the block they came from, gaps included", () => {
   assert.equal(Object.values(byAnchor).flat().includes("claim-before"), false);
 });
 
+test("a claim resting on two turns is filed under both of them", () => {
+  // This map is read in both directions, and the reverse one is the one that was broken: scrolling
+  // to the SECOND turn of a two-turn claim lit nothing, which reads as the summary having run out
+  // rather than as a bug.
+  const byAnchor = groupCitationsByAnchor(
+    [{ key: "exchange", atMs: 5_000, alsoAtMs: [15_000] }],
+    ANCHORS,
+  );
+
+  assert.deepEqual(byAnchor, { a: ["exchange"], b: ["exchange"] });
+});
+
+test("two moments inside one turn are one claim about that turn, not two", () => {
+  const byAnchor = groupCitationsByAnchor(
+    // 5s and 9s both fall in block a; 25s falls in the silence after b, which belongs to b.
+    [{ key: "same-turn", atMs: 5_000, alsoAtMs: [9_000, 5_000, 25_000] }],
+    ANCHORS,
+  );
+
+  assert.deepEqual(byAnchor, { a: ["same-turn"], b: ["same-turn"] });
+});
+
+test("a single-moment claim is filed exactly as it always was", () => {
+  // The old shape has no alsoAtMs at all, and an absent field must not be read as a moment.
+  assert.deepEqual(
+    groupCitationsByAnchor([{ key: "claim-1", atMs: 12_000 }], ANCHORS),
+    { b: ["claim-1"] },
+  );
+  assert.deepEqual(
+    groupCitationsByAnchor([{ key: "claim-1", atMs: 12_000, alsoAtMs: [] }], ANCHORS),
+    { b: ["claim-1"] },
+  );
+  // A supporting moment before the first recorded word drops on its own, without taking the
+  // primary one with it.
+  assert.deepEqual(
+    groupCitationsByAnchor([{ key: "claim-1", atMs: 12_000, alsoAtMs: [-500] }], ANCHORS),
+    { b: ["claim-1"] },
+  );
+});
+
 test("a re-measurement of the same document is recognised as the same document", () => {
   assert.equal(anchorsEqual(ANCHORS, ANCHORS.map((anchor) => ({ ...anchor }))), true);
   // A sub-pixel wobble is a font settling, not the document moving.
