@@ -58,6 +58,57 @@ export function findPlayableRecording(
   );
 }
 
+/** A recording artifact, whatever state it is in. The one predicate both counters below share. */
+function isRecording(artifact: RoomHistoryArtifact): boolean {
+  return artifact.type === "recording";
+}
+
+/**
+ * How many recordings of this meeting can actually be played. WT-655.
+ *
+ * WHY ANYONE NEEDS A COUNT AND NOT JUST THE FIRST ONE
+ *   A meeting can hold several. Anyone in the room may stop recording and start again, and each run
+ *   is its own file with its own row and its own `recordingStartedAt`. `findPlayableRecording`
+ *   returns the FIRST match, so a moment from the second half of the meeting gets measured against
+ *   the first file — and the arithmetic in recording-seek.ts has no way to notice: the answer is
+ *   positive, inside the file, and completely wrong. A seek that "works" and lands on the wrong
+ *   sentence is the one failure that module exists to prevent, and this is the case it cannot see,
+ *   because both origins it was handed are real.
+ *
+ *   Choosing the right file needs each recording's duration to know where one ends and the next
+ *   begins, and the backend does not store it yet. Until it does, the caller withholds seeking
+ *   entirely when this returns more than 1 and says so, rather than seeking to a plausible lie.
+ */
+export function countPlayableRecordings(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): number {
+  return (
+    artifacts?.filter((artifact) => isRecording(artifact) && canDownloadArtifact(artifact))
+      .length ?? 0
+  );
+}
+
+/**
+ * Whether a recording of this meeting exists but has nothing behind it yet.
+ *
+ * The difference between "not recorded" and "recorded, still being written" — which
+ * `findPlayableRecording` collapses into the same null, because for its purpose they are the same:
+ * neither one can be played. They are not the same thing to tell the reader. A meeting nobody
+ * recorded gets no notice at all; a meeting whose file is still processing is worth one, because
+ * the answer changes on its own in a minute.
+ *
+ * Any non-ready status counts, not only `processing` — `failed` and `missing` are equally
+ * "there was a recording and you cannot watch it", and neither is served by claiming the meeting
+ * was never recorded.
+ */
+export function hasPendingRecording(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): boolean {
+  return Boolean(
+    artifacts?.some((artifact) => isRecording(artifact) && !canDownloadArtifact(artifact)),
+  );
+}
+
 /**
  * The format the reader will actually receive — not the one the row is stored as.
  *

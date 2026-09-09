@@ -90,7 +90,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { MinutesPanel } from "@/components/rooms/minutes-panel";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
-import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
+import {
+  countPlayableRecordings,
+  findPlayableRecording,
+  hasPendingRecording,
+} from "@/lib/meeting/meeting-artifacts";
+import { resolveCitationRowId } from "@/lib/meeting/citation-target";
 import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
 import {
   describeRecordSharing,
@@ -279,6 +284,63 @@ export default function RoomInformationPage() {
     [transcriptQuery.data?.timelineAnchorAt, endedRecordQuery.data?.artifacts],
   );
 
+  /**
+   * Whether a transcript timestamp may open the recording at all, and if not, why. WT-655.
+   *
+   * ONE DERIVATION, THREE CONSUMERS
+   *   The gate on `onSeekToRecording`, the notice above the transcript, and the player's own
+   *   `unavailableReason` all read this. Deriving each separately is how a page ends up hiding
+   *   every timestamp while explaining nothing, which is exactly the bug being fixed: `undefined`
+   *   for the handler was the whole of the old answer, so every click on a timestamp was quietly
+   *   swallowed with nothing on screen saying why.
+   *
+   * WHY MORE THAN ONE RECORDING MEANS NONE
+   *   Anyone in the room can stop and restart recording, and each run is a separate file with its
+   *   own start instant. `findPlayableRecording` hands back the first, so a moment from the second
+   *   half of the meeting would be measured against the first file and produce a positive,
+   *   plausible, WRONG offset — a seek that appears to work and lands on the wrong sentence.
+   *   Picking the right file needs recording durations the backend does not store yet, so until it
+   *   does, seeking is withheld and said out loud. See countPlayableRecordings.
+   */
+  const playableRecordingCount = countPlayableRecordings(
+    endedRecordQuery.data?.artifacts,
+  );
+  const canSeekToRecording =
+    playableRecordingCount === 1 && canAlignToRecording(seekSources);
+
+  /**
+   * Why a moment cannot be opened, for the reader — null when it can, or when there is nothing to
+   * explain.
+   *
+   * A meeting with NO recording is deliberately null: not being recorded is the ordinary case and
+   * gets a plain reading page, not a notice about a feature it was never going to have.
+   * `"unalignable"` is the permanent one — the transcript predates the release that stored where
+   * its timeline begins (WT-473), and no value can be reconstructed for it, so the notice states it
+   * flatly rather than implying a wait. See SEEK_UNAVAILABLE_MESSAGES.
+   */
+  const seekUnavailableReason: "unalignable" | "multiple" | null =
+    playableRecordingCount > 1
+      ? "multiple"
+      : playableRecordingCount === 1 && !canAlignToRecording(seekSources)
+        ? "unalignable"
+        : null;
+
+  /**
+   * What the PLAYER says when it has nothing to play, or nothing it can safely seek in.
+   *
+   * A different question from the notice above, which is about timestamps: `"processing"` is not a
+   * seek problem at all, it is "the file is still being written, come back in a minute" — and
+   * `findPlayableRecording` cannot report it, because it collapses "never recorded" and "not ready"
+   * into the same null on purpose. The union is fixed by meeting-record-panels.
+   */
+  const recordingUnavailableReason: "processing" | "multiple" | null =
+    playableRecordingCount > 1
+      ? "multiple"
+      : playableRecordingCount === 0 &&
+          hasPendingRecording(endedRecordQuery.data?.artifacts)
+        ? "processing"
+        : null;
+
   /** Move the recording to a meeting moment. Silent when the clocks cannot be reconciled. */
   const requestSeek = useCallback(
     (atMs: number) => {
@@ -305,16 +367,22 @@ export default function RoomInformationPage() {
    * The function is imported here even though the panel that draws the list now lives in its own
    * file: what makes the two numbers agree is that they are produced by the SAME grouping, and a
    * count passed back up out of the panel would be a second claim rather than the same one.
+   *
+   * WT-655: it is now the rows themselves that are memoised rather than only their number, because
+   * jumping to a cited moment has to resolve that moment to a ROW — see citation-target.ts. Same
+   * grouping, same sort, one call: the count and the jump target cannot disagree about what a row
+   * is, which is the whole point of not approximating this a second time.
    */
-  const transcriptEntryCount = useMemo(
+  const transcriptRows = useMemo(
     () =>
       groupSavedTranscriptSegments(
         [...transcriptSegments].sort(
           (left, right) => left.sequenceOrder - right.sequenceOrder,
         ),
-      ).length,
+      ),
     [transcriptSegments],
   );
+  const transcriptEntryCount = transcriptRows.length;
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -347,16 +415,43 @@ export default function RoomInformationPage() {
         toast.error("That moment is not in the saved transcript.");
         return;
       }
+      /**
+       * WT-655: the cited SEGMENT is resolved to the ROW that contains it before anything is looked
+       * up in the DOM.
+       *
+       * findSegmentAtMs searches the raw, ungrouped list, because that is the list with the timings
+       * in it — but the transcript on screen is drawn from groupSavedTranscriptSegments, which folds
+       * consecutive chunks of one continuous piece of speech into one bubble named after the FIRST
+       * of them. A citation that landed anywhere else in a bubble produced an id that names no
+       * element and no row, and `if (!node) return` swallowed it: the click did nothing, said
+       * nothing, and looked deliberate next to the toast one branch above. The `highlighted`
+       * comparison in the transcript panel is keyed on the row's id too, so the same mismatch was
+       * also eating the highlight.
+       */
+      const rowId = resolveCitationRowId(transcriptRows, segment.id);
+      if (!rowId) {
+        // Grouping drops control markers before anything is drawn, so a moment can genuinely have
+        // no line a person can read. Scrolling to the nearest row instead would land the reader on
+        // a line that is not the evidence they clicked to check.
+        toast.error("That moment has no line in the transcript.");
+        return;
+      }
       // The tab switch renders the transcript in the same commit, so the node does not
       // exist yet on this frame.
       requestAnimationFrame(() => {
-        const node = document.getElementById(`transcript-segment-${segment.id}`);
-        if (!node) return;
+        const node = document.getElementById(`transcript-segment-${rowId}`);
+        if (!node) {
+          // Never silent again. The row exists in the data and not on screen — a filter or a
+          // language view is hiding it — and the reader has to be told, or the citation looks
+          // broken in exactly the way it used to be.
+          toast.error("Could not scroll to that moment in the transcript.");
+          return;
+        }
         node.scrollIntoView({ behavior: "smooth", block: "center" });
-        setHighlightedSegmentId(segment.id);
+        setHighlightedSegmentId(rowId);
       });
     },
-    [transcriptSegments, requestSeek],
+    [transcriptSegments, transcriptRows, requestSeek],
   );
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
@@ -698,15 +793,18 @@ export default function RoomInformationPage() {
                 seek={seek}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
                 onJumpToMoment={jumpToTranscriptMoment}
+                seekUnavailableReason={seekUnavailableReason}
+                recordingUnavailableReason={recordingUnavailableReason}
                 speakerDirectory={speakerDirectory}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
                     translations={transcriptTranslations}
                     preferredLanguage={user?.preferredLanguage}
-                    onSeekToRecording={
-                      canAlignToRecording(seekSources) ? requestSeek : undefined
-                    }
+                    // WT-655: the count gate joined the alignment gate. Two playable recordings
+                    // means every offset is measured against the wrong file half the time, and the
+                    // notice above the transcript now says why the timestamps went quiet.
+                    onSeekToRecording={canSeekToRecording ? requestSeek : undefined}
                     baseTime={
                       transcriptQuery.data?.createdAt ||
                       room.startedAt ||
@@ -895,6 +993,30 @@ function RoomEntryButton({
 }
 
 /**
+ * WT-655 — what a reader is told when a timestamp will not open the recording.
+ *
+ * THE SILENCE THIS BREAKS
+ *   `onSeekToRecording` was gated on `canAlignToRecording` alone, and the gate's only expression
+ *   was passing `undefined`: every timestamp in the transcript kept its clickable look, lost its
+ *   click, and offered no reason anywhere on the page. A feature that quietly does nothing is
+ *   indistinguishable from a broken one, and the reader's next move is to file a bug about the
+ *   transcript.
+ *
+ * WHY THE WORDING AVOIDS "YET"
+ *   `unalignable` is permanent. The two origins the arithmetic needs were added by WT-473 and
+ *   cannot be reconstructed for a meeting recorded before them, so there is nothing to wait for
+ *   and saying "not yet" would invite a reader to keep coming back. `multiple` genuinely is
+ *   temporary — it needs recording durations the backend does not store — so it is the one that
+ *   gets a "yet".
+ */
+const SEEK_UNAVAILABLE_MESSAGES: Record<"unalignable" | "multiple", string> = {
+  unalignable:
+    "You can watch this recording, but jumping to a moment is not available for it — this meeting was transcribed before WarpTalk started recording where a video's timeline begins.",
+  multiple:
+    "This meeting has more than one recording, so jumping to a moment is not available yet — a timestamp cannot be matched to the right file.",
+};
+
+/**
  * Everything a meeting left behind, on the meeting's own page.
  *
  * The transcript, the AI summary and the retained files used to be a separate Transcripts
@@ -918,6 +1040,8 @@ function MeetingRecordSection({
   seek,
   onRecordChanged,
   onJumpToMoment,
+  seekUnavailableReason,
+  recordingUnavailableReason,
   speakerDirectory,
   expanded,
   onToggleExpanded,
@@ -949,6 +1073,16 @@ function MeetingRecordSection({
   seek: SeekRequest | null;
   onRecordChanged: () => void;
   onJumpToMoment: (atMs: number) => void;
+  /**
+   * WT-655 — why a transcript timestamp does not open the recording, when it does not.
+   *
+   * Derived on the page, because only the page holds the transcript's `timelineAnchorAt`. Null
+   * covers both "it works" and "there is no recording to jump into" — a meeting nobody recorded
+   * gets a plain reading page, not a notice about a feature it never had.
+   */
+  seekUnavailableReason?: "unalignable" | "multiple" | null;
+  /** Passed straight to the player. The union is meeting-record-panels'. */
+  recordingUnavailableReason?: "processing" | "multiple" | null;
   /** Faces for the reading rail's attendees tab, from the same workspace member list the
    *  transcript's own speakers come from — the only place an avatar exists. */
   speakerDirectory?: Readonly<
@@ -1156,7 +1290,20 @@ function MeetingRecordSection({
           artifact={recording}
           onConsentGranted={onRecordChanged}
           seek={seek}
+          // WT-655: `artifact` is null both when the meeting was never recorded and when its file
+          // is still being written, and the player cannot tell those apart from a null. This says
+          // which — and says when several recordings are why no seek is on offer.
+          unavailableReason={recordingUnavailableReason}
         />
+      ) : null}
+      {/* WT-655: the one line that stops the transcript's timestamps going quiet without a reason.
+          Above the reading surface and on this tab only, because it is about the timestamps in it;
+          the Summary tab has its own player and its citations fail with a toast. A meeting with no
+          recording produces no reason at all and so renders nothing — see seekUnavailableReason. */}
+      {activeTab === "transcript" && seekUnavailableReason ? (
+        <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
+          {SEEK_UNAVAILABLE_MESSAGES[seekUnavailableReason]}
+        </div>
       ) : null}
       {activeTab === "transcript" ? (
         // "Still writing this up" came from the deleted `/ended` page, and it has to come with
