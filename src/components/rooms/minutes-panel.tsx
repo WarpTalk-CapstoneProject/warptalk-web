@@ -57,7 +57,11 @@ import {
   type MinutesPolicyFacts,
   type MinutesTemplateId,
 } from "@/lib/meeting/minutes-document";
-import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import {
+  MINUTES_WITHHELD,
+  useMeetingMinutes,
+  useMeetingMinutesActions,
+} from "@/hooks/use-meeting-minutes";
 import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspace, useWorkspaceSettings } from "@/hooks/use-workspace";
@@ -117,7 +121,11 @@ export function MinutesPanel({
   /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
   onSeek?: (atMs: number) => void;
 }) {
-  const { data: minutes, isLoading } = useMeetingMinutes(roomId);
+  const { data: read, isLoading } = useMeetingMinutes(roomId);
+  // WT-651: an unapproved document follows the room's artifactAccess policy, so "not shared with
+  // you" is one of the three normal answers here rather than a failure.
+  const withheld = read === MINUTES_WITHHELD;
+  const minutes = withheld ? null : read;
   const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
 
   /*
@@ -195,6 +203,28 @@ export function MinutesPanel({
       <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted">
         <Spinner size={14} className="animate-spin" />
         Loading minutes…
+      </div>
+    );
+  }
+
+  if (withheld) {
+    return (
+      <div className="p-6">
+        <div className="max-w-lg space-y-3">
+          <h3 className="text-[14px] font-semibold text-ink">Still a draft</h3>
+          {/* The same distinction summary-absence.ts draws, in this document's own words: the
+              minutes exist and are being worked on, and what is missing is permission rather than
+              the document. A flat "unauthorized" here would send somebody who WAS at the meeting
+              looking for a broken page instead of asking the host.
+
+              Says what changes it, in the terms the server uses: signing is the act that publishes
+              a biên bản, so "once it is signed" is the answer, not "once it is shared". */}
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            These minutes have been drawn up but nobody has signed them yet. A draft stays with the
+            people who can act on it; you will be able to read it here once the host or the
+            secretary signs it.
+          </p>
+        </div>
       </div>
     );
   }
