@@ -58,11 +58,34 @@ export interface MinutesSection {
   items?: MinutesItem[] | null;
 }
 
+/**
+ * One thing the meeting actually put to the room.
+ *
+ * WHY `movedBy`, `secondedBy` AND `outcome` ARE OPTIONAL
+ *   A motion under Robert's Rules is four facts, not three counts: somebody moved it, somebody
+ *   seconded it, the room voted, and the CHAIR DECLARED a result. The declaration is the part
+ *   that is not arithmetic — a motion needing a two-thirds majority can be lost on a count that
+ *   looks like a win, and a motion can be withdrawn or tabled with no count at all — so the
+ *   outcome is recorded as what was declared rather than recomputed from the tallies here.
+ *
+ *   They are optional because minutes already stored in production predate them. `content` is
+ *   kept verbatim by the server, so those documents come back exactly as they were written; a
+ *   required field would make every one of them fail to describe itself, and this is a signed
+ *   record where quietly filling in a proposer nobody named is the worst possible repair. Absent
+ *   means NOT RECORDED, and the templates print the line only when it is there.
+ */
 export interface MinutesVote {
   topic: string;
   forCount: number;
   againstCount: number;
   abstainCount: number;
+  /** Who put the motion. Absent on a document written before this was recorded. */
+  movedBy?: string | null;
+  /** Who seconded it. A motion can genuinely have no seconder — absent is not "unknown". */
+  secondedBy?: string | null;
+  /** What the chair declared: "Carried", "Failed", "Withdrawn", "Tabled". Free text by design —
+   *  the vocabulary belongs to the room's own rules of order, not to this client. */
+  outcome?: string | null;
   atMs?: number | null;
 }
 
@@ -79,6 +102,18 @@ export interface MeetingMinutesContent {
    */
   translations?: Record<string, MinutesSection[]> | null;
   location?: string | null;
+  /**
+   * How the record is classified — "Internal", "Confidential", "Public", or whatever vocabulary
+   * the organisation actually uses.
+   *
+   * NOTHING IN THIS CLIENT DERIVES ONE. A classification is a decision somebody makes about a
+   * document; it is not a function of who attended or of whether the host pressed Publish. The
+   * templates print this line when the stored document carries a value and print NO line at all
+   * when it does not, because a "Confidential" banner this product invented is a legal assurance
+   * behind which there is nobody — the same rule the .docx writer already follows when it prints
+   * an ellipsis rather than guessing a date.
+   */
+  classification?: string | null;
   /** When the meeting was called to order — the first participant's join. */
   openedAt?: string | null;
   closedAt?: string | null;
@@ -95,6 +130,16 @@ export interface MeetingMinutesDto {
   id: string;
   translationRoomId: string;
   minutesNo: string;
+  /**
+   * A DISPLAY name: the title the meeting was held under when this version was drawn up, read by
+   * the server out of the document's own body.
+   *
+   * The record's identity is `minutesNo` — that is what the database keys on and what a reader
+   * files it under. This is deliberately NOT the room's current title: renaming a room must not
+   * retitle a document somebody has already signed. Null means not recorded; fall back to the
+   * room's title for display.
+   */
+  meetingTitle?: string | null;
   status: MinutesStatus;
   version: number;
   isCurrent: boolean;

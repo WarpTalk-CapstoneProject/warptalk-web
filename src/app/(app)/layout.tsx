@@ -31,17 +31,21 @@ import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-pan
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
-import { isLiveMeetingPath } from "@/lib/workspace/workspace-routes";
+import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getErrorStatus } from "@/lib/api/retry-policy";
-import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useTranslationRoom, useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
+import { isExternalBridge } from "@/lib/meeting/meeting-types";
+import { useBridgeTrigger } from "@/hooks/use-bridge-trigger";
+import { onBridgeRoomActivated } from "@/lib/desktop/bridge";
+import type { TriggerMeeting } from "@/lib/meeting/bridge-trigger";
 import {
   preferRememberedWorkspace,
   recallLastWorkspaceSlug,
@@ -215,17 +219,87 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     [pathname, workspaceTabOptions]
   );
 
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  /**
+   * The routes that get NO portal drawn around them.
+   *
+   * The first four are the ones that run before a workspace is chosen. `/{slug}/activate` is the
+   * fifth and arrives from the other direction — a workspace exists, and has not been paid for.
+   * It belongs in this list for the same reason they do: a sidebar full of destinations that all
+   * redirect back to the page you are on is not navigation, it is the product with its doors
+   * locked, which was the exact complaint about the screen this route replaced.
+   *
+   * `isAdminRoute` is subtracted because the activation matcher is `/{anything}/activate` — it
+   * cannot tell a workspace slug from a top-level route on its own.
+   */
   const isOnboardingRoute =
     pathname === "/workspace" ||
     pathname === "/workspace/plans" ||
     pathname === "/workspace/create" ||
-    pathname === "/workspace/join";
-  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+    pathname === "/workspace/join" ||
+    (!isAdminRoute && isWorkspaceActivationPath(pathname));
   const isSystemAdmin = useIsSystemAdmin();
   // Decides more than the header divider: it is also what tells the meeting dock to stop
   // floating (`floating={!isLiveMeetingRoute}`). Miss the live route and the minimised
   // window floats on top of the meeting it is a copy of.
   const isLiveMeetingRoute = isLiveMeetingPath(pathname);
+  // An external bridge is watched in Google Meet, so WarpTalk must remain a floating widget even
+  // when its own `/live` route is open. The background LiveKit connection still carries the audio
+  // and AI pipeline; only the second meeting-shaped UI is removed.
+  const isExternalBridgeMeeting = isExternalBridge(roomQuery.data?.translationRoomType);
+  const meetingWidgetFloating = !isLiveMeetingRoute || isExternalBridgeMeeting;
+
+  /**
+   * The floating bridge widget, driven by the meeting rather than by the page.
+   *
+   * Mounted at the shell, and sourced from the WORKSPACE, not from whatever the user has open.
+   * That is the whole point: an external-bridge call is watched in Google Meet, so the user may
+   * never touch WarpTalk at all. Reading `activeRoomId` here would have kept the old requirement
+   * alive under a new name - that store is only ever written by the room's own /live route.
+   *
+   * The active room is still merged in, for the case the list cannot cover: a room in another
+   * workspace, or one past the page cap.
+   */
+  const workspaceRoomsQuery = useTranslationRooms({
+    workspaceId: activeWorkspaceId ?? undefined,
+    pageSize: 50,
+    enabled: Boolean(activeWorkspaceId),
+  });
+  const activeBridgeRoomQuery = useTranslationRoom(activeMeetingRoomId ?? "");
+
+  const bridgeTriggerMeetings = useMemo<TriggerMeeting[]>(() => {
+    const candidates = [
+      ...(workspaceRoomsQuery.data?.rooms ?? []),
+      ...(activeBridgeRoomQuery.data ? [activeBridgeRoomQuery.data] : []),
+    ];
+
+    const byRoomId = new Map<string, TriggerMeeting>();
+    for (const room of candidates) {
+      if (!isExternalBridge(room.translationRoomType)) continue;
+      // A bridge room with no booked slot runs from when it was made. `createdAt` rather than the
+      // current time: a clock read during render is impure, and it would also keep a room made
+      // yesterday eligible forever instead of letting it fall out of the window like any other.
+      const startsAtMs = Date.parse(room.scheduledAt ?? room.createdAt);
+      if (Number.isNaN(startsAtMs)) continue;
+      byRoomId.set(room.id, { roomId: room.id, startsAtMs });
+    }
+    return Array.from(byRoomId.values());
+  }, [workspaceRoomsQuery.data, activeBridgeRoomQuery.data]);
+
+  useBridgeTrigger({ meetings: bridgeTriggerMeetings });
+
+  /**
+   * Flow 2's last mile: the offer window made a room, and this window has to run it.
+   *
+   * The popup cannot do it. `activeRoomId` lives in sessionStorage, which is per-window, so a room
+   * the popup opened would be invisible here - and the meeting session that carries LiveKit, the
+   * dub and the bridge legs only mounts for THIS window's active room.
+   */
+  const openMeeting = useActiveMeetingStore((state) => state.openMeeting);
+  useEffect(() => {
+    const stop = onBridgeRoomActivated((roomId) => openMeeting(roomId));
+    return stop ?? undefined;
+  }, [openMeeting]);
 
   // Starts the token's refresh timer for a session that was already in place on load.
   //
@@ -436,8 +510,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     if (sub) {
                       parts.push({ label: roomTitle || "Loading..." });
                     }
-                  } else if (feature === "history") {
-                    parts.push({ label: "History" });
+                  } else if (feature === "artifacts") {
+                    parts.push({ label: "Artifacts" });
                   } else if (feature === "dashboard") {
                     parts.push({ label: "Dashboard" });
                   } else if (feature === "home") {
@@ -563,11 +637,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               // tears down the LiveKit connection this whole arrangement exists to preserve.
               // The dock owns the floating position now — it used to be pinned to the
               // bottom-right, which is exactly where the chat launcher and the toasts live.
-              <MiniMeetingDock floating={!isLiveMeetingRoute}>
+              <MiniMeetingDock floating={meetingWidgetFloating}>
                 <PersistentMeetingSession
                   key={activeMeetingRoomId}
                   roomId={activeMeetingRoomId}
-                  compact={!isLiveMeetingRoute}
+                  compact={meetingWidgetFloating}
                   onMeetingClosed={closeMeeting}
                 />
               </MiniMeetingDock>

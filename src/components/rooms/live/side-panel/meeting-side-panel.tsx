@@ -36,6 +36,7 @@ export function MeetingSidePanel({
   activeCount,
   segments,
   missedCount,
+  transcriptPause,
   onCopyText,
   joinLink,
   chatTargetLanguage,
@@ -55,6 +56,8 @@ export function MeetingSidePanel({
   segments: TranscriptSegmentDto[];
   /** Lines already spoken when this person joined; passed through to the transcript. */
   missedCount?: number;
+  /** WT-605: passed straight through to the transcript panel — see its own prop doc. */
+  transcriptPause?: { paused: boolean; since: string | null };
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
   /** Viewer's own listen language — passed to ChatPanel for on-click translation. */
@@ -226,6 +229,7 @@ export function MeetingSidePanel({
                 roomId={roomId}
                 baseTime={room.startedAt}
                 missedCount={missedCount}
+              transcriptPause={transcriptPause}
                 // Same value ChatPanel already translates into — this viewer's listen language.
                 readerLanguage={chatTargetLanguage}
               />

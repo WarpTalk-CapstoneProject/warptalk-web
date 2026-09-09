@@ -51,6 +51,7 @@ import {
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
+  PlugsConnected,
   SignOut,
   Plus,
   Sliders,
@@ -64,7 +65,8 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-  CheckSquare,} from "@phosphor-icons/react/dist/ssr";
+  CheckSquare,
+  Files,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -226,9 +228,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       ]
     },
     { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
-    { icon: Archive, label: "History", href: `/${slug}/history` },
-    // No Transcripts entry: a meeting's transcript, summary and files live on that
-    // meeting's own page, below its description.
+    // No History row: /history was a second, worse answer to the question Artifacts answers —
+    // it listed meetings, which Meetings above already does, and its outputs rail could not show
+    // minutes at all. Past meetings are still browsable on Meetings, which asks for ENDED.
+    // Artifacts, not "Transcripts". This entry used to be absent on purpose — "a meeting's
+    // transcript, summary and files live on that meeting's own page, below its description" —
+    // and that is still true: the record lives on the meeting, and this page links back to it.
+    // What was missing was the INDEX. Every question a record is kept to answer ("which meeting
+    // decided the budget?", "which meetings have a signed biên bản?") is a question about the
+    // documents, and answering it meant opening meetings one at a time.
+    //
+    // Directly under History because the two are one archive read two ways: History lists the
+    // MEETINGS, this lists what they wrote down.
+    { icon: Files, label: "Artifacts", href: `/${slug}/artifacts` },
     { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
   ];
 
@@ -407,6 +419,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
           { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
+          // Beside Platform config because it is the same kind of thing: reference data the whole
+          // platform runs on. Unlike that page it is writable, which is the point of WT-646 — the
+          // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
+          // a SQL job rather than a screen.
+          { icon: PlugsConnected, label: "Plugins", href: "/admin/plugins" },
           { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
         ],
       },
@@ -571,6 +588,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           ? `/${activeWorkspaceSlug}/settings/account/profile`
           : "/workspace",
       },
+      {
+        icon: PlugsConnected,
+        label: "Plugins",
+        href: "/settings/plugins",
+      },
     ];
 
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
@@ -705,6 +727,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                   Profile
+                </span>
+              </Link>
+            </div>
+
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === "/settings/plugins" ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Plugins
                 </span>
               </Link>
             </div>

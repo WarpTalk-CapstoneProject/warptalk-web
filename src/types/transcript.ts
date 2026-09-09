@@ -119,3 +119,16 @@ export interface CreateCorrectionRequest {
   correctedText: string;
   correctionType: "stt" | "translation" | "speaker" | "timing";
 }
+
+/**
+ * One stretch during which the transcript was deliberately not written down. WT-605.
+ *
+ * `endedAt` null means the pause is still in force — that is how anyone joining mid-pause learns
+ * the state, since the broadcast that told everybody else fired before they arrived.
+ */
+export interface TranscriptPauseWindowDto {
+  id: string;
+  translationRoomId: string;
+  startedAt: string;
+  endedAt: string | null;
+}

@@ -40,6 +40,77 @@ export interface AssistantSkillDto {
   description: string;
 }
 
+export type AssistantPluginInstallationStatus =
+  | "not_installed"
+  | "installed"
+  | "disabled";
+
+export type AssistantPluginConnectionStatus =
+  | "not_connected"
+  | "connected"
+  | "expired"
+  | "revoked";
+
+export interface McpToolDescriptorDto {
+  name: string;
+  pluginKey: string;
+  label: string;
+  description: string;
+  effect: "read" | "write";
+  requiredScopes: string[];
+  parameters: Record<string, unknown>;
+}
+
+export interface AssistantPluginCatalogItemDto {
+  key: string;
+  label: string;
+  description: string;
+  avatarUrl?: string | null;
+  requiredScopes: string[];
+  installationStatus: AssistantPluginInstallationStatus;
+  connectionStatus: AssistantPluginConnectionStatus;
+  connectedAccountEmail?: string | null;
+  tools: McpToolDescriptorDto[];
+  /** Scopes actually granted at the provider's consent screen — a subset of requiredScopes when the user declined some. */
+  grantedScopes: string[];
+  /**
+   * Who the OAuth grant is with. Several rows share one provider — google_drive, google_calendar
+   * and google_meet are all `google` — and since WT-646 a connection is keyed by this, not by
+   * `key`, so disconnecting any one of them ends the grant for all of them.
+   *
+   * Optional on the type, not on the wire: `PluginCatalogItemMapper.ToCatalogItem` copies it as of
+   * WT-646, but a server older than that sends nothing here, and so does any row an operator adds
+   * without one. `pluginConnectionGroupKey` falls back to the shared issuer of a row's required
+   * scopes in those cases; see src/lib/assistant/plugin-connection.ts.
+   */
+  provider?: string | null;
+  /**
+   * Operator curation, set from the admin catalog surface. Optional on the type because a server
+   * older than WT-646 sends none of them, in which case ordering falls back to label alone.
+   */
+  isFeatured?: boolean;
+  /** Ascending. Ties are broken by label. */
+  sortOrder?: number;
+  /** Null on every row today; grouping by it is only worth doing once rows carry one. */
+  category?: string | null;
+  /**
+   * Why the active workspace's plugin policy refuses this row, or absent when nothing refuses it.
+   *
+   * A blocked row is still returned rather than hidden, deliberately: a user whose workspace
+   * switched plugins off under an already-connected one has to be able to see the row to revoke
+   * the grant. Install and connect are refused; disconnect and disable are not.
+   *
+   * Present only when the catalog was listed with a `workspaceId`. The plugins page supplies the
+   * active workspace, so it gets a verdict; a caller that omits it gets no workspace policy at all
+   * and this field is always absent.
+   */
+  workspacePolicyBlockReason?: string | null;
+}
+
+export interface PluginConnectUrlDto {
+  url: string;
+}
+
 /**
  * Ambient "what page is the user looking at" hint sent alongside a chat message.
  * Snapshot must stay a thin, display-only projection (id/title/status) — never raw
@@ -54,13 +125,17 @@ export interface AssistantPageContextDto {
 }
 
 /**
- * An explicit "@mention" the user attached to this message (a room, document, or member
- * picked from the widget's @ menu) — as opposed to AssistantPageContextDto's ambient,
- * automatic page context. No workspaceId here: the backend scopes every mention to the
+ * An explicit "@mention" the user attached to this message (a room, document, member, or
+ * installed plugin picked from the widget's @ menu) — as opposed to AssistantPageContextDto's
+ * ambient, automatic page context. No workspaceId here: the backend scopes every mention to the
  * conversation's own workspace server-side.
+ *
+ * A "plugin" mention's entityId is the plugin's catalog key (e.g. "google_drive") — the same key
+ * every install/connect/disconnect call takes. It names a capability the user wants used for this
+ * turn, not a record to look up.
  */
 export interface AssistantMentionDto {
-  entityType: "room" | "document" | "member";
+  entityType: "room" | "document" | "member" | "plugin";
   entityId: string;
   label?: string;
 }

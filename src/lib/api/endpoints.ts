@@ -145,7 +145,45 @@ export const API = {
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
-    exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+    exportDocx: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.docx` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    /**
+     * The same document, converted from that .docx — never a second layout, so `template` means
+     * exactly what it means above.
+     */
+    exportPdf: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.pdf` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    /** The share dialog's state. GET creates the link, restricted, on first ask. */
+    share: (roomId: string) => `/rooms/${roomId}/minutes/share`,
+    /** Email travels in the query string: an address contains characters a route segment does not. */
+    sharePerson: (roomId: string, email: string) =>
+      `/rooms/${roomId}/minutes/share/people?email=${encodeURIComponent(email)}`,
+    sharePeople: (roomId: string) => `/rooms/${roomId}/minutes/share/people`,
+    /**
+     * Every current biên bản in the workspace this caller may read.
+     *
+     * Anchored on the workspace rather than on a room because the Artifacts library asks a
+     * question no room can answer: which meetings left a written record at all. The gateway
+     * routes this one path to the translation-room service ahead of its own workspaces
+     * catch-all — see workspace-minutes-route.
+     */
+    forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
+  },
+  /**
+   * Reading a biên bản from a share link.
+   *
+   * The only unauthenticated routes the web calls. The token IS the credential, so these are
+   * requested through publicApiClient — which never refreshes a session or redirects to /login
+   * on a 401, because a visitor with no account is not an expired session.
+   */
+  sharedMinutes: {
+    byToken: (token: string) => `/shared/minutes/${encodeURIComponent(token)}`,
+    exportDocx: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.docx`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    exportPdf: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.pdf`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
@@ -158,6 +196,19 @@ export const API = {
     start: "/transcripts",
     get: (id: string) => `/transcripts/${id}`,
     byRoom: (translationRoomId: string) => `/transcripts/by-room/${translationRoomId}`,
+    // WT-605. Keyed by ROOM, not by transcript id, exactly as TranscriptsController declares
+    // them — the host pressing this has a room open, not a transcript id in hand.
+    //
+    // Not to be confused with `translationRooms.pause` further down: that one stops the AI
+    // workers translating and dubbing. These stop only the written record growing, while
+    // translation, dubbing, subtitles and LiveKit carry on.
+    pauseByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause`,
+    resumeByRoom: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/resume`,
+    /** Readable by every participant, not just the host — the notice is for the whole room. */
+    pauseWindows: (translationRoomId: string) =>
+      `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
@@ -199,17 +250,6 @@ export const API = {
     setLock: (roomId: string) => `/meetings/rooms/${roomId}/lock`,
     setMuteOnEntry: (roomId: string) => `/meetings/rooms/${roomId}/mute-on-entry`,
     setRecording: (roomId: string) => `/meetings/rooms/${roomId}/recording`,
-    pollsList: (roomId: string) => `/meetings/rooms/${roomId}/polls`,
-    pollsCreate: (roomId: string) => `/meetings/rooms/${roomId}/polls`,
-    pollsVote: (roomId: string, pollId: string) => `/meetings/rooms/${roomId}/polls/${pollId}/vote`,
-    pollsClose: (roomId: string, pollId: string) => `/meetings/rooms/${roomId}/polls/${pollId}/close`,
-    questionsList: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
-    questionsAsk: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
-    questionsUpvote: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/upvote`,
-    questionsAnswer: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/answer`,
-    breakoutsStart: (roomId: string) => `/meetings/rooms/${roomId}/breakouts`,
-    breakoutsEnd: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/end`,
-    breakoutsMyAssignment: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/my-assignment`,
   },
   workspaces: {
     base: "/workspaces",
@@ -270,6 +310,46 @@ export const API = {
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
     skills: "/assistant/skills",
+    plugins: "/assistant/plugins",
+    installPlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/install`,
+    disablePlugin: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
+    pluginConnection: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    /**
+     * `client` tells the API which surface is asking, so it can seal that into the OAuth state.
+     * The desktop app opens consent in the system browser, and by the time the callback runs
+     * nothing on that request remembers which app started it.
+     */
+    pluginConnectUrl: (pluginKey: string, client?: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url` +
+      (client ? `?client=${encodeURIComponent(client)}` : ""),
+  },
+  /**
+   * The system-admin half of the plugin catalog (assistant service, WT-646).
+   *
+   * Separate from `assistant.plugins` above because the audiences are separate: those routes are
+   * what a signed-in user's plugins page calls, these write the global catalog every user reads
+   * and are gated on the platform-admin policy. Keeping them apart is what stops a user-facing
+   * component reaching for an admin URL by autocomplete.
+   *
+   * `catalog` is a RESERVED plugin key on the server for the reason this shape makes visible: it
+   * is a literal route segment sitting where `{pluginKey}` sits, and ASP.NET gives the literal
+   * precedence.
+   */
+  adminPluginCatalog: {
+    base: "/assistant/plugins/catalog",
+    detail: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}`,
+    oauth: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/oauth`,
+    tools: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/tools`,
+    rediscover: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/rediscover`,
+    audits: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
