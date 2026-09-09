@@ -1371,7 +1371,10 @@ function RoomNotesEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-[160px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
+          // 160px of empty box was a tenth of the first screen on a room whose notes nobody
+          // wrote — and most rooms have none. The editor grows with its content anyway, so the
+          // floor only has to be a comfortable click target for an empty one: three lines.
+          "min-h-[72px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
           "[&_p]:my-1.5 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-[20px] [&_h1]:font-semibold [&_h1]:text-foreground " +
           "[&_h2]:mt-3.5 [&_h2]:mb-1.5 [&_h2]:text-[17px] [&_h2]:font-semibold [&_h2]:text-foreground " +
           "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-foreground " +
