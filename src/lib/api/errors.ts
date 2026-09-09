@@ -6,6 +6,45 @@ interface ApiErrorBody {
   Message?: string;
   /** The API's own reason: "FORBIDDEN", "NOT_FOUND", "INVALID_STATE", … */
   code?: string;
+  /**
+   * ASP.NET's ValidationProblemDetails, which is what a FluentValidation failure actually returns
+   * — NOT the { error, code } shape the rest of the API uses.
+   *
+   * `errors` is field name to messages. `title` is always the generic "One or more validation
+   * errors occurred.", which is why it is deliberately never shown: swapping one meaningless
+   * sentence for another is not a fix.
+   */
+  title?: string;
+  errors?: Record<string, string[]>;
+}
+
+/**
+ * The messages out of a ValidationProblemDetails, in one sentence.
+ *
+ * WHY THIS EXISTS
+ *     WT-649 reported registration answering a bad Full Name with "Registration failed. Please try
+ *     again." The cause was read backwards at first — the API was assumed to be flattening field
+ *     names away. It is the opposite. The server sends
+ *
+ *       { "title": "One or more validation errors occurred.",
+ *         "errors": { "FullName": ["Full name cannot exceed 150 characters."] } }
+ *
+ *     and this client read only `message`, `Message` and `error` — none of which exist on that
+ *     shape. So the one response that knew exactly which field was wrong, and why, was the one
+ *     response nothing could read, in EVERY feature of the app rather than only on this form.
+ *
+ *     Confirmed by running it, not by reading it: the { error, code } shape is what a SERVICE
+ *     failure returns ("Email already registered"), while a VALIDATOR failure returns
+ *     ValidationProblemDetails. Both are 400s from the same endpoint.
+ */
+function validationMessages(body: ApiErrorBody | undefined): string | undefined {
+  if (!body?.errors) return undefined;
+
+  const messages = Object.values(body.errors)
+    .flat()
+    .filter((message): message is string => typeof message === "string" && message.trim().length > 0);
+
+  return messages.length > 0 ? messages.join(" ") : undefined;
 }
 
 /**
@@ -101,7 +140,13 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError<ApiErrorBody>(error)) {
     const body = error.response?.data;
     return (
-      firstMeaningful(body?.message, body?.Message, body?.error, transportMessage(error)) ??
+      firstMeaningful(
+        body?.message,
+        body?.Message,
+        body?.error,
+        validationMessages(body),
+        transportMessage(error),
+      ) ??
       fallback
     );
   }

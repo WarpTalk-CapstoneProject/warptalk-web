@@ -6,6 +6,7 @@ import {
   pendingCorrections,
   dedupeTranscriptSegments,
   findSuggestionForUtterance,
+  firstTranslationStart,
   confidencePercent,
   formatTranscriptTimestamp,
   getAnimatedWordTokens,
@@ -14,11 +15,15 @@ import {
   groupSavedTranscriptSegments,
   groupTranscriptSegments,
   isTranscriptControlMarker,
+  isTranscriptSystemSegment,
   resolveSegmentTranslation,
   resolveTranscriptSpeakerName,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
 } from "../transcript-display.ts";
+// A blank row's cost is only visible where the translations are read — the grouping keeps its id
+// and resolveTranscriptLine is what then demands a translation for it.
+import { indexTranslationsBySegment, resolveTranscriptLine } from "../transcript-language.ts";
 import type { ParticipantInfoDto, TranscriptSegmentDto } from "../../../types/realtime.ts";
 
 function segment(overrides: Partial<TranscriptSegmentDto> = {}): TranscriptSegmentDto {
@@ -305,6 +310,83 @@ test("a control marker is not swallowed into the line before it", () => {
   assert.ok(!grouped[0].originalText.includes("MEETING_END"), grouped[0].originalText);
 });
 
+// WT-311(e). The consumer stamps a sentinel three ways — no participant id, the name "System",
+// the pseudo-language "system" — and the text filter alone read only the fourth. A transcript
+// whose only row was a mangled marker therefore rendered as a one-line list attributed to
+// System, while a clean one rendered as empty: two empty states for one empty meeting.
+
+test("isTranscriptSystemSegment reads every tell the consumer stamps on a sentinel", () => {
+  assert.equal(isTranscriptSystemSegment({ originalText: "__MEETING_END__" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", originalLanguage: "system" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", speakerId: "system" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", speakerName: "System" }), true);
+  assert.equal(isTranscriptSystemSegment({ originalText: "bye", speakerName: " system " }), true);
+});
+
+test("a participant who happens to be called System is a person, and is kept", () => {
+  assert.equal(
+    isTranscriptSystemSegment({
+      originalText: "Hello",
+      speakerName: "System",
+      speakerParticipantId: "019f0d00-0de0-7000-9000-000000000003",
+    }),
+    false,
+  );
+  assert.equal(
+    isTranscriptSystemSegment({ originalText: "Hello", speakerName: "Alice", speakerParticipantId: "u1" }),
+    false,
+  );
+  assert.equal(isTranscriptSystemSegment({ originalText: "Hello", originalLanguage: "en" }), false);
+});
+
+test("a line the pipeline attributed to System is dropped even when its text was mangled", () => {
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("Hello everyone", 1),
+    { ...savedSegment("MEETING END", 2, "System"), originalLanguage: "system" },
+    savedSegment("end of meeting", 3, "System"),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].originalText, "Hello everyone");
+});
+
+test("a transcript holding only the sentinel is empty, not a one-line list", () => {
+  // The two empty states of WT-311(e), collapsed into one: the panel counts what this returns,
+  // and zero is what makes it say "No transcript was captured" instead of listing the marker.
+  assert.deepEqual(
+    groupSavedTranscriptSegments([
+      { ...savedSegment("__MEETING_END__", 1, "System"), originalLanguage: "system" },
+    ]),
+    [],
+  );
+});
+
+test("a correction on any merged chunk marks the whole utterance as corrected", () => {
+  const grouped = groupSavedTranscriptSegments([
+    { ...savedSegment("Hello", 1), speakerParticipantId: "u1" },
+    { ...savedSegment("everyone", 2), speakerParticipantId: "u1", isCorrected: true },
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].isCorrected, true);
+  assert.deepEqual(grouped[0].mergedSegmentIds, ["seg-1", "seg-2"]);
+});
+
+test("the header's 'Translation started' is the earliest session, whatever order they arrived", () => {
+  assert.equal(
+    firstTranslationStart([
+      { startedAt: "2026-09-01T10:30:00Z" },
+      { startedAt: "2026-09-01T10:05:00Z" },
+      { startedAt: null },
+      { startedAt: "garbage" },
+    ]),
+    "2026-09-01T10:05:00Z",
+  );
+  // Translation never ran: a real state, not a missing one — the header says nothing.
+  assert.equal(firstTranslationStart([]), null);
+  assert.equal(firstTranslationStart([{ startedAt: undefined }]), null);
+});
+
 test("a participant whose display name is their own id is not a name", () => {
   // After a sign-out and sign-in the roster can come back holding the user id as the display
   // name, and this branch trusted it absolutely — so a transcript attributed lines to
@@ -362,6 +444,70 @@ test("a marker is dropped BEFORE it can be merged into a real line", () => {
 
 test("a live transcript that is nothing but markers renders as empty, not as noise", () => {
   assert.deepEqual(groupTranscriptSegments([segment({ originalText: "__MEETING_END__" })]), []);
+});
+
+// ── A row with no text is not a line either ─────────────────────────────────
+//
+// stt_worker publishes a trailing `text=""` marker when an audio chunk finishes, and until the
+// ingress consumer grew a guard for it every audio chunk of every meeting left a blank row
+// behind. They are still in every transcript recorded before that guard, and the backend's
+// coverage refuses to count OR translate them (IsTranslatableSegment) — so a blank row kept on
+// this side is a shortfall the server will never close.
+
+test("a blank saved row is not an entry of its own", () => {
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("Hello everyone", 1),
+    savedSegment("   ", 2, "Someone else"),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.equal(grouped[0].originalText, "Hello everyone");
+});
+
+test("a blank row is not absorbed into the utterance around it", () => {
+  // The id is what matters here, not the text: appending "" changes no sentence, but adding the
+  // blank row's id to mergedSegmentIds asserts that a translation exists for it.
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("I think", 1),
+    savedSegment("", 2),
+    savedSegment("we should ship it", 3),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.deepEqual(grouped[0].mergedSegmentIds, ["seg-1", "seg-3"]);
+});
+
+test("an utterance that spans a blank row is fully translated, not permanently partial", () => {
+  // The defect, end to end. Both halves of what was actually said are translated, so the line is
+  // complete — but the blank row in the middle was counted as a third segment needing coverage,
+  // so `covered < segmentIds.length` held forever. That is one line the panel marked incomplete
+  // and one entry the "not in English yet" count could never let go of, no matter how many times
+  // the reader pressed Translate: the server does not translate blank rows and never will.
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("I think", 1),
+    savedSegment("", 2),
+    savedSegment("we should ship it", 3),
+  ]);
+
+  const index = indexTranslationsBySegment([
+    { segmentId: "seg-1", targetLanguage: "vi", translatedText: "Tôi nghĩ" },
+    { segmentId: "seg-3", targetLanguage: "vi", translatedText: "chúng ta nên ship" },
+  ]);
+
+  const resolved = resolveTranscriptLine(grouped[0], index, "vi");
+  assert.equal(resolved.isPartial, false);
+  assert.equal(resolved.isUntranslated, false);
+  assert.equal(resolved.text, "Tôi nghĩ chúng ta nên ship");
+});
+
+test("the live grouping drops blank rows too", () => {
+  const grouped = groupTranscriptSegments([
+    segment({ segmentId: "s1", originalText: "Thanks all" }),
+    segment({ segmentId: "s2", originalText: "  ", startTimeMs: 2_100, endTimeMs: 2_100 }),
+  ]);
+
+  assert.equal(grouped.length, 1);
+  assert.deepEqual(grouped[0].mergedSegmentIds, ["s1"]);
 });
 
 // WT-371 Bug 3. stt_worker publishes `confidence=round(avg_logprob, 4)` — an average token

@@ -52,15 +52,28 @@ import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { getErrorMessage } from "@/lib/api/errors";
+import {
+  getSafeCallbackUrl,
+  resolvePostLoginDestination,
+} from "@/lib/auth/post-login-destination";
 import { setAccessTokenCookie } from "@/lib/auth/session-cookie";
 import { languagesInScope } from "@/lib/language/languages";
+import { recallLastWorkspaceSlug } from "@/lib/workspace/last-workspace";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { AuthResponse } from "@/types/auth";
+import type { AuthResponse, UserDto } from "@/types/auth";
 
-function getSafeCallbackUrl(value: string | null) {
-  if (!value || !value.startsWith("/") || value.startsWith("//") || value === "/rooms") return "/workspace";
-  return value;
+/**
+ * WT-347: the same answer the login page gives. A Google sign-in from this page is a returning
+ * account as often as a new one, and a returning account with a workspace belongs in it, not on
+ * the hub. (`getSafeCallbackUrl` used to be a second copy of the login page's; it is one now.)
+ */
+function postLoginDestination(user: UserDto, rawCallbackUrl: string | null) {
+  return resolvePostLoginDestination({
+    callbackUrl: rawCallbackUrl,
+    lastWorkspaceSlug: recallLastWorkspaceSlug(user.id),
+  });
 }
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() ?? "";
@@ -80,13 +93,38 @@ const MEETING_LANGUAGES = languagesInScope("meeting");
 const DEFAULT_SPEAK = "vi-VN";
 const DEFAULT_LISTEN = "en-US";
 
+/**
+ * Mirrors of the server's rules, kept here so a violation is answered where the field is.
+ *
+ * WT-649: a name of spaces, or one past the column width, was refused by the API and reported as
+ * an anonymous toast on the LAST step of the wizard — while the field it was about sits on step 2.
+ * The person is told something is wrong, on a screen with nothing to fix. Every limit below has a
+ * server-side counterpart in UserConstants; these exist to name the field, not to be the guard.
+ */
+const FULL_NAME_MAX = 150;
+const EMAIL_MAX = 255;
+const PASSWORD_MAX = 128;
+
 const getRegisterSchema = (hasToken: boolean) =>
   z.object({
     email: hasToken
       ? z.string().optional().or(z.literal(""))
-      : z.string().min(1, "Email is required").email("Invalid email address"),
-    fullName: z.string().min(1, "Please enter your name"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+      : z
+          .string()
+          .min(1, "Email is required")
+          .email("Invalid email address")
+          .max(EMAIL_MAX, `Email cannot exceed ${EMAIL_MAX} characters`),
+    // .trim() before .min(1), and the order is the whole point: reversed, a name of nothing but
+    // spaces passes and is only caught after a round trip.
+    fullName: z
+      .string()
+      .trim()
+      .min(1, "Please enter your name")
+      .max(FULL_NAME_MAX, `Full name cannot exceed ${FULL_NAME_MAX} characters`),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(PASSWORD_MAX, `Password cannot exceed ${PASSWORD_MAX} characters`),
   });
 
 type RegisterFormData = {
@@ -102,7 +140,7 @@ interface PendingVerification {
   emailVerificationRequired: true;
 }
 
-function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
+function RegisterGoogleButton({ rawCallbackUrl }: { rawCallbackUrl: string | null }) {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
@@ -119,10 +157,9 @@ function RegisterGoogleButton({ callbackUrl }: { callbackUrl: string }) {
         login(user, accessToken);
         setAccessTokenCookie(accessToken, expiresAt);
         toast.success("Google sign-in successful!");
-        router.replace(callbackUrl);
+        router.replace(postLoginDestination(user, rawCallbackUrl));
       } catch (err: unknown) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error?.response?.data?.error || "Google sign-in failed. Please try again.");
+        toast.error(getErrorMessage(err, "Google sign-in failed. Please try again."));
       }
     },
     onError: () => toast.error("Google authentication failed or popup was closed."),
@@ -159,7 +196,8 @@ function RegisterForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const hasToken = Boolean(token);
-  const callbackUrl = getSafeCallbackUrl(searchParams.get("callbackUrl") || searchParams.get("redirect"));
+  const rawCallbackUrl = searchParams.get("callbackUrl") || searchParams.get("redirect");
+  const callbackUrl = getSafeCallbackUrl(rawCallbackUrl);
 
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
@@ -250,10 +288,13 @@ function RegisterForm() {
       login(user, accessToken);
       setAccessTokenCookie(accessToken, expiresAt);
       toast.success("Registration successful!");
-      router.replace(callbackUrl);
+      router.replace(postLoginDestination(user, rawCallbackUrl));
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Registration failed. Please try again.");
+      // getErrorMessage rather than reaching into response.data.error by hand: the hand-rolled
+      // read saw only a body, so every transport failure — offline, 502, 504, a rate limit —
+      // arrived as "Registration failed. Please try again." and told the person to retry the one
+      // thing that could not work yet.
+      toast.error(getErrorMessage(err, "Registration failed. Please try again."));
     }
   };
 
@@ -330,7 +371,7 @@ function RegisterForm() {
                 className="space-y-4"
               >
                 {GOOGLE_CLIENT_ID ? (
-                  <RegisterGoogleButton callbackUrl={callbackUrl} />
+                  <RegisterGoogleButton rawCallbackUrl={rawCallbackUrl} />
                 ) : (
                   <RegisterGoogleUnavailableButton />
                 )}

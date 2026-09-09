@@ -101,6 +101,14 @@ export const VoiceProfileService = {
     return data;
   },
 
+  /** The uploaded recording itself. Owner only; anybody else's profile answers 404. */
+  async sample(profileId: string): Promise<Blob> {
+    const { data } = await apiClient.get<Blob>(API.voiceProfiles.sample(profileId), {
+      responseType: "blob",
+    });
+    return data;
+  },
+
 };
 
 export const VoiceConsentService = {

@@ -29,7 +29,7 @@ import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
 import { TranscriptReadingLayout } from "@/components/rooms/meeting-reading-rail";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
-import type { RoomHistoryArtifact } from "@/types/roomHistory";
+import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto, TranscriptTranslationDto } from "@/types/transcript";
 
 const TU = "019f0d00-0de0-7000-9000-000000000001";
@@ -189,6 +189,46 @@ const RECORDING: RoomHistoryArtifact = {
   backendSource: "translation_room_recordings",
 };
 
+/**
+ * The ended record the rail reads, now that the rail carries the WHOLE summary rather than a list
+ * of its citable points. Everything below the sections is here because the rail renders it: the
+ * overview paragraph, the template the summary was written in, and the artifact its Download
+ * button points at.
+ */
+const PREVIEW_RECORD: EndedRoomHistoryItem = {
+  id: "preview-room",
+  workspaceId: "preview-workspace",
+  hostId: TU,
+  hostName: "Tu",
+  title: "Sprint review — 20 Aug",
+  translationRoomCode: "preview",
+  status: "ended",
+  startedAt: "2026-08-21T00:16:00.000Z",
+  endedAt: "2026-08-21T00:18:00.000Z",
+  durationSeconds: 120,
+  sourceLanguage: "vi-VN",
+  targetLanguages: ["ja-JP"],
+  participants: [],
+  participantCount: 2,
+  artifacts: [RECORDING],
+  retention: { kind: "not_configured" },
+  consent: { recording: "required", transcript: "not_required", summary: "not_required" },
+  summary: {
+    id: "preview-summary",
+    translationRoomId: "preview-room",
+    summary:
+      "The demo will run in Japanese with the Vietnamese dub behind it, and the dub's one-second lag is being looked into.",
+    keyPoints: [],
+    decisions: [],
+    actionItems: [],
+    modelUsed: "preview",
+    processingTimeMs: 0,
+    generatedAt: "2026-08-21T00:18:30.000Z",
+    templateKey: "general",
+    sections: SUMMARY_SECTIONS,
+  },
+};
+
 export default function TranscriptPreviewPage() {
   // ?theme=light / ?theme=dark. Both themes have to be looked at, and the machine doing the
   // looking follows the OS — which pins it to one of them and hides every regression in the
@@ -248,13 +288,13 @@ export default function TranscriptPreviewPage() {
         </h2>
         <div className="rounded-[14px] border border-border bg-surface-1 p-5">
           <TranscriptReadingLayout
-            sections={SUMMARY_SECTIONS}
+            record={PREVIEW_RECORD}
             segments={SEGMENTS}
+            hasTranscript
             recording={RECORDING}
             seek={null}
             onConsentGranted={() => {}}
             onJumpToMoment={() => {}}
-            onOpenSummaryTab={() => {}}
             speakerDirectory={SPEAKER_DIRECTORY}
             transcript={
               <MeetingTranscriptArtifact
@@ -295,6 +335,8 @@ export default function TranscriptPreviewPage() {
             transcriptStatus="finalized"
             canEdit
             speakerDirectory={SPEAKER_DIRECTORY}
+            meetingStartedAt="2026-08-21T00:10:00.000Z"
+            meetingEndedAt="2026-08-21T00:52:00.000Z"
           />
         </div>
       </section>

@@ -38,6 +38,14 @@ export const API = {
     // voice does real work on the AI side; later calls for the same (voice, language) are
     // served from that render.
     preview: "/auth/voice-profiles/preview",
+    /**
+     * The recording somebody uploaded, played back to them — NOT the clone.
+     *
+     * Separate from `preview` because they answer different questions: preview is the clone
+     * speaking a fixed sentence, this is the original. Hearing one without the other says nothing
+     * about how good the clone is.
+     */
+    sample: (profileId: string) => `/auth/voice-profiles/${profileId}/sample`,
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
