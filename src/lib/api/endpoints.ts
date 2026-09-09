@@ -148,6 +148,18 @@ export const API = {
     exportDocx: (roomId: string, template?: string) =>
       `/rooms/${roomId}/minutes/export.docx` + (template ? `?template=${encodeURIComponent(template)}` : ""),
     /**
+     * The same document, converted from that .docx — never a second layout, so `template` means
+     * exactly what it means above.
+     */
+    exportPdf: (roomId: string, template?: string) =>
+      `/rooms/${roomId}/minutes/export.pdf` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    /** The share dialog's state. GET creates the link, restricted, on first ask. */
+    share: (roomId: string) => `/rooms/${roomId}/minutes/share`,
+    /** Email travels in the query string: an address contains characters a route segment does not. */
+    sharePerson: (roomId: string, email: string) =>
+      `/rooms/${roomId}/minutes/share/people?email=${encodeURIComponent(email)}`,
+    sharePeople: (roomId: string) => `/rooms/${roomId}/minutes/share/people`,
+    /**
      * Every current biên bản in the workspace this caller may read.
      *
      * Anchored on the workspace rather than on a room because the Artifacts library asks a
@@ -156,6 +168,22 @@ export const API = {
      * catch-all — see workspace-minutes-route.
      */
     forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
+  },
+  /**
+   * Reading a biên bản from a share link.
+   *
+   * The only unauthenticated routes the web calls. The token IS the credential, so these are
+   * requested through publicApiClient — which never refreshes a session or redirects to /login
+   * on a 401, because a visitor with no account is not an expired session.
+   */
+  sharedMinutes: {
+    byToken: (token: string) => `/shared/minutes/${encodeURIComponent(token)}`,
+    exportDocx: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.docx`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    exportPdf: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.pdf`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
