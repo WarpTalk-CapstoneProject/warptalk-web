@@ -137,10 +137,17 @@ export default function MeetingLayoutPreview() {
               segments={segments}
               roomId="preview-paused"
               readerLanguage="en"
-              transcriptPause={{ paused: true, since: "2026-09-06T10:05:00Z" }}
-              /* The "Transcript paused · HH:MM–HH:MM" DIVIDERS are not visible here: they are
-                 drawn from the pause-window list the panel fetches itself, and this preview has
-                 no server. The banner above is the part that renders from props. */
+              /* WT-657: with a baseTime to anchor against, the LIVE pause is positioned from
+                 `since` alone — so the lines said after it render dimmed and captioned "not
+                 saved", which is the state this preview exists to show. `since` is 4s in, and
+                 the fixture's lines are 4s apart, so the first line is the record and everything
+                 under it is not.
+
+                 The CLOSED "Transcript paused · HH:MM–HH:MM" dividers still do not appear here:
+                 those come from the pause-window list the panel fetches itself, and this preview
+                 has no server. */
+              baseTime="2026-09-06T10:00:00Z"
+              transcriptPause={{ paused: true, since: "2026-09-06T10:00:04Z" }}
             />
           </div>
 
