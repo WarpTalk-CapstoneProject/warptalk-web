@@ -22,6 +22,7 @@ import {
   splitSegmentsAroundPauseGaps,
   distributePauseGapsAcrossBlocks,
   formatTranscriptPauseGapRun,
+  pauseFilterHasNothingToMatch,
   withLivePauseGap,
   withoutSegmentsInOpenPauseGaps,
 } from "../transcript-display.ts";
@@ -1034,50 +1035,129 @@ test("one pause across three session blocks draws exactly one divider", () => {
   assert.deepEqual(drawn.map((gap) => gap.window.id), ["w1"]);
 });
 
-// ── WT-605 W3: the label must not read as a broken clock ─────────────────────────────────────
+// ── WT-605 W3: the divider names TWO MOMENTS, and never reads as a broken clock ──────────────
+//
+// The label was a range with a prefix bolted on by each panel ("Transcript paused · 10:01–10:05").
+// The product owner's form of 2026-09-10 states both moments instead — when the record stopped and
+// when it started again — and the whole sentence, prefix included, is built here so the two panels
+// cannot phrase the same case differently. Every case the range form handled still has to come out
+// right, which is what these tests are for.
 
 // Injected so the assertions do not depend on the machine's locale or time zone, which is
 // otherwise what decides between "10:15 PM" and "22:15".
 const clock = (iso: string) => new Date(iso).toISOString().slice(11, 16);
 
-test("formatTranscriptPauseGapRun prints a length, not a zero-width range, under a minute", () => {
+test("formatTranscriptPauseGapRun states both moments for a closed pause", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 300_000)], BASE_TIME);
+
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused at 10:01 and resumed at 10:05",
+  );
+});
+
+test("formatTranscriptPauseGapRun prints a length, not the same moment twice, under a minute", () => {
   const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 100_000)], BASE_TIME);
 
-  // Both ends formatted at minute precision gave "10:01–10:01", which reads as a bug.
-  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01 · 40s");
+  // Both moments formatted at minute precision would give "paused at 10:01 and resumed at 10:01",
+  // which reads as a bug rather than as a short pause.
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused at 10:01 for 40s",
+  );
 });
 
 test("formatTranscriptPauseGapRun never rounds a very short pause away to 0s", () => {
   const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 60_200)], BASE_TIME);
 
-  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01 · 1s");
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused at 10:01 for 1s",
+  );
 });
 
-test("formatTranscriptPauseGapRun prints a range for a pause of a minute or more", () => {
-  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 300_000)], BASE_TIME);
+test("formatTranscriptPauseGapRun promises no second moment for a pause still in force", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
 
-  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01–10:05");
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused at 10:01 and not resumed yet",
+  );
 });
 
-test("formatTranscriptPauseGapRun names a run of merged pauses as one", () => {
+test("formatTranscriptPauseGapRun does not say a finished meeting might still resume", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  // On the saved record of a meeting that is over, "not resumed yet" promises a resume that can
+  // never come — and the range form's "now" made a claim about the reader's present, months later.
+  // The meeting ending is what closed the hole, and that is what it says.
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock, meetingEnded: true }),
+    "Transcript paused at 10:01 and still paused when the meeting ended",
+  );
+});
+
+test("formatTranscriptPauseGapRun names a run of merged pauses as one, with both edges", () => {
   const gaps = resolveTranscriptPauseGaps(
     [pauseWindow(60_000, 120_000, "w1"), pauseWindow(240_000, 300_000, "w2")],
     BASE_TIME,
   );
 
-  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "2 pauses · 10:01–10:05");
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused 2 times between 10:01 and 10:05",
+  );
 });
 
-test("formatTranscriptPauseGapRun says 'now' only while the meeting is still running", () => {
-  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+test("formatTranscriptPauseGapRun measures a sub-minute RUN too, not only a single pause", () => {
+  // Two pauses inside one minute would print "between 10:01 and 10:01" — the same zero-width
+  // reading the single-pause case is guarded against, arriving by the other route.
+  const gaps = resolveTranscriptPauseGaps(
+    [pauseWindow(60_000, 70_000, "w1"), pauseWindow(80_000, 100_000, "w2")],
+    BASE_TIME,
+  );
 
-  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01–now");
-  // On the saved record of a meeting that is over there is no "now": an unclosed window would
-  // otherwise claim the transcript is paused at the moment you are reading it, months later.
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused 2 times at 10:01, for 40s",
+  );
+});
+
+test("formatTranscriptPauseGapRun handles a run whose last pause is still open", () => {
+  const gaps = resolveTranscriptPauseGaps(
+    [pauseWindow(60_000, 120_000, "w1"), pauseWindow(240_000, null, "w2")],
+    BASE_TIME,
+  );
+
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock }),
+    "Transcript paused 2 times since 10:01, not resumed yet",
+  );
   assert.equal(
     formatTranscriptPauseGapRun(gaps, { formatTime: clock, meetingEnded: true }),
-    "10:01–end of meeting",
+    "Transcript paused 2 times since 10:01, still paused when the meeting ended",
   );
+});
+
+// ── WT-605: the filter going inert has to be answerable, not silent ─────────────────────────
+
+test("pauseFilterHasNothingToMatch is true when a known pause has no open gap to match", () => {
+  // The state resolveTranscriptPauseGaps produces without a baseTime, and the state a
+  // broadcast-learned pause sits in until its window list catches up. In both,
+  // withoutSegmentsInOpenPauseGaps withholds nothing while the banner says otherwise.
+  assert.equal(pauseFilterHasNothingToMatch({ paused: true }, []), true);
+
+  const closed = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+  assert.equal(pauseFilterHasNothingToMatch({ paused: true }, closed), true);
+});
+
+test("pauseFilterHasNothingToMatch is false whenever the filter can actually do its job", () => {
+  const open = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  assert.equal(pauseFilterHasNothingToMatch({ paused: true }, open), false);
+  // Not paused is not a fault: there is nothing to withhold and nothing to complain about.
+  assert.equal(pauseFilterHasNothingToMatch({ paused: false }, []), false);
+  assert.equal(pauseFilterHasNothingToMatch(undefined, []), false);
 });
 
 // ── WT-605 W1: nothing said during an OPEN pause window may be rendered ──────────────────────

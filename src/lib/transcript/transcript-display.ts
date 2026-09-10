@@ -567,8 +567,8 @@ export function groupSegmentsByTranslationSession<T extends { startTimeMs: numbe
 
 /**
  * WT-605. Where one [Pause Transcript, Resume Transcript] window falls in MEETING-RELATIVE time
- * (the same units as `segment.startTimeMs`), so the panel can draw a "Transcript paused ·
- * HH:MM–HH:MM" divider between the segments on either side of it — the transcript-pause
+ * (the same units as `segment.startTimeMs`), so the panel can draw a "Transcript paused at HH:MM
+ * and resumed at HH:MM" divider between the segments on either side of it — the transcript-pause
  * counterpart to `groupSegmentsByTranslationSession`'s "Translation N" dividers.
  */
 export type TranscriptPauseGap = {
@@ -579,16 +579,96 @@ export type TranscriptPauseGap = {
 };
 
 /**
+ * Complaints about the pause machinery, in development only and once per distinct `key`.
+ *
+ * WHY DEV-ONLY, AND WHY NOT A THROW
+ *   Everything this channel reports is a DATA condition — a room with no timeline anchor, a
+ *   broadcast that has outrun its window list. A participant in a real meeting can do nothing
+ *   about any of it, and taking their transcript down with an exception over it would turn a
+ *   degraded panel into no panel at all. The people who can act on it are the ones running the
+ *   app locally, so that is who is told.
+ *
+ * WHY IT IS DEDUPED BY KEY
+ *   Both callers sit on render paths — inside `useMemo`s that recompute whenever a segment
+ *   arrives, which during a busy meeting is several times a second, and twice per pass again
+ *   under StrictMode. An un-deduped warn would bury the console in copies of one fact and be
+ *   muted by the second developer who saw it. Once per condition per page load is the most it
+ *   can be worth saying.
+ *
+ * The alternative considered and rejected was returning a richer result type from
+ * `resolveTranscriptPauseGaps` and making every caller unpack it: that spreads the handling of a
+ * rare fault across every divider on two panels, and the panel that actually depends on the answer
+ * (the live one) already asks the sharper question below.
+ */
+const warnedPauseConditions = new Set<string>();
+
+function warnAboutPauseGapsInDev(key: string, message: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  if (warnedPauseConditions.has(key)) return;
+  warnedPauseConditions.add(key);
+  console.warn(`[transcript-pause] ${message}`);
+}
+
+/**
+ * Whether the gap list is about to filter NOTHING while the transcript is known to be paused —
+ * the one state in which `withoutSegmentsInOpenPauseGaps` is a no-op and says so to nobody.
+ *
+ * THIS IS THE DESIGN'S MOST DANGEROUS FAILURE, BECAUSE IT IS THE QUIET ONE
+ *   Every gap in the list is anchored against `baseTime`, and `resolveTranscriptPauseGaps` returns
+ *   [] when there is none to anchor against. No gaps means no OPEN gap; no open gap means the
+ *   filter keeps every segment; and the panel then prints, underneath its own amber "nothing said
+ *   from now on is written down" banner, the exact words the pause exists to withhold. Nothing
+ *   errors, nothing is red, and every other assertion about the feature stays true.
+ *
+ *   A missing `baseTime` is not the only route in. A broadcast reaches this client a round trip
+ *   before the window list catches up, and `resolveTranscriptPause` gives a broadcast-learned pause
+ *   no `since` at all — so `withLivePauseGap` has no instant to synthesize from and the list stays
+ *   empty for the length of that fetch. Asking about the OUTCOME ("is there an open gap to match?")
+ *   rather than about either cause is what makes one check cover both.
+ *
+ * Answers and, in development, says so out loud once — see warnAboutPauseGapsInDev.
+ */
+export function pauseFilterHasNothingToMatch(
+  pause: { paused: boolean } | null | undefined,
+  gaps: readonly TranscriptPauseGap[],
+): boolean {
+  if (!pause?.paused) return false;
+  if (gaps.some((gap) => gap.endMs === null)) return false;
+
+  warnAboutPauseGapsInDev(
+    "no-open-gap-while-paused",
+    "The transcript is paused but the gap list holds no open window, so nothing is being "
+      + "withheld. Check that the panel has a baseTime and that the pause-window refetch landed.",
+  );
+  return true;
+}
+
+/**
  * Converts each window's wall-clock StartedAt/EndedAt into meeting-relative ms. Returns []
  * without a `baseTime` to anchor against — old data, or a room with no timeline anchor yet —
  * same "nothing to compute a position with" fallback `groupSegmentsByTranslationSession` takes.
+ *
+ * Dropping windows for want of an anchor is not the same as having none, and the difference is
+ * invisible from the return value: see pauseFilterHasNothingToMatch for what an empty list costs
+ * the live panel. Said out loud here, in dev, because this is the only place that can tell the
+ * two apart.
  */
 export function resolveTranscriptPauseGaps(
   windows: readonly TranscriptPauseWindowDto[],
   baseTime?: string,
 ): TranscriptPauseGap[] {
   const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
-  if (Number.isNaN(baseMs) || !windows.length) return [];
+  if (Number.isNaN(baseMs) || !windows.length) {
+    if (Number.isNaN(baseMs) && windows.length) {
+      warnAboutPauseGapsInDev(
+        "no-base-time",
+        `${windows.length} pause window(s) cannot be placed: baseTime is `
+          + `${baseTime === undefined ? "missing" : `unusable (${baseTime})`}. No divider will be `
+          + "drawn and, on the live panel, nothing said during a pause will be withheld.",
+      );
+    }
+    return [];
+  }
 
   return windows
     .filter((window) => window.startedAt)
@@ -791,28 +871,56 @@ function defaultPauseClock(iso: string): string {
 }
 
 /**
- * The time part of one "Transcript paused · …" divider, for a run of one or more windows.
+ * Whole seconds of a stretch shorter than a minute, or null when it is longer or unmeasurable.
  *
- * THREE THINGS THIS FIXES, ALL OF THEM THE LABEL LYING (WT-605)
- *   under a minute — both ends were formatted at minute precision, so a 40-second pause printed
- *                    "10:15 PM–10:15 PM": a range with no width, which reads as a broken clock
- *                    rather than as a short pause. Such a run prints its LENGTH instead.
- *   a run of gaps  — see TranscriptPauseBlock.gapsBefore. Consecutive pauses with nothing said
- *                    between them are one hole, and are named as one.
- *   "now"          — honest only in a meeting that is still going. On the saved record of an
- *                    ENDED meeting there is no "now", and a window left open by a room that ended
- *                    mid-pause would otherwise claim the transcript is paused at the moment you
- *                    are reading it, months later. `meetingEnded` swaps it for the truth: the
- *                    record stops there and the meeting stopped with it.
+ * Never 0s: a pause the host lifted immediately still happened, and rounding it away would print
+ * a divider saying nothing was missed for no measurable stretch of time.
+ */
+function secondsIfUnderAMinute(
+  startedAt: string,
+  endedAt: string | null | undefined,
+): number | null {
+  if (!endedAt) return null;
+  const lengthMs = Date.parse(endedAt) - Date.parse(startedAt);
+  if (!Number.isFinite(lengthMs) || lengthMs < 0 || lengthMs >= SHORT_PAUSE_MS) return null;
+  return Math.max(1, Math.round(lengthMs / 1_000));
+}
+
+/**
+ * The WHOLE text of one transcript-pause divider, for a run of one or more windows.
  *
- * `formatTime` is injectable so the tests can assert the SHAPE of the label without depending on
+ * TWO MARKS, NOT A RANGE (product owner, 2026-09-10)
+ *   The label used to be a range with a prefix bolted on by each panel — "Transcript paused ·
+ *   10:15 PM–10:18 PM". A range reads as a duration somebody has to subtract; the two moments the
+ *   reader actually wants are when the record stopped and when it started again, said as moments.
+ *   So the sentence names both: "Transcript paused at 10:15 PM and resumed at 10:18 PM".
+ *
+ *   The prefix moved in here with it. Split across the module and two JSX files, one panel could
+ *   say "Transcript paused ·" while the other said something else, and the sentence would only be
+ *   grammatical by coincidence — the second mark has to agree with the first in every branch below.
+ *
+ * FOUR CASES, AND EACH ONE IS A DIFFERENT SENTENCE BECAUSE EACH IS A DIFFERENT FACT
+ *   still open, live  — there IS no second mark yet. "…and not resumed yet" says the pause is the
+ *                       reader's present, without inventing a time for something that has not
+ *                       happened.
+ *   still open, ended — the record of a meeting that finished mid-pause. There is no "now" on that
+ *                       page months later, and "not resumed yet" would promise a resume that can
+ *                       never come; the meeting ending IS what closed the hole.
+ *   under a minute    — both marks format to the same minute, so "paused at 10:15 PM and resumed
+ *                       at 10:15 PM" reads as a broken clock rather than as a short pause. The
+ *                       length replaces the second mark, which is the one honest thing left to say.
+ *   a run of windows  — see TranscriptPauseBlock.gapsBefore. Consecutive pauses with nothing said
+ *                       between them are one hole in the record and are named once, with the count,
+ *                       so the two marks are the run's outer edges rather than one pause's.
+ *
+ * `formatTime` is injectable so the tests can assert the SHAPE of the sentence without depending on
  * the machine's locale and time zone, which is otherwise what decides whether this reads
  * "10:15 PM" or "22:15".
  */
 export function formatTranscriptPauseGapRun(
   gaps: readonly TranscriptPauseGap[],
   options: {
-    /** True on the saved record of a meeting that is over — see "now" above. */
+    /** True on the saved record of a meeting that is over — see the ended case above. */
     meetingEnded?: boolean;
     formatTime?: (iso: string) => string;
   } = {},
@@ -822,25 +930,33 @@ export function formatTranscriptPauseGapRun(
   const formatTime = options.formatTime ?? defaultPauseClock;
   const first = gaps[0];
   const last = gaps[gaps.length - 1];
-  const started = formatTime(first.window.startedAt);
-  const ended = last.window.endedAt
-    ? formatTime(last.window.endedAt)
-    : options.meetingEnded
-      ? "end of meeting"
-      : "now";
+  const pausedAt = formatTime(first.window.startedAt);
+  const resumedAt = last.window.endedAt ? formatTime(last.window.endedAt) : null;
+  // Measured across the whole RUN, so two pauses inside one minute cannot print the same mark
+  // twice either — the sub-minute case is about what the clock can resolve, not about how many
+  // windows produced the hole.
+  const seconds = secondsIfUnderAMinute(first.window.startedAt, last.window.endedAt);
 
-  if (gaps.length > 1) return `${gaps.length} pauses · ${started}–${ended}`;
-
-  if (first.window.endedAt) {
-    const lengthMs = Date.parse(first.window.endedAt) - Date.parse(first.window.startedAt);
-    if (Number.isFinite(lengthMs) && lengthMs >= 0 && lengthMs < SHORT_PAUSE_MS) {
-      // Never "0s": a pause the host lifted immediately still happened, and rounding it away
-      // would print a divider that says nothing was missed for no measurable stretch of time.
-      return `${started} · ${Math.max(1, Math.round(lengthMs / 1_000))}s`;
+  if (gaps.length > 1) {
+    if (!resumedAt) {
+      return options.meetingEnded
+        ? `Transcript paused ${gaps.length} times since ${pausedAt}, still paused when the meeting ended`
+        : `Transcript paused ${gaps.length} times since ${pausedAt}, not resumed yet`;
     }
+    return seconds === null
+      ? `Transcript paused ${gaps.length} times between ${pausedAt} and ${resumedAt}`
+      : `Transcript paused ${gaps.length} times at ${pausedAt}, for ${seconds}s`;
   }
 
-  return `${started}–${ended}`;
+  if (!resumedAt) {
+    return options.meetingEnded
+      ? `Transcript paused at ${pausedAt} and still paused when the meeting ended`
+      : `Transcript paused at ${pausedAt} and not resumed yet`;
+  }
+
+  return seconds === null
+    ? `Transcript paused at ${pausedAt} and resumed at ${resumedAt}`
+    : `Transcript paused at ${pausedAt} for ${seconds}s`;
 }
 
 /**

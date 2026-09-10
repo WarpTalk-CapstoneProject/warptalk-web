@@ -27,7 +27,11 @@
  *      design that kept the lines and faded them (WT-657), and neither is self-evident from the
  *      code: a `recorded` flag reads like extra information rather than a reversal, and the
  *      wrapper around the gap list reads like a formality until you notice the panel is inert
- *      without it. The last section pins both, with the reasoning at each assertion.
+ *      without it. That section pins both, with the reasoning at each assertion.
+ *   5. That the ASK happens on the way in and only on the way in, that the divider states two
+ *      moments rather than a range, and that the filter cannot go inert without saying so. These
+ *      three are the last round's additions and share one property with everything above: each
+ *      protects a decision whose reversal would look, in a diff, like a tidy-up.
  */
 
 import assert from "node:assert/strict";
@@ -51,6 +55,7 @@ const savedPanel = read("src/components/rooms/meeting-transcript-panel.tsx");
 const display = read("src/lib/transcript/transcript-display.ts");
 const displayTests = read("src/lib/transcript/__tests__/transcript-display.test.ts");
 const overlay = read("src/components/rooms/live/live-subtitle-overlay.tsx");
+const confirmDialog = read("src/components/rooms/live/transcript-pause-confirm-dialog.tsx");
 
 // ── hop 1: the endpoints exist, keyed by ROOM as the controller declares them ──
 
@@ -247,8 +252,8 @@ for (const [name, source] of [
 // pause the transcript at unrelated moments, and two dividers reading alike would merge in the
 // reader's mind into one thing that happened once.
 assert.match(
-  panel,
-  /Transcript paused ·/,
+  withoutComments(display),
+  /`Transcript paused (at \$\{pausedAt\}|\$\{gaps\.length\} times)/,
   "The divider must name itself as a TRANSCRIPT pause, distinct from the translation-session divider it sits among.",
 );
 
@@ -297,11 +302,8 @@ assert.match(
 );
 // Dropping lines silently is how the fix becomes the next bug report. A panel that stops moving
 // while the room is visibly talking looks broken, which is the exact sentence the tester wrote.
-assert.match(
-  withoutComments(panel),
-  /recorded\.hiddenCount > 0 \?/,
-  "The live panel must say something where the dropped lines would have been. An absence with no explanation is indistinguishable from a transcript that has failed.",
-);
+// The placeholder that answers it is asserted at the bottom, with the inert-filter case it also
+// has to cover.
 
 // ── the filter has to be fed a list that already knows about the live pause (WT-657) ───────
 //
@@ -335,6 +337,23 @@ assert.match(
 // dimmed line is still readable, quotable and screenshottable, and it is absent from the saved
 // record — so the panel and the transcript would disagree about what was said. These assertions
 // exist because that design is the natural thing to reach for again.
+//
+// WHY THE ARGUMENT "BUT DIMMED IS FRIENDLIER" IS ALREADY ANSWERED, AND WHERE
+//   The thing a dimmed line would offer — "your words are being heard right now" — is not missing
+//   from the product. It has a surface of its own, and a better one. `live-subtitle-overlay` calls
+//   captionTextForReader(utterance, readerLanguage, translationActive): the lane shows every line
+//   translated into the language of whoever is looking, keeps the last LANE_LINES (3), and
+//   deliberately includes the reader's own speech — a test on development pins that, in as many
+//   words: "would stop anyone ever seeing their own words". The lane is ephemeral by construction,
+//   which is exactly right for a reassurance about the present moment.
+//
+//   The transcript panel makes one promise instead: this is the record. Rendering the same content
+//   there, faded, duplicates it into the single frame that may not hold it — and a reader skimming
+//   grey text takes it for part of the record, which it is not: it is gone at the next reload. The
+//   two surfaces are not two styles of the same list; they answer two different questions, and only
+//   one of them is allowed to be wrong about what was kept.
+//
+//   So do not "soften" these three. Remove them and the next tidy-up quietly reunites the surfaces.
 
 assert.doesNotMatch(
   withoutComments(display),
@@ -344,12 +363,12 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   withoutComments(panel),
   /opacity-60|sub\.recorded/,
-  "The live panel must not render lines said during a pause at reduced opacity. They are not shown at all — showing them faded puts words on screen that the saved transcript will never hold.",
+  "The live panel must not render lines said during a pause at reduced opacity. They are not shown at all — showing them faded puts words on screen that the saved transcript will never hold, and the caption lane already shows the speaker their own words, translated, while they are speaking them.",
 );
 assert.doesNotMatch(
   panel,
   /not saved to the transcript|Said while paused/i,
-  "No copy captioning lines as shown-but-unsaved. There are no such lines on screen to caption; the divider and the placeholder are what mark the hole.",
+  "No copy captioning lines as shown-but-unsaved. There are no such lines on screen to caption; the divider and the placeholder are what mark the hole. A caption here would also be the only place in the product claiming the transcript panel can hold something the transcript does not.",
 );
 // The placeholder's exact promise, which is the whole user-facing half of the ruling.
 assert.match(
@@ -423,9 +442,142 @@ assert.match(
 assert.match(
   withoutComments(savedPanel),
   /formatTranscriptPauseGapRun\(gaps, \{ meetingEnded \}\)/,
-  "The saved panel must tell the label the meeting is over: 'now' on a record of a finished meeting is a claim about the reader's present that nothing on that page can support.",
+  "The saved panel must tell the label the meeting is over: an unclosed window on a record of a finished meeting must not promise a resume that can never come, nor claim anything about the reader's present.",
+);
+
+// ── the divider states TWO MOMENTS, and the panels do not write the sentence themselves ─────
+//
+// The product owner's form of 2026-09-10: "Transcript paused at 10:15 PM and resumed at 10:18 PM".
+// A range made the reader subtract to get the two facts they wanted; the sentence hands them over.
+//
+// The opening words moved into the module with it, and that is the half worth pinning. Split
+// between here and two JSX files, one panel could keep a "Transcript paused ·" prefix in front of a
+// sentence that now begins with the same three words, and each of the four cases below has a
+// different grammar for the prefix to agree with — which only the module can see.
+
+// Matched on `withoutComments`, and on the whole template literal rather than on a phrase inside
+// it. Both matter: every one of these sentences is also QUOTED in the prose above the function, so
+// a check against the raw source would go on passing after the code had stopped producing any of
+// them; and each case is pinned separately because the four are four different facts, not four
+// wordings of one, and a check that any of them survives is a check that none of them is pinned.
+for (const [form, why] of [
+  [
+    /`Transcript paused at \$\{pausedAt\} and resumed at \$\{resumedAt\}`/,
+    "a closed pause states BOTH moments — the two facts the reader wanted out of the old range, without the subtraction",
+  ],
+  [
+    /`Transcript paused at \$\{pausedAt\} and not resumed yet`/,
+    "a pause still in force has no second moment YET, and must not have one invented for it",
+  ],
+  [
+    /`Transcript paused at \$\{pausedAt\} and still paused when the meeting ended`/,
+    "on the record of a finished meeting there is no resume to wait for, and no 'now' to point at either — the meeting ending is what closed the hole",
+  ],
+  [
+    /`Transcript paused at \$\{pausedAt\} for \$\{seconds\}s`/,
+    "a sub-minute pause would print the same minute as both moments, which reads as a broken clock — so the length replaces the second moment",
+  ],
+  [
+    /`Transcript paused \$\{gaps\.length\} times/,
+    "consecutive pauses with nothing said between them are one hole in the record and are named once, with the count, so the two moments are the run's outer edges",
+  ],
+]) {
+  assert.match(
+    withoutComments(display),
+    form,
+    `formatTranscriptPauseGapRun must keep this exact sentence: ${why}.`,
+  );
+}
+for (const [name, source] of [
+  ["the live transcript panel", panel],
+  ["the saved transcript panel", savedPanel],
+]) {
+  assert.doesNotMatch(
+    withoutComments(source),
+    /Transcript paused ·/,
+    `${name} must not prefix the divider itself — formatTranscriptPauseGapRun returns the whole sentence, and a prefix in front of it reads "Transcript paused · Transcript paused at 10:15".`,
+  );
+}
+
+// ── pausing asks first; resuming does not ───────────────────────────────────────────────────
+//
+// The switch has two directions and only one of them can lose anything. Pausing gives up speech
+// being said right now, which no later action recovers — and this dialog is the ONLY place a host
+// is told so before it happens. Resuming just starts writing again: confirming it would spend a
+// click on a decision that cannot go wrong, and a prompt answered by reflex stops protecting the
+// case it was built for. So the asymmetry is asserted in both directions.
+
+assert.match(
+  withoutComments(session),
+  /function handleToggleTranscriptPause\(\)\s*\{\s*if \(!transcriptPause\.paused\)\s*\{[\s\S]{0,120}?setTranscriptPauseConfirmOpen\(true\);[\s\S]{0,40}?return;\s*\}\s*commitTranscriptPause\(false\);/,
+  "Pausing must open the confirmation and stop there; resuming must call the mutation directly. The gate belongs in the session, not in a control: there are two ways in (the panel's tab row and the dock's Settings row) and a check inside either one is a check the other route walks past.",
+);
+assert.match(
+  withoutComments(session),
+  /<TranscriptPauseConfirmDialog[\s\S]{0,400}?commitTranscriptPause\(true\)/,
+  "Confirming the dialog is what actually pauses. Rendered once on the session so both entrances reach the same instance.",
+);
+assert.doesNotMatch(
+  withoutComments(confirmDialog),
+  /Resume|resume/,
+  "The confirmation must know nothing about resuming — a dialog that can be reused for both directions is one that will be, and the resume path must not acquire a prompt.",
+);
+assert.match(
+  confirmDialog,
+  /Pause transcript\s*<\/Button>/,
+  "The confirm button must name the action. 'OK' under a yes/no title is answered by muscle memory; the button is the last chance to notice which of the two switches is about to move.",
+);
+// Both halves of the ruling, in the one sentence a host reads before losing data. Dropping either
+// is how this dialog stops being worth showing: without the first, a host believes the words are
+// merely hidden and pauses a conversation they needed; without the second, they believe the
+// meeting stops with the transcript and never press it at all.
+assert.match(
+  confirmDialog,
+  /is written to the transcript or stored/,
+  "The dialog must say the words are neither written down NOR stored — 'not shown' or a bare 'paused' loses the reason it is worth confirming.",
+);
+assert.match(
+  confirmDialog,
+  /dubbing and voice clone keep running/,
+  "The dialog must say what does NOT stop. WT-605 introduced a separate event pair precisely so pausing the transcript could not be read as stopping the meeting.",
+);
+assert.doesNotMatch(
+  withoutComments(confirmDialog),
+  /Meeting paused|Pause meeting|Pause translation/i,
+  "Copy in the confirmation must not call this pausing the meeting or the translation — they are different switches and the backend refuses to conflate them.",
+);
+
+// ── the filter going inert must not be silent ───────────────────────────────────────────────
+//
+// withoutSegmentsInOpenPauseGaps withholds only what falls inside an OPEN gap, and there are two
+// ordinary ways to be paused with no open gap in hand: a room with no usable baseTime, where
+// resolveTranscriptPauseGaps can place nothing; and the round trip between the broadcast landing
+// and the window list catching up, during which a broadcast-learned pause carries no `since` for
+// withLivePauseGap to synthesize from. In both, lines keep appearing under a banner that has just
+// promised they are not being written down — and nothing errors, so every other check here stays
+// green. It is the quietest failure this design has.
+
+assert.match(
+  display,
+  /export function pauseFilterHasNothingToMatch\(/,
+  "The 'paused, but nothing to filter against' state must be nameable. Asked as one question about the OUTCOME rather than about either cause, it covers both routes in.",
+);
+assert.match(
+  displayTests,
+  /pauseFilterHasNothingToMatch/,
+  "That state must be tested — like the rule it guards, its failure mode is silence rather than an error.",
+);
+assert.match(
+  withoutComments(panel),
+  /pauseFilterInert = pauseFilterHasNothingToMatch\(transcriptPause, pauseGaps\)/,
+  "The live panel must ask, because it is the panel that depends on the answer.",
+);
+assert.match(
+  withoutComments(panel),
+  /recorded\.hiddenCount > 0 \|\| pauseFilterInert \?/,
+  "The live panel must say something where the dropped lines would have been — and must say it in the inert case too, where it is the only mark of a hole no divider can yet be drawn for. An absence with no explanation is indistinguishable from a transcript that has failed.",
 );
 
 console.log(
-  "Transcript pause contract OK (5 hops + meaning + dividers + paused behaviour + dropped-not-dimmed checked)",
+  "Transcript pause contract OK (5 hops + meaning + dividers + paused behaviour + dropped-not-dimmed + confirm-on-pause + inert-filter checked)",
 );

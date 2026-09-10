@@ -13,6 +13,7 @@ import {
   formatTranscriptTimestamp,
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
+  pauseFilterHasNothingToMatch,
   resolveSegmentTranslation,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
@@ -128,6 +129,21 @@ export function TranscriptPanel({
     () => withoutSegmentsInOpenPauseGaps(segments, pauseGaps),
     [segments, pauseGaps],
   );
+
+  // THE FILTER ABOVE CAN BE A NO-OP, AND NOTHING ELSE ON SCREEN WOULD SAY SO.
+  //
+  // It withholds only what falls inside an OPEN gap, and there are two ordinary ways to be paused
+  // with no open gap in hand: a room with no usable `baseTime`, where resolveTranscriptPauseGaps
+  // can place nothing at all, and the round trip between the broadcast landing and the window list
+  // catching up, during which a broadcast-learned pause has no `since` for withLivePauseGap to
+  // synthesize from. In both, lines keep appearing under the amber banner that has just promised
+  // they are not being written down.
+  //
+  // Asked here rather than left to the module because this is the panel that depends on the
+  // answer. The dev-only half of the complaint lives in pauseFilterHasNothingToMatch; the
+  // user-facing half is the placeholder below, which stays TRUE in this state — the record really
+  // has stopped — and is the only thing telling a reader so while the list is still moving.
+  const pauseFilterInert = pauseFilterHasNothingToMatch(transcriptPause, pauseGaps);
 
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The distance this panel itself uses to decide it has stopped following. A chip offering to
@@ -280,12 +296,14 @@ export function TranscriptPanel({
           </div>
         ))}
       </AnimatePresence>
-      {/* Only once something has actually been dropped. The banner above already says the
-          transcript is paused; this says the different, sharper thing — that words WERE spoken
-          just now and deliberately left out. Without it the panel simply stops moving while
-          people are visibly talking, which is indistinguishable from a transcript that has
-          broken, and that is the report this whole ticket started as. */}
-      {recorded.hiddenCount > 0 ? <PausedLinesPlaceholder /> : null}
+      {/* Once something has actually been dropped — or once the filter is known to be unable to
+          drop anything while the transcript is paused. The banner above already says the
+          transcript is paused; this says the different, sharper thing — that the list you are
+          reading is no longer the record. Without it the panel simply stops moving while people
+          are visibly talking, which is indistinguishable from a transcript that has broken, and
+          that is the report this whole ticket started as; and in the inert case (see
+          pauseFilterInert) it is the only mark of a hole the divider cannot yet be drawn for. */}
+      {recorded.hiddenCount > 0 || pauseFilterInert ? <PausedLinesPlaceholder /> : null}
     </div>
       {/* The panel stops following the moment the reader scrolls up — which is right, and left
           them stranded in the middle of an hour of talking with the newest line somewhere below
@@ -346,14 +364,25 @@ function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTrans
  *
  * Takes a RUN of windows, not one: two pauses with nobody speaking between them are one hole in
  * the record and are named as one. `meetingEnded` is not passed here because this panel only ever
- * renders a meeting that is happening — "now" is the truth on this surface, and the lie it can
- * become lives on the saved panel, which passes it.
+ * renders a meeting that is happening — an unclosed window here is one that has genuinely not been
+ * resumed yet, and the lie that becomes on a finished meeting lives on the saved panel, which
+ * passes it.
+ *
+ * The whole sentence comes out of formatTranscriptPauseGapRun, prefix included. It used to be
+ * "Transcript paused ·" written here and a range written there, which is two files that have to
+ * agree on grammar for the four cases the label has — and only one of them can see which case it
+ * is in.
+ *
+ * NOT UPPERCASED, unlike the SessionDivider it sits among. That divider is a two-word label
+ * ("Translation 1"); this is now a sentence with two clock times in it, and a sentence set in
+ * 10px all-caps is read letter by letter or not at all. The line rules and the muted colour keep
+ * the two legible as the same kind of mark.
  */
 function TranscriptPauseDivider({ gaps }: { gaps: readonly TranscriptPauseGap[] }) {
   return (
-    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold tracking-wide text-ink-subtle">
       <div className="h-px flex-1 bg-border" />
-      <span>Transcript paused · {formatTranscriptPauseGapRun(gaps)}</span>
+      <span className="text-center">{formatTranscriptPauseGapRun(gaps)}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );

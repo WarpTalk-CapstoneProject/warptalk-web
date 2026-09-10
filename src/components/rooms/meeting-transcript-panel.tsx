@@ -1522,6 +1522,11 @@ function TranscriptSessionDivider({
  * the record of a meeting that finished last March, which is a claim about the reader's present
  * that nothing on this page can support. On a finished meeting the honest end of an open window
  * is the end of the meeting, and that is what it says.
+ *
+ * The whole sentence — the "Transcript paused" opening included — comes out of
+ * formatTranscriptPauseGapRun, so this panel and the live one cannot end up phrasing the same
+ * four cases differently. It is a sentence naming two moments now rather than a label with a
+ * range, which is also why it is no longer uppercased: see the live panel's own divider.
  */
 function TranscriptPauseDivider({
   gaps,
@@ -1531,9 +1536,11 @@ function TranscriptPauseDivider({
   meetingEnded: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
       <div className="h-px flex-1 bg-border" />
-      <span>Transcript paused · {formatTranscriptPauseGapRun(gaps, { meetingEnded })}</span>
+      <span className="text-center">
+        {formatTranscriptPauseGapRun(gaps, { meetingEnded })}
+      </span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );
