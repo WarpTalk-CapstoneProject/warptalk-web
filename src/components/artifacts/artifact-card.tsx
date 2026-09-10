@@ -19,6 +19,7 @@ import {
   relativeTime,
 } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
+import { UserChip } from "@/components/user/user-chip";
 import { recordDetailPath } from "@/lib/workspace/workspace-routes";
 
 /**
@@ -113,7 +114,19 @@ export function ArtifactCard({
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 px-3.5 py-3">
         <RecordMarks group={group} />
         <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-ink-subtle">
-          <span className="truncate">{group.hostName || "—"}</span>
+          {/* The card is a <Link>, so the chip renders a span and swallows its own click —
+              opening the host's card must not also open the record. */}
+          {group.hostName ? (
+            <UserChip
+              user={{ userId: group.hostId, name: group.hostName, role: "Host" }}
+              variant="text"
+              size="sm"
+              showAvatar={false}
+              className="text-[10px] text-ink-subtle"
+            />
+          ) : (
+            <span className="truncate">—</span>
+          )}
           <span className="text-ink-subtle/60">·</span>
           <span className="shrink-0">{relativeTime(group.changedAt ?? group.meetingEndedAt)}</span>
         </span>

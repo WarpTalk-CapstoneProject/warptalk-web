@@ -1,6 +1,5 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
@@ -25,6 +24,7 @@ import {
   recurrenceBadgeLabel,
 } from "@/lib/meeting/recurrence";
 import { LanguageLabel } from "@/components/language/language-label";
+import { UserChip } from "@/components/user/user-chip";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
@@ -147,11 +147,7 @@ function LinearRow({
   // one the viewer is currently in this resolves to the server's aggregate — see the PR's
   // BACKEND note: that aggregate is `TranslationRoomParticipants.Count`, not the seat rule.
   const occupancy = useRoomOccupancy(room);
-  const { name: hostName, avatarUrl: hostAvatar } = resolveRoomHost(
-    room,
-    members,
-    user,
-  );
+  const host = resolveRoomHost(room, members, user);
 
   // WT-327: a grouped row opens the meeting it stands for — the one live now, or the next due,
   // which is what the server picked as the row's representative. There is no separate booking
@@ -229,16 +225,12 @@ function LinearRow({
           <StatusPanel status={room.status} />
         </div>
 
+        {/* The host pill is now the host CHIP: same capsule, but it opens their card instead of
+            being a label you can only look at. The row is a <Link>, so the chip renders a span
+            rather than a button and swallows the click — opening the card must not also open the
+            meeting. */}
         <div className="hidden @[700px]:flex shrink-0 items-center">
-          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            <Avatar className="size-5 shrink-0 rounded-full">
-              <AvatarImage src={hostAvatar} alt={hostName} />
-              <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-                {hostName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
-          </div>
+          <UserChip user={host} size="md" className="border-border/60" />
         </div>
 
         <div className="flex shrink-0 items-center">

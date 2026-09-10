@@ -49,6 +49,7 @@ import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
+import { UserChip } from "@/components/user/user-chip";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -1200,7 +1201,17 @@ function WeekCard({
         {meeting.title}
       </p>
 
-      <p className="mt-0.5 truncate text-[9px] text-ink-subtle">{meeting.hostName}</p>
+      {/* The card is itself clickable, so the chip renders a span and swallows the click: opening
+          someone's card must not also select the meeting behind it. */}
+      <div className="mt-0.5 flex min-w-0 text-[9px] text-ink-subtle">
+        <UserChip
+          user={{ userId: meeting.hostId, name: meeting.hostName, role: "Host" }}
+          variant="text"
+          size="sm"
+          showAvatar={false}
+          className="text-[9px] text-ink-subtle"
+        />
+      </div>
 
       {isLive ? (
         <Link
@@ -1273,7 +1284,16 @@ function PastMeetingDialog({
 
           <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] text-ink-subtle">
             <span className="rounded-full border border-border px-2 py-1">{meeting.translationRoomCode}</span>
-            <span>Hosted by {meeting.hostName}</span>
+            <span className="flex items-center gap-1">
+              Hosted by{" "}
+              <UserChip
+                user={{ userId: meeting.hostId, name: meeting.hostName, role: "Host" }}
+                variant="text"
+                size="sm"
+                showAvatar={false}
+                className="text-[10px] text-ink-subtle"
+              />
+            </span>
           </div>
 
           <div className="mt-5 flex items-center justify-between">
