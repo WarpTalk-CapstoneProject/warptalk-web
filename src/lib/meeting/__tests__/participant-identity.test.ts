@@ -105,15 +105,18 @@ test("the language badge is a language code and a language name, nothing else", 
   assert.equal(badge?.label, "Vietnamese");
 });
 
-test("a split profile still shows only the language being spoken", () => {
+test("a split profile shows the language the person chose to hear", () => {
   const badge = describeParticipantLanguage("vi", "en-US");
 
-  assert.equal(badge?.code, "VI");
-  assert.equal(badge?.label, "Vietnamese");
+  // The `code` key is WT-661's; the ENGLISH value is development's listen-first ordering, and
+  // it is what this test's own name asks for — the branch asserted Vietnamese, which is the
+  // language this person SPEAKS, not the one they chose to hear.
+  assert.equal(badge?.code, "EN");
+  assert.equal(badge?.label, "English");
 });
 
-test("the listen language stands in when nobody said what they speak", () => {
-  const badge = describeParticipantLanguage(null, "ja-JP");
+test("the speak language stands in when nobody said what they want to hear", () => {
+  const badge = describeParticipantLanguage("ja-JP", null);
 
   assert.equal(badge?.code, "JA");
   assert.equal(badge?.label, "Japanese");

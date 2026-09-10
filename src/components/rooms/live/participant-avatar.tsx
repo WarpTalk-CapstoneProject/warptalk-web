@@ -15,10 +15,13 @@ import {
  *   colours. None of them showed the actual photograph, and none showed which language the person
  *   had chosen, which is the single most useful fact about somebody in a translation meeting.
  *
- * THE FLAG IS THE SPEAK LANGUAGE
- *   That is what everyone else is hearing translated. When a participant's listen language differs
- *   (a split the meeting bar can no longer create, but stored profiles still carry), the tooltip
- *   says both. See describeParticipantLanguage.
+ * THE FLAG IS THE LISTEN LANGUAGE
+ *   It used to be the speak language, on the reasoning that that is what everyone else hears
+ *   translated. The listen language is the one the person actually picked — the meeting bar can no
+ *   longer create a speak/listen split, and speech language is headed for detection rather than a
+ *   dropdown, at which point the speak side stops being a choice and becomes a guess. A badge on a
+ *   face carries the choice. Audio routing is unaffected: FilteredRoomAudio keys dub selection off
+ *   the SPEAK language and never reads this. See describeParticipantLanguage.
  */
 // WT-661: the badge holds a two-letter language code, not a flag emoji, so each row sizes a PILL
 // rather than a circle — fixed height with horizontal padding, width following the text. A square
