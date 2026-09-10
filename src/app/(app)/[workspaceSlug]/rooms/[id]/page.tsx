@@ -163,6 +163,7 @@ import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
 import type { SummaryRenderingView } from "@/types/meetingSummary";
 import { parseMeetingSummaryContent } from "@/types/meetingSummary";
+import { isAxiosError } from "axios";
 
 /**
  * The meeting record's tabs.
@@ -1562,7 +1563,23 @@ function MeetingRecordSection({
   const requestSummaryRewrite = useCallback(
     async (templateKey: string, language?: string) => {
       if (!endedRecord) return;
-      await translationRoomService.regenerateSummary(endedRecord.id, templateKey, language);
+
+      // THE SERVER'S REASON, SHOWN.
+      //
+      // This call was unguarded, so every refusal was thrown away as an unhandled rejection: the
+      // spinner stopped and the user saw nothing. The endpoint refuses with sentences that say
+      // exactly what to do — "This meeting has a transcript but no summary artifact to rewrite.
+      // It needs to be finalized again, not re-summarised." — and that sentence reaching nobody
+      // is a large part of why the control was reported as simply not working.
+      try {
+        await translationRoomService.regenerateSummary(endedRecord.id, templateKey, language);
+      } catch (error) {
+        toast.error(
+          (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message)
+            || "Could not rewrite the summary.",
+        );
+        throw error;
+      }
       toast.success("Rewriting the summary…");
 
       if (rewritePollRef.current !== null) {
