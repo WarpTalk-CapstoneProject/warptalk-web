@@ -88,6 +88,19 @@ for (const relativePath of [PLUGINS_PAGE, GLOBAL_WIDGET]) {
     `${relativePath} must read the catalog through the shared withEffectiveConnectionStatus helper, so the two plugin surfaces cannot disagree about which plugins are usable.`,
   );
 
+  // Sharing the derivation is only half of it, and it was the half this file used to check. The
+  // two surfaces also have to read the same LISTING: useAssistantPlugins() with no workspace is a
+  // different query key AND a different response, because the API annotates rows with that
+  // workspace's refusal and has nothing to annotate them with when no workspace is named. The
+  // Skills menu called it unscoped, so a workspace with plugins switched off still had them
+  // offered there — and install and connect from that menu went through unscoped too, which on
+  // the backend meant no policy at all.
+  if (!/useAssistantPlugins\(\s*\w/.test(source)) {
+    throw new Error(
+      `${relativePath} calls useAssistantPlugins() without a workspace. Both plugin surfaces must read the workspace-scoped catalog, or one of them shows rows the other has blocked.`,
+    );
+  }
+
   for (const token of ["tileId", "toDisplayTiles", "resourceKey"]) {
     assertNotIncludes(
       source,
