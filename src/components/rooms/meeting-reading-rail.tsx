@@ -882,6 +882,9 @@ function RailSummary({
                   summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE,
                   summary?.summaryLanguage || undefined,
                 );
+              } catch {
+                // Swallowed HERE and only here: the page has already shown the server's own
+                // sentence. Letting it escape would surface a second, generic error beside it.
               } finally {
                 // Cleared when the REQUEST is accepted, not when the summary lands.
                 setRegenerating(false);

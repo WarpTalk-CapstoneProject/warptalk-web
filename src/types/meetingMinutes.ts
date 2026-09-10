@@ -249,3 +249,23 @@ export function counterpartOf(
 export function isEditable(minutes: MeetingMinutesDto | undefined): boolean {
   return minutes != null && minutes.status !== "APPROVED";
 }
+
+/**
+ * The record's proceedings in a language it was not drawn up in.
+ *
+ * `MeetingMinutesContent.translations` covers the languages the meeting was interpreted into
+ * while it ran. This is the answer for a reader outside that set — generated when they ask,
+ * never in advance for a language nobody wanted.
+ *
+ * `unavailable` is a real answer and the reason must be shown. A biên bản its secretary has
+ * edited cannot honestly be translated from the meeting's summary, because the summary no longer
+ * says what the document says — and a record whose whole value is that somebody signed it must
+ * not be rendered in words the signatory never wrote. Silence would leave a reader clicking a
+ * picker that does nothing.
+ */
+export interface MinutesTranslationDto {
+  language: string;
+  sections: MinutesSection[] | null;
+  status: "ready" | "generating" | "unavailable";
+  unavailableReason?: string | null;
+}
