@@ -164,6 +164,15 @@ import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
  */
 type MeetingRecordTab = "recap" | "minutes" | "artifacts";
 
+/**
+ * Nothing cited, as ONE value rather than a new one every time.
+ *
+ * The transcript column is several hundred rows on a meeting anybody bothers to read, and a fresh
+ * `new Set()` is a new prop identity — which is that whole column re-rendering to draw exactly what
+ * it already had. Same reason NO_MARKED_KEYS exists on the other end of this wire.
+ */
+const NO_HIGHLIGHTED_SEGMENTS: ReadonlySet<string> = new Set<string>();
+
 type UserIdentity = {
   id: string;
   name: string;
@@ -251,7 +260,11 @@ export default function RoomInformationPage() {
     () => translationsQuery.data?.items ?? [],
     [translationsQuery.data],
   );
-  const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
+  // A set, because a summary sentence rests on every turn it was drawn from — see
+  // jumpToTranscriptMoment. The transcript asks it once per rendered line, so it is handed the
+  // lookup rather than a list it would have to scan.
+  const [highlightedSegmentIds, setHighlightedSegmentIds] =
+    useState<ReadonlySet<string>>(NO_HIGHLIGHTED_SEGMENTS);
   const [seek, setSeek] = useState<SeekRequest | null>(null);
 
   const room = roomQuery.data;
@@ -292,12 +305,16 @@ export default function RoomInformationPage() {
   );
 
   /**
-   * Scroll the transcript to the moment a summary claim cites, and mark it.
+   * Scroll the transcript to the moments a summary claim cites, and mark all of them.
    *
-   * Resolved to the segment that was BEING SPOKEN at that moment rather than the nearest
+   * Each moment is resolved to the segment that was BEING SPOKEN then rather than the nearest
    * one — see findSegmentAtMs. The DOM node is found by segment id rather than held in a
    * ref map, because the transcript re-renders on every correction and a ref map would go
    * stale exactly when the host is editing.
+   *
+   * A claim can rest on more than one moment: "Kenji carried on with the install" and the "ok,
+   * taking it" that answered it are two turns by two people, and marking only the first showed
+   * the reader half of the evidence for a sentence about both.
    */
   // The two origins WT-473 stored for exactly this. Either missing means the transcript cannot be
   // aligned to the recording at all, and recording-seek.ts refuses rather than guessing.
@@ -369,22 +386,45 @@ export default function RoomInformationPage() {
   ]);
 
   const jumpToTranscriptMoment = useCallback(
-    (atMs: number) => {
-      // Both, and the seek first: it is the part with nothing on screen to acknowledge it, so it
-      // must not wait behind a scroll animation.
-      requestSeek(atMs);
-      const segment = findSegmentAtMs(transcriptSegments, atMs);
-      if (!segment) {
+    (atMs: number, alsoAtMs: readonly number[] = []) => {
+      // Resolved before anything moves, because until every moment is in hand there is nothing
+      // that can say which of them comes FIRST — and the first is where both the scroll and the
+      // seek have to land. A reader dropped into the middle of the evidence has to scroll
+      // backwards to find where it started, which is the opposite of checking a claim.
+      const byId = new Map<string, TranscriptSegmentDto>();
+      for (const moment of [atMs, ...alsoAtMs]) {
+        const segment = findSegmentAtMs(transcriptSegments, moment);
+        // Several moments of one exchange routinely land in the same turn — that is one place to
+        // light, not three.
+        if (segment && !byId.has(segment.id)) byId.set(segment.id, segment);
+      }
+      // On the segment's own start, not on the order the moments arrived in: `alsoAtMs` is sorted,
+      // but `atMs` is the PRIMARY moment rather than the earliest one, and a claim whose primary
+      // anchor is the reply would otherwise open at the reply.
+      const cited = [...byId.values()].sort(
+        (left, right) => left.startTimeMs - right.startTimeMs,
+      );
+      const earliest = cited[0];
+
+      // Ahead of the scroll: it is the part with nothing on screen to acknowledge it, so it must
+      // not wait behind an animation. It still fires when nothing resolved — the recording and the
+      // saved transcript are different artifacts, and a moment the transcript trimmed away may
+      // well be on the tape.
+      requestSeek(earliest ? earliest.startTimeMs : atMs);
+
+      // Only when NO moment resolved. A group where some of them did is a jump that worked, and
+      // an error toast over a transcript that just scrolled to the right place reads as a bug.
+      if (!earliest) {
         toast.error("That moment is not in the saved transcript.");
         return;
       }
       // The tab switch renders the transcript in the same commit, so the node does not
       // exist yet on this frame.
       requestAnimationFrame(() => {
-        const node = document.getElementById(`transcript-segment-${segment.id}`);
+        const node = document.getElementById(`transcript-segment-${earliest.id}`);
         if (!node) return;
         node.scrollIntoView({ behavior: "smooth", block: "center" });
-        setHighlightedSegmentId(segment.id);
+        setHighlightedSegmentIds(new Set(byId.keys()));
       });
     },
     [transcriptSegments, requestSeek],
@@ -811,7 +851,7 @@ export default function RoomInformationPage() {
                     }
                     canEdit={isHost}
                     onSegmentsChanged={() => void segmentsQuery.refetch()}
-                    highlightedSegmentId={highlightedSegmentId}
+                    highlightedSegmentIds={highlightedSegmentIds}
                     speakerDirectory={speakerDirectory}
                   />
                 }
@@ -991,7 +1031,9 @@ function MeetingRecordSection({
   /** Where to move the recording, when a citation or a transcript line asked. */
   seek: SeekRequest | null;
   onRecordChanged: () => void;
-  onJumpToMoment: (atMs: number) => void;
+  /** The claim's primary moment, and the others it rests on. A caller with a single moment — the
+   *  minutes panel, a transcript line — passes one and nothing changes for it. */
+  onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   /** Faces for the reading rail's attendees tab, from the same workspace member list the
    *  transcript's own speakers come from — the only place an avatar exists. */
   speakerDirectory?: Readonly<
