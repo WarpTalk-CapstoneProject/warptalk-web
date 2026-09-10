@@ -559,15 +559,20 @@ export const translationRoomService = {
   },
 
   /**
-   * Ask for this meeting's summary to be written again in a different shape.
+   * Ask for this meeting's summary to be written again — in a different shape, a different
+   * language, or both.
    *
    * Answers 202, not 200 — the summary is not rewritten when this resolves. It arrives on
    * the artifact, so the caller has to refetch rather than trust the response body.
+   *
+   * Omitting `language` means "leave the language alone", which the AI side reads as "follow
+   * the transcript". The field is left off the body entirely rather than sent empty, so the
+   * request looks exactly like one from before the choice existed.
    */
-  regenerateSummary(roomId: string, templateKey: string) {
+  regenerateSummary(roomId: string, templateKey: string, language?: string) {
     return apiClient.post<{ message: string }>(
       API.roomArtifacts.regenerateSummary(roomId),
-      { templateKey },
+      language ? { templateKey, language } : { templateKey },
     );
   },
 
