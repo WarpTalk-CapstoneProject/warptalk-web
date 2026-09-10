@@ -43,7 +43,7 @@
  *   while making every sentence of it answerable.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   CaretDown,
   CaretUp,
@@ -90,6 +90,10 @@ import { cn } from "@/lib/utils";
 import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
+import type {
+  MeetingSummaryContent,
+  SummaryRenderingView,
+} from "@/types/meetingSummary";
 
 /**
  * The traceable template's prose section.
@@ -159,6 +163,8 @@ export function TranscriptReadingLayout({
   onJumpToMoment,
   onDownload,
   onRewrite,
+  rendering,
+  onSelectRendering,
   speakerDirectory,
 }: {
   /** Built by the room page — see the note in transcript-reading-sync.tsx on why it arrives whole. */
@@ -207,6 +213,13 @@ export function TranscriptReadingLayout({
   /** Ask for the summary to be rewritten in another shape, another language, or both.
    *  Omit to hide the pickers. */
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
+  /**
+   * The (shape, language) being READ right now, when it is not the one the host published.
+   * Null means "show what the host published", which is what every reader starts on.
+   */
+  rendering?: SummaryRenderingView | null;
+  /** Ask to read another pair. Never rewrites the meeting's summary — see RailSummary. */
+  onSelectRendering?: (templateKey: string, language: string) => void;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -252,6 +265,8 @@ export function TranscriptReadingLayout({
           onJumpToMoment={onJumpToMoment}
           onDownload={onDownload}
           onRewrite={onRewrite}
+          rendering={rendering}
+          onSelectRendering={onSelectRendering}
           speakerDirectory={speakerDirectory}
         />
       </div>
@@ -274,6 +289,8 @@ function ReadingRail({
   onJumpToMoment,
   onDownload,
   onRewrite,
+  rendering,
+  onSelectRendering,
   speakerDirectory,
 }: {
   record: EndedRoomHistoryItem | null;
@@ -293,13 +310,29 @@ function ReadingRail({
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
+  rendering?: SummaryRenderingView | null;
+  onSelectRendering?: (templateKey: string, language: string) => void;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
-  const sections = record?.summary?.sections ?? null;
+  /**
+   * WHAT IS ON SCREEN, which is not always what the host published.
+   *
+   * One substitution, here, because everything downstream derives from it: `sections` feeds the
+   * claims, the claims feed the tab count and the transcript sync, and the panel reads the
+   * summary again for its overview. Overriding inside the panel alone would light up moments
+   * belonging to a summary nobody was looking at.
+   *
+   * A rendering still being written contributes nothing, so the published summary stays on
+   * screen while the new one is generated. Blanking a perfectly good summary for a minute would
+   * be a worse answer than showing the one that is already there.
+   */
+  const shownSummary =
+    rendering?.status === "ready" && rendering.content ? rendering.content : record?.summary;
+  const sections = shownSummary?.sections ?? null;
 
   /**
    * The whole summary, in the summary's own order.
@@ -499,6 +532,9 @@ function ReadingRail({
             onJumpToMoment={onJumpToMoment}
             onDownload={onDownload}
             onRewrite={onRewrite}
+            shownSummary={shownSummary}
+            rendering={rendering}
+            onSelectRendering={onSelectRendering}
           />
         ) : (
           <RailTalkTime shares={shares} speakerDirectory={speakerDirectory} />
@@ -562,6 +598,9 @@ function RailSummary({
   onJumpToMoment,
   onDownload,
   onRewrite,
+  shownSummary,
+  rendering,
+  onSelectRendering,
 }: {
   record: EndedRoomHistoryItem | null;
   segments: readonly StalenessSegment[];
@@ -576,8 +615,14 @@ function RailSummary({
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
+  shownSummary?: MeetingSummaryContent | null;
+  rendering?: SummaryRenderingView | null;
+  onSelectRendering?: (templateKey: string, language: string) => void;
 }) {
-  const summary = record?.summary;
+  // The pair being READ, which the mid component already resolved: the published summary
+  // unless a rendering is ready. Passed in rather than re-derived so the panel and the claims
+  // beside it can never disagree about which summary is on screen.
+  const summary = shownSummary;
   const artifact = record?.artifacts.find((item) => item.type === "summary_export");
   const ready = artifact?.status === "ready";
   const downloading = busyArtifactId !== null && busyArtifactId === artifact?.id;
@@ -614,7 +659,11 @@ function RailSummary({
     hasTranscript,
   });
 
-  const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  // The pair on screen. `rendering` wins even while it is generating, so the picker keeps
+  // showing what was asked for instead of snapping back to the published pair for a minute —
+  // which is what made the old picker read as "nothing happened".
+  const currentTemplate =
+    rendering?.templateKey ?? summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
   // Read off the claims rather than off the template key: a summary rewritten into another shape
   // arrives before its templateKey does, and the sections are what is actually being rendered.
   const hasNarrative = claims.some((claim) => claim.sectionKey === NARRATIVE_SECTION_KEY);
@@ -624,7 +673,7 @@ function RailSummary({
    * transcript — so it is offered as its own option rather than being filled in with a guess
    * about what the text looks like.
    */
-  const currentLanguage = summary?.summaryLanguage ?? "";
+  const currentLanguage = rendering?.language ?? summary?.summaryLanguage ?? "";
   // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
   const stale = isSummaryStale(segments, artifact);
   /**
@@ -636,11 +685,17 @@ function RailSummary({
    * while a rewrite was in flight — no spinner, no lock, and a second click would queue a
    * duplicate.
    */
-  const [requested, setRequested] = useState<{ template: string; language: string } | null>(null);
   const [regenerating, setRegenerating] = useState(false);
-  const isRewriting =
-    requested !== null &&
-    (requested.template !== currentTemplate || requested.language !== currentLanguage);
+
+  /**
+   * Waiting for a rendering, which is no longer the same event as rewriting the meeting.
+   *
+   * The picker used to POST a rewrite, so choosing Japanese REPLACED the room's summary and the
+   * rail had to run its own 90-second deadline against an artifact that might never change.
+   * Now it asks to read a pair, the page owns the polling and the deadline, and this is simply
+   * whether that read has landed.
+   */
+  const isRendering = rendering?.status === "generating";
 
   /**
    * Every language the product can translate into, not only the ones this meeting produced.
@@ -661,29 +716,11 @@ function RailSummary({
       : [{ code: "", label: "As spoken" }, ...offered];
   }, [currentLanguage]);
 
-  async function requestRewrite(template: string, language: string) {
-    if (!onRewrite) return;
-    setRequested({ template, language });
-    try {
-      // Empty means "leave the language alone", and the service leaves the field off the
-      // request entirely rather than sending a blank one.
-      await onRewrite(template, language || undefined);
-    } catch {
-      setRequested(null);
-    }
+  function selectRendering(template: string, language: string) {
+    // Reading, not rewriting: nobody else's summary changes. The deadline and the polling live
+    // with the caller, which is the only place that knows whether a refetch is still in flight.
+    onSelectRendering?.(template, language);
   }
-
-  useEffect(() => {
-    // A rewrite that never lands must not leave the picker spinning forever — the summary
-    // arrives on the artifact asynchronously, and "still waiting" and "never coming" look
-    // identical without a deadline.
-    if (!isRewriting) return;
-    const timer = window.setTimeout(() => {
-      setRequested(null);
-      toast.error("The rewritten summary has not arrived. Try again.");
-    }, 90_000);
-    return () => window.clearTimeout(timer);
-  }, [isRewriting]);
 
   async function copyAsText() {
     if (!summary || !record) return;
@@ -738,21 +775,26 @@ function RailSummary({
       {/* One row, and it is the summary's own controls rather than the record's: the shape it
           was written in, the language it was written in, a copy of it, and the file it was
           written to. Shape and language sit side by side because they are the same kind of
-          decision — both are judgements only a reader of the finished meeting can make, and
-          both are answered by rewriting rather than by re-rendering. */}
+          decision — both are judgements only a reader of the finished meeting can make.
+
+          They now READ rather than rewrite. Choosing a language used to replace the room's one
+          summary artifact, so a Japanese attendee reading a shared meeting took the host's
+          English summary away from everybody until the host pressed the button again. The pair
+          somebody picks here is theirs; changing what the meeting's summary IS lives on the
+          out-of-date notice below, which is the one control that means it. */}
       <div className="mb-1 flex items-center gap-1.5 border-b border-border pb-2">
-        {onRewrite ? (
+        {onSelectRendering ? (
           <>
             <select
-              value={isRewriting ? (requested?.template ?? currentTemplate) : currentTemplate}
-              disabled={isRewriting}
+              value={currentTemplate}
+              disabled={isRendering}
               onChange={(event) => {
                 const templateKey = event.target.value;
                 if (templateKey === currentTemplate) return;
-                void requestRewrite(templateKey, currentLanguage);
+                selectRendering(templateKey, currentLanguage);
               }}
               aria-label="Summary shape"
-              title="Rewrite this summary in a different shape"
+              title="Read this meeting in a different shape"
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
               {SUMMARY_TEMPLATES.map((template) => (
@@ -762,15 +804,15 @@ function RailSummary({
               ))}
             </select>
             <select
-              value={isRewriting ? (requested?.language ?? currentLanguage) : currentLanguage}
-              disabled={isRewriting}
+              value={currentLanguage}
+              disabled={isRendering}
               onChange={(event) => {
                 const language = event.target.value;
                 if (language === currentLanguage) return;
-                void requestRewrite(currentTemplate, language);
+                selectRendering(currentTemplate, language);
               }}
               aria-label="Summary language"
-              title="Rewrite this summary in a different language"
+              title="Read this meeting in a different language"
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
               {languageOptions.map((language) => (
@@ -781,7 +823,7 @@ function RailSummary({
             </select>
           </>
         ) : null}
-        {isRewriting ? (
+        {isRendering ? (
           <SpinnerGap size={12} className="animate-spin text-ink-subtle" />
         ) : null}
         <button
@@ -813,6 +855,18 @@ function RailSummary({
         ) : null}
       </div>
 
+      {/* WHOSE SUMMARY THIS IS. A rendering reads identically to the published summary, so
+          without saying so a reader cannot tell whether what they are looking at is the record
+          of the meeting or a translation they asked for a moment ago — and the download button
+          beside it only ever serves the published one. */}
+      {rendering && !rendering.isCanonical ? (
+        <p className="border-b border-border px-2 pb-2 pt-1.5 text-[11px] leading-4 text-ink-muted">
+          {isRendering
+            ? "Writing this version for you…"
+            : "Your own version of this meeting. What the host published is unchanged."}
+        </p>
+      ) : null}
+
       {stale && onRewrite ? (
         <div className="px-1 pt-2">
           <SummaryStalenessNotice
@@ -820,9 +874,14 @@ function RailSummary({
             onRegenerate={async () => {
               setRegenerating(true);
               try {
-                // Same shape AND same language: this button exists because the transcript
-                // moved on, not because anything about the summary was wrong.
-                await onRewrite(currentTemplate, currentLanguage || undefined);
+                // The PUBLISHED pair, not whatever pair is on screen. This is the one control
+                // that changes the meeting's summary for everybody, and it exists because the
+                // transcript moved on — not because the reader picked a language. Rewriting into
+                // the reader's pair would quietly publish their private choice to the room.
+                await onRewrite(
+                  summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE,
+                  summary?.summaryLanguage || undefined,
+                );
               } finally {
                 // Cleared when the REQUEST is accepted, not when the summary lands.
                 setRegenerating(false);
