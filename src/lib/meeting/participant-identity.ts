@@ -180,12 +180,19 @@ export function identityFor(
  *
  * One person, one language is the shape the meeting bar now writes (WT-434), so the badge shows
  * the language they SPEAK — that is what the people around them are hearing translated, and it
- * falls back to their listen language only when nobody has told us what they speak.
+ * falls back to their speak language only when nobody has told us what they want to hear.
+ *
+ * THE LISTEN LANGUAGE IS THE ONE THE PERSON CHOSE.
+ * This used to lead with the speak language, on the reasoning that it is what everyone else hears
+ * translated. The product is moving the other way: the meeting bar already cannot create a
+ * speak/listen split, and speech language is headed for detection rather than a dropdown — at
+ * which point it stops being something a person picked and starts being something the system
+ * guessed. A badge beside a face should carry the choice, not the guess.
  *
  * It deliberately does NOT narrate both sides. An earlier version said "Speaks Vietnamese · hears
  * English" whenever a stored profile carried a split, which put a sentence on a badge whose whole
- * job is to be read at a glance beside a face. The split is still real and still routes correctly;
- * the place to read it is the People panel, not a flag.
+ * job is to be read at a glance. The split is still real and still routes audio correctly — see
+ * FilteredRoomAudio, which keys dub selection off the SPEAK language and is untouched by this.
  *
  * Returns an empty flag rather than a placeholder glyph for a language with no region, so a caller
  * can decide between "no badge" and "a badge with no flag" instead of being handed mojibake.
@@ -194,7 +201,7 @@ export function describeParticipantLanguage(
   speakLanguage?: string | null,
   listenLanguage?: string | null,
 ): { flag: string; label: string } | null {
-  const primary = speakLanguage?.trim() || listenLanguage?.trim();
+  const primary = listenLanguage?.trim() || speakLanguage?.trim();
   if (!primary) return null;
 
   return { flag: getFlagEmoji(primary), label: getLanguageName(primary) };

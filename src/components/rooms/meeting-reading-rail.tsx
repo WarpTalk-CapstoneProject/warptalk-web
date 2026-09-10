@@ -78,6 +78,7 @@ import {
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
+import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 
@@ -101,7 +102,19 @@ type RailClaim = {
   atMs: number | null;
 };
 
-type RailTab = "summary" | "attendees";
+/**
+ * The rail's two tabs.
+ *
+ * The second one was called "attendees" and labelled "Attendees", which promised a roster and
+ * delivered something else: it is built from `speakingShares`, so it lists only the people the
+ * transcript caught talking, ranks them by how much, and says "Nobody was recorded speaking in
+ * this meeting" when there is no transcript to read it from. Somebody who sat through the whole
+ * hour without a word did not appear in it. RailTalkTime's own comment had this right all along —
+ * "attendance says who was in the room, which is a different question" — and the name now agrees
+ * with it. The actual roster lives in the page's People panel, 300px away, which is exactly why
+ * the two must not share a word.
+ */
+type RailTab = "summary" | "talk";
 
 export function TranscriptReadingLayout({
   transcript,
@@ -109,9 +122,12 @@ export function TranscriptReadingLayout({
   segments,
   hasTranscript,
   recording,
+  recordingUnavailableReason,
   seek,
+  seekSources,
   busyArtifactId,
   onConsentGranted,
+  onDurationSeconds,
   onJumpToMoment,
   onDownload,
   onRewrite,
@@ -129,16 +145,35 @@ export function TranscriptReadingLayout({
    * who wanted both had to keep swapping. So the rail takes the record and renders all of it.
    */
   record: EndedRoomHistoryItem | null;
-  /** The persisted transcript, for the attendees tab. Control markers are dropped here, not by
+  /** The persisted transcript, for the talk-time tab. Control markers are dropped here, not by
    *  the caller — see the note on `shares`. */
   segments: readonly TranscriptSegmentDto[];
   /** Whether the meeting captured any transcript at all, once the page knows. `undefined` means
    *  "not loaded yet" and nothing is concluded from it. */
   hasTranscript?: boolean;
   recording: RoomHistoryArtifact | null;
+  /** Why nothing is playable, when the meeting did record something. See MeetingRecordingPlayer. */
+  recordingUnavailableReason?: "processing" | "multiple" | null;
   seek: SeekRequest | null;
+  /**
+   * WT-655 — the two origins that turn the recording's playhead into a moment in the meeting.
+   *
+   * Forwarded to ReadingSyncProvider and used nowhere in this file: it is passed through because the
+   * provider is mounted here, not because the rail has any business with it. The room page builds
+   * the value once and both directions of the conversion read the same object.
+   */
+  seekSources?: SeekSources;
   busyArtifactId?: string | null;
   onConsentGranted: () => void;
+  /**
+   * WT-655 — the recording's own length, back UP to the page.
+   *
+   * Not routed through ReadingSyncProvider like the playhead is, and the asymmetry is the point:
+   * the playhead is consumed inside the provider, whereas the duration's only consumer is the
+   * `seekSources` the page builds and hands back DOWN to that provider. Publishing it into the
+   * context would be asking the provider to feed its own input.
+   */
+  onDurationSeconds?: (seconds: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
@@ -151,7 +186,7 @@ export function TranscriptReadingLayout({
   const [pipOpen, setPipOpen] = useState(true);
 
   return (
-    <ReadingSyncProvider>
+    <ReadingSyncProvider seekSources={seekSources}>
       <div
         className={cn(
           /* The three breakpoints, and they are three genuinely different layouts rather than one
@@ -178,11 +213,13 @@ export function TranscriptReadingLayout({
           segments={segments}
           hasTranscript={hasTranscript}
           recording={recording}
+          recordingUnavailableReason={recordingUnavailableReason}
           seek={seek}
           busyArtifactId={busyArtifactId ?? null}
           pipOpen={pipOpen}
           onTogglePip={() => setPipOpen((current) => !current)}
           onConsentGranted={onConsentGranted}
+          onDurationSeconds={onDurationSeconds}
           onJumpToMoment={onJumpToMoment}
           onDownload={onDownload}
           onRewrite={onRewrite}
@@ -198,11 +235,13 @@ function ReadingRail({
   segments,
   hasTranscript,
   recording,
+  recordingUnavailableReason,
   seek,
   busyArtifactId,
   pipOpen,
   onTogglePip,
   onConsentGranted,
+  onDurationSeconds,
   onJumpToMoment,
   onDownload,
   onRewrite,
@@ -212,11 +251,16 @@ function ReadingRail({
   segments: readonly TranscriptSegmentDto[];
   hasTranscript?: boolean;
   recording: RoomHistoryArtifact | null;
+  /** Why there is nothing to play, when the meeting did record something. See MeetingRecordingPlayer. */
+  recordingUnavailableReason?: "processing" | "multiple" | null;
   seek: SeekRequest | null;
   busyArtifactId: string | null;
   pipOpen: boolean;
   onTogglePip: () => void;
   onConsentGranted: () => void;
+  /** Passed straight to the pip player. See TranscriptReadingLayout for why it does not travel
+   *  through the sync context the playhead does. */
+  onDurationSeconds?: (seconds: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string) => Promise<void>;
@@ -318,7 +362,12 @@ function ReadingRail({
        transcript is the document and the summary is a different document. A record that printed
        both interleaved would be neither. */
     <aside className="order-1 flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface-2 lg:order-none print:hidden">
-      {recording ? (
+      {/* WT-655: a recording that is still being processed has no playable artifact, so `recording`
+          is null and this whole block used to vanish — indistinguishable from a meeting nobody
+          recorded, for the reader most likely to be waiting on it. `"multiple"` deliberately does
+          NOT open this block: the transcript tab already carries a line explaining that case, and
+          saying it twice on one screen reads as two different problems. */}
+      {recording || recordingUnavailableReason === "processing" ? (
         <div className="border-b border-border p-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-subtle">
@@ -344,8 +393,19 @@ function ReadingRail({
             <MeetingRecordingPlayer
               variant="pip"
               artifact={recording}
+              unavailableReason={recordingUnavailableReason}
               seek={seek}
               playbackRequest={sync?.playbackRequest ?? null}
+              /* WT-655 — the wire the transcript follows the recording along. Handed the context's
+                 own functions rather than arrows closing over them: the player retracts the
+                 highlight when these change identity (see its unmount cleanup), so an inline
+                 lambda here would clear the playhead on every render of this rail. */
+              onPlaybackSeconds={sync?.publishPlaybackSeconds}
+              onPlayingChange={sync?.publishPlaying}
+              /* Stable for the same reason those two are: the player retracts the duration when
+                 this changes identity, so an arrow declared here would report "length unknown" on
+                 every render of the rail and disarm the past-the-end refusal. */
+              onDurationSeconds={onDurationSeconds}
               onConsentGranted={onConsentGranted}
             />
           ) : null}
@@ -364,9 +424,9 @@ function ReadingRail({
           count={claims.length || undefined}
         />
         <RailTabButton
-          active={tab === "attendees"}
-          onClick={() => setTab("attendees")}
-          label="Attendees"
+          active={tab === "talk"}
+          onClick={() => setTab("talk")}
+          label="Talk time"
           count={shares.length || undefined}
         />
       </div>
@@ -391,7 +451,7 @@ function ReadingRail({
             onRewrite={onRewrite}
           />
         ) : (
-          <RailAttendees shares={shares} speakerDirectory={speakerDirectory} />
+          <RailTalkTime shares={shares} speakerDirectory={speakerDirectory} />
         )}
       </div>
     </aside>
@@ -762,7 +822,7 @@ function RailClaimButton({
  * five people shared in every roster the product has. The transcript is the only record of it —
  * see speakingShares.
  */
-function RailAttendees({
+function RailTalkTime({
   shares,
   speakerDirectory,
 }: {

@@ -508,6 +508,12 @@ const CONSENT_CALLBACK_ERRORS: Record<string, string> = {
   // willing. The reference is what turns this into something an operator can act on.
   provider_configuration: "WarpTalk's connection to this provider is not configured correctly. Nothing is wrong with your account.",
   provider_unavailable: "The provider could not complete the sign-in. Try again in a moment.",
+  // The generic fallback below would say "start the connection again", which is the one thing that
+  // cannot work here: signing in again with the same second account produces the same refusal. One
+  // account connects per provider and every plugin from that provider shares it, so the remedy is
+  // to end the connection that exists before starting another.
+  provider_account_mismatch:
+    "You signed in with a different account than the one already connected. Disconnect the connected account first, then connect this one.",
 };
 
 const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
