@@ -21,6 +21,12 @@ export type MeetingSummaryItem = {
   /** Milliseconds from the start of the meeting, or null for a summary written before
    *  citations existed. A null renders as text with nothing to click. */
   atMs: number | null;
+  /** The OTHER moments the item rests on, ascending and without repeats.
+   *
+   *  A sentence that summarises an exchange came from several turns by several speakers, and
+   *  `atMs` can only name one of them — it stays the primary moment, the one a click jumps to.
+   *  Empty rather than absent, so nothing downstream has to guard before iterating. */
+  alsoAtMs: readonly number[];
 };
 
 export type MeetingSummarySectionView = {
@@ -31,6 +37,7 @@ export type MeetingSummarySectionView = {
 
 /** Titles for the sections the templates produce. */
 const SECTION_TITLES: Record<string, string> = {
+  narrative: "What happened",
   decisions: "Decisions",
   actionItems: "Action items",
   // Not a summary template section: the minutes drafter adds it for a recurring meeting,
@@ -70,7 +77,7 @@ export function sectionTitle(key: string): string {
  * The shapes a summary can be rewritten into.
  *
  * Mirrors warptalk-ai's summary_templates registry. Two copies of a list is a drift risk, but
- * the alternative — an endpoint whose only job is to list five constants — buys a network
+ * the alternative — an endpoint whose only job is to list six constants — buys a network
  * round trip on every page load to avoid an edit that happens once a quarter. An unknown key
  * falls back to General on the AI side, so a stale entry here degrades rather than breaks.
  */
@@ -79,6 +86,11 @@ export const SUMMARY_TEMPLATES: { key: string; label: string; description: strin
     key: "general",
     label: "General meeting",
     description: "Overview, decisions, action items and anything left unresolved.",
+  },
+  {
+    key: "traceable",
+    label: "Traceable summary",
+    description: "Every sentence carries the moments it came from.",
   },
   { key: "standup", label: "Standup", description: "Per-person progress, plans and blockers." },
   {
@@ -114,11 +126,32 @@ function toMs(value: unknown): number | null {
   return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(n) : null;
 }
 
+/**
+ * The supporting moments, through exactly the rule `atMs` already goes through.
+ *
+ * One unusable element drops rather than failing the item: a sentence with three good moments and
+ * one the assistant garbled is still a sentence with three good moments, and losing it entirely
+ * would be a worse answer than losing the fourth anchor.
+ *
+ * Ascending and de-duplicated — a repeated moment is not a second piece of evidence, and a reader
+ * stepping through them expects to travel forwards through the meeting.
+ */
+function toMsList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+
+  const moments = new Set<number>();
+  for (const entry of value) {
+    const ms = toMs(entry);
+    if (ms !== null) moments.add(ms);
+  }
+  return Array.from(moments).sort((left, right) => left - right);
+}
+
 function toItem(raw: unknown): MeetingSummaryItem | null {
   // The pre-template shape: a decision was just a string.
   if (typeof raw === "string") {
     const text = raw.trim();
-    return text ? { text, atMs: null } : null;
+    return text ? { text, atMs: null, alsoAtMs: [] } : null;
   }
   if (!raw || typeof raw !== "object") return null;
 
@@ -128,7 +161,12 @@ function toItem(raw: unknown): MeetingSummaryItem | null {
   if (!text) return null;
 
   const owner = typeof row.owner === "string" ? row.owner.trim() : "";
-  return { text, ...(owner ? { owner } : {}), atMs: toMs(row.atMs) };
+  return {
+    text,
+    ...(owner ? { owner } : {}),
+    atMs: toMs(row.atMs),
+    alsoAtMs: toMsList(row.alsoAtMs),
+  };
 }
 
 export function parseSummarySections(
