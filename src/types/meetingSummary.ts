@@ -34,10 +34,18 @@ export interface MeetingSummaryContent extends MeetingSummarySection {
   /** True when the AI assistant had nothing to summarize (e.g. an empty transcript) or
    * generation failed — render an "insufficient data" state instead of an empty summary. */
   insufficientData?: boolean;
-  /** Present only when the room has more than one target language: a translated
-   * {summary, decisions, actionItems} per language code, alongside the top-level
-   * (primary-language) section. */
+  /** Present only when the room has more than one target language AND nobody chose a
+   * summary language: a translated {summary, decisions, actionItems} per language code,
+   * alongside the top-level (primary-language) section. Choosing a language means one
+   * document, so the two never appear together. */
   translations?: Record<string, MeetingSummarySection>;
+  /** ISO 639-1 the summary was WRITTEN in, as recorded by the worker that wrote it.
+   *
+   * Absent or empty means nobody chose one and the model followed the transcript — which is
+   * every summary written before the choice existed. That is deliberately not the same as
+   * "we do not know what language this is": it is the honest statement that no code here can
+   * say, and it is why this is never guessed at by inspecting the text. */
+  summaryLanguage?: string;
 }
 
 export function parseMeetingSummaryContent(raw: string | null | undefined): MeetingSummaryContent | undefined {
@@ -65,6 +73,10 @@ export function parseMeetingSummaryContent(raw: string | null | undefined): Meet
       templateKey: typeof parsed.templateKey === "string" ? parsed.templateKey : undefined,
       insufficientData: parsed.insufficientData as boolean | undefined,
       translations: parsed.translations as MeetingSummaryContent["translations"],
+      summaryLanguage:
+        typeof parsed.summaryLanguage === "string" && parsed.summaryLanguage.trim()
+          ? parsed.summaryLanguage.trim().toLowerCase()
+          : undefined,
     };
   } catch {
     return undefined;

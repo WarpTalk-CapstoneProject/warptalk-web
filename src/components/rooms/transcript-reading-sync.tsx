@@ -14,7 +14,9 @@
  * WHAT TRAVELS, AND IN WHICH DIRECTION
  *   Up, from the transcript:  the blocks it laid out (`anchors`), and which one the reader's eye
  *                             is on (`readingKey`).
- *   Down, from the rail:      which block a summary claim is pointing at right now (`markedKey`).
+ *   Down, from the rail:      which blocks a summary claim is pointing at right now (`markedKeys`)
+ *                             — a sentence that summarises an exchange rests on more than one turn,
+ *                             and marking only the first would leave the reply unlit.
  *   Down, from the player:    where the recording's playhead is (`playingMs`) and whether it is
  *                             moving (`isPlaying`) — see THE PLAYHEAD below.
  *   Sideways, once:           a navigator and a playback toggle, registered by whoever owns the
@@ -93,9 +95,9 @@ export type ReadingSync = {
   /** The block under the reader's eye, or null before the first measurement. */
   readingKey: string | null;
   setReadingKey: (key: string | null) => void;
-  /** The block a rail item is pointing at while it is hovered or focused. */
-  markedKey: string | null;
-  setMarkedKey: (key: string | null) => void;
+  /** The blocks a rail item is pointing at while it is hovered or focused. */
+  markedKeys: readonly string[];
+  setMarkedKeys: (keys: readonly string[]) => void;
   registerNavigator: (navigator: ReadingNavigator | null) => void;
   /** A press of Space, as a token — see the same pattern on SeekRequest. */
   playbackRequest: { token: number } | null;
@@ -128,6 +130,16 @@ export type ReadingSync = {
   isFollowing: boolean;
   setFollowing: (next: boolean) => void;
 };
+
+/**
+ * Nothing marked, as ONE value rather than a new one every time.
+ *
+ * The context value is what every consumer re-renders on, and the transcript column is several
+ * hundred rows on a meeting anybody bothers to read. A fresh `[]` on each clear is a new identity,
+ * which is a new context value, which is that whole column re-rendering because a pointer left a
+ * rail item — the same trap `anchorsEqual` is written against, one field shallower.
+ */
+const NO_MARKED_KEYS: readonly string[] = Object.freeze([]);
 
 const ReadingSyncContext = createContext<ReadingSync | null>(null);
 
@@ -181,7 +193,7 @@ export function ReadingSyncProvider({
 }) {
   const [anchors, setAnchors] = useState<readonly ReadingAnchor[]>([]);
   const [readingKey, setReadingKey] = useState<string | null>(null);
-  const [markedKey, setMarkedKey] = useState<string | null>(null);
+  const [markedKeys, setMarkedKeysState] = useState<readonly string[]>(NO_MARKED_KEYS);
   const [playbackRequest, setPlaybackRequest] = useState<{ token: number } | null>(null);
   /** The playhead as the player last reported it, on the FILE axis. */
   const [playbackSeconds, setPlaybackSeconds] = useState<number | null>(null);
@@ -200,6 +212,19 @@ export function ReadingSyncProvider({
     // constantly. Setting state on those would re-render the rail, which re-lays out the column,
     // which measures again — see anchorsEqual.
     setAnchors((current) => (anchorsEqual(current, next) ? current : next));
+  }, []);
+
+  const setMarkedKeys = useCallback((next: readonly string[]) => {
+    // The rail re-resolves the same claim to the same keys on every pointer event inside one item,
+    // so this arrives equal-but-new constantly. Publishing those would re-render the transcript
+    // column for a value that did not change — the reason publishAnchors goes through anchorsEqual,
+    // and the reason a clear collapses back to the one frozen empty array instead of a fresh one.
+    const incoming = next.length === 0 ? NO_MARKED_KEYS : next;
+    setMarkedKeysState((current) =>
+      current.length === incoming.length && current.every((key, index) => key === incoming[index])
+        ? current
+        : incoming,
+    );
   }, []);
 
   const registerNavigator = useCallback((next: ReadingNavigator | null) => {
@@ -288,8 +313,8 @@ export function ReadingSyncProvider({
       publishAnchors,
       readingKey,
       setReadingKey,
-      markedKey,
-      setMarkedKey,
+      markedKeys,
+      setMarkedKeys,
       registerNavigator,
       playbackRequest,
       publishPlaybackSeconds,
@@ -303,7 +328,8 @@ export function ReadingSyncProvider({
       anchors,
       publishAnchors,
       readingKey,
-      markedKey,
+      markedKeys,
+      setMarkedKeys,
       registerNavigator,
       playbackRequest,
       publishPlaybackSeconds,

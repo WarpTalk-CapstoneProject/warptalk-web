@@ -78,6 +78,7 @@ function buildSummaryArtifact(
     insufficientData: parsed.insufficientData,
     translations: parsed.translations,
     templateKey: parsed.templateKey,
+    summaryLanguage: parsed.summaryLanguage,
     sections: parsed.sections,
   };
 }
