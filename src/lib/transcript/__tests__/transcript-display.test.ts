@@ -20,6 +20,7 @@ import {
   resolveTranscriptSpeakerName,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
+  withLivePauseGap,
 } from "../transcript-display.ts";
 // A blank row's cost is only visible where the translations are read — the grouping keeps its id
 // and resolveTranscriptLine is what then demands a translation for it.
@@ -872,7 +873,7 @@ test("splitSegmentsAroundPauseGaps is a no-op with no gaps", () => {
 
   const blocks = splitSegmentsAroundPauseGaps(segments, []);
 
-  assert.deepEqual(blocks, [{ gapBefore: null, segments }]);
+  assert.deepEqual(blocks, [{ gapBefore: null, recorded: true, segments }]);
 });
 
 test("splitSegmentsAroundPauseGaps splits cleanly at the gap boundary", () => {
@@ -922,4 +923,78 @@ test("splitSegmentsAroundPauseGaps handles two separate pauses in one meeting", 
   assert.deepEqual(blocks.map((b) => b.segments.map((s) => s.id)), [["a"], ["b"], ["c"]]);
   assert.equal(blocks[1].gapBefore?.window.id, "w1");
   assert.equal(blocks[2].gapBefore?.window.id, "w2");
+});
+
+// ── WT-657: lines said into a stopped recorder ───────────────────────────────
+
+/**
+ * Pausing the transcript stops the WRITE, not the broadcast. WT-605 deliberately keeps translation
+ * and dubbing running through a pause so listeners still hear each other, so the Gateway goes on
+ * sending `TranscriptSegmentReceived` — and lines kept appearing in the live panel, as ordinary
+ * transcript, directly under a notice saying the transcript was paused. Nothing wrote them down
+ * and they were gone on the next reload.
+ */
+test("segments arriving during a pause still in force are not part of the record", () => {
+  const segments = [
+    { startTimeMs: 1000, id: "before" },
+    // Said after Pause was pressed at 60s, with no Resume yet.
+    { startTimeMs: 90_000, id: "during" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks[0].recorded, true);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
+  assert.equal(blocks[1].recorded, false, "an open gap means the recorder is still off");
+  assert.deepEqual(blocks[1].segments.map((s) => s.id), ["during"]);
+});
+
+test("segments after a pause that was lifted are part of the record again", () => {
+  const segments = [
+    { startTimeMs: 1000, id: "before" },
+    { startTimeMs: 200_000, id: "after" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks[1].recorded, true, "a closed gap is history, not a live pause");
+});
+
+/**
+ * The window list and the live state disagree for everyone except the host: `pause-windows` is
+ * fetched once on mount and invalidated only by the host's own toggle mutation, while everybody
+ * else learns about the pause from a `TranscriptPaused` broadcast that never touches that query.
+ * Deriving from windows alone was therefore correct for the host and inert for the room.
+ */
+test("a live pause the window list has not heard about still marks the lines", () => {
+  const gaps = withLivePauseGap([], { paused: true, since: "2026-09-06T10:01:00Z" }, BASE_TIME);
+
+  assert.equal(gaps.length, 1);
+  assert.equal(gaps[0].endMs, null);
+
+  const blocks = splitSegmentsAroundPauseGaps(
+    [{ startTimeMs: 90_000, id: "during" }],
+    gaps,
+  );
+  assert.equal(blocks[1].recorded, false);
+});
+
+test("a pause the window list already knows about is not counted twice", () => {
+  const fromWindows = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const gaps = withLivePauseGap(fromWindows, { paused: true, since: "2026-09-06T10:01:00Z" }, BASE_TIME);
+
+  assert.equal(gaps.length, 1, "two open gaps would split one pause in two and draw it twice");
+});
+
+test("no live pause, or nothing to anchor it against, changes nothing", () => {
+  const fromWindows = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  assert.deepEqual(withLivePauseGap(fromWindows, { paused: false, since: null }, BASE_TIME), fromWindows);
+  assert.deepEqual(withLivePauseGap(fromWindows, undefined, BASE_TIME), fromWindows);
+  // Broadcast-only clients carry no start time, and a gap with no position is worse than none.
+  assert.deepEqual(withLivePauseGap(fromWindows, { paused: true, since: null }, BASE_TIME), fromWindows);
+  assert.deepEqual(withLivePauseGap(fromWindows, { paused: true, since: "2026-09-06T10:01:00Z" }, undefined), fromWindows);
 });

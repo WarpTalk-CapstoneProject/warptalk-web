@@ -20,8 +20,7 @@
 
 // Relative, with the extension: this module's unit tests run under the plain node test
 // runner, which does not resolve the "@/" alias for real values.
-import { getFlagEmoji } from "../language/language-flag.ts";
-import { getLanguageName } from "../language/languages.ts";
+import { getLanguageCode, getLanguageName } from "../language/languages.ts";
 
 /**
  * One page, big enough for any workspace that fits in a meeting.
@@ -176,7 +175,7 @@ export function identityFor(
 }
 
 /**
- * The language badge: a flag, and the name of that language. Nothing else.
+ * The language badge: the language's code, and the name of that language. Nothing else.
  *
  * One person, one language is the shape the meeting bar now writes (WT-434), so the badge shows
  * the language they SPEAK — that is what the people around them are hearing translated, and it
@@ -194,15 +193,21 @@ export function identityFor(
  * job is to be read at a glance. The split is still real and still routes audio correctly — see
  * FilteredRoomAudio, which keys dub selection off the SPEAK language and is untouched by this.
  *
- * Returns an empty flag rather than a placeholder glyph for a language with no region, so a caller
- * can decide between "no badge" and "a badge with no flag" instead of being handed mojibake.
+ * WT-661: `code` replaced a flag emoji. The flag did not render on Windows — a regional-indicator
+ * pair falls back to its two letters there — and it was the wrong mark regardless, since the
+ * country it names is not the language it was standing for. An unknown language now degrades to
+ * its own tag rather than to an empty string, so the badge no longer disappears for a language
+ * the registry has not been taught.
  */
 export function describeParticipantLanguage(
   speakLanguage?: string | null,
   listenLanguage?: string | null,
-): { flag: string; label: string } | null {
+): { code: string; label: string } | null {
+  // `code` from WT-661 (a flag emoji does not render on Windows, and names a country rather
+  // than a language); LISTEN first from development, which is the ordering the doc above argues
+  // for — the badge should carry the language the person chose, not the one we will soon guess.
   const primary = listenLanguage?.trim() || speakLanguage?.trim();
   if (!primary) return null;
 
-  return { flag: getFlagEmoji(primary), label: getLanguageName(primary) };
+  return { code: getLanguageCode(primary), label: getLanguageName(primary) };
 }

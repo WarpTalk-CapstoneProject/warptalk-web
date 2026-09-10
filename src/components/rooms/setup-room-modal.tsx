@@ -19,9 +19,8 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { getFlagEmoji } from "@/lib/language/language-flag";
 import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
-import { parseTargetLanguages } from "@/lib/language/languages";
+import { getLanguageCode, parseTargetLanguages } from "@/lib/language/languages";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   useJoinLanguagePolicy,
@@ -543,14 +542,14 @@ export function SetupRoomModal() {
                     >
                       <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                         <span className="leading-none text-[14px]">
-                          {getFlagEmoji(speakLanguage)}
+                          {getLanguageCode(speakLanguage)}
                         </span>
                         <span className="font-medium text-ink">I speak</span>
                       </SelectTrigger>
                       <SelectContent>
                         {preJoin.options.map((language) => (
                           <SelectItem key={language.locale} value={language.locale}>
-                            {getFlagEmoji(language.locale)} {language.name}
+                            {getLanguageCode(language.locale)} {language.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -568,14 +567,14 @@ export function SetupRoomModal() {
                     >
                       <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                         <span className="leading-none text-[14px]">
-                          {getFlagEmoji(listenLanguage)}
+                          {getLanguageCode(listenLanguage)}
                         </span>
                         <span className="font-medium text-ink">I hear</span>
                       </SelectTrigger>
                       <SelectContent>
                         {preJoin.options.map((language) => (
                           <SelectItem key={language.locale} value={language.locale}>
-                            {getFlagEmoji(language.locale)} {language.name}
+                            {getLanguageCode(language.locale)} {language.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

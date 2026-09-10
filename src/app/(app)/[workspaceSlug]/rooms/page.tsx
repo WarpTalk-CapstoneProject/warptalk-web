@@ -243,9 +243,9 @@ function LinearRow({
 
         <div className="flex shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
+            {/* Reads "EN · VI · JA" — the languages this meeting is held in, and nothing else.
 
-                It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
+                It used to read "English → VI · JA", which asserted a relationship the product
                 does not have: every participant picks their own speak and listen language, so
                 there is no meeting-wide source and no direction to point an arrow at. A room
                 only ever declares a SET. The named source was the loudest thing in the chip and
@@ -255,9 +255,10 @@ function LinearRow({
                 it sat after every multi-language room whether or not anything had been hidden,
                 so it punctuated a gap that was never there.
 
-                Flags only, no names: the column is 176px and two language names do not fit.
-                LanguageLabel keeps the name as the title and aria-label, so the flag is not the
-                only thing carrying the meaning. A room can declare any number of languages —
+                Codes only, no names: the column is 176px and two language names do not fit.
+                LanguageLabel keeps the name as the title and aria-label, so the code is not the
+                only thing carrying the meaning. WT-661 retired the flags these used to be —
+                Windows renders no flag glyph, and a country is not a language. A room can declare any number of languages —
                 nothing client-side caps the set — so the pill is capped at the column and clips
                 rather than pushing the occupancy and date columns out of line. */}
             {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(

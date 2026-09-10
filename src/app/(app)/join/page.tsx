@@ -24,8 +24,7 @@ import {
 } from "@/components/ui/select";
 import { useJoinLanguagePolicy, useJoinTranslationRoomByCode } from "@/hooks/use-translationRooms";
 import { getErrorMessage } from "@/lib/api/errors";
-import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName } from "@/lib/language/languages";
+import { getLanguageCode, getLanguageName } from "@/lib/language/languages";
 import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
 import { useUserSettings } from "@/hooks/use-user-settings";
 import { NOISE_SUPPRESSION_PREFERENCE_VERSION } from "@/lib/meeting/track-effects-preferences";
@@ -592,7 +591,7 @@ function JoinMeetingContent() {
                 >
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">
-                      {getFlagEmoji(speakLanguage)}
+                      {getLanguageCode(speakLanguage)}
                     </span>
                     <span className="font-medium text-ink">
                       {getLanguageName(speakLanguage)}
@@ -607,7 +606,7 @@ function JoinMeetingContent() {
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-[14px] leading-none">
-                            {getFlagEmoji(l.value)}
+                            {getLanguageCode(l.value)}
                           </span>
                           <span className="font-medium">{l.label}</span>
                         </div>
@@ -630,7 +629,7 @@ function JoinMeetingContent() {
                 >
                   <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                     <span className="leading-none text-[14px]">
-                      {getFlagEmoji(listenLanguage)}
+                      {getLanguageCode(listenLanguage)}
                     </span>
                     <span className="font-medium text-ink">
                       {getLanguageName(listenLanguage)}
@@ -645,7 +644,7 @@ function JoinMeetingContent() {
                       >
                         <div className="flex items-center gap-2">
                           <span className="text-[14px] leading-none">
-                            {getFlagEmoji(l.value)}
+                            {getLanguageCode(l.value)}
                           </span>
                           <span className="font-medium">{l.label}</span>
                         </div>

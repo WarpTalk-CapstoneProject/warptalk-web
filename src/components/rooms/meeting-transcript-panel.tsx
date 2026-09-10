@@ -88,8 +88,7 @@ import {
 } from "@/components/rooms/transcript-speaker-avatar";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
-import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageCode, getLanguageName, languagesInScope } from "@/lib/language/languages";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
@@ -1661,7 +1660,7 @@ function TranscriptLanguageMenu({
           {options.map((option) => (
             <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
               <TranscriptLanguageItem
-                label={`${getFlagEmoji(option.code)} ${getLanguageName(option.code)}`.trim()}
+                label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
                 detail={languageDetail(option, busyLanguage === option.code)}
                 selected={!asSpoken && option.code === value}
               />
