@@ -1,6 +1,10 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import type {
+  SummaryRenderingDto,
+  SummaryRenderingSummaryDto,
+} from "@/types/meetingSummary";
 import {
   normalizeNoiseReductionMode,
   type NoiseReductionMode,
@@ -573,6 +577,30 @@ export const translationRoomService = {
     return apiClient.post<{ message: string }>(
       API.roomArtifacts.regenerateSummary(roomId),
       language ? { templateKey, language } : { templateKey },
+    );
+  },
+
+  /**
+   * This meeting's summary in a shape and language, generating that rendering if nobody has
+   * asked for the pair yet.
+   *
+   * Reading, not rewriting. This never changes what another reader sees, which is the whole
+   * reason it is a different call from regenerateSummary — asking for a language through THAT
+   * one replaced the room's summary for everybody.
+   *
+   * Resolves with `status: "generating"` and no content the first time a pair is asked for. That
+   * is neither an error nor an empty summary: the caller polls this same method until `ready`.
+   */
+  getSummaryRendering(roomId: string, templateKey: string, language?: string) {
+    return apiClient.get<SummaryRenderingDto>(
+      API.roomArtifacts.summary(roomId, templateKey, language),
+    );
+  },
+
+  /** Which renderings the room already holds, so a picker can say which choices are instant. */
+  getSummaryRenderings(roomId: string) {
+    return apiClient.get<SummaryRenderingSummaryDto[]>(
+      API.roomArtifacts.summaryRenderings(roomId),
     );
   },
 

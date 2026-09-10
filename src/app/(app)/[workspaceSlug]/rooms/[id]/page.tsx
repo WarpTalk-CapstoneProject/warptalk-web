@@ -161,6 +161,8 @@ import type {
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import { RoomRecurrenceLine } from "@/components/rooms/room-recurrence-line";
 import { MeetingPropertiesPills } from "./MeetingPropertiesPills";
+import type { SummaryRenderingView } from "@/types/meetingSummary";
+import { parseMeetingSummaryContent } from "@/types/meetingSummary";
 
 /**
  * The meeting record's tabs.
@@ -1448,6 +1450,115 @@ function MeetingRecordSection({
    * change the shape, the language, or both, and the poll cannot tell them apart — which is
    * why the stamp above carries all three parts rather than only the shape.
    */
+  /**
+   * WHICH PAIR THIS READER IS LOOKING AT, and the fetch that fills it.
+   *
+   * Null means "the summary the host published", which is where every reader starts. Anything
+   * else is theirs alone: the request behind it cannot change what another reader sees, which
+   * is the whole reason it is a GET and not the rewrite below.
+   */
+  const [rendering, setRendering] = useState<SummaryRenderingView | null>(null);
+  const renderingPollRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (renderingPollRef.current !== null) window.clearInterval(renderingPollRef.current);
+    },
+    [],
+  );
+
+  const selectRendering = useCallback(
+    (templateKey: string, language: string) => {
+      if (!endedRecord) return;
+
+      if (renderingPollRef.current !== null) {
+        window.clearInterval(renderingPollRef.current);
+        renderingPollRef.current = null;
+      }
+
+      // Shown immediately, before the request resolves. The picker reads its value from this,
+      // so leaving it until the response lands would snap the dropdown back to the published
+      // pair for a moment — which is exactly what made the old one look like it did nothing.
+      setRendering({
+        templateKey,
+        language,
+        isCanonical: false,
+        status: "generating",
+        content: null,
+      });
+
+      const stopAt = Date.now() + 90_000;
+
+      const read = async () => {
+        try {
+          // Destructured, matching every other read through this service.
+          const { data: answer } = await translationRoomService.getSummaryRendering(
+            endedRecord.id,
+            templateKey,
+            language || undefined,
+          );
+
+          // A reader who changed their mind while this was in flight must not have the old
+          // answer land on top of the new one.
+          let superseded = false;
+          setRendering((current: SummaryRenderingView | null) => {
+            if (
+              current
+              && (current.templateKey !== answer.templateKey
+                || current.language !== answer.language)
+            ) {
+              superseded = true;
+              return current;
+            }
+            return {
+              templateKey: answer.templateKey,
+              language: answer.language,
+              isCanonical: answer.isCanonical,
+              status: answer.status,
+              // `?? null` because the parser answers undefined for content it cannot read, and
+              // "nothing to show" has to be one value here — the rail decides what to render on
+              // `content` being falsy, and undefined would make that decision twice.
+              content: answer.content ? (parseMeetingSummaryContent(answer.content) ?? null) : null,
+            };
+          });
+          if (superseded) return true;
+
+          return answer.status === "ready";
+        } catch {
+          setRendering(null);
+          toast.error("Could not read this meeting in that language.");
+          return true;
+        }
+      };
+
+      void (async () => {
+        if (await read()) return;
+
+        // Still being written. Polled here rather than in the rail because only this component
+        // knows whether a read is still in flight, and a deadline is what separates "waiting"
+        // from "never coming".
+        renderingPollRef.current = window.setInterval(() => {
+          if (Date.now() > stopAt) {
+            if (renderingPollRef.current !== null) {
+              window.clearInterval(renderingPollRef.current);
+              renderingPollRef.current = null;
+            }
+            setRendering(null);
+            toast.error("That version has not arrived. Try again.");
+            return;
+          }
+          void read().then((done) => {
+            if (done && renderingPollRef.current !== null) {
+              window.clearInterval(renderingPollRef.current);
+              renderingPollRef.current = null;
+            }
+          });
+        }, 4000);
+      })();
+    },
+    [endedRecord],
+  );
+
   const requestSummaryRewrite = useCallback(
     async (templateKey: string, language?: string) => {
       if (!endedRecord) return;
@@ -1671,6 +1782,8 @@ function MeetingRecordSection({
             onJumpToMoment={onJumpToMoment}
             onDownload={downloadArtifact}
             onRewrite={endedRecord ? requestSummaryRewrite : undefined}
+            rendering={rendering}
+            onSelectRendering={endedRecord ? selectRendering : undefined}
             speakerDirectory={speakerDirectory}
           />
         ) : (
