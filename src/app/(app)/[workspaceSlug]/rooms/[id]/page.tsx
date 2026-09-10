@@ -1356,7 +1356,14 @@ function MeetingRecordSection({
   // updatedAt moves on every rewrite (see translation_room_artifacts.updated_at), and the
   // template is kept in the stamp so a legacy artifact with no updatedAt can still report a reshape.
   const summaryArtifact = endedRecord?.artifacts.find((item) => item.type === "summary_export");
-  const summaryStamp = `${summaryArtifact?.updatedAt ?? ""}|${endedRecord?.summary?.templateKey ?? ""}`;
+  // The language belongs in the stamp for the same reason the template does: a rewrite that
+  // changes only the language is a real arrival, and an artifact old enough to have no
+  // updatedAt would otherwise report nothing had happened.
+  const summaryStamp = [
+    summaryArtifact?.updatedAt ?? "",
+    endedRecord?.summary?.templateKey ?? "",
+    endedRecord?.summary?.summaryLanguage ?? "",
+  ].join("|");
 
   // Read inside the polling interval, which closes over the render that started it and
   // would otherwise never see the rewritten summary arrive.
@@ -1381,14 +1388,18 @@ function MeetingRecordSection({
   /**
    * Ask for the summary to be rewritten, and watch for it landing.
    *
-   * Lifted out of the deleted Summary tab unchanged. The endpoint answers 202 — the summary lands
-   * on the artifact later — so this polls for it rather than trusting the response, stops the
-   * moment the new shape arrives, and gives up after 90 seconds either way.
+   * Lifted out of the deleted Summary tab. The endpoint answers 202 — the summary lands on the
+   * artifact later — so this polls for it rather than trusting the response, stops the moment
+   * the new one arrives, and gives up after 90 seconds either way.
+   *
+   * `language` is optional and omitting it means "leave the language alone". A rewrite can
+   * change the shape, the language, or both, and the poll cannot tell them apart — which is
+   * why the stamp above carries all three parts rather than only the shape.
    */
   const requestSummaryRewrite = useCallback(
-    async (templateKey: string) => {
+    async (templateKey: string, language?: string) => {
       if (!endedRecord) return;
-      await translationRoomService.regenerateSummary(endedRecord.id, templateKey);
+      await translationRoomService.regenerateSummary(endedRecord.id, templateKey, language);
       toast.success("Rewriting the summary…");
 
       if (rewritePollRef.current !== null) {
