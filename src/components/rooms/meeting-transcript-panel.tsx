@@ -101,7 +101,9 @@ import {
   type ReadingAnchor,
 } from "@/lib/transcript/document-reading";
 import {
+  distributePauseGapsAcrossBlocks,
   firstTranslationStart,
+  formatTranscriptPauseGapRun,
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
@@ -354,6 +356,20 @@ export function MeetingTranscriptArtifact({
   // pausing translation are different, unrelated actions.
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
   const pauseGaps = resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime);
+  // NO withoutSegmentsInOpenPauseGaps HERE, AND THAT IS THE DECISION RATHER THAN AN OMISSION.
+  //
+  // The live panel filters lines that fall in a still-open window because it is fed by the
+  // realtime store, which keeps carrying speech through a pause so the caption lane can. This
+  // panel is fed by the DATABASE, and a paused transcript is precisely one nothing is written
+  // into — so the filter would have nothing to remove on any healthy meeting.
+  //
+  // What it WOULD do is fail dangerously on an unhealthy one. A window left open — a room that
+  // crashed mid-pause, or ended before the backend closed it — has no upper bound, so the rule
+  // would delete every line after the pause began from the saved record, permanently and with no
+  // sign that anything was removed. A safety net that can silently swallow the second half of a
+  // meeting is not cheap. The divider below already tells the reader where the hole is; a hole is
+  // what this surface has to show, not one it should make.
+
   const totalCount = grouped.length;
   // WT-311(d): when translation first started, from the sessions the meeting actually ran. Null
   // when it never did, and then the header simply does not claim it.
@@ -460,6 +476,15 @@ export function MeetingTranscriptArtifact({
   const readingTurns = useMemo(
     () => blocks.flatMap((block) => groupIntoSpeakerTurns(block.segments)),
     [blocks],
+  );
+
+  // Each window is drawn in exactly ONE session block. Passing the whole list to every block —
+  // which is what the render below used to do — makes splitSegmentsAroundPauseGaps' trailing pass
+  // repeat every late pause once per translation session, so a meeting with three sessions showed
+  // one pause three times, at three different points in the record.
+  const gapsPerBlock = distributePauseGapsAcrossBlocks(
+    blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+    pauseGaps,
   );
 
   /**
@@ -1331,7 +1356,7 @@ export function MeetingTranscriptArtifact({
               isReading ? "mx-auto w-full max-w-[820px]" : "space-y-1",
             )}
           >
-          {blocks.map((block) => (
+          {blocks.map((block, blockIndex) => (
             <div key={block.sessionNumber} className={layout === "chat" ? "space-y-2" : "space-y-0.5"}>
               {showSessionLabels ? (
                 <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
@@ -1345,9 +1370,13 @@ export function MeetingTranscriptArtifact({
                   `sub.segments`, never `block.segments` — grouping turns across a pause would
                   merge speech from either side of it into one block and hide the very gap the
                   divider is there to announce. */}
-              {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
-                <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`}>
-                  {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
+              {splitSegmentsAroundPauseGaps(block.segments, gapsPerBlock[blockIndex] ?? []).map((sub, subIndex) => (
+                <div
+                  key={sub.gapsBefore.map((gap) => gap.window.id).join("+") || `${block.sessionNumber}-${subIndex}`}
+                >
+                  {sub.gapsBefore.length ? (
+                    <TranscriptPauseDivider gaps={sub.gapsBefore} meetingEnded={isEnded} />
+                  ) : null}
                   {layout === "timeline"
                     ? // One dot per stretch of the meeting a person held, so the rail shows who had
                       // the floor and when — the thing neither of the other two layouts can show at
@@ -1488,17 +1517,30 @@ function TranscriptSessionDivider({
  * translation/dubbing/subtitles were still running. Same visual language as
  * TranscriptSessionDivider above, deliberately distinct wording so the two are never mistaken
  * for one another.
+ *
+ * `meetingEnded` is why this takes the flag at all. An unclosed window printed "10:15 PM–now" on
+ * the record of a meeting that finished last March, which is a claim about the reader's present
+ * that nothing on this page can support. On a finished meeting the honest end of an open window
+ * is the end of the meeting, and that is what it says.
+ *
+ * The whole sentence — the "Transcript paused" opening included — comes out of
+ * formatTranscriptPauseGapRun, so this panel and the live one cannot end up phrasing the same
+ * four cases differently. It is a sentence naming two moments now rather than a label with a
+ * range, which is also why it is no longer uppercased: see the live panel's own divider.
  */
-function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
-  const started = new Date(gap.window.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const ended = gap.window.endedAt
-    ? new Date(gap.window.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "now";
-
+function TranscriptPauseDivider({
+  gaps,
+  meetingEnded,
+}: {
+  gaps: readonly TranscriptPauseGap[];
+  meetingEnded: boolean;
+}) {
   return (
-    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
       <div className="h-px flex-1 bg-border" />
-      <span>Transcript paused · {started}–{ended}</span>
+      <span className="text-center">
+        {formatTranscriptPauseGapRun(gaps, { meetingEnded })}
+      </span>
       <div className="h-px flex-1 bg-border" />
     </div>
   );

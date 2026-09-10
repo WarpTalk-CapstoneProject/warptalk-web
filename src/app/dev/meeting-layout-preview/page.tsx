@@ -137,15 +137,20 @@ export default function MeetingLayoutPreview() {
               segments={segments}
               roomId="preview-paused"
               readerLanguage="en"
-              /* WT-657: with a baseTime to anchor against, the LIVE pause is positioned from
-                 `since` alone — so the lines said after it render dimmed and captioned "not
-                 saved", which is the state this preview exists to show. `since` is 4s in, and
-                 the fixture's lines are 4s apart, so the first line is the record and everything
-                 under it is not.
+              /* A baseTime is what makes the pause POSITIONABLE without a server: `since` alone
+                 anchors the live gap, so this renders the whole withheld state — the one line
+                 that made it into the record, the divider where the record stops, and the
+                 "Paused — new lines are not being recorded." placeholder standing in for the
+                 rest. `since` is 4s in and the fixture's lines are 4s apart, so exactly the
+                 first line survives and every later one is dropped.
 
-                 The CLOSED "Transcript paused · HH:MM–HH:MM" dividers still do not appear here:
-                 those come from the pause-window list the panel fetches itself, and this preview
-                 has no server. */
+                 That is the state worth reviewing precisely because it is an ABSENCE: it is the
+                 one thing a screenshot of the banner cannot show, and the one a regression would
+                 restore silently by putting the dropped lines back on screen.
+
+                 Only the live gap is drawn. The CLOSED "Transcript paused · HH:MM–HH:MM"
+                 dividers come from the pause-window list the panel fetches itself, and this
+                 preview has no server. */
               baseTime="2026-09-06T10:00:00Z"
               transcriptPause={{ paused: true, since: "2026-09-06T10:00:04Z" }}
             />

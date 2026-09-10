@@ -163,6 +163,7 @@ import {
   type FloatingReaction,
 } from "@/components/rooms/live/reaction-overlay";
 import { LanguagePickerModal } from "@/components/rooms/live/language-picker-modal";
+import { TranscriptPauseConfirmDialog } from "@/components/rooms/live/transcript-pause-confirm-dialog";
 import { useRoomHistory } from "@/hooks/use-room-history";
 import { useUpdateUserSettings, useUserSettings } from "@/hooks/use-user-settings";
 import {
@@ -904,6 +905,12 @@ export function PersistentMeetingSession({
   const [transcriptPauseEvent, setTranscriptPauseEvent] = useState<{
     paused: boolean;
   } | null>(null);
+  /**
+   * WT-605. Whether the "are you sure" for PAUSING is on screen — see handleToggleTranscriptPause
+   * for why only that direction has one. Held on the session rather than on either control,
+   * because both routes into the switch have to pass through the same gate.
+   */
+  const [transcriptPauseConfirmOpen, setTranscriptPauseConfirmOpen] = useState(false);
   // WT-272: mute-on-entry is READ from the room's persisted setting, which the join response
   // already carries, and only overridden once this host actually toggles it (null = untouched).
   // It used to be plain `useState(false)`, so the flyout always opened claiming "off" no matter
@@ -2910,13 +2917,35 @@ export function PersistentMeetingSession({
   // WT-06: recording state is confirmed via the RecordingStateChanged broadcast (see
   // MeetingRoomService.SetRecordingAsync) — no optimistic local update needed.
   /**
-   * WT-605, host-only. Deliberately no optimistic flip: the state comes back as a broadcast the
+   * WT-605, host-only. The switch, and the one place the two directions stop being symmetrical.
+   *
+   * PAUSING ASKS FIRST, RESUMING DOES NOT
+   *   Pausing gives up speech that is being said right now and cannot be got back afterwards —
+   *   nothing reaches the transcript or the database for as long as it is on. That is the only
+   *   irreversible half, so it is the only half that gets a dialog (TranscriptPauseConfirmDialog,
+   *   which carries the sentence). Resuming merely starts writing again; confirming it would cost
+   *   a keystroke every time for a decision that cannot go wrong, and a prompt people dismiss by
+   *   reflex is a prompt that no longer protects the case it was built for.
+   *
+   *   The gate lives HERE rather than in the control because there are two ways in — the icon in
+   *   the panel's tab row and the row in the dock's Settings menu — and a check inside either one
+   *   is a check the other route walks straight past.
+   */
+  function handleToggleTranscriptPause() {
+    if (!transcriptPause.paused) {
+      setTranscriptPauseConfirmOpen(true);
+      return;
+    }
+    commitTranscriptPause(false);
+  }
+
+  /**
+   * Sends the request. Deliberately no optimistic flip: the state comes back as a broadcast the
    * whole room receives, so this client reads the same source as everybody else. Flipping locally
    * would put the host's screen a beat ahead of the room, and would survive a 409 saying the
    * transcript was never in the state we assumed.
    */
-  function handleToggleTranscriptPause() {
-    const nextPaused = !transcriptPause.paused;
+  function commitTranscriptPause(nextPaused: boolean) {
     setTranscriptPausedMutation.mutate(nextPaused, {
       onError: (error) => {
         // 409 INVALID_STATE is not a failure of ours — somebody else moved the switch first, and
@@ -2937,6 +2966,22 @@ export function PersistentMeetingSession({
         );
       },
     });
+  }
+
+  /**
+   * WT-605. The dock's way back to a switch that now lives in the Transcript panel's tab row.
+   *
+   * Opens the panel on the Transcript tab FIRST, then toggles. Below `lg` that panel is an
+   * overlay drawer that can be shut, so a dock control which only called the mutation would
+   * change the record with nothing on screen to show for it — the paused notice, the divider and
+   * the panel's own control would all be behind a drawer the host still had to think to open.
+   * Both statements here are ordinary React state and land in the same commit that starts the
+   * mutation; nothing waits on the server to reveal the panel.
+   */
+  function handleToggleTranscriptPauseFromDock() {
+    setSidePanelMode("transcript");
+    setRightSidebarOpen(true);
+    handleToggleTranscriptPause();
   }
 
   function handleToggleRecording() {
@@ -3498,9 +3543,13 @@ export function PersistentMeetingSession({
                     // isRoomHost, not isHost, for the reason the flash-mode and Stop Translation
                     // props above give: TranscriptRecordingService gates on IsRoomHostAsync, so a
                     // workspace admin — host-like everywhere else in this bar — would be handed a
-                    // button that answers 403. Omitting the prop hides the control instead.
-                    onToggleTranscriptPause={
-                      isRoomHost ? handleToggleTranscriptPause : undefined
+                    // row that answers 403. Omitting the prop hides it instead.
+                    //
+                    // The dock's copy of this is a way IN to the panel, not a second switch: the
+                    // handler opens the Transcript tab before it toggles, so the host always sees
+                    // what changed. The switch itself is in the panel's tab row.
+                    onToggleTranscriptPauseInPanel={
+                      isRoomHost ? handleToggleTranscriptPauseFromDock : undefined
                     }
                   />
                 </div>
@@ -3541,6 +3590,14 @@ export function PersistentMeetingSession({
                   ? { paused: transcriptPause.paused, since: transcriptPause.since }
                   : undefined
               }
+              transcriptPausePending={setTranscriptPausedMutation.isPending}
+              // WT-605. The SWITCH, as opposed to the state above: isRoomHost, not isHost, because
+              // TranscriptRecordingService gates on IsRoomHostAsync and a workspace admin would
+              // otherwise be handed a control that answers 403. Omitting it hides the control and
+              // leaves the state — which every participant still sees — untouched.
+              onToggleTranscriptPause={
+                isRoomHost ? handleToggleTranscriptPause : undefined
+              }
               onCopyText={copyText}
               joinLink={joinLink}
               chatTargetLanguage={targetLanguage}
@@ -3552,6 +3609,20 @@ export function PersistentMeetingSession({
         </main>
         )}
       </LiveKitRoom>
+
+      {/* WT-605. Rendered once, beside the session's other modals rather than inside either
+          control: the icon in the panel's tab row and the row in the dock's Settings menu both
+          arrive here through handleToggleTranscriptPause, and a copy per entrance is a copy that
+          can be reached from one route and not the other. */}
+      <TranscriptPauseConfirmDialog
+        open={transcriptPauseConfirmOpen}
+        onOpenChange={setTranscriptPauseConfirmOpen}
+        pending={setTranscriptPausedMutation.isPending}
+        onConfirm={() => {
+          setTranscriptPauseConfirmOpen(false);
+          commitTranscriptPause(true);
+        }}
+      />
 
       {!compact ? <LanguagePickerModal
         open={showLanguagePicker}

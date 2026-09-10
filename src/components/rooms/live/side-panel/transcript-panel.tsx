@@ -6,15 +6,19 @@ import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/language/languages";
 import {
   confidencePercent,
+  distributePauseGapsAcrossBlocks,
   findSuggestionForUtterance,
   formatTranscriptClockTime,
+  formatTranscriptPauseGapRun,
   formatTranscriptTimestamp,
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
+  pauseFilterHasNothingToMatch,
   resolveSegmentTranslation,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
   withLivePauseGap,
+  withoutSegmentsInOpenPauseGaps,
   type GroupedTranscriptSegment,
   type TranscriptPauseGap,
   type TranslationSessionBlock,
@@ -96,10 +100,16 @@ export function TranscriptPanel({
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and
   // pausing translation are different, unrelated actions.
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  // ONE gap list, and it has to include the pause this client has only heard about (WT-657).
+  //
+  // The broadcast lands first and the window list follows a round trip later — every participant
+  // refetches it, so it is a lag, not a blind spot. But the lines needing to be withheld arrive
+  // precisely inside that lag. Derived from the fetched windows alone, both consumers below go
+  // quiet for its duration: the filter finds no open window and keeps every line, and the divider
+  // has nothing to draw. The panel would then print, under its own "Transcript paused" banner,
+  // exactly the words the pause exists to withhold.
   const pauseGaps = useMemo(
     () =>
-      // WT-657: folded together because only the host's window list learns about a pause as it
-      // happens. See withLivePauseGap.
       withLivePauseGap(
         resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
         transcriptPause,
@@ -108,17 +118,59 @@ export function TranscriptPanel({
     [pauseWindowsQuery.data, baseTime, transcriptPause],
   );
 
+  // WT-605, the reported defect: the banner appeared and the words kept flowing under it.
+  //
+  // BEFORE the grouping, not after. groupTranscriptSegments folds consecutive chunks of one
+  // person talking into a single bubble, so a chunk spoken after the host pressed Pause that
+  // lands within MAX_UTTERANCE_GAP_MS of the previous one stops being a segment at all and
+  // becomes part of an earlier line's text — where no filter downstream can reach it. The same
+  // ordering the control-marker drop already relies on, for the same reason.
+  const recorded = useMemo(
+    () => withoutSegmentsInOpenPauseGaps(segments, pauseGaps),
+    [segments, pauseGaps],
+  );
+
+  // THE FILTER ABOVE CAN BE A NO-OP, AND NOTHING ELSE ON SCREEN WOULD SAY SO.
+  //
+  // It withholds only what falls inside an OPEN gap, and there are two ordinary ways to be paused
+  // with no open gap in hand: a room with no usable `baseTime`, where resolveTranscriptPauseGaps
+  // can place nothing at all, and the round trip between the broadcast landing and the window list
+  // catching up, during which a broadcast-learned pause has no `since` for withLivePauseGap to
+  // synthesize from. In both, lines keep appearing under the amber banner that has just promised
+  // they are not being written down.
+  //
+  // Asked here rather than left to the module because this is the panel that depends on the
+  // answer. The dev-only half of the complaint lives in pauseFilterHasNothingToMatch; the
+  // user-facing half is the placeholder below, which stays TRUE in this state — the record really
+  // has stopped — and is the only thing telling a reader so while the list is still moving.
+  const pauseFilterInert = pauseFilterHasNothingToMatch(transcriptPause, pauseGaps);
+
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The distance this panel itself uses to decide it has stopped following. A chip offering to
     // jump to a bottom the panel is already gliding towards reads as a broken control.
     threshold: STICK_TO_BOTTOM_PX,
-    revision: segments.length,
+    // What is RENDERED, not what arrived. While paused the store keeps growing and the list does
+    // not, so counting arrivals would offer "jump to the newest line" for a line that is not
+    // there — a chip that appears to do nothing.
+    revision: recorded.segments.length,
   });
 
   const blocks = useMemo(() => {
-    const utterances = groupTranscriptSegments(segments);
+    const utterances = groupTranscriptSegments(recorded.segments);
     return groupSegmentsByTranslationSession(utterances, sessions ?? [], baseTime);
-  }, [segments, sessions, baseTime]);
+  }, [recorded.segments, sessions, baseTime]);
+
+  // Each pause belongs to exactly ONE session block. Handing every block the whole list — which
+  // is what both panels used to do — makes the trailing pass in splitSegmentsAroundPauseGaps
+  // redraw every late gap once per session, so one pause read as three.
+  const gapsPerBlock = useMemo(
+    () =>
+      distributePauseGapsAcrossBlocks(
+        blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+        pauseGaps,
+      ),
+    [blocks, pauseGaps],
+  );
 
   // WHERE THE READER WAS, NOT WHERE THE TRANSCRIPT ENDS.
   //
@@ -215,35 +267,43 @@ export function TranscriptPanel({
         </div>
       ) : null}
       <AnimatePresence initial={false}>
-        {blocks.map((block) => (
+        {blocks.map((block, blockIndex) => (
           <div key={block.sessionNumber} className="space-y-2">
             {showSessionLabels ? <SessionDivider block={block} /> : null}
-            {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
-              <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`} className="space-y-2">
-                {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
-                {/* WT-657: lines that arrive while the pause is still in force. Translation and
-                    dubbing keep running through a pause by design, so the Gateway goes on
-                    broadcasting them — but nothing writes them down, and they are gone on the next
-                    reload. Drawn dimmed and labelled rather than dropped, so a listener still gets
-                    the words while the host can see they are not being kept. */}
-                {sub.recorded ? null : <UnrecordedLead />}
-                <div className={sub.recorded ? "space-y-2" : "space-y-2 opacity-60"}>
-                  {sub.segments.map((segment) => (
-                    <TranscriptBubble
-                      key={segment.segmentId}
-                      segment={segment}
-                      readerLanguage={readerLanguage}
-                      isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
-                      suggestion={findSuggestionForUtterance(segment, suggestions)}
-                      onDismissSuggestion={dismissSuggestion}
-                    />
-                  ))}
-                </div>
+            {splitSegmentsAroundPauseGaps(block.segments, gapsPerBlock[blockIndex] ?? []).map((sub, subIndex) => (
+              <div
+                key={sub.gapsBefore.map((gap) => gap.window.id).join("+") || `${block.sessionNumber}-${subIndex}`}
+                className="space-y-2"
+              >
+                {sub.gapsBefore.length ? <TranscriptPauseDivider gaps={sub.gapsBefore} /> : null}
+                {/* Every bubble here is one the record kept. Nothing spoken into an open pause
+                    reaches this map — it was dropped upstream, before the grouping. A branch that
+                    rendered such a line dimmed instead would put words on screen that the saved
+                    transcript does not have, which is the disagreement this panel must not
+                    produce; see withoutSegmentsInOpenPauseGaps for the ruling behind that. */}
+                {sub.segments.map((segment) => (
+                  <TranscriptBubble
+                    key={segment.segmentId}
+                    segment={segment}
+                    readerLanguage={readerLanguage}
+                    isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
+                    suggestion={findSuggestionForUtterance(segment, suggestions)}
+                    onDismissSuggestion={dismissSuggestion}
+                  />
+                ))}
               </div>
             ))}
           </div>
         ))}
       </AnimatePresence>
+      {/* Once something has actually been dropped — or once the filter is known to be unable to
+          drop anything while the transcript is paused. The banner above already says the
+          transcript is paused; this says the different, sharper thing — that the list you are
+          reading is no longer the record. Without it the panel simply stops moving while people
+          are visibly talking, which is indistinguishable from a transcript that has broken, and
+          that is the report this whole ticket started as; and in the inert case (see
+          pauseFilterInert) it is the only mark of a hole the divider cannot yet be drawn for. */}
+      {recorded.hiddenCount > 0 || pauseFilterInert ? <PausedLinesPlaceholder /> : null}
     </div>
       {/* The panel stops following the moment the reader scrolls up — which is right, and left
           them stranded in the middle of an hour of talking with the newest line somewhere below
@@ -260,24 +320,6 @@ export function TranscriptPanel({
  * this is NOT the meeting stopping. Translation, dubbing and subtitles run exactly as before, and
  * a notice that let someone believe otherwise would send them out of a working meeting.
  */
-/**
- * WT-657. The line between the words on screen and the words in the record.
- *
- * The panel already carries a pinned "Transcript paused" notice, and that was not enough: lines
- * kept appearing under it, which reads as the notice being stale rather than as the lines being
- * uncounted. This sits immediately above the lines it is about, so the two cannot be read apart.
- *
- * Deliberately quiet — one line, no icon, no colour. The amber notice above is the alarm; a second
- * one here would compete with it, and this is a caption on the lines, not another warning.
- */
-function UnrecordedLead() {
-  return (
-    <p role="status" className="px-1 pt-1 text-[11px] italic leading-relaxed text-ink-muted">
-      Said while paused — shown live, not saved to the transcript.
-    </p>
-  );
-}
-
 function TranscriptPausedNotice({ since }: { since: string | null }) {
   const startedAt = since
     ? new Date(since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
@@ -319,19 +361,45 @@ function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTrans
  * WT-605. The gap left by a Pause Transcript window — no line was recorded here, only
  * translation/dubbing/subtitles were still running. Same visual language as SessionDivider
  * above, deliberately distinct wording so the two are never mistaken for one another.
+ *
+ * Takes a RUN of windows, not one: two pauses with nobody speaking between them are one hole in
+ * the record and are named as one. `meetingEnded` is not passed here because this panel only ever
+ * renders a meeting that is happening — an unclosed window here is one that has genuinely not been
+ * resumed yet, and the lie that becomes on a finished meeting lives on the saved panel, which
+ * passes it.
+ *
+ * The whole sentence comes out of formatTranscriptPauseGapRun, prefix included. It used to be
+ * "Transcript paused ·" written here and a range written there, which is two files that have to
+ * agree on grammar for the four cases the label has — and only one of them can see which case it
+ * is in.
+ *
+ * NOT UPPERCASED, unlike the SessionDivider it sits among. That divider is a two-word label
+ * ("Translation 1"); this is now a sentence with two clock times in it, and a sentence set in
+ * 10px all-caps is read letter by letter or not at all. The line rules and the muted colour keep
+ * the two legible as the same kind of mark.
  */
-function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
-  const started = new Date(gap.window.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const ended = gap.window.endedAt
-    ? new Date(gap.window.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "now";
-
+function TranscriptPauseDivider({ gaps }: { gaps: readonly TranscriptPauseGap[] }) {
   return (
-    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold tracking-wide text-ink-subtle">
       <div className="h-px flex-1 bg-border" />
-      <span>Transcript paused · {started}–{ended}</span>
+      <span className="text-center">{formatTranscriptPauseGapRun(gaps)}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
+  );
+}
+
+/**
+ * Where the lines would have been, had the transcript been running.
+ *
+ * Shape approved by the product owner in the WT-605 design artifact. It is deliberately not a
+ * second banner: it sits at the foot of the list, in the flow, muted, so the reader's eye lands
+ * on it exactly where it expected the next line — the one place the absence needs explaining.
+ */
+function PausedLinesPlaceholder() {
+  return (
+    <p className="px-1 py-3 text-center text-[11px] italic leading-relaxed text-ink-subtle">
+      Paused — new lines are not being recorded.
+    </p>
   );
 }
 
