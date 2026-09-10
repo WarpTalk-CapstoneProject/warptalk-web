@@ -201,7 +201,7 @@ export function MeetingTranscriptArtifact({
   onCopy,
   transcriptId,
   transcriptStatus,
-  highlightedSegmentId,
+  highlightedSegmentIds,
   canEdit,
   onSegmentsChanged,
   speakerDirectory,
@@ -226,9 +226,15 @@ export function MeetingTranscriptArtifact({
   /** Needed to correct or finalize; omit and the section stays read-only. */
   transcriptId?: string;
   transcriptStatus?: string;
-  /** Set when a summary citation jumped here; the row is marked so the reader can see
-   *  which line the claim came from rather than landing in an anonymous wall of text. */
-  highlightedSegmentId?: string | null;
+  /** Set when a summary citation jumped here; the rows are marked so the reader can see
+   *  which lines the claim came from rather than landing in an anonymous wall of text.
+   *
+   *  A SET, not one id: a sentence summarising an exchange rests on several turns by several
+   *  speakers, and ringing only the first of them told the reader the claim came from half of
+   *  its own evidence. Membership is asked once per rendered line on a column that can be several
+   *  hundred rows, so the caller hands over something that can answer in constant time rather
+   *  than a list this panel would have to scan. Absent means no citation is pointing here. */
+  highlightedSegmentIds?: ReadonlySet<string>;
   /**
    * WT-516: the server's code when the transcript lookup FAILED — `FORBIDDEN`, `NOT_FOUND`, a
    * status. Without it this panel cannot tell "you may not read this" from "there is nothing",
@@ -470,6 +476,25 @@ export function MeetingTranscriptArtifact({
   const publishAnchors = sync?.publishAnchors;
   const anchors = sync?.anchors;
   const setReadingKey = sync?.setReadingKey;
+  const markedKeys = sync?.markedKeys;
+
+  /**
+   * The blocks the rail is pointing at, as a lookup rather than a list.
+   *
+   * A summary sentence rests on every turn it was drawn from, so this is a set of keys and not one
+   * key — and it is asked once per block on a document that is routinely several hundred of them,
+   * every time a pointer crosses a rail item. Scanning the list per block would make the cost of
+   * hovering one claim the product of the two, which is the same trap groupCitationsByAnchor is
+   * written against on the other side of this wire. Built once per render off the array, the way
+   * languageChipLineIds above is; the provider only hands over a new array when the keys actually
+   * changed, so this rebuilds when the answer can have changed and not when a render happens.
+   *
+   * Null while nothing is marked, so the common case costs no allocation at all.
+   */
+  const markedKeySet = useMemo(
+    () => (markedKeys && markedKeys.length > 0 ? new Set(markedKeys) : null),
+    [markedKeys],
+  );
 
   const measureAnchors = useCallback(() => {
     const scroller = scrollerRef.current;
@@ -599,7 +624,7 @@ export function MeetingTranscriptArtifact({
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
       onSeek: onSeekToRecording ? () => onSeekToRecording(segment.startTimeMs) : undefined,
-      highlighted: highlightedSegmentId === segment.id,
+      highlighted: highlightedSegmentIds?.has(segment.id) ?? false,
       // A chip on every line of a transcript that IS in one language is noise. Shown when the
       // line is not simply "spoken in the language you asked for", which makes its absence
       // meaningful: no chip means these are the speaker's own words.
@@ -1198,7 +1223,7 @@ export function MeetingTranscriptArtifact({
                                 ? () => onSeekToRecording(turn.startTimeMs)
                                 : undefined
                             }
-                            marked={sync?.markedKey === turn.key}
+                            marked={markedKeySet?.has(turn.key) ?? false}
                             reading={sync?.readingKey === turn.key}
                             query={query}
                             rows={turn.lines.map((line) => {
@@ -1837,7 +1862,8 @@ function TranscriptDocumentTurn({
   /** The wall clock, for the tooltip, when the transcript knows when the meeting began. */
   clock: string | null;
   onSeek?: () => void;
-  /** A summary claim in the rail is pointing here right now. */
+  /** A summary claim in the rail is pointing here right now — at this block among however many
+   *  others it rests on, because one sentence can summarise an exchange. */
   marked: boolean;
   /** This is the block under the reader's eye — the direction of the sync people forget. */
   reading: boolean;
