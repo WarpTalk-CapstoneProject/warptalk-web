@@ -6,7 +6,9 @@ import {
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
+  countPlayableRecordings,
   findPlayableRecording,
+  hasPendingRecording,
 } from "../meeting-artifacts.ts";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
@@ -131,4 +133,71 @@ test("a recording still behind its consent stop is offered, and consent is asked
 
   assert.equal(found?.id, "rec");
   assert.equal(found?.consentRequired, true);
+});
+
+// WT-655 — findPlayableRecording returns the FIRST match, which is fine for "what do I play" and
+// wrong for "may I seek". Anyone in the room can stop and restart recording, and each run is its
+// own file with its own start instant: a moment from the second half of the meeting measured
+// against the first file yields a positive, plausible, wrong offset. That is a seek that looks like
+// it worked and lands on the wrong sentence, and nothing in the arithmetic can detect it, because
+// both origins it was handed are real. So it is counted instead.
+
+test("no recordings at all is zero, not an error", () => {
+  assert.equal(countPlayableRecordings(undefined), 0);
+  assert.equal(countPlayableRecordings(null), 0);
+  assert.equal(countPlayableRecordings([]), 0);
+  assert.equal(
+    countPlayableRecordings([artifact({ type: "transcript_export" })]),
+    0,
+  );
+});
+
+test("one playable recording is the case seeking is allowed in", () => {
+  assert.equal(
+    countPlayableRecordings([
+      artifact({ id: "t", type: "transcript_export" }),
+      artifact({ id: "rec", type: "recording" }),
+      artifact({ id: "s", type: "summary_export" }),
+    ]),
+    1,
+  );
+});
+
+test("a stop-and-restart meeting counts every file it produced", () => {
+  // Three runs, three rows, three different recordingStartedAt values — and one arithmetic that can
+  // only be told about one of them. This count is the only thing standing between that and a seek
+  // to the wrong sentence.
+  assert.equal(
+    countPlayableRecordings([
+      artifact({ id: "r1", type: "recording", recordingStartedAt: "2026-09-08T10:00:00Z" }),
+      artifact({ id: "r2", type: "recording", recordingStartedAt: "2026-09-08T10:20:00Z" }),
+      artifact({ id: "r3", type: "recording", recordingStartedAt: "2026-09-08T10:45:00Z" }),
+    ]),
+    3,
+  );
+});
+
+test("only PLAYABLE recordings are counted", () => {
+  // A processing file cannot be seeked into either, so it must not push a perfectly seekable
+  // meeting over the line and withhold a feature that works.
+  assert.equal(
+    countPlayableRecordings([
+      artifact({ id: "r1", type: "recording" }),
+      artifact({ id: "r2", type: "recording", status: "processing" }),
+      artifact({ id: "r3", type: "recording", status: "failed" }),
+    ]),
+    1,
+  );
+});
+
+test("a recording still being written is told apart from no recording at all", () => {
+  // findPlayableRecording collapses both into null on purpose — neither can be played. They are
+  // not the same thing to say to a reader: one resolves itself in a minute, the other never
+  // happened, and only the first deserves anything on screen.
+  assert.equal(hasPendingRecording([artifact({ type: "recording", status: "processing" })]), true);
+  assert.equal(hasPendingRecording([artifact({ type: "recording", status: "failed" })]), true);
+  assert.equal(hasPendingRecording([artifact({ type: "recording", status: "ready" })]), false);
+  assert.equal(hasPendingRecording([artifact({ type: "transcript_export", status: "processing" })]), false);
+  assert.equal(hasPendingRecording([]), false);
+  assert.equal(hasPendingRecording(undefined), false);
 });

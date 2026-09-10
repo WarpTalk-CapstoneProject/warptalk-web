@@ -6,6 +6,30 @@ import { Calendar as CalendarIcon, Copy, Tag, Users } from "@phosphor-icons/reac
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { meetingTypeByValue } from "@/lib/meeting/meeting-types";
+import { UserChip, type UserChipIdentity } from "@/components/user/user-chip";
+
+/**
+ * Who hosts this room, from the two sources this component has: the signed-in user (when they
+ * are the host) and the participant roster. Neither is guaranteed — a host who has not joined
+ * yet is in neither — so the last resort is the word "Host", not their id.
+ */
+function hostIdentity(
+  room: TranslationRoomDto,
+  apiParticipants: TranslationRoomParticipantDto[],
+  user: { id: string; fullName?: string } | null,
+): UserChipIdentity {
+  const fromRoster = apiParticipants.find(
+    (participant) => participant.userId === room.hostId,
+  );
+  return {
+    userId: room.hostId,
+    name:
+      (room.hostId === user?.id ? user?.fullName : fromRoster?.displayName) ||
+      fromRoster?.displayName ||
+      "Host",
+    role: "Host",
+  };
+}
 
 export function MeetingPropertiesPills({
   room,
@@ -73,14 +97,12 @@ export function MeetingPropertiesPills({
         </div>
       )}
 
-      <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-        <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0 uppercase">
-          {room.hostId === user?.id ? user?.fullName?.charAt(0) : (apiParticipants.find(p => p.userId === room.hostId)?.displayName?.charAt(0) || room.hostId.charAt(0))}
-        </div>
-        <span className="text-ink-muted pr-1.5 text-[12px] font-medium">
-          {room.hostId === user?.id ? user?.fullName : (apiParticipants.find(p => p.userId === room.hostId)?.displayName || room.hostId)}
-        </span>
-      </div>
+      {/* The host, as a chip you can open rather than a name you can only read. This drew its own
+          initial-in-a-circle and never had a code path that could show a face, so the host of
+          every meeting was a letter — and when neither the viewer nor the participant list could
+          name them it printed the raw host UUID into the pill. The shared chip carries the face,
+          the presence dot and the card; an unresolvable host now reads as "Host". */}
+      <UserChip user={hostIdentity(room, apiParticipants, user)} size="md" className="border-border/60" />
 
       <LanguageSelector
         languages={room.targetLanguages?.length ? room.targetLanguages : [room.sourceLanguage].filter(Boolean) as string[]}

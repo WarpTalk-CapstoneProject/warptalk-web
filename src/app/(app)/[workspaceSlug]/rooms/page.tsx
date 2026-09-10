@@ -1,6 +1,5 @@
 "use client";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
@@ -25,6 +24,7 @@ import {
   recurrenceBadgeLabel,
 } from "@/lib/meeting/recurrence";
 import { LanguageLabel } from "@/components/language/language-label";
+import { UserChip } from "@/components/user/user-chip";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
@@ -147,11 +147,7 @@ function LinearRow({
   // one the viewer is currently in this resolves to the server's aggregate — see the PR's
   // BACKEND note: that aggregate is `TranslationRoomParticipants.Count`, not the seat rule.
   const occupancy = useRoomOccupancy(room);
-  const { name: hostName, avatarUrl: hostAvatar } = resolveRoomHost(
-    room,
-    members,
-    user,
-  );
+  const host = resolveRoomHost(room, members, user);
 
   // WT-327: a grouped row opens the meeting it stands for — the one live now, or the next due,
   // which is what the server picked as the row's representative. There is no separate booking
@@ -229,23 +225,19 @@ function LinearRow({
           <StatusPanel status={room.status} />
         </div>
 
+        {/* The host pill is now the host CHIP: same capsule, but it opens their card instead of
+            being a label you can only look at. The row is a <Link>, so the chip renders a span
+            rather than a button and swallows the click — opening the card must not also open the
+            meeting. */}
         <div className="hidden @[700px]:flex shrink-0 items-center">
-          <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            <Avatar className="size-5 shrink-0 rounded-full">
-              <AvatarImage src={hostAvatar} alt={hostName} />
-              <AvatarFallback className="text-[9px] font-medium bg-primary/10 text-primary">
-                {hostName.charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="truncate text-ink-muted pr-1.5">{hostName}</span>
-          </div>
+          <UserChip user={host} size="md" className="border-border/60" />
         </div>
 
         <div className="flex shrink-0 items-center">
           <div className="flex h-[26px] max-w-full items-center gap-1.5 overflow-hidden rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-            {/* Reads "🇺🇸 · 🇻🇳 · 🇯🇵" — the languages this meeting is held in, and nothing else.
+            {/* Reads "EN · VI · JA" — the languages this meeting is held in, and nothing else.
 
-                It used to read "English → 🇻🇳 · 🇯🇵", which asserted a relationship the product
+                It used to read "English → VI · JA", which asserted a relationship the product
                 does not have: every participant picks their own speak and listen language, so
                 there is no meeting-wide source and no direction to point an arrow at. A room
                 only ever declares a SET. The named source was the loudest thing in the chip and
@@ -255,9 +247,10 @@ function LinearRow({
                 it sat after every multi-language room whether or not anything had been hidden,
                 so it punctuated a gap that was never there.
 
-                Flags only, no names: the column is 176px and two language names do not fit.
-                LanguageLabel keeps the name as the title and aria-label, so the flag is not the
-                only thing carrying the meaning. A room can declare any number of languages —
+                Codes only, no names: the column is 176px and two language names do not fit.
+                LanguageLabel keeps the name as the title and aria-label, so the code is not the
+                only thing carrying the meaning. WT-661 retired the flags these used to be —
+                Windows renders no flag glyph, and a country is not a language. A room can declare any number of languages —
                 nothing client-side caps the set — so the pill is capped at the column and clips
                 rather than pushing the occupancy and date columns out of line. */}
             {meetingLanguageSet(room.sourceLanguage, room.targetLanguages).map(

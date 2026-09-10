@@ -614,25 +614,80 @@ export type TranscriptPauseBlock<T> = {
 };
 
 /**
+ * WT-657. The gap list, plus the pause the room is in RIGHT NOW if the window list does not
+ * already know about it.
+ *
+ * THE WINDOW LIST IS NOT WRONG, IT IS LATE
+ *   `applyTranscriptPause` in persistent-meeting-session fires `pauseWindowsQuery.refetch()` on
+ *   BOTH broadcasts, on EVERY participant — the query key is room-scoped and shared, so the panel
+ *   is reading the same cache that refetch fills. The list therefore does catch up on its own.
+ *   What it cannot do is catch up instantly: between `TranscriptPaused` landing and that round
+ *   trip resolving, this client holds `paused: true` next to a window list with no open window.
+ *
+ *   That interval is short and it is exactly when the words are arriving. Anything derived from
+ *   the windows alone renders nothing during it — so a viewer would watch lines pile up under the
+ *   paused notice for as long as the fetch takes, which is the reported bug in miniature. Folding
+ *   the broadcast in closes the race rather than papering over a hole.
+ *
+ * `since` is a wall-clock instant and gaps are meeting-relative, hence `baseTime` — the same
+ * anchor `resolveTranscriptPauseGaps` uses, and the same "nothing to anchor against" fallback.
+ *
+ * WT-605 consumes this beyond the divider it was written for: the gaps this returns are what
+ * `withoutSegmentsInOpenPauseGaps` filters against, so the live pause suppresses lines from the
+ * instant the broadcast lands rather than from whenever the refetch comes back.
+ */
+export function withLivePauseGap(
+  gaps: readonly TranscriptPauseGap[],
+  pause: { paused: boolean; since: string | null } | undefined,
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  if (!pause?.paused) return [...gaps];
+  // Already known from the window list — the host's case. Adding a second open gap would split the
+  // same pause in two and draw its divider twice.
+  if (gaps.some((gap) => gap.endMs === null)) return [...gaps];
+
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  const sinceMs = pause.since ? new Date(pause.since).getTime() : NaN;
+  if (Number.isNaN(baseMs) || Number.isNaN(sinceMs)) return [...gaps];
+
+  return [
+    ...gaps,
+    {
+      // Synthetic: the real row exists server-side, but this viewer has not been sent it. Only
+      // `startMs`/`endMs` are read for splitting; `id` keys the divider's React element.
+      window: { id: `live-pause-${pause.since}`, startedAt: pause.since!, endedAt: null },
+      startMs: sinceMs - baseMs,
+      endMs: null,
+    } as TranscriptPauseGap,
+  ].sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
  * Splits an already-chronological list of segments into blocks around each pause gap.
  *
- * A SEGMENT CAN FALL INSIDE A GAP, AND THE DOCSTRING HERE USED TO DENY IT (WT-605)
+ * A SEGMENT CAN FALL INSIDE A GAP, AND THE DOCSTRING HERE USED TO DENY IT (WT-605, WT-657)
  *   It claimed "no segment is ever expected to fall INSIDE a gap — the segments spoken during it
  *   were never persisted". That is true of the SAVED transcript and false of the live one, which
  *   is where the bug was found: pausing stops the record growing, it does not stop
  *   `TranscriptSegmentReceived`, because the caption lane and the transcript panel read the same
- *   store and captions deliberately keep running through a pause.
+ *   store and captions deliberately keep running through a pause. WT-657 diagnosed that same lie
+ *   independently, from the other end — the panel and the notice asserting opposite things.
  *
  *   So a gap's block opens at the moment the pause ENDED, not at the moment it began. Opening it
- *   at `startMs` — what this did — put every line spoken during the pause BELOW the "Transcript
- *   paused" divider, where it reads as having been said after the host resumed: the record then
- *   asserts the opposite of what happened. Above the divider it reads as "and from here, nothing",
- *   which is what the mark is for.
+ *   at `startMs` put every line spoken during the pause BELOW the "Transcript paused" divider,
+ *   where it reads as having been said after the host resumed: the record then asserts the
+ *   opposite of what happened. Above the divider it reads as "and from here, nothing", which is
+ *   what the mark is for.
  *
  *   A gap still open has no end to reach, so nothing can open its block from inside the loop; it
  *   is emitted by the trailing pass below, after every line already in hand. On the live panel
  *   those lines are gone before they get here (withoutSegmentsInOpenPauseGaps); on the saved one
  *   the case is a chunk finalized either side of the pause boundary, and this is where it lands.
+ *
+ *   No `recorded` flag rides along, because nothing downstream may render an unrecorded line —
+ *   see withoutSegmentsInOpenPauseGaps for the product decision that settles it. A flag here
+ *   would be an invitation to draw those lines dimmed instead of dropping them, which is the one
+ *   outcome the panel must not produce.
  *
  * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
  * translation and pause transcript at different, unrelated moments, so callers run this within
@@ -792,6 +847,20 @@ export function formatTranscriptPauseGapRun(
  * The lines that are actually being written down: everything except what was said while a pause
  * window is STILL OPEN. WT-605, and the defect the tester reported.
  *
+ * DROPPED, NOT DIMMED — THE PRODUCT OWNER'S RULING OF 2026-09-10
+ *   WT-657 fixed the same defect the other way: keep the lines, mark them unrecorded, render them
+ *   at reduced opacity under a caption. Both designs are honest; only one of them is the product.
+ *   The ruling, verbatim: "khi host chủ động pause transcript là sẵn sàng cho tinh thần chỉ dịch
+ *   bằng audio dubbing và voice clone, không persist ở transcript và DB" — a host who pauses the
+ *   transcript is opting into translation carried by audio dubbing and voice clone ALONE, with
+ *   nothing persisted to the transcript or the database.
+ *
+ *   So the panel must not show what will not be kept. A dimmed line is still a line on screen: it
+ *   gets read, quoted and screenshotted, and it is absent from the record the meeting is judged
+ *   by — which makes the panel and the saved transcript disagree about what was said. The gap the
+ *   divider draws is the honest artefact of that decision, and the placeholder below the list is
+ *   where the absence explains itself.
+ *
  * WHY THE FILTER IS HERE AND NOT AT THE STORE OR THE GATEWAY
  *   Pausing the transcript stops the RECORD growing and nothing else — the product decision of
  *   2026-09-09 is explicit that the caption lane keeps showing words through a pause. The overlay
@@ -817,6 +886,17 @@ export function formatTranscriptPauseGapRun(
  *   and a line arriving now is, by definition, one that is not being recorded. `receivedAt` is
  *   read as a second, independent tell for the same reason: it is stamped on arrival in wall
  *   clock, so it survives the ingress reset that `startTimeMs` does not.
+ *
+ * THE GAPS HANDED IN MUST HAVE PASSED THROUGH withLivePauseGap
+ *   This filter is only ever as current as the list it is given, and the window list lags the
+ *   broadcast by one round trip (see withLivePauseGap). Fed from `resolveTranscriptPauseGaps`
+ *   alone there is no open window to match during that interval, so this returns every segment
+ *   untouched and the panel prints exactly the lines the pause exists to withhold — the reported
+ *   bug, surviving its own fix for as long as the fetch takes.
+ *
+ *   That gap-closing is WT-657's, carried over from the design this one replaced. The rendering
+ *   decision changed; the observation that the window list alone is not a live enough source did
+ *   not, and it is load-bearing here.
  *
  * The count comes back with the lines because the panel says so on screen: a stretch where words
  * are visibly being spoken and nothing appears needs to explain itself, or the panel looks broken.

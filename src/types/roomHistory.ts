@@ -97,6 +97,9 @@ export interface TranslationRoomSummaryArtifact {
   translations?: Record<string, MeetingSummarySection>;
   /** Which template produced this summary; absent on pre-template summaries. */
   templateKey?: string;
+  /** ISO 639-1 the summary was written in, as recorded by the worker that wrote it. Absent
+   *  means nobody chose one and the model followed the transcript. */
+  summaryLanguage?: string;
   /** Normalised sections carrying their citations — what the Summary tab renders. */
   sections?: MeetingSummarySectionView[];
 }

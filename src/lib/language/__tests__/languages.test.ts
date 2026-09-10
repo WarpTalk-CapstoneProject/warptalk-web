@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   SUPPORTED_LANGUAGES,
   formatLanguageRoute,
+  getLanguageCode,
   getLanguageName,
   isLanguageAllowedByPolicy,
   languagesInScope,
@@ -150,4 +151,38 @@ test("an unknown language is passed through rather than guessed at", () => {
   assert.equal(getLanguageName("kl-GL"), "kl-GL");
   assert.equal(getLanguageName(undefined), "Auto");
   assert.equal(getLanguageName(""), "Auto");
+});
+
+/**
+ * WT-661: the short mark beside a language is its ISO-639-1 code, not a flag emoji.
+ *
+ * Two independent defects retired the flag. Windows ships no colour flag glyphs, so a
+ * regional-indicator pair rendered as its two letters and a room configured for English and
+ * Vietnamese read "US · VN". And a flag asserted a country: English was drawn as the United
+ * States, which is wrong for every British, Indian, Nigerian and Australian speaker of it.
+ */
+test("a language's short mark is its own code, from a tag or a bare code", () => {
+  assert.equal(getLanguageCode("vi-VN"), "VI");
+  assert.equal(getLanguageCode("en-US"), "EN");
+  assert.equal(getLanguageCode("ja-JP"), "JA");
+  assert.equal(getLanguageCode("vi"), "VI");
+  assert.equal(getLanguageCode("vi_VN"), "VI");
+});
+
+test("an unknown language degrades to its own tag, not to nothing", () => {
+  // The flag did the opposite: no region meant no glyph, so the badge vanished for any language
+  // the registry had not been taught. A code is available for every tag there is.
+  assert.equal(getLanguageCode("xh"), "XH");
+  assert.equal(getLanguageCode("kl-GL"), "KL");
+});
+
+test("no language means no mark", () => {
+  assert.equal(getLanguageCode(undefined), "");
+  assert.equal(getLanguageCode(""), "");
+});
+
+test("the code never carries a region, which is the whole point", () => {
+  // en-US and en-GB are one language and must produce one mark. The flag produced two, and
+  // neither of them said "English".
+  assert.equal(getLanguageCode("en-GB"), getLanguageCode("en-US"));
 });

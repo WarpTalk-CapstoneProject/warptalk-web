@@ -117,8 +117,8 @@ function ChatSenderAvatar({
   displayName: string;
 }) {
   const identity = useMeetingIdentity(userId, displayName);
-  // No flag: the row already prints the message's language beside the name.
-  return <ParticipantAvatar identity={identity} size="sm" showFlag={false} className="mt-0.5" />;
+  // No code badge: the row already prints the message's language beside the name.
+  return <ParticipantAvatar identity={identity} size="sm" showCode={false} className="mt-0.5" />;
 }
 
 export function ChatPanel({

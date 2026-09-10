@@ -143,11 +143,29 @@ export const API = {
     consent: (id: string) => `/room-artifacts/${id}/consent`,
     regenerateSummary: (roomId: string) =>
       `/room-artifacts/rooms/${roomId}/summary/regenerate`,
+    // Reading a meeting in a shape and language. A GET that can cause work: the first reader of
+    // a pair nobody has asked for gets a 202 and the answer lands a moment later. It never
+    // changes what any other reader sees, which is what separates it from regenerateSummary.
+    summary: (roomId: string, template: string, language?: string) => {
+      const query = new URLSearchParams({ template });
+      // Only when chosen. An absent `language` and an empty one mean the same thing to the
+      // server, but sending the empty one makes two spellings of one request — and so two
+      // entries in anything that keys on the URL.
+      if (language) query.set("language", language);
+      return `/room-artifacts/rooms/${roomId}/summary?${query.toString()}`;
+    },
+    summaryRenderings: (roomId: string) =>
+      `/room-artifacts/rooms/${roomId}/summary/renderings`,
   },
   // Biên bản họp. Its own group rather than an artifact route: minutes are not an output a job
   // produced, they are a record with a lifecycle and a signature.
   minutes: {
     byRoom: (roomId: string) => `/rooms/${roomId}/minutes`,
+    // Reading the record in a language it was not drawn up in. A GET that can cause work —
+    // the first reader of a language pays for a model call and the answer lands a moment
+    // later — but it writes nothing to the document.
+    translation: (roomId: string, language: string) =>
+      `/rooms/${roomId}/minutes/translation?language=${encodeURIComponent(language)}`,
     draft: (roomId: string) => `/rooms/${roomId}/minutes/draft`,
     update: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}`,
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,

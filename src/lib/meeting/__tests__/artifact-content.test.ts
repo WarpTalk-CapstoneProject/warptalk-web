@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 import { readSummaryArtifact } from "../artifact-content.ts";
+import { parseMeetingSummaryContent } from "../../../types/meetingSummary.ts";
 
 /**
  * The exact payload production stored for room 01a0089e on 2026-08-16, escapes and all — this is
@@ -149,5 +150,37 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
       !source.includes("JSON.stringify(JSON.parse"),
       `${page.path} must not pretty-print JSON at the reader`,
     );
+  }
+});
+
+/**
+ * The language a summary was written in is READ BACK, never guessed at.
+ *
+ * A reader has to be able to see which language the document in front of them is in before
+ * deciding whether to ask for another one, and the only trustworthy source for that is what the
+ * worker recorded when it wrote the summary. Detecting it from the text would be answering a
+ * question we already knew the answer to — and getting it wrong on a two-sentence summary.
+ */
+test("a recorded summary language survives parsing, normalised", () => {
+  const parsed = parseMeetingSummaryContent(
+    JSON.stringify({ summary: "Bot performance was discussed.", summaryLanguage: "EN" }),
+  );
+
+  assert.equal(parsed?.summaryLanguage, "en");
+});
+
+/**
+ * No recorded language is a real answer: it says nobody chose, and the model followed the
+ * transcript. Every summary written before the choice existed is in this state, and the rail
+ * offers "As spoken" for exactly it — so it must not be confused with a language of "".
+ */
+test("a summary with no recorded language reports undefined, not an empty string", () => {
+  for (const content of [
+    JSON.stringify({ summary: "x" }),
+    JSON.stringify({ summary: "x", summaryLanguage: "" }),
+    JSON.stringify({ summary: "x", summaryLanguage: "   " }),
+    JSON.stringify({ summary: "x", summaryLanguage: 7 }),
+  ]) {
+    assert.equal(parseMeetingSummaryContent(content)?.summaryLanguage, undefined);
   }
 });

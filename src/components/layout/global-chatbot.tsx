@@ -58,6 +58,7 @@ import {
   usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
+import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import type * as signalR from "@microsoft/signalr";
 import type {
@@ -419,7 +420,12 @@ export function GlobalChatbot() {
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
-  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } = useAssistantPlugins();
+  // Scoped to the active workspace, exactly as the Plugins settings page reads it. Unscoped, the
+  // API has no policy to apply and answers with every row unblocked — so a workspace that had
+  // turned plugins off still had them offered here, and the install and connect below went through
+  // the same ungoverned door.
+  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } =
+    useAssistantPlugins(activeWorkspaceId ?? undefined);
   const installPlugin = useInstallAssistantPlugin();
   const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
@@ -453,13 +459,23 @@ export function GlobalChatbot() {
   const handlePluginAction = async (plugin: AssistantPluginCatalogItemDto) => {
     try {
       if (plugin.installationStatus !== "installed") {
-        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        await installPlugin.mutateAsync({
+          pluginKey: plugin.key,
+          workspaceId: activeWorkspaceId ?? undefined,
+        });
         toast.success(`${plugin.label} installed`);
         return;
       }
 
       if (plugin.connectionStatus !== "connected") {
-        const result = await connectPlugin.mutateAsync({ pluginKey: plugin.key });
+        const result = await connectPlugin.mutateAsync({
+          pluginKey: plugin.key,
+          // Sealed into the OAuth state. Without it a desktop user is sent through the system
+          // browser with "web" recorded, the callback never emits client=desktop, and the
+          // warptalk:// hand-back never fires — they finish consent and are left in the browser.
+          client: isDesktopApp() ? "desktop" : "web",
+          workspaceId: activeWorkspaceId ?? undefined,
+        });
         if (openProviderConsent(result.url)) {
           toast.message(`Finish connecting ${plugin.label} in your browser.`);
         } else {
@@ -482,7 +498,11 @@ export function GlobalChatbot() {
 
   const handlePluginConnectionAction = async (pluginKey: string) => {
     try {
-      const result = await connectPlugin.mutateAsync({ pluginKey });
+      const result = await connectPlugin.mutateAsync({
+        pluginKey,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId: activeWorkspaceId ?? undefined,
+      });
       if (openProviderConsent(result.url)) {
         toast.message("Finish connecting this plugin in your browser.");
       } else {

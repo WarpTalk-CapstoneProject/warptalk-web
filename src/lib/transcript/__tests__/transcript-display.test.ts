@@ -22,6 +22,7 @@ import {
   splitSegmentsAroundPauseGaps,
   distributePauseGapsAcrossBlocks,
   formatTranscriptPauseGapRun,
+  withLivePauseGap,
   withoutSegmentsInOpenPauseGaps,
 } from "../transcript-display.ts";
 // A blank row's cost is only visible where the translations are read — the grouping keeps its id
@@ -1138,4 +1139,105 @@ test("withoutSegmentsInOpenPauseGaps is a no-op when the transcript is running",
 
   assert.deepEqual(result.segments.map((s) => s.id), ["a", "b"]);
   assert.equal(result.hiddenCount, 0);
+});
+
+// ── WT-657: lines said into a stopped recorder ───────────────────────────────
+
+/**
+ * Pausing the transcript stops the WRITE, not the broadcast. WT-605 deliberately keeps translation
+ * and dubbing running through a pause so listeners still hear each other, so the Gateway goes on
+ * sending `TranscriptSegmentReceived` — and lines kept appearing in the live panel, as ordinary
+ * transcript, directly under a notice saying the transcript was paused. Nothing wrote them down
+ * and they were gone on the next reload.
+ *
+ * Those lines are DROPPED, not dimmed: a host who pauses is opting into dubbing and voice clone
+ * alone, with nothing persisted, so the panel must not display what the record will not hold.
+ * The divider is what remains of them, and it stands whether or not any line survives under it.
+ */
+test("segments arriving during a pause still in force are not part of the record", () => {
+  const segments = [
+    { startTimeMs: 1000, id: "before" },
+    // Said after Pause was pressed at 60s, with no Resume yet.
+    { startTimeMs: 90_000, id: "during" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const kept = withoutSegmentsInOpenPauseGaps(segments, gaps);
+
+  assert.deepEqual(kept.segments.map((s) => s.id), ["before"]);
+  assert.equal(kept.hiddenCount, 1, "the panel has to say how many lines it withheld");
+
+  const blocks = splitSegmentsAroundPauseGaps(kept.segments, gaps);
+
+  assert.deepEqual(blocks[0].gapsBefore, []);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
+  assert.equal(blocks[1].gapsBefore.length, 1, "the pause still leaves its mark in the record");
+  assert.deepEqual(blocks[1].segments, [], "nothing said into a stopped recorder is drawn");
+});
+
+test("segments after a pause that was lifted are part of the record again", () => {
+  const segments = [
+    { startTimeMs: 1000, id: "before" },
+    { startTimeMs: 200_000, id: "after" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  const kept = withoutSegmentsInOpenPauseGaps(segments, gaps);
+  assert.equal(kept.hiddenCount, 0, "a closed gap is history, not a live pause");
+
+  const blocks = splitSegmentsAroundPauseGaps(kept.segments, gaps);
+
+  assert.deepEqual(blocks[1].segments.map((s) => s.id), ["after"]);
+});
+
+/**
+ * WT-657's contribution to this design. The window list is not blind to a pause — every
+ * participant refetches it when the broadcast lands — but it is a round trip behind, and the
+ * lines that must be withheld are exactly the ones arriving inside that window.
+ *
+ * Derived from the fetched list alone, the filter finds no open gap and keeps every one of them:
+ * the panel prints, under its own paused banner, the very words the pause exists to withhold.
+ */
+test("a live pause the window list has not heard about still withholds the lines", () => {
+  const gaps = withLivePauseGap([], { paused: true, since: "2026-09-03T10:01:00Z" }, BASE_TIME);
+
+  assert.equal(gaps.length, 1);
+  assert.equal(gaps[0].endMs, null);
+
+  const kept = withoutSegmentsInOpenPauseGaps([{ startTimeMs: 90_000, id: "during" }], gaps);
+
+  assert.deepEqual(kept.segments, []);
+  assert.equal(kept.hiddenCount, 1);
+});
+
+test("without the live gap folded in, the filter would keep what the pause withholds", () => {
+  // The regression this guards: `resolveTranscriptPauseGaps` alone, during the refetch, yields no
+  // open window at all — so the filter is a no-op and the reported bug survives its own fix.
+  const fromWindowsOnly = resolveTranscriptPauseGaps([], BASE_TIME);
+
+  const kept = withoutSegmentsInOpenPauseGaps(
+    [{ startTimeMs: 90_000, id: "during" }],
+    fromWindowsOnly,
+  );
+
+  assert.equal(kept.hiddenCount, 0);
+  assert.deepEqual(kept.segments.map((s) => s.id), ["during"]);
+});
+
+test("a pause the window list already knows about is not counted twice", () => {
+  const fromWindows = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const gaps = withLivePauseGap(fromWindows, { paused: true, since: "2026-09-03T10:01:00Z" }, BASE_TIME);
+
+  assert.equal(gaps.length, 1, "two open gaps would split one pause in two and draw it twice");
+});
+
+test("no live pause, or nothing to anchor it against, changes nothing", () => {
+  const fromWindows = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  assert.deepEqual(withLivePauseGap(fromWindows, { paused: false, since: null }, BASE_TIME), fromWindows);
+  assert.deepEqual(withLivePauseGap(fromWindows, undefined, BASE_TIME), fromWindows);
+  // Broadcast-only clients carry no start time, and a gap with no position is worse than none.
+  assert.deepEqual(withLivePauseGap(fromWindows, { paused: true, since: null }, BASE_TIME), fromWindows);
+  assert.deepEqual(withLivePauseGap(fromWindows, { paused: true, since: "2026-09-03T10:01:00Z" }, undefined), fromWindows);
 });

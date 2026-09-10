@@ -29,6 +29,7 @@ import { Switch } from "@/components/ui/switch";
 import { isImageExtension } from "@/constants/workspace-document";
 import { cn } from "@/lib/utils";
 import { documentActorName } from "@/lib/documents/document-actor";
+import { UserChip } from "@/components/user/user-chip";
 import {
   DOCUMENT_PERMISSIONS,
   DOCUMENT_PERMISSION_HINTS,
@@ -43,6 +44,8 @@ interface WorkspaceMemberItem {
   email: string;
   roleName: string;
   membershipType?: string;
+  /** Optional so the callers that only pass a directory subset still type-check. */
+  avatarUrl?: string | null;
 }
 
 interface PolicyItem {
@@ -226,9 +229,27 @@ function PolicyList({
                 {tone === "deny" ? (
                   <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-destructive" />
                 ) : null}
-                <span className="max-w-[140px] truncate">
-                  {member ? member.fullName : "User"}
-                </span>
+                {/* The chip's shell stays exactly as it was — white, hairline, square-ish, with
+                    the deny dot carrying the only colour. What changed is that the NAME inside it
+                    opens the person's card: this list is the answer to "who can see this
+                    document", and it used to name people it could tell you nothing else about. */}
+                {member ? (
+                  <UserChip
+                    user={{
+                      userId: member.userId,
+                      name: member.fullName,
+                      email: member.email,
+                      avatarUrl: member.avatarUrl,
+                      role: member.roleName,
+                    }}
+                    variant="text"
+                    size="sm"
+                    showAvatar={false}
+                    className="max-w-[140px] text-[11px] text-ink"
+                  />
+                ) : (
+                  <span className="max-w-[140px] truncate">User</span>
+                )}
                 {canManage ? (
                   <button
                     type="button"

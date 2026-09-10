@@ -16,6 +16,7 @@ import {
   resolveSegmentTranslation,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
+  withLivePauseGap,
   withoutSegmentsInOpenPauseGaps,
   type GroupedTranscriptSegment,
   type TranscriptPauseGap,
@@ -98,9 +99,22 @@ export function TranscriptPanel({
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and
   // pausing translation are different, unrelated actions.
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  // ONE gap list, and it has to include the pause this client has only heard about (WT-657).
+  //
+  // The broadcast lands first and the window list follows a round trip later — every participant
+  // refetches it, so it is a lag, not a blind spot. But the lines needing to be withheld arrive
+  // precisely inside that lag. Derived from the fetched windows alone, both consumers below go
+  // quiet for its duration: the filter finds no open window and keeps every line, and the divider
+  // has nothing to draw. The panel would then print, under its own "Transcript paused" banner,
+  // exactly the words the pause exists to withhold.
   const pauseGaps = useMemo(
-    () => resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
-    [pauseWindowsQuery.data, baseTime],
+    () =>
+      withLivePauseGap(
+        resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
+        transcriptPause,
+        baseTime,
+      ),
+    [pauseWindowsQuery.data, baseTime, transcriptPause],
   );
 
   // WT-605, the reported defect: the banner appeared and the words kept flowing under it.
@@ -246,6 +260,11 @@ export function TranscriptPanel({
                 className="space-y-2"
               >
                 {sub.gapsBefore.length ? <TranscriptPauseDivider gaps={sub.gapsBefore} /> : null}
+                {/* Every bubble here is one the record kept. Nothing spoken into an open pause
+                    reaches this map — it was dropped upstream, before the grouping. A branch that
+                    rendered such a line dimmed instead would put words on screen that the saved
+                    transcript does not have, which is the disagreement this panel must not
+                    produce; see withoutSegmentsInOpenPauseGaps for the ruling behind that. */}
                 {sub.segments.map((segment) => (
                   <TranscriptBubble
                     key={segment.segmentId}

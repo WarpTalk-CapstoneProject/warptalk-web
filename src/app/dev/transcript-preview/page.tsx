@@ -133,11 +133,48 @@ const TRANSLATIONS: TranscriptTranslationDto[] = TRANSLATED.map(
 
 /**
  * A summary of the fixture above, with citations, so Option C's rail has something real to point
- * at. The last item deliberately carries NO moment: the rail must refuse to render it and say so,
- * and that refusal is the part worth looking at — it is the rule that stops an unverifiable claim
- * appearing in a column whose whole argument is that claims have sources.
+ * at. One item in each shape deliberately carries NO moment: the rail must refuse to offer a jump
+ * for it and say so, and that refusal is the part worth looking at — it is the rule that stops an
+ * unverifiable claim appearing in a column whose whole argument is that claims have sources.
+ *
+ * The `narrative` section is what the traceable template emits in place of the flat overview
+ * paragraph, and it is here for the same reason the rest of this page is: there is otherwise no
+ * way to look at it without a real meeting written in that template. Two of its sentences are
+ * chosen for the two cases that are easy to get wrong —
+ *   · 24s + 41s land in DIFFERENT turns, so hovering it must light two blocks of the transcript
+ *     at once and scrolling to either one must light the sentence back;
+ *   · 54s + 56s are one utterance the recogniser split, so they land in the SAME turn and the
+ *     rail must publish that block once rather than twice.
  */
 const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
+  {
+    key: "narrative",
+    title: "What happened",
+    items: [
+      {
+        text: "Tuan read the demo out in Japanese, and Tu checked that both languages stayed on screen while he did.",
+        atMs: 24_000,
+        alsoAtMs: [41_000],
+      },
+      {
+        text: "The dub ran about a second behind the speaker, though the translation itself came out right.",
+        atMs: 54_000,
+        alsoAtMs: [56_000],
+      },
+      {
+        text: "They agreed to leave the written summary in Vietnamese.",
+        atMs: 70_000,
+        alsoAtMs: [],
+      },
+      // No moment: a sentence nobody actually said, which is the one this section must draw
+      // without a left bar and without making it clickable.
+      {
+        text: "Nothing was settled about which language the export should default to.",
+        atMs: null,
+        alsoAtMs: [],
+      },
+    ],
+  },
   {
     key: "decisions",
     title: "Decisions",
@@ -145,10 +182,12 @@ const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
       {
         text: "The demo will be read out in Japanese first, with the Vietnamese dub running behind it.",
         atMs: 24_000,
+        alsoAtMs: [],
       },
       {
         text: "Both languages stay visible at once rather than the panel switching between them.",
         atMs: 41_000,
+        alsoAtMs: [],
       },
     ],
   },
@@ -160,10 +199,16 @@ const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
         owner: "Tuan",
         text: "Check why the dub is running about a second behind the speaker.",
         atMs: 54_000,
+        alsoAtMs: [],
       },
-      { owner: "Tu", text: "Keep the written summary in Vietnamese.", atMs: 70_000 },
+      { owner: "Tu", text: "Keep the written summary in Vietnamese.", atMs: 70_000, alsoAtMs: [] },
       // No moment recorded — the shape every summary written before citations existed still has.
-      { owner: "Tu", text: "Ask the team which language the export should default to.", atMs: null },
+      {
+        owner: "Tu",
+        text: "Ask the team which language the export should default to.",
+        atMs: null,
+        alsoAtMs: [],
+      },
     ],
   },
 ];
@@ -192,8 +237,11 @@ const RECORDING: RoomHistoryArtifact = {
 /**
  * The ended record the rail reads, now that the rail carries the WHOLE summary rather than a list
  * of its citable points. Everything below the sections is here because the rail renders it: the
- * overview paragraph, the template the summary was written in, and the artifact its Download
- * button points at.
+ * template the summary was written in, and the artifact its Download button points at.
+ *
+ * The flat `summary` string is kept and is deliberately NOT drawn here: a summary carrying a
+ * narrative gives the paragraph over to the sentences, and leaving the string in the fixture is
+ * what makes that substitution visible rather than merely asserted.
  */
 const PREVIEW_RECORD: EndedRoomHistoryItem = {
   id: "preview-room",
@@ -224,7 +272,9 @@ const PREVIEW_RECORD: EndedRoomHistoryItem = {
     modelUsed: "preview",
     processingTimeMs: 0,
     generatedAt: "2026-08-21T00:18:30.000Z",
-    templateKey: "general",
+    // Traceable, because the sections above carry a narrative — the picker would otherwise name a
+    // shape this fixture is not in.
+    templateKey: "traceable",
     sections: SUMMARY_SECTIONS,
   },
 };
@@ -281,7 +331,11 @@ export default function TranscriptPreviewPage() {
           breakpoints: two regions with a 16:9 pip, two regions with a 320px rail and the pip
           collapsed to its transport bar, and the stacked layout with the summary on top. Hover a
           claim to light its paragraph, scroll the transcript to watch the claims light themselves,
-          and press J / K / Space / `/` with focus on nothing in particular. */}
+          and press J / K / Space / `/` with focus on nothing in particular.
+
+          The narrative at the top is the part to tab through rather than hover: a keyboard reader
+          has to get the same left bar, the same moments at the right edge, and the same lit turns
+          a pointer gets, and the fourth sentence has to be unreachable because it has no source. */}
       <section className="flex flex-col gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
           Option C · the transcript beside what it amounts to

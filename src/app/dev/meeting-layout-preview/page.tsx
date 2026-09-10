@@ -85,7 +85,7 @@ export default function MeetingLayoutPreview() {
                 </div>
               </div>
               <div className="pointer-events-none absolute bottom-5 left-5 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-[13px] font-medium text-white">
-                <span className="text-[12px]">🇻🇳</span>
+                <span className="rounded bg-white/20 px-1 py-px text-[10px] font-semibold tracking-wide">VI</span>
                 <span>Huynh Thai Tu</span>
               </div>
               <span className="pointer-events-none absolute inset-0 z-30 rounded-[24px] ring-2 ring-inset ring-primary" />
@@ -102,7 +102,7 @@ export default function MeetingLayoutPreview() {
                 Start Translation
               </span>
               <span className="flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[13px] font-medium">
-                🇻🇳 Vietnamese
+                VI · Vietnamese
               </span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">CC</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">A</span>
@@ -137,10 +137,22 @@ export default function MeetingLayoutPreview() {
               segments={segments}
               roomId="preview-paused"
               readerLanguage="en"
-              transcriptPause={{ paused: true, since: "2026-09-06T10:05:00Z" }}
-              /* The "Transcript paused · HH:MM–HH:MM" DIVIDERS are not visible here: they are
-                 drawn from the pause-window list the panel fetches itself, and this preview has
-                 no server. The banner above is the part that renders from props. */
+              /* A baseTime is what makes the pause POSITIONABLE without a server: `since` alone
+                 anchors the live gap, so this renders the whole withheld state — the one line
+                 that made it into the record, the divider where the record stops, and the
+                 "Paused — new lines are not being recorded." placeholder standing in for the
+                 rest. `since` is 4s in and the fixture's lines are 4s apart, so exactly the
+                 first line survives and every later one is dropped.
+
+                 That is the state worth reviewing precisely because it is an ABSENCE: it is the
+                 one thing a screenshot of the banner cannot show, and the one a regression would
+                 restore silently by putting the dropped lines back on screen.
+
+                 Only the live gap is drawn. The CLOSED "Transcript paused · HH:MM–HH:MM"
+                 dividers come from the pause-window list the panel fetches itself, and this
+                 preview has no server. */
+              baseTime="2026-09-06T10:00:00Z"
+              transcriptPause={{ paused: true, since: "2026-09-06T10:00:04Z" }}
             />
           </div>
 

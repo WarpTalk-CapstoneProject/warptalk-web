@@ -1,7 +1,7 @@
 import apiClient from "@/lib/api/client";
 import publicApiClient from "@/lib/api/public-client";
 import { API } from "@/lib/api/endpoints";
-import type { MeetingMinutesDto } from "@/types/meetingMinutes";
+import type { MeetingMinutesDto, MinutesTranslationDto } from "@/types/meetingMinutes";
 import type { WorkspaceMinutesResponse } from "@/types/workspaceMinutes";
 import type { MinutesTemplateId } from "@/lib/meeting/minutes-document";
 import type { MinutesShare, MinutesShareMode, SharedMinutes } from "@/types/minutesShare";
@@ -14,6 +14,18 @@ import type { MinutesShare, MinutesShareMode, SharedMinutes } from "@/types/minu
  * being quietly dropped by re-serialising through a typed model.
  */
 export const meetingMinutesService = {
+  /**
+   * The record in a language it was not drawn up in, generating that reading if nobody has asked
+   * for it yet.
+   *
+   * Never writes to the document — the biên bản's number, versions and signatures are untouched.
+   * Resolves with `status: "generating"` the first time a language is asked for, which the caller
+   * polls; `"unavailable"` carries a reason that must be shown rather than treated as an error.
+   */
+  getTranslation(roomId: string, language: string) {
+    return apiClient.get<MinutesTranslationDto>(API.minutes.translation(roomId, language));
+  },
+
   /**
    * The workspace's minutes, newest meeting first.
    *

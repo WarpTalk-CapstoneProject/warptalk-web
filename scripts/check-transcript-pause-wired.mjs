@@ -22,6 +22,12 @@
  *      through CI. The behaviour section at the bottom is the half that was missing, and it has
  *      two halves of its own, because the rule is not "show less" but "show less HERE": the
  *      transcript panel stops, the caption lane deliberately does not.
+ *   4. That the lines are DROPPED rather than dimmed, and that the filter is fed a gap list which
+ *      already knows about the live pause. Both were settled on 2026-09-10 against a competing
+ *      design that kept the lines and faded them (WT-657), and neither is self-evident from the
+ *      code: a `recorded` flag reads like extra information rather than a reversal, and the
+ *      wrapper around the gap list reads like a formality until you notice the panel is inert
+ *      without it. The last section pins both, with the reasoning at each assertion.
  */
 
 import assert from "node:assert/strict";
@@ -297,6 +303,61 @@ assert.match(
   "The live panel must say something where the dropped lines would have been. An absence with no explanation is indistinguishable from a transcript that has failed.",
 );
 
+// ── the filter has to be fed a list that already knows about the live pause (WT-657) ───────
+//
+// The window list trails the broadcast by one round trip. Filtering against the fetched windows
+// alone leaves no open gap to match during that interval — so the filter is a no-op for exactly
+// as long as the lines it must withhold are arriving, and the reported bug survives its own fix
+// with every other assertion in this file still green. That is why this is pinned rather than
+// left to read as an incidental wrapper.
+
+assert.match(
+  display,
+  /export function withLivePauseGap\(/,
+  "Folding the broadcast-known pause into the gap list must stay an exported function here — the panel's filter and its divider both depend on it, and it carries the timing subtlety that made the first fix inert.",
+);
+assert.match(
+  displayTests,
+  /withLivePauseGap/,
+  "withLivePauseGap must be tested: its failure mode is silence, not an error.",
+);
+assert.match(
+  withoutComments(panel),
+  /pauseGaps = useMemo\([\s\S]{0,200}?withLivePauseGap\([\s\S]{0,200}?resolveTranscriptPauseGaps\(/,
+  "The live panel's `pauseGaps` must be the window list WRAPPED in withLivePauseGap. Unwrapped, the filter below it has nothing to match until the refetch lands, and the panel prints the very lines the pause exists to withhold.",
+);
+
+// ── dropped, not dimmed — the product owner's ruling of 2026-09-10 ─────────────────────────
+//
+// A host who pauses the transcript is opting into translation carried by audio dubbing and voice
+// clone alone, with nothing persisted to the transcript or the DB. An earlier design kept those
+// lines and rendered them faded under a caption; it is honest, and it is not what shipped. A
+// dimmed line is still readable, quotable and screenshottable, and it is absent from the saved
+// record — so the panel and the transcript would disagree about what was said. These assertions
+// exist because that design is the natural thing to reach for again.
+
+assert.doesNotMatch(
+  withoutComments(display),
+  /\brecorded\s*:/,
+  "splitSegmentsAroundPauseGaps must not carry a `recorded` flag. Nothing downstream may render an unrecorded line, so a flag saying which ones they are is an invitation to draw them instead of dropping them.",
+);
+assert.doesNotMatch(
+  withoutComments(panel),
+  /opacity-60|sub\.recorded/,
+  "The live panel must not render lines said during a pause at reduced opacity. They are not shown at all — showing them faded puts words on screen that the saved transcript will never hold.",
+);
+assert.doesNotMatch(
+  panel,
+  /not saved to the transcript|Said while paused/i,
+  "No copy captioning lines as shown-but-unsaved. There are no such lines on screen to caption; the divider and the placeholder are what mark the hole.",
+);
+// The placeholder's exact promise, which is the whole user-facing half of the ruling.
+assert.match(
+  panel,
+  /Paused — new lines are not being recorded\./,
+  "The placeholder must say that new lines are not being RECORDED — that is the sentence the ruling turns on, and softening it to 'not shown' or 'paused' loses the reason the lines are missing.",
+);
+
 // The other half of the rule, and the one a later tidy-up is most likely to "fix". The caption
 // lane reads the SAME transcriptSegments store as the panel, and the product decision of
 // 2026-09-09 is that captions keep running through a pause — which is also the sentence the
@@ -366,5 +427,5 @@ assert.match(
 );
 
 console.log(
-  "Transcript pause contract OK (5 hops + meaning + dividers + paused behaviour checked)",
+  "Transcript pause contract OK (5 hops + meaning + dividers + paused behaviour + dropped-not-dimmed checked)",
 );
