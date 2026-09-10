@@ -42,7 +42,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
@@ -68,6 +67,7 @@ import {
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { DocumentActor } from "@/components/documents/document-actor";
+import { UserChip } from "@/components/user/user-chip";
 import { findDocumentActor } from "@/lib/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
@@ -542,17 +542,18 @@ export default function WorkspaceDocumentsPage() {
                     {/* Uploaded By */}
                     <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
                       {uploader ? (
-                        <div className="flex items-center gap-2" title={`Uploaded by ${uploader.fullName}`}>
-                          <Avatar className="h-6 w-6 rounded-full border border-border/50">
-                            <AvatarImage src={uploader.avatarUrl ?? undefined} alt={uploader.fullName} />
-                            <AvatarFallback className="rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
-                              {uploader.fullName ? uploader.fullName.charAt(0).toUpperCase() : "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-[11px] font-medium text-ink truncate max-w-[110px]">
-                            {uploader.fullName}
-                          </span>
-                        </div>
+                        <UserChip
+                          user={{
+                            userId: uploader.userId,
+                            name: uploader.fullName || uploader.email,
+                            email: uploader.email,
+                            avatarUrl: uploader.avatarUrl,
+                            role: uploader.roleName,
+                          }}
+                          variant="text"
+                          size="sm"
+                          className="max-w-[140px] text-[11px] text-ink"
+                        />
                       ) : (
                         <span className="text-ink-muted text-[11px]">—</span>
                       )}
@@ -561,17 +562,18 @@ export default function WorkspaceDocumentsPage() {
                     {/* Approved By */}
                     <td className="py-3.5 px-4" onClick={(e) => e.stopPropagation()}>
                       {approver ? (
-                        <div className="flex items-center gap-2" title={`Approved by ${approver.fullName}`}>
-                          <Avatar className="h-6 w-6 rounded-full border border-emerald-500/30">
-                            <AvatarImage src={approver.avatarUrl ?? undefined} alt={approver.fullName} />
-                            <AvatarFallback className="rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-semibold">
-                              {approver.fullName ? approver.fullName.charAt(0).toUpperCase() : "A"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-[11px] font-medium text-emerald-600 truncate max-w-[110px]">
-                            {approver.fullName}
-                          </span>
-                        </div>
+                        <UserChip
+                          user={{
+                            userId: approver.userId,
+                            name: approver.fullName || approver.email,
+                            email: approver.email,
+                            avatarUrl: approver.avatarUrl,
+                            role: approver.roleName,
+                          }}
+                          variant="text"
+                          size="sm"
+                          className="max-w-[140px] text-[11px] text-emerald-600"
+                        />
                       ) : (
                         <span className="text-ink-muted text-[11px]">—</span>
                       )}

@@ -14,6 +14,9 @@
  *   401 — the link is restricted and nobody is signed in. That is a sign-in, not a refusal: an
  *         invited person clicking their own link has done nothing wrong.
  *   403 — signed in, and not on the list. The only honest thing to say is who to ask.
+ *   400 — the link is fine and the DOCUMENT is not: still a draft, and a draft is not published.
+ *         Said as its own sentence because "you do not have access" would send the reader back to
+ *         the host over something the host has not done yet rather than over permission.
  *
  * WHAT IT DELIBERATELY DOES NOT OFFER
  *   No seek-to-transcript control, because a shared reader has no transcript and a citation that
@@ -103,6 +106,15 @@ export function SharedMinutesView({ token }: { token: string }) {
         <Centred title="Sign in to read this">
           This document was shared with named people. Sign in with the address it was sent to, then
           open the link again.
+        </Centred>
+      );
+    }
+
+    if (status === 400) {
+      return (
+        <Centred title="This document is not signed yet">
+          The link works, but the minutes behind it are still a draft. They open the moment the
+          host or the secretary signs them — nobody has to send you a new address.
         </Centred>
       );
     }

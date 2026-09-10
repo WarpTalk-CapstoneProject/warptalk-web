@@ -227,7 +227,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           : [])
       ]
     },
-    { icon: CalendarBlank, label: "Schedules", href: `/${slug}/schedules` },
+    // "Schedules" read as a list of schedule OBJECTS — recurrence rules — while the page is a
+    // month/week grid of meetings. The route keeps its path: links already sent and the
+    // placeholder contract point at /schedules, and the name a user never types is not worth
+    // breaking those for.
+    { icon: CalendarBlank, label: "Calendar", href: `/${slug}/schedules` },
     // No History row: /history was a second, worse answer to the question Artifacts answers —
     // it listed meetings, which Meetings above already does, and its outputs rail could not show
     // minutes at all. Past meetings are still browsable on Meetings, which asks for ENDED.

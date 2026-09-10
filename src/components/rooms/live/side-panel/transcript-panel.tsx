@@ -14,6 +14,7 @@ import {
   resolveSegmentTranslation,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
+  withLivePauseGap,
   type GroupedTranscriptSegment,
   type TranscriptPauseGap,
   type TranslationSessionBlock,
@@ -96,8 +97,15 @@ export function TranscriptPanel({
   // pausing translation are different, unrelated actions.
   const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
   const pauseGaps = useMemo(
-    () => resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
-    [pauseWindowsQuery.data, baseTime],
+    () =>
+      // WT-657: folded together because only the host's window list learns about a pause as it
+      // happens. See withLivePauseGap.
+      withLivePauseGap(
+        resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime),
+        transcriptPause,
+        baseTime,
+      ),
+    [pauseWindowsQuery.data, baseTime, transcriptPause],
   );
 
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
@@ -213,16 +221,24 @@ export function TranscriptPanel({
             {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
               <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`} className="space-y-2">
                 {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
-                {sub.segments.map((segment) => (
-                  <TranscriptBubble
-                    key={segment.segmentId}
-                    segment={segment}
-                    readerLanguage={readerLanguage}
-                    isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
-                    suggestion={findSuggestionForUtterance(segment, suggestions)}
-                    onDismissSuggestion={dismissSuggestion}
-                  />
-                ))}
+                {/* WT-657: lines that arrive while the pause is still in force. Translation and
+                    dubbing keep running through a pause by design, so the Gateway goes on
+                    broadcasting them — but nothing writes them down, and they are gone on the next
+                    reload. Drawn dimmed and labelled rather than dropped, so a listener still gets
+                    the words while the host can see they are not being kept. */}
+                {sub.recorded ? null : <UnrecordedLead />}
+                <div className={sub.recorded ? "space-y-2" : "space-y-2 opacity-60"}>
+                  {sub.segments.map((segment) => (
+                    <TranscriptBubble
+                      key={segment.segmentId}
+                      segment={segment}
+                      readerLanguage={readerLanguage}
+                      isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
+                      suggestion={findSuggestionForUtterance(segment, suggestions)}
+                      onDismissSuggestion={dismissSuggestion}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -244,6 +260,24 @@ export function TranscriptPanel({
  * this is NOT the meeting stopping. Translation, dubbing and subtitles run exactly as before, and
  * a notice that let someone believe otherwise would send them out of a working meeting.
  */
+/**
+ * WT-657. The line between the words on screen and the words in the record.
+ *
+ * The panel already carries a pinned "Transcript paused" notice, and that was not enough: lines
+ * kept appearing under it, which reads as the notice being stale rather than as the lines being
+ * uncounted. This sits immediately above the lines it is about, so the two cannot be read apart.
+ *
+ * Deliberately quiet — one line, no icon, no colour. The amber notice above is the alarm; a second
+ * one here would compete with it, and this is a caption on the lines, not another warning.
+ */
+function UnrecordedLead() {
+  return (
+    <p role="status" className="px-1 pt-1 text-[11px] italic leading-relaxed text-ink-muted">
+      Said while paused — shown live, not saved to the transcript.
+    </p>
+  );
+}
+
 function TranscriptPausedNotice({ since }: { since: string | null }) {
   const startedAt = since
     ? new Date(since).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })

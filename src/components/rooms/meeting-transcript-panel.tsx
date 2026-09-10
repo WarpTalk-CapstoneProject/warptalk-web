@@ -30,6 +30,7 @@ import {
   Lock,
   MessageSquare,
   Pencil,
+  Play,
   Search,
   X,
 } from "lucide-react";
@@ -87,8 +88,7 @@ import {
 } from "@/components/rooms/transcript-speaker-avatar";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
-import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageCode, getLanguageName, languagesInScope } from "@/lib/language/languages";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
@@ -169,6 +169,62 @@ function clockTime(iso: string): string {
 
 /** How the transcript is laid out: as the conversation, as a document, or on a timeline. */
 type TranscriptLayout = "chat" | "document" | "timeline";
+
+/**
+ * Whether this reader has asked the system not to animate.
+ *
+ * Read at the moment of the scroll rather than held in state: the setting can change while a record
+ * page is open, and a stale answer here means a surface that keeps animating itself after somebody
+ * has just turned animation off. The guard is for SSR and for the jsdom-shaped environments that
+ * have `window` but not `matchMedia`.
+ */
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * WT-655(C3) — "Follow playback", after the reader has scrolled away from it.
+ *
+ * Same floating shape as ScrollToLatestChip, deliberately: they answer the same kind of question
+ * ("take me back to the thing that is moving") and appear in the same corner of the same scroller,
+ * so two different shapes would read as two unrelated systems. Filled rather than outlined, because
+ * unlike Latest this one is offered rarely and is the more specific of the two answers.
+ *
+ * `tabIndex`/`aria-hidden` while invisible for the same reason the Latest chip carries them: a
+ * focusable invisible button is a trap that scrolls the page for no visible reason.
+ */
+function FollowPlaybackChip({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center transition-opacity duration-150 print:hidden",
+        visible ? "opacity-100" : "opacity-0",
+      )}
+    >
+      <button
+        type="button"
+        tabIndex={visible ? 0 : -1}
+        aria-hidden={!visible}
+        onClick={onClick}
+        title="Scroll with the recording again"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full bg-ink py-1.5 pl-2.5 pr-3.5 text-[12px] font-medium text-canvas shadow-[0_2px_10px_rgba(0,0,0,0.14)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1",
+          visible ? "pointer-events-auto" : "pointer-events-none",
+        )}
+      >
+        <Play className="size-3.5 fill-current" />
+        Follow playback
+      </button>
+    </div>
+  );
+}
 
 /**
  * The saved meeting transcript, rendered as a distinct artifact participants can read
@@ -545,21 +601,137 @@ export function MeetingTranscriptArtifact({
     });
   }
 
-  const scrollToTurn = useCallback((key: string) => {
+  const scrollToTurn = useCallback((key: string, options?: { center?: boolean }) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
     const node = scroller.querySelector<HTMLElement>(
       `[data-reading-turn="${CSS.escape(key)}"]`,
     );
     if (!node) return;
-    const offset =
-      node.getBoundingClientRect().top
-      - scroller.getBoundingClientRect().top
-      + scroller.scrollTop;
-    // Just above the reading line, not at the very top edge: landing a block flush against the
-    // top puts it exactly where readingAnchorAt stops counting it as the one being read.
-    scroller.scrollTo({ top: Math.max(0, offset - 24), behavior: "smooth" });
+    const box = node.getBoundingClientRect();
+    const offset = box.top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    /* CENTRED for a block the recording is playing, just under the top edge for one the reader
+       jumped to. Different jobs: a jump is "start reading here", and the answer is at the top with
+       the rest of the meeting below it. Following playback is "keep this in view while it moves",
+       and a line pinned to the top edge has the next thirty seconds of talking below it and no
+       context above — which is exactly what a reader following an argument needs. Centred also
+       means the block does not have to move again the instant the speaker changes. */
+    const top = options?.center
+      ? offset - Math.max(0, (scroller.clientHeight - box.height) / 2)
+      // Just above the reading line, not at the very top edge: landing a block flush against the
+      // top puts it exactly where readingAnchorAt stops counting it as the one being read.
+      : offset - 24;
+    scroller.scrollTo({
+      top: Math.max(0, top),
+      // Somebody who asked the system not to animate has asked that of a surface which, while
+      // following a recording, animates itself every twenty seconds unprompted. Honouring it here
+      // is not a nicety.
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
   }, []);
+
+  /* ─────────────────────────────────────────────────────────────────────────────────────────
+     WT-655(C) — the transcript follows the recording.
+
+     Wave 1 gave the reader transcript → video: click a timestamp and the recording seeks. This is
+     the other direction, and it is the one that makes a record watchable rather than merely
+     searchable: while the recording plays, the line being spoken is marked and the column scrolls
+     to keep it in view.
+
+     THE THREE RULES THAT KEEP IT FROM BEING ANNOYING
+       1. The mark is a TEXT COLOUR, never a background. Background is already spoken for twice over
+          here — hover, and the row a summary citation jumped to (`highlighted`). A third meaning on
+          the same property is how a reader stops being able to read any of them.
+       2. A manual scroll switches following off, and only the reader switches it back on. Being
+          dragged back to the playhead after deliberately scrolling away is the single worst thing a
+          surface like this can do.
+       3. Nothing moves while the recording is paused. No polling, no highlight, no scrolling —
+          which is why `isPlaying` is published by the player rather than inferred from the playhead
+          having stopped changing.
+     ───────────────────────────────────────────────────────────────────────────────────────── */
+
+  /* One field at a time, for the reason spelled out above `publishAnchors`: the context value now
+     also changes identity about four times a second while the recording plays, so anything closing
+     over the whole `sync` would be rebuilt at that rate. */
+  const syncPlayingKey = sync?.playingKey ?? null;
+  const isPlaying = sync?.isPlaying ?? false;
+  const isFollowing = sync?.isFollowing ?? false;
+  const setFollowing = sync?.setFollowing;
+  // The scroller only exists once there is a transcript to put in it — see `absence`.
+  const hasScroller = !absence;
+
+  /**
+   * Which block the recording is playing, or null.
+   *
+   * The moment is resolved to a block by the sync provider, with `anchorForMs` — the same function
+   * the rail resolves a citation with, deliberately not a second implementation. The transcript has
+   * no end times to work with, so a line stays marked through the silence after it until the next
+   * one begins; that is correct, and blanking the mark during gaps would make it flicker on every
+   * breath the speaker took.
+   *
+   * Gated here on `onSeekToRecording`, which is a fact about this column rather than about the
+   * playhead. A meeting with no recording, or one whose clocks cannot be reconciled, offers no
+   * seek — and by exactly the same rule nothing in it may light up as playing, because there is
+   * nothing playing it could honestly refer to.
+   */
+  const canFollowPlayback = Boolean(onSeekToRecording);
+  const playingKey = canFollowPlayback ? syncPlayingKey : null;
+
+  /**
+   * Keep the playing block in view.
+   *
+   * Keyed on `playingKey` rather than on the playhead, so this fires once when the line CHANGES
+   * instead of four times a second — a smooth scroll restarted every 250ms never arrives anywhere,
+   * and the column would crawl.
+   */
+  useEffect(() => {
+    if (!isReading || !isFollowing || !isPlaying || !playingKey) return;
+    scrollToTurn(playingKey, { center: true });
+  }, [isReading, isFollowing, isPlaying, playingKey, scrollToTurn]);
+
+  /**
+   * The reader taking the scroll back.
+   *
+   * `wheel` and `touchmove`, NOT `scroll`. The auto-scroll above fires `scroll` itself, so listening
+   * for that would have following switch itself off the first time it worked — and the reader would
+   * be left with a pill they never asked for after a single line. These two events only happen when
+   * a hand is on the wheel or the glass.
+   *
+   * Keyboard scrolling (Page Down, arrows) is not caught here, deliberately: J and K move the
+   * reading position through the navigator, which is a different gesture with its own behaviour.
+   */
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !setFollowing || !isReading) return;
+    const stopFollowing = () => setFollowing(false);
+    scroller.addEventListener("wheel", stopFollowing, { passive: true });
+    scroller.addEventListener("touchmove", stopFollowing, { passive: true });
+    return () => {
+      scroller.removeEventListener("wheel", stopFollowing);
+      scroller.removeEventListener("touchmove", stopFollowing);
+    };
+    // `hasScroller`, because the element does not exist while the panel is explaining an absent
+    // transcript — the listeners have to be attached when it appears rather than only on mount.
+  }, [setFollowing, isReading, hasScroller]);
+
+  /** Both conditions, and it is the AND that matters — see the chip's own note below. */
+  const showFollowPill = Boolean(isReading && canFollowPlayback && !isFollowing && isPlaying);
+
+  /**
+   * Seeking is also a request to follow.
+   *
+   * Somebody who clicked 07:16 wants to hear what happened at 07:16 — and then what happened next.
+   * Leaving following off there would mark the line they picked, play past it, and leave the mark
+   * behind on a sentence that has finished.
+   */
+  const seekToMoment = useCallback(
+    (atMs: number) => {
+      if (!onSeekToRecording) return;
+      setFollowing?.(true);
+      onSeekToRecording(atMs);
+    },
+    [onSeekToRecording, setFollowing],
+  );
 
   // J, K and `/` are handled by the provider — it is the only thing that can see a keypress aimed
   // at nothing in particular — and it needs this column to carry them out. Registered while
@@ -598,7 +770,10 @@ export function MeetingTranscriptArtifact({
       ),
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
-      onSeek: onSeekToRecording ? () => onSeekToRecording(segment.startTimeMs) : undefined,
+      // The gate stays on `onSeekToRecording`, not on the wrapper: `seekToMoment` exists whether or
+      // not a seek is possible, and gating on it would make every timestamp look clickable on a
+      // meeting with no recording. See TranscriptLineTime.
+      onSeek: onSeekToRecording ? () => seekToMoment(segment.startTimeMs) : undefined,
       highlighted: highlightedSegmentId === segment.id,
       // A chip on every line of a transcript that IS in one language is noise. Shown when the
       // line is not simply "spoken in the language you asked for", which makes its absence
@@ -1164,7 +1339,7 @@ export function MeetingTranscriptArtifact({
                           time={base ? segmentTime(turn.startTimeMs) : null}
                           onSeek={
                             onSeekToRecording
-                              ? () => onSeekToRecording(turn.startTimeMs)
+                              ? () => seekToMoment(turn.startTimeMs)
                               : undefined
                           }
                           // The rail starts AT the first dot rather than above it — a line hanging
@@ -1195,11 +1370,14 @@ export function MeetingTranscriptArtifact({
                             clock={base ? segmentTime(turn.startTimeMs) : null}
                             onSeek={
                               onSeekToRecording
-                                ? () => onSeekToRecording(turn.startTimeMs)
+                                ? () => seekToMoment(turn.startTimeMs)
                                 : undefined
                             }
                             marked={sync?.markedKey === turn.key}
                             reading={sync?.readingKey === turn.key}
+                            // Only ever true for the block the recording is actually playing —
+                            // `playingKey` is null without a recording behind this record.
+                            playing={playingKey === turn.key}
                             query={query}
                             rows={turn.lines.map((line) => {
                               const row = buildRow(line);
@@ -1228,8 +1406,28 @@ export function MeetingTranscriptArtifact({
           </div>
         </div>
         {/* A record of an hour-long meeting is hundreds of rows. Somebody reading the middle of it
-            had no way back to the end but dragging the scrollbar the length of the room. */}
-        <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
+            had no way back to the end but dragging the scrollbar the length of the room.
+            Lifted a row when the follow pill is out: two floating chips in the same place is one
+            chip covering the other, and which one wins would depend on render order. */}
+        <ScrollToLatestChip
+          visible={isAway}
+          onClick={scrollToLatest}
+          className={showFollowPill ? "bottom-12" : undefined}
+        />
+        {/* WT-655(C3). Offered only while following is OFF and the recording is PLAYING — the two
+            conditions together. Off-and-paused needs no pill: nothing is moving, so there is
+            nothing to catch up with, and a control offering to chase a stopped playhead is a
+            control that appears to do nothing. */}
+        <FollowPlaybackChip
+          visible={showFollowPill}
+          onClick={() => {
+            setFollowing?.(true);
+            // Recentre immediately rather than waiting for the playhead to cross into the next
+            // block: from where the reader is standing, pressing this and watching nothing happen
+            // for twenty seconds is the button not working.
+            if (playingKey) scrollToTurn(playingKey, { center: true });
+          }}
+        />
         </div>
       )}
     </div>
@@ -1462,7 +1660,7 @@ function TranscriptLanguageMenu({
           {options.map((option) => (
             <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
               <TranscriptLanguageItem
-                label={`${getFlagEmoji(option.code)} ${getLanguageName(option.code)}`.trim()}
+                label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
                 detail={languageDetail(option, busyLanguage === option.code)}
                 selected={!asSpoken && option.code === value}
               />
@@ -1824,6 +2022,7 @@ function TranscriptDocumentTurn({
   onSeek,
   marked,
   reading,
+  playing,
   query,
   rows,
 }: {
@@ -1841,6 +2040,15 @@ function TranscriptDocumentTurn({
   marked: boolean;
   /** This is the block under the reader's eye — the direction of the sync people forget. */
   reading: boolean;
+  /**
+   * WT-655(C1) — the recording is playing THIS block right now.
+   *
+   * Rendered as a change of TEXT COLOUR and nothing else. The three background marks below are
+   * already three states on one property, and a fourth would be unreadable; more importantly, a
+   * playing line moves every twenty seconds or so, and a moving background is a strobe. Colour on
+   * the words themselves puts the mark where the reader is already looking.
+   */
+  playing: boolean;
   query: string;
   rows: TranscriptRowBase[];
 }) {
@@ -1871,7 +2079,24 @@ function TranscriptDocumentTurn({
           whole block, so it draws exactly the boundary the reader is looking for. */}
       <TranscriptSpeakerStripe speaker={speaker} className="my-1.5 left-[-2px] print:hidden" />
 
-      <div className="pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none text-ink-subtle">
+      {/* The gutter is this layout's seek target, and the rule TranscriptLineTime spells out
+          applies here for the same reason: the block beside it stays selectable prose, so the
+          timestamp grows and the block is not a button. 10.5px is the smallest type on the page —
+          6.75px above and below its leading-none line box makes exactly 24px of height, and -my
+          returns all of it, so the digits stay on the 5px of top padding this column was measured
+          with. Flex, not a line of text, so the target is a flex item and takes its position from
+          the box rather than from a synthesized baseline. The play mark goes LEFT of the digits:
+          their right edge is the straight edge this column exists to draw, and nothing may move
+          it. */}
+      <div
+        className={cn(
+          "flex items-start justify-end pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none",
+          // The gutter takes the playing colour too. It is the one part of this block that reads as
+          // a position in the recording, so leaving it grey while the words beside it are marked
+          // would separate the mark from the clock it is about.
+          playing ? "text-primary" : "text-ink-subtle",
+        )}
+      >
         {onSeek ? (
           <button
             type="button"
@@ -1881,11 +2106,16 @@ function TranscriptDocumentTurn({
                 ? `Play the recording from here — ${clock}`
                 : "Play the recording from here"
             }
-            className="rounded underline-offset-2 hover:text-ink hover:underline"
+            className="group/seek -mx-1 -my-[6.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[6.75px] hover:text-ink"
           >
-            {elapsed}
+            <Play
+              aria-hidden
+              className="size-3 shrink-0 fill-current opacity-0 transition-opacity motion-reduce:transition-none group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"
+            />
+            <span className="underline-offset-2 group-hover/seek:underline">{elapsed}</span>
           </button>
         ) : (
+          // No recording behind this record: the gutter is a printed time, not a control.
           <span title={clock ?? undefined}>{elapsed}</span>
         )}
       </div>
@@ -1899,7 +2129,12 @@ function TranscriptDocumentTurn({
         </p>
         <div className="mt-1.5 space-y-2">
           {rows.map((row) => (
-            <TranscriptDocumentLine key={row.segment.id} {...row} query={query} />
+            <TranscriptDocumentLine
+              key={row.segment.id}
+              {...row}
+              query={query}
+              playing={playing}
+            />
           ))}
         </div>
       </div>
@@ -1920,7 +2155,8 @@ function TranscriptDocumentLine({
   onStartEdit,
   editor,
   query,
-}: TranscriptRowBase & { query: string }) {
+  playing,
+}: TranscriptRowBase & { query: string; playing: boolean }) {
   if (isEditing) {
     return <div id={`transcript-segment-${segment.id}`}>{editor}</div>;
   }
@@ -1935,7 +2171,11 @@ function TranscriptDocumentLine({
           <p
             key={`${segment.id}-r-${at}`}
             className={cn(
-              "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] text-ink",
+              "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] transition-colors",
+              // WT-655(C1): the playing line, and the ONLY thing that changes is the colour of the
+              // words. Printed pages get the ink colour whatever the player is doing — a mark about
+              // a video means nothing on paper.
+              playing ? "text-primary print:text-ink" : "text-ink",
               at > 0 && "mt-1",
             )}
           >
@@ -2005,8 +2245,15 @@ function TranscriptTimelineTurn({
   return (
     <div className="grid grid-cols-[58px_16px_minmax(0,1fr)] gap-x-1">
       {/* Wide enough for "07:16 AM" on one line. At 46px it wrapped the meridiem onto a second
-          row, which put a two-line label beside a one-line name on every single turn. */}
-      <div className="whitespace-nowrap pt-[7px] text-right">
+          row, which put a two-line label beside a one-line name on every single turn.
+
+          A flex column rather than a line of text, so the enlarged timestamp target is a flex
+          item: an inline-flex box in a line of text takes its baseline from its own bottom edge
+          and would drop the digits below the name beside them. `items-start` because the grid
+          stretches this cell to the height of the whole turn. The reserved play mark can reach
+          past the 58px on a locale that prints a meridiem — it reaches into the scroller's own
+          padding, which is why nothing is clipped and the digits stay where they were. */}
+      <div className="flex items-start justify-end whitespace-nowrap pt-[7px] text-right">
         {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
       </div>
 
@@ -2108,7 +2355,31 @@ function TranscriptTimelineLine({
   );
 }
 
+/**
+ * The timestamp on a line, and — when there is a recording behind it — the way into it.
+ *
+ * The target is the TIMESTAMP and deliberately not the row. Every other product that does this
+ * makes the whole line clickable, and every other product's line carries nothing else; ours also
+ * carries inline correction editing, the way back to what was spoken, and the thing every reader
+ * of a transcript does without being told, which is drag across the words to quote them. A row
+ * that is a <button> cannot be selected with a mouse, so making it one would buy a bigger seek
+ * target with the reading.
+ *
+ * So the target does not move, it grows. What was ~11px of mono text — a target under half the
+ * 24px a pointer can be expected to hit — is padded out to 24px tall, and the negative margin
+ * hands that height straight back to the line box so no row it sits in is a pixel taller than it
+ * was. The visible text is untouched: only the area that answers a click changes.
+ *
+ * The play mark is what says the label DOES something; a timestamp on its own reads as a label.
+ * It is always in the layout and only ever fades in, because a mark that appeared at hover width
+ * would shove the timestamp sideways exactly as the pointer arrived at it. It sits to the LEFT of
+ * the digits: both callers right-align this column, and the digits' right edge is the straight
+ * edge the eye runs down.
+ */
 function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => void }) {
+  // No recording, no target. A meeting whose record has no video is read as a document, and
+  // nothing in a document may look clickable — so this stays a plain span with no hit area to
+  // enlarge and no mark to reveal, exactly as it was.
   if (!onSeek) {
     return <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{time}</span>;
   }
@@ -2118,9 +2389,17 @@ function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => voi
       type="button"
       onClick={onSeek}
       title="Play the recording from here"
-      className="shrink-0 rounded font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-ink hover:underline"
+      // 3.75px above and below an 11px/1.5 line box is 24px of height, and -my gives all of it
+      // back. -mx does the same for the 4px of horizontal reach.
+      className="group/seek -mx-1 -my-[3.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[3.75px] font-mono text-[11px] text-muted-foreground hover:text-ink"
     >
-      {time}
+      <Play
+        aria-hidden
+        className="size-3 shrink-0 fill-current opacity-0 transition-opacity motion-reduce:transition-none group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"
+      />
+      {/* Underlined on the span rather than the button: the mark is a mark, not a word, and an
+          underline running under it reads as a broken glyph. */}
+      <span className="underline-offset-2 group-hover/seek:underline">{time}</span>
     </button>
   );
 }

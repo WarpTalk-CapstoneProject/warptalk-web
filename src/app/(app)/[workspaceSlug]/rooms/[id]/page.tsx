@@ -72,6 +72,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import {
+  UserChipCard,
+  type UserChipIdentity,
+} from "@/components/user/user-chip";
 import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
@@ -88,8 +92,22 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { MinutesPanel } from "@/components/rooms/minutes-panel";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
-import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
-import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
+import {
+  countPlayableRecordings,
+  findPlayableRecording,
+  hasPendingRecording,
+} from "@/lib/meeting/meeting-artifacts";
+import { resolveCitationRowId } from "@/lib/meeting/citation-target";
+import {
+  MOMENT_PARAM,
+  parseMomentParam,
+  withMomentParam,
+} from "@/lib/meeting/moment-link";
+import {
+  canAlignToRecording,
+  seekTargetSeconds,
+  type SeekSources,
+} from "@/lib/meeting/recording-seek";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -119,7 +137,6 @@ import {
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
-import { getLanguageName } from "@/lib/language/languages";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
   resolveRoomEntryIntent,
@@ -253,6 +270,17 @@ export default function RoomInformationPage() {
   );
   const [highlightedSegmentId, setHighlightedSegmentId] = useState<string | null>(null);
   const [seek, setSeek] = useState<SeekRequest | null>(null);
+  /**
+   * WT-655 — how long the recording runs, as the media element reports it. Null until it does.
+   *
+   * The setter is handed to the player unwrapped, which is why this is `useState` and not a ref:
+   * `useState` setters are referentially stable for the life of the component, and the player
+   * retracts the duration whenever the callback it was given changes identity. The same trick the
+   * reading sync already plays with `publishPlaying: setIsPlaying`.
+   */
+  const [recordingDurationSeconds, setRecordingDurationSeconds] = useState<number | null>(
+    null,
+  );
 
   const room = roomQuery.data;
   const apiParticipants = participantsQuery.data ?? [];
@@ -301,24 +329,149 @@ export default function RoomInformationPage() {
    */
   // The two origins WT-473 stored for exactly this. Either missing means the transcript cannot be
   // aligned to the recording at all, and recording-seek.ts refuses rather than guessing.
+  /**
+   * WT-655 — the third field, and the one with no column behind it.
+   *
+   * `durationSeconds` is what makes seekTargetSeconds refuse a moment that falls after the host
+   * stopped recording. Nothing supplied it before, so that refusal had never once executed in
+   * production: a late moment yielded a positive offset, the browser clamped `currentTime` to the
+   * end of the file, and the reader got the final frame — which is a still picture of the meeting
+   * ending and is indistinguishable from a seek that worked.
+   *
+   * IT ARRIVES LATE, ON PURPOSE, AND THE GUARD IS DORMANT UNTIL IT DOES
+   *   The player fetches its presigned url only when somebody presses play (a fifteen-minute link
+   *   spent on every visit to this page mostly expires unwatched), so before the first press there
+   *   is no media element, no metadata, and no length. Every timestamp clicked in that window is
+   *   checked against `null` and therefore against nothing. The refusal TIGHTENS once the file is
+   *   loaded rather than being in force from the start, and that is the ceiling of this approach —
+   *   a duration stored beside `recording_started_at` would arrive with the artifact and guard the
+   *   first click too. Until then the first click is covered one layer down instead: the player
+   *   compares a queued seek against its own `duration` before applying it, which is the only
+   *   moment the number exists for a click that arrived before the file did.
+   */
   const seekSources = useMemo(
     () => ({
       timelineAnchorAt: transcriptQuery.data?.timelineAnchorAt ?? null,
       recordingStartedAt:
         findPlayableRecording(endedRecordQuery.data?.artifacts)?.recordingStartedAt ?? null,
+      durationSeconds: recordingDurationSeconds,
     }),
-    [transcriptQuery.data?.timelineAnchorAt, endedRecordQuery.data?.artifacts],
+    [
+      transcriptQuery.data?.timelineAnchorAt,
+      endedRecordQuery.data?.artifacts,
+      recordingDurationSeconds,
+    ],
+  );
+
+  /**
+   * Whether a transcript timestamp may open the recording at all, and if not, why. WT-655.
+   *
+   * ONE DERIVATION, THREE CONSUMERS
+   *   The gate on `onSeekToRecording`, the notice above the transcript, and the player's own
+   *   `unavailableReason` all read this. Deriving each separately is how a page ends up hiding
+   *   every timestamp while explaining nothing, which is exactly the bug being fixed: `undefined`
+   *   for the handler was the whole of the old answer, so every click on a timestamp was quietly
+   *   swallowed with nothing on screen saying why.
+   *
+   * WHY MORE THAN ONE RECORDING MEANS NONE
+   *   Anyone in the room can stop and restart recording, and each run is a separate file with its
+   *   own start instant. `findPlayableRecording` hands back the first, so a moment from the second
+   *   half of the meeting would be measured against the first file and produce a positive,
+   *   plausible, WRONG offset — a seek that appears to work and lands on the wrong sentence.
+   *   Picking the right file needs recording durations the backend does not store yet, so until it
+   *   does, seeking is withheld and said out loud. See countPlayableRecordings.
+   */
+  const playableRecordingCount = countPlayableRecordings(
+    endedRecordQuery.data?.artifacts,
+  );
+  const canSeekToRecording =
+    playableRecordingCount === 1 && canAlignToRecording(seekSources);
+
+  /**
+   * Why a moment cannot be opened, for the reader — null when it can, or when there is nothing to
+   * explain.
+   *
+   * A meeting with NO recording is deliberately null: not being recorded is the ordinary case and
+   * gets a plain reading page, not a notice about a feature it was never going to have.
+   * `"unalignable"` is the permanent one — the transcript predates the release that stored where
+   * its timeline begins (WT-473), and no value can be reconstructed for it, so the notice states it
+   * flatly rather than implying a wait. See SEEK_UNAVAILABLE_MESSAGES.
+   */
+  const seekUnavailableReason: "unalignable" | "multiple" | null =
+    playableRecordingCount > 1
+      ? "multiple"
+      : playableRecordingCount === 1 && !canAlignToRecording(seekSources)
+        ? "unalignable"
+        : null;
+
+  /**
+   * What the PLAYER says when it has nothing to play, or nothing it can safely seek in.
+   *
+   * A different question from the notice above, which is about timestamps: `"processing"` is not a
+   * seek problem at all, it is "the file is still being written, come back in a minute" — and
+   * `findPlayableRecording` cannot report it, because it collapses "never recorded" and "not ready"
+   * into the same null on purpose. The union is fixed by meeting-record-panels.
+   */
+  const recordingUnavailableReason: "processing" | "multiple" | null =
+    playableRecordingCount > 1
+      ? "multiple"
+      : playableRecordingCount === 0 &&
+          hasPendingRecording(endedRecordQuery.data?.artifacts)
+        ? "processing"
+        : null;
+
+  /**
+   * WT-655 — true only for the instant a `?t=` arrival is being applied.
+   *
+   * The arrival runs through the same `jumpToTranscriptMoment` a click does, deliberately: one path
+   * from a moment to a scrolled row, so the row-resolution fix Wave 1 landed cannot be bypassed. But
+   * that path writes the moment back into the URL, which for a click is the whole point and for an
+   * arrival would put back the parameter we are about to strip — and the strip is what stops the
+   * link re-firing every time an internal navigation returns to this page. The apply is entirely
+   * synchronous, so a flag set around it is enough; nothing can interleave.
+   */
+  const arrivingFromMomentLinkRef = useRef(false);
+
+  /**
+   * Put the moment the reader is looking at into the address bar. WT-655.
+   *
+   * NOT A NEW LINK, AND NOTHING IS MADE PUBLIC. This is the page's own URL with one parameter added:
+   * whoever opens it meets exactly the access checks this page already applies, and a viewer with no
+   * right to the meeting sees what they would have seen without the parameter. Worth saying out loud,
+   * because "share a moment" is the kind of feature that grows a public-link mode by accident.
+   *
+   * `router.replace`, so the back button still goes back to wherever the reader came from rather
+   * than walking them through every timestamp they clicked. `scroll: false` because the default
+   * scrolls to the top — which would undo the scroll that is the reason we are here.
+   *
+   * THE CONSEQUENCE, STATED: after clicking a timestamp the URL shows that moment, so copying the
+   * address bar copies what is on screen. A refresh then honours it once and clears it again.
+   */
+  const rememberMomentInUrl = useCallback(
+    (atMs: number) => {
+      if (arrivingFromMomentLinkRef.current) return;
+      const query = withMomentParam(window.location.search, atMs);
+      router.replace(
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+        { scroll: false },
+      );
+    },
+    [router],
   );
 
   /** Move the recording to a meeting moment. Silent when the clocks cannot be reconciled. */
   const requestSeek = useCallback(
     (atMs: number) => {
+      // Before the refusal below, not after it. The moment is on the MEETING axis and is what the
+      // reader is looking at whether or not the video can follow — a meeting with no recording, or
+      // with several, still deserves a shareable address bar.
+      rememberMomentInUrl(atMs);
       const seconds = seekTargetSeconds(seekSources, atMs);
       if (seconds === null) return;
       // A token, so clicking the SAME line twice seeks twice — the viewer has scrubbed away since.
       setSeek({ seconds, token: Date.now() });
     },
-    [seekSources],
+    [seekSources, rememberMomentInUrl],
   );
 
   /**
@@ -336,16 +489,22 @@ export default function RoomInformationPage() {
    * The function is imported here even though the panel that draws the list now lives in its own
    * file: what makes the two numbers agree is that they are produced by the SAME grouping, and a
    * count passed back up out of the panel would be a second claim rather than the same one.
+   *
+   * WT-655: it is now the rows themselves that are memoised rather than only their number, because
+   * jumping to a cited moment has to resolve that moment to a ROW — see citation-target.ts. Same
+   * grouping, same sort, one call: the count and the jump target cannot disagree about what a row
+   * is, which is the whole point of not approximating this a second time.
    */
-  const transcriptEntryCount = useMemo(
+  const transcriptRows = useMemo(
     () =>
       groupSavedTranscriptSegments(
         [...transcriptSegments].sort(
           (left, right) => left.sequenceOrder - right.sequenceOrder,
         ),
-      ).length,
+      ),
     [transcriptSegments],
   );
+  const transcriptEntryCount = transcriptRows.length;
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -378,17 +537,123 @@ export default function RoomInformationPage() {
         toast.error("That moment is not in the saved transcript.");
         return;
       }
+      /**
+       * WT-655: the cited SEGMENT is resolved to the ROW that contains it before anything is looked
+       * up in the DOM.
+       *
+       * findSegmentAtMs searches the raw, ungrouped list, because that is the list with the timings
+       * in it — but the transcript on screen is drawn from groupSavedTranscriptSegments, which folds
+       * consecutive chunks of one continuous piece of speech into one bubble named after the FIRST
+       * of them. A citation that landed anywhere else in a bubble produced an id that names no
+       * element and no row, and `if (!node) return` swallowed it: the click did nothing, said
+       * nothing, and looked deliberate next to the toast one branch above. The `highlighted`
+       * comparison in the transcript panel is keyed on the row's id too, so the same mismatch was
+       * also eating the highlight.
+       */
+      const rowId = resolveCitationRowId(transcriptRows, segment.id);
+      if (!rowId) {
+        // Grouping drops control markers before anything is drawn, so a moment can genuinely have
+        // no line a person can read. Scrolling to the nearest row instead would land the reader on
+        // a line that is not the evidence they clicked to check.
+        toast.error("That moment has no line in the transcript.");
+        return;
+      }
       // The tab switch renders the transcript in the same commit, so the node does not
       // exist yet on this frame.
       requestAnimationFrame(() => {
-        const node = document.getElementById(`transcript-segment-${segment.id}`);
-        if (!node) return;
+        const node = document.getElementById(`transcript-segment-${rowId}`);
+        if (!node) {
+          // Never silent again. The row exists in the data and not on screen — a filter or a
+          // language view is hiding it — and the reader has to be told, or the citation looks
+          // broken in exactly the way it used to be.
+          toast.error("Could not scroll to that moment in the transcript.");
+          return;
+        }
         node.scrollIntoView({ behavior: "smooth", block: "center" });
-        setHighlightedSegmentId(segment.id);
+        setHighlightedSegmentId(rowId);
       });
     },
-    [transcriptSegments, requestSeek],
+    [transcriptSegments, transcriptRows, requestSeek],
   );
+
+  /** Whether this arrival's `?t=` has been dealt with. One shot per mount, malformed values too. */
+  const momentLinkAppliedRef = useRef(false);
+  /**
+   * Whether the answer carrying `recordingStartedAt` is in.
+   *
+   * `useEndedRoomRecord` is disabled until a workspace id is known, and a disabled query never
+   * leaves `pending` — so "settled" cannot be `!isPending` or an arrival on a meeting with no
+   * workspace resolved would wait forever for an answer that is not coming. A room whose own lookup
+   * has finished with no workspace behind it never had a record to fetch, and counts as answered.
+   */
+  const recordAnswerSettled =
+    endedRecordQuery.isSuccess ||
+    endedRecordQuery.isError ||
+    ((roomQuery.isSuccess || roomQuery.isError) && !validWorkspaceId);
+
+  /**
+   * `?t=` — someone shared a moment of this meeting. WT-655.
+   *
+   * WHY IT WAITS
+   *   Both answers have to be in first, and for different reasons. Without the transcript there is
+   *   no row to scroll to, and an empty list at this point is not "no line" but "not fetched" — the
+   *   difference between honouring the link and telling the reader their moment is not in the
+   *   transcript. Without the ended record there is no `recordingStartedAt`, so `requestSeek` would
+   *   refuse silently and the video would sit still on a link that should have moved it. Neither is
+   *   a race worth losing for the sake of firing a few hundred milliseconds earlier.
+   *
+   * WHY IT GOES THROUGH jumpToTranscriptMoment
+   *   Because that is the one path from a moment to the row a reader can see. It seeks AND scrolls,
+   *   and when the meeting cannot be seeked at all — no recording, clocks unreconcilable, several
+   *   recordings — the seek is the half that quietly declines and the scroll is the half that still
+   *   works. Reading the right sentence is most of the value of "look at this bit", and it is the
+   *   part that survives a meeting nobody recorded. A second scroll path would also reintroduce the
+   *   mid-group citation bug Wave 1 fixed; see resolveCitationRowId.
+   *
+   *   The recording being unloaded at this instant is not a problem: the player holds a seek that
+   *   arrives before its file does and applies it once metadata lands, so the moment is waiting for
+   *   the reader's first press of play rather than being dropped.
+   *
+   * WHY THE PARAMETER IS THEN REMOVED
+   *   A parameter that lingers re-fires on every internal navigation back to this page: leave the
+   *   record, come back to it, and the reader is yanked to a moment they visited ten minutes ago.
+   *   `router.replace`, so this leaves no history entry to press Back through.
+   */
+  useEffect(() => {
+    if (momentLinkAppliedRef.current) return;
+    if (hasTranscript === undefined || !recordAnswerSettled) return;
+
+    const atMs = parseMomentParam(
+      new URLSearchParams(window.location.search).get(MOMENT_PARAM),
+    );
+    momentLinkAppliedRef.current = true;
+
+    // Silence, deliberately. A malformed `?t=` is somebody's mangled copy-paste — broken across two
+    // lines in a chat client, or with an auto-linker's bracket stuck to the end — and there is no
+    // action the reader can take about it. No seek, no toast, and above all no jump to 0:00, which
+    // would be a confident answer to a question nobody asked. It is also left IN the URL: there is
+    // nothing to re-fire, and the reader may be about to fix it by hand.
+    if (atMs === null) return;
+
+    // See the ref: the arrival must not re-mint the parameter it is consuming.
+    arrivingFromMomentLinkRef.current = true;
+    try {
+      jumpToTranscriptMoment(atMs);
+    } finally {
+      arrivingFromMomentLinkRef.current = false;
+    }
+
+    const query = withMomentParam(window.location.search, null);
+    router.replace(
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+      { scroll: false },
+    );
+  }, [
+    hasTranscript,
+    recordAnswerSettled,
+    jumpToTranscriptMoment,
+    router,
+  ]);
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the
   // Tracking panel both render off this object; neither one filters a status itself, which is
@@ -682,9 +947,10 @@ export default function RoomInformationPage() {
                   {/* Rating a meeting used to live on `/ended`, which was the only door to it and
                       is gone. Here it is a control on the meeting itself, offered only once the
                       meeting is over — there is nothing to rate before that. */}
-                  {isEnded ? (
-                    <MeetingFeedbackMenu roomId={room.id} meetingTitle={room.title} />
-                  ) : null}
+                  {/* Moved into the button row below. On its own line it stacked above the
+                      `···`, and on an ENDED room — where there is no primary button — that left
+                      two lone icons floating one above the other at the page's right edge,
+                      reading as two unrelated controls rather than one cluster. */}
                   {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
                       the title. A second StatusChip stood here, so the same room announced
                       "Waiting" twice on one screen in two different visual languages — a grey
@@ -719,6 +985,15 @@ export default function RoomInformationPage() {
                         pending={startRoomMutation.isPending}
                         onActivate={handleRoomEntry}
                         className="h-9 px-4"
+                      />
+                    ) : null}
+                    {/* Rating a meeting used to live on `/ended`, which was the only door to it
+                        and is gone. Here it is a control on the meeting itself, offered only once
+                        the meeting is over — there is nothing to rate before that. */}
+                    {isEnded ? (
+                      <MeetingFeedbackMenu
+                        roomId={room.id}
+                        meetingTitle={room.title}
                       />
                     ) : null}
                     <RoomActionsMenu
@@ -774,17 +1049,24 @@ export default function RoomInformationPage() {
                 segments={transcriptSegments}
                 hasTranscript={hasTranscript}
                 seek={seek}
+                seekSources={seekSources}
                 onRecordChanged={() => void endedRecordQuery.refetch()}
+                // WT-655: the media element is the only source of the recording's length, and this
+                // is the wire it comes back up. See the note on `seekSources` above.
+                onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
+                seekUnavailableReason={seekUnavailableReason}
+                recordingUnavailableReason={recordingUnavailableReason}
                 speakerDirectory={speakerDirectory}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
                     translations={transcriptTranslations}
                     preferredLanguage={user?.preferredLanguage}
-                    onSeekToRecording={
-                      canAlignToRecording(seekSources) ? requestSeek : undefined
-                    }
+                    // WT-655: the count gate joined the alignment gate. Two playable recordings
+                    // means every offset is measured against the wrong file half the time, and the
+                    // notice above the transcript now says why the timestamps went quiet.
+                    onSeekToRecording={canSeekToRecording ? requestSeek : undefined}
                     baseTime={
                       transcriptQuery.data?.createdAt ||
                       room.startedAt ||
@@ -936,6 +1218,30 @@ function RoomEntryButton({
 }
 
 /**
+ * WT-655 — what a reader is told when a timestamp will not open the recording.
+ *
+ * THE SILENCE THIS BREAKS
+ *   `onSeekToRecording` was gated on `canAlignToRecording` alone, and the gate's only expression
+ *   was passing `undefined`: every timestamp in the transcript kept its clickable look, lost its
+ *   click, and offered no reason anywhere on the page. A feature that quietly does nothing is
+ *   indistinguishable from a broken one, and the reader's next move is to file a bug about the
+ *   transcript.
+ *
+ * WHY THE WORDING AVOIDS "YET"
+ *   `unalignable` is permanent. The two origins the arithmetic needs were added by WT-473 and
+ *   cannot be reconstructed for a meeting recorded before them, so there is nothing to wait for
+ *   and saying "not yet" would invite a reader to keep coming back. `multiple` genuinely is
+ *   temporary — it needs recording durations the backend does not store — so it is the one that
+ *   gets a "yet".
+ */
+const SEEK_UNAVAILABLE_MESSAGES: Record<"unalignable" | "multiple", string> = {
+  unalignable:
+    "You can watch this recording, but jumping to a moment is not available for it — this meeting was transcribed before WarpTalk started recording where a video's timeline begins.",
+  multiple:
+    "This meeting has more than one recording, so jumping to a moment is not available yet — a timestamp cannot be matched to the right file.",
+};
+
+/**
  * Everything a meeting left behind, on the meeting's own page.
  *
  * The transcript, the AI summary and the retained files used to be a separate Transcripts
@@ -957,8 +1263,12 @@ function MeetingRecordSection({
   segments,
   hasTranscript,
   seek,
+  seekSources,
   onRecordChanged,
+  onDurationSeconds,
   onJumpToMoment,
+  seekUnavailableReason,
+  recordingUnavailableReason,
   speakerDirectory,
   tab,
   onTabChange,
@@ -990,8 +1300,36 @@ function MeetingRecordSection({
   segments: TranscriptSegmentDto[];
   /** Where to move the recording, when a citation or a transcript line asked. */
   seek: SeekRequest | null;
+  /**
+   * WT-655 — the two clock origins, for the direction that runs the other way: the recording is
+   * playing, and the transcript has to know which line that is.
+   *
+   * The same object `requestSeek` measures against, threaded rather than rebuilt here. Two
+   * derivations of this pair would be two answers to where the meeting's timeline begins, and the
+   * second one is wrong in a way that renders as a highlight sitting a sentence behind the audio.
+   */
+  seekSources?: SeekSources;
   onRecordChanged: () => void;
+  /**
+   * WT-655 — the recording's length, going the other way from everything else here.
+   *
+   * Both players on this page report it to the same handler, and they cannot both be mounted: the
+   * pip belongs to the Transcript tab and the block player to Summary, so switching tabs unmounts
+   * one (which publishes null) and mounts the other (which publishes the number again once its own
+   * metadata lands). That is why the handler is a plain setter and not a merge of two sources.
+   */
+  onDurationSeconds?: (seconds: number | null) => void;
   onJumpToMoment: (atMs: number) => void;
+  /**
+   * WT-655 — why a transcript timestamp does not open the recording, when it does not.
+   *
+   * Derived on the page, because only the page holds the transcript's `timelineAnchorAt`. Null
+   * covers both "it works" and "there is no recording to jump into" — a meeting nobody recorded
+   * gets a plain reading page, not a notice about a feature it never had.
+   */
+  seekUnavailableReason?: "unalignable" | "multiple" | null;
+  /** Passed straight to the player. The union is meeting-record-panels'. */
+  recordingUnavailableReason?: "processing" | "multiple" | null;
   /** Faces for the reading rail's attendees tab, from the same workspace member list the
    *  transcript's own speakers come from — the only place an avatar exists. */
   speakerDirectory?: Readonly<
@@ -1225,6 +1563,16 @@ function MeetingRecordSection({
           of the record is the single biggest reason the transcript below it was being read a
           screenful at a time. The Summary tab keeps the block player, because there is no reading
           column beside it there to compete with. */}
+      {/* WT-655: the one line that stops the transcript's timestamps going quiet without a reason.
+          Above the reading surface, because it is about the timestamps in it. A meeting that was
+          simply never recorded produces no reason at all and so renders nothing — see
+          seekUnavailableReason. The player it used to sit beside is gone: Summary and Transcript
+          are one tab now, and the rail's pip is the only player on it. */}
+      {activeTab === "recap" && seekUnavailableReason ? (
+        <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
+          {SEEK_UNAVAILABLE_MESSAGES[seekUnavailableReason]}
+        </div>
+      ) : null}
       {activeTab === "recap" ? (
         // "Still writing this up" came from the deleted `/ended` page, and it has to come with
         // it: the host now lands HERE the moment they press End, which is the one minute when
@@ -1251,9 +1599,12 @@ function MeetingRecordSection({
             segments={segments}
             hasTranscript={hasTranscript}
             recording={recording}
+            recordingUnavailableReason={recordingUnavailableReason}
             seek={seek}
+            seekSources={seekSources}
             busyArtifactId={busyArtifactId}
             onConsentGranted={onRecordChanged}
+            onDurationSeconds={onDurationSeconds}
             onJumpToMoment={onJumpToMoment}
             onDownload={downloadArtifact}
             onRewrite={endedRecord ? requestSummaryRewrite : undefined}
@@ -1361,7 +1712,10 @@ function RoomNotesEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-[160px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
+          // 160px of empty box was a tenth of the first screen on a room whose notes nobody
+          // wrote — and most rooms have none. The editor grows with its content anyway, so the
+          // floor only has to be a comfortable click target for an empty one: three lines.
+          "min-h-[72px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
           "[&_p]:my-1.5 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-[20px] [&_h1]:font-semibold [&_h1]:text-foreground " +
           "[&_h2]:mt-3.5 [&_h2]:mb-1.5 [&_h2]:text-[17px] [&_h2]:font-semibold [&_h2]:text-foreground " +
           "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-foreground " +
@@ -1686,46 +2040,26 @@ function LinkToolbarButton({
  * plain row can open it, and the chip had nothing left to do.
  */
 function PersonPopover({ user }: { user: UserIdentity }) {
-  return (
-    <PopoverContent
-      align="start"
-      className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
-    >
-      <div className="flex items-start gap-3">
-        <PersonAvatar user={user} className="size-10 text-[14px]" />
-        <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold text-ink">
-            {user.name}
-          </p>
-          <p className="truncate text-[12px] text-muted-foreground">
-            {user.email ?? user.id}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {user.role ? <InlineChip>{user.role}</InlineChip> : null}
-            {user.status ? <InlineChip>{user.status}</InlineChip> : null}
-          </div>
-        </div>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
-        <div>
-          <p>Speaks</p>
-          <p className="mt-0.5 font-medium text-ink">
-            {user.speakLanguage
-              ? getLanguageName(user.speakLanguage)
-              : "Not set"}
-          </p>
-        </div>
-        <div>
-          <p>Listens</p>
-          <p className="mt-0.5 font-medium text-ink">
-            {user.listenLanguage
-              ? getLanguageName(user.listenLanguage)
-              : "Not set"}
-          </p>
-        </div>
-      </div>
-    </PopoverContent>
-  );
+  // The card is the shared one now. Its markup used to live here in full, one of several
+  // near-identical copies scattered across the app — which is how the archive, the meetings
+  // list and the schedule all ended up printing a name with nothing behind it while THIS page
+  // had the good version. The trigger stays local: the roster is rows, not chips.
+  return <UserChipCard user={toChipIdentity(user)} align="start" />;
+}
+
+function toChipIdentity(user: UserIdentity): UserChipIdentity {
+  return {
+    // For an invitee this is an invitation id rather than a user id — presence simply never
+    // resolves for it, which is the correct answer for somebody who has not accepted yet.
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    status: user.status,
+    speakLanguage: user.speakLanguage,
+    listenLanguage: user.listenLanguage,
+  };
 }
 
 function buildUserList(
@@ -2109,31 +2443,6 @@ function RoomActionsMenu({
   );
 }
 
-function InlineChip({
-  children,
-  icon,
-}: {
-  children: ReactNode;
-  icon?: ReactNode;
-}) {
-  return (
-    <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      {icon}
-      <span className="truncate">{children}</span>
-    </span>
-  );
-}
-
-/**
- * A person on the room's record: their face when they have one, their initial when they do not.
- *
- * This drew the initial and nothing else — a circle with one letter in it, with no code path that
- * could ever show a picture. `UserIdentity` has declared `avatarUrl` the whole time, so it looked
- * from the outside like the data was missing rather than the rendering.
- *
- * AvatarImage resolves the stored value against the API origin, which an uploaded avatar needs:
- * it is a relative path, and the app is served from a different host than the API.
- */
 function PersonAvatar({
   user,
   className,

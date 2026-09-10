@@ -30,6 +30,16 @@ export function roomDetailPath(workspaceSlug: string, roomId: string): string {
   return `/${workspaceSlug}/rooms/${roomId}`;
 }
 
+/**
+ * The calendar of what is booked — where a meeting created for later actually shows up.
+ *
+ * Distinct from the meetings LIST at `/{slug}/rooms`: that one is a flat inventory, this one is
+ * the month/week grid, and a booking made for Thursday is only legible on the second.
+ */
+export function schedulesPath(workspaceSlug: string): string {
+  return `/${workspaceSlug}/schedules`;
+}
+
 /** The library of everything WarpTalk wrote down, across every meeting. */
 export function recordsPath(workspaceSlug: string): string {
   return `/${workspaceSlug}/artifacts`;
