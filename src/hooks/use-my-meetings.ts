@@ -48,6 +48,17 @@ export function useMyMeetings(
 /**
  * The caller's meetings between two instants, however many months that crosses.
  *
+ * NOT `useMyMeetingsInRange` any more. "My" read as the thing that set this apart from the
+ * Meetings list — and it is not: for anyone who is not a workspace owner or admin,
+ * GetTranslationRoomsAsync falls through to BuildAccessibleRoomsQuery and that list is the
+ * caller's own meetings too. Both surfaces are personal; only the shape differs (a calendar
+ * grid here, a flat inventory there), so the name says the range and leaves out the half that
+ * claimed a distinction the server does not draw.
+ *
+ * The query KEY still says "my-meetings", deliberately: it is shared with `useMyMeetings` so the
+ * two views reuse one another's months, and renaming it would split that cache in half. Same for
+ * the service and the endpoint behind it — those are the API's own name, not this hook's.
+ *
  * Still fetched and cached BY MONTH — one request and one cache entry per month, exactly as
  * `useMyMeetings` does — and merged here. Switching to arbitrary from/to keys would have been
  * less code and worse: a week key and a month key covering the same days are two entries holding
@@ -57,7 +68,7 @@ export function useMyMeetings(
  * Rows are de-duplicated by id, because a meeting near a boundary is returned by both of its
  * months' queries.
  */
-export function useMyMeetingsInRange(
+export function useMeetingsInRange(
   workspaceId: string | null,
   from: Date,
   to: Date,

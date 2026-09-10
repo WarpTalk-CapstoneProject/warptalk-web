@@ -601,10 +601,68 @@ export function resolveTranscriptPauseGaps(
 }
 
 /**
- * Splits an already-chronological list of segments into blocks around each pause gap. No
- * segment is ever expected to fall INSIDE a gap — that is the entire point of Pause Transcript,
- * the segments spoken during it were never persisted — so each gap lands cleanly on the boundary
- * between the segment before it and the segment after.
+ * WT-657. The gap list, plus the pause the room is in RIGHT NOW if the window list does not
+ * already know about it.
+ *
+ * The two sources disagree by design, and only for some viewers. `GET …/pause-windows` is
+ * "fetched once on mount rather than polled" (useTranscriptPauseWindows) and is invalidated only
+ * inside `useSetTranscriptPaused` — the mutation the HOST fires. Everyone else learns about a
+ * pause from the `TranscriptPaused` broadcast, which updates the live state and never touches that
+ * query. So a participant holds `paused: true` alongside a window list with no open window, and
+ * anything derived from windows alone is correct for the host and silently inert for the room.
+ *
+ * `since` is a wall-clock instant and gaps are meeting-relative, hence `baseTime` — the same
+ * anchor `resolveTranscriptPauseGaps` uses, and the same "nothing to anchor against" fallback.
+ */
+export function withLivePauseGap(
+  gaps: readonly TranscriptPauseGap[],
+  pause: { paused: boolean; since: string | null } | undefined,
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  if (!pause?.paused) return [...gaps];
+  // Already known from the window list — the host's case. Adding a second open gap would split the
+  // same pause in two and draw its divider twice.
+  if (gaps.some((gap) => gap.endMs === null)) return [...gaps];
+
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  const sinceMs = pause.since ? new Date(pause.since).getTime() : NaN;
+  if (Number.isNaN(baseMs) || Number.isNaN(sinceMs)) return [...gaps];
+
+  return [
+    ...gaps,
+    {
+      // Synthetic: the real row exists server-side, but this viewer has not been sent it. Only
+      // `startMs`/`endMs` are read for splitting; `id` keys the divider's React element.
+      window: { id: `live-pause-${pause.since}`, startedAt: pause.since!, endedAt: null },
+      startMs: sinceMs - baseMs,
+      endMs: null,
+    } as TranscriptPauseGap,
+  ].sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
+ * Splits an already-chronological list of segments into blocks around each pause gap.
+ *
+ * For segments READ BACK from the API, no segment falls inside a gap — that is the entire point
+ * of Pause Transcript, the ones spoken during it were never persisted — so each gap lands cleanly
+ * on the boundary between the segment before it and the segment after.
+ *
+ * WT-657: that is NOT true of the live list. Pausing the transcript stops the WRITE, in
+ * TranscriptRedisConsumerService; the Gateway's AiResultConsumerService goes on broadcasting
+ * `TranscriptSegmentReceived` to the room either way, because WT-605 deliberately keeps
+ * translation and dubbing running through a pause so listeners still hear each other. So during a
+ * pause still in force, lines keep arriving over SignalR that the database will never hold — and
+ * they landed here in the block after the open gap and rendered as ordinary transcript, directly
+ * under a notice saying the transcript was paused. The panel was stating both at once, and the
+ * lines it drew vanished on the next reload.
+ *
+ * Hence `recorded`. A block sits after an OPEN gap only while that pause is still in force, so its
+ * segments are exactly the ones being spoken into a stopped recorder. Everything else — before any
+ * pause, or after one that was lifted — is the real record.
+ *
+ * Derived rather than tagged at arrival on purpose: it then also covers segments that reached the
+ * client before it learned about the pause, and it says nothing at all on a reloaded transcript,
+ * where those lines are simply absent.
  *
  * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
  * translation and pause transcript at different, unrelated moments, so callers run this within
@@ -613,17 +671,25 @@ export function resolveTranscriptPauseGaps(
 export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
   segments: readonly T[],
   gaps: readonly TranscriptPauseGap[],
-): Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> {
-  if (!gaps.length) return [{ gapBefore: null, segments: [...segments] }];
+): Array<{ gapBefore: TranscriptPauseGap | null; recorded: boolean; segments: T[] }> {
+  if (!gaps.length) return [{ gapBefore: null, recorded: true, segments: [...segments] }];
 
-  const blocks: Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> = [
-    { gapBefore: null, segments: [] },
-  ];
+  const blocks: Array<{
+    gapBefore: TranscriptPauseGap | null;
+    recorded: boolean;
+    segments: T[];
+  }> = [{ gapBefore: null, recorded: true, segments: [] }];
   let gapIndex = 0;
 
   for (const segment of segments) {
     while (gapIndex < gaps.length && segment.startTimeMs >= gaps[gapIndex].startMs) {
-      blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+      blocks.push({
+        gapBefore: gaps[gapIndex],
+        // Open gap = the pause is still in force, so anything filed after it is being said into a
+        // recorder that is off.
+        recorded: gaps[gapIndex].endMs !== null,
+        segments: [],
+      });
       gapIndex += 1;
     }
     blocks[blocks.length - 1].segments.push(segment);
@@ -633,7 +699,11 @@ export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
   // resuming — would otherwise vanish here instead of rendering its divider. Trailing blocks
   // stay empty; the divider itself is drawn from `gapBefore`, not from having lines to hold.
   while (gapIndex < gaps.length) {
-    blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+    blocks.push({
+      gapBefore: gaps[gapIndex],
+      recorded: gaps[gapIndex].endMs !== null,
+      segments: [],
+    });
     gapIndex += 1;
   }
 

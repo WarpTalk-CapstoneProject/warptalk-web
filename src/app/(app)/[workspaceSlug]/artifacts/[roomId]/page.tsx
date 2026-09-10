@@ -35,6 +35,7 @@ import { useArtifactLibrary, useDrawUpMinutes } from "@/hooks/use-artifact-libra
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { groupEntriesByMeeting, preferredEntry } from "@/lib/meeting/artifact-library";
 import type { ArtifactKind } from "@/lib/meeting/artifact-library";
+import { UserChip } from "@/components/user/user-chip";
 import { recordsPath } from "@/lib/workspace/workspace-routes";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -117,9 +118,30 @@ export default function RecordDetailPage({ params }: PageProps) {
             <h1 className="min-w-0 truncate text-[18px] font-semibold tracking-tight text-ink">
               {group.roomTitle}
             </h1>
-            <p className="truncate text-[11px] text-ink-muted">
-              {group.roomCode}
-              {group.hostName ? ` · ${group.hostName}` : ""}
+            {/* The host is a CHIP, not the tail of a string. "WRJ · Ngô Xuân Hạnh Nhi" told you
+                who ran this meeting and gave you no way to find out who that is — no address, no
+                role, no idea whether they are at their desk to ask. The code stays text; it is
+                not a person. */}
+            <p className="flex min-w-0 items-center gap-1 text-[11px] text-ink-muted">
+              <span className="shrink-0">{group.roomCode}</span>
+              {group.hostName ? (
+                <>
+                  <span aria-hidden className="shrink-0">
+                    ·
+                  </span>
+                  <UserChip
+                    user={{
+                      userId: group.hostId,
+                      name: group.hostName,
+                      role: "Host",
+                    }}
+                    variant="text"
+                    size="sm"
+                    showAvatar={false}
+                    className="text-[11px] text-ink-muted"
+                  />
+                </>
+              ) : null}
             </p>
           </div>
 

@@ -85,7 +85,7 @@ export default function MeetingLayoutPreview() {
                 </div>
               </div>
               <div className="pointer-events-none absolute bottom-5 left-5 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-[13px] font-medium text-white">
-                <span className="text-[12px]">🇻🇳</span>
+                <span className="rounded bg-white/20 px-1 py-px text-[10px] font-semibold tracking-wide">VI</span>
                 <span>Huynh Thai Tu</span>
               </div>
               <span className="pointer-events-none absolute inset-0 z-30 rounded-[24px] ring-2 ring-inset ring-primary" />
@@ -102,7 +102,7 @@ export default function MeetingLayoutPreview() {
                 Start Translation
               </span>
               <span className="flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[13px] font-medium">
-                🇻🇳 Vietnamese
+                VI · Vietnamese
               </span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">CC</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">A</span>
@@ -137,10 +137,17 @@ export default function MeetingLayoutPreview() {
               segments={segments}
               roomId="preview-paused"
               readerLanguage="en"
-              transcriptPause={{ paused: true, since: "2026-09-06T10:05:00Z" }}
-              /* The "Transcript paused · HH:MM–HH:MM" DIVIDERS are not visible here: they are
-                 drawn from the pause-window list the panel fetches itself, and this preview has
-                 no server. The banner above is the part that renders from props. */
+              /* WT-657: with a baseTime to anchor against, the LIVE pause is positioned from
+                 `since` alone — so the lines said after it render dimmed and captioned "not
+                 saved", which is the state this preview exists to show. `since` is 4s in, and
+                 the fixture's lines are 4s apart, so the first line is the record and everything
+                 under it is not.
+
+                 The CLOSED "Transcript paused · HH:MM–HH:MM" dividers still do not appear here:
+                 those come from the pause-window list the panel fetches itself, and this preview
+                 has no server. */
+              baseTime="2026-09-06T10:00:00Z"
+              transcriptPause={{ paused: true, since: "2026-09-06T10:00:04Z" }}
             />
           </div>
 

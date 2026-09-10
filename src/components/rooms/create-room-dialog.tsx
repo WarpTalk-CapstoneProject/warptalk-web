@@ -3,15 +3,16 @@
 import {
   ArrowsInSimple,
   ArrowsOutSimple,
+  CalendarCheck,
   CheckCircle,
   Copy,
   Repeat,
-  SignIn,
   SlidersHorizontal,
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import gsap from "gsap";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { meetingTypeByLabel, isExternalBridge } from "@/lib/meeting/meeting-types";
@@ -26,6 +27,7 @@ import {
 import {
   useCreateRecurringTranslationRoom,
   useCreateTranslationRoom,
+  useStartTranslationRoom,
   useTranslationRoom,
   useTranslationRoomInvitations,
   useUpdateTranslationRoomSettings,
@@ -39,6 +41,8 @@ import {
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import { liveMeetingPath, schedulesPath } from "@/lib/workspace/workspace-routes";
+import { markInstantMeetingStarted } from "@/lib/meeting/instant-meeting-handoff";
 import {
   type DailyRecurrenceDraft,
   detectTimeZone,
@@ -59,6 +63,7 @@ function getDefaultStartTime() {
 }
 
 export function CreateRoomDialog() {
+  const router = useRouter();
   const isOpen = useUIStore((state) => state.createRoomModalOpen);
   const setIsOpen = useUIStore((state) => state.setCreateRoomModalOpen);
   const editRoomId = useUIStore((state) => state.editRoomId);
@@ -122,6 +127,10 @@ export function CreateRoomDialog() {
   const createRoomMutation = useCreateTranslationRoom();
   const createRecurringRoomMutation = useCreateRecurringTranslationRoom();
   const updateRoomMutation = useUpdateTranslationRoomSettings();
+  // An instant meeting is STARTED by this dialog, not merely created. Same mutation the room
+  // page's own "Start meeting" CTA uses, so the two cannot disagree about what opening a room
+  // means.
+  const startRoomMutation = useStartTranslationRoom();
 
   // WT-271: the workspace's language policy, so the picker offers only what the server will
   // accept. `allowedTargetLanguages` is a list of bare ISO-639-1 codes; empty means
@@ -204,6 +213,17 @@ export function CreateRoomDialog() {
   // different (or nothing) under it, and the host needs to know that before submitting rather
   // than after the room exists.
   const bridgeSelected = isExternalBridge(meetingTypeByLabel(meetingTemplate).value);
+
+  // An instant meeting: no start time and no repeat rule, i.e. "now". This is the same
+  // distinction the server draws at creation — `ScheduledAt.HasValue ? "SCHEDULED" : "WAITING"` —
+  // and it is what decides whether submitting this dialog opens the call or books it.
+  //
+  // Google Meet's two entries are the model: "Start an instant meeting" drops you into the call
+  // and shows the link there; "Create a meeting for later" hands you the link and nothing else.
+  // WarpTalk had only the second behaviour, so a host who wanted to meet NOW was made to read a
+  // success screen, click Join, land on the room's information page, and press Start there —
+  // three screens between the button and the meeting it promised.
+  const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;
 
   const validation = {
     title: title.trim().length > 0,
@@ -381,6 +401,45 @@ export function CreateRoomDialog() {
           workspaceId: activeWorkspaceId,
           scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
         });
+
+        if (isInstantMeeting) {
+          // Straight into the call, the way "Start an instant meeting" does. The room is
+          // created WAITING (no scheduledAt), and the host is allowed to take it live
+          // immediately — so do it here rather than making them find the same button on the
+          // room page.
+          //
+          // The success screen is deliberately not reached on this path: everything it offered
+          // is already inside the meeting. The join link lives in the control bar's copy action
+          // and the Invite dialog, and the room's settings are editable from the meeting itself
+          // — which is also why "Configure" is not worth a screen of its own here.
+          try {
+            await startRoomMutation.mutateAsync(room.id);
+          } catch (error) {
+            // The room EXISTS. A start that the server refuses — a suspended workspace, a room
+            // limit — must not lose it, so fall through to the same completion screen a
+            // scheduled meeting gets and let the host open it from there once the reason is
+            // dealt with.
+            setCreatedRoomId(room.id);
+            setCreatedRoomCode(room.translationRoomCode);
+            // toast, not failSubmit: `submitError` renders in the form's footer, which the
+            // completion screen this line switches to does not have. Reporting it there would be
+            // reporting it nowhere.
+            toast.error(
+              getErrorMessage(error, "Room created, but it could not be started."),
+            );
+            return;
+          }
+          // The link this dialog would have shown on its success screen, handed to the meeting
+          // instead — see instant-meeting-handoff. Written before the navigation, because the
+          // page that reads it is the one being navigated to.
+          markInstantMeetingStarted(window.sessionStorage, room.id);
+          // Navigate BEFORE closing, for the reason completeMeetingJoin gives: closing first can
+          // unmount the component that owns the router mid-callback.
+          router.push(liveMeetingPath(activeWorkspaceSlug, room.id));
+          handleOpenChange(false);
+          return;
+        }
+
         setCreatedRoomId(room.id);
         setCreatedRoomCode(room.translationRoomCode);
         toast.success("Room created successfully. Invites sent!");
@@ -599,17 +658,27 @@ export function CreateRoomDialog() {
                       !canSubmit ||
                       createRoomMutation.isPending ||
                       createRecurringRoomMutation.isPending ||
-                      updateRoomMutation.isPending
+                      updateRoomMutation.isPending ||
+                      startRoomMutation.isPending
                     }
                     className="h-[30px] px-3.5 rounded-md bg-ink text-canvas hover:opacity-90 disabled:opacity-40 transition-all font-medium text-[13px] shadow-sm"
                   >
+                    {/* The label says which of the two things this button does. Adding a start
+                        time or a repeat rule books the meeting; without one it opens it now, and
+                        calling that "Create Room" was how the dialog got away with dropping the
+                        host on a success screen instead of into the call. */}
                     {createRoomMutation.isPending ||
                     createRecurringRoomMutation.isPending ||
-                    updateRoomMutation.isPending
-                      ? "Saving..."
+                    updateRoomMutation.isPending ||
+                    startRoomMutation.isPending
+                      ? isInstantMeeting
+                        ? "Starting..."
+                        : "Saving..."
                       : editRoomId
                         ? "Save Changes"
-                        : "Create Room"}
+                        : isInstantMeeting
+                          ? "Start meeting"
+                          : "Create Room"}
                   </Button>
                 </div>
               </div>
@@ -630,8 +699,17 @@ export function CreateRoomDialog() {
                 <h3 className="text-[18px] font-semibold text-foreground mb-1 tracking-tight">
                   Meeting Created Successfully
                 </h3>
+                {/* This screen is normally reached only by a meeting booked for LATER — an
+                    instant one goes straight into the call — so it says what was actually
+                    booked rather than that a room "is ready to use", which was the one thing
+                    a meeting scheduled for Thursday is not.
+                    The exception is an instant meeting whose START was refused: the room is
+                    real and this screen is where it lands, so it must not then claim to have
+                    been booked for a time nobody chose. The toast carries the reason. */}
                 <p className="text-[13px] text-muted-foreground mb-6">
-                  Your room “{title}” is ready to use.
+                  {isInstantMeeting
+                    ? `“${title}” was created but is not open yet. Share the link, or start it from the meeting page.`
+                    : `“${title}” is booked. Share the link now; it opens when the meeting starts.`}
                 </p>
 
                 {/* Room Code Card */}
@@ -668,10 +746,21 @@ export function CreateRoomDialog() {
                     <SlidersHorizontal weight="bold" size={14} />
                     Configure
                   </Button>
+                  {/* "Join" — to the room's own page — used to sit here, and for a BOOKING it was
+                      the wrong offer twice over. It is not a meeting yet, so there is nothing to
+                      join; and the CTA waiting on that page for the host reads "Start meeting",
+                      which would open a meeting booked for Thursday, on Monday, by accident.
+                      Starting a meeting the moment it is created is instant-meeting logic, and
+                      the instant path no longer passes through here at all.
+                      The calendar is where a booking belongs, and going there confirms it landed
+                      on the day it was meant for. Still a link the host clicks, never a push:
+                      this screen exists for the join link above it, and redirecting out from
+                      under that would take the link away at the moment it is wanted — the same
+                      reason Google Meet's "meeting for later" hands you a link and stays put. */}
                   <Link
                     href={
                       activeWorkspaceSlug
-                        ? `/${activeWorkspaceSlug}/rooms/${createdRoomId}`
+                        ? schedulesPath(activeWorkspaceSlug)
                         : `/room/${createdRoomId}`
                     }
                     onClick={() => handleOpenChange(false)}
@@ -680,8 +769,8 @@ export function CreateRoomDialog() {
                       "flex-1 text-[13px] h-[34px] font-medium bg-primary text-white hover:bg-primary/90 gap-2 flex items-center justify-center",
                     )}
                   >
-                    <SignIn weight="bold" size={14} />
-                    Join
+                    <CalendarCheck weight="bold" size={14} />
+                    View in calendar
                   </Link>
                 </div>
               </div>

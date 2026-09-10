@@ -38,7 +38,7 @@ test("a locale tag matches the bare code the server saved", () => {
   assert.equal(isPicked(["en", "vi"], "ja-JP"), false);
 });
 
-test("a room already carrying duplicates shows one flag per language", () => {
+test("a room already carrying duplicates shows one chip per language", () => {
   // Exactly what production held for the room in the report.
   assert.deepEqual(dedupe(["en", "vi", "vi", "vi", "vi", "vi"]), ["en", "vi"]);
 });
@@ -85,11 +85,11 @@ test("a room with no source still shows its targets", () => {
 
 test("a room with nothing declared shows nothing rather than inventing English", () => {
   // The chip used to fall back to "en-US" when sourceLanguage was absent, so a room with no
-  // languages at all still flew an American flag.
+  // languages at all still flew an American flag — WT-661 has since replaced the flag with the language code, but the de-duplication this file pins is unchanged.
   assert.deepEqual(meetingLanguageSet(undefined, undefined), []);
   assert.deepEqual(meetingLanguageSet("", []), []);
 });
 
-test("empty and malformed entries never become a flag", () => {
+test("empty and malformed entries never become a chip", () => {
   assert.deepEqual(meetingLanguageSet("en", ["", "   ", "vi"]), ["en", "vi"]);
 });

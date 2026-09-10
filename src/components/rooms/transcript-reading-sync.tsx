@@ -17,6 +17,8 @@
  *   Down, from the rail:      which blocks a summary claim is pointing at right now (`markedKeys`)
  *                             — a sentence that summarises an exchange rests on more than one turn,
  *                             and marking only the first would leave the reply unlit.
+ *   Down, from the player:    where the recording's playhead is (`playingMs`) and whether it is
+ *                             moving (`isPlaying`) — see THE PLAYHEAD below.
  *   Sideways, once:           a navigator and a playback toggle, registered by whoever owns the
  *                             DOM for them, so the keymap can live in ONE place instead of being
  *                             re-implemented by every surface that has a key to handle.
@@ -25,6 +27,19 @@
  *   citation's moment to a block key and publishes the key; the transcript compares keys. That is
  *   what stops the "which paragraph does this claim cover" rule existing in two places and drifting
  *   — it was the single most likely way for this feature to end up quietly off by one turn.
+ *
+ * THE PLAYHEAD, AND WHY ITS CONVERSION HAPPENS IN HERE
+ *   The player publishes `video.currentTime` and nothing else. That number is on the FILE axis; the
+ *   transcript's offsets are on the meeting axis, and the gap between the two origins is different
+ *   for every meeting (recording-seek.ts opens with why). Converting inside the provider means
+ *   there is exactly one place where the two clocks meet in this direction, mirroring the one place
+ *   they meet in the other — `requestSeek` on the room page. The player stays a media element with
+ *   a couple of callbacks and knows nothing about meetings; the transcript receives a meeting
+ *   moment and resolves it through the same `anchorForMs` the rail uses.
+ *
+ *   Following is state here rather than in the transcript panel because both sides need it: the
+ *   panel scrolls with it, and the pill that turns it back on may only appear while the recording
+ *   is actually playing — a fact only the player knows.
  *
  * OPTIONAL BY DESIGN
  *   `useReadingSync()` returns null outside a provider, and every consumer degrades to its
@@ -44,10 +59,26 @@ import {
 } from "react";
 
 import {
+  meetingMsFromRecordingSeconds,
+  type SeekSources,
+} from "@/lib/meeting/recording-seek";
+import {
+  anchorForMs,
   anchorsEqual,
   readingShortcut,
   type ReadingAnchor,
 } from "@/lib/transcript/document-reading";
+
+/**
+ * How often the playhead is allowed to move the highlight: about 4 Hz.
+ *
+ * `timeupdate` already fires at roughly this rate in most browsers, so this is a floor rather than
+ * a reduction — but the rate is explicitly NOT specified by the HTML standard, and a browser that
+ * fires it on every frame would re-render the transcript column sixty times a second while somebody
+ * reads it. A highlight that lands a quarter of a second late is not something a reader can see; a
+ * reading surface that drops frames is.
+ */
+const PLAYHEAD_INTERVAL_MS = 240;
 
 /** What J, K and `/` drive. Registered by the surface that owns the scroll container. */
 export type ReadingNavigator = {
@@ -70,6 +101,34 @@ export type ReadingSync = {
   registerNavigator: (navigator: ReadingNavigator | null) => void;
   /** A press of Space, as a token — see the same pattern on SeekRequest. */
   playbackRequest: { token: number } | null;
+  /**
+   * Where the recording's playhead is, in FILE seconds — `video.currentTime` verbatim.
+   *
+   * Called from the player's `timeupdate`, which fires about four times a second. Null when there
+   * is no playhead to speak of (no recording loaded, or the element was torn down), which retracts
+   * the highlight rather than leaving it standing on a line nothing is playing.
+   */
+  publishPlaybackSeconds: (seconds: number | null) => void;
+  /** The same instant on the MEETING axis, or null when the two clocks cannot be reconciled. */
+  /**
+   * The block the recording is playing, or null.
+   *
+   * A KEY AND NOT A MILLISECOND, DELIBERATELY. The playhead arrives about four times a second, and
+   * this context value's identity is what every consumer re-renders on — publishing the raw moment
+   * meant the whole transcript column re-rendered at 4 Hz to change one line's colour, and the
+   * column is six hundred rows on a long meeting. Resolved here instead, the value changes when the
+   * SPEAKER LINE changes: once every twenty seconds or so, which is the actual rate of the news.
+   *
+   * It is resolved with `anchorForMs`, the same function the rail resolves a citation with, so the
+   * "which block does this moment belong to" rule keeps exactly one implementation.
+   */
+  playingKey: string | null;
+  /** Whether the recording is actually moving. Published by the player; see THE PLAYHEAD above. */
+  isPlaying: boolean;
+  publishPlaying: (playing: boolean) => void;
+  /** Whether the transcript scrolls itself to keep the playing line in view. */
+  isFollowing: boolean;
+  setFollowing: (next: boolean) => void;
 };
 
 /**
@@ -118,11 +177,31 @@ function isBusyTarget(target: EventTarget | null): boolean {
  * mounted only while this provider is — which is only while the Transcript tab is open — so it
  * cannot fire over the Summary, Minutes or Artifacts panels.
  */
-export function ReadingSyncProvider({ children }: { children: ReactNode }) {
+export function ReadingSyncProvider({
+  children,
+  seekSources,
+}: {
+  children: ReactNode;
+  /**
+   * The two origins the file↔meeting conversion needs, built once by the room page.
+   *
+   * Absent — /dev/transcript-preview, or any surface with no recording behind it — means no
+   * playhead can be placed in the meeting, so `playingMs` stays null and nothing ever lights up as
+   * playing. That is the same refusal seeking makes, in the same module, for the same reason.
+   */
+  seekSources?: SeekSources;
+}) {
   const [anchors, setAnchors] = useState<readonly ReadingAnchor[]>([]);
   const [readingKey, setReadingKey] = useState<string | null>(null);
   const [markedKeys, setMarkedKeysState] = useState<readonly string[]>(NO_MARKED_KEYS);
   const [playbackRequest, setPlaybackRequest] = useState<{ token: number } | null>(null);
+  /** The playhead as the player last reported it, on the FILE axis. */
+  const [playbackSeconds, setPlaybackSeconds] = useState<number | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  // On by default: a reader who presses play has asked to be taken through the meeting. It is
+  // turned off by their own scroll, never by anything this code does on its own.
+  const [isFollowing, setIsFollowing] = useState(true);
+  const lastPlayheadAtRef = useRef(0);
 
   // A ref, not state: the key handler is registered once and would otherwise close over whatever
   // navigator existed on the render that mounted it, which is none.
@@ -151,6 +230,40 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
   const registerNavigator = useCallback((next: ReadingNavigator | null) => {
     navigatorRef.current = next;
   }, []);
+
+  /**
+   * The playhead, throttled, on its way in from the media element.
+   *
+   * A wall-clock gate rather than a comparison of the seconds themselves: `timeupdate` reports a
+   * float that changes every time it fires, so "has it changed" is always yes and would throttle
+   * nothing. Null clears the gate as well as the value, so a fresh element's first report lands
+   * immediately instead of waiting out the interval left over from the previous one.
+   */
+  const publishPlaybackSeconds = useCallback((seconds: number | null) => {
+    if (seconds === null) {
+      lastPlayheadAtRef.current = 0;
+      setPlaybackSeconds(null);
+      return;
+    }
+    const now = Date.now();
+    if (now - lastPlayheadAtRef.current < PLAYHEAD_INTERVAL_MS) return;
+    lastPlayheadAtRef.current = now;
+    setPlaybackSeconds(seconds);
+  }, []);
+
+  /**
+   * The one place the file axis becomes the meeting axis.
+   *
+   * See the module header. The mirror of this — meeting → file — is `requestSeek` on the room page,
+   * and the pair is unit-tested as exact inverses in recording-seek.test.ts.
+   */
+  const playingMs = useMemo(
+    () =>
+      playbackSeconds === null
+        ? null
+        : meetingMsFromRecordingSeconds(seekSources ?? {}, playbackSeconds),
+    [seekSources, playbackSeconds],
+  );
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -182,6 +295,18 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  /**
+   * The playhead as a block key. See `playingKey` on ReadingSync for why the conversion lands here
+   * rather than in the column that draws the mark.
+   */
+  const playingKey = useMemo(
+    () =>
+      playingMs === null || anchors.length === 0
+        ? null
+        : (anchorForMs(anchors, playingMs)?.key ?? null),
+    [anchors, playingMs],
+  );
+
   const value = useMemo<ReadingSync>(
     () => ({
       anchors,
@@ -192,6 +317,12 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
       setMarkedKeys,
       registerNavigator,
       playbackRequest,
+      publishPlaybackSeconds,
+      playingKey,
+      isPlaying,
+      publishPlaying: setIsPlaying,
+      isFollowing,
+      setFollowing: setIsFollowing,
     }),
     [
       anchors,
@@ -201,6 +332,10 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
       setMarkedKeys,
       registerNavigator,
       playbackRequest,
+      publishPlaybackSeconds,
+      playingKey,
+      isPlaying,
+      isFollowing,
     ],
   );
 
