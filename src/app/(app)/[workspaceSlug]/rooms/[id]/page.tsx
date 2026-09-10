@@ -1534,10 +1534,29 @@ function MeetingRecordSection({
           });
           if (superseded) return true;
 
+          // WT-669 — a rendering that is not coming says so, and says why.
+          //
+          // Before `failed` existed the server could only keep answering `generating`, so this
+          // returned false, the poll kept asking, and ninety seconds later the deadline below
+          // produced a sentence that named nothing. The reason had been written by the worker
+          // the whole time.
+          if (answer.status === "failed") {
+            setRendering(null);
+            toast.error(answer.error || "That version could not be written.");
+            return true;
+          }
+
           return answer.status === "ready";
-        } catch {
+        } catch (error) {
           setRendering(null);
-          toast.error("Could not read this meeting in that language.");
+          // The server's own sentence, the way the rewrite path already does it. The endpoint
+          // refuses with things a reader can act on — "This meeting has no summary yet, so there
+          // is nothing to read in another language" — and replacing that with a general apology
+          // is most of what made this control feel broken rather than unavailable.
+          toast.error(
+            (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message)
+              || "Could not read this meeting in that language.",
+          );
           return true;
         }
       };

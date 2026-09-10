@@ -105,9 +105,11 @@ export interface SummaryRenderingDto {
   content: string | null;
   /** True when this is the summary the host published rather than a rendering beside it. */
   isCanonical: boolean;
-  status: "ready" | "generating";
+  status: "ready" | "generating" | "failed";
   /** When this rendering was last written; null while generating. */
   updatedAt: string | null;
+  /** Why it is not coming, in the words the worker wrote. Set only with `failed`. */
+  error?: string | null;
 }
 
 /** Which renderings a room already holds, so a picker can show which choices are instant. */
@@ -132,6 +134,11 @@ export interface SummaryRenderingView {
   templateKey: string;
   language: string;
   isCanonical: boolean;
-  status: "ready" | "generating";
+  /**
+   * `failed` is the one that did not exist, and its absence was the bug: a rendering that could
+   * not be written had no way to be anything but `generating`, so the only ending a reader ever
+   * saw was their own client giving up after ninety seconds.
+   */
+  status: "ready" | "generating" | "failed";
   content: MeetingSummaryContent | null;
 }
