@@ -72,6 +72,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
+import {
+  UserChipCard,
+  type UserChipIdentity,
+} from "@/components/user/user-chip";
 import { usePresence } from "@/hooks/use-presence";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
@@ -133,7 +137,6 @@ import {
 } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
-import { getLanguageName } from "@/lib/language/languages";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
   resolveRoomEntryIntent,
@@ -2037,45 +2040,26 @@ function LinkToolbarButton({
  * plain row can open it, and the chip had nothing left to do.
  */
 function PersonPopover({ user }: { user: UserIdentity }) {
-  return (
-    <PopoverContent
-      align="start"
-      className="w-[260px] rounded-xl border-border/70 p-3 shadow-xl"
-    >
-      <div className="flex items-start gap-3">
-        <PersonAvatar user={user} className="size-10 text-[14px]" />
-        <div className="min-w-0">
-          <p className="truncate text-[14px] font-semibold text-ink">
-            {user.name}
-          </p>
-          <p className="truncate text-[12px] text-muted-foreground">
-            {user.email ?? user.id}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {user.role ? <InlineChip>{user.role}</InlineChip> : null}
-            {user.status ? <InlineChip>{user.status}</InlineChip> : null}
-          </div>
-        </div>
-      </div>
-      {/* One language, and it is the one this person chose: what they want to hear the meeting in.
-          The card used to print "Speaks" beside "Listens", which read as a setting with two halves
-          — and on most rows the two halves were the same word, since a monolingual participant in
-          a bilingual room speaks and hears the same language. The speak side is also on its way to
-          being detected rather than chosen, and a card that presents a guess in the same type as a
-          choice invites the reader to trust both equally.
+  // The card is the shared one now. Its markup used to live here in full, one of several
+  // near-identical copies scattered across the app — which is how the archive, the meetings
+  // list and the schedule all ended up printing a name with nothing behind it while THIS page
+  // had the good version. The trigger stays local: the roster is rows, not chips.
+  return <UserChipCard user={toChipIdentity(user)} align="start" />;
+}
 
-          It still routes: FilteredRoomAudio picks dub-or-microphone from the SPEAK language, which
-          is untouched here. This is what the card SAYS, not what the meeting does. */}
-      <div className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
-        <p>Listens in</p>
-        <p className="mt-0.5 font-medium text-ink">
-          {user.listenLanguage
-            ? getLanguageName(user.listenLanguage)
-            : "Not set"}
-        </p>
-      </div>
-    </PopoverContent>
-  );
+function toChipIdentity(user: UserIdentity): UserChipIdentity {
+  return {
+    // For an invitee this is an invitation id rather than a user id — presence simply never
+    // resolves for it, which is the correct answer for somebody who has not accepted yet.
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    avatarUrl: user.avatarUrl,
+    role: user.role,
+    status: user.status,
+    speakLanguage: user.speakLanguage,
+    listenLanguage: user.listenLanguage,
+  };
 }
 
 function buildUserList(
@@ -2459,31 +2443,6 @@ function RoomActionsMenu({
   );
 }
 
-function InlineChip({
-  children,
-  icon,
-}: {
-  children: ReactNode;
-  icon?: ReactNode;
-}) {
-  return (
-    <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-      {icon}
-      <span className="truncate">{children}</span>
-    </span>
-  );
-}
-
-/**
- * A person on the room's record: their face when they have one, their initial when they do not.
- *
- * This drew the initial and nothing else — a circle with one letter in it, with no code path that
- * could ever show a picture. `UserIdentity` has declared `avatarUrl` the whole time, so it looked
- * from the outside like the data was missing rather than the rendering.
- *
- * AvatarImage resolves the stored value against the API origin, which an uploaded avatar needs:
- * it is a relative path, and the app is served from a different host than the API.
- */
 function PersonAvatar({
   user,
   className,
