@@ -5,8 +5,7 @@ import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSi
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
-import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
+import { getLanguageCode, getLanguageName, isLanguageAllowedByPolicy, languagesInScope, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   applySingleLanguageChoice,
   describeLanguageChoice,
@@ -1733,7 +1732,7 @@ function LanguageColumn({
               selected === language ? "bg-surface-2 text-ink" : "text-ink-muted hover:bg-surface-2 hover:text-ink"
             }`}
           >
-            <span>{getFlagEmoji(language)}</span>
+            <span>{getLanguageCode(language)}</span>
             <span className="flex-1 truncate">{getLanguageName(language)}</span>
             {selected === language ? <CheckCircle className="h-3.5 w-3.5" weight="fill" /> : null}
           </button>
