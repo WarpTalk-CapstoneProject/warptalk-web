@@ -307,6 +307,27 @@ export function getLanguageRegion(value?: string) {
   return getLanguageByCode(value)?.region ?? "";
 }
 
+/**
+ * WT-661: the short mark that stands for a language where there is no room for its name — "EN",
+ * "VI", "JA".
+ *
+ * This replaced a flag emoji, for two independent reasons. Windows ships no colour flag glyphs in
+ * Segoe UI Emoji, so a regional-indicator pair fell back to rendering its two letters and a room
+ * configured for English and Vietnamese read "US · VN" — raw country codes sitting where a
+ * language belongs. And a flag was the wrong mark even where it rendered: English is not the
+ * United States, so a British, Indian, Nigerian or Australian participant was shown a US flag to
+ * mean the language they speak.
+ *
+ * The ISO-639-1 code, which is what the language actually is, has neither problem: it needs no
+ * emoji font and it makes no claim about a country.
+ *
+ * Derived from `normalizeLanguageCode` rather than from the registry's `region`, so an unknown
+ * language degrades to its own tag ("xh" -> "XH") instead of to nothing.
+ */
+export function getLanguageCode(value?: string) {
+  return normalizeLanguageCode(value).toUpperCase();
+}
+
 /** The locale tag for a language, for surfaces that store tags rather than bare codes. */
 export function getLanguageLocale(value?: string) {
   return getLanguageByCode(value)?.locale ?? value ?? "";

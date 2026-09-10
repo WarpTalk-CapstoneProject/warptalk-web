@@ -85,7 +85,7 @@ export default function MeetingLayoutPreview() {
                 </div>
               </div>
               <div className="pointer-events-none absolute bottom-5 left-5 flex items-center gap-1.5 rounded-full bg-black/55 px-3 py-1 text-[13px] font-medium text-white">
-                <span className="text-[12px]">🇻🇳</span>
+                <span className="rounded bg-white/20 px-1 py-px text-[10px] font-semibold tracking-wide">VI</span>
                 <span>Huynh Thai Tu</span>
               </div>
               <span className="pointer-events-none absolute inset-0 z-30 rounded-[24px] ring-2 ring-inset ring-primary" />
@@ -102,7 +102,7 @@ export default function MeetingLayoutPreview() {
                 Start Translation
               </span>
               <span className="flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[13px] font-medium">
-                🇻🇳 Vietnamese
+                VI · Vietnamese
               </span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">CC</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">A</span>

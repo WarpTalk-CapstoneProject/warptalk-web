@@ -20,15 +20,20 @@ import {
  *   (a split the meeting bar can no longer create, but stored profiles still carry), the tooltip
  *   says both. See describeParticipantLanguage.
  */
+// WT-661: the badge holds a two-letter language code, not a flag emoji, so each row sizes a PILL
+// rather than a circle — fixed height with horizontal padding, width following the text. A square
+// big enough for two letters at `xs` would have been wider than the avatar it sits on.
 const SIZES = {
-  xs: { box: "size-6", text: "text-[10px]", flag: "size-3.5 text-[8px] -bottom-px -right-px" },
-  sm: { box: "size-7", text: "text-[11px]", flag: "size-4 text-[9px] -bottom-0.5 -right-0.5" },
-  md: { box: "size-9", text: "text-[12px]", flag: "size-[18px] text-[10px] -bottom-0.5 -right-0.5" },
+  // Letters need more size than the flag did: a flag was recognisable by its colours at any size,
+  // two grey letters are not. Each row is the largest badge that still leaves the face readable.
+  xs: { box: "size-6", text: "text-[10px]", code: "h-3.5 px-[3px] text-[8px] -bottom-px -right-px" },
+  sm: { box: "size-7", text: "text-[11px]", code: "h-4 px-1 text-[9px] -bottom-0.5 -right-0.5" },
+  md: { box: "size-9", text: "text-[12px]", code: "h-[18px] px-1 text-[10px] -bottom-0.5 -right-1" },
   // The two big sizes pull the badge INWARDS. A round avatar's bottom-right bounding-box corner
   // is off the circle entirely, so the badge that reads as "attached" at 24px reads as a sticker
   // floating beside the head at 80px.
-  lg: { box: "size-14", text: "text-[17px]", flag: "size-6 text-[13px] bottom-0 right-0" },
-  xl: { box: "size-20", text: "text-[24px]", flag: "size-7 text-[15px] bottom-0.5 right-0.5" },
+  lg: { box: "size-14", text: "text-[17px]", code: "h-5 px-1.5 text-[11px] bottom-0 right-0" },
+  xl: { box: "size-20", text: "text-[24px]", code: "h-6 px-2 text-[13px] bottom-0.5 right-0.5" },
 } as const;
 
 export type ParticipantAvatarSize = keyof typeof SIZES;
@@ -36,14 +41,14 @@ export type ParticipantAvatarSize = keyof typeof SIZES;
 export function ParticipantAvatar({
   identity,
   size = "sm",
-  showFlag = true,
+  showCode = true,
   speaking = false,
   className = "",
 }: {
   identity: ParticipantIdentity;
   size?: ParticipantAvatarSize;
   /** Off for surfaces that already print the language beside the name. */
-  showFlag?: boolean;
+  showCode?: boolean;
   /** Rings the face while this person holds the floor — the camera-off tile's only speech cue. */
   speaking?: boolean;
   className?: string;
@@ -53,7 +58,7 @@ export function ParticipantAvatar({
     identity.speakLanguage,
     identity.listenLanguage,
   );
-  const flag = showFlag && language?.flag ? language.flag : null;
+  const code = showCode && language?.code ? language.code : null;
 
   return (
     <span
@@ -77,12 +82,12 @@ export function ParticipantAvatar({
           {identity.initials}
         </AvatarFallback>
       </Avatar>
-      {flag ? (
+      {code ? (
         <span
           aria-hidden
-          className={`absolute grid place-items-center rounded-full bg-surface-1 leading-none shadow-sm ring-1 ring-border ${sizing.flag}`}
+          className={`absolute grid place-items-center rounded-full bg-surface-1 font-semibold leading-none tracking-wide text-ink-muted shadow-sm ring-1 ring-border ${sizing.code}`}
         >
-          {flag}
+          {code}
         </span>
       ) : null}
       {language ? <span className="sr-only">{language.label}</span> : null}
@@ -102,15 +107,15 @@ export function ParticipantLanguageBadge({
     identity.speakLanguage,
     identity.listenLanguage,
   );
-  if (!language?.flag) return null;
+  if (!language?.code) return null;
 
   return (
     <span
       title={language.label}
-      className={`leading-none ${className}`}
+      className={`rounded bg-surface-3 px-1 py-px text-[10px] font-medium leading-none tracking-wide text-ink-muted ${className}`}
       aria-label={language.label}
     >
-      {language.flag}
+      {language.code}
     </span>
   );
 }
