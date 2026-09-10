@@ -33,6 +33,14 @@
  *   claim with no `atMs` cannot do that, cannot light up, and cannot be checked — it would be a
  *   paragraph of assertion sitting in a column whose whole argument is that assertions have
  *   sources. They are counted and pointed at instead, so nothing is silently dropped.
+ *
+ * WHY THE OVERVIEW IS A SECTION NOW
+ *   That argument had one exemption, and it was the largest block on the panel: the overview
+ *   paragraph, printed as flat text with no moment behind any of it and read first by everybody.
+ *   The traceable template removes the exemption by emitting the overview as `narrative` — the same
+ *   prose, cut into sentences that each carry their own moments. It is drawn as prose rather than
+ *   as rows (see RailNarrativeSentence), because the point is to keep it readable as a paragraph
+ *   while making every sentence of it answerable.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -81,9 +89,20 @@ import { cn } from "@/lib/utils";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 
+/**
+ * The traceable template's prose section.
+ *
+ * Every other section of every other template is a list of separate points, and a row apiece is
+ * the right shape for those. This one is a paragraph that happens to arrive as sentences, and a
+ * paragraph rendered as rows stops being a paragraph — so it is the one key this file branches on.
+ */
+const NARRATIVE_SECTION_KEY = "narrative";
+
 /** One line of the rail, and the moment in the meeting it is answerable to. */
 type RailClaim = {
   key: string;
+  /** The summary's own key for the section, which decides how the point is drawn. */
+  sectionKey: string;
   section: string;
   /** The section title, on the first claim of each run of it — null on the rest. */
   heading: string | null;
@@ -99,6 +118,14 @@ type RailClaim = {
    * moment simply do not offer a jump, and say so.
    */
   atMs: number | null;
+  /**
+   * The rest of the moments the point rests on — empty for a point that rests on one turn.
+   *
+   * A sentence that summarises an exchange came from several turns by several speakers, and one
+   * of them cannot stand for the others: marking only `atMs` leaves the reply unlit while the
+   * reader is looking straight at it, which reads as the summary having lost interest.
+   */
+  alsoAtMs: readonly number[];
 };
 
 type RailTab = "summary" | "attendees";
@@ -249,6 +276,7 @@ function ReadingRail({
       section.items.forEach((item, index) => {
         rows.push({
           key: `${section.key}-${index}`,
+          sectionKey: section.key,
           section: section.title,
           // Printed when the section CHANGES rather than on every row, the same rule the
           // transcript's language chip follows.
@@ -256,6 +284,7 @@ function ReadingRail({
           text: item.text,
           owner: item.owner,
           atMs: item.atMs,
+          alsoAtMs: item.alsoAtMs,
         });
       });
     }
@@ -280,9 +309,12 @@ function ReadingRail({
     // Only the points that carry a moment take part. A point with no moment is still rendered —
     // it is part of the summary — but there is no block for it to light up, and inventing one
     // would be the same lie as inventing the citation.
+    // Every moment travels, not just the primary one: the reverse direction is the one this map
+    // is mostly read in, and a claim resting on two turns used to go dark the moment the reader
+    // scrolled from the first to the second — which looks exactly like the summary running out.
     const citations: ReadingCitation[] = claims
       .filter((claim): claim is RailClaim & { atMs: number } => claim.atMs !== null)
-      .map((claim) => ({ key: claim.key, atMs: claim.atMs }));
+      .map((claim) => ({ key: claim.key, atMs: claim.atMs, alsoAtMs: claim.alsoAtMs }));
     return groupCitationsByAnchor(citations, sync?.anchors ?? []);
   }, [claims, sync?.anchors]);
 
@@ -306,11 +338,27 @@ function ReadingRail({
     [segments],
   );
 
-  function markClaim(atMs: number | null) {
+  /**
+   * Light every block the pointed-at claim rests on, and nothing else.
+   *
+   * `alsoAtMs` is optional so a point that rests on a single turn asks for it the way it always
+   * has. The keys are a SET before they are published: several moments of one sentence commonly
+   * land in the same turn, and a key published twice is one turn counted twice by anything
+   * downstream that counts rather than merely tests membership.
+   */
+  function markClaim(atMs: number | null, alsoAtMs: readonly number[] = []) {
     if (!sync) return;
-    sync.setMarkedKey(
-      atMs === null ? null : (anchorForMs(sync.anchors, atMs)?.key ?? null),
-    );
+    if (atMs === null) {
+      sync.setMarkedKeys([]);
+      return;
+    }
+
+    const keys = new Set<string>();
+    for (const moment of [atMs, ...alsoAtMs]) {
+      const anchor = anchorForMs(sync.anchors, moment);
+      if (anchor) keys.add(anchor.key);
+    }
+    sync.setMarkedKeys(Array.from(keys));
   }
 
   return (
@@ -461,7 +509,8 @@ function RailSummary({
   /** The claims covering the block being read right now. */
   litKeys: readonly string[];
   uncitedCount: number;
-  onMark: (atMs: number | null) => void;
+  /** Mark the blocks a claim rests on, or clear with a null. See markClaim. */
+  onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
   onJumpToMoment: (atMs: number) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string) => Promise<void>;
@@ -470,10 +519,16 @@ function RailSummary({
   const artifact = record?.artifacts.find((item) => item.type === "summary_export");
   const ready = artifact?.status === "ready";
   const downloading = busyArtifactId !== null && busyArtifactId === artifact?.id;
+  // `sections` counts as content in its own right. A traceable summary can put every word it has
+  // into `narrative` and leave the flat overview string empty, and judging emptiness on the three
+  // pre-template fields alone would answer "No summary yet" over a summary that is right there.
   const hasContent = Boolean(
     summary
       && !summary.insufficientData
-      && (summary.summary || summary.decisions.length || summary.actionItems.length),
+      && (summary.summary
+        || summary.decisions.length
+        || summary.actionItems.length
+        || claims.length),
   );
   const recentlyEnded = useRecentlyEnded(record?.endedAt);
 
@@ -498,6 +553,9 @@ function RailSummary({
   });
 
   const currentTemplate = summary?.templateKey ?? DEFAULT_SUMMARY_TEMPLATE;
+  // Read off the claims rather than off the template key: a summary rewritten into another shape
+  // arrives before its templateKey does, and the sections are what is actually being rendered.
+  const hasNarrative = claims.some((claim) => claim.sectionKey === NARRATIVE_SECTION_KEY);
   // Derived, never stored. See summary-staleness.ts for why a flag would end up lying.
   const stale = isSummaryStale(segments, artifact);
   const [requestedTemplate, setRequestedTemplate] = useState<string | null>(null);
@@ -521,8 +579,9 @@ function RailSummary({
     const lines = [
       `${record.title} — AI meeting summary`,
       "",
-      summary.summary || "(no overview)",
-      "",
+      // The same substitution the panel makes: a summary whose narrative IS the overview would
+      // otherwise be pasted with its opening paragraph printed twice.
+      ...(hasNarrative ? [] : [summary.summary || "(no overview)", ""]),
       ...(summary.sections ?? []).flatMap((section) => [
         section.title,
         ...(section.items.length
@@ -643,8 +702,13 @@ function RailSummary({
       ) : null}
 
       {/* The overview, which the rail did not carry at all while the Summary tab existed — the
-          reader got the citable points and not the paragraph that says what the meeting was. */}
-      {summary?.summary ? (
+          reader got the citable points and not the paragraph that says what the meeting was.
+
+          It gives way to the narrative section when there is one. Both are the same prose, and
+          only the narrative version can be checked: printing the flat string above a citable copy
+          of itself would put the unverifiable one first and largest, which is precisely the dead
+          spot the narrative exists to remove. */}
+      {summary?.summary && !hasNarrative ? (
         <p className="border-b border-border px-2 pb-2.5 pt-2 text-[12.5px] leading-[1.55] text-ink">
           {summary.summary}
         </p>
@@ -663,12 +727,29 @@ function RailSummary({
                 {claim.heading}
               </h5>
             ) : null}
-            <RailClaimButton
-              claim={claim}
-              lit={litKeys.includes(claim.key)}
-              onMark={onMark}
-              onJumpToMoment={onJumpToMoment}
-            />
+            {/* Said once under the heading rather than on every sentence. It stands in for the
+                timestamp line the sentences do not carry, and a hint repeated beside six
+                consecutive sentences is the same striped table the timestamps would have been. */}
+            {claim.heading && claim.sectionKey === NARRATIVE_SECTION_KEY ? (
+              <p className="mb-1 px-2.5 text-[10.5px] leading-4 text-ink-subtle">
+                Click a sentence to see where it came from.
+              </p>
+            ) : null}
+            {claim.sectionKey === NARRATIVE_SECTION_KEY ? (
+              <RailNarrativeSentence
+                claim={claim}
+                lit={litKeys.includes(claim.key)}
+                onMark={onMark}
+                onJumpToMoment={onJumpToMoment}
+              />
+            ) : (
+              <RailClaimButton
+                claim={claim}
+                lit={litKeys.includes(claim.key)}
+                onMark={onMark}
+                onJumpToMoment={onJumpToMoment}
+              />
+            )}
           </div>
         ))
       )}
@@ -750,6 +831,96 @@ function RailClaimButton({
       )}
     >
       {body}
+    </button>
+  );
+}
+
+/**
+ * One sentence of the narrative, and the moments underneath it.
+ *
+ * WHY THIS IS NOT RailClaimButton
+ *   A decision is a row: one statement, one moment, and a timestamp printed under it earns its
+ *   line because the reader is scanning a list and wants the time. The narrative is a paragraph
+ *   that happens to have arrived as sentences, and six sentences each with a mono timestamp line
+ *   of their own is not a paragraph any more — it is a striped table, which is exactly what the
+ *   mockup that tried rules between the sentences produced. So: the same bounded region as the
+ *   button, stacked tight enough to still read as continuous prose, and no timestamp line.
+ *
+ * WHAT REPLACES THE TIMESTAMP LINE
+ *   That line was the only thing telling a reader at rest that these words are clickable, so
+ *   dropping it has to be paid for three times over: the left bar is faintly visible instead of
+ *   transparent, the section says once underneath its heading that a sentence can be clicked, and
+ *   the moments themselves appear at the right edge on hover and on focus. The last one is
+ *   `opacity-0` rather than unmounted — a paragraph that reflows as the pointer crosses it is a
+ *   paragraph nobody can read while pointing at it.
+ *
+ * A SENTENCE WITH NO MOMENT KEEPS NO BAR
+ *   Same argument as the button above, one step earlier: the bar IS the affordance here, so its
+ *   absence says "this one has no source" before the reader spends a click finding out. Only the
+ *   2px it occupies stays, so the unsourced sentence still lines up with the rest of the prose.
+ */
+function RailNarrativeSentence({
+  claim,
+  lit,
+  onMark,
+  onJumpToMoment,
+}: {
+  claim: RailClaim;
+  lit: boolean;
+  onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
+  onJumpToMoment: (atMs: number) => void;
+}) {
+  if (claim.atMs === null) {
+    return (
+      <p className="mb-px block w-full rounded-md border-l-2 border-l-transparent px-2.5 py-1 text-left text-[12.5px] leading-[1.55] text-ink">
+        {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
+        {claim.text}
+      </p>
+    );
+  }
+
+  const atMs = claim.atMs;
+  // Through a Set because the primary moment can also appear among the others, and a reader
+  // stepping along "0:11 · 0:11 · 0:28" would read the repeat as two pieces of evidence.
+  const moments = Array.from(new Set([atMs, ...claim.alsoAtMs])).sort(
+    (left, right) => left - right,
+  );
+
+  return (
+    <button
+      type="button"
+      // Focus as well as hover, in both directions — the same rule as the claim button, and for
+      // the same reason: a highlight only a pointer can reach is a highlight half the readers of
+      // this page never see.
+      onMouseEnter={() => onMark(atMs, claim.alsoAtMs)}
+      onMouseLeave={() => onMark(null)}
+      onFocus={() => onMark(atMs, claim.alsoAtMs)}
+      onBlur={() => onMark(null)}
+      onClick={() => onJumpToMoment(atMs)}
+      title="Go to where this sentence came from"
+      className={cn(
+        "group mb-px flex w-full items-baseline gap-2 rounded-md border-l-2 px-2.5 py-1 text-left transition-colors",
+        lit
+          ? "border-l-primary bg-primary/10"
+          : "border-l-primary/20 hover:border-l-primary hover:bg-surface-1",
+      )}
+    >
+      <span className="min-w-0 flex-1 text-[12.5px] leading-[1.55] text-ink">
+        {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
+        {claim.text}
+      </span>
+      {/* Held in the layout at rest, never unmounted. `lit` is the reverse direction — the reader
+          is already reading the turn this came from, and offering to take them there would be
+          offering to take them where they are. */}
+      <span
+        className={cn(
+          "shrink-0 font-mono text-[10px] tabular-nums text-ink-subtle transition-opacity",
+          lit ? "opacity-0" : "opacity-0 group-hover:opacity-100 group-focus:opacity-100",
+        )}
+      >
+        <span aria-hidden="true">↗ </span>
+        {moments.map((moment) => formatCitationTime(moment)).join(" · ")}
+      </span>
     </button>
   );
 }
