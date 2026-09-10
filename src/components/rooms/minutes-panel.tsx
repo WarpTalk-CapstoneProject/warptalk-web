@@ -32,7 +32,7 @@
  *   box would stop being a record. It sits below the page, as work, not as part of the document.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckSquare,
   Square,
@@ -82,6 +82,8 @@ import {
   printDocument,
   type MinutesEditHandlers,
 } from "@/components/rooms/minutes-document";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import type { MinutesTranslationDto } from "@/types/meetingMinutes";
 
 function formatTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -164,9 +166,48 @@ export function MinutesPanel({
   const [chosenTemplate, setChosenTemplate] = useState<MinutesTemplateId | null>(null);
 
   const stored = useMemo(() => parseMinutesContent(minutes?.content), [minutes?.content]);
+
+  const carriedLanguages = useMemo(() => translationLanguagesOf(stored), [stored]);
   // Editing works on a copy so an in-flight refetch cannot overwrite what is being typed; the
   // copy is dropped the moment editing ends, which is also what discards an abandoned edit.
-  const view = editing && draft ? draft : stored;
+  const base = editing && draft ? draft : stored;
+
+  /**
+   * READING THE RECORD IN A LANGUAGE IT WAS NOT DRAWN UP IN.
+   *
+   * `content.translations` covers the languages the meeting was being interpreted into while it
+   * ran. A reader outside that set — the Japanese reader in a Vietnamese/English room — has no
+   * version of the document at all, so they ask for one and it is generated once.
+   *
+   * The answer is folded INTO `translations` rather than replacing `sections`, which is the whole
+   * design: a signed record is shown beside its original, never instead of it, and folding it in
+   * means the existing bilingual renderer handles it — including `pairByCitation`, which pairs on
+   * the citation and refuses a section outright rather than lining up two halves that might not
+   * correspond. Replacing the body would have thrown that guarantee away and shown a reader
+   * translated prose with nothing to check it against.
+   *
+   * Never while editing. The secretary is correcting the original, and a translated column beside
+   * a half-typed correction is a document nobody is reading.
+   */
+  const [readingLanguage, setReadingLanguage] = useState<string | null>(null);
+  const [fetched, setFetched] = useState<MinutesTranslationDto | null>(null);
+  const translationPollRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (translationPollRef.current !== null) window.clearInterval(translationPollRef.current);
+    },
+    [],
+  );
+
+  const view = useMemo<MeetingMinutesContent>(() => {
+    if (editing) return base;
+    if (!readingLanguage || fetched?.status !== "ready" || !fetched.sections) return base;
+    return {
+      ...base,
+      translations: { ...(base.translations ?? {}), [readingLanguage]: fetched.sections },
+    };
+  }, [base, editing, readingLanguage, fetched]);
 
   /**
    * Writing an edit back to the slot it came from.
@@ -177,6 +218,72 @@ export function MinutesPanel({
    * update SPREADS the item rather than replacing it, which is how the citation survives a
    * reworded sentence: only `text` is touched.
    */
+  const readInLanguage = useCallback(
+    (language: string) => {
+      if (translationPollRef.current !== null) {
+        window.clearInterval(translationPollRef.current);
+        translationPollRef.current = null;
+      }
+
+      // Back to the document as it stands. Not a fetch: the original is always already here.
+      if (!language) {
+        setReadingLanguage(null);
+        setFetched(null);
+        return;
+      }
+
+      setReadingLanguage(language);
+      setFetched({ language, sections: null, status: "generating" });
+
+      const stopAt = Date.now() + 90_000;
+
+      const read = async () => {
+        try {
+          const { data } = await meetingMinutesService.getTranslation(roomId, language);
+          // A reader who changed their mind while this was out must not have the old answer land
+          // on top of the new one.
+          let superseded = false;
+          setFetched((current) => {
+            if (current && current.language !== data.language) {
+              superseded = true;
+              return current;
+            }
+            return data;
+          });
+          return superseded || data.status !== "generating";
+        } catch {
+          setReadingLanguage(null);
+          setFetched(null);
+          toast.error("Could not read this record in that language.");
+          return true;
+        }
+      };
+
+      void (async () => {
+        if (await read()) return;
+        translationPollRef.current = window.setInterval(() => {
+          if (Date.now() > stopAt) {
+            if (translationPollRef.current !== null) {
+              window.clearInterval(translationPollRef.current);
+              translationPollRef.current = null;
+            }
+            setReadingLanguage(null);
+            setFetched(null);
+            toast.error("That reading has not arrived. Try again.");
+            return;
+          }
+          void read().then((done) => {
+            if (done && translationPollRef.current !== null) {
+              window.clearInterval(translationPollRef.current);
+              translationPollRef.current = null;
+            }
+          });
+        }, 4000);
+      })();
+    },
+    [roomId],
+  );
+
   const edits = useMemo<MinutesEditHandlers>(
     () => ({
       setAgenda: (value) =>
@@ -402,6 +509,14 @@ export function MinutesPanel({
             disabled={editing}
           />
 
+          <ReadingLanguagePicker
+            carried={carriedLanguages}
+            reading={readingLanguage}
+            busy={fetched?.status === "generating"}
+            disabled={editing}
+            onChange={readInLanguage}
+          />
+
           <button
             type="button"
             onClick={() => setShowGuides((current) => !current)}
@@ -583,7 +698,17 @@ export function MinutesPanel({
       {/* The document. The surround is a token colour; the page inside it is not — see the
           component's own comment on why a printed page does not follow the viewer's theme. */}
       <div className="bg-surface-2 print:bg-transparent">
-        <MinutesDocument
+        {/* A REFUSAL A READER CAN ACT ON.
+          "This cannot be translated because a person edited it" is a fact; a picker that silently
+          does nothing is a bug to whoever clicked it. The document below stays exactly as it is —
+          the reading was never going to replace it. */}
+      {fetched?.status === "unavailable" && fetched.unavailableReason ? (
+        <div className="mx-6 mb-3 rounded-md border border-border bg-surface-1 px-3 py-2 text-[12px] leading-5 text-ink-muted print:hidden">
+          {fetched.unavailableReason}
+        </div>
+      ) : null}
+
+      <MinutesDocument
           minutes={minutes}
           content={view}
           template={template}
@@ -634,6 +759,70 @@ export function MinutesPanel({
  * they are looking at without opening a menu. Disabled while editing — swapping the layout under
  * a half-typed correction moves the field the secretary is in.
  */
+/**
+ * Which language to READ the record in.
+ *
+ * A dropdown and not a segmented control, unlike the layout beside it: the layout has two options
+ * and the choice is worth seeing at a glance, while this list is as long as the languages the
+ * product speaks.
+ *
+ * The two groups are labelled because they cost different things. A language the document was
+ * drawn up in is already here and appears instantly; anything else is written on request, once,
+ * and the first reader waits for it. One flat list would make a model call look like a click.
+ *
+ * Disabled while editing — the secretary is correcting the original, and a translated column
+ * beside a half-typed correction is a document nobody is reading.
+ */
+function ReadingLanguagePicker({
+  carried,
+  reading,
+  busy,
+  disabled,
+  onChange,
+}: {
+  carried: string[];
+  reading: string | null;
+  busy: boolean;
+  disabled: boolean;
+  onChange: (language: string) => void;
+}) {
+  const offered = languagesInScope("chatTarget").filter(
+    (language) => !carried.includes(language.code),
+  );
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <select
+        value={reading ?? ""}
+        disabled={disabled || busy}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="Read this record in"
+        title="Read this record in another language"
+        className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
+      >
+        <option value="">As drawn up</option>
+        {carried.length > 0 ? (
+          <optgroup label="Drawn up in">
+            {carried.map((code) => (
+              <option key={code} value={code}>
+                {getLanguageName(code)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        <optgroup label="Written on request">
+          {offered.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
+    </div>
+  );
+}
+
 function TemplateSwitch({
   template,
   onChange,

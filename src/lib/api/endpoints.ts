@@ -161,6 +161,11 @@ export const API = {
   // produced, they are a record with a lifecycle and a signature.
   minutes: {
     byRoom: (roomId: string) => `/rooms/${roomId}/minutes`,
+    // Reading the record in a language it was not drawn up in. A GET that can cause work —
+    // the first reader of a language pays for a model call and the answer lands a moment
+    // later — but it writes nothing to the document.
+    translation: (roomId: string, language: string) =>
+      `/rooms/${roomId}/minutes/translation?language=${encodeURIComponent(language)}`,
     draft: (roomId: string) => `/rooms/${roomId}/minutes/draft`,
     update: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}`,
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
