@@ -169,9 +169,11 @@ assert.match(
 );
 assert.match(
   sentence,
-  /onClick=\{\(\) => onJumpToMoment\(atMs\)\}/,
-  "A click still lands on the primary moment — the group is what lights up, not what a jump has to "
-    + "choose between.",
+  /onClick=\{\(\) => onJumpToMoment\(atMs, claim\.alsoAtMs\)\}/,
+  "A click must hand over the whole group, not just the primary moment. The page picks the "
+    + "earliest of them to scroll and seek to, and rings all of them — so passing one moment "
+    + "leaves a click lighting less than the hover that preceded it, which reads as the jump "
+    + "having lost the rest of the evidence.",
 );
 assert.match(
   rail,

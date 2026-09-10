@@ -166,7 +166,7 @@ export function TranscriptReadingLayout({
   seek: SeekRequest | null;
   busyArtifactId?: string | null;
   onConsentGranted: () => void;
-  onJumpToMoment: (atMs: number) => void;
+  onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   /** Ask for the summary to be rewritten in another shape. Omit to hide the picker. */
   onRewrite?: (templateKey: string) => Promise<void>;
@@ -244,7 +244,7 @@ function ReadingRail({
   pipOpen: boolean;
   onTogglePip: () => void;
   onConsentGranted: () => void;
-  onJumpToMoment: (atMs: number) => void;
+  onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string) => Promise<void>;
   speakerDirectory?: Readonly<
@@ -511,7 +511,7 @@ function RailSummary({
   uncitedCount: number;
   /** Mark the blocks a claim rests on, or clear with a null. See markClaim. */
   onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
-  onJumpToMoment: (atMs: number) => void;
+  onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string) => Promise<void>;
 }) {
@@ -779,7 +779,7 @@ function RailClaimButton({
   claim: RailClaim;
   lit: boolean;
   onMark: (atMs: number | null) => void;
-  onJumpToMoment: (atMs: number) => void;
+  onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
 }) {
   const body = (
     <>
@@ -868,7 +868,7 @@ function RailNarrativeSentence({
   claim: RailClaim;
   lit: boolean;
   onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
-  onJumpToMoment: (atMs: number) => void;
+  onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
 }) {
   if (claim.atMs === null) {
     return (
@@ -896,7 +896,7 @@ function RailNarrativeSentence({
       onMouseLeave={() => onMark(null)}
       onFocus={() => onMark(atMs, claim.alsoAtMs)}
       onBlur={() => onMark(null)}
-      onClick={() => onJumpToMoment(atMs)}
+      onClick={() => onJumpToMoment(atMs, claim.alsoAtMs)}
       title="Go to where this sentence came from"
       className={cn(
         "group mb-px flex w-full items-baseline gap-2 rounded-md border-l-2 px-2.5 py-1 text-left transition-colors",

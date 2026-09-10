@@ -67,13 +67,6 @@ export type ReadingSync = {
   /** The blocks a rail item is pointing at while it is hovered or focused. */
   markedKeys: readonly string[];
   setMarkedKeys: (keys: readonly string[]) => void;
-  /** The first of `markedKeys`, and the old single-key setter over it.
-   *
-   *  Here only so the rail and the transcript column still compile while this wave lands — a
-   *  contract branch nobody can typecheck is a contract nobody can verify. Both go once those two
-   *  are reading `markedKeys`, and nothing new should be written against them. */
-  markedKey: string | null;
-  setMarkedKey: (key: string | null) => void;
   registerNavigator: (navigator: ReadingNavigator | null) => void;
   /** A press of Space, as a token — see the same pattern on SeekRequest. */
   playbackRequest: { token: number } | null;
@@ -155,14 +148,6 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // The compatibility pair. See ReadingSync — both are gone once the rail and the column speak in
-  // sets of keys, and neither carries anything markedKeys does not.
-  const markedKey = markedKeys.length > 0 ? markedKeys[0] : null;
-  const setMarkedKey = useCallback(
-    (key: string | null) => setMarkedKeys(key === null ? NO_MARKED_KEYS : [key]),
-    [setMarkedKeys],
-  );
-
   const registerNavigator = useCallback((next: ReadingNavigator | null) => {
     navigatorRef.current = next;
   }, []);
@@ -205,8 +190,6 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
       setReadingKey,
       markedKeys,
       setMarkedKeys,
-      markedKey,
-      setMarkedKey,
       registerNavigator,
       playbackRequest,
     }),
@@ -216,8 +199,6 @@ export function ReadingSyncProvider({ children }: { children: ReactNode }) {
       readingKey,
       markedKeys,
       setMarkedKeys,
-      markedKey,
-      setMarkedKey,
       registerNavigator,
       playbackRequest,
     ],
