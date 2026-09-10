@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { PauseCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { ChatPanel } from "@/components/rooms/live/chat-panel";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
@@ -37,6 +38,8 @@ export function MeetingSidePanel({
   segments,
   missedCount,
   transcriptPause,
+  transcriptPausePending,
+  onToggleTranscriptPause,
   onCopyText,
   joinLink,
   chatTargetLanguage,
@@ -58,6 +61,20 @@ export function MeetingSidePanel({
   missedCount?: number;
   /** WT-605: passed straight through to the transcript panel — see its own prop doc. */
   transcriptPause?: { paused: boolean; since: string | null };
+  /** The pause/resume request is in flight. Everyone sees the state; only the host sees this. */
+  transcriptPausePending?: boolean;
+  /**
+   * WT-605, host-only: flips the transcript between recording and paused.
+   *
+   * Omit to hide the control — that is how it is kept to the host, and it must be the ROOM host
+   * (isRoomHost). TranscriptRecordingService gates on IsRoomHostAsync, so a workspace admin,
+   * host-like on every other control in this meeting, would be handed a button that answers 403.
+   *
+   * The STATE is not host-only and never travels with this prop: `transcriptPause` above reaches
+   * every participant, because a transcript that quietly stops growing looks exactly like a room
+   * that has gone quiet and only one of those is worth reacting to.
+   */
+  onToggleTranscriptPause?: () => void;
   onCopyText: (value: string, label: string) => void;
   joinLink: string;
   /** Viewer's own listen language — passed to ChatPanel for on-click translation. */
@@ -205,6 +222,12 @@ export function MeetingSidePanel({
           <TabButton
             active={mode === "transcript"}
             label="Transcript"
+            // WT-605. The control below only exists while this tab is open, so somebody sitting
+            // in Chat or People would have no way of knowing the record had stopped. The dot is
+            // for THEM: it is on the tab, not on the control, it is shown to every participant
+            // rather than only to the host, and it survives the panel being on another tab.
+            marked={Boolean(transcriptPause?.paused)}
+            markLabel="Transcript paused"
             onClick={() => selectMode("transcript")}
           />
           <TabButton
@@ -219,6 +242,23 @@ export function MeetingSidePanel({
             badge={activeCount}
             onClick={() => selectMode("participants")}
           />
+          {/* WT-605. Moved here from the bottom dock, where it sat between Stop Translation,
+              Record and CC — three switches about the meeting, one about the panel this control
+              actually governs. It belongs beside the thing it changes.
+
+              Only while the Transcript tab is showing: a Pause button hovering over the People
+              list is a button whose effect is off-screen. The cost of that is somebody in another
+              tab losing the switch, which is what the dot on the Transcript tab answers, and
+              somebody below `lg` — where this whole panel is a drawer that can be shut — losing
+              it entirely, which the row in the dock's Settings menu answers by opening the drawer
+              on this tab first. */}
+          {onToggleTranscriptPause && mode === "transcript" ? (
+            <TranscriptPauseControl
+              paused={Boolean(transcriptPause?.paused)}
+              pending={Boolean(transcriptPausePending)}
+              onClick={onToggleTranscriptPause}
+            />
+          ) : null}
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-transparent">
@@ -229,7 +269,7 @@ export function MeetingSidePanel({
                 roomId={roomId}
                 baseTime={room.startedAt}
                 missedCount={missedCount}
-              transcriptPause={transcriptPause}
+                transcriptPause={transcriptPause}
                 // Same value ChatPanel already translates into — this viewer's listen language.
                 readerLanguage={chatTargetLanguage}
               />
@@ -286,11 +326,17 @@ function TabButton({
   active,
   label,
   badge,
+  marked,
+  markLabel,
   onClick,
 }: {
   active: boolean;
   label: string;
   badge?: number;
+  /** A state worth knowing about from another tab. Currently only the transcript pause. */
+  marked?: boolean;
+  /** What the mark means. Required reading for a screen reader, since a dot says nothing. */
+  markLabel?: string;
   onClick: () => void;
 }) {
   return (
@@ -301,6 +347,14 @@ function TabButton({
       }`}
     >
       {label}
+      {marked ? (
+        <span
+          className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500"
+          title={markLabel}
+          aria-label={markLabel}
+          role="img"
+        />
+      ) : null}
       {badge !== undefined && (
         <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-surface-2 px-1 text-[10px] font-semibold text-ink-muted">
           {badge}
@@ -309,6 +363,59 @@ function TabButton({
       {active && (
         <div className="absolute inset-x-0 bottom-0 h-0.5 rounded-t-full bg-ink" />
       )}
+    </button>
+  );
+}
+
+/**
+ * WT-605, host-only: pause or resume the writing-down of the transcript.
+ *
+ * ICON ONLY, AND THAT IS THE SPEC RATHER THAN A SAVING OF SPACE
+ *   The product owner asked for "nút chỉ gồm icon, user rê chuột vào sẽ hiển thị công dụng" — the
+ *   tooltip is the ONLY place the words appear. Which makes `aria-label` load-bearing rather than
+ *   decorative: an icon with no accessible name is a button a screen reader announces as
+ *   "button", and this one changes whether the meeting is being written down. The label and the
+ *   tooltip are therefore the same string, so they cannot drift.
+ *
+ * The state language is the one the dock control already had and readers have already learned:
+ * the glyph fills when paused, pulses while the request is in flight, and takes the `active`
+ * treatment so it is legible as a switch that is currently ON rather than a button to press.
+ */
+function TranscriptPauseControl({
+  paused,
+  pending,
+  onClick,
+}: {
+  paused: boolean;
+  pending: boolean;
+  onClick: () => void;
+}) {
+  const label = pending
+    ? "Transcript request in progress"
+    : paused
+      ? "Resume transcript"
+      : "Pause transcript";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={pending}
+      aria-label={label}
+      title={label}
+      aria-pressed={paused}
+      className={`ml-auto mb-2.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg transition-colors ${
+        pending
+          ? "cursor-not-allowed text-ink-tertiary"
+          : paused
+            ? "bg-amber-500/15 text-amber-600"
+            : "text-ink-subtle hover:bg-surface-2 hover:text-ink"
+      }`}
+    >
+      <PauseCircle
+        className={`h-[18px] w-[18px] ${pending ? "animate-pulse" : ""}`}
+        weight={paused ? "fill" : "regular"}
+      />
     </button>
   );
 }

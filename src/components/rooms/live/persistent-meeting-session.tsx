@@ -2939,6 +2939,22 @@ export function PersistentMeetingSession({
     });
   }
 
+  /**
+   * WT-605. The dock's way back to a switch that now lives in the Transcript panel's tab row.
+   *
+   * Opens the panel on the Transcript tab FIRST, then toggles. Below `lg` that panel is an
+   * overlay drawer that can be shut, so a dock control which only called the mutation would
+   * change the record with nothing on screen to show for it — the paused notice, the divider and
+   * the panel's own control would all be behind a drawer the host still had to think to open.
+   * Both statements here are ordinary React state and land in the same commit that starts the
+   * mutation; nothing waits on the server to reveal the panel.
+   */
+  function handleToggleTranscriptPauseFromDock() {
+    setSidePanelMode("transcript");
+    setRightSidebarOpen(true);
+    handleToggleTranscriptPause();
+  }
+
   function handleToggleRecording() {
     const action = isRecording ? "stop" : "start";
     setRecordingMutation.mutate(action, {
@@ -3498,9 +3514,13 @@ export function PersistentMeetingSession({
                     // isRoomHost, not isHost, for the reason the flash-mode and Stop Translation
                     // props above give: TranscriptRecordingService gates on IsRoomHostAsync, so a
                     // workspace admin — host-like everywhere else in this bar — would be handed a
-                    // button that answers 403. Omitting the prop hides the control instead.
-                    onToggleTranscriptPause={
-                      isRoomHost ? handleToggleTranscriptPause : undefined
+                    // row that answers 403. Omitting the prop hides it instead.
+                    //
+                    // The dock's copy of this is a way IN to the panel, not a second switch: the
+                    // handler opens the Transcript tab before it toggles, so the host always sees
+                    // what changed. The switch itself is in the panel's tab row.
+                    onToggleTranscriptPauseInPanel={
+                      isRoomHost ? handleToggleTranscriptPauseFromDock : undefined
                     }
                   />
                 </div>
@@ -3540,6 +3560,14 @@ export function PersistentMeetingSession({
                 transcriptPause.known
                   ? { paused: transcriptPause.paused, since: transcriptPause.since }
                   : undefined
+              }
+              transcriptPausePending={setTranscriptPausedMutation.isPending}
+              // WT-605. The SWITCH, as opposed to the state above: isRoomHost, not isHost, because
+              // TranscriptRecordingService gates on IsRoomHostAsync and a workspace admin would
+              // otherwise be handed a control that answers 403. Omitting it hides the control and
+              // leaves the state — which every participant still sees — untouched.
+              onToggleTranscriptPause={
+                isRoomHost ? handleToggleTranscriptPause : undefined
               }
               onCopyText={copyText}
               joinLink={joinLink}

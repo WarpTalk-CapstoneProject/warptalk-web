@@ -601,29 +601,72 @@ export function resolveTranscriptPauseGaps(
 }
 
 /**
- * Splits an already-chronological list of segments into blocks around each pause gap. No
- * segment is ever expected to fall INSIDE a gap — that is the entire point of Pause Transcript,
- * the segments spoken during it were never persisted — so each gap lands cleanly on the boundary
- * between the segment before it and the segment after.
+ * A run of transcript with the pause windows that sit immediately above it.
+ *
+ * `gapsBefore` is a LIST rather than one window because two pauses with nobody speaking between
+ * them are one hole in the record, not two: drawn as two dividers they stack against each other
+ * with nothing in between, which reads as a rendering fault rather than as two decisions the host
+ * made. The renderer collapses a run into a single divider — see formatTranscriptPauseGapRun.
+ */
+export type TranscriptPauseBlock<T> = {
+  gapsBefore: TranscriptPauseGap[];
+  segments: T[];
+};
+
+/**
+ * Splits an already-chronological list of segments into blocks around each pause gap.
+ *
+ * A SEGMENT CAN FALL INSIDE A GAP, AND THE DOCSTRING HERE USED TO DENY IT (WT-605)
+ *   It claimed "no segment is ever expected to fall INSIDE a gap — the segments spoken during it
+ *   were never persisted". That is true of the SAVED transcript and false of the live one, which
+ *   is where the bug was found: pausing stops the record growing, it does not stop
+ *   `TranscriptSegmentReceived`, because the caption lane and the transcript panel read the same
+ *   store and captions deliberately keep running through a pause.
+ *
+ *   So a gap's block opens at the moment the pause ENDED, not at the moment it began. Opening it
+ *   at `startMs` — what this did — put every line spoken during the pause BELOW the "Transcript
+ *   paused" divider, where it reads as having been said after the host resumed: the record then
+ *   asserts the opposite of what happened. Above the divider it reads as "and from here, nothing",
+ *   which is what the mark is for.
+ *
+ *   A gap still open has no end to reach, so nothing can open its block from inside the loop; it
+ *   is emitted by the trailing pass below, after every line already in hand. On the live panel
+ *   those lines are gone before they get here (withoutSegmentsInOpenPauseGaps); on the saved one
+ *   the case is a chunk finalized either side of the pause boundary, and this is where it lands.
  *
  * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
  * translation and pause transcript at different, unrelated moments, so callers run this within
- * each translation-session block rather than instead of that grouping.
+ * each translation-session block rather than instead of that grouping. The gaps handed in must be
+ * the ones belonging to THAT block — see distributePauseGapsAcrossBlocks, without which the
+ * trailing pass below redraws every late gap once per session.
  */
 export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
   segments: readonly T[],
   gaps: readonly TranscriptPauseGap[],
-): Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> {
-  if (!gaps.length) return [{ gapBefore: null, segments: [...segments] }];
+): Array<TranscriptPauseBlock<T>> {
+  if (!gaps.length) return [{ gapsBefore: [], segments: [...segments] }];
 
-  const blocks: Array<{ gapBefore: TranscriptPauseGap | null; segments: T[] }> = [
-    { gapBefore: null, segments: [] },
-  ];
+  const blocks: Array<TranscriptPauseBlock<T>> = [{ gapsBefore: [], segments: [] }];
+
+  function openGap(gap: TranscriptPauseGap) {
+    const last = blocks[blocks.length - 1];
+    // Nothing was said between this pause and the one before it, so the two are one stretch of
+    // missing record. Folding them into one block is what lets the divider say so once.
+    if (last.gapsBefore.length > 0 && last.segments.length === 0) {
+      last.gapsBefore.push(gap);
+      return;
+    }
+    blocks.push({ gapsBefore: [gap], segments: [] });
+  }
+
   let gapIndex = 0;
-
   for (const segment of segments) {
-    while (gapIndex < gaps.length && segment.startTimeMs >= gaps[gapIndex].startMs) {
-      blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+    while (
+      gapIndex < gaps.length
+      && gaps[gapIndex].endMs !== null
+      && segment.startTimeMs >= gaps[gapIndex].endMs!
+    ) {
+      openGap(gaps[gapIndex]);
       gapIndex += 1;
     }
     blocks[blocks.length - 1].segments.push(segment);
@@ -631,13 +674,189 @@ export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
 
   // A gap with no segment after it — the room is still paused, or nobody has spoken since
   // resuming — would otherwise vanish here instead of rendering its divider. Trailing blocks
-  // stay empty; the divider itself is drawn from `gapBefore`, not from having lines to hold.
+  // stay empty; the divider itself is drawn from `gapsBefore`, not from having lines to hold.
   while (gapIndex < gaps.length) {
-    blocks.push({ gapBefore: gaps[gapIndex], segments: [] });
+    openGap(gaps[gapIndex]);
     gapIndex += 1;
   }
 
   return blocks;
+}
+
+/**
+ * Which translation-session block each pause window should be drawn in — one entry per block,
+ * in the same order.
+ *
+ * WHY THIS EXISTS (WT-605, the duplicate-divider bug)
+ *   Both panels called `splitSegmentsAroundPauseGaps(block.segments, pauseGaps)` inside their
+ *   `blocks.map` — every block handed the WHOLE gap list. The trailing pass in that function
+ *   emits every gap that sits after the block's last segment, so with two or more translation
+ *   sessions the same pause was drawn once in each block: "Transcript paused · 10:15–10:20"
+ *   appearing three times down a transcript, which reads as three pauses.
+ *
+ *   The fix belongs here rather than in the renderer because it is the only place that can see
+ *   all the blocks at once, which is exactly the knowledge the per-block call is missing.
+ *
+ * A gap goes to the block holding the first line spoken after it ENDED — the same boundary
+ * splitSegmentsAroundPauseGaps opens its block on, so the two cannot disagree about where the
+ * divider lands. A gap nothing follows (still open, or nobody spoke again) goes to the last
+ * block, where the trailing pass will draw it.
+ *
+ * Takes start TIMES rather than the blocks themselves, which is a concession to the React
+ * Compiler rather than a taste: handing it the segment arrays makes it treat every block as
+ * possibly mutated here, and it then gives up memoizing the whole saved-transcript panel. Times
+ * are all this decision has ever needed.
+ */
+export function distributePauseGapsAcrossBlocks(
+  /** One entry per translation-session block, in order — the start times of its segments. */
+  blockStartTimes: readonly (readonly number[])[],
+  gaps: readonly TranscriptPauseGap[],
+): TranscriptPauseGap[][] {
+  const perBlock: TranscriptPauseGap[][] = blockStartTimes.map(() => []);
+  if (!blockStartTimes.length) return perBlock;
+
+  for (const gap of gaps) {
+    let target = blockStartTimes.length - 1;
+    if (gap.endMs !== null) {
+      const endMs = gap.endMs;
+      const found = blockStartTimes.findIndex((times) => times.some((time) => time >= endMs));
+      if (found !== -1) target = found;
+    }
+    perBlock[target].push(gap);
+  }
+
+  return perBlock;
+}
+
+/** A pause this short prints the same clock time at both ends, so it prints its length instead. */
+const SHORT_PAUSE_MS = 60_000;
+
+function defaultPauseClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * The time part of one "Transcript paused · …" divider, for a run of one or more windows.
+ *
+ * THREE THINGS THIS FIXES, ALL OF THEM THE LABEL LYING (WT-605)
+ *   under a minute — both ends were formatted at minute precision, so a 40-second pause printed
+ *                    "10:15 PM–10:15 PM": a range with no width, which reads as a broken clock
+ *                    rather than as a short pause. Such a run prints its LENGTH instead.
+ *   a run of gaps  — see TranscriptPauseBlock.gapsBefore. Consecutive pauses with nothing said
+ *                    between them are one hole, and are named as one.
+ *   "now"          — honest only in a meeting that is still going. On the saved record of an
+ *                    ENDED meeting there is no "now", and a window left open by a room that ended
+ *                    mid-pause would otherwise claim the transcript is paused at the moment you
+ *                    are reading it, months later. `meetingEnded` swaps it for the truth: the
+ *                    record stops there and the meeting stopped with it.
+ *
+ * `formatTime` is injectable so the tests can assert the SHAPE of the label without depending on
+ * the machine's locale and time zone, which is otherwise what decides whether this reads
+ * "10:15 PM" or "22:15".
+ */
+export function formatTranscriptPauseGapRun(
+  gaps: readonly TranscriptPauseGap[],
+  options: {
+    /** True on the saved record of a meeting that is over — see "now" above. */
+    meetingEnded?: boolean;
+    formatTime?: (iso: string) => string;
+  } = {},
+): string {
+  if (!gaps.length) return "";
+
+  const formatTime = options.formatTime ?? defaultPauseClock;
+  const first = gaps[0];
+  const last = gaps[gaps.length - 1];
+  const started = formatTime(first.window.startedAt);
+  const ended = last.window.endedAt
+    ? formatTime(last.window.endedAt)
+    : options.meetingEnded
+      ? "end of meeting"
+      : "now";
+
+  if (gaps.length > 1) return `${gaps.length} pauses · ${started}–${ended}`;
+
+  if (first.window.endedAt) {
+    const lengthMs = Date.parse(first.window.endedAt) - Date.parse(first.window.startedAt);
+    if (Number.isFinite(lengthMs) && lengthMs >= 0 && lengthMs < SHORT_PAUSE_MS) {
+      // Never "0s": a pause the host lifted immediately still happened, and rounding it away
+      // would print a divider that says nothing was missed for no measurable stretch of time.
+      return `${started} · ${Math.max(1, Math.round(lengthMs / 1_000))}s`;
+    }
+  }
+
+  return `${started}–${ended}`;
+}
+
+/**
+ * The lines that are actually being written down: everything except what was said while a pause
+ * window is STILL OPEN. WT-605, and the defect the tester reported.
+ *
+ * WHY THE FILTER IS HERE AND NOT AT THE STORE OR THE GATEWAY
+ *   Pausing the transcript stops the RECORD growing and nothing else — the product decision of
+ *   2026-09-09 is explicit that the caption lane keeps showing words through a pause. The overlay
+ *   (live-subtitle-overlay) reads the very same `transcriptSegments` store the transcript panel
+ *   reads, so a gate at the store or in `addTranscriptSegment` would take the captions down with
+ *   the transcript — killing the exact promise the paused banner prints two inches above it.
+ *
+ *   A store gate would not even be sufficient. `addOrMergeTranslationText` in
+ *   translationRoom-store CREATES a segment when a TranslationTextReceived arrives with no join
+ *   key to merge into, so the translation lane rebuilds a bubble whatever the STT lane was
+ *   allowed to do. Filtering at the point of render is immune to how a segment got into the
+ *   store, which is the only property that makes this rule hold.
+ *
+ * WHY ONLY OPEN WINDOWS, WHEN A CLOSED ONE DESCRIBES A PAUSE JUST AS REAL
+ *   `startTimeMs` is an offset into the audio INGRESS TRACK, and that track resets to zero when
+ *   it reconnects (see formatTranscriptClockTime, which exists because of it). Against a CLOSED
+ *   window — a bounded interval somewhere in the middle of the meeting — a post-reconnect line
+ *   can land inside that interval by arithmetic alone and be deleted from the panel although it
+ *   was recorded perfectly. That is the direction this rule must never fail in: hiding words that
+ *   WERE written down is worse than the bug being fixed, and it is silent.
+ *
+ *   An open window has no upper bound, so the only lines it can match are the ones arriving now —
+ *   and a line arriving now is, by definition, one that is not being recorded. `receivedAt` is
+ *   read as a second, independent tell for the same reason: it is stamped on arrival in wall
+ *   clock, so it survives the ingress reset that `startTimeMs` does not.
+ *
+ * The count comes back with the lines because the panel says so on screen: a stretch where words
+ * are visibly being spoken and nothing appears needs to explain itself, or the panel looks broken.
+ */
+export function withoutSegmentsInOpenPauseGaps<
+  T extends { startTimeMs: number; receivedAt?: number | null },
+>(
+  segments: readonly T[],
+  gaps: readonly TranscriptPauseGap[],
+): { segments: T[]; hiddenCount: number } {
+  const open = gaps.filter((gap) => gap.endMs === null);
+  if (!open.length) return { segments: [...segments], hiddenCount: 0 };
+
+  const kept: T[] = [];
+  let hiddenCount = 0;
+
+  for (const segment of segments) {
+    if (open.some((gap) => fallsInsideOpenPauseGap(segment, gap))) {
+      hiddenCount += 1;
+      continue;
+    }
+    kept.push(segment);
+  }
+
+  return { segments: kept, hiddenCount };
+}
+
+function fallsInsideOpenPauseGap(
+  segment: { startTimeMs: number; receivedAt?: number | null },
+  gap: TranscriptPauseGap,
+): boolean {
+  if (segment.startTimeMs >= gap.startMs) return true;
+
+  // The ingress clock reset while the pause was on, so this line's offset is small again and the
+  // comparison above says it predates a pause it was actually spoken during. `receivedAt` is
+  // wall-clock and cannot be rewound that way.
+  const receivedAt = segment.receivedAt;
+  if (typeof receivedAt !== "number") return false;
+  const pausedAt = Date.parse(gap.window.startedAt);
+  return Number.isFinite(pausedAt) && receivedAt >= pausedAt;
 }
 
 export function resolveTranscriptSpeakerName(

@@ -20,6 +20,9 @@ import {
   resolveTranscriptSpeakerName,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
+  distributePauseGapsAcrossBlocks,
+  formatTranscriptPauseGapRun,
+  withoutSegmentsInOpenPauseGaps,
 } from "../transcript-display.ts";
 // A blank row's cost is only visible where the translations are read — the grouping keeps its id
 // and resolveTranscriptLine is what then demands a translation for it.
@@ -872,12 +875,10 @@ test("splitSegmentsAroundPauseGaps is a no-op with no gaps", () => {
 
   const blocks = splitSegmentsAroundPauseGaps(segments, []);
 
-  assert.deepEqual(blocks, [{ gapBefore: null, segments }]);
+  assert.deepEqual(blocks, [{ gapsBefore: [], segments }]);
 });
 
 test("splitSegmentsAroundPauseGaps splits cleanly at the gap boundary", () => {
-  // Spoken before the pause, then after it — nothing is ever spoken DURING the gap, since that
-  // is exactly what Pause Transcript means: those segments were never persisted at all.
   const segments = [
     { startTimeMs: 1000, id: "before" },
     { startTimeMs: 200_000, id: "after" },
@@ -887,9 +888,9 @@ test("splitSegmentsAroundPauseGaps splits cleanly at the gap boundary", () => {
   const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
 
   assert.equal(blocks.length, 2);
-  assert.equal(blocks[0].gapBefore, null);
+  assert.deepEqual(blocks[0].gapsBefore, []);
   assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
-  assert.equal(blocks[1].gapBefore, gaps[0]);
+  assert.deepEqual(blocks[1].gapsBefore, [gaps[0]]);
   assert.deepEqual(blocks[1].segments.map((s) => s.id), ["after"]);
 });
 
@@ -901,7 +902,7 @@ test("splitSegmentsAroundPauseGaps handles a room still paused (no segments afte
 
   assert.equal(blocks.length, 2);
   assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before"]);
-  assert.equal(blocks[1].gapBefore?.endMs, null);
+  assert.equal(blocks[1].gapsBefore[0]?.endMs, null);
   assert.deepEqual(blocks[1].segments, []);
 });
 
@@ -920,6 +921,221 @@ test("splitSegmentsAroundPauseGaps handles two separate pauses in one meeting", 
 
   assert.equal(blocks.length, 3);
   assert.deepEqual(blocks.map((b) => b.segments.map((s) => s.id)), [["a"], ["b"], ["c"]]);
-  assert.equal(blocks[1].gapBefore?.window.id, "w1");
-  assert.equal(blocks[2].gapBefore?.window.id, "w2");
+  assert.equal(blocks[1].gapsBefore[0]?.window.id, "w1");
+  assert.equal(blocks[2].gapsBefore[0]?.window.id, "w2");
+});
+
+// ── WT-605 W4: a segment CAN fall inside a gap, and it must not read as post-resume speech ───
+
+test("splitSegmentsAroundPauseGaps keeps a segment spoken inside a gap ABOVE the divider", () => {
+  // The docstring used to swear this could not happen. It does: pausing stops the record, not
+  // TranscriptSegmentReceived, and a chunk finalized just after the host pressed Pause lands
+  // here. Opening the gap's block at startMs put it BELOW the "Transcript paused" mark, i.e.
+  // presented as something said after the transcript resumed.
+  const segments = [
+    { startTimeMs: 1_000, id: "before" },
+    { startTimeMs: 80_000, id: "during" },
+    { startTimeMs: 200_000, id: "after" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.equal(blocks.length, 2);
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before", "during"]);
+  assert.deepEqual(blocks[1].segments.map((s) => s.id), ["after"]);
+});
+
+test("splitSegmentsAroundPauseGaps leaves a segment inside a STILL-OPEN gap above it", () => {
+  const segments = [
+    { startTimeMs: 1_000, id: "before" },
+    { startTimeMs: 80_000, id: "during" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  assert.deepEqual(blocks[0].segments.map((s) => s.id), ["before", "during"]);
+  assert.deepEqual(blocks[1].segments, []);
+});
+
+// ── WT-605 W3: two pauses with nobody speaking between them are one hole ─────────────────────
+
+test("splitSegmentsAroundPauseGaps merges consecutive gaps with no speech between them", () => {
+  const segments = [
+    { startTimeMs: 1_000, id: "a" },
+    { startTimeMs: 400_000, id: "b" },
+  ];
+  const gaps = resolveTranscriptPauseGaps(
+    [pauseWindow(60_000, 120_000, "w1"), pauseWindow(150_000, 200_000, "w2")],
+    BASE_TIME,
+  );
+
+  const blocks = splitSegmentsAroundPauseGaps(segments, gaps);
+
+  // Two dividers stacked with nothing in between reads as a rendering fault, not as two pauses.
+  assert.equal(blocks.length, 2);
+  assert.deepEqual(blocks[1].gapsBefore.map((gap) => gap.window.id), ["w1", "w2"]);
+  assert.deepEqual(blocks[1].segments.map((s) => s.id), ["b"]);
+});
+
+// ── WT-605 W2: one pause, drawn once, however many translation sessions there are ────────────
+
+// distributePauseGapsAcrossBlocks is handed start TIMES rather than the blocks themselves — see
+// its docstring for why — so these tests go through the same shaping the two panels do. Written
+// out here rather than hidden behind a fixture: if that shaping ever changes, it has to change in
+// three places that are all looking at each other.
+const startTimesOf = (blocks: readonly { segments: readonly { startTimeMs: number }[] }[]) =>
+  blocks.map((block) => block.segments.map((segment) => segment.startTimeMs));
+
+test("distributePauseGapsAcrossBlocks gives each gap to exactly one block", () => {
+  const blocks = [
+    { segments: [{ startTimeMs: 1_000 }] },
+    { segments: [{ startTimeMs: 200_000 }] },
+    { segments: [{ startTimeMs: 400_000 }] },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000, "w1")], BASE_TIME);
+
+  const perBlock = distributePauseGapsAcrossBlocks(startTimesOf(blocks), gaps);
+
+  // Every block used to be handed the whole list, and the trailing pass in
+  // splitSegmentsAroundPauseGaps then redrew this pause in all three of them.
+  assert.deepEqual(perBlock.map((entry) => entry.map((gap) => gap.window.id)), [[], ["w1"], []]);
+});
+
+test("distributePauseGapsAcrossBlocks sends a still-open gap to the last block", () => {
+  const blocks = [
+    { segments: [{ startTimeMs: 1_000 }] },
+    { segments: [{ startTimeMs: 200_000 }] },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(300_000, null, "open")], BASE_TIME);
+
+  const perBlock = distributePauseGapsAcrossBlocks(startTimesOf(blocks), gaps);
+
+  assert.deepEqual(perBlock.map((entry) => entry.map((gap) => gap.window.id)), [[], ["open"]]);
+});
+
+test("one pause across three session blocks draws exactly one divider", () => {
+  const blocks = [
+    { segments: [{ startTimeMs: 1_000, id: "a" }] },
+    { segments: [{ startTimeMs: 200_000, id: "b" }] },
+    { segments: [{ startTimeMs: 400_000, id: "c" }] },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000, "w1")], BASE_TIME);
+  const perBlock = distributePauseGapsAcrossBlocks(startTimesOf(blocks), gaps);
+
+  const drawn = blocks.flatMap((block, index) =>
+    splitSegmentsAroundPauseGaps(block.segments, perBlock[index]).flatMap(
+      (sub) => sub.gapsBefore,
+    ),
+  );
+
+  assert.deepEqual(drawn.map((gap) => gap.window.id), ["w1"]);
+});
+
+// ── WT-605 W3: the label must not read as a broken clock ─────────────────────────────────────
+
+// Injected so the assertions do not depend on the machine's locale or time zone, which is
+// otherwise what decides between "10:15 PM" and "22:15".
+const clock = (iso: string) => new Date(iso).toISOString().slice(11, 16);
+
+test("formatTranscriptPauseGapRun prints a length, not a zero-width range, under a minute", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 100_000)], BASE_TIME);
+
+  // Both ends formatted at minute precision gave "10:01–10:01", which reads as a bug.
+  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01 · 40s");
+});
+
+test("formatTranscriptPauseGapRun never rounds a very short pause away to 0s", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 60_200)], BASE_TIME);
+
+  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01 · 1s");
+});
+
+test("formatTranscriptPauseGapRun prints a range for a pause of a minute or more", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 300_000)], BASE_TIME);
+
+  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01–10:05");
+});
+
+test("formatTranscriptPauseGapRun names a run of merged pauses as one", () => {
+  const gaps = resolveTranscriptPauseGaps(
+    [pauseWindow(60_000, 120_000, "w1"), pauseWindow(240_000, 300_000, "w2")],
+    BASE_TIME,
+  );
+
+  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "2 pauses · 10:01–10:05");
+});
+
+test("formatTranscriptPauseGapRun says 'now' only while the meeting is still running", () => {
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  assert.equal(formatTranscriptPauseGapRun(gaps, { formatTime: clock }), "10:01–now");
+  // On the saved record of a meeting that is over there is no "now": an unclosed window would
+  // otherwise claim the transcript is paused at the moment you are reading it, months later.
+  assert.equal(
+    formatTranscriptPauseGapRun(gaps, { formatTime: clock, meetingEnded: true }),
+    "10:01–end of meeting",
+  );
+});
+
+// ── WT-605 W1: nothing said during an OPEN pause window may be rendered ──────────────────────
+
+test("withoutSegmentsInOpenPauseGaps drops what was said while the transcript is paused", () => {
+  const segments = [
+    { startTimeMs: 1_000, id: "before" },
+    { startTimeMs: 80_000, id: "during" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const result = withoutSegmentsInOpenPauseGaps(segments, gaps);
+
+  assert.deepEqual(result.segments.map((s) => s.id), ["before"]);
+  assert.equal(result.hiddenCount, 1);
+});
+
+test("withoutSegmentsInOpenPauseGaps drops a line whose ingress clock reset during the pause", () => {
+  // startTimeMs is an offset into the audio ingress track and returns to ~0 when that track
+  // reconnects, so it can put a line spoken DURING the pause before the pause began.
+  // receivedAt is wall-clock and cannot be rewound that way.
+  const pausedAt = new Date(new Date(BASE_TIME).getTime() + 60_000).getTime();
+  const segments = [
+    { startTimeMs: 1_000, id: "genuinely-before", receivedAt: pausedAt - 30_000 },
+    { startTimeMs: 900, id: "after-a-reconnect", receivedAt: pausedAt + 5_000 },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, null)], BASE_TIME);
+
+  const result = withoutSegmentsInOpenPauseGaps(segments, gaps);
+
+  assert.deepEqual(result.segments.map((s) => s.id), ["genuinely-before"]);
+  assert.equal(result.hiddenCount, 1);
+});
+
+test("withoutSegmentsInOpenPauseGaps leaves a CLOSED window's segments alone", () => {
+  // Deliberate. A closed window is a bounded interval in the middle of the meeting, and a line
+  // whose ingress clock has reset can land inside it by arithmetic alone — so filtering on one
+  // would silently delete speech that WAS recorded, which is worse than the bug being fixed.
+  const segments = [
+    { startTimeMs: 1_000, id: "before" },
+    { startTimeMs: 80_000, id: "inside-a-closed-window" },
+    { startTimeMs: 200_000, id: "after" },
+  ];
+  const gaps = resolveTranscriptPauseGaps([pauseWindow(60_000, 120_000)], BASE_TIME);
+
+  const result = withoutSegmentsInOpenPauseGaps(segments, gaps);
+
+  assert.deepEqual(
+    result.segments.map((s) => s.id),
+    ["before", "inside-a-closed-window", "after"],
+  );
+  assert.equal(result.hiddenCount, 0);
+});
+
+test("withoutSegmentsInOpenPauseGaps is a no-op when the transcript is running", () => {
+  const segments = [{ startTimeMs: 1_000, id: "a" }, { startTimeMs: 2_000, id: "b" }];
+
+  const result = withoutSegmentsInOpenPauseGaps(segments, []);
+
+  assert.deepEqual(result.segments.map((s) => s.id), ["a", "b"]);
+  assert.equal(result.hiddenCount, 0);
 });

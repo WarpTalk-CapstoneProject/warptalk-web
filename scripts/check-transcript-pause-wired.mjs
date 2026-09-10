@@ -10,11 +10,18 @@
  *   on the change that caused it. This repo's recurring failure is code wired to nothing, and a
  *   feature spread over six files is six chances to lose it again.
  *
- * THE TWO THINGS THAT MUST NOT DRIFT
+ * THE THREE THINGS THAT MUST NOT DRIFT
  *   1. The hops: endpoint → service → hook → the meeting page → the control → the notice.
  *   2. The MEANING. WT-605 exists because pausing the transcript is NOT stopping the meeting or
  *      the translation. The backend says so in as many words, and copy that blurs the two would
  *      send somebody out of a meeting that is still running perfectly.
+ *   3. What paused actually DOES. Everything above was true and the feature was still broken:
+ *      every link in the chain existed, the banner appeared on cue, and the transcript went on
+ *      printing every word anybody said. The five hops only ever asserted that the parts were
+ *      connected, never that pausing stopped anything — which is precisely why the bug walked
+ *      through CI. The behaviour section at the bottom is the half that was missing, and it has
+ *      two halves of its own, because the rule is not "show less" but "show less HERE": the
+ *      transcript panel stops, the caption lane deliberately does not.
  */
 
 import assert from "node:assert/strict";
@@ -36,6 +43,8 @@ const sidePanel = read("src/components/rooms/live/side-panel/meeting-side-panel.
 const panel = read("src/components/rooms/live/side-panel/transcript-panel.tsx");
 const savedPanel = read("src/components/rooms/meeting-transcript-panel.tsx");
 const display = read("src/lib/transcript/transcript-display.ts");
+const displayTests = read("src/lib/transcript/__tests__/transcript-display.test.ts");
+const overlay = read("src/components/rooms/live/live-subtitle-overlay.tsx");
 
 // ── hop 1: the endpoints exist, keyed by ROOM as the controller declares them ──
 
@@ -106,9 +115,55 @@ assert.match(
   "The switch must gate on isRoomHost, not isHost: TranscriptRecordingService gates on IsRoomHostAsync, so a workspace admin would be handed a button that answers 403.",
 );
 assert.match(
+  withoutComments(sidePanel),
+  /onToggleTranscriptPause && mode === "transcript"/,
+  "The switch lives in the Transcript panel's tab row and must be hidden when no handler is passed (that is how it stays host-only) AND when another tab is showing — a Pause button over the People list changes something off screen.",
+);
+
+// Somebody sitting in Chat or People cannot see the control, so the tab itself has to carry the
+// state. This one is for EVERY participant, not only the host who can toggle it.
+assert.match(
+  withoutComments(sidePanel),
+  /marked=\{Boolean\(transcriptPause\?\.paused\)\}/,
+  "The Transcript tab must show a paused marker, or moving the control into the panel hides the fact from anyone on another tab.",
+);
+
+// Icon-only was the product owner's ask ("nút chỉ gồm icon"), which makes the accessible name the
+// only name this control has. An icon button with no aria-label announces as "button".
+assert.match(
+  withoutComments(sidePanel),
+  /aria-label=\{label\}[\s\S]{0,120}?title=\{label\}/,
+  "The icon-only pause control must carry an aria-label, and the same string as its tooltip — the tooltip is the only place the words appear, so the two must not be able to drift.",
+);
+for (const copy of ["Pause transcript", "Resume transcript", "Transcript request in progress"]) {
+  assert.ok(
+    sidePanel.includes(copy),
+    `The pause control's tooltip must still offer "${copy}" — the state language is the whole label, since the button shows no text.`,
+  );
+}
+
+// Below `lg` the side panel is an overlay drawer that can be closed, so the dock keeps one way
+// back in. It must OPEN the panel first: a dock control that only fires the mutation changes the
+// record with nothing on screen to show for it.
+assert.match(
   withoutComments(controlBar),
-  /onToggleTranscriptPause \?/,
-  "The control bar must hide the control when no handler is passed — that is how it is kept host-only.",
+  /onToggleTranscriptPauseInPanel \?/,
+  "The control bar must keep an entrance to the switch, hidden when no handler is passed — below lg the side panel is a drawer the host may have shut.",
+);
+assert.match(
+  withoutComments(session),
+  /function handleToggleTranscriptPauseFromDock\(\)\s*\{[\s\S]{0,400}?setSidePanelMode\("transcript"\)[\s\S]{0,200}?setRightSidebarOpen\(true\)[\s\S]{0,200}?handleToggleTranscriptPause\(\)/,
+  "The dock entrance must open the drawer on the Transcript tab BEFORE toggling, so the host sees the notice, the divider and the control they just used.",
+);
+assert.doesNotMatch(
+  withoutComments(controlBar),
+  /onToggleTranscriptPause\b/,
+  "The control bar must not take a handler that toggles the transcript directly — only onToggleTranscriptPauseInPanel, which opens the panel first. A direct one is how the switch walks back into the dock row.",
+);
+assert.match(
+  withoutComments(controlBar),
+  /<SettingsRow[\s\S]{0,400}?PauseCircle/,
+  "The dock's entrance must be a row in the Settings menu, not a button back in the control row: it sat between Stop Translation, Record and CC — three switches about the meeting, one about a panel — which is the confusion this ticket forbids.",
 );
 assert.match(
   withoutComments(session),
@@ -145,6 +200,9 @@ assert.match(
 for (const [source, name] of [
   [panel, "the transcript panel"],
   [controlBar, "the control bar"],
+  // Added when WT-605 moved the switch out of the dock: the words a host reads before pressing
+  // are now written HERE, so this is where the confusion would be introduced next.
+  [sidePanel, "the side panel"],
 ]) {
   assert.doesNotMatch(
     withoutComments(source),
@@ -201,4 +259,112 @@ assert.doesNotMatch(
   "The meeting page must go through resolveTranscriptPause, not read the windows itself — reading them directly is exactly the race the module exists to settle.",
 );
 
-console.log("Transcript pause contract OK (5 hops + meaning + dividers checked)");
+// ── what PAUSED actually does, which everything above passed without ever asking ───────────
+//
+// The tester's report: press Pause, the banner appears exactly as designed, and the transcript
+// keeps printing every word. Every assertion above was green throughout. So: the panel must drop
+// what is said while a window is still open.
+
+assert.match(
+  display,
+  /export function withoutSegmentsInOpenPauseGaps[<(]/,
+  "The 'do not render what was said while paused' rule must be an exported function here, not an inline filter in a component: it can fail in the direction that DELETES recorded speech, which is worse than the bug it fixes and completely silent.",
+);
+assert.match(
+  displayTests,
+  /withoutSegmentsInOpenPauseGaps/,
+  "That rule must be exercised by the transcript-display tests. A rule with a dangerous failure direction and no test is the shape this ticket keeps coming back in.",
+);
+assert.match(
+  withoutComments(panel),
+  /withoutSegmentsInOpenPauseGaps\(segments, pauseGaps\)/,
+  "The live transcript panel must filter the segments through that rule. Rendering the store unfiltered is the reported bug.",
+);
+// Before the grouping, not after. groupTranscriptSegments merges consecutive chunks of one
+// speaker into one bubble, so a line spoken after Pause that lands within MAX_UTTERANCE_GAP_MS of
+// the previous one stops being a segment and becomes part of an earlier line's TEXT — where no
+// later filter can reach it.
+assert.match(
+  withoutComments(panel),
+  /withoutSegmentsInOpenPauseGaps\([\s\S]{0,400}?groupTranscriptSegments\(/,
+  "The filter must run BEFORE groupTranscriptSegments, or a paused chunk is merged into the previous bubble's text and no downstream filter can find it again.",
+);
+// Dropping lines silently is how the fix becomes the next bug report. A panel that stops moving
+// while the room is visibly talking looks broken, which is the exact sentence the tester wrote.
+assert.match(
+  withoutComments(panel),
+  /recorded\.hiddenCount > 0 \?/,
+  "The live panel must say something where the dropped lines would have been. An absence with no explanation is indistinguishable from a transcript that has failed.",
+);
+
+// The other half of the rule, and the one a later tidy-up is most likely to "fix". The caption
+// lane reads the SAME transcriptSegments store as the panel, and the product decision of
+// 2026-09-09 is that captions keep running through a pause — which is also the sentence the
+// paused banner prints two inches away. Filtering here would make that banner a lie.
+assert.match(
+  withoutComments(overlay),
+  /state\.transcriptSegments/,
+  "The caption lane must keep reading the transcript store directly. Captions run through a pause; that is the promise the paused notice makes to the room.",
+);
+assert.doesNotMatch(
+  withoutComments(overlay),
+  /PauseGap|pauseWindow|transcriptPause/i,
+  "The caption lane must NOT be gated on the transcript pause. Pausing stops the written record only — translation, dubbing and subtitles keep running, and gating this lane is how that promise gets quietly withdrawn while every other check stays green.",
+);
+
+// One pause, one divider — however many translation sessions the meeting had. Both panels used
+// to call splitSegmentsAroundPauseGaps(block.segments, pauseGaps) inside their blocks.map, with
+// every block handed the WHOLE list, so the trailing pass redrew every late gap once per session.
+assert.match(
+  display,
+  /export function distributePauseGapsAcrossBlocks[<(]/,
+  "Assigning each pause window to ONE session block must be a function here — it is the only place that can see every block at once, which is exactly what the per-block call cannot.",
+);
+assert.match(
+  displayTests,
+  /distributePauseGapsAcrossBlocks/,
+  "The one-divider-per-pause rule must be tested; the duplicate was invisible until a meeting happened to have two translation sessions.",
+);
+for (const [name, source] of [
+  ["the live transcript panel", panel],
+  ["the saved transcript panel", savedPanel],
+]) {
+  // Matched on `blocks.map(` rather than on an exact argument list because the function is fed
+  // start TIMES, not the blocks — the shape of that projection is the module's business and may
+  // change. What must not change is that the decision is made once, across ALL the blocks, before
+  // any single one of them is split.
+  assert.match(
+    withoutComments(source),
+    /distributePauseGapsAcrossBlocks\(\s*blocks\.map\(/,
+    `${name} must narrow the gaps per block, across every block at once, before splitting.`,
+  );
+  assert.match(
+    withoutComments(source),
+    /splitSegmentsAroundPauseGaps\(block\.segments, gapsPerBlock\[blockIndex\]/,
+    `${name} must split each block against ITS OWN gaps.`,
+  );
+  assert.doesNotMatch(
+    withoutComments(source),
+    /splitSegmentsAroundPauseGaps\(block\.segments, pauseGaps\)/,
+    `${name} must not hand every session block the whole gap list — that is what drew one pause once per session.`,
+  );
+}
+
+// The divider's own label, which was three separate small lies: a sub-minute pause printed
+// "10:15 PM–10:15 PM", two pauses with nothing said between them stacked as two rules with
+// nothing in between, and an unclosed window said "now" on the record of a meeting that ended
+// months ago.
+assert.match(
+  display,
+  /export function formatTranscriptPauseGapRun\(/,
+  "The divider's time label must be built here, where the sub-minute, merged-run and 'now' cases are decided once and tested.",
+);
+assert.match(
+  withoutComments(savedPanel),
+  /formatTranscriptPauseGapRun\(gaps, \{ meetingEnded \}\)/,
+  "The saved panel must tell the label the meeting is over: 'now' on a record of a finished meeting is a claim about the reader's present that nothing on that page can support.",
+);
+
+console.log(
+  "Transcript pause contract OK (5 hops + meaning + dividers + paused behaviour checked)",
+);

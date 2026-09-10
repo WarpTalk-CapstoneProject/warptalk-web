@@ -6,14 +6,17 @@ import { motion, AnimatePresence } from "motion/react";
 import { getLanguageName } from "@/lib/language/languages";
 import {
   confidencePercent,
+  distributePauseGapsAcrossBlocks,
   findSuggestionForUtterance,
   formatTranscriptClockTime,
+  formatTranscriptPauseGapRun,
   formatTranscriptTimestamp,
   groupSegmentsByTranslationSession,
   groupTranscriptSegments,
   resolveSegmentTranslation,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
+  withoutSegmentsInOpenPauseGaps,
   type GroupedTranscriptSegment,
   type TranscriptPauseGap,
   type TranslationSessionBlock,
@@ -100,17 +103,44 @@ export function TranscriptPanel({
     [pauseWindowsQuery.data, baseTime],
   );
 
+  // WT-605, the reported defect: the banner appeared and the words kept flowing under it.
+  //
+  // BEFORE the grouping, not after. groupTranscriptSegments folds consecutive chunks of one
+  // person talking into a single bubble, so a chunk spoken after the host pressed Pause that
+  // lands within MAX_UTTERANCE_GAP_MS of the previous one stops being a segment at all and
+  // becomes part of an earlier line's text — where no filter downstream can reach it. The same
+  // ordering the control-marker drop already relies on, for the same reason.
+  const recorded = useMemo(
+    () => withoutSegmentsInOpenPauseGaps(segments, pauseGaps),
+    [segments, pauseGaps],
+  );
+
   const { isAway, scrollToLatest } = useScrollToLatest(containerRef, {
     // The distance this panel itself uses to decide it has stopped following. A chip offering to
     // jump to a bottom the panel is already gliding towards reads as a broken control.
     threshold: STICK_TO_BOTTOM_PX,
-    revision: segments.length,
+    // What is RENDERED, not what arrived. While paused the store keeps growing and the list does
+    // not, so counting arrivals would offer "jump to the newest line" for a line that is not
+    // there — a chip that appears to do nothing.
+    revision: recorded.segments.length,
   });
 
   const blocks = useMemo(() => {
-    const utterances = groupTranscriptSegments(segments);
+    const utterances = groupTranscriptSegments(recorded.segments);
     return groupSegmentsByTranslationSession(utterances, sessions ?? [], baseTime);
-  }, [segments, sessions, baseTime]);
+  }, [recorded.segments, sessions, baseTime]);
+
+  // Each pause belongs to exactly ONE session block. Handing every block the whole list — which
+  // is what both panels used to do — makes the trailing pass in splitSegmentsAroundPauseGaps
+  // redraw every late gap once per session, so one pause read as three.
+  const gapsPerBlock = useMemo(
+    () =>
+      distributePauseGapsAcrossBlocks(
+        blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+        pauseGaps,
+      ),
+    [blocks, pauseGaps],
+  );
 
   // WHERE THE READER WAS, NOT WHERE THE TRANSCRIPT ENDS.
   //
@@ -207,12 +237,15 @@ export function TranscriptPanel({
         </div>
       ) : null}
       <AnimatePresence initial={false}>
-        {blocks.map((block) => (
+        {blocks.map((block, blockIndex) => (
           <div key={block.sessionNumber} className="space-y-2">
             {showSessionLabels ? <SessionDivider block={block} /> : null}
-            {splitSegmentsAroundPauseGaps(block.segments, pauseGaps).map((sub, subIndex) => (
-              <div key={sub.gapBefore?.window.id ?? `${block.sessionNumber}-${subIndex}`} className="space-y-2">
-                {sub.gapBefore ? <TranscriptPauseDivider gap={sub.gapBefore} /> : null}
+            {splitSegmentsAroundPauseGaps(block.segments, gapsPerBlock[blockIndex] ?? []).map((sub, subIndex) => (
+              <div
+                key={sub.gapsBefore.map((gap) => gap.window.id).join("+") || `${block.sessionNumber}-${subIndex}`}
+                className="space-y-2"
+              >
+                {sub.gapsBefore.length ? <TranscriptPauseDivider gaps={sub.gapsBefore} /> : null}
                 {sub.segments.map((segment) => (
                   <TranscriptBubble
                     key={segment.segmentId}
@@ -228,6 +261,12 @@ export function TranscriptPanel({
           </div>
         ))}
       </AnimatePresence>
+      {/* Only once something has actually been dropped. The banner above already says the
+          transcript is paused; this says the different, sharper thing — that words WERE spoken
+          just now and deliberately left out. Without it the panel simply stops moving while
+          people are visibly talking, which is indistinguishable from a transcript that has
+          broken, and that is the report this whole ticket started as. */}
+      {recorded.hiddenCount > 0 ? <PausedLinesPlaceholder /> : null}
     </div>
       {/* The panel stops following the moment the reader scrolls up — which is right, and left
           them stranded in the middle of an hour of talking with the newest line somewhere below
@@ -285,19 +324,34 @@ function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTrans
  * WT-605. The gap left by a Pause Transcript window — no line was recorded here, only
  * translation/dubbing/subtitles were still running. Same visual language as SessionDivider
  * above, deliberately distinct wording so the two are never mistaken for one another.
+ *
+ * Takes a RUN of windows, not one: two pauses with nobody speaking between them are one hole in
+ * the record and are named as one. `meetingEnded` is not passed here because this panel only ever
+ * renders a meeting that is happening — "now" is the truth on this surface, and the lie it can
+ * become lives on the saved panel, which passes it.
  */
-function TranscriptPauseDivider({ gap }: { gap: TranscriptPauseGap }) {
-  const started = new Date(gap.window.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const ended = gap.window.endedAt
-    ? new Date(gap.window.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "now";
-
+function TranscriptPauseDivider({ gaps }: { gaps: readonly TranscriptPauseGap[] }) {
   return (
     <div className="flex items-center gap-2 py-2 text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
       <div className="h-px flex-1 bg-border" />
-      <span>Transcript paused · {started}–{ended}</span>
+      <span>Transcript paused · {formatTranscriptPauseGapRun(gaps)}</span>
       <div className="h-px flex-1 bg-border" />
     </div>
+  );
+}
+
+/**
+ * Where the lines would have been, had the transcript been running.
+ *
+ * Shape approved by the product owner in the WT-605 design artifact. It is deliberately not a
+ * second banner: it sits at the foot of the list, in the flow, muted, so the reader's eye lands
+ * on it exactly where it expected the next line — the one place the absence needs explaining.
+ */
+function PausedLinesPlaceholder() {
+  return (
+    <p className="px-1 py-3 text-center text-[11px] italic leading-relaxed text-ink-subtle">
+      Paused — new lines are not being recorded.
+    </p>
   );
 }
 
