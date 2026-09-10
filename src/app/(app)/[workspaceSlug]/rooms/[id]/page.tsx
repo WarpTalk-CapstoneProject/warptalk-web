@@ -682,9 +682,10 @@ export default function RoomInformationPage() {
                   {/* Rating a meeting used to live on `/ended`, which was the only door to it and
                       is gone. Here it is a control on the meeting itself, offered only once the
                       meeting is over — there is nothing to rate before that. */}
-                  {isEnded ? (
-                    <MeetingFeedbackMenu roomId={room.id} meetingTitle={room.title} />
-                  ) : null}
+                  {/* Moved into the button row below. On its own line it stacked above the
+                      `···`, and on an ENDED room — where there is no primary button — that left
+                      two lone icons floating one above the other at the page's right edge,
+                      reading as two unrelated controls rather than one cluster. */}
                   {/* WT-310(10): the status is rendered once, by MeetingPropertiesPills under
                       the title. A second StatusChip stood here, so the same room announced
                       "Waiting" twice on one screen in two different visual languages — a grey
@@ -719,6 +720,15 @@ export default function RoomInformationPage() {
                         pending={startRoomMutation.isPending}
                         onActivate={handleRoomEntry}
                         className="h-9 px-4"
+                      />
+                    ) : null}
+                    {/* Rating a meeting used to live on `/ended`, which was the only door to it
+                        and is gone. Here it is a control on the meeting itself, offered only once
+                        the meeting is over — there is nothing to rate before that. */}
+                    {isEnded ? (
+                      <MeetingFeedbackMenu
+                        roomId={room.id}
+                        meetingTitle={room.title}
                       />
                     ) : null}
                     <RoomActionsMenu
@@ -1361,7 +1371,10 @@ function RoomNotesEditor({
     editorProps: {
       attributes: {
         class:
-          "min-h-[160px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
+          // 160px of empty box was a tenth of the first screen on a room whose notes nobody
+          // wrote — and most rooms have none. The editor grows with its content anyway, so the
+          // floor only has to be a comfortable click target for an empty one: three lines.
+          "min-h-[72px] w-full max-w-none text-[13px] leading-6 text-ink outline-none " +
           "[&_p]:my-1.5 [&_h1]:mt-4 [&_h1]:mb-1.5 [&_h1]:text-[20px] [&_h1]:font-semibold [&_h1]:text-foreground " +
           "[&_h2]:mt-3.5 [&_h2]:mb-1.5 [&_h2]:text-[17px] [&_h2]:font-semibold [&_h2]:text-foreground " +
           "[&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:text-[15px] [&_h3]:font-semibold [&_h3]:text-foreground " +
@@ -1706,23 +1719,22 @@ function PersonPopover({ user }: { user: UserIdentity }) {
           </div>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-[11px] text-muted-foreground">
-        <div>
-          <p>Speaks</p>
-          <p className="mt-0.5 font-medium text-ink">
-            {user.speakLanguage
-              ? getLanguageName(user.speakLanguage)
-              : "Not set"}
-          </p>
-        </div>
-        <div>
-          <p>Listens</p>
-          <p className="mt-0.5 font-medium text-ink">
-            {user.listenLanguage
-              ? getLanguageName(user.listenLanguage)
-              : "Not set"}
-          </p>
-        </div>
+      {/* One language, and it is the one this person chose: what they want to hear the meeting in.
+          The card used to print "Speaks" beside "Listens", which read as a setting with two halves
+          — and on most rows the two halves were the same word, since a monolingual participant in
+          a bilingual room speaks and hears the same language. The speak side is also on its way to
+          being detected rather than chosen, and a card that presents a guess in the same type as a
+          choice invites the reader to trust both equally.
+
+          It still routes: FilteredRoomAudio picks dub-or-microphone from the SPEAK language, which
+          is untouched here. This is what the card SAYS, not what the meeting does. */}
+      <div className="mt-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
+        <p>Listens in</p>
+        <p className="mt-0.5 font-medium text-ink">
+          {user.listenLanguage
+            ? getLanguageName(user.listenLanguage)
+            : "Not set"}
+        </p>
       </div>
     </PopoverContent>
   );

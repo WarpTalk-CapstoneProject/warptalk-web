@@ -105,15 +105,15 @@ test("the language badge is a flag and a language name, nothing else", () => {
   assert.equal(badge?.label, "Vietnamese");
 });
 
-test("a split profile still shows only the language being spoken", () => {
+test("a split profile shows the language the person chose to hear", () => {
   const badge = describeParticipantLanguage("vi", "en-US");
 
-  assert.equal(badge?.flag, "🇻🇳");
-  assert.equal(badge?.label, "Vietnamese");
+  assert.equal(badge?.flag, "🇺🇸");
+  assert.equal(badge?.label, "English");
 });
 
-test("the listen language stands in when nobody said what they speak", () => {
-  const badge = describeParticipantLanguage(null, "ja-JP");
+test("the speak language stands in when nobody said what they want to hear", () => {
+  const badge = describeParticipantLanguage("ja-JP", null);
 
   assert.equal(badge?.flag, "🇯🇵");
   assert.equal(badge?.label, "Japanese");
