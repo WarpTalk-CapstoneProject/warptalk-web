@@ -276,6 +276,88 @@ for (const [label, source] of [
   }
 }
 
+/**
+ * The text of the first `name(...)` call in `source`, parentheses balanced, with where it sits.
+ *
+ * Strings are not skipped. That is enough for the argument lists read here, none of which carries
+ * a parenthesis inside a string literal; a check that one day does would fail loudly, not pass.
+ */
+function callSpan(source, name) {
+  const match = new RegExp(`\\b${name}\\(`).exec(source);
+  if (!match) return null;
+  let depth = 0;
+  for (let index = match.index + match[0].length - 1; index < source.length; index += 1) {
+    if (source[index] === "(") depth += 1;
+    else if (source[index] === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return { start: match.index, end: index + 1, text: source.slice(match.index, index + 1) };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * 7. Start asks the main window to carry the room before it opens a translation session.
+ *
+ * WHAT HAPPENED: the popup's Start called /start and /resume directly. Both are server calls and
+ * both succeeded, so the popup showed Stop and the sessions list said ACTIVE - while the pipeline,
+ * which only the main window's PersistentMeetingSession runs, never mounted, because that mounts
+ * for the main window's own active room and nothing had told it about this one. A scheduled room
+ * whose popup the trigger raised translated nothing, with every surface saying it was. Flow 2 had
+ * the relay all along (activateBridgeRoom); flow 1 simply never called it.
+ *
+ * So both ends are checked where they are CALLED. The order inside startBridgeTranslation is held
+ * by its unit test; what a test of the helper cannot see is a popup that stops going through it.
+ */
+if (controls) {
+  const code = withoutImports(stripComments(controls));
+  const start = callSpan(code, "startBridgeTranslation");
+  if (!start) {
+    failures.push(
+      `${CONTROLS} no longer starts translation through startBridgeTranslation. That is the only `
+        + `path that asks the main window to carry the room first; without it the popup opens a `
+        + `session that no LiveKit connection, dub or bridge leg is feeding.`,
+    );
+  } else {
+    if (!/\bactivateBridgeRoom\b/.test(start.text)) {
+      failures.push(
+        `${CONTROLS} calls startBridgeTranslation without activateBridgeRoom as its activate step. `
+          + `The room would be marked translating in a main window that never mounted it.`,
+      );
+    }
+
+    // Any /resume fired outside the sequence is the old bug by another route.
+    const resumeName = /const\s+(\w+)\s*=\s*useResumeTranslationRoom\(/.exec(code)?.[1];
+    if (resumeName) {
+      const stray = [...code.matchAll(new RegExp(`\\b${resumeName}\\.mutate(?:Async)?\\(`, "g"))]
+        .some((use) => use.index < start.start || use.index >= start.end);
+      if (stray) {
+        failures.push(
+          `${CONTROLS} calls ${resumeName}.mutate outside startBridgeTranslation. That opens a `
+            + `translation session without first asking the main window to carry the room.`,
+        );
+      }
+    }
+  }
+}
+
+const LAYOUT = "src/app/(app)/layout.tsx";
+const layout = read(LAYOUT);
+if (!layout) {
+  failures.push(`${LAYOUT} is missing; it is the main window's end of the activation relay.`);
+} else {
+  const relay = callSpan(withoutImports(stripComments(layout)), "onBridgeRoomActivated");
+  if (!relay || !/\bopenMeeting\(/.test(relay.text)) {
+    failures.push(
+      `${LAYOUT} no longer turns onBridgeRoomActivated into openMeeting. Both bridge popups - the `
+        + `offer and the transcript's Start - would then ask a main window that does not answer, `
+        + `and translation would run with nothing capturing or dubbing it.`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error("FAIL desktop bridge overlay contract\n");
   for (const failure of failures) console.error(`  - ${failure.replace(/\s+/g, " ")}\n`);
@@ -283,6 +365,6 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "PASS every desktop bridge helper has a caller, the overlay carries its four controls, and the "
-    + "setup wizard is reachable from a real room",
+  "PASS every desktop bridge helper has a caller, the overlay carries its four controls, its Start "
+    + "activates the room in the main window, and the setup wizard is reachable from a real room",
 );
