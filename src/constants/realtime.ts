@@ -69,6 +69,8 @@ export const QUERY_KEYS = {
 
 export const BROADCAST_CHANNELS = {
   NOTIFICATIONS_SYNC: "warptalk_notifications",
+  // Bridge loopback consent: the main window's snapshots out, the popup's intents back.
+  BRIDGE_CAPTURE_CONSENT: "warptalk_bridge_capture_consent",
 } as const;
 
 export const ALLOWED_REACTION_EMOJIS = ["👍", "❤️", "😂", "🎉", "👏", "😮"] as const;
