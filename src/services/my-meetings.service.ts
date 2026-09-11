@@ -82,6 +82,9 @@ function mapMeeting(item: TranslationRoomHistoryItemDto): MyMeetingItem {
     participantCount: room.participantCount ?? item.participants.length,
     artifacts: item.artifacts.map(mapArtifact),
     isHost: room.isHost === true,
+    // Absent → null. The server omits the key when the viewer has no invitation, and an older
+    // server omits it always; neither is evidence of anything, and the resolver reads null that way.
+    viewerInvitationStatus: item.viewerInvitationStatus ?? null,
     externalProvider: room.externalProvider,
     externalMeetingUrl: room.externalMeetingUrl,
     externalCalendarEventId: room.externalCalendarEventId,

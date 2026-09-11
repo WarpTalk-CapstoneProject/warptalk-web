@@ -48,12 +48,17 @@ export function useMyMeetings(
 /**
  * The caller's meetings between two instants, however many months that crosses.
  *
- * NOT `useMyMeetingsInRange` any more. "My" read as the thing that set this apart from the
- * Meetings list — and it is not: for anyone who is not a workspace owner or admin,
- * GetTranslationRoomsAsync falls through to BuildAccessibleRoomsQuery and that list is the
- * caller's own meetings too. Both surfaces are personal; only the shape differs (a calendar
- * grid here, a flat inventory there), so the name says the range and leaves out the half that
- * claimed a distinction the server does not draw.
+ * NOT `useMyMeetingsInRange` any more, and the rename is about the hook's job, not about the data:
+ * what sets it apart is that it takes a from/to range and stitches months together, where
+ * `useMyMeetings` above serves exactly one month.
+ *
+ * The data behind it IS personal, and that is a real difference from the Meetings page — do not
+ * read the two as the same list in different shapes. Both go through BuildListableRoomsQueryAsync,
+ * but `GET /translation-rooms/my-meetings` pins RoomTimelineScope.Mine (WT-333, FR-333-005): the
+ * caller's own rooms only — hosted, joined, or invited to. The Meetings page's
+ * `GET /translation-rooms` runs at scope Workspace, where a workspace Owner/Admin is widened to
+ * EVERY room in the workspace. The two lists agree only for a plain member, who falls through to
+ * BuildAccessibleRoomsQuery either way.
  *
  * The query KEY still says "my-meetings", deliberately: it is shared with `useMyMeetings` so the
  * two views reuse one another's months, and renaming it would split that cache in half. Same for
