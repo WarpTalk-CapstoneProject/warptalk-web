@@ -1424,6 +1424,16 @@ function MeetingRecordSection({
   // would otherwise never see the rewritten summary arrive.
   const summaryStampRef = useRef(summaryStamp);
   const rewritePollRef = useRef<number | null>(null);
+  /**
+   * WT-669 — why the last rewrite did not happen, on its way to the rail.
+   *
+   * A token rather than a bare string, and for the same reason SeekRequest carries one: asking
+   * twice and failing the same way twice is two answers, and a value compared by equality would
+   * show the second one as nothing having changed.
+   */
+  const [rewriteFailure, setRewriteFailure] = useState<{ token: number; reason: string } | null>(
+    null,
+  );
 
   // In an effect, not during render: writing a ref while rendering is how a component ends
   // up reading a value React has not committed yet.
@@ -1524,10 +1534,29 @@ function MeetingRecordSection({
           });
           if (superseded) return true;
 
+          // WT-669 — a rendering that is not coming says so, and says why.
+          //
+          // Before `failed` existed the server could only keep answering `generating`, so this
+          // returned false, the poll kept asking, and ninety seconds later the deadline below
+          // produced a sentence that named nothing. The reason had been written by the worker
+          // the whole time.
+          if (answer.status === "failed") {
+            setRendering(null);
+            toast.error(answer.error || "That version could not be written.");
+            return true;
+          }
+
           return answer.status === "ready";
-        } catch {
+        } catch (error) {
           setRendering(null);
-          toast.error("Could not read this meeting in that language.");
+          // The server's own sentence, the way the rewrite path already does it. The endpoint
+          // refuses with things a reader can act on — "This meeting has no summary yet, so there
+          // is nothing to read in another language" — and replacing that with a general apology
+          // is most of what made this control feel broken rather than unavailable.
+          toast.error(
+            (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message)
+              || "Could not read this meeting in that language.",
+          );
           return true;
         }
       };
@@ -1571,8 +1600,14 @@ function MeetingRecordSection({
       // exactly what to do — "This meeting has a transcript but no summary artifact to rewrite.
       // It needs to be finalized again, not re-summarised." — and that sentence reaching nobody
       // is a large part of why the control was reported as simply not working.
+      let requestId = "";
       try {
-        await translationRoomService.regenerateSummary(endedRecord.id, templateKey, language);
+        const queued = await translationRoomService.regenerateSummary(
+          endedRecord.id,
+          templateKey,
+          language,
+        );
+        requestId = queued?.data?.requestId ?? "";
       } catch (error) {
         toast.error(
           (isAxiosError(error) && (error.response?.data as { message?: string } | undefined)?.message)
@@ -1587,6 +1622,12 @@ function MeetingRecordSection({
       }
       const askedAt = summaryStampRef.current;
       const stopAt = Date.now() + 90_000;
+      const stopPolling = () => {
+        if (rewritePollRef.current !== null) {
+          window.clearInterval(rewritePollRef.current);
+          rewritePollRef.current = null;
+        }
+      };
       rewritePollRef.current = window.setInterval(() => {
         // Any change to the stamp means something landed — a new shape or the same shape
         // rewritten. An artifact predating updated_at whose shape did not change cannot be
@@ -1594,13 +1635,39 @@ function MeetingRecordSection({
         // rather than a poll that claims success.
         const arrived = summaryStampRef.current !== askedAt;
         if (arrived || Date.now() > stopAt) {
-          if (rewritePollRef.current !== null) {
-            window.clearInterval(rewritePollRef.current);
-            rewritePollRef.current = null;
-          }
+          stopPolling();
           return;
         }
         onRecordChanged();
+
+        // WT-669 — and the same tick asks what became of the request itself.
+        //
+        // The stamp above only ever moves on SUCCESS, so before this every failure looked like
+        // a rewrite still running, right up until the deadline turned it into a sentence that
+        // named nothing. The reason existed the whole time; it just stopped at a log line on
+        // the server. A request with no id was redirected to finalization and has nothing to
+        // ask about, so it keeps the deadline as its only answer.
+        if (!requestId) return;
+        void translationRoomService
+          .getSummaryRewriteStatus(endedRecord.id, requestId)
+          .then((response) => {
+            // `.data`, not the response: an AxiosResponse has a `status` of its own and it is a
+            // NUMBER, so reading it directly would compare 200 against "failed" and quietly
+            // never fire.
+            const outcome = response?.data;
+            if (outcome?.status !== "failed") return;
+            stopPolling();
+            // Carried to the rail rather than shouted in a toast: this is an answer about the
+            // summary, it belongs beside the summary, and it has to still be there a few
+            // seconds later when the reader looks up from the picker they just used.
+            setRewriteFailure({
+              token: Date.now(),
+              reason: outcome.error || "The summary could not be rewritten.",
+            });
+          })
+          .catch(() => {
+            // Asking failed, which says nothing about the rewrite. Stay on the deadline.
+          });
       }, 4000);
     },
     [endedRecord, onRecordChanged],
@@ -1799,6 +1866,7 @@ function MeetingRecordSection({
             onJumpToMoment={onJumpToMoment}
             onDownload={downloadArtifact}
             onRewrite={endedRecord ? requestSummaryRewrite : undefined}
+            rewriteFailure={rewriteFailure}
             rendering={rendering}
             onSelectRendering={endedRecord ? selectRendering : undefined}
             speakerDirectory={speakerDirectory}

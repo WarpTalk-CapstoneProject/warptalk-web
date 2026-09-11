@@ -163,6 +163,7 @@ export function TranscriptReadingLayout({
   onJumpToMoment,
   onDownload,
   onRewrite,
+  rewriteFailure,
   rendering,
   onSelectRendering,
   speakerDirectory,
@@ -213,6 +214,9 @@ export function TranscriptReadingLayout({
   /** Ask for the summary to be rewritten in another shape, another language, or both.
    *  Omit to hide the pickers. */
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
+  /** WT-669 — why the last rewrite did not happen. A new token means a new answer, even when
+   *  the reason is word-for-word the one before it. */
+  rewriteFailure?: { token: number; reason: string } | null;
   /**
    * The (shape, language) being READ right now, when it is not the one the host published.
    * Null means "show what the host published", which is what every reader starts on.
@@ -265,6 +269,7 @@ export function TranscriptReadingLayout({
           onJumpToMoment={onJumpToMoment}
           onDownload={onDownload}
           onRewrite={onRewrite}
+          rewriteFailure={rewriteFailure}
           rendering={rendering}
           onSelectRendering={onSelectRendering}
           speakerDirectory={speakerDirectory}
@@ -289,6 +294,7 @@ function ReadingRail({
   onJumpToMoment,
   onDownload,
   onRewrite,
+  rewriteFailure,
   rendering,
   onSelectRendering,
   speakerDirectory,
@@ -310,6 +316,9 @@ function ReadingRail({
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
+  /** WT-669 — why the last rewrite did not happen. A new token means a new answer, even when
+   *  the reason is word-for-word the one before it. */
+  rewriteFailure?: { token: number; reason: string } | null;
   rendering?: SummaryRenderingView | null;
   onSelectRendering?: (templateKey: string, language: string) => void;
   speakerDirectory?: Readonly<
@@ -532,6 +541,7 @@ function ReadingRail({
             onJumpToMoment={onJumpToMoment}
             onDownload={onDownload}
             onRewrite={onRewrite}
+            rewriteFailure={rewriteFailure}
             shownSummary={shownSummary}
             rendering={rendering}
             onSelectRendering={onSelectRendering}
@@ -598,6 +608,7 @@ function RailSummary({
   onJumpToMoment,
   onDownload,
   onRewrite,
+  rewriteFailure,
   shownSummary,
   rendering,
   onSelectRendering,
@@ -615,6 +626,9 @@ function RailSummary({
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
   onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
+  /** WT-669 — why the last rewrite did not happen. A new token means a new answer, even when
+   *  the reason is word-for-word the one before it. */
+  rewriteFailure?: { token: number; reason: string } | null;
   shownSummary?: MeetingSummaryContent | null;
   rendering?: SummaryRenderingView | null;
   onSelectRendering?: (templateKey: string, language: string) => void;
@@ -892,6 +906,29 @@ function RailSummary({
             }}
           />
         </div>
+      ) : null}
+
+      {/* WT-669 — WHY THE LAST REWRITE DID NOT HAPPEN, IN THE WORDS THE WORKER WROTE.
+
+          A rewrite is queued, so its answer arrives long after the button stopped spinning. Every
+          way it could fail used to end at a log line on the server: the reader watched an
+          unchanged summary and, a minute and a half later, was told in general terms that
+          something had not arrived. The reason existed the whole time.
+
+          Beside the summary rather than in a toast, because it is an answer ABOUT the summary and
+          because a toast is gone by the time somebody looks up from the control they just used.
+          It clears itself the moment a rewrite succeeds — the summary changing is the answer. */}
+      {rewriteFailure ? (
+        <p
+          key={rewriteFailure.token}
+          role="status"
+          /* `destructive`, not `danger`: only tokens registered in @theme generate a utility in
+             Tailwind v4, and --color-danger is not one of them — those classes would compile to
+             nothing and the notice would read as an ordinary paragraph. See globals.css. */
+          className="mx-1 mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2 text-[11.5px] leading-4 text-ink"
+        >
+          {rewriteFailure.reason}
+        </p>
       ) : null}
 
       {/* The overview, which the rail did not carry at all while the Summary tab existed — the

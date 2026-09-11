@@ -574,9 +574,27 @@ export const translationRoomService = {
    * request looks exactly like one from before the choice existed.
    */
   regenerateSummary(roomId: string, templateKey: string, language?: string) {
-    return apiClient.post<{ message: string }>(
+    // `requestId` is how the caller finds out what happened. Everything past the 202 is
+    // asynchronous, and without it the only signal a rewrite ever gave was the summary quietly
+    // changing — or, for every way it can fail, nothing at all. Empty when the server redirected
+    // the request to finalization, which is a different pipeline with nothing to poll.
+    return apiClient.post<{ message: string; requestId: string }>(
       API.roomArtifacts.regenerateSummary(roomId),
       language ? { templateKey, language } : { templateKey },
+    );
+  },
+
+  /**
+   * What became of one queued rewrite: `pending`, `completed`, or `failed` with the reason the
+   * worker wrote.
+   *
+   * `pending` covers both "still running" and "the answer expired before anyone asked", because
+   * nothing can tell those apart and guessing would be worse than waiting — the caller keeps its
+   * own deadline for that.
+   */
+  getSummaryRewriteStatus(roomId: string, requestId: string) {
+    return apiClient.get<{ status: string; error?: string | null }>(
+      API.roomArtifacts.summaryRewriteStatus(roomId, requestId),
     );
   },
 
