@@ -66,9 +66,13 @@ test("scopes decide what a picker offers", () => {
   assert.ok(!meeting.includes("zh"));
   assert.equal(getLanguageName("zh-CN"), "Chinese");
 
+  // Every meeting language, since the catalogue is warmed for every language Cartesia publishes.
+  // It used to be ["vi", "en"]: the catalogue only existed for a language after a meeting had
+  // dubbed into it, and this scope was drawn around that limitation. A workspace's policy narrows
+  // it — see voice/library-languages.ts — so this is the ceiling, not what a person is offered.
   assert.deepEqual(
     languagesInScope("voiceCatalog").map((language) => language.code),
-    ["vi", "en"],
+    ["vi", "en", "ja", "ko", "fr", "es"],
   );
 });
 

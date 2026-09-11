@@ -38,6 +38,7 @@ export function VoiceLine({
   status,
   statusText,
   actions,
+  avatar,
 }: {
   tone: VoiceLineTone;
   name: string;
@@ -50,16 +51,27 @@ export function VoiceLine({
   /** The same state as plain words, for the stacked narrow layout. */
   statusText?: string;
   actions?: ReactNode;
+  /**
+   * A face in place of the state dot. Catalogue voices take one — several hundred of them as
+   * identical grey dots is a list nobody can find a voice in twice. A profile keeps its dot,
+   * because for a profile the dot IS information: it is the state.
+   */
+  avatar?: ReactNode;
 }) {
   return (
     <div
       className={cn(
-        "grid grid-cols-[7px_minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border px-1.5 py-2.5 last:border-b-0",
+        "grid items-center gap-x-3 border-b border-border px-1.5 py-2.5 last:border-b-0",
         "transition-colors hover:bg-surface-2",
-        "@[520px]/main:min-h-[44px] @[520px]/main:grid-cols-[7px_minmax(0,1fr)_112px_minmax(0,190px)_auto] @[520px]/main:py-0",
+        "@[520px]/main:min-h-[44px] @[520px]/main:py-0",
+        avatar
+          ? "grid-cols-[28px_minmax(0,1fr)_auto] @[520px]/main:grid-cols-[28px_minmax(0,1fr)_112px_minmax(0,190px)_auto]"
+          : "grid-cols-[7px_minmax(0,1fr)_auto] @[520px]/main:grid-cols-[7px_minmax(0,1fr)_112px_minmax(0,190px)_auto]",
       )}
     >
-      <span aria-hidden className={cn("size-[7px] justify-self-center rounded-full", TONE_DOT[tone])} />
+      {avatar ?? (
+        <span aria-hidden className={cn("size-[7px] justify-self-center rounded-full", TONE_DOT[tone])} />
+      )}
 
       <div className="flex min-w-0 items-center gap-2">
         <span className="truncate text-[13px] font-medium text-ink">{name}</span>
