@@ -22,6 +22,20 @@
  *   Assertion 1 generalises it: every helper exported from lib/desktop/bridge.ts must have a
  *   caller outside that file and outside its own tests. A method can be declared, typed, wrapped
  *   in a guard, unit-tested, and reach nobody — which is exactly the state WT-577 found.
+ *
+ * PHASE 2 (WT-525): THE OVERLAY IS A WIDGET NOW
+ *
+ *   The page no longer renders the WT-577 control strip (bridge-overlay-controls.tsx). It renders
+ *   `WidgetShell` inside `BridgeWidgetProvider` (components/rooms/bridge/widget/), and the controls
+ *   the strip carried moved into the widget's slots: Start/Stop and Pause transcript into the
+ *   dock's session slot, End into the header, the voice into the settings slot. Assertion 2 used
+ *   to require the strip on the page, which the rewrite made false on purpose; it now guards the
+ *   structure that replaced it, by the same rule — the slot must be rendered by something a user
+ *   reaches, and each control must still fire its mutation.
+ *
+ *   The old strip's file is still in the repo (another session owns it), so the checks written
+ *   against it stay, but only while the file exists: a check that fails because a dead file was
+ *   deleted would be guarding nothing.
  */
 
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -83,6 +97,36 @@ function sourceFiles(dir, found = []) {
   return found;
 }
 
+/**
+ * The text of the first `name(...)` call in `source`, parentheses balanced, with where it sits.
+ *
+ * Strings are not skipped. That is enough for the argument lists read here, none of which carries
+ * a parenthesis inside a string literal; a check that one day does would fail loudly, not pass.
+ *
+ * Declared up here rather than beside assertion 7, where it arrived: assertion 8 reads call order
+ * with it too.
+ */
+function callSpan(source, name) {
+  const match = new RegExp(`\\b${name}\\(`).exec(source);
+  if (!match) return null;
+  let depth = 0;
+  for (let index = match.index + match[0].length - 1; index < source.length; index += 1) {
+    if (source[index] === "(") depth += 1;
+    else if (source[index] === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return { start: match.index, end: index + 1, text: source.slice(match.index, index + 1) };
+      }
+    }
+  }
+  return null;
+}
+
+/** The name a hook's result is bound to — `const resumeRoom = useResumeTranslationRoom(` — or null. */
+function boundName(code, hook) {
+  return new RegExp(`const\\s+(\\w+)\\s*=\\s*${hook}\\(`).exec(code)?.[1] ?? null;
+}
+
 const BRIDGE = "src/lib/desktop/bridge.ts";
 const bridge = read(BRIDGE);
 const allSources = existsSync(join(root, "src")) ? sourceFiles(join(root, "src")) : [];
@@ -125,16 +169,32 @@ if (!bridge) {
 }
 
 /**
- * 2. The overlay page renders the controls WT-525 asked for.
+ * 2. The overlay page renders the widget, and the widget renders its session controls.
  *
- * The page shipped with the transcript alone, which is one of the four things the ticket named.
- * The other three are what stop the overlay being a read-only window you still have to leave in
- * order to do anything.
+ * WAS: "the page renders BridgeOverlayControls". The page shipped with the transcript alone, and
+ * the strip was what stopped the overlay being a read-only window you still had to leave in order
+ * to do anything. Phase 2 moved those controls into the widget, so the same guarantee is now two
+ * hops long — page → WidgetShell → the slot — and either hop going missing is the WT-577 shape
+ * again: the controls exist, typed and working, and nothing renders them.
  */
 const OVERLAY_PAGE = "src/app/desktop-transcript/[roomId]/page.tsx";
+const WIDGET_DIR = "src/components/rooms/bridge/widget";
+const SHELL = `${WIDGET_DIR}/widget-shell.tsx`;
+const DOCK = `${WIDGET_DIR}/dock-session-controls.tsx`;
+const END = `${WIDGET_DIR}/end-session.tsx`;
 const CONTROLS = "src/components/rooms/bridge/bridge-overlay-controls.tsx";
 const overlayPage = read(OVERLAY_PAGE);
+const shell = read(SHELL);
+const dock = read(DOCK);
+const endSession = read(END);
 const controls = read(CONTROLS);
+
+/** Every .ts/.tsx in the widget folder, for the checks that are about the widget as a whole. */
+const widgetFiles = existsSync(join(root, WIDGET_DIR))
+  ? readdirSync(join(root, WIDGET_DIR))
+    .filter((name) => /\.tsx?$/.test(name))
+    .map((name) => `${WIDGET_DIR}/${name}`)
+  : [];
 
 // Every symbol test below is word-bounded. A bare substring test passes for a RENAMED symbol —
 // `BridgeSetupWizardX` contains `BridgeSetupWizard` — and a rename is how these references
@@ -142,31 +202,84 @@ const controls = read(CONTROLS);
 if (!overlayPage) {
   failures.push(`${OVERLAY_PAGE} is missing. It is what the desktop app loads into the always-on-top
     window; without it openTranscriptWindow opens a 404 over the user's meeting.`);
-} else if (!/\bBridgeOverlayControls\b/.test(overlayPage)) {
-  failures.push(
-    `${OVERLAY_PAGE} no longer renders BridgeOverlayControls. WT-525 asks the overlay for Start/Stop `
-      + `Translation, a voice picker and a voice clone toggle beside the transcript; without them a `
-      + `user watching Google Meet has to go and find the WarpTalk window, which is the tab-switch `
-      + `the overlay exists to remove.`,
-  );
+} else {
+  // Inside, not merely beside: every slot reads `useBridgeWidget()`, which throws outside the
+  // provider — a shell rendered next to it is a crash over the user's call, not a missing feature.
+  const code = stripComments(overlayPage);
+  const open = code.search(/<BridgeWidgetProvider\b/);
+  const close = code.indexOf("</BridgeWidgetProvider>");
+  const shellAt = code.search(/<WidgetShell\b/);
+  if (open === -1 || close === -1 || shellAt === -1 || shellAt < open || shellAt > close) {
+    failures.push(
+      `${OVERLAY_PAGE} no longer renders <WidgetShell> inside <BridgeWidgetProvider>. The widget is `
+        + `the whole overlay since WT-525 Phase 2 — transcript, WarpBot, Start/Stop translation, `
+        + `Pause transcript and End — and every one of its slots throws outside the provider.`,
+    );
+  }
 }
 
-if (!controls) {
-  failures.push(`${CONTROLS} is missing; ${OVERLAY_PAGE} renders it.`);
+if (!shell) {
+  failures.push(`${SHELL} is missing; ${OVERLAY_PAGE} renders it.`);
+} else {
+  // The shell passes its slots no props, so a slot the shell stops rendering leaves no type error
+  // behind: the file compiles, the component is exported, and nobody can reach it.
+  const code = stripComments(shell);
+  for (const [slot, what] of [
+    ["DockSessionControls", "Start/Stop translation and Pause transcript"],
+    ["EndSessionButton", "End, the only exit from a bridge room"],
+    ["EndedView", "the screen that says the Google Meet call is still going"],
+  ]) {
+    if (!new RegExp(`<${slot}\\b`).test(code)) {
+      failures.push(
+        `${SHELL} no longer renders <${slot}>. That slot is ${what}; without it the control is `
+          + `written, exported and reachable by nobody.`,
+      );
+    }
+  }
+}
+
+if (!dock) {
+  failures.push(`${DOCK} is missing; the widget shell renders it as the dock's session slot.`);
 } else {
   // Named by the mutation each control fires, not by its label: a renamed button is a copy change,
   // whereas a control that stops calling its mutation is the control going away.
+  //
+  // Pause transcript is new here. It was never on the WT-577 strip, but it is on the widget's dock
+  // and has the WT-605 history of being a feature that existed everywhere except on screen.
+  for (const [hook, what] of [
+    ["useResumeTranslationRoom", "Start Translation (/resume is the endpoint that opens a session)"],
+    ["useStopTranslation", "Stop Translation"],
+    ["useSetTranscriptPaused", "Pause transcript (WT-605)"],
+  ]) {
+    if (!new RegExp(`\\b${hook}\\b`).test(withoutImports(stripComments(dock)))) {
+      failures.push(
+        `${DOCK} no longer uses ${hook} — ${what} is a control the widget's dock must carry, and `
+          + `the dock is the only place in the overlay it lives.`,
+      );
+    }
+  }
+}
+
+/**
+ * 2b. The old strip, while it still exists.
+ *
+ * REMOVED: the requirement that it use `useSetVoiceCloneConsent`. The widget has no clone switch,
+ * by design: whether somebody is cloned follows their account's "Enable Voice Cloning" setting
+ * plus their consent, not a per-window toggle. Requiring the switch here would pin a control the
+ * product has decided against to a file that is no longer rendered — and a later rewrite of that
+ * file that dropped it, correctly, would fail for it.
+ *
+ * The voice picker checks stay, on this file, until the widget's settings slot (t4) carries its
+ * own. Moving them to the settings slot now would fail the build on a stub that has not landed.
+ */
+if (controls) {
   for (const [hook, what] of [
     ["useResumeTranslationRoom", "Start Translation (/resume is the endpoint that opens a session)"],
     ["useStopTranslation", "Stop Translation"],
     ["useSetDubVoice", "the voice picker"],
-    ["useSetVoiceCloneConsent", "the voice clone toggle"],
   ]) {
     if (!new RegExp(`\\b${hook}\\b`).test(controls)) {
-      failures.push(
-        `${CONTROLS} no longer uses ${hook} — ${what} is one of the four controls WT-525 requires on `
-          + `the overlay.`,
-      );
+      failures.push(`${CONTROLS} no longer uses ${hook} — ${what} is one of its controls.`);
     }
   }
 
@@ -233,11 +346,15 @@ if (!widget) {
  * These are the only WarpTalk windows sitting among the user's own, and both were written against
  * a dark mock: `bg-[#0b0b0c] text-white` on <main> overrode the theme the root layout had already
  * applied, so a light-theme user got one black window and no way to change it.
+ *
+ * The widget's files are checked too: the page is only routing now, so the colours the overlay
+ * actually paints live in them, and checking the page alone would check the one file that has none.
  */
 for (const [label, source] of [
   [OVERLAY_PAGE, overlayPage],
   [WIZARD, read(WIZARD)],
   ["src/app/desktop-bridge-offer/page.tsx", read("src/app/desktop-bridge-offer/page.tsx")],
+  ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
   if (!source) continue;
   const code = stripComments(source);
@@ -259,6 +376,9 @@ for (const [label, source] of [
  * every destructive button in the app invisible before --destructive was registered, and the two
  * places it survived were both on these windows — where the text it silenced was the error telling
  * the user why their meeting could not start.
+ *
+ * The widget's files are included for the reason given at 5, and because the widget has a
+ * `danger` TONE (dock-icon-button.tsx) — exactly the word somebody will reach for as a class.
  */
 for (const [label, source] of [
   [OVERLAY_PAGE, overlayPage],
@@ -266,12 +386,152 @@ for (const [label, source] of [
   [WIZARD, read(WIZARD)],
   [WIDGET, widget],
   ["src/app/desktop-bridge-offer/page.tsx", read("src/app/desktop-bridge-offer/page.tsx")],
+  ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
   if (!source) continue;
   if (/\b(?:text|bg|border)-danger\b/.test(stripComments(source))) {
     failures.push(
       `${label} uses a \`-danger\` colour utility. --color-danger is not registered in @theme, so `
         + `that class compiles to nothing and the text renders in body colour. Use -destructive.`,
+    );
+  }
+}
+
+/**
+ * 7. Start asks the main window to carry the room before it opens a translation session.
+ *
+ * WHAT HAPPENED: the popup's Start called /start and /resume directly. Both are server calls and
+ * both succeeded, so the popup showed Stop and the sessions list said ACTIVE - while the pipeline,
+ * which only the main window's PersistentMeetingSession runs, never mounted, because that mounts
+ * for the main window's own active room and nothing had told it about this one. A scheduled room
+ * whose popup the trigger raised translated nothing, with every surface saying it was. Flow 2 had
+ * the relay all along (activateBridgeRoom); flow 1 simply never called it.
+ *
+ * So both ends are checked where they are CALLED. The order inside startBridgeTranslation is held
+ * by its unit test; what a test of the helper cannot see is a popup that stops going through it.
+ *
+ * Phase 2: the Start a user can actually press is the widget dock's, so that is the file this is
+ * REQUIRED of. The old strip is held to the same rule while it exists — it is still a Start button,
+ * and an unrendered file is one import away from being rendered again.
+ */
+function checkStartGoesThroughActivation(label, source) {
+  const code = withoutImports(stripComments(source));
+  const start = callSpan(code, "startBridgeTranslation");
+  if (!start) {
+    failures.push(
+      `${label} no longer starts translation through startBridgeTranslation. That is the only `
+        + `path that asks the main window to carry the room first; without it the popup opens a `
+        + `session that no LiveKit connection, dub or bridge leg is feeding.`,
+    );
+    return;
+  }
+
+  if (!/\bactivateBridgeRoom\b/.test(start.text)) {
+    failures.push(
+      `${label} calls startBridgeTranslation without activateBridgeRoom as its activate step. `
+        + `The room would be marked translating in a main window that never mounted it.`,
+    );
+  }
+
+  // Any /resume fired outside the sequence is the old bug by another route.
+  const resumeName = boundName(code, "useResumeTranslationRoom");
+  if (resumeName) {
+    const stray = [...code.matchAll(new RegExp(`\\b${resumeName}\\.mutate(?:Async)?\\(`, "g"))]
+      .some((use) => use.index < start.start || use.index >= start.end);
+    if (stray) {
+      failures.push(
+        `${label} calls ${resumeName}.mutate outside startBridgeTranslation. That opens a `
+          + `translation session without first asking the main window to carry the room.`,
+      );
+    }
+  }
+}
+
+if (dock) checkStartGoesThroughActivation(DOCK, dock);
+if (controls) checkStartGoesThroughActivation(CONTROLS, controls);
+
+const LAYOUT = "src/app/(app)/layout.tsx";
+const layout = read(LAYOUT);
+if (!layout) {
+  failures.push(`${LAYOUT} is missing; it is the main window's end of the activation relay.`);
+} else {
+  const relay = callSpan(withoutImports(stripComments(layout)), "onBridgeRoomActivated");
+  if (!relay || !/\bopenMeeting\(/.test(relay.text)) {
+    failures.push(
+      `${LAYOUT} no longer turns onBridgeRoomActivated into openMeeting. Both bridge popups - the `
+        + `offer and the transcript's Start - would then ask a main window that does not answer, `
+        + `and translation would run with nothing capturing or dubbing it.`,
+    );
+  }
+}
+
+/**
+ * 8. End ends BOTH halves, in the order "End meeting for all" does (path A).
+ *
+ * End in the widget is the only exit from a bridge room, so what it calls is the whole of how such
+ * a room is closed. Two calls, and each one alone leaves something running:
+ *   - useEndMeetingForAll deletes the LiveKit room and publishes `__MEETING_END__`, the sentinel
+ *     the AI worker writes the summary on. Without it: no summary, and a provider room left open.
+ *   - useEndTranslationRoom marks the room ENDED and starts finalization. Without it the room stays
+ *     IN_PROGRESS — billed, and listed as live — with nobody in it.
+ * The order is MeetingExitControl's then handleExit's: the meeting first, the room second.
+ *
+ * And it must end in `markEnded()`, or the ended screen — the one that says the Google Meet call
+ * is still going — is never shown, and the user is left looking at a dock for a session that no
+ * longer exists.
+ */
+if (!endSession) {
+  failures.push(`${END} is missing; the widget shell renders it as the only exit from a bridge room.`);
+} else {
+  const code = withoutImports(stripComments(endSession));
+  const calls = [];
+  for (const [hook, what] of [
+    ["useEndMeetingForAll", "deletes the LiveKit room and triggers the summary"],
+    ["useEndTranslationRoom", "marks the room ENDED and starts finalization"],
+  ]) {
+    const name = boundName(code, hook);
+    const at = name ? code.search(new RegExp(`\\b${name}\\.mutate(?:Async)?\\(`)) : -1;
+    if (at === -1) {
+      failures.push(
+        `${END} does not call ${hook}'s mutation. That call ${what}; End without it leaves that `
+          + `half of the meeting running.`,
+      );
+    }
+    calls.push(at);
+  }
+  if (calls[0] !== -1 && calls[1] !== -1 && calls[0] > calls[1]) {
+    failures.push(
+      `${END} ends the translation room before the meeting. Path A ("End meeting for all") ends the `
+        + `LiveKit meeting first and the room second; reversed, a failed second call leaves an ENDED `
+        + `room whose provider room is still open.`,
+    );
+  }
+  if (!/\bmarkEnded\(/.test(code)) {
+    failures.push(
+      `${END} never calls markEnded(). The shell would never show the ended screen, and the user `
+        + `would be left with Start and Pause buttons for a session that no longer exists.`,
+    );
+  }
+}
+
+/**
+ * 9. No Leave anywhere in the widget.
+ *
+ * Leave marks the host LEFT and nothing else. In a bridge room the stand-in seat never
+ * disconnects, so the room would stay open — translating, billing, holding its LiveKit room —
+ * with nobody who can see it, and nothing on screen would say so. End is the exit, on purpose.
+ *
+ * Read on code with comments stripped, since the reason is written down in the files themselves.
+ * `\bleave` matches the copy ("Leave", "Leave meeting") and a leave hook or hub method, and not
+ * `onMouseLeave`, which has no word boundary before the L.
+ */
+for (const file of widgetFiles) {
+  const code = stripComments(read(file) ?? "");
+  if (/\bleave|useLeave/i.test(code)) {
+    failures.push(
+      `${file} carries a Leave control. A bridge room has no Leave: the stand-in seat keeps the room `
+        + `open after the host leaves, so leaving orphans a room that is still translating and `
+        + `billing. End (end-session.tsx) is the only exit.`,
     );
   }
 }
@@ -283,6 +543,7 @@ if (failures.length > 0) {
 }
 
 console.log(
-  "PASS every desktop bridge helper has a caller, the overlay carries its four controls, and the "
-    + "setup wizard is reachable from a real room",
+  "PASS every desktop bridge helper has a caller, the overlay renders the widget and its session "
+    + "controls, Start activates the room in the main window, End ends both the meeting and the room "
+    + "with no Leave beside it, and the setup wizard is reachable from a real room",
 );
