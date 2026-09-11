@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { useRoomOccupancy } from "@/hooks/use-room-occupancy";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceMembers } from "@/hooks/use-workspace";
-import { resolveRoomHost } from "@/lib/meeting/room-host";
+import { isInvitedToRoom, resolveRoomHost } from "@/lib/meeting/room-host";
 import { useAuthStore } from "@/stores/auth-store";
 import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { SeriesListSummary, TranslationRoomDto } from "@/types/translationRoom";
@@ -28,7 +28,12 @@ import { UserChip } from "@/components/user/user-chip";
 import { meetingLanguageSet } from "@/lib/language/languages";
 // The home day panel needs the same two answers; they live in one place so the two surfaces
 // cannot drift the way the language chip did.
-import { belongsToDay, isMeetingOver, startOfDay } from "@/lib/meeting/meeting-day";
+import {
+  ALL_ROOM_STATUSES_FILTER,
+  belongsToDay,
+  isMeetingOver,
+  startOfDay,
+} from "@/lib/meeting/meeting-day";
 import type { WorkspaceMemberDto } from "@/types/workspace";
 import {
   Calendar as CalendarIcon,
@@ -141,6 +146,9 @@ function LinearRow({
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
   const user = useAuthStore((state) => state.user);
+  // The raw store value, not useWorkspaceRole(): that hook reads "not loaded yet" as "member",
+  // which is the one role that would let isInvitedToRoom stamp "Invited" on a room.
+  const workspaceRole = useWorkspaceStore((state) => state.role);
   const isCurrentUserHost = room.hostId === user?.id || Boolean(room.isHost);
   // WT-274: same hook the room detail page reads, so a row and the page it links to cannot
   // report different occupancy. The list has no per-room roster, so for every room except the
@@ -203,7 +211,9 @@ function LinearRow({
             {room.series.occurrenceCount} meetings
           </span>
         )}
-        {user?.id && room.hostId !== user.id && (
+        {/* The viewer's relation to the room, not "someone else booked it" — see
+            isInvitedToRoom for why an Owner/Admin never gets this badge from the list. */}
+        {isInvitedToRoom(room, user?.id, workspaceRole) && (
           <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
             Invited
           </span>
@@ -323,7 +333,10 @@ export default function MeetingsPageLinear() {
   const [activeTab, setActiveTab] = useState<"active" | "history" | "all">(
     "active",
   );
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  // Which week the strip is showing — where the user last picked or paged to. Deliberately NOT
+  // the selected day: clearing the day must not throw the strip back to this week, so the two
+  // are separate state, and only `dayFilter` is ever drawn as selected.
+  const [weekAnchor, setWeekAnchor] = useState<Date>(new Date());
   const [today] = useState<Date>(() => new Date());
   // Opens on today, and the list is filtered by it from the first render.
   //
@@ -333,15 +346,24 @@ export default function MeetingsPageLinear() {
   // control that is drawn as active has to be active.
   //
   // Still nullable, and "Clear day" still clears it: a day narrows the tab, and there has to be
-  // a way to ask the tab's own question. Picking the selected day again also clears it.
+  // a way to ask the tab's own question. Picking the selected day again also clears it. This is
+  // what the strip highlights, so a cleared day leaves no chip lit — the strip used to highlight
+  // its own copy of the date, and went on drawing the cleared day as active above a list that
+  // had stopped filtering by it: the same lie as the null start above, arrived at the other way.
   const [dayFilter, setDayFilter] = useState<Date | null>(() => new Date());
   // workspaceId is what lets the server answer this question for a workspace Owner/Admin at all:
   // without it the list falls back to host-or-participant-or-invitee and an Admin sees an empty
   // page for a workspace that has meetings in it. It also stops this workspace-scoped screen from
   // listing another workspace's rooms.
+  //
+  // Every status the server has, from the one list in meeting-day — both queries below read it,
+  // and the tab filters read its terminal half through `isMeetingOver`. Sent explicitly because
+  // the server's default is the four unfinished statuses only, and a hand-written list here used
+  // to ask for a TIMEOUT that does not exist while leaving EXPIRED and FAILED rooms out of every
+  // tab.
   const roomList = useTranslationRooms({
     pageSize: 100,
-    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    status: ALL_ROOM_STATUSES_FILTER,
     workspaceId: activeWorkspaceId ?? undefined,
   });
 
@@ -355,7 +377,7 @@ export default function MeetingsPageLinear() {
   // fetched by the tabs that show it.
   const groupedList = useTranslationRooms({
     pageSize: 100,
-    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    status: ALL_ROOM_STATUSES_FILTER,
     workspaceId: activeWorkspaceId ?? undefined,
     groupBySeries: true,
     enabled: activeTab !== "active",
@@ -465,10 +487,16 @@ export default function MeetingsPageLinear() {
       // the hour keeps a meeting that is running late; older than that it was never started, and
       // it belongs to its own day under Scheduled, not here.
       const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60000);
+      // Paused is live. The meeting is still running with people in it — it has only stopped
+      // listening — and the server's own admin directory counts IN_PROGRESS and PAUSED together
+      // as "live" for exactly that reason. It was missing here while the day-picked branch above
+      // (anything not over) kept it, so pressing "Clear day" — the button that is supposed to
+      // widen the tab — made a paused meeting disappear from it.
       return rooms.filter(
         (r) =>
           matchesSearch(r) &&
           (r.status === "in_progress" ||
+            r.status === "paused" ||
             r.status === "waiting" ||
             (r.status === "scheduled" &&
               (!r.scheduledAt ||
@@ -476,14 +504,12 @@ export default function MeetingsPageLinear() {
                   new Date(r.scheduledAt) >= twoHoursAgo)))),
       );
     }
+    // The same `isMeetingOver` the day-picked branch asks. This one used to list its own three
+    // statuses — one of which (`timeout`) no server sends — beside a helper that listed the same
+    // wrong three; neither knew `expired` or `failed`. One predicate is what makes "History with
+    // a day picked" and "History" agree about which meetings are finished.
     if (activeTab === "history")
-      return rowSource.filter(
-        (r) =>
-          matchesSearch(r) &&
-          (r.status === "ended" ||
-            r.status === "cancelled" ||
-            r.status === "timeout"),
-      );
+      return rowSource.filter((r) => matchesSearch(r) && isMeetingOver(r.status));
     // All: every room this person can see, in every status, one row per occurrence. No status
     // filter and no grouping — the two things that were hiding meetings from a tab named All.
     return rooms.filter(matchesSearch);
@@ -570,10 +596,11 @@ export default function MeetingsPageLinear() {
       >
         <MeetingDayStrip
           rooms={rooms}
-          selectedDate={selectedDate}
+          selectedDate={dayFilter}
+          weekAnchor={weekAnchor}
           today={today}
           onSelectDate={(day) => {
-            setSelectedDate(day);
+            setWeekAnchor(day);
             setDayFilter((current) =>
               current && startOfDay(current) === startOfDay(day) ? null : day,
             );
