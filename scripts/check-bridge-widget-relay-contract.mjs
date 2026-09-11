@@ -70,7 +70,9 @@ if (widgetFiles.length === 0) {
 
 // 1. The popup never joins the room.
 for (const file of widgetFiles) {
-  if (/JoinTranslationRoom/.test(code(file))) {
+  // Word-bounded: the hub method is invoked by its bare name ("JoinTranslationRoom"), while
+  // helpers such as canJoinTranslationRoom (a room-status check, not a hub call) must not trip it.
+  if (/\bJoinTranslationRoom\b/.test(code(file))) {
     failures.push(`${name(file)} calls JoinTranslationRoom — that ForceDisconnects the main window.`);
   }
 }
