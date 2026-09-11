@@ -74,6 +74,7 @@ import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { DocumentDuplicateDialog } from "@/components/documents/document-duplicate-dialog";
 import {
   DOCUMENT_TAB,
+  DUPLICATE_STRATEGY,
   documentMatchesTab,
   parseDuplicateConflict,
   type DocumentTab,
@@ -299,7 +300,7 @@ export default function WorkspaceDocumentsPage() {
     const existingId = duplicateConflict?.duplicate?.documentId;
     setDuplicateConflict(null);
 
-    if (strategy === "skip") {
+    if (strategy === DUPLICATE_STRATEGY.SKIP) {
       // Nothing was stored, so there is nothing to undo — just take them to the document that is
       // already here, which is what they said they wanted to keep.
       setIsUploadModalOpen(false);
