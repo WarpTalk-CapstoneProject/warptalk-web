@@ -32,6 +32,7 @@ import { GearSix, Lightning, Microphone, SpeakerHigh } from "@phosphor-icons/rea
 import { AnimatePresence, motion } from "motion/react";
 
 import { noiseReductionLabel } from "@/lib/meeting/noise-reduction";
+import { cn } from "@/lib/utils";
 
 import { DockIconButton } from "./dock-icon-button";
 import { FlashModeRow } from "./settings/flash-mode-row";
@@ -51,6 +52,7 @@ export function SettingsFlyout() {
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const backRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const flyoutId = useId();
 
   // Read here rather than inside the sub-panel so the root row can name the current mode.
@@ -95,13 +97,30 @@ export function SettingsFlyout() {
     };
   }, [open, section]);
 
-  // A keyboard user who drilled into a panel lands on its way back out.
+  // A keyboard user who drilled into a panel lands on its way back out; one who came back out
+  // lands on the flyout itself, because the back button they were on has just unmounted and focus
+  // would otherwise fall to the document.
+  const lastSectionRef = useRef<SettingsSection>("root");
   useEffect(() => {
-    if (open && section !== "root") backRef.current?.focus();
+    if (!open) {
+      lastSectionRef.current = "root";
+      return;
+    }
+    if (section !== "root") backRef.current?.focus();
+    else if (lastSectionRef.current !== "root") dialogRef.current?.focus();
+    lastSectionRef.current = section;
   }, [open, section]);
 
   return (
-    <div ref={containerRef} className="flex items-center">
+    <div
+      ref={containerRef}
+      // While the flyout is open, the gear's own hover tooltip would draw on top of the flyout's
+      // bottom edge — the mouse is still on the gear right after the click — and it only repeats
+      // the flyout's name. DockIconButton has no prop to hide it, and its file is not this task's,
+      // so it is hidden from here by its shape (the aria-hidden span beside the button).
+      // TODO(WT-525): replace with a `tooltipHidden` prop on DockIconButton.
+      className={cn("flex items-center", open && "[&>span>span[aria-hidden=true]]:!opacity-0")}
+    >
       <DockIconButton
         ref={triggerRef}
         label={FLYOUT_LABEL}
@@ -117,9 +136,11 @@ export function SettingsFlyout() {
       <AnimatePresence>
         {open ? (
           <motion.div
+            ref={dialogRef}
             id={flyoutId}
             role="dialog"
             aria-label={FLYOUT_LABEL}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -127,7 +148,7 @@ export function SettingsFlyout() {
             // Upward from the dock's right edge. The height cap is the smaller of the design's
             // ~430px and what is left above the dock, so a window dragged down to its 240px
             // minimum still scrolls the flyout instead of pushing it out of the top.
-            className="absolute bottom-full right-3 z-50 mb-2 max-h-[min(430px,calc(100dvh-4.5rem))] w-[264px] max-w-[calc(100%-1.5rem)] origin-bottom-right overflow-y-auto rounded-lg border border-border bg-surface-1 p-1 shadow-lg"
+            className="absolute bottom-full right-3 z-50 mb-2 max-h-[min(430px,calc(100dvh-4.5rem))] w-[264px] max-w-[calc(100%-1.5rem)] origin-bottom-right overflow-y-auto rounded-lg border border-border bg-surface-1 p-1 shadow-lg outline-none"
           >
             {section === "root" ? (
               <>
