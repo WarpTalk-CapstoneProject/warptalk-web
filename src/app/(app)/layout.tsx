@@ -38,11 +38,16 @@ import { useOnboardingStore } from "@/stores/onboarding-store";
 import { useWorkspaceTabsStore } from "@/stores/workspace-tabs-store";
 import { useAuthStore } from "@/stores/auth-store";
 import { getErrorStatus } from "@/lib/api/retry-policy";
-import { useTranslationRoom, useTranslationRooms } from "@/hooks/use-translationRooms";
+import {
+  useTranslationRoom,
+  useTranslationRoomSessions,
+  useTranslationRooms,
+} from "@/hooks/use-translationRooms";
 import { useWorkspaces, useSelectWorkspace } from "@/hooks/use-workspace";
 import { useActiveMeetingStore } from "@/stores/active-meeting-store";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
+import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useBridgeTrigger } from "@/hooks/use-bridge-trigger";
 import { onBridgeRoomActivated } from "@/lib/desktop/bridge";
 import { extractMeetCodeFromUrl, type TriggerMeeting } from "@/lib/meeting/bridge-trigger";
@@ -281,6 +286,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       // yesterday eligible forever instead of letting it fall out of the window like any other.
       const startsAtMs = Date.parse(room.scheduledAt ?? room.createdAt);
       if (Number.isNaN(startsAtMs)) continue;
+      // The end, when the room knows one. The DTO carries no booked end time, so the only end on
+      // offer is `endedAt` — the meeting really did end. Without it the trigger falls back to its
+      // one-hour ceiling, which is a guess and is treated as one: it can close the window on the
+      // schedule, never on a translation that is still running (see `translatingRoomId` below).
+      const endedAtMs = room.endedAt ? Date.parse(room.endedAt) : Number.NaN;
+      // A room that can no longer be joined and never ended — cancelled, expired — has no meeting
+      // left to trigger for. Left in, a cancelled booking still raised "starting soon" over Meet.
+      if (!canJoinTranslationRoom(room.status) && Number.isNaN(endedAtMs)) continue;
       // The code the sensor reads off the browser's own address bar, so a Meet call that is NOT
       // this meeting cannot latch it. `nextBridgeTrigger` only ever uses it to REFUSE a sighting
       // whose code disagrees; an absent one proves nothing either way and is left to the schedule
@@ -290,13 +303,44 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       byRoomId.set(room.id, {
         roomId: room.id,
         startsAtMs,
+        endsAtMs: Number.isNaN(endedAtMs) ? undefined : endedAtMs,
         meetCode: extractMeetCodeFromUrl(room.externalMeetingUrl),
       });
     }
     return Array.from(byRoomId.values());
   }, [workspaceRoomsQuery.data, activeBridgeRoomQuery.data]);
 
-  useBridgeTrigger({ meetings: bridgeTriggerMeetings });
+  /**
+   * Which bridge room is being translated right now, if any.
+   *
+   * Read from the ACTIVE meeting session's translation sessions — the same query, and so the same
+   * cache entry, that PersistentMeetingSession derives its own `translationStarted` from — so the
+   * popup and the meeting cannot disagree about whether translation is on. The active room is the
+   * one whose meeting session carries the pipeline (LiveKit, the dub, both bridge legs), and
+   * flow 2 makes the offer's room active here before anything starts (`onBridgeRoomActivated`).
+   *
+   * KNOWN GAP: a room nobody opened in this window. The popup's own Start
+   * (BridgeOverlayControls) opens a translation session server-side without making the room
+   * active here, so that case is not seen by this and still falls back to the schedule.
+   *
+   * The trigger used to be told nothing, so at start + one hour a room with no end time left its
+   * window mid-translation, and the popup carrying Stop was closed or navigated to the offer.
+   */
+  const activeBridgeRoomId =
+    activeBridgeRoomQuery.data && isExternalBridge(activeBridgeRoomQuery.data.translationRoomType)
+      ? activeBridgeRoomQuery.data.id
+      : null;
+  const activeBridgeSessionsQuery = useTranslationRoomSessions(
+    activeBridgeRoomId ?? "",
+    activeBridgeRoomId !== null,
+  );
+  const translatingRoomId =
+    activeBridgeRoomId !== null &&
+    (activeBridgeSessionsQuery.data ?? []).some((session) => session.status === "ACTIVE")
+      ? activeBridgeRoomId
+      : null;
+
+  useBridgeTrigger({ meetings: bridgeTriggerMeetings, translatingRoomId });
 
   /**
    * Flow 2's last mile: the offer window made a room, and this window has to run it.

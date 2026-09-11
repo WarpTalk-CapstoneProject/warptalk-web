@@ -39,9 +39,41 @@ if (!/meetCode:\s*extractMeetCodeFromUrl\(\s*room\.externalMeetingUrl\s*\)/.test
   );
 }
 
+/**
+ * The same lesson, twice more: the trigger is also TOLD when translation is running and when a
+ * meeting ended.
+ *
+ * `useBridgeTrigger` has taken a translation flag since it was written and `TriggerMeeting` has
+ * had an `endsAtMs`, and the shell passed neither. The pure half answered `running` correctly in
+ * every test while, in the product, a room with no end time left its trigger window at start + one
+ * hour in the middle of a translated call - closing the popup that held Stop translation, or, with
+ * Meet on screen, navigating it to the offer. Again: grep the caller, not the helper.
+ */
+const triggerCall = /useBridgeTrigger\(\s*\{([^}]*)\}\s*\)/.exec(source);
+if (!triggerCall) {
+  failures.push(
+    "no `useBridgeTrigger({ ... })` call in the app shell — the floating bridge widget has no " +
+      "owner for a meeting nobody opened in WarpTalk",
+  );
+} else if (!/\btranslatingRoomId\b/.test(triggerCall[1])) {
+  failures.push(
+    "useBridgeTrigger is not given `translatingRoomId` — the trigger cannot tell a translation in " +
+      "progress from a meeting whose window has run out, and drops the popup mid-translation",
+  );
+}
+
+if (!/endsAtMs:/.test(source)) {
+  failures.push(
+    "the TriggerMeeting the shell assembles carries no `endsAtMs` — a room that has ended keeps the " +
+      "widget armed until the one-hour ceiling instead of letting go when the meeting did",
+  );
+}
+
 if (failures.length > 0) {
   for (const failure of failures) console.error(`FAIL ${FILE}\n     ${failure}`);
   process.exit(1);
 }
 
-console.log("PASS the bridge trigger is given each room's Meet code");
+console.log(
+  "PASS the bridge trigger is given each room's Meet code, its end, and the room being translated",
+);
