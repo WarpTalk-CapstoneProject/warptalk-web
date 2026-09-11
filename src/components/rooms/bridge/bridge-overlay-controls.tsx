@@ -13,8 +13,13 @@
  *   translation is running exactly while the room has an ACTIVE session row, the dub voice is a
  *   setting in AuthService, and clone consent is a per-room audio-route flag. So each control is
  *   the same mutation the in-meeting control bar fires, and the main window learns what happened
- *   the same way any other participant does — by polling the sessions list. No IPC, no shared
- *   store, and no second source of truth to drift.
+ *   the same way any other participant does — by polling the sessions list. No shared store, and
+ *   no second source of truth to drift.
+ *
+ *   With one exception, and it is the one that makes the rest mean anything: the main window only
+ *   polls, joins and carries audio for a room it has been told to open. Start therefore asks it
+ *   to, over the same IPC relay flow 2 uses, before the session is opened. See
+ *   startBridgeTranslation for why that has to come first.
  *
  * WHY START/STOP IS HOST-ONLY HERE
  *   `/resume` — the endpoint that opens a translation session — gates on IsHostedBy. WT-371's
@@ -29,12 +34,14 @@
  *   changes its mind.
  */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 
 import { Switch } from "@/components/ui/switch";
+import { activateBridgeRoom } from "@/lib/desktop/bridge";
 import { getLanguageName } from "@/lib/language/languages";
+import { startBridgeTranslation } from "@/lib/meeting/bridge-overlay-start";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useResumeTranslationRoom,
@@ -111,7 +118,14 @@ export function BridgeOverlayControls({
     [profiles],
   );
 
-  const busy = startRoom.isPending || resumeRoom.isPending || stopTranslation.isPending;
+  /**
+   * The whole Start sequence, not just its mutations: activation is awaited before either of them
+   * is pending, and a second press in that gap would ask the main window twice and open the room
+   * twice.
+   */
+  const [starting, setStarting] = useState(false);
+  const busy =
+    starting || startRoom.isPending || resumeRoom.isPending || stopTranslation.isPending;
 
   async function toggleTranslation() {
     if (!room) return;
@@ -124,17 +138,29 @@ export function BridgeOverlayControls({
       return;
     }
 
+    setStarting(true);
     try {
-      // Opening the ROOM and starting TRANSLATION are two acts since WT-339, and only /resume does
-      // the second one. Same order as the in-meeting button, for the same reason: this window is
-      // reachable before anyone has opened the room from the main one.
-      if (room.status !== "in_progress" && room.status !== "paused") {
-        await startRoom.mutateAsync(room.id);
+      // Activate, then open the ROOM if nobody has, then /resume. The order is the point; it lives
+      // in startBridgeTranslation so a test can hold it there.
+      const { activated } = await startBridgeTranslation(room, {
+        activate: activateBridgeRoom,
+        openRoom: (id) => startRoom.mutateAsync(id),
+        startTranslation: (id) => resumeRoom.mutateAsync(id),
+      });
+      if (activated) {
+        toast.success("Translation started.");
+      } else {
+        // Said, not swallowed: without the main window this is the old bug - a session marked
+        // running that nothing is feeding - and the one thing the user can do about it is open the
+        // meeting there themselves.
+        toast.warning("Translation started, but WarpTalk could not open this meeting.", {
+          description: "Open it in the WarpTalk window so your voice and the dub are carried.",
+        });
       }
-      await resumeRoom.mutateAsync(room.id);
-      toast.success("Translation started.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to start translation.");
+    } finally {
+      setStarting(false);
     }
   }
 
