@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
+import type { DuplicateStrategy } from "@/lib/documents/document-review";
 import type {
   UpdateKnowledgeChunkRequest,
   WorkspaceKnowledgeChunkDto,
@@ -15,6 +16,7 @@ import type {
   WorkspaceInvitationDto,
   WorkspaceDocumentDto,
   WorkspaceDocumentAccessPolicyDto,
+  DocumentHistoryEntryDto,
   GlossaryDto,
   GlossaryTermDto,
   PagedResult,
@@ -265,6 +267,12 @@ export const WorkspaceService = {
       confidentialityLevel?: string;
       isAiAllowed?: boolean;
       file: File;
+      /**
+       * What to do if these exact bytes are already in the workspace. Omitted means "ask": the
+       * upload fails with 409 and `DOCUMENT_DUPLICATE_CONTENT`, which
+       * `parseDuplicateConflict` turns into the choice dialog. WT-666.
+       */
+      duplicateStrategy?: DuplicateStrategy;
     }
   ): Promise<WorkspaceDocumentDto> {
     const formData = new FormData();
@@ -277,11 +285,56 @@ export const WorkspaceService = {
       formData.append("confidentialityLevel", request.confidentialityLevel);
     }
     formData.append("isAiAllowed", String(request.isAiAllowed ?? true));
+    if (request.duplicateStrategy) {
+      formData.append("duplicateStrategy", request.duplicateStrategy);
+    }
     formData.append("file", request.file);
 
     const { data } = await apiClient.postForm<WorkspaceDocumentDto>(
       API.workspaces.documents(workspaceId),
       formData
+    );
+    return data;
+  },
+
+  /**
+   * Replaces a rejected document's file, keeping its id, its approval trail and the reviewer's
+   * reason. WT-633.
+   *
+   * The document goes back to `pending_approval`; the superseded file stays in storage and the
+   * previous key is written onto a `Reuploaded` audit row.
+   */
+  async reuploadDocument(
+    workspaceId: string,
+    docId: string,
+    request: { file: File; name?: string; note?: string }
+  ): Promise<WorkspaceDocumentDto> {
+    const formData = new FormData();
+    formData.append("file", request.file);
+    if (request.name) {
+      formData.append("name", request.name);
+    }
+    if (request.note) {
+      formData.append("note", request.note);
+    }
+
+    const { data } = await apiClient.postForm<WorkspaceDocumentDto>(
+      API.workspaces.documentRevision(workspaceId, docId),
+      formData
+    );
+    return data;
+  },
+
+  /** A document's approval and feedback history, newest first. WT-633. */
+  async getDocumentHistory(
+    workspaceId: string,
+    docId: string,
+    page = 1,
+    pageSize = 20
+  ): Promise<PagedResult<DocumentHistoryEntryDto>> {
+    const { data } = await apiClient.get<PagedResult<DocumentHistoryEntryDto>>(
+      API.workspaces.documentHistory(workspaceId, docId),
+      { params: { page, pageSize } }
     );
     return data;
   },
@@ -369,8 +422,12 @@ export const WorkspaceService = {
     return data;
   },
 
-  async approveDocument(workspaceId: string, docId: string, approve: boolean): Promise<void> {
-    await apiClient.post(API.workspaces.documentApprove(workspaceId, docId), { approve });
+  /**
+   * @param reason Why the reviewer decided this. REQUIRED when `approve` is false — the API
+   * refuses a rejection without one, because the uploader is shown this sentence. WT-633.
+   */
+  async approveDocument(workspaceId: string, docId: string, approve: boolean, reason?: string): Promise<void> {
+    await apiClient.post(API.workspaces.documentApprove(workspaceId, docId), { approve, reason });
   },
 
   async downloadDocument(workspaceId: string, docId: string): Promise<Blob> {

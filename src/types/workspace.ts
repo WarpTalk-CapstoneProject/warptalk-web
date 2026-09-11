@@ -275,6 +275,45 @@ export interface WorkspaceDocumentDto {
   downloadUrl?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Why the last AI ingestion attempt did not complete, or null when it succeeded or was skipped. */
+  ingestionFailureReason?: string | null;
+  /**
+   * Why a reviewer rejected this document. WT-633.
+   *
+   * DETAIL ROUTE ONLY — the list evaluates access for every row it returns, and carrying this
+   * would add a second audit query per document, so it is absent (not null, absent) from a listed
+   * document. It also OUTLIVES the rejection: re-uploading sets the status back to
+   * `pending_approval` and the reason stays, because the feedback being answered should still be
+   * readable while the answer is under review. Read it together with `status`, never alone.
+   */
+  rejectionReason?: string | null;
+}
+
+/**
+ * The document already holding the bytes someone just tried to upload. WT-666.
+ *
+ * Absent from a 409 body means the caller may not open that document — the collision is real, but
+ * naming it would be a way to learn that a document they cannot see exists. Say "already in this
+ * workspace" without a name in that case.
+ */
+export interface DocumentDuplicateDto {
+  documentId: string;
+  name: string;
+  fileName: string;
+  status: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+/** One entry in a document's approval and feedback history. WT-633. */
+export interface DocumentHistoryEntryDto {
+  id: string;
+  /** The raw audit action — `UploadDocument`, `RejectDocument`, `Reuploaded`, and so on. */
+  action: string;
+  actorId?: string | null;
+  actionAt: string;
+  /** The reviewer's rejection reason or the uploader's revision note. Null for other actions. */
+  reason?: string | null;
 }
 
 export interface WorkspaceDocumentAccessPolicyDto {

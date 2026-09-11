@@ -9,7 +9,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
-import { use, useEffect } from "react";
+import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -26,10 +26,21 @@ import {
   useApproveWorkspaceDocument,
   useDownloadWorkspaceDocument,
   usePatchWorkspaceDocumentMetadata,
+  useReuploadWorkspaceDocument,
   useWorkspace,
   useWorkspaceDocument,
+  useWorkspaceDocumentHistory,
+  useWorkspaceMembers,
 } from "@/hooks/use-workspace";
 import { downloadBlob } from "@/lib/ui/download-blob";
+import { documentActorName } from "@/lib/documents/document-actor";
+import {
+  canUploadRevision as canUploadRevisionFor,
+  shouldShowRejectionFeedback,
+} from "@/lib/documents/document-review";
+import { DocumentRejectDialog } from "@/components/documents/document-reject-dialog";
+import { DocumentReviewTrail } from "@/components/documents/document-review-trail";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
 import { DocumentPreview } from "./components/DocumentPreview";
@@ -45,6 +56,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const routeParams = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = routeParams.workspaceSlug;
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
+  const currentUser = useAuthStore((s) => s.user);
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
   // Queries & Hooks
   const documentQuery = useWorkspaceDocument(
@@ -86,7 +98,21 @@ export default function DocumentDetailPage({ params }: PageProps) {
     activeWorkspaceId || "",
     documentId,
   );
+  // WT-633. The revision route keeps the document id, so it keeps the approval trail and the
+  // reviewer's reason — the delete-and-upload-again workaround destroyed both.
+  const reuploadMutation = useReuploadWorkspaceDocument(
+    activeWorkspaceId || "",
+    documentId,
+  );
+  const historyQuery = useWorkspaceDocumentHistory(
+    activeWorkspaceId || "",
+    documentId,
+  );
+  // The only source of faces and names for a user id on this page; the document DTO carries ids.
+  const membersQuery = useWorkspaceMembers(activeWorkspaceId || "", 1, 100);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const doc = documentQuery.data;
+  const workspaceMembers = membersQuery.data?.items ?? [];
   const canApproveDocuments = Boolean(workspaceQuery.data?.canApproveDocuments);
   const isPendingApproval = Boolean(
     doc?.status?.toLowerCase() === WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
@@ -130,16 +156,36 @@ export default function DocumentDetailPage({ params }: PageProps) {
     }
   };
 
-  const handleApprove = async (approve: boolean) => {
+  /**
+   * @param reason Required when rejecting. The API refuses a rejection without one, and so does
+   * the dialog that collects it — the uploader is shown this sentence and nothing else, which is
+   * the whole of WT-633.
+   */
+  const handleApprove = async (approve: boolean, reason?: string) => {
     try {
-      await approveMutation.mutateAsync({ docId: documentId, approve });
+      await approveMutation.mutateAsync({ docId: documentId, approve, reason });
+      setIsRejectDialogOpen(false);
       toast.success(
-        approve ? "Document approved for ingestion." : "Document rejected.",
+        approve
+          ? "Document approved for ingestion."
+          : "Document rejected. The uploader can see your reason.",
       );
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
           ?.error || "Action failed.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleUploadRevision = async (file: File, note: string) => {
+    try {
+      await reuploadMutation.mutateAsync({ file, note: note || undefined });
+      toast.success("Corrected version submitted for approval.");
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to upload the corrected version.";
       toast.error(errorMsg);
     }
   };
@@ -250,7 +296,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
                   <span>Approve</span>
                 </button>
                 <button
-                  onClick={() => handleApprove(false)}
+                  onClick={() => setIsRejectDialogOpen(true)}
                   disabled={approveMutation.isPending}
                   className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-destructive/30 bg-surface-1 px-3 text-[13px] font-medium text-destructive shadow-sm transition hover:bg-destructive/10 disabled:opacity-50"
                   title="Reject document"
@@ -306,6 +352,23 @@ export default function DocumentDetailPage({ params }: PageProps) {
             AND checking who it will be shared with, and those two facts were previously never on
             screen at the same time. */}
         <div className="flex flex-col gap-6 lg:sticky lg:top-0 lg:max-h-full lg:overflow-y-auto lg:pb-2">
+          {/* WT-633 — above the properties, because when a document is rejected the reason and
+              the way to answer it are the only things on this page anybody needs. */}
+          <DocumentReviewTrail
+            rejectionReason={doc.rejectionReason}
+            showRejectionBanner={shouldShowRejectionFeedback(doc)}
+            canUploadRevision={canUploadRevisionFor(
+              doc,
+              currentUser?.id,
+              canApproveDocuments,
+            )}
+            isUploadingRevision={reuploadMutation.isPending}
+            onUploadRevision={handleUploadRevision}
+            history={historyQuery.data?.items ?? []}
+            isHistoryLoading={historyQuery.isLoading}
+            actorName={(userId) => documentActorName(workspaceMembers, userId)}
+          />
+
           <DocumentSidePanel
             doc={doc}
             membersList={membersList}
@@ -325,6 +388,14 @@ export default function DocumentDetailPage({ params }: PageProps) {
           />
         </div>
       </div>
+
+      <DocumentRejectDialog
+        open={isRejectDialogOpen}
+        documentName={doc.name}
+        isSubmitting={approveMutation.isPending}
+        onClose={() => setIsRejectDialogOpen(false)}
+        onConfirm={(reason) => handleApprove(false, reason)}
+      />
     </div>
   );
 }

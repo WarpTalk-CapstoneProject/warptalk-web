@@ -71,9 +71,34 @@ import { UserChip } from "@/components/user/user-chip";
 import { findDocumentActor } from "@/lib/documents/document-actor";
 import { DocumentDeleteDialog } from "@/components/documents/document-delete-dialog";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
+import { DocumentDuplicateDialog } from "@/components/documents/document-duplicate-dialog";
+import {
+  DOCUMENT_TAB,
+  documentMatchesTab,
+  parseDuplicateConflict,
+  type DocumentTab,
+  type DuplicateConflict,
+  type DuplicateStrategy,
+} from "@/lib/documents/document-review";
+
+/**
+ * WT-666: the name is trimmed before it is measured, and 255 is the column width.
+ *
+ * The server enforces both — this schema is here so the person typing finds out before the upload
+ * rather than after it. It used to check a 2-character minimum and nothing else, so a 300-character
+ * name reached Postgres verbatim and came back as a 500.
+ */
+const MAX_DOCUMENT_NAME_LENGTH = 255;
 
 const uploadSchema = z.object({
-  name: z.string().min(2, "Document name must be at least 2 characters"),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Document name must be at least 2 characters")
+    .max(
+      MAX_DOCUMENT_NAME_LENGTH,
+      `Document name must be ${MAX_DOCUMENT_NAME_LENGTH} characters or fewer`,
+    ),
   isAiAllowed: z.boolean(),
 });
 
@@ -81,9 +106,25 @@ const ACCEPTED_UPLOAD_EXTENSIONS =
   ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
 
 type UploadFormData = z.infer<typeof uploadSchema>;
-type FilterCategory =
-  "all" | "pending" | "ai" | "admin" | "sensitive" | "archived";
+/**
+ * The status tabs WT-633 asks for, and the three content filters that were already here.
+ *
+ * They share one control because they answer the same question — "show me this slice" — and
+ * because a document can only be in one status at a time, so a second row of chips would have
+ * been a second way to say the same thing.
+ */
+type FilterCategory = DocumentTab | "ai" | "admin" | "sensitive";
 type ViewMode = "list" | "grid";
+
+const STATUS_TABS: DocumentTab[] = [
+  DOCUMENT_TAB.PUBLISHED,
+  DOCUMENT_TAB.PENDING,
+  DOCUMENT_TAB.REJECTED,
+];
+
+function isStatusTab(category: FilterCategory): category is DocumentTab {
+  return (STATUS_TABS as string[]).includes(category);
+}
 
 export default function WorkspaceDocumentsPage() {
   const router = useRouter();
@@ -104,6 +145,10 @@ export default function WorkspaceDocumentsPage() {
     id: string;
     name: string;
   } | null>(null);
+  // WT-666. Set when the API answered 409 DOCUMENT_DUPLICATE_CONTENT — the file is already here
+  // and nothing has been stored, so the dialog can ask what to do and retry with the answer.
+  const [duplicateConflict, setDuplicateConflict] =
+    useState<DuplicateConflict | null>(null);
 
   // TanStack Query list
   const documentsQuery = useWorkspaceDocuments(
@@ -181,7 +226,14 @@ export default function WorkspaceDocumentsPage() {
     }
   };
 
-  const handleUploadSubmit = async (formData: UploadFormData) => {
+  /**
+   * @param duplicateStrategy Omitted on the first attempt, so a collision comes back as a 409 and
+   * the dialog can ask. Supplied on the retry, carrying the person's answer.
+   */
+  const runUpload = async (
+    formData: UploadFormData,
+    duplicateStrategy?: DuplicateStrategy,
+  ) => {
     if (!selectedFile) {
       toast.error("Please select a file to upload.");
       return;
@@ -193,12 +245,13 @@ export default function WorkspaceDocumentsPage() {
 
     try {
       const uploadedDocument = await uploadMutation.mutateAsync({
-        name: formData.name,
+        name: formData.name.trim(),
         sourceType: WORKSPACE_DOCUMENT_SOURCE_TYPE.UPLOAD,
         sourceId: null,
         confidentialityLevel: WORKSPACE_DOCUMENT_CONFIDENTIALITY_LEVEL.GENERAL,
         isAiAllowed: formData.isAiAllowed,
         file: selectedFile,
+        duplicateStrategy,
       });
 
       toast.success(
@@ -211,6 +264,7 @@ export default function WorkspaceDocumentsPage() {
       );
       setSelectedFile(null);
       setSelectedFileIsImage(false);
+      setDuplicateConflict(null);
       reset({ name: "", isAiAllowed: true });
       setIsUploadModalOpen(false);
       const fileInput = document.getElementById(
@@ -218,6 +272,14 @@ export default function WorkspaceDocumentsPage() {
       ) as HTMLInputElement;
       if (fileInput) fileInput.value = "";
     } catch (err: unknown) {
+      // The one failure that is a question rather than an error. Matched on the API's own code,
+      // never on the sentence — the sentence names the colliding document and changes with it.
+      const conflict = parseDuplicateConflict(err);
+      if (conflict) {
+        setDuplicateConflict(conflict);
+        return;
+      }
+
       const response = (
         err as { response?: { status?: number; data?: { error?: string } } }
       )?.response;
@@ -229,6 +291,28 @@ export default function WorkspaceDocumentsPage() {
             : response?.data?.error || "Failed to upload document.";
       toast.error(errorMsg);
     }
+  };
+
+  const handleUploadSubmit = (formData: UploadFormData) => runUpload(formData);
+
+  const handleDuplicateChoice = async (strategy: DuplicateStrategy) => {
+    const existingId = duplicateConflict?.duplicate?.documentId;
+    setDuplicateConflict(null);
+
+    if (strategy === "skip") {
+      // Nothing was stored, so there is nothing to undo — just take them to the document that is
+      // already here, which is what they said they wanted to keep.
+      setIsUploadModalOpen(false);
+      setSelectedFile(null);
+      setSelectedFileIsImage(false);
+      reset({ name: "", isAiAllowed: true });
+      if (existingId) {
+        router.push(`/${workspaceSlug}/documents/${existingId}`);
+      }
+      return;
+    }
+
+    await handleSubmit((formData) => runUpload(formData, strategy))();
   };
 
   const handleArchive = async (docId: string) => {
@@ -312,31 +396,26 @@ export default function WorkspaceDocumentsPage() {
 
   // Filter raw documents list based on Category Pills
   const rawDocsList = documentsQuery.data?.items || [];
-  const pendingCount = rawDocsList.filter(
-    (doc) =>
-      doc.status?.toLowerCase() ===
-        WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-      doc.status?.toLowerCase().includes("pending"),
-  ).length;
-  const archivedCount = rawDocsList.filter(
-    (doc) => doc.status?.toLowerCase() === "archived",
-  ).length;
+  const countIn = (tab: DocumentTab) =>
+    rawDocsList.filter((doc) => documentMatchesTab(doc, tab)).length;
+
+  const pendingCount = countIn(DOCUMENT_TAB.PENDING);
+  // WT-633. A rejected document is already restricted to its uploader and the approvers by the
+  // API's own evaluator — `IsApprovalRestrictedStatus` covers `rejected` the same way it covers
+  // `pending_approval` — so this count is only ever above zero for someone entitled to see it.
+  // The chip is hidden at zero rather than shown empty: for most people it always will be.
+  const rejectedCount = countIn(DOCUMENT_TAB.REJECTED);
+  const archivedCount = countIn(DOCUMENT_TAB.ARCHIVED);
 
   const filteredDocs = rawDocsList.filter((doc) => {
-    const isArchived = doc.status?.toLowerCase() === "archived";
-    if (activeCategory === "archived") {
-      return isArchived;
+    if (isStatusTab(activeCategory)) {
+      return documentMatchesTab(doc, activeCategory);
     }
-    // Filter out archived documents from all other category views
-    if (isArchived) return false;
 
-    if (activeCategory === "pending") {
-      return (
-        doc.status?.toLowerCase() ===
-          WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
-        doc.status?.toLowerCase().includes("pending")
-      );
-    }
+    // The content filters are orthogonal to status, but they still exclude archived documents —
+    // an archived document is retired, and "AI Context" listing one would overstate the shelf.
+    if (!documentMatchesTab(doc, DOCUMENT_TAB.ALL)) return false;
+
     if (activeCategory === "ai") {
       return doc.isAiAllowed;
     }
@@ -366,13 +445,30 @@ export default function WorkspaceDocumentsPage() {
           <FilterChip selected={activeCategory === "all"} onClick={() => setActiveCategory("all")}>
             All
           </FilterChip>
-          {canApproveDocuments && (
+          {/* WT-633 asks for Published / Pending / Rejected as first-class tabs.
+              Pending is no longer gated on `canApproveDocuments`: a member who uploaded a
+              document waiting on review could not see their own queue, and the count they see is
+              already only what the API returned to them. */}
+          <FilterChip
+            selected={activeCategory === DOCUMENT_TAB.PUBLISHED}
+            onClick={() => setActiveCategory(DOCUMENT_TAB.PUBLISHED)}
+          >
+            Published
+          </FilterChip>
+          <FilterChip
+            selected={activeCategory === DOCUMENT_TAB.PENDING}
+            onClick={() => setActiveCategory(DOCUMENT_TAB.PENDING)}
+            badge={pendingCount > 0 ? pendingCount : undefined}
+          >
+            Pending Approval
+          </FilterChip>
+          {rejectedCount > 0 && (
             <FilterChip
-              selected={activeCategory === "pending"}
-              onClick={() => setActiveCategory("pending")}
-              badge={pendingCount > 0 ? pendingCount : undefined}
+              selected={activeCategory === DOCUMENT_TAB.REJECTED}
+              onClick={() => setActiveCategory(DOCUMENT_TAB.REJECTED)}
+              badge={rejectedCount}
             >
-              Pending Approval
+              Rejected
             </FilterChip>
           )}
           <FilterChip selected={activeCategory === "ai"} onClick={() => setActiveCategory("ai")}>
@@ -392,8 +488,8 @@ export default function WorkspaceDocumentsPage() {
           </FilterChip>
           {archivedCount > 0 && (
             <FilterChip
-              selected={activeCategory === "archived"}
-              onClick={() => setActiveCategory("archived")}
+              selected={activeCategory === DOCUMENT_TAB.ARCHIVED}
+              onClick={() => setActiveCategory(DOCUMENT_TAB.ARCHIVED)}
               badge={archivedCount}
             >
               Archived
@@ -584,7 +680,16 @@ export default function WorkspaceDocumentsPage() {
                       className="py-3.5 px-4"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {doc.status?.toLowerCase() ===
+                      {/* REJECTED HAS TO COME FIRST. Rejecting leaves `isAiAllowed` alone and
+                          sets ingestion to `skipped`, which matched none of the branches below —
+                          so a rejected document fell all the way through and was labelled
+                          "AI Context", the one thing it certainly is not. */}
+                      {documentMatchesTab(doc, DOCUMENT_TAB.REJECTED) ? (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
+                          <Warning className="h-3 w-3" />
+                          <span>Rejected</span>
+                        </span>
+                      ) : doc.status?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
                       doc.status?.toLowerCase().includes("pending") ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
@@ -702,7 +807,14 @@ export default function WorkspaceDocumentsPage() {
                 <div className="p-2 rounded-lg bg-surface-2 group-hover:bg-surface-3 transition-colors">
                   {getFileIcon(doc.fileExtension)}
                 </div>
-                {!doc.isAiAllowed ? (
+                {documentMatchesTab(doc, DOCUMENT_TAB.REJECTED) ? (
+                  <span
+                    className="p-1 text-destructive bg-destructive/10 rounded-full"
+                    title="Rejected"
+                  >
+                    <Warning className="h-3.5 w-3.5" />
+                  </span>
+                ) : !doc.isAiAllowed ? (
                   <span
                     className="p-1 text-ink-muted bg-surface-3 rounded-full"
                     title="Administrative"
@@ -904,6 +1016,7 @@ export default function WorkspaceDocumentsPage() {
                 <Input
                   type="text"
                   placeholder="e.g. Legal Glossaries 2026"
+                  maxLength={MAX_DOCUMENT_NAME_LENGTH}
                   className="h-10 border-hairline focus:ring-1 focus:ring-primary text-xs rounded-xl px-3"
                   {...register("name")}
                   disabled={isSubmitting}
@@ -991,6 +1104,15 @@ export default function WorkspaceDocumentsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* WT-666 — the same file, again. Nothing has been stored at this point; the dialog asks
+          and the answer is sent back as `duplicateStrategy` on a retry. */}
+      <DocumentDuplicateDialog
+        conflict={duplicateConflict}
+        isSubmitting={uploadMutation.isPending}
+        onClose={() => setDuplicateConflict(null)}
+        onChoose={handleDuplicateChoice}
+      />
 
       {/* Delete Confirmation Dialog */}
       <DocumentDeleteDialog
