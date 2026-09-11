@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   SUPPORTED_LANGUAGES,
   formatLanguageRoute,
+  formatLanguageRouteShort,
   getLanguageCode,
   getLanguageName,
   isLanguageAllowedByPolicy,
@@ -89,6 +90,20 @@ test("the language route reads as names, with the source not repeated", () => {
 test("a single-language route is just that language", () => {
   assert.equal(formatLanguageRoute("vi-VN", ["vi-VN"]), "Vietnamese");
   assert.equal(formatLanguageRoute("vi-VN", []), "Vietnamese");
+});
+
+test("the short route reads as codes, with the source not repeated", () => {
+  // The calendar's Agenda row: "EN → VI", never "English → Vietnamese" in a 12px meta line.
+  assert.equal(formatLanguageRouteShort("en-US", ["en-US", "vi-VN"]), "EN → VI");
+  assert.equal(formatLanguageRouteShort("vi-VN", ["vi-VN", "en-US", "ja-JP"]), "VI → EN, JA");
+  // Deduped on the language, not the tag — the same rule the long form applies.
+  assert.equal(formatLanguageRouteShort("en", ["en-GB", "vi"]), "EN → VI");
+  assert.equal(formatLanguageRouteShort("vi-VN", ["vi-VN"]), "VI");
+});
+
+test("the short route never opens on a bare arrow", () => {
+  assert.equal(formatLanguageRouteShort(undefined, ["vi-VN"]), "Auto → VI");
+  assert.equal(formatLanguageRouteShort(undefined, []), "Auto");
 });
 
 test("an empty workspace policy means unrestricted, not forbidden", () => {

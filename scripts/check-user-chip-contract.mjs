@@ -117,7 +117,11 @@ const SURFACES = [
   ],
   [
     "src/app/(app)/[workspaceSlug]/schedules/page.tsx",
-    "the schedule card and its detail pane",
+    "the schedule's week card and past-meeting dialog",
+  ],
+  [
+    "src/components/schedules/agenda-row.tsx",
+    "the agenda row's \"Invited by\" host — also the month view's day pane",
   ],
   [
     "src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx",
