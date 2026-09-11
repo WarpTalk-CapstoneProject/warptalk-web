@@ -348,6 +348,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
    * The popup cannot do it. `activeRoomId` lives in sessionStorage, which is per-window, so a room
    * the popup opened would be invisible here - and the meeting session that carries LiveKit, the
    * dub and the bridge legs only mounts for THIS window's active room.
+   *
+   * Flow 1 arrives here as well. The popup's own Start translation asks for its room to be made
+   * active before it opens a translation session (startBridgeTranslation), so a scheduled room
+   * nobody opened in this window is carried here like any other rather than translating nothing.
    */
   const openMeeting = useActiveMeetingStore((state) => state.openMeeting);
   useEffect(() => {
