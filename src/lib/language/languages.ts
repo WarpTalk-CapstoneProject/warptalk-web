@@ -34,7 +34,16 @@ export type LanguageScope =
   | "meeting"
   /** Selectable when recording a voice profile. */
   | "voiceProfile"
-  /** Has a provider voice library worth browsing. */
+  /**
+   * Has a provider voice library worth browsing.
+   *
+   * Every meeting language, since warptalk-ai warms the catalogue for every language Cartesia
+   * publishes (ai#163). Before that the catalogue was a by-product of dubbing — filled for one
+   * language during a meeting, capped at six voices, gone after six hours — so only the two
+   * languages with meetings in them ever had anything, and this scope was drawn around that
+   * limitation rather than around what exists. A workspace's own policy narrows it further; see
+   * voice/library-languages.ts.
+   */
   | "voiceCatalog"
   /** Selectable as a glossary pair language. */
   | "glossary"
@@ -73,28 +82,28 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "ja-JP",
     name: "Japanese",
     region: "JP",
-    scopes: ["meeting", "voiceProfile", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "ko",
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in

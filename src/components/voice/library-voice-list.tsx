@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,9 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
 import { describeSavedVoice } from "@/lib/voice/voice-preference";
 import { isLibraryVoicePointer } from "@/lib/voice/profile-status";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName, type SupportedLanguage } from "@/lib/language/languages";
+import { LanguageFlag } from "@/components/voice/language-flag";
+import { VoiceOrb } from "@/components/voice/voice-orb";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
@@ -33,8 +36,6 @@ import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 function bareLanguage(language: string) {
   return language.split(/[-_]/)[0]?.toLowerCase() ?? language;
 }
-
-const LANGUAGES = languagesInScope("voiceCatalog");
 
 /**
  * The stand-in voice this person picked for speakers who chose none, for one language.
@@ -80,15 +81,29 @@ function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
 export function LibraryVoiceList({
   profiles,
   language,
+  languages,
+  policyReady,
   onLanguageChange,
   search,
 }: {
   profiles: VoiceProfileDto[];
   language: string;
+  /**
+   * The languages this workspace may browse — voice-library scope, narrowed by the workspace's
+   * allowed target languages. See voice/library-languages.ts.
+   */
+  languages: readonly SupportedLanguage[];
+  /**
+   * Whether the workspace policy has arrived. Until it has, nothing is fetched: an unknown policy
+   * reads as "unrestricted", so fetching early would pull a catalogue the workspace may not allow
+   * and only then snap away from it — which is precisely the fetch this is meant to prevent.
+   */
+  policyReady: boolean;
   onLanguageChange: (language: string) => void;
   search: string;
 }) {
-  const catalogQuery = useVoiceCatalog(language);
+  const catalogQuery = useVoiceCatalog(language, policyReady);
+  const current = languages.find((item) => item.code === language);
   const setPreferred = useSetPreferredVoice();
   const currentVoiceId = usePreferredVoiceId(profiles, language);
 
@@ -122,22 +137,34 @@ export function LibraryVoiceList({
       actions={
         <Select value={language} onValueChange={(value) => onLanguageChange(value ?? language)}>
           <SelectTrigger
-            className="h-[28px] w-[152px] rounded-full text-[12.5px]"
+            className="h-[30px] w-[168px] rounded-full text-[12.5px]"
             aria-label="Language for the voice library"
           >
-            <SelectValue />
+            {/* A bare <SelectValue /> renders the raw VALUE, so the closed control read "en" while
+                the open list said "English". Rendered explicitly so the two always agree. */}
+            <SelectValue>
+              {() => (
+                <span className="flex min-w-0 items-center gap-2">
+                  <LanguageFlag region={current?.region} />
+                  <span className="truncate">{current?.name ?? getLanguageName(language)}</span>
+                </span>
+              )}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {LANGUAGES.map((item) => (
+            {languages.map((item) => (
               <SelectItem key={item.code} value={item.code}>
-                {item.name}
+                <span className="flex items-center gap-2">
+                  <LanguageFlag region={item.region} />
+                  {item.name}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       }
     >
-      {catalogQuery.isLoading ? (
+      {!policyReady || catalogQuery.isLoading ? (
         <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">Loading voices…</p>
       ) : voices.length === 0 ? (
         // A cold catalog is the normal state before the AI worker's first synthesis for this
@@ -146,8 +173,12 @@ export function LibraryVoiceList({
           <PagePlaceholder
             kind="voice-profiles"
             className="min-h-[240px]"
-            title={`No voices for ${getLanguageName(language)} yet`}
-            description="They appear after the first translation into this language in a meeting."
+            title={`No library voices for ${getLanguageName(language)}`}
+            // The old sentence — "they appear after the first translation into this language in a
+            // meeting" — described the lazy cache the catalogue used to be. It is warmed for every
+            // language now, so empty means Cartesia publishes none here, or the worker has only
+            // just restarted and has not walked the library yet.
+            description="Cartesia publishes no voices in this language, or the library is still loading after a restart."
           />
         </div>
       ) : filtered.length === 0 ? (
@@ -155,11 +186,27 @@ export function LibraryVoiceList({
           No library voice matches that search.
         </p>
       ) : (
-        filtered.map((voice) => {
+        // BOUNDED, WITH THE SCROLLBAR HIDDEN — and a fade, because hiding the bar removes the only
+        // sign that the list goes on. Four hundred English voices laid out in full pushed everything
+        // below the library off the page; bounded, the list stays one module among the others and
+        // still scrolls by wheel, trackpad and touch.
+        //
+        // The fade is a mask on the scroller itself rather than an overlay, so nothing sits on top
+        // of the rows to intercept a click on the last one.
+        <div
+          className={cn(
+            "max-h-[420px] overflow-y-auto overscroll-contain",
+            "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            filtered.length > 7 &&
+              "[mask-image:linear-gradient(to_bottom,black_calc(100%-48px),transparent)]",
+          )}
+        >
+        {filtered.map((voice) => {
           const active = voice.id === currentVoiceId;
           return (
             <VoiceLine
               key={voice.id}
+              avatar={<VoiceOrb voiceId={voice.id} />}
               tone="library"
               name={voice.name}
               badge={active ? <VoiceChip tone="active">Stand-in</VoiceChip> : undefined}
@@ -181,7 +228,8 @@ export function LibraryVoiceList({
               }
             />
           );
-        })
+        })}
+        </div>
       )}
     </WorkspaceListModule>
   );

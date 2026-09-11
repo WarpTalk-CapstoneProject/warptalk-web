@@ -26,6 +26,9 @@ import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
 import { VoiceChip, VoiceLine } from "@/components/voice/voice-line";
+import { cn } from "@/lib/utils";
+import { LanguageFlag } from "@/components/voice/language-flag";
+import { VoiceOrb } from "@/components/voice/voice-orb";
 import {
   WorkspaceFilterPill,
   WorkspaceListModule,
@@ -43,13 +46,26 @@ const PROFILES = [
   { name: "Old demo take", language: "English", tone: "failed", status: "Couldn't clone", detail: "", dubbing: false },
 ] as const;
 
-const LIBRARY = [
-  { name: "Ava", gender: "Female", listening: true },
-  { name: "Brooke", gender: "Female", listening: false },
-  { name: "Daniel", gender: "Male", listening: false },
-  { name: "Linh", gender: "Female", listening: false },
-  { name: "Minh", gender: "Male", listening: false },
+// Thirty, not five: the library is bounded to a scroller with its bar hidden, and five rows
+// never reach the bound — the preview would show a list that looks finished and prove nothing
+// about the fade or the scroll. English has ~419 voices in production.
+const LIBRARY_NAMES = [
+  "Skylar - Friendly Guide", "Daniel - Modern Assistant", "Gemma - Decisive Agent",
+  "Parker - Supportive Pal", "Archie - Approachable Mate", "Jacqueline - Reassuring Agent",
+  "Clive - Measured Expert", "Ella - Caring Scout", "Lien - Gentle Coordinator",
+  "Linh - Soft Presence", "Minh - Conversational Partner", "Xia - Calm Companion",
+  "Ava - Bright Narrator", "Brooke - Big Sister", "Owen - Steady Host", "Maya - Warm Teacher",
+  "Theo - Dry Wit", "Nora - Clear Presenter", "Leo - Energetic Coach", "Iris - Soft Reader",
+  "Hugo - Deep Baritone", "Zara - Crisp Newsreader", "Felix - Playful Friend",
+  "Ruby - Confident Lead", "Sam - Neutral Voice", "Lena - Patient Guide", "Kai - Laid-back",
+  "Mira - Poised Anchor", "Jude - Quiet Thinker", "Tess - Upbeat Helper",
 ] as const;
+const LIBRARY = LIBRARY_NAMES.map((name, index) => ({
+  id: `preview-voice-${index}`,
+  name,
+  gender: index % 2 ? "Masculine" : "Feminine",
+  listening: index === 0,
+}));
 
 /**
  * The three widths the main region actually takes: full page, one meeting side panel open, both
@@ -252,14 +268,25 @@ function Frame({ width }: { width: string }) {
               title="Library voices"
               count={LIBRARY.length}
               actions={
-                <Button variant="outline" className="h-[28px] w-[152px] justify-between rounded-full px-3 text-[12.5px]">
-                  Vietnamese
+                <Button variant="outline" className="h-[30px] w-[168px] justify-between gap-2 rounded-full px-3 text-[12.5px]">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <LanguageFlag region="US" />
+                    <span className="truncate">English</span>
+                  </span>
                 </Button>
               }
             >
+              <div
+                className={cn(
+                  "max-h-[420px] overflow-y-auto overscroll-contain",
+                  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+                  "[mask-image:linear-gradient(to_bottom,black_calc(100%-48px),transparent)]",
+                )}
+              >
               {LIBRARY.map((voice) => (
                 <VoiceLine
-                  key={voice.name}
+                  key={voice.id}
+                  avatar={<VoiceOrb voiceId={voice.id} />}
                   tone="library"
                   name={voice.name}
                   badge={voice.listening ? <VoiceChip tone="active">Stand-in</VoiceChip> : undefined}
@@ -277,6 +304,7 @@ function Frame({ width }: { width: string }) {
                   }
                 />
               ))}
+              </div>
             </WorkspaceListModule>
           </WorkspaceSplit>
         </WorkspacePage>
