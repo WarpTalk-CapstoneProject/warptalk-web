@@ -41,11 +41,16 @@ import {
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { liveMeetingPath, schedulesPath } from "@/lib/workspace/workspace-routes";
+import {
+  liveMeetingPath,
+  schedulesPath,
+  withScheduleFocus,
+} from "@/lib/workspace/workspace-routes";
 import { markInstantMeetingStarted } from "@/lib/meeting/instant-meeting-handoff";
 import {
   type DailyRecurrenceDraft,
   detectTimeZone,
+  firstOccurrenceDate,
 } from "@/lib/meeting/daily-recurrence";
 import { describeRecurrenceSentence } from "@/lib/meeting/recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
@@ -121,6 +126,10 @@ export function CreateRoomDialog() {
 
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [createdRoomCode, setCreatedRoomCode] = useState<string | null>(null);
+  // The day the booking lands on, for the success screen's "View in calendar" — the one-off start
+  // time the host picked, or a series' first occurrence. Null for an instant meeting whose start
+  // was refused: it was booked for no particular time, so the link names only the room.
+  const [createdRoomAt, setCreatedRoomAt] = useState<Date | null>(null);
   // WT-270: the server's own explanation for a refused submit, kept on screen. A toast alone
   // was not enough — it expires, and the dialog it refers to stays open behind it.
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -261,6 +270,7 @@ export function CreateRoomDialog() {
         setIsExpanded(false);
         setCreatedRoomId(null);
         setCreatedRoomCode(null);
+        setCreatedRoomAt(null);
         setSubmitError(null);
         setInitializedEditRoomId(null);
         setInitializedInvitationsRoomId(null);
@@ -390,6 +400,13 @@ export function CreateRoomDialog() {
           });
           setCreatedRoomId(result.firstOccurrence.id);
           setCreatedRoomCode(result.firstOccurrence.translationRoomCode);
+          // The server's own first occurrence when it says one; otherwise the same "today if the
+          // hour has not passed, else tomorrow" rule the server applies (see firstOccurrenceDate).
+          setCreatedRoomAt(
+            result.firstOccurrence.scheduledAt
+              ? new Date(result.firstOccurrence.scheduledAt)
+              : firstOccurrenceDate(dailyRecurrence.time, new Date()),
+          );
           toast.success(
             `${describeRecurrenceSentence(result.series)} at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
           );
@@ -442,6 +459,8 @@ export function CreateRoomDialog() {
 
         setCreatedRoomId(room.id);
         setCreatedRoomCode(room.translationRoomCode);
+        // Not instant, so `scheduledAt` is set — the time the host picked is the day to open.
+        setCreatedRoomAt(scheduledAt);
         toast.success("Room created successfully. Invites sent!");
       }
     } catch (error) {
@@ -756,11 +775,18 @@ export function CreateRoomDialog() {
                       on the day it was meant for. Still a link the host clicks, never a push:
                       this screen exists for the join link above it, and redirecting out from
                       under that would take the link away at the moment it is wanted — the same
-                      reason Google Meet's "meeting for later" hands you a link and stays put. */}
+                      reason Google Meet's "meeting for later" hands you a link and stays put.
+                      The link names the booked day and the room, so the calendar opens on that
+                      month and points at the new row instead of opening on today and leaving the
+                      host to page forward to Thursday. The calendar reads both once and then
+                      clears them from its URL, so a reload does not flash the row again. */}
                   <Link
                     href={
                       activeWorkspaceSlug
-                        ? schedulesPath(activeWorkspaceSlug)
+                        ? withScheduleFocus(schedulesPath(activeWorkspaceSlug), {
+                            date: createdRoomAt,
+                            roomId: createdRoomId,
+                          })
                         : `/room/${createdRoomId}`
                     }
                     onClick={() => handleOpenChange(false)}
