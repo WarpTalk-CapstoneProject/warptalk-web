@@ -8,6 +8,7 @@ import {
   Mic,
   MicOff,
   Play,
+  SlidersHorizontal,
   Square,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export function ExternalBridgeWidget({
   onToggleMicrophone,
   onStartTranslation,
   onStopTranslation,
+  onOpenDeviceSetup,
   onExit,
 }: {
   room: TranslationRoomDto;
@@ -40,8 +42,25 @@ export function ExternalBridgeWidget({
   onToggleMicrophone: () => void;
   onStartTranslation: () => void;
   onStopTranslation: () => void;
+  /**
+   * WT-578: reopen the device setup wizard.
+   *
+   * Always offered, not only while something is broken. Virtual audio devices are taken away by
+   * reboots, app updates and other programs grabbing the driver, and the meeting is already
+   * running when that happens — so the repair has to be reachable from a healthy-looking widget.
+   */
+  onOpenDeviceSetup: () => void;
   onExit: (action: "leave" | "end") => void;
 }) {
+  /**
+   * Translation cannot start yet because the outbound device is missing.
+   *
+   * Only while translation is NOT running: a device that disappears mid-call is a repair, and
+   * turning the live Stop button into "Set up audio devices" would take away the one control the
+   * user needs to stop a session that is already publishing.
+   */
+  const needsSetup = !translationStarted && !bridgeOutboundReady;
+
   async function openGoogleMeet() {
     const openedInBrowser = await openInSystemBrowser("https://meet.google.com/new");
     if (!openedInBrowser) window.open("https://meet.google.com/new", "_blank", "noopener,noreferrer");
@@ -94,6 +113,20 @@ export function ExternalBridgeWidget({
             detail={bridgeInboundLoopback ? "Meet window capture" : "Virtual speaker"}
             ready={bridgeInboundLoopback || bridgeOutboundReady}
           />
+
+          {/*
+            WT-578. Under the three rows that report the devices, because this is what a reader
+            does about what they just read. Those rows have always been able to say "not ready" and
+            there was nothing on this widget — or anywhere else a user can reach — that acted on it.
+          */}
+          <button
+            type="button"
+            onClick={onOpenDeviceSetup}
+            className="flex h-7 w-full items-center justify-center gap-1.5 rounded-md border border-border/70 text-[11px] font-medium text-ink-muted transition hover:bg-surface-3 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <SlidersHorizontal className="size-3" aria-hidden="true" />
+            Device settings
+          </button>
         </div>
 
         {meetingError ? (
@@ -107,26 +140,47 @@ export function ExternalBridgeWidget({
           <div className="flex items-center gap-2 text-xs font-semibold">
             {translationStarted ? (
               <CircleCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
+            ) : needsSetup ? (
+              <AlertTriangle className="size-3.5 text-amber-600" aria-hidden="true" />
             ) : (
               <span className="size-3.5 rounded-full border border-ink-muted/40" />
             )}
-            {translationStarted ? "Translation is live" : "Translation is ready"}
+            {translationStarted
+              ? "Translation is live"
+              : needsSetup
+                ? "Audio devices not set up"
+                : "Translation is ready"}
           </div>
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
             {translationStarted
               ? "Speak into your real microphone. The translated voice is sent to Meet."
-              : "Create or join the call in Google Meet, then start WarpTalk here."}
+              : needsSetup
+                ? "The virtual microphone Meet listens to is not installed yet."
+                : "Create or join the call in Google Meet, then start WarpTalk here."}
           </p>
+          {/*
+            WT-578. This was one button that disabled itself when the outbound device was missing,
+            and a greyed-out "Start translation" is the whole bug in miniature: it names the thing
+            the user came to do, refuses to do it, and says nothing about what would change that.
+            With no device the button's job is not to start translation, it is to go and get the
+            device — so it becomes that button rather than a disabled version of another one.
+          */}
           <button
             type="button"
-            disabled={isConnecting || (!translationStarted && !bridgeOutboundReady)}
+            disabled={isConnecting && !needsSetup}
             onClick={() => {
-              if (translationStarted) onStopTranslation();
+              if (needsSetup) onOpenDeviceSetup();
+              else if (translationStarted) onStopTranslation();
               else onStartTranslation();
             }}
             className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[11px] font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
-            {translationStarted ? (
+            {needsSetup ? (
+              <>
+                <SlidersHorizontal className="size-3" aria-hidden="true" />
+                Set up audio devices
+              </>
+            ) : translationStarted ? (
               <>
                 <Square className="size-3" fill="currentColor" aria-hidden="true" />
                 Stop translation

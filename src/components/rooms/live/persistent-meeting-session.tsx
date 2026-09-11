@@ -119,7 +119,9 @@ import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
 import { deviceInboundSource, openLoopbackInboundSource } from "@/lib/audio/bridge-inbound-source";
 import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
 import { BrowserCaptureConsentModal } from "./browser-capture-consent-modal";
+import { BridgeSetupDialog } from "@/components/rooms/bridge/bridge-setup-dialog";
 import {
+  closeTranscriptWindow,
   listWindowsLoopbackSources,
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
@@ -330,6 +332,16 @@ export function PersistentMeetingSession({
     sourceId: string;
   } | null>(null);
   const transcriptPopupOpenedRef = useRef<string | null>(null);
+  /**
+   * WT-578. The device setup wizard, which until now had no caller outside a dev preview page.
+   *
+   * Opened once per room when the outbound device is missing, and reopenable by hand from the
+   * bridge widget at any time. Once per room and not once per failed read: the device check reruns
+   * on every remount, and a wizard that reappears after the user closed it is a wizard they learn
+   * to dismiss without reading.
+   */
+  const [bridgeSetupOpen, setBridgeSetupOpen] = useState(false);
+  const bridgeSetupPromptedRef = useRef<string | null>(null);
 
   // A bridge that is not carrying is indistinguishable from a bridge that is, from inside
   // WarpTalk: the transcript still scrolls and the meeting still looks healthy while the far
@@ -338,13 +350,20 @@ export function PersistentMeetingSession({
     toast.error("The far side is not hearing the translation.", { description: message });
   }, []);
 
-  // The floating transcript window is NOT opened here any more.
+  // TWO OPENERS, AND WHAT EACH ONE IS FOR.
   //
-  // It used to be, and that tied it to this subtree: the window appeared because the user had the
-  // room open in WarpTalk, and vanished when they navigated away - during a meeting they are
-  // watching in Google Meet, which is the one time they are guaranteed not to be looking at this
-  // page. `useBridgeTrigger` in the app shell owns it now, and opens it when the meeting is near
-  // and a Meet window is on screen. One owner, or two writers fight over one window.
+  // `useBridgeTrigger` in the app shell opens the floating window when a meeting is near and a
+  // Meet window is on screen, and closes it again when that stops being true. That is the case
+  // where the user never opens the room in WarpTalk at all.
+  //
+  // This one covers the case the trigger cannot see: a user who opens a bridge room by hand,
+  // outside the schedule window or with no Meet window detected yet. The comment that used to sit
+  // here said the window was "NOT opened here any more" while the effect below opened it — the two
+  // halves of a reconciliation that only landed in one of them.
+  //
+  // The trigger closes only windows the trigger opened, so an opener here without a matching close
+  // leaves an always-on-top window over the user's desktop with nobody left to shut it. Hence the
+  // cleanup: what this opened, this closes.
 
   useEffect(() => {
     // Not cleared on the way out: the value is only ever READ through `isBridgeRoom` below, so
@@ -373,6 +392,13 @@ export function PersistentMeetingSession({
             // not exist for their machine, sending them off to fix the wrong thing.
             description: `${currentBridgeDeviceLabels().outboundSink} is not installed, so the far side will not hear the translation.`,
           });
+          // WT-578: and then the wizard, which is the part that was missing. The toast alone named
+          // a device and vanished; it never said where to get one, and the only screen that does
+          // was reachable from nowhere in the product.
+          if (bridgeSetupPromptedRef.current !== roomId) {
+            bridgeSetupPromptedRef.current = roomId;
+            setBridgeSetupOpen(true);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -384,12 +410,22 @@ export function PersistentMeetingSession({
     return () => {
       cancelled = true;
     };
-  }, [isBridgeRoom]);
+    // `roomId` is here because the wizard prompt above is remembered per room: a device that is
+    // missing is missing for this meeting and for the next one, and the reader of that ref has to
+    // be re-evaluated when the room changes or the second meeting gets the toast with no wizard.
+  }, [isBridgeRoom, roomId]);
 
   useEffect(() => {
     if (!isBridgeRoom || transcriptPopupOpenedRef.current === roomId) return;
     transcriptPopupOpenedRef.current = roomId;
     void openDesktopTranscriptWindow(roomId);
+
+    return () => {
+      // Only what this opened. The ref is cleared first so a remount for the same room opens it
+      // again rather than deciding it is already open and leaving the user with nothing.
+      transcriptPopupOpenedRef.current = null;
+      void closeTranscriptWindow();
+    };
   }, [isBridgeRoom, roomId]);
   // The LiveKit disconnect is only half of what an abandoned tab costs. This query polls every
   // 3s — 20 requests a minute against a gateway that rate-limits an IP at 100/min and answers
@@ -3141,6 +3177,7 @@ export function PersistentMeetingSession({
             onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
             onStartTranslation={() => void handleStartWarptalk()}
             onStopTranslation={handleStopWarptalk}
+            onOpenDeviceSetup={() => setBridgeSetupOpen(true)}
             onExit={handleExit}
           />
         ) : compact ? (
@@ -3663,6 +3700,26 @@ export function PersistentMeetingSession({
           }
         }}
       />
+
+      {/*
+        WT-578. The device wizard, opened from the widget at any time and once by itself when the
+        outbound device is missing. Rendered beside the other modals for the same reason they are:
+        opening it is a render off a state flag, not a side effect fired from inside the device
+        check, which reruns whenever its dependencies move.
+      */}
+      {isBridgeRoom ? (
+        <BridgeSetupDialog
+          open={bridgeSetupOpen}
+          onOpenChange={setBridgeSetupOpen}
+          translationStarted={translationStarted}
+          onReady={() => {
+            // Finishing the wizard before translation starts IS the start: the user has just
+            // confirmed every leg works, and sending them back to press one more button is how a
+            // setup flow ends in a room that still is not translating.
+            if (!translationStarted) void handleStartWarptalk();
+          }}
+        />
+      ) : null}
       </MeetingIdentityProvider>
     </div>
   );
