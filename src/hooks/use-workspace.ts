@@ -29,6 +29,7 @@ export const WORKSPACE_KEYS = {
   documents: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "documents", workspaceId, { page, pageSize, search }] as const,
   documentDetail: (workspaceId: string, docId: string) => ["workspaces", "document", workspaceId, docId] as const,
+  documentHistory: (workspaceId: string, docId: string) => ["workspaces", "document-history", workspaceId, docId] as const,
   documentPolicies: (workspaceId: string, docId: string, page: number, pageSize: number) =>
     ["workspaces", "document-policies", workspaceId, docId, { page, pageSize }] as const,
   glossaries: (workspaceId: string) => ["glossaries", "list", workspaceId] as const,
@@ -533,15 +534,50 @@ export function usePatchWorkspaceDocumentMetadata(workspaceId: string, docId: st
   });
 }
 
+/**
+ * @param reason Required by the API when `approve` is false. WT-633: the uploader is shown this
+ * sentence, and a rejection that does not carry one is the defect that ticket describes.
+ */
 export function useApproveWorkspaceDocument(workspaceId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ docId, approve }: { docId: string; approve: boolean }) =>
-      WorkspaceService.approveDocument(workspaceId, docId, approve),
+    mutationFn: ({ docId, approve, reason }: { docId: string; approve: boolean; reason?: string }) =>
+      WorkspaceService.approveDocument(workspaceId, docId, approve, reason),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, variables.docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentHistory(workspaceId, variables.docId) });
       queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
     },
+  });
+}
+
+/**
+ * Replaces a rejected document's file, keeping its id and its history. WT-633.
+ *
+ * Invalidates the HISTORY as well as the document: the whole point of the revision route is that
+ * it appends to the trail, and a stale history panel beside a freshly-resubmitted document is
+ * exactly the "no trace of what happened" the ticket reports.
+ */
+export function useReuploadWorkspaceDocument(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (request: { file: File; name?: string; note?: string }) =>
+      WorkspaceService.reuploadDocument(workspaceId, docId, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentHistory(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
+    },
+  });
+}
+
+/** A document's approval and feedback history, newest first. WT-633. */
+export function useWorkspaceDocumentHistory(workspaceId: string, docId: string, enabled = true) {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.documentHistory(workspaceId, docId),
+    queryFn: () => WorkspaceService.getDocumentHistory(workspaceId, docId),
+    enabled: Boolean(workspaceId && docId) && enabled,
+    staleTime: 10000,
   });
 }
 

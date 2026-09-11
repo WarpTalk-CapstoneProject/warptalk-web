@@ -25,11 +25,15 @@ import {
  * open/close must not be called on every render.
  *
  * OWNERSHIP
- *   This hook is the only caller of openTranscriptWindow/closeTranscriptWindow. That is the point.
- *   The old arrangement opened the window from inside the meeting-session component, so the window
- *   lived and died with a React subtree on a route the user is not even looking at during an
- *   external-bridge meeting - they are in Google Meet. One owner, mounted at the shell, is what
- *   makes the window able to outlive any particular page.
+ *   This hook owns the window for a meeting NOBODY OPENED IN WARPTALK - the case it exists for.
+ *   Mounted at the shell, it outlives any particular page, so the window survives a user who is
+ *   watching Google Meet and never touches the app.
+ *
+ *   It is not the only opener, and the comment here claimed it was for longer than it was true.
+ *   persistent-meeting-session opens the window too, for the user who opens a bridge room by hand
+ *   with no sighting and no schedule to arm this. The two coexist because each one closes only
+ *   what it opened: `openedTarget` below is this hook's record, and an unconditional close here
+ *   would shut a window this hook never raised.
  */
 
 /** How often the clock is re-read. The trigger window has minute-scale edges; this is plenty. */

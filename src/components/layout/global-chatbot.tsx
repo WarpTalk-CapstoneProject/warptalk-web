@@ -312,6 +312,15 @@ function getPageContextKey(context: AssistantPageContextDto | null) {
   ].join(":");
 }
 
+/**
+ * WT-667 — how tall the composer is allowed to get before it starts scrolling instead.
+ *
+ * Roughly six lines at `text-[13px]`. The panel it lives in is 412px tall (600px expanded), so
+ * this is the point where growing further would cost more of the conversation than it gains in
+ * draft: past six lines you are re-reading what you wrote, not reading what WarpBot said.
+ */
+const COMPOSER_MAX_HEIGHT_PX = 132;
+
 export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -334,6 +343,41 @@ export function GlobalChatbot() {
     string | null
   >(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * WT-667 — a `rows={1}` textarea is one line tall forever.
+   *
+   * Nothing here ever touched its height, so a long question scrolled INSIDE a 20px window:
+   * you could see the two lines under the caret and nothing else, with a panel of empty space
+   * sitting above it. Re-reading a question before sending it was impossible.
+   *
+   * A textarea reports the height its content wants in `scrollHeight`, but only once it is not
+   * being held to a smaller height — hence resetting to `auto` before measuring. Without that
+   * reset the box can grow and never shrink again, because a tall box reports its own height.
+   */
+  const autoSizeComposer = useCallback((element: HTMLTextAreaElement | null) => {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+  }, []);
+  /**
+   * Sizing on ATTACH as well as on change, because the widget is a popover: the textarea is
+   * unmounted while it is closed and remounts with whatever draft was left in state. An effect
+   * keyed on the text alone would not re-run for that, and the draft would come back one line
+   * tall.
+   */
+  const attachComposer = useCallback(
+    (element: HTMLTextAreaElement | null) => {
+      inputRef.current = element;
+      autoSizeComposer(element);
+    },
+    [autoSizeComposer],
+  );
+  // Every path that changes the text lands in `inputValue` — typing, picking a slash command,
+  // a question handed over from the page, the clear on send — so one effect on it covers all
+  // of them, including the shrink back to one line after a message goes out.
+  useEffect(() => {
+    autoSizeComposer(inputRef.current);
+  }, [inputValue, autoSizeComposer]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const activeWorkspaceId = useWorkspaceStore(
@@ -1780,7 +1824,11 @@ export function GlobalChatbot() {
                     onDragLeave={() => setDragDepth((depth) => Math.max(0, depth - 1))}
                     onDrop={handleDrop}
                     className={cn(
-                      "flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto rounded-[10px] transition-colors",
+                      // WT-667: the cap here has to clear the textarea's own (132px) plus a row
+                      // of context chips, or the two scrollbars fight: the box would stop growing
+                      // at 120px and the tray would scroll instead of the text. This one is for
+                      // MANY chips, not for a long message.
+                      "flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[200px] bg-transparent px-2 py-1.5 overflow-y-auto rounded-[10px] transition-colors",
                       dragDepth > 0 && "bg-primary/5 outline-dashed outline-1 outline-primary/40",
                     )}
                   >
@@ -1815,7 +1863,7 @@ export function GlobalChatbot() {
                       </span>
                     ))}
                     <textarea
-                      ref={inputRef}
+                      ref={attachComposer}
                       value={inputValue}
                       onChange={handleInput}
                       onKeyDown={handleKeyDown}
@@ -1827,7 +1875,11 @@ export function GlobalChatbot() {
                             ? "Ask with page context..."
                             : "Ask WarpBot..."
                       }
-                      className="flex-1 min-w-[120px] bg-transparent resize-none outline-none text-[13px] text-ink placeholder:text-ink-subtle self-stretch"
+                      // WT-667: `resize-none` stays — the height is computed, not dragged. The
+                      // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
+                      // state it used to be. No `self-stretch`: an explicit height is what makes
+                      // the box the size of its text, and stretching fights it.
+                      className="flex-1 min-w-[120px] bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
                       rows={1}
                     />
                   </div>
