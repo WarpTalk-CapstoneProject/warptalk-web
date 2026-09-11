@@ -423,6 +423,15 @@ export interface TranslationRoomHistoryItemDto {
   room: TranslationRoomDto;
   participants: TranslationRoomParticipantDto[];
   artifacts: TranslationRoomArtifactDto[];
+  /**
+   * The CALLER's own invitation to this room, as stored (PENDING / ACCEPTED / DECLINED).
+   *
+   * Sent only by `GET /translation-rooms/my-meetings`; the history route shares this shape and never
+   * sends it. The server omits the key when there is no invitation, so absent means "no invitation"
+   * on a current backend and "not supported" on an older one — readers treat both as no evidence.
+   * It is what lets the calendar tell an email-only invitee who never came from an attendee.
+   */
+  viewerInvitationStatus?: string | null;
 }
 
 export interface TranslationRoomHistoryResponse {

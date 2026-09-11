@@ -45,7 +45,13 @@ export type BridgeTriggerState =
 export interface TriggerMeeting {
   roomId: string;
   startsAtMs: number;
-  /** When the schedule says it ends. Absent for rooms with no end time; see the tail constant. */
+  /**
+   * When the meeting is known to end. Absent for rooms with no end time; see the tail constant.
+   *
+   * The room DTO carries no booked end, so in practice this is `endedAt`: the one end the server
+   * actually knows. It is a ceiling on the schedule, never on a translation that is running - see
+   * `selectTriggerMeeting`.
+   */
   endsAtMs?: number;
   /** From the room's stored Meet URL. Used to tell two concurrent meetings apart when it can. */
   meetCode?: string;
@@ -65,6 +71,12 @@ export interface BridgeTriggerInput {
   meetWindowVisible: boolean;
   /** The code that window's title carried, when it carried one. */
   observedMeetCode?: string;
+  /**
+   * When the sensor stopped seeing a Meet window, or null while one is on screen or none has been
+   * seen. Only the offer reads it; see OFFER_GRACE_MS.
+   */
+  meetWindowLostAtMs?: number | null;
+  /** Translation is running in THIS meeting - not merely in some meeting. */
   translationStarted: boolean;
 }
 
@@ -86,6 +98,18 @@ export const TRIGGER_LEAD_MS = 5 * 60_000;
  * anything.
  */
 export const DEFAULT_MEETING_TAIL_MS = 60 * 60_000;
+
+/**
+ * How long an offer outlives the sighting that raised it.
+ *
+ * Switching away from the Meet tab ends the sighting before Chrome's automatic picture-in-picture
+ * starts the next one, and the watcher only looks every 3 s (warptalk-desktop meet-presence.ts), so
+ * the gap is one or two polls. Following the sensor exactly closed the offer in that gap and opened
+ * it again - a second focus steal and a second notification for a call the user never left. Eight
+ * seconds covers two missed polls and a slow PiP, and is still short enough that an offer for a
+ * call that really ended does not linger.
+ */
+export const OFFER_GRACE_MS = 8_000;
 
 export const IDLE_TRIGGER: BridgeTriggerSnapshot = { state: "idle", roomId: null };
 
@@ -112,11 +136,23 @@ export function isWithinTriggerWindow(meeting: TriggerMeeting, nowMs: number): b
  *
  * Only ever one: two widgets over one browser window would be worse than the problem they solve.
  * Ties go to the meeting that starts soonest, which is the one the user is walking into.
+ *
+ * A meeting being translated wins outright, whatever the clock says. The window above is a guess
+ * at when a meeting might matter; a running translation is proof that it does. Without this, a
+ * room with no end time fell out of its window at start + DEFAULT_MEETING_TAIL_MS in the middle of
+ * the call, and the popup carrying Stop translation was closed - or, with Meet still on screen,
+ * navigated to the offer for the very call it was translating.
  */
 export function selectTriggerMeeting(
   meetings: readonly TriggerMeeting[],
   nowMs: number,
+  translatingRoomId: string | null = null,
 ): TriggerMeeting | null {
+  if (translatingRoomId) {
+    const translating = meetings.find((meeting) => meeting.roomId === translatingRoomId);
+    if (translating) return translating;
+  }
+
   const eligible = meetings.filter((meeting) => isWithinTriggerWindow(meeting, nowMs));
   if (eligible.length === 0) return null;
   return eligible.reduce((best, meeting) =>
@@ -141,6 +177,11 @@ export function nextBridgeTrigger(
   input: BridgeTriggerInput,
 ): BridgeTriggerSnapshot {
   const { meeting } = input;
+
+  // Before the window check, not after it: the schedule decides when the widget may appear, never
+  // when a translation in progress has to lose its controls.
+  if (meeting && input.translationStarted) return { state: "running", roomId: meeting.roomId };
+
   if (!meeting || !isWithinTriggerWindow(meeting, input.nowMs)) {
     /**
      * Flow 2: a call with no room behind it.
@@ -148,13 +189,14 @@ export function nextBridgeTrigger(
      * Deliberately NOT latched, unlike `ready`. A latch has to be bounded by something, and every
      * bound `ready` uses comes from the meeting - its roomId, its scheduled window. An offer has
      * neither, so a latched one would have no way to expire and would sit on screen after the call
-     * it was offering for had ended. Following the sensor directly costs a flicker when the user
-     * tabs away before accepting; it never costs a window that will not leave.
+     * it was offering for had ended.
+     *
+     * What it has instead is a short grace, which is bounded by the clock alone: it covers the gap
+     * between a Meet tab losing focus and its picture-in-picture window being seen, and nothing
+     * longer. See OFFER_GRACE_MS.
      */
-    return input.meetWindowVisible ? OFFER_TRIGGER : IDLE_TRIGGER;
+    return input.meetWindowVisible || isWithinOfferGrace(input) ? OFFER_TRIGGER : IDLE_TRIGGER;
   }
-
-  if (input.translationStarted) return { state: "running", roomId: meeting.roomId };
 
   // A code that disagrees is a different meeting, so the sighting is not this meeting's. A code
   // that is merely absent proves nothing either way, and refusing to believe the sensor without
@@ -171,7 +213,121 @@ export function nextBridgeTrigger(
   return { state: seen || latched ? "ready" : "upcoming", roomId: meeting.roomId };
 }
 
+/**
+ * Whether a Meet window that has just gone out of view still counts for the offer.
+ *
+ * `meetWindowLostAtMs` only exists after a sighting ended, so this can only ever extend an offer
+ * the sensor has already backed; it cannot raise one on its own.
+ */
+function isWithinOfferGrace(input: BridgeTriggerInput): boolean {
+  const lostAtMs = input.meetWindowLostAtMs;
+  return lostAtMs != null && input.nowMs - lostAtMs < OFFER_GRACE_MS;
+}
+
 /** Whether this state means the floating widget should be open at all. */
 export function shouldShowBridgeWidget(state: BridgeTriggerState): boolean {
   return state !== "idle";
+}
+
+/**
+ * The popup the user closed, and how far along the meeting was when they did.
+ *
+ * `target` is the hook's window target - a roomId, or the offer's stand-in - so this compares with
+ * the same string the hook opens by.
+ */
+export interface BridgeWindowDismissal {
+  target: string;
+  state: BridgeTriggerState;
+}
+
+export interface BridgeWindowLedger {
+  /** The target the trigger last opened the popup for; null while it holds nothing open. */
+  opened: string | null;
+  dismissed: BridgeWindowDismissal | null;
+}
+
+export type BridgeWindowCommand = { kind: "open"; target: string } | { kind: "close" } | null;
+
+export const EMPTY_BRIDGE_WINDOW: BridgeWindowLedger = { opened: null, dismissed: null };
+
+/**
+ * How far along a meeting is, for deciding whether a closed popup may come back by itself.
+ *
+ * `offer` and `upcoming` share a rung because neither follows from the other: they are the two
+ * flows' first states.
+ */
+const PHASE_RANK: Record<BridgeTriggerState, number> = {
+  idle: 0,
+  offer: 1,
+  upcoming: 1,
+  ready: 2,
+  running: 3,
+};
+
+/**
+ * What to do with the popup, given where the trigger now points.
+ *
+ * WHY THIS KNOWS ABOUT THE USER CLOSING IT
+ *   The desktop app used to close the popup without telling anyone, so the hook went on believing
+ *   it was open. The next open for the same target was then skipped as a no-op, and the popup was
+ *   gone until the trigger happened to point somewhere else - for a translated meeting, that is
+ *   the rest of the call.
+ *
+ * WHAT A CLOSE MEANS
+ *   "Not now", not "never". It holds for the phase the meeting was in, and the popup comes back
+ *   when the meeting moves forward: closing the 5-minute heads-up should not also hide the Start
+ *   button once the user is actually in Meet, and closing that should not hide the controls of a
+ *   translation someone then starts. Reopening in the SAME phase would be a window that will not
+ *   leave, which is exactly what a close must never produce.
+ *
+ *   A dismissal also lasts only as long as its target: once the trigger lets go of it - the call
+ *   ended, or a different meeting took over - the next time is a new time.
+ */
+export function nextBridgeWindow(
+  ledger: BridgeWindowLedger,
+  target: string | null,
+  state: BridgeTriggerState,
+): { ledger: BridgeWindowLedger; command: BridgeWindowCommand } {
+  const dismissed = ledger.dismissed?.target === target ? ledger.dismissed : null;
+
+  if (target === ledger.opened) return { ledger: { opened: ledger.opened, dismissed }, command: null };
+
+  if (target === null) return { ledger: EMPTY_BRIDGE_WINDOW, command: { kind: "close" } };
+
+  if (dismissed && PHASE_RANK[state] <= PHASE_RANK[dismissed.state]) {
+    return { ledger: { opened: ledger.opened, dismissed }, command: null };
+  }
+
+  return { ledger: { opened: target, dismissed: null }, command: { kind: "open", target } };
+}
+
+/**
+ * The user closed the popup showing `closedTarget`.
+ *
+ * Ignored unless it is the popup the trigger opened. Another opener - a bridge room the user opened
+ * by hand - owns its own window, and a dismissal recorded against it would suppress a popup the
+ * trigger never showed.
+ */
+export function bridgeWindowClosed(
+  ledger: BridgeWindowLedger,
+  closedTarget: string,
+  state: BridgeTriggerState,
+): BridgeWindowLedger {
+  if (ledger.opened === null || ledger.opened !== closedTarget) return ledger;
+  return { opened: null, dismissed: { target: closedTarget, state } };
+}
+
+/**
+ * The desktop app reopened the popup itself - from the tray, or from the notification.
+ *
+ * Adopted only when it shows what the trigger points at now, so that the trigger closes it again
+ * when the meeting lets go. A popup the trigger does not account for is left to whoever asked.
+ */
+export function bridgeWindowReopened(
+  ledger: BridgeWindowLedger,
+  reopenedTarget: string,
+  currentTarget: string | null,
+): BridgeWindowLedger {
+  if (reopenedTarget !== currentTarget) return ledger;
+  return { opened: reopenedTarget, dismissed: null };
 }

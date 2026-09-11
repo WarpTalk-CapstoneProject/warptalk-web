@@ -133,12 +133,111 @@ test("viewerAttended is three-valued: yes, no, and no evidence", () => {
   assert.equal(viewerAttended([{ userId: VIEWER, status: " CONNECTED " as never }], VIEWER), true);
 });
 
+test("invited by email only, never came, meeting over → missed, not joined", () => {
+  // The reported bug. The email route onto the timeline writes no participant row, so the roster
+  // is silent about the viewer; the invitation is what says they were expected.
+  for (const invitation of ["PENDING", "ACCEPTED", " pending "]) {
+    assert.equal(
+      resolve(
+        meeting({
+          status: "ended",
+          participants: [{ userId: "someone-else", status: "connected" }],
+          viewerInvitationStatus: invitation,
+        }),
+      ),
+      "missed",
+      `an ${invitation.trim()} invitation with no roster row is a no-show`,
+    );
+  }
+
+  assert.equal(
+    resolve(meeting({ status: "ended", participants: [], viewerInvitationStatus: "PENDING" })),
+    "missed",
+  );
+});
+
+test("a participant row always outranks the invitation", () => {
+  // Accepted and then actually came: the row is what happened, the invitation only what was asked.
+  assert.equal(
+    resolve(
+      meeting({
+        status: "ended",
+        participants: [{ userId: VIEWER, status: "left" }],
+        viewerInvitationStatus: "ACCEPTED",
+      }),
+    ),
+    "joined",
+  );
+
+  // A row the resolver cannot read stays "no evidence" — the invitation does not get to break the
+  // tie against a row that exists.
+  assert.equal(
+    resolve(
+      meeting({
+        status: "ended",
+        participants: [{ userId: VIEWER, status: "some_status_added_later" as never }],
+        viewerInvitationStatus: "PENDING",
+      }),
+    ),
+    "joined",
+  );
+
+  // And a row that says "never got in" is still missed, invitation or not.
+  assert.equal(
+    resolve(
+      meeting({
+        status: "ended",
+        participants: [{ userId: VIEWER, status: "waiting" }],
+        viewerInvitationStatus: "ACCEPTED",
+      }),
+    ),
+    "missed",
+  );
+});
+
+test("no usable invitation keeps the conservative joined", () => {
+  const ended = { status: "ended" as const, participants: [] };
+
+  // An older backend sends no field at all; a current one omits it when there is no invitation.
+  assert.equal(resolve(meeting(ended)), "joined");
+  assert.equal(resolve(meeting({ ...ended, viewerInvitationStatus: null })), "joined");
+  // DECLINED (written by nothing today) and states added later say nothing about attendance.
+  assert.equal(resolve(meeting({ ...ended, viewerInvitationStatus: "DECLINED" })), "joined");
+  assert.equal(resolve(meeting({ ...ended, viewerInvitationStatus: "EXPIRED" })), "joined");
+  // Not knowing who is looking means not knowing whether a row is theirs, and a row would win.
+  assert.equal(resolve(meeting({ ...ended, viewerInvitationStatus: "PENDING" }), null), "joined");
+});
+
+test("the invitation changes nothing before the meeting is over", () => {
+  const invited = { participants: [], viewerInvitationStatus: "PENDING" };
+
+  assert.equal(resolve(meeting({ ...invited, status: "scheduled", occursAt: at(60 * 60 * 1000) })), "upcoming");
+  assert.equal(resolve(meeting({ ...invited, status: "scheduled", occursAt: at(-5 * 60 * 1000) })), "upcoming");
+  assert.equal(resolve(meeting({ ...invited, status: "in_progress" })), "live");
+  assert.equal(resolve(meeting({ ...invited, status: "waiting" })), "live");
+});
+
+test("viewerAttended reads the invitation only when the viewer has no row", () => {
+  assert.equal(viewerAttended([], VIEWER, "PENDING"), false);
+  assert.equal(viewerAttended([], VIEWER, "accepted"), false);
+  assert.equal(viewerAttended([], VIEWER, "DECLINED"), null);
+  assert.equal(viewerAttended([], VIEWER, null), null);
+  assert.equal(viewerAttended([], VIEWER), null);
+  assert.equal(viewerAttended([], null, "PENDING"), null);
+  assert.equal(viewerAttended([{ userId: VIEWER, status: "connected" }], VIEWER, "PENDING"), true);
+});
+
 test("a cancelled meeting lands in the missed bucket, and the page still calls it Cancelled", () => {
   // Nobody attended a meeting that was called off, so "joined" would be a false claim. The
   // schedules page tests `status === "cancelled"` before it ever reads this value, which is why
   // this bucketing is invisible on screen — see stateBadgeLabel.
   assert.equal(
     resolve(meeting({ status: "cancelled", participants: [{ userId: VIEWER, status: "invited" }] })),
+    "missed",
+  );
+  // Same for somebody invited by email only — and the same on-screen label wins over it.
+  assert.equal(
+    resolve(meeting({ status: "cancelled", participants: [], viewerInvitationStatus: "PENDING" })),
     "missed",
   );
 });

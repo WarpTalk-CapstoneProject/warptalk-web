@@ -114,6 +114,10 @@ export interface DesktopBridge {
   activateRoom?: (roomId: string) => Promise<void>;
   onRoomActivated?: (callback: (roomId: string) => void) => () => void;
   closeTranscriptWindow?: () => Promise<void>;
+  /** The user closed the popup. `roomId` is what it showed; null for the offer. */
+  onTranscriptWindowClosed?: (callback: (roomId: string | null) => void) => () => void;
+  /** The desktop app reopened the popup itself, from the tray or a notification. */
+  onTranscriptWindowReopened?: (callback: (roomId: string | null) => void) => () => void;
   listWindowsLoopbackSources?: () => Promise<WindowsLoopbackSource[]>;
   onWindowsLoopbackPcmChunk?: (callback: (chunk: WindowsLoopbackPcmChunk) => void) => () => void;
   startAudioCapture?: (request?: WindowsLoopbackCaptureRequest) => Promise<WindowsLoopbackStartResult>;
@@ -301,6 +305,39 @@ export async function closeTranscriptWindow(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Told when the user closes the popup themselves.
+ *
+ * Only a close the user made: one this app asked for through closeTranscriptWindow is already
+ * known to the caller and is not echoed back. Null off the desktop shell and on a desktop build
+ * older than the event - the per-method guard, not isDesktopApp(), because an installed build can
+ * lag the web app it loads.
+ */
+export function onTranscriptWindowClosed(
+  callback: (roomId: string | null) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onTranscriptWindowClosed) return null;
+  try {
+    return bridge.onTranscriptWindowClosed(callback);
+  } catch {
+    return null;
+  }
+}
+
+/** Told when the desktop app brings the popup back on its own - the tray item, a notification. */
+export function onTranscriptWindowReopened(
+  callback: (roomId: string | null) => void,
+): (() => void) | null {
+  const bridge = getDesktopBridge();
+  if (!bridge?.onTranscriptWindowReopened) return null;
+  try {
+    return bridge.onTranscriptWindowReopened(callback);
+  } catch {
+    return null;
   }
 }
 

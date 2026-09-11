@@ -1,20 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   closeTranscriptWindow,
+  onTranscriptWindowClosed,
+  onTranscriptWindowReopened,
   openTranscriptWindow,
   watchMeetPresence,
   type MeetPresence,
 } from "@/lib/desktop/bridge";
 import {
+  EMPTY_BRIDGE_WINDOW,
   IDLE_TRIGGER,
+  OFFER_GRACE_MS,
+  bridgeWindowClosed,
+  bridgeWindowReopened,
   nextBridgeTrigger,
+  nextBridgeWindow,
   selectTriggerMeeting,
   type BridgeTriggerSnapshot,
+  type BridgeTriggerState,
+  type BridgeWindowLedger,
   type TriggerMeeting,
 } from "@/lib/meeting/bridge-trigger";
+import type { MeetSensorReading } from "@/lib/meeting/meeting-session-lifecycle";
 
 /**
  * The impure half of the bridge trigger: arms the sensor, keeps a clock, opens and closes the
@@ -32,7 +42,7 @@ import {
  *   It is not the only opener, and the comment here claimed it was for longer than it was true.
  *   persistent-meeting-session opens the window too, for the user who opens a bridge room by hand
  *   with no sighting and no schedule to arm this. The two coexist because each one closes only
- *   what it opened: `openedTarget` below is this hook's record, and an unconditional close here
+ *   what it opened: `windowLedger` below is this hook's record, and an unconditional close here
  *   would shut a window this hook never raised.
  */
 
@@ -41,6 +51,9 @@ const TICK_MS = 15_000;
 
 /** Stands in for a roomId in the one state that has none. */
 const OFFER_TARGET = "__offer__";
+
+/** The desktop app names the popup's room, or null for the offer; the hook keys on one string. */
+const targetFor = (roomId: string | null): string => roomId ?? OFFER_TARGET;
 
 export interface UseBridgeTriggerOptions {
   /**
@@ -51,15 +64,40 @@ export interface UseBridgeTriggerOptions {
    * to catch. It used to gate the sensor; see the arming comment below for why it no longer can.
    */
   meetings: readonly TriggerMeeting[];
-  translationStarted?: boolean;
+  /**
+   * The room translation is running in, or null.
+   *
+   * A roomId rather than a boolean because "translation has started" is only meaningful next to
+   * WHICH meeting: with two bridge rooms in their windows, a bare flag would mark whichever one
+   * the schedule happened to pick as running. It also has to reach the selection, not just the
+   * reducer - see `selectTriggerMeeting` - or the meeting drops out at the end of its window
+   * before the reducer is ever asked.
+   */
+  translatingRoomId?: string | null;
+}
+
+export interface BridgeTriggerResult {
+  trigger: BridgeTriggerSnapshot;
+  /**
+   * What the Meet sensor last said, for the meeting session's idle reaper.
+   *
+   * Handed down rather than subscribed to a second time, and for two reasons. The desktop reports
+   * a sighting only when it CHANGES, so a listener that arrives after Meet came on screen hears
+   * nothing until the call ends. And the watcher in the desktop's main process is one shared
+   * instance: a second owner's disarm would switch it off under this hook, and the offer with it.
+   */
+  meetSensor: MeetSensorReading | null;
 }
 
 export function useBridgeTrigger({
   meetings,
-  translationStarted = false,
-}: UseBridgeTriggerOptions): BridgeTriggerSnapshot {
+  translatingRoomId = null,
+}: UseBridgeTriggerOptions): BridgeTriggerResult {
   const [presence, setPresence] = useState<MeetPresence | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  /** When the sensor stopped seeing Meet; the offer's grace runs from here. See OFFER_GRACE_MS. */
+  const [meetWindowLostAtMs, setMeetWindowLostAtMs] = useState<number | null>(null);
+  const meetWindowVisibleRef = useRef(false);
   /**
    * The room a Meet window has been seen for. The whole of the latch, and the only thing here that
    * is genuinely new information rather than something derivable from it.
@@ -74,7 +112,21 @@ export function useBridgeTrigger({
     return () => window.clearInterval(timer);
   }, []);
 
-  const meeting = selectTriggerMeeting(meetings, nowMs);
+  /**
+   * The offer's grace ends between ticks, and nothing else would re-render to notice.
+   *
+   * Presence events arrive only when the sighting changes, and the clock above ticks every 15 s,
+   * so without this an 8 s grace would really last anywhere up to 15.
+   */
+  useEffect(() => {
+    if (meetWindowLostAtMs === null) return;
+    const remainingMs = meetWindowLostAtMs + OFFER_GRACE_MS - Date.now();
+    if (remainingMs <= 0) return;
+    const timer = window.setTimeout(() => setNowMs(Date.now()), remainingMs + 50);
+    return () => window.clearTimeout(timer);
+  }, [meetWindowLostAtMs]);
+
+  const meeting = selectTriggerMeeting(meetings, nowMs, translatingRoomId);
   const meetingRoomId = meeting?.roomId ?? null;
 
   // Read by the sensor callback, which fires long after the render that set it up.
@@ -141,6 +193,16 @@ export function useBridgeTrigger({
       if (next.meetWindowVisible && meetingRoomIdRef.current) {
         setSeenRoomId(meetingRoomIdRef.current);
       }
+      // Only a sighting that ENDED starts the grace. A first report of "nothing there" is not a
+      // loss of anything, and must not be able to raise an offer on its own.
+      if (next.meetWindowVisible) {
+        setMeetWindowLostAtMs(null);
+      } else if (meetWindowVisibleRef.current) {
+        setMeetWindowLostAtMs(next.observedAtMs);
+      }
+      meetWindowVisibleRef.current = next.meetWindowVisible;
+      // The clock is otherwise up to one tick stale, and the grace is measured against it.
+      setNowMs(Date.now());
     });
     return stop ?? undefined;
   }, []);
@@ -159,7 +221,8 @@ export function useBridgeTrigger({
       nowMs,
       meetWindowVisible: presence?.meetWindowVisible ?? false,
       observedMeetCode: presence?.meetCode,
-      translationStarted,
+      meetWindowLostAtMs,
+      translationStarted: meetingRoomId !== null && meetingRoomId === translatingRoomId,
     },
   );
 
@@ -169,26 +232,77 @@ export function useBridgeTrigger({
   // `offer` has no room by definition, so the target is a route rather than an id. Encoding both
   // in one string keeps this a single comparison: re-running it on every render would raise and
   // refocus a window the user had deliberately moved aside.
-  const windowTarget = trigger.state === "idle" ? null : (trigger.roomId ?? OFFER_TARGET);
-  const openedTarget = useRef<string | null>(null);
+  //
+  // The state is passed alongside only for the one case the target cannot express: a popup the
+  // user CLOSED comes back when the meeting moves forward. The rule is `nextBridgeWindow`.
+  const windowTarget = trigger.state === "idle" ? null : targetFor(trigger.roomId);
+  const windowLedger = useRef<BridgeWindowLedger>(EMPTY_BRIDGE_WINDOW);
+  // Read by the desktop's window events, which arrive long after the render that set them up.
+  const windowTargetRef = useRef<string | null>(null);
+  const triggerStateRef = useRef<BridgeTriggerState>("idle");
   useEffect(() => {
-    if (windowTarget === openedTarget.current) return;
-    openedTarget.current = windowTarget;
-    if (windowTarget === null) {
+    windowTargetRef.current = windowTarget;
+    triggerStateRef.current = trigger.state;
+
+    const { ledger, command } = nextBridgeWindow(windowLedger.current, windowTarget, trigger.state);
+    windowLedger.current = ledger;
+    if (command?.kind === "close") {
       void closeTranscriptWindow();
-    } else {
-      void openTranscriptWindow(windowTarget === OFFER_TARGET ? null : windowTarget);
+    } else if (command?.kind === "open") {
+      void openTranscriptWindow(command.target === OFFER_TARGET ? null : command.target);
     }
-  }, [windowTarget]);
+  }, [windowTarget, trigger.state]);
+
+  /**
+   * The popup's own lifecycle, as the desktop app reports it.
+   *
+   * The X on the popup used to be invisible from here: the desktop dropped its reference and told
+   * nobody, so the ledger went on saying "open" and every later open for the same target was
+   * skipped as a no-op. Neither subscription exists on a browser tab or on a desktop build older
+   * than the events, which leaves the old behaviour rather than a broken one.
+   */
+  useEffect(() => {
+    const stopClosed = onTranscriptWindowClosed((roomId) => {
+      windowLedger.current = bridgeWindowClosed(
+        windowLedger.current,
+        targetFor(roomId),
+        triggerStateRef.current,
+      );
+    });
+    const stopReopened = onTranscriptWindowReopened((roomId) => {
+      windowLedger.current = bridgeWindowReopened(
+        windowLedger.current,
+        targetFor(roomId),
+        windowTargetRef.current,
+      );
+    });
+    return () => {
+      stopClosed?.();
+      stopReopened?.();
+    };
+  }, []);
 
   // Closing on unmount would be wrong during navigation - the shell stays mounted, so this only
   // runs when the app itself is going away, and leaving a floating window behind then is what the
   // user would call a bug.
   useEffect(() => {
     return () => {
-      if (openedTarget.current) void closeTranscriptWindow();
+      if (windowLedger.current.opened) void closeTranscriptWindow();
     };
   }, []);
 
-  return trigger;
+  // Memoised so the meeting session below the shell does not see a new object on every clock tick.
+  const meetSensor = useMemo<MeetSensorReading | null>(
+    () =>
+      presence === null
+        ? null
+        : {
+            meetWindowVisible: presence.meetWindowVisible,
+            meetCode: presence.meetCode,
+            meetWindowLostAtMs,
+          },
+    [presence, meetWindowLostAtMs],
+  );
+
+  return { trigger, meetSensor };
 }

@@ -3,6 +3,7 @@
 import {
   Fragment,
   type ElementType,
+  type Ref,
   useCallback,
   useEffect,
   useMemo,
@@ -11,7 +12,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { enGB } from "date-fns/locale";
 import {
   CalendarBlank,
@@ -39,13 +40,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AgendaList, type AgendaListHandle } from "@/components/schedules/agenda-list";
+import {
+  AgendaSidebarCalendar,
+  AgendaWeekStrip,
+} from "@/components/schedules/agenda-navigator";
+import { AgendaRow } from "@/components/schedules/agenda-row";
+import { MeetingStateIcon } from "@/components/schedules/meeting-state-icon";
 import { useMeetingsInRange } from "@/hooks/use-my-meetings";
+import { agendaDayKey, type TimedMeeting } from "@/lib/meeting/agenda-sections";
 import {
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
 } from "@/lib/meeting/meeting-artifacts";
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
+import {
+  meetingDisplayState,
+  meetingStateLabel,
+} from "@/lib/meeting/meeting-display-state";
 import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
@@ -53,6 +66,7 @@ import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { UserChip } from "@/components/user/user-chip";
 import { cn } from "@/lib/utils";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
+import { readScheduleFocus, schedulesPath } from "@/lib/workspace/workspace-routes";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -76,18 +90,22 @@ import type { RoomHistoryArtifact } from "@/types/roomHistory";
  */
 type TimeFilter = "all" | "upcoming" | "joined";
 
-/** One meeting with its state resolved for this viewer, at this minute. See `timedMeetings`. */
-type TimedMeeting = MyMeetingItem & { timeState: MeetingTimeState };
-
 /**
- * Month or week.
+ * Agenda, month or week.
  *
- * Two views of the same rows, not two pages: the search box, the filters and the popup all mean
- * the same thing in both, and splitting them would have meant maintaining that twice. A month
- * answers "what does this stretch look like"; a week answers "what am I doing on Thursday", which
- * is the question a scrolling agenda is worst at.
+ * Three views of the same rows, not three pages: the search box, the filter chips (and their
+ * counts) and the popup all mean the same thing in each, and splitting them would have meant
+ * maintaining that three times. The agenda answers "what do I have, and when" — the question most
+ * people open a calendar with, so it is the default. A month answers "what does this stretch look
+ * like"; a week answers "what am I doing on Thursday", which is the question a scrolling agenda is
+ * worst at.
+ *
+ * The agenda shows exactly what the month does — one month, fetched with the same single request
+ * under the same cache key — so switching between the two never costs a request or moves you.
  */
-type CalendarView = "month" | "week";
+type CalendarView = "agenda" | "month" | "week";
+
+const calendarViews: CalendarView[] = ["agenda", "month", "week"];
 
 const timeFilters: Array<{ value: TimeFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -98,36 +116,62 @@ const EMPTY_MEETINGS: TimedMeeting[] = [];
 const APP_CALENDAR_LOCALE = "en-GB";
 
 /**
- * The geometry a month cell packs its chips with — NOT a chip limit.
+ * How a month cell packs its rows — and why there are no pixel numbers here any more.
  *
  * There used to be a `MONTH_CELL_CHIP_LIMIT = 3` here, and it was a bug: the grid is `h-full` with
  * stretched rows, so a cell is whatever height the window gives it — 110px on a laptop, 250px on a
  * tall screen — while the constant stayed at three 20px chips. A cell twice as tall as it needed to
  * be still drew three rows and then "+4 more" under half a cell of white space.
  *
- * So the count is measured instead (see `useMeasuredHeight`): these are the sizes the arithmetic
- * needs, and they must stay in step with the classes on `MonthChip` (h-5), the list's `space-y-0.5`
- * and the overflow row (h-4).
+ * Its replacement measured the cell but still did the arithmetic with hard-coded chip, gap and
+ * overflow-row heights (20 / 2 / 16) that agreed with `h-5`, `space-y-0.5` and `h-4` only by a
+ * comment asking them to "stay in step". They did not always: a root font size other than 16px, a
+ * zoom level, sub-pixel rounding — any drift between the constants and what the browser actually
+ * laid out, and the list overflowed. The row that falls outside `overflow-hidden` is the LAST one,
+ * which is always "+N more": a day whose badge said 10 drew two chips, half of a third, and no count
+ * at all — the day silently lost eight meetings, the exact failure the count row exists to prevent.
+ *
+ * So both sides of the division are now read from the DOM. The list's height as before
+ * (`useMeasuredHeight`), and one row's height plus the gap between two rows from a hidden copy of
+ * the real `MonthChip` (`MonthRowProbe` / `useMonthRowMetrics`). "+N more" is drawn at exactly that
+ * row height, so a cell is a column of identical slots and the count is one division — see
+ * `slotsInList`. Nothing here has to be kept in step with a class, and a taller chip design changes
+ * the count without anyone touching this block.
+ *
+ * That promise has now been cashed once: the chip became the Agenda's row at month scale — state
+ * icon, time, title — and grew from 20px to 22px by changing this one class. The probe read the new
+ * height, "+N more" took it with it, and the count adjusted without a second edit anywhere.
  */
-const MONTH_CHIP_HEIGHT = 20;
-const MONTH_CHIP_GAP = 2;
-const MONTH_OVERFLOW_ROW_HEIGHT = 16;
+const MONTH_ROW_HEIGHT_CLASS = "h-[22px]";
 
 /**
- * What a cell draws before the first measurement lands — server render and the first client paint.
- *
- * Three is the number that fits the 110px minimum cell, so the common case starts correct and the
- * measurement only ever adds rows. Never used once a real height is in hand.
+ * The vertical rhythm of a cell's list. One constant because the probe must stack its two rows
+ * exactly the way the real list does — the gap it reports is only true if it is the same class.
  */
-const MONTH_CELL_CHIP_FALLBACK = 3;
+const MONTH_ROW_STACK_CLASS = "space-y-0.5";
 
-function startOfDay(date: Date) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
+/**
+ * How many slots (chips, or chips plus the "+N more" row) a cell uses before the first measurement
+ * lands — server render and the first client paint.
+ *
+ * Three is what fits the 110px minimum cell at the default sizes, so the common case starts correct
+ * and the measurement only ever adds rows. It counts the "+N more" row as a slot, so a busy day
+ * paints two chips and the count, never three chips and a count pushed off the bottom. Never used
+ * once a real height is in hand.
+ */
+const MONTH_CELL_SLOT_FALLBACK = 3;
 
-function dayKey(iso: string) {
-  return String(startOfDay(new Date(iso)));
-}
+/**
+ * Float noise allowed when deciding whether one more slot fits.
+ *
+ * The readings are `getBoundingClientRect` floats of a layout done in 1/64px units, and once zoom
+ * scales them a list that is exactly three rows tall can read as 65.99999 and lose a slot it has
+ * room for. The allowance has to be bigger than that noise and SMALLER than one layout unit (1/64px,
+ * less at high zoom): a real deficit is always at least one unit, so a thousandth of a pixel can
+ * never admit a row that does not fit. A looser, rounder-looking 0.05 is not harmless: checked in a
+ * real layout it let a row overhang the list by 0.05px whenever the list was one unit short.
+ */
+const MONTH_FIT_TOLERANCE_PX = 0.001;
 
 export default function CalendarPage() {
   const params = useParams();
@@ -155,11 +199,20 @@ export default function CalendarPage() {
   const viewerUserId = useAuthStore((state) => state.user?.id ?? null);
   const now = useNowMinute();
 
-  const [view, setView] = useState<CalendarView>("month");
-  // One anchor for both views. Switching from week to month keeps you in the month you were
+  const [view, setView] = useState<CalendarView>("agenda");
+  // One anchor for every view. Switching from week to month keeps you in the month you were
   // looking at, and switching back puts you in the week you left — a separate anchor per view
-  // would silently teleport you to today on every toggle.
+  // would silently teleport you to today on every toggle. The agenda's navigator moves this same
+  // anchor, so paging it to October and switching to Month shows October.
   const [monthAnchor, setMonthAnchor] = useState(() => new Date());
+  /**
+   * The day at the top of the agenda list, as the list reports it — the navigator marks it.
+   *
+   * Reported by the list rather than derived here, because only the list knows what it has
+   * scrolled to. Left as it is when the view changes: the list reports afresh as soon as it mounts
+   * again, and until then the navigator ignores a day outside the month (see `stripAnchor`).
+   */
+  const [agendaVisibleDay, setAgendaVisibleDay] = useState<Date | null>(null);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TimeFilter>("all");
   const [dialogMeetingId, setDialogMeetingId] = useState<string | null>(null);
@@ -172,11 +225,57 @@ export default function CalendarPage() {
    */
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
 
+  /**
+   * The agenda list's imperative handle — "scroll to the 18th", "point at this meeting".
+   *
+   * A callback ref rather than a plain object ref for the one request that can arrive while the
+   * list is not mounted: a deep link landing on a failed fetch, where the error state stands in for
+   * the list. That request waits here and is handed over the moment the list mounts again. The
+   * list queues everything else for itself — a day or a row it has not drawn yet — see
+   * `AgendaListHandle`.
+   */
+  const agendaRef = useRef<AgendaListHandle | null>(null);
+  const pendingHighlightId = useRef<string | null>(null);
+  const attachAgenda = useCallback((handle: AgendaListHandle | null) => {
+    agendaRef.current = handle;
+    const id = pendingHighlightId.current;
+    if (handle && id) {
+      pendingHighlightId.current = null;
+      handle.highlightMeeting(id);
+    }
+  }, []);
+
+  /**
+   * "View in calendar" after a booking: `?date=2026-09-18&focus=<roomId>` (see `withScheduleFocus`).
+   *
+   * Read ONCE per link. The month and the view are adjusted here, during render — the same
+   * adjust-state-from-input shape the create dialog uses for its edit fields — so the first frame
+   * is already the booked month in the agenda, not today's month for one paint and then a jump.
+   * The highlight and the URL cleanup are an effect further down, because both reach outside React.
+   *
+   * Keyed on the query string, and the key resets when the URL empties, so the same link followed
+   * twice (the dialog is reachable from this very page) is honoured twice rather than swallowed as
+   * "already applied".
+   */
+  const searchParams = useSearchParams();
+  const focusRequest = useMemo(() => readScheduleFocus(searchParams), [searchParams]);
+  const focusKey = focusRequest ? searchParams.toString() : null;
+  const [appliedFocusKey, setAppliedFocusKey] = useState<string | null>(null);
+  if (focusKey !== appliedFocusKey) {
+    setAppliedFocusKey(focusKey);
+    if (focusRequest) {
+      if (focusRequest.date) setMonthAnchor(focusRequest.date);
+      // The agenda whatever view was open: it is the one view that can point at a single row.
+      setView("agenda");
+      setSelectedDayKey(null);
+    }
+  }
+
   const weekDays = useMemo(() => weekOf(monthAnchor), [monthAnchor]);
 
-  // The visible window. In month view this is exactly one month, so it resolves to the same single
-  // request and the same cache entry the agenda always used; in week view it is seven days, which
-  // may cost two requests when the week straddles a boundary.
+  // The visible window. In agenda and month view this is exactly one month, so both resolve to the
+  // same single request and the same cache entry — switching between them costs nothing. In week
+  // view it is seven days, which may cost two requests when the week straddles a boundary.
   const [rangeFrom, rangeTo] = useMemo(() => {
     if (view === "week") {
       return [startOfDayDate(weekDays[0]), endOfDayDate(weekDays[6])] as const;
@@ -187,9 +286,41 @@ export default function CalendarPage() {
   const meetings = useMeetingsInRange(activeWorkspaceId, rangeFrom, rangeTo, query);
   const fetched = meetings.data?.meetings ?? EMPTY_MEETINGS;
 
+  /**
+   * The deep link's second half, once the render above has moved to its month and to the agenda.
+   *
+   * The list is mounted by now (child refs attach before a parent's effects run), so the highlight
+   * normally goes straight to it and the list holds it until the row is drawn. `handledFocusKey`
+   * keeps this to one pass per link: `meetings` is a new object every render, and without the
+   * guard each of those renders would refetch and re-highlight until the URL finished clearing.
+   */
+  const handledFocusKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusKey === null) {
+      handledFocusKey.current = null;
+      return;
+    }
+    if (!focusRequest || handledFocusKey.current === focusKey) return;
+    handledFocusKey.current = focusKey;
+
+    if (focusRequest.roomId) {
+      if (agendaRef.current) agendaRef.current.highlightMeeting(focusRequest.roomId);
+      else pendingHighlightId.current = focusRequest.roomId;
+      // The booking is seconds old, and this month may be in the cache from a visit less than a
+      // minute ago — fresh by the query's staleTime, and without the new meeting in it. The create
+      // mutations invalidate the meetings LIST's key, not this one, so ask for the month again;
+      // the list keeps the highlight waiting until the row arrives.
+      if (activeWorkspaceId) void meetings.refetch();
+    }
+    // Replace, not push: the params were a one-time instruction. A reload or a Back must not land
+    // on them again and flash the row a second time. No scroll — the agenda owns its own.
+    router.replace(schedulesPath(workspaceSlug), { scroll: false });
+  }, [focusKey, focusRequest, activeWorkspaceId, meetings, router, workspaceSlug]);
+
   // The months are fetched whole, so a week view holds up to two months of rows it must not show.
+  // Agenda and month fetch exactly the month they draw, so they take the rows as they come.
   const windowed = useMemo(() => {
-    if (view === "month") return fetched;
+    if (view !== "week") return fetched;
     const from = rangeFrom.getTime();
     const to = rangeTo.getTime();
     return fetched.filter((meeting) => {
@@ -223,9 +354,19 @@ export default function CalendarPage() {
 
   // Marked from everything fetched rather than from the visible window: in week view the little
   // calendar is how you find the week that holds something, so it must still show the whole month.
+  // Unfiltered for the agenda's navigator for the same reason — a dot that vanished when Joined
+  // was on would hide the very day you went looking for.
   const daysWithMeetings = useMemo(
     () => fetched.map((meeting) => new Date(meeting.occursAt)),
     [fetched],
+  );
+
+  // Every day that holds a meeting BEFORE the filter chips, so an agenda day the chip emptied can
+  // say "Nothing here matches this filter" instead of "No meetings" — the second would tell you
+  // your Tuesday is free when it is not. Keyed with `agendaDayKey`, as the list keys its days.
+  const dayKeysWithAnyMeeting = useMemo(
+    () => new Set(windowed.map((meeting) => agendaDayKey(meeting.occursAt))),
+    [windowed],
   );
 
   const counts = useMemo(() => {
@@ -248,7 +389,7 @@ export default function CalendarPage() {
   const selectedDayMeetings = useMemo(() => {
     if (selectedDayKey === null) return EMPTY_MEETINGS;
     return visible
-      .filter((meeting) => dayKey(meeting.occursAt) === selectedDayKey)
+      .filter((meeting) => agendaDayKey(meeting.occursAt) === selectedDayKey)
       .sort((a, b) => Date.parse(a.occursAt) - Date.parse(b.occursAt));
   }, [visible, selectedDayKey]);
 
@@ -259,7 +400,7 @@ export default function CalendarPage() {
    * does nothing when you click it again reads as stuck.
    */
   function toggleDay(date: Date) {
-    const key = String(startOfDay(date));
+    const key = agendaDayKey(date);
     setSelectedDayKey((current) => (current === key ? null : key));
   }
 
@@ -281,10 +422,11 @@ export default function CalendarPage() {
   /**
    * One rule for what a meeting row does, wherever it is drawn.
    *
-   * The chip in the cell and the same meeting listed in the day panel go through this single
-   * function, so the two cannot drift apart. It asks `hasFinished` — the ROOM's status — not
-   * `timeState`: `missed` covers both a room that ended without you (a recap to read) and a slot
-   * nobody ever opened (a room still sitting there), and those two want opposite destinations.
+   * The chip in the cell, the same meeting listed in the day panel and its row in the agenda all
+   * go through this single function, so they cannot drift apart. It asks `hasFinished` — the
+   * ROOM's status — not `timeState`: `missed` covers both a room that ended without you (a recap
+   * to read) and a slot nobody ever opened (a room still sitting there), and those two want
+   * opposite destinations.
    */
   function openMeeting(meeting: TimedMeeting) {
     if (hasFinished(meeting)) setDialogMeetingId(meeting.id);
@@ -316,6 +458,33 @@ export default function CalendarPage() {
   // happens at the month fetch, so that is the number the server's total describes.
   const truncated = (meetings.data?.total ?? 0) > fetched.length;
 
+  // The notices the sidebar carries under its calendar, in whichever sidebar is showing: the
+  // agenda's navigator renders them as its children, the week sidebar inline. One element, so the
+  // two cannot word the same warning differently.
+  const rangeNotices = (
+    <>
+      {meetings.isPartial ? (
+        <p className="text-[10px] leading-4 text-amber-700">
+          This week crosses two months and one of them failed to load, so some meetings may be
+          missing.
+        </p>
+      ) : null}
+
+      {truncated ? (
+        <p className="text-[10px] leading-4 text-ink-subtle">
+          Showing {fetched.length} of {meetings.data?.total} meetings in{" "}
+          {view === "week" ? "these weeks' months" : "this month"}. Narrow the search to see the
+          rest.
+        </p>
+      ) : null}
+    </>
+  );
+
+  // Only a failure with nothing to show replaces the content. Checked before the views because the
+  // agenda does not unmount for loading (see below), so "loading" can no longer be the first branch
+  // for all three.
+  const showError = meetings.isError && !meetings.isPartial && !meetings.isLoading;
+
   // bg-surface-1, the same white Meetings and Members open onto. A workspace page that brings
   // its own wash reads as bolted on from somewhere else.
   return (
@@ -324,7 +493,12 @@ export default function CalendarPage() {
           components/workspace/page-chrome. The route name is already in the top bar and the
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
           same word three times with documentation living in the furniture. Meetings and Members
-          open straight onto their content and this now does too. */}
+          open straight onto their content and this now does too.
+
+          The header is the same in every view: the chips count and filter the agenda exactly as
+          they do the grids. No summary line and no status legend beside them — both were tried in
+          the agenda design and rejected, because the chips already say the counts and a second
+          place saying them is how two numbers come to disagree. */}
       <header className="flex flex-col gap-3 border-b border-border px-5 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-8">
         <ScheduleMetricTabs counts={counts} filter={filter} onFilterChange={setFilter} />
 
@@ -337,12 +511,16 @@ export default function CalendarPage() {
             expandedWidth={300}
           />
 
+          {/* Beside the switch that brings it, so it reads as part of the Month view rather than
+              as a page-wide key that vanishes for no reason when you switch away. */}
+          {view === "month" ? <MonthRelationLegend /> : null}
+
           <div
             className="flex h-9 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-2/60 p-0.5"
             role="tablist"
             aria-label="Calendar view"
           >
-            {(["month", "week"] as const).map((value) => (
+            {calendarViews.map((value) => (
               <button
                 key={value}
                 type="button"
@@ -351,7 +529,7 @@ export default function CalendarPage() {
                 onClick={() => {
                   setView(value);
                   // The panel is a month-view affordance; leaving its state set would spring it
-                  // back open on the way back from the week.
+                  // back open on the way back from the agenda or the week.
                   setSelectedDayKey(null);
                 }}
                 className={cn(
@@ -368,90 +546,141 @@ export default function CalendarPage() {
         </div>
       </header>
 
+      {/* The agenda's navigator on narrow screens: a week strip between the header and the list,
+          because below lg there is no sidebar to hold the month. It hides itself at lg, where the
+          sidebar below takes over — the two never show at once. */}
+      {view === "agenda" ? (
+        <AgendaWeekStrip
+          month={monthAnchor}
+          daysWithMeetings={daysWithMeetings}
+          visibleDay={agendaVisibleDay}
+          today={now}
+          onMonthChange={setMonthAnchor}
+          onPickDay={(day) => agendaRef.current?.scrollToDay(day, { smooth: true })}
+        />
+      ) : null}
+
       {/* `relative`, so the day panel can fall back to an overlay INSIDE the calendar area rather
           than over the whole viewport: below xl it is positioned against this box, which leaves the
           workspace's own top bar and rail reachable while a day is open. */}
       <div className="relative flex min-h-0 flex-1">
-        <aside
+        {view === "agenda" ? (
+          // Picking a day scrolls the list; it moves the month only when the day is in another
+          // one, and then the navigator fires `onMonthChange` first — so the scroll request
+          // reaches a list that is already switching month, which holds it until the day is drawn.
+          <AgendaSidebarCalendar
+            month={monthAnchor}
+            daysWithMeetings={daysWithMeetings}
+            visibleDay={agendaVisibleDay}
+            today={now}
+            onMonthChange={setMonthAnchor}
+            onPickDay={(day) => agendaRef.current?.scrollToDay(day, { smooth: true })}
+          >
+            {rangeNotices}
+          </AgendaSidebarCalendar>
+        ) : (
+          <aside
+            className={cn(
+              "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5",
+              view === "week" && "lg:flex",
+            )}
+          >
+            <div>
+              <div className="mb-2 flex items-center justify-between px-1">
+                <button
+                  type="button"
+                  aria-label={view === "week" ? "Previous week" : "Previous month"}
+                  onClick={() => stepRange(-1)}
+                  className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
+                >
+                  <CaretLeft size={13} />
+                </button>
+                <span className="text-[12px] font-medium">
+                  {view === "week"
+                    ? formatWeekRange(weekDays)
+                    : monthAnchor.toLocaleDateString(APP_CALENDAR_LOCALE, { month: "long", year: "numeric" })}
+                </span>
+                <button
+                  type="button"
+                  aria-label={view === "week" ? "Next week" : "Next month"}
+                  onClick={() => stepRange(1)}
+                  className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
+                >
+                  <CaretRight size={13} />
+                </button>
+              </div>
+
+              <div className="overflow-hidden rounded-xl border border-border bg-surface-1 p-1">
+                <Calendar
+                  mode="single"
+                  month={monthAnchor}
+                  locale={enGB}
+                  weekStartsOn={1}
+                  onMonthChange={setMonthAnchor}
+                  onSelect={(date) => date && goToDay(date)}
+                  className="w-full p-0.5 [--cell-size:1.8rem]"
+                  classNames={{
+                    month_caption: "hidden",
+                    nav: "hidden",
+                  }}
+                  modifiers={{
+                    hasMeeting: daysWithMeetings,
+                    // In week view the calendar doubles as a position indicator: without this you
+                    // cannot tell from it which seven days are on screen.
+                    ...(view === "week" ? { inWeek: weekDays } : {}),
+                  }}
+                  modifiersClassNames={{
+                    hasMeeting:
+                      "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
+                    inWeek: "bg-surface-2 text-ink rounded-none first:rounded-l-md last:rounded-r-md",
+                  }}
+                />
+              </div>
+            </div>
+
+            {rangeNotices}
+          </aside>
+        )}
+
+        {/* ONE scroll container per view. The grids scroll here; the agenda list owns its own
+            scroller — its sticky week headers, scroll spy and scroll-to-day all measure against
+            it — so in the agenda this box must clip instead, or the two would nest and the outer
+            one would steal the wheel. */}
+        <div
           className={cn(
-            "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5",
-            view === "week" && "lg:flex",
+            "min-w-0 flex-1",
+            view === "agenda" ? "overflow-hidden" : "overflow-y-auto",
           )}
         >
-          <div>
-            <div className="mb-2 flex items-center justify-between px-1">
-              <button
-                type="button"
-                aria-label={view === "week" ? "Previous week" : "Previous month"}
-                onClick={() => stepRange(-1)}
-                className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
-              >
-                <CaretLeft size={13} />
-              </button>
-              <span className="text-[12px] font-medium">
-                {view === "week"
-                  ? formatWeekRange(weekDays)
-                  : monthAnchor.toLocaleDateString(APP_CALENDAR_LOCALE, { month: "long", year: "numeric" })}
-              </span>
-              <button
-                type="button"
-                aria-label={view === "week" ? "Next week" : "Next month"}
-                onClick={() => stepRange(1)}
-                className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
-              >
-                <CaretRight size={13} />
-              </button>
-            </div>
-
-            <div className="overflow-hidden rounded-xl border border-border bg-surface-1 p-1">
-              <Calendar
-                mode="single"
-                month={monthAnchor}
-                locale={enGB}
-                weekStartsOn={1}
-                onMonthChange={setMonthAnchor}
-                onSelect={(date) => date && goToDay(date)}
-                className="w-full p-0.5 [--cell-size:1.8rem]"
-                classNames={{
-                  month_caption: "hidden",
-                  nav: "hidden",
-                }}
-                modifiers={{
-                  hasMeeting: daysWithMeetings,
-                  // In week view the calendar doubles as a position indicator: without this you
-                  // cannot tell from it which seven days are on screen.
-                  ...(view === "week" ? { inWeek: weekDays } : {}),
-                }}
-                modifiersClassNames={{
-                  hasMeeting:
-                    "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
-                  inWeek: "bg-surface-2 text-ink rounded-none first:rounded-l-md last:rounded-r-md",
-                }}
-              />
-            </div>
-          </div>
-
-          {meetings.isPartial ? (
-            <p className="text-[10px] leading-4 text-amber-700">
-              This week crosses two months and one of them failed to load, so some meetings may be
-              missing.
-            </p>
-          ) : null}
-
-          {truncated ? (
-            <p className="text-[10px] leading-4 text-ink-subtle">
-              Showing {fetched.length} of {meetings.data?.total} meetings in{" "}
-              {view === "week" ? "these weeks' months" : "this month"}. Narrow the search to see the
-              rest.
-            </p>
-          ) : null}
-        </aside>
-
-        <div className="min-w-0 flex-1 overflow-y-auto">
-          {meetings.isLoading ? (
-            <LoadingState />
-          ) : meetings.isError && !meetings.isPartial ? (
+          {showError ? (
             <ErrorState onRetry={() => meetings.refetch()} />
+          ) : view === "agenda" ? (
+            // The list stays MOUNTED while a month loads, under the same loading screen the grids
+            // show in its place. It has to: picking the 3rd of next month asks it to change month
+            // and scroll in one tick, and a deep link asks it to highlight a row the refetch has
+            // not brought yet. It holds both until the rows arrive — which it cannot do if the
+            // loading state unmounts it and a fresh list mounts on the 1st.
+            <div className="relative h-full" aria-busy={meetings.isLoading}>
+              <div className="h-full" inert={meetings.isLoading}>
+                <AgendaList
+                  ref={attachAgenda}
+                  month={monthAnchor}
+                  meetings={visible}
+                  dayKeysWithAnyMeeting={dayKeysWithAnyMeeting}
+                  now={now}
+                  workspaceSlug={workspaceSlug}
+                  onOpenMeeting={openMeeting}
+                  onVisibleDayChange={setAgendaVisibleDay}
+                />
+              </div>
+              {meetings.isLoading ? (
+                <div className="absolute inset-0 z-20 bg-surface-1">
+                  <LoadingState />
+                </div>
+              ) : null}
+            </div>
+          ) : meetings.isLoading ? (
+            <LoadingState />
           ) : view === "week" ? (
             <WeekGrid
               days={weekDays}
@@ -548,6 +777,38 @@ function ScheduleMetricTabs({
 }
 
 /**
+ * The key to the month chips' fill: filled is a meeting you host, outlined one you were invited to.
+ *
+ * Month only. A week card spells its relation out in a pill and an agenda row in words ("You host",
+ * "Invited by …"), so a legend in either would be a caption for words already on screen; a 22px
+ * month row has no room for the word, and the fill is its only mark. The swatches are grey on
+ * purpose — the hue belongs to the state palette, and a sky or emerald swatch here would read as
+ * "sky means host". Grey says the fill is the point, not the colour. The opacities are the chips'
+ * own (a 25% border behind a 10% fill; a 60% outline), in ink.
+ *
+ * Hidden below md: this row also holds the search, which opens to 300px, and the view switch, and
+ * on a phone-to-small-tablet width the three do not fit side by side. The chips' tooltips and
+ * accessible names still carry the relation there.
+ */
+function MonthRelationLegend() {
+  return (
+    <ul
+      aria-label="Chip legend"
+      className="mr-1 hidden shrink-0 items-center gap-3 text-[10px] text-ink-subtle md:flex"
+    >
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden className="size-2.5 rounded-sm border border-ink/25 bg-ink/10" />
+        You host
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span aria-hidden className="size-2.5 rounded-sm border border-ink/60 bg-transparent" />
+        {"You're invited"}
+      </li>
+    </ul>
+  );
+}
+
+/**
  * The month, as a 7-column calendar grid (Google Calendar style).
  *
  * Renders the full 7-column matrix for the month regardless of whether meetings exist,
@@ -588,7 +849,7 @@ function MonthGrid({
   const byDay = useMemo(() => {
     const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
-      const key = dayKey(meeting.occursAt);
+      const key = agendaDayKey(meeting.occursAt);
       const bucket = map.get(key);
       if (bucket) bucket.push(meeting);
       else map.set(key, [meeting]);
@@ -599,11 +860,11 @@ function MonthGrid({
     return map;
   }, [meetings]);
 
-  const todayKey = String(startOfDay(new Date()));
+  const todayKey = agendaDayKey(new Date());
   const currentMonth = monthAnchor.getMonth();
 
   /**
-   * How many chips fit, from the cell's REAL height.
+   * How much room a cell has for rows, from the cell's REAL height.
    *
    * Measured on the first cell's list area and applied to all of them, because every row in this
    * grid is exactly as tall as every other: the rows are auto-sized, the cells all carry the same
@@ -613,8 +874,23 @@ function MonthGrid({
    * so there is no observe → grow → observe loop and no layout shift, only more of the cell used.
    */
   const [listRef, listHeight] = useMeasuredHeight();
-  const chipsIfNoOverflow = fitsInList(listHeight, 0);
-  const chipsWithOverflowRow = fitsInList(listHeight, MONTH_OVERFLOW_ROW_HEIGHT + MONTH_CHIP_GAP);
+
+  /**
+   * The other half of the division: one real row and one real gap, from `MonthRowProbe`.
+   *
+   * The probe is a copy of an actual `MonthChip`, so whatever the chip's classes say — today's 22px
+   * agenda-style row, or a taller one later — is what gets counted. It is absolutely positioned
+   * inside cell 0's list, so it takes no space from the cell and cannot feed the height it is being
+   * divided into: the probe's size depends only on the chip's own styling, the list's only on the
+   * grid row. Neither measurement moves the other, so there is still no measure → grow → measure
+   * loop.
+   *
+   * It needs a meeting to render, and any one will do — every chip is the same height whatever its
+   * state or relation. With no meetings there is nothing to count and the probe is simply absent.
+   */
+  const [probeRef, rowMetrics] = useMonthRowMetrics();
+  const probeMeeting = meetings[0] ?? null;
+  const slots = slotsInList(listHeight, rowMetrics);
 
   return (
     <div className="flex h-full flex-col">
@@ -639,15 +915,16 @@ function MonthGrid({
           ))}
 
           {monthDays.map((day, index) => {
-            const key = String(startOfDay(day));
+            const key = agendaDayKey(day);
             const dayMeetings = byDay.get(key) ?? EMPTY_MEETINGS;
             const isToday = key === todayKey;
             const isSelected = key === selectedDayKey;
             const isCurrentMonth = day.getMonth() === currentMonth;
 
-            // Everything fits, or it does not and the last row has to be spent on the count.
-            const shown =
-              dayMeetings.length <= chipsIfNoOverflow ? dayMeetings.length : chipsWithOverflowRow;
+            // Everything fits, or it does not and the last slot is spent on the count. Slots are
+            // all one height, so "the count takes a slot" is exact rather than a second estimate.
+            // `slots` is never below 1, so a cell with room for one row shows only "+N more".
+            const shown = dayMeetings.length <= slots ? dayMeetings.length : slots - 1;
             const hiddenCount = dayMeetings.length - shown;
 
             return (
@@ -711,28 +988,47 @@ function MonthGrid({
                 </div>
 
                 <div
-                  // Measured on cell 0 only; see `chipsIfNoOverflow` above for why one reading
+                  // Measured on cell 0 only; see `listHeight` above for why one reading
                   // describes every cell. `min-h-0` + `flex-1` is load-bearing, not decoration.
                   ref={index === 0 ? listRef : undefined}
-                  className="pointer-events-none relative mt-1 min-h-0 flex-1 space-y-0.5 overflow-hidden"
+                  className="pointer-events-none relative mt-1 min-h-0 flex-1 overflow-hidden"
                 >
-                  {dayMeetings.slice(0, shown).map((meeting) => (
-                    <MonthChip
-                      key={meeting.id}
-                      meeting={meeting}
-                      onOpen={() => onOpenMeeting(meeting)}
-                    />
-                  ))}
-                  {hiddenCount > 0 ? (
-                    <button
-                      type="button"
-                      onClick={() => onSelectDay(day)}
-                      aria-label={`Show all ${dayMeetings.length} meetings on ${formatDayHeading(day)}`}
-                      className="pointer-events-auto block h-4 w-full cursor-pointer truncate rounded-sm px-1 text-left text-[9px] font-medium leading-4 text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
-                    >
-                      +{hiddenCount} more
-                    </button>
+                  {index === 0 && probeMeeting ? (
+                    <MonthRowProbe ref={probeRef} meeting={probeMeeting} />
                   ) : null}
+
+                  {/* The rows sit in their own stack rather than directly in the measured box, so
+                      the probe beside them is not one of the stack's children: `space-y` spaces
+                      children by position (`> :not(:last-child)`), and an extra child — even an
+                      absolutely positioned one — would change which row counts as the last. */}
+                  <div className={MONTH_ROW_STACK_CLASS}>
+                    {dayMeetings.slice(0, shown).map((meeting) => (
+                      <MonthChip
+                        key={meeting.id}
+                        meeting={meeting}
+                        onOpen={() => onOpenMeeting(meeting)}
+                      />
+                    ))}
+                    {hiddenCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => onSelectDay(day)}
+                        aria-label={`Show all ${dayMeetings.length} meetings on ${formatDayHeading(day)}`}
+                        // Exactly one chip tall, and that is what makes the count a slot like any
+                        // other. The class gives it the chip's height before anything is measured;
+                        // once the probe has read the real chip, the inline height pins it to that
+                        // reading, so even a chip whose height comes from its content later cannot
+                        // leave this row a pixel taller than the slot reserved for it.
+                        style={rowMetrics ? { height: rowMetrics.height } : undefined}
+                        className={cn(
+                          "pointer-events-auto flex w-full cursor-pointer items-center rounded-sm px-1 text-left text-[11px] font-medium text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40",
+                          MONTH_ROW_HEIGHT_CLASS,
+                        )}
+                      >
+                        <span className="truncate">+{hiddenCount} more</span>
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             );
@@ -744,47 +1040,88 @@ function MonthGrid({
 }
 
 /**
- * One meeting on a month cell.
+ * One meeting on a month cell — the Agenda's row, at month scale.
+ *
+ * Icon · time · title, in the order the agenda reads them, so switching views does not ask the eye
+ * to learn a second layout for the same meeting: the state glyph (`MeetingStateIcon`, 12px), the
+ * start time in the time column's mono face, then the title taking whatever width is left and
+ * truncating. The time moved to the front from the far end, where a long title pushed it out of a
+ * 120px cell first — and the time is the half of a month row people actually scan for.
+ *
+ * What stays the chip's own is its box: filled for "you host", outlined for "you were invited", in
+ * the WT-538 hue of its state (`monthChipToneClass`). The agenda row can drop the box because a
+ * list has room to say "You host" in words; a 22px cell row has room for nothing but the fill.
  *
  * A `<button>` rather than the clickable `<div>` this used to be, so a chip is tabbable and opens
  * on Enter like everything else on the page. `pointer-events-auto` puts it back on top of the
  * cell-wide select-this-day button it sits over — see the cell for why that layering exists.
  *
- * `h-5` is not free styling: `MONTH_CHIP_HEIGHT` is this number, and the cell counts chips with it.
+ * Its height is free styling: the cell counts chips by measuring a hidden copy of this very
+ * component (`MonthRowProbe`), so the move to 22px changed `MONTH_ROW_HEIGHT_CLASS` and nothing
+ * else. The icon is decorative here; the state, like the relation, is spoken by the chip's own
+ * accessible name, because neither a glyph nor a fill is something a screen reader can announce.
  */
 function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => void }) {
+  const relation = relationLabel(meeting);
+  const time = formatTime(meeting.occursAt);
+
   return (
     <button
       type="button"
       onClick={onOpen}
-      title={meeting.title}
+      title={`${meeting.title} · ${relation}`}
+      aria-label={`${meeting.title}, ${time}, ${meetingStateLabel(meeting)}, ${relation}`}
       className={cn(
-        "group pointer-events-auto block h-5 w-full cursor-pointer overflow-hidden rounded-sm border px-1.5 text-left text-[10px] leading-5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+        "group pointer-events-auto flex w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-sm border px-1 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
+        MONTH_ROW_HEIGHT_CLASS,
         monthChipToneClass(meeting),
       )}
     >
-      <div className="flex h-full min-w-0 items-center gap-1">
-        <span
-          className={cn(
-            "truncate font-medium",
-            meeting.status === "cancelled" && "text-ink-muted",
-          )}
-        >
-          {meeting.title}
-        </span>
-        <span className="ml-auto shrink-0 text-[9px] tabular-nums text-ink-subtle">
-          {formatTime(meeting.occursAt)}
-        </span>
-        {meeting.timeState === "live" && meeting.status !== "cancelled" ? (
-          <span className="relative flex size-1.5 shrink-0">
-            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
-          </span>
-        ) : null}
-      </div>
+      <MeetingStateIcon meeting={meeting} size={12} />
+      <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-ink-muted">
+        {time}
+      </span>
+      <span
+        className={cn(
+          "min-w-0 truncate text-[12px] leading-4",
+          isHostedByViewer(meeting) ? "font-semibold" : "font-normal",
+          meeting.status === "cancelled" && "text-ink-muted",
+        )}
+      >
+        {meeting.title}
+      </span>
     </button>
   );
 }
+
+/**
+ * Two real `MonthChip`s, stacked the way a cell stacks them, that nobody can see or reach.
+ *
+ * This is the ruler the month grid counts with (see `useMonthRowMetrics`). It renders the actual
+ * component rather than a look-alike so it cannot drift from it: any change to the chip's height,
+ * border or padding is a change to the probe by construction. Two rows rather than one because the
+ * gap is only observable BETWEEN two rows — reading it off the class would be the constant again.
+ *
+ * `invisible` keeps its layout box (so it can be measured) while painting nothing and taking no
+ * clicks; `absolute` keeps it out of the cell's flow; `inert` and `aria-hidden` keep its buttons out
+ * of the tab order and out of the accessibility tree, so a screen reader never meets a phantom copy
+ * of somebody's meeting.
+ */
+function MonthRowProbe({ ref, meeting }: { ref: Ref<HTMLDivElement>; meeting: TimedMeeting }) {
+  return (
+    <div
+      ref={ref}
+      aria-hidden
+      inert
+      className={cn("invisible absolute inset-x-0 top-0", MONTH_ROW_STACK_CLASS)}
+    >
+      <MonthChip meeting={meeting} onOpen={noop} />
+      <MonthChip meeting={meeting} onOpen={noop} />
+    </div>
+  );
+}
+
+function noop() {}
 
 /**
  * The selected day, in full, beside the grid — Outlook's day pane, not Google's overflow bubble.
@@ -795,9 +1132,12 @@ function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => v
  * same list in a place where repeating the cell is not a repetition — the pane is understood as
  * "the day you selected, in detail", and the grid it details stays whole and untouched to its left.
  *
- * Rows are `WeekCard`s, the same component the week view builds a column out of. A detail pane
- * should say more than the chip it expands — the time, the host, the state badge, a Join button on
- * a live room — and the week view already had that row, so this cannot drift away from it either.
+ * Rows are `AgendaRow`s, the same component the Agenda view lists a day with. A detail pane should
+ * say more than the chip it expands — the time, the host, the head count and the route, a Join
+ * button on a live room — and the agenda already had that row, so this cannot drift away from it.
+ * It was the week view's `WeekCard` until the agenda design: a column of tinted, bordered cards
+ * with two pills each is a wall in which nothing stands out, and the pane is a list, not a column.
+ * The week keeps its cards; a seven-column grid is where a box per meeting earns its border.
  */
 function DayDetailPanel({
   day,
@@ -869,16 +1209,19 @@ function DayDetailPanel({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {meetings.length ? (
-            meetings.map((meeting) => (
-              <WeekCard
-                key={meeting.id}
-                meeting={meeting}
-                workspaceSlug={workspaceSlug}
-                onOpen={() => onOpenMeeting(meeting)}
-              />
-            ))
+            <ul className="space-y-0.5">
+              {meetings.map((meeting) => (
+                <li key={meeting.id}>
+                  <AgendaRow
+                    meeting={meeting}
+                    workspaceSlug={workspaceSlug}
+                    onOpen={() => onOpenMeeting(meeting)}
+                  />
+                </li>
+              ))}
+            </ul>
           ) : (
             // An empty day still opens, and still says which kind of empty it is. A pane that went
             // blank would read as broken, and "nothing here" is a different fact from "nothing here
@@ -931,17 +1274,69 @@ function useMeasuredHeight() {
   return [ref, height] as const;
 }
 
+/** One month-cell row as the browser actually laid it out: its height, and the space below it. */
+type MonthRowMetrics = { height: number; gap: number };
+
 /**
- * How many `MONTH_CHIP_HEIGHT` rows fit in `height`, once `reserved` pixels are spoken for.
+ * The real height of one chip row and the real gap between two, read off `MonthRowProbe`.
  *
- * `reserved` is the "+N more" line: a cell that cannot show everything has to keep room for the
- * count, or the count is the thing that gets clipped and the day silently loses meetings again.
- * Returns the fallback while nothing has been measured yet, and never returns a negative.
+ * Border boxes from `getBoundingClientRect`, not the observer's `contentRect`: the chip has a
+ * border, and the content box would under-report every row by two pixels — the very kind of drift
+ * this replaces. The gap is taken as the distance between the two probe rows rather than from a
+ * computed margin, so it stays right however the stack happens to implement its spacing.
+ *
+ * Same timing as `useMeasuredHeight`: a synchronous first reading in the ref callback, so the
+ * first painted frame already uses it, then a `ResizeObserver` for anything that changes the
+ * chip's size later — a root font-size change resizes the probe, and the probe reports it. A
+ * reading equal to the last one keeps the previous object, so width-only resizes do not re-render
+ * the grid.
  */
-function fitsInList(height: number | null, reserved: number) {
-  if (height === null) return MONTH_CELL_CHIP_FALLBACK;
-  const usable = height - reserved + MONTH_CHIP_GAP;
-  return Math.max(0, Math.floor(usable / (MONTH_CHIP_HEIGHT + MONTH_CHIP_GAP)));
+function useMonthRowMetrics() {
+  const [metrics, setMetrics] = useState<MonthRowMetrics | null>(null);
+
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+
+    const read = () => {
+      const first = node.children[0];
+      const second = node.children[1];
+      if (!first || !second) return;
+      const a = first.getBoundingClientRect();
+      const b = second.getBoundingClientRect();
+      const next = { height: a.height, gap: Math.max(0, b.top - a.bottom) };
+      setMetrics((current) =>
+        current && current.height === next.height && current.gap === next.gap ? current : next,
+      );
+    };
+
+    read();
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, metrics] as const;
+}
+
+/**
+ * How many equal slots a cell's list holds: `floor((list + gap) / (row + gap))`.
+ *
+ * A slot is one chip OR the "+N more" row — they are drawn at the same height precisely so this
+ * can be one division. n rows take `n·row + (n−1)·gap`, which is where the `+ gap` on top comes
+ * from: the last row has no gap after it.
+ *
+ * Never below 1. A cell squeezed below a single row still owes the reader the count, and "+N more"
+ * alone is the honest thing to draw there; zero slots would draw nothing and lose the whole day.
+ * Returns the fallback until both the list and a row have been measured.
+ */
+function slotsInList(listHeight: number | null, row: MonthRowMetrics | null) {
+  if (listHeight === null || row === null || row.height <= 0) return MONTH_CELL_SLOT_FALLBACK;
+  const slots = Math.floor(
+    (listHeight + row.gap + MONTH_FIT_TOLERANCE_PX) / (row.height + row.gap),
+  );
+  return Math.max(1, slots);
 }
 
 /** "Tuesday, 8 September 2026" — the panel's title and the cells' accessible names. */
@@ -989,7 +1384,7 @@ function WeekGrid({
   const byDay = useMemo(() => {
     const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
-      const key = dayKey(meeting.occursAt);
+      const key = agendaDayKey(meeting.occursAt);
       const bucket = map.get(key);
       if (bucket) bucket.push(meeting);
       else map.set(key, [meeting]);
@@ -1000,7 +1395,7 @@ function WeekGrid({
     return map;
   }, [meetings]);
 
-  const todayKey = String(startOfDay(new Date()));
+  const todayKey = agendaDayKey(new Date());
 
   return (
     <div className="flex h-full flex-col">
@@ -1009,7 +1404,7 @@ function WeekGrid({
       <div className="min-h-0 flex-1 overflow-x-auto">
         <div className="grid h-full min-w-[860px] grid-cols-7">
           {days.map((day) => {
-            const key = String(startOfDay(day));
+            const key = agendaDayKey(day);
             const dayMeetings = byDay.get(key) ?? EMPTY_MEETINGS;
             const isToday = key === todayKey;
             const isWeekend = day.getDay() === 0 || day.getDay() === 6;
@@ -1152,9 +1547,12 @@ function WeekCard({
   onOpen: () => void;
 }) {
   // A cancelled meeting is not live, whatever the clock says about its slot: the pulsing dot and
-  // the Join button are affordances for a room that is actually open.
-  const isCancelled = meeting.status === "cancelled";
-  const isLive = meeting.timeState === "live" && !isCancelled;
+  // the Join button are affordances for a room that is actually open. `meetingDisplayState` is
+  // where cancellation outranks the clock, for this card and every other row on the page.
+  const displayState = meetingDisplayState(meeting);
+  const isCancelled = displayState === "cancelled";
+  const isLive = displayState === "live";
+  const relation = relationLabel(meeting);
 
   return (
     <div
@@ -1167,35 +1565,50 @@ function WeekCard({
           onOpen();
         }
       }}
-      title={meeting.title}
+      title={`${meeting.title} · ${relation}`}
       className={cn(
         "cursor-pointer rounded-lg border px-2 py-1.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
         rowToneClass(meeting),
       )}
     >
-      <div className="flex items-center gap-1.5">
+      {/* Both levels wrap. A week column on a laptop is ~120px wide, and time + "You host" +
+          "Upcoming" is wider than that; without wrapping the pills would run out past the card's
+          border. So the pill group drops under the time when it has to, and splits into its own
+          lines when even that is too narrow — always right-aligned, never overflowing. */}
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
         <span className="text-[10px] font-medium tabular-nums text-ink-muted">
           {formatTime(meeting.occursAt)}
         </span>
-        <span
-          className={cn(
-            "ml-auto rounded px-1 py-0.5 text-[9px] font-medium capitalize",
-            stateBadgeClass(meeting),
-          )}
-        >
-          {stateBadgeLabel(meeting)}
-        </span>
-        {isLive ? (
-          <span className="relative flex size-1.5 shrink-0">
-            <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
+        <span className="ml-auto flex flex-wrap items-center justify-end gap-1">
+          <span
+            className={cn(
+              "rounded px-1 py-0.5 text-[9px] font-medium",
+              relationPillClass(meeting),
+            )}
+          >
+            {relation}
           </span>
-        ) : null}
+          <span
+            className={cn(
+              "rounded px-1 py-0.5 text-[9px] font-medium capitalize",
+              stateBadgeClass(meeting),
+            )}
+          >
+            {meetingStateLabel(meeting)}
+          </span>
+          {isLive ? (
+            <span className="relative flex size-1.5 shrink-0">
+              <span className="absolute inline-flex size-1.5 rounded-full bg-rose-500/80 motion-safe:animate-ping" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-rose-500" />
+            </span>
+          ) : null}
+        </span>
       </div>
 
       <p
         className={cn(
-          "mt-1 line-clamp-2 text-[11px] font-medium leading-snug text-ink",
+          "mt-1 line-clamp-2 text-[11px] leading-snug text-ink",
+          isHostedByViewer(meeting) ? "font-semibold" : "font-normal",
           isCancelled && "text-ink-muted",
         )}
       >
@@ -1536,65 +1949,133 @@ function isGoogleMeetMeeting(meeting: MyMeetingItem) {
  *
  * And it is colour ONLY. No strike-through, on anything: `line-through` was removed from this file
  * in 8953691 at the user's request, and it does not come back for this state or any other.
+ *
+ * The hue answers "what state is this meeting in". Whether the viewer HOSTS it or was merely
+ * INVITED is a second question, and it gets a second visual variable rather than a second set of
+ * colours: filled for host (the tinted background in the state hue, the title in semibold),
+ * outline for invited (a transparent card with its border in the state hue, the title at normal
+ * weight). Two variables that vary independently can be read independently — a sky outline is
+ * "upcoming, invited" at a glance — whereas five more hues for the relation would have made the
+ * palette above unlearnable. Cancelled keeps its slate and still splits the same way, so the one
+ * rule holds on every card. The words ("You host" / "Invited") travel with the fill in the card's
+ * pill and the chip's accessible name, so none of this is colour-only for a screen reader.
+ *
+ * Which state a row shows comes from `meetingDisplayState` — cancellation first, then the clock —
+ * the one rule the badge, the state icon and both tone functions here all ask, rather than each
+ * re-spelling the `status === "cancelled"` branch for itself.
  */
 function rowToneClass(meeting: TimedMeeting) {
-  if (meeting.status === "cancelled") {
-    return "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
+  const hosted = isHostedByViewer(meeting);
+  const state = meetingDisplayState(meeting);
+  if (state === "cancelled") {
+    return hosted
+      ? "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2"
+      : "border-l-4 border-l-slate-400 border-slate-400/60 bg-transparent text-ink-muted hover:bg-surface-2/60";
   }
-  if (meeting.timeState === "live") {
-    return "border-l-4 border-l-rose-500 border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20";
+  if (state === "live") {
+    return hosted
+      ? "border-l-4 border-l-rose-500 border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20"
+      : "border-l-4 border-l-rose-500 border-rose-500/60 bg-transparent text-rose-950 dark:text-rose-100 hover:bg-rose-500/10";
   }
-  if (meeting.timeState === "upcoming") {
-    return "border-l-4 border-l-sky-500 border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
+  if (state === "upcoming") {
+    return hosted
+      ? "border-l-4 border-l-sky-500 border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20"
+      : "border-l-4 border-l-sky-500 border-sky-500/60 bg-transparent text-sky-950 dark:text-sky-100 hover:bg-sky-500/10";
   }
-  if (meeting.timeState === "missed") {
-    return "border-l-4 border-l-amber-500 border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20";
+  if (state === "missed") {
+    return hosted
+      ? "border-l-4 border-l-amber-500 border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20"
+      : "border-l-4 border-l-amber-500 border-amber-500/60 bg-transparent text-amber-950 dark:text-amber-100 hover:bg-amber-500/10";
   }
-  return "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
-}
-
-function monthChipToneClass(meeting: TimedMeeting) {
-  if (meeting.status === "cancelled") {
-    return "border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2";
-  }
-  if (meeting.timeState === "live") {
-    return "border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20";
-  }
-  if (meeting.timeState === "upcoming") {
-    return "border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20";
-  }
-  if (meeting.timeState === "missed") {
-    return "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20";
-  }
-  return "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20";
+  return hosted
+    ? "border-l-4 border-l-emerald-500 border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20"
+    : "border-l-4 border-l-emerald-500 border-emerald-500/60 bg-transparent text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/10";
 }
 
 /**
- * Cancellation outranks the clock, exactly as it already does in rowToneClass and
- * monthChipToneClass. Without this first branch a cancelled meeting wore a green "Joined" or a
- * blue "Upcoming" pill next to its own greyed-out title on a grey card — three signals, three
- * different answers to "what happened to this meeting?".
- *
- * That branch is also why a cancelled meeting resolving to `missed` changes nothing on screen: it
- * never reaches the state branches below. "Cancelled" is the more specific answer and it wins.
+ * The month chip's half of the same rule — same hues, same fill-versus-outline split as
+ * `rowToneClass`, minus the left accent bar a 22px row has no room for. On a chip that small the
+ * outline carries more of the load, so the invited border sits at 60% of the hue where the hosted
+ * one keeps the quieter 25% it has always had behind its fill.
  */
-function stateBadgeClass(meeting: TimedMeeting) {
-  if (meeting.status === "cancelled") return "bg-surface-3 text-ink-muted";
-  if (meeting.timeState === "live") return "bg-rose-500/10 text-rose-700";
-  if (meeting.timeState === "upcoming") return "bg-sky-500/10 text-sky-700";
-  if (meeting.timeState === "missed") return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
-  return "bg-emerald-500/10 text-emerald-700";
+function monthChipToneClass(meeting: TimedMeeting) {
+  const hosted = isHostedByViewer(meeting);
+  const state = meetingDisplayState(meeting);
+  if (state === "cancelled") {
+    return hosted
+      ? "border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2"
+      : "border-slate-400/60 bg-transparent text-ink-muted hover:bg-surface-2/60";
+  }
+  if (state === "live") {
+    return hosted
+      ? "border-rose-500/25 bg-rose-500/10 text-rose-950 dark:text-rose-100 hover:bg-rose-500/20"
+      : "border-rose-500/60 bg-transparent text-rose-950 dark:text-rose-100 hover:bg-rose-500/10";
+  }
+  if (state === "upcoming") {
+    return hosted
+      ? "border-sky-500/25 bg-sky-500/10 text-sky-950 dark:text-sky-100 hover:bg-sky-500/20"
+      : "border-sky-500/60 bg-transparent text-sky-950 dark:text-sky-100 hover:bg-sky-500/10";
+  }
+  if (state === "missed") {
+    return hosted
+      ? "border-amber-500/25 bg-amber-500/10 text-amber-950 dark:text-amber-100 hover:bg-amber-500/20"
+      : "border-amber-500/60 bg-transparent text-amber-950 dark:text-amber-100 hover:bg-amber-500/10";
+  }
+  return hosted
+    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/20"
+    : "border-emerald-500/60 bg-transparent text-emerald-950 dark:text-emerald-100 hover:bg-emerald-500/10";
 }
 
-/** The label half of the same decision — kept beside the colour so the two cannot drift apart. */
-function stateBadgeLabel(meeting: TimedMeeting) {
-  if (meeting.status === "cancelled") return "Cancelled";
-  if (meeting.timeState === "live") return "Live";
-  if (meeting.timeState === "upcoming") return "Upcoming";
-  // "Missed", not "Not attended": the shorter word is the one people use, and the badge has room
-  // for one word. It says nothing about fault — a meeting that never happened is missed too.
-  if (meeting.timeState === "missed") return "Missed";
-  return "Joined";
+/**
+ * Whether the viewer hosts this meeting — the fill half of the tone rule above.
+ *
+ * `=== true` rather than a bare truthiness check: the mapper already normalises the field, and
+ * anything that is not an explicit yes is drawn as an invitation, which is the safer thing to
+ * mislabel than a stranger's meeting shown as yours.
+ */
+function isHostedByViewer(meeting: MyMeetingItem) {
+  return meeting.isHost === true;
+}
+
+/**
+ * The words for the fill — kept beside it, as `meetingStateLabel` sits beside the state rule, so
+ * the two cannot drift.
+ */
+function relationLabel(meeting: MyMeetingItem) {
+  return isHostedByViewer(meeting) ? "You host" : "Invited";
+}
+
+/**
+ * The relation pill beside the state badge on a week card. Neutral, not in the state hue: a second
+ * coloured pill would read as a second state. It repeats the card's own encoding in grey instead —
+ * filled for host, outlined for invited — so the pill and the card it sits on say the same thing.
+ * The outline is an inset ring rather than a border so both pills stay the badge's exact height.
+ */
+function relationPillClass(meeting: MyMeetingItem) {
+  return isHostedByViewer(meeting)
+    ? "bg-ink/[0.07] text-ink"
+    : "bg-transparent text-ink-muted ring-1 ring-inset ring-ink/25";
+}
+
+/**
+ * Cancellation outranks the clock, exactly as it does in rowToneClass and monthChipToneClass —
+ * all three ask `meetingDisplayState`. Before cancellation came first here, a cancelled meeting
+ * wore a green "Joined" or a blue "Upcoming" pill next to its own greyed-out title on a grey card —
+ * three signals, three different answers to "what happened to this meeting?".
+ *
+ * That ordering is also why a cancelled meeting resolving to `missed` changes nothing on screen: it
+ * is "cancelled" before the clock is consulted. The more specific answer wins.
+ *
+ * The badge's WORDS are `meetingStateLabel`, from the same module as the rule, so the label and
+ * this colour cannot come to disagree about which state they are naming.
+ */
+function stateBadgeClass(meeting: TimedMeeting) {
+  const state = meetingDisplayState(meeting);
+  if (state === "cancelled") return "bg-surface-3 text-ink-muted";
+  if (state === "live") return "bg-rose-500/10 text-rose-700";
+  if (state === "upcoming") return "bg-sky-500/10 text-sky-700";
+  if (state === "missed") return "bg-amber-500/15 text-amber-700 dark:text-amber-400";
+  return "bg-emerald-500/10 text-emerald-700";
 }
 
 function formatTime(value: string) {

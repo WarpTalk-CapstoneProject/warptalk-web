@@ -4,8 +4,11 @@ import assert from "node:assert/strict";
 import {
   isLiveMeetingPath,
   liveMeetingPath,
+  readScheduleFocus,
   roomDetailPath,
   roomWaitingPath,
+  schedulesPath,
+  withScheduleFocus,
 } from "../workspace-routes.ts";
 
 test("every workspace path carries the slug", () => {
@@ -34,6 +37,56 @@ test("the shell recognises the live meeting at either address", () => {
   assert.equal(isLiveMeetingPath("/acme/rooms/r1/live"), true);
   assert.equal(isLiveMeetingPath("/acme/rooms/r1/live/"), true);
   assert.equal(isLiveMeetingPath("/room/r1"), true);
+});
+
+test("the calendar deep link carries the booked day and the room", () => {
+  const href = withScheduleFocus(schedulesPath("acme"), {
+    date: new Date(2026, 8, 18, 1, 30),
+    roomId: "r1",
+  });
+  assert.equal(href, "/acme/schedules?date=2026-09-18&focus=r1");
+});
+
+test("the deep link's day is the local day, not the UTC one", () => {
+  // 00:30 local is still "yesterday" in UTC for everyone east of Greenwich; toISOString() would
+  // open the calendar on the wrong day, and on the 1st in the wrong month.
+  const href = withScheduleFocus("/acme/schedules", { date: new Date(2026, 9, 1, 0, 30) });
+  assert.equal(href, "/acme/schedules?date=2026-10-01");
+});
+
+test("a deep link with nothing to say leaves the path alone", () => {
+  assert.equal(withScheduleFocus("/acme/schedules", {}), "/acme/schedules");
+  assert.equal(
+    withScheduleFocus("/acme/schedules", { date: new Date(Number.NaN), roomId: "  " }),
+    "/acme/schedules",
+  );
+  assert.equal(withScheduleFocus("/acme/schedules", { roomId: "r1" }), "/acme/schedules?focus=r1");
+});
+
+test("the calendar reads back exactly what the link wrote", () => {
+  const focus = readScheduleFocus(new URLSearchParams("date=2026-09-18&focus=r1"));
+  assert.ok(focus);
+  assert.equal(focus.roomId, "r1");
+  assert.ok(focus.date);
+  assert.equal(focus.date.getFullYear(), 2026);
+  assert.equal(focus.date.getMonth(), 8);
+  assert.equal(focus.date.getDate(), 18);
+  assert.equal(focus.date.getHours(), 0);
+});
+
+test("a malformed day is dropped, not rolled over into another month", () => {
+  assert.deepEqual(readScheduleFocus(new URLSearchParams("date=2026-02-30&focus=r1")), {
+    date: null,
+    roomId: "r1",
+  });
+  assert.equal(readScheduleFocus(new URLSearchParams("date=2026-13-01")), null);
+  assert.equal(readScheduleFocus(new URLSearchParams("date=18/09/2026")), null);
+});
+
+test("a URL with no deep link reads as none", () => {
+  assert.equal(readScheduleFocus(new URLSearchParams("")), null);
+  assert.equal(readScheduleFocus(new URLSearchParams("focus=%20")), null);
+  assert.equal(readScheduleFocus(null), null);
 });
 
 test("the rooms around it are not the live meeting", () => {
