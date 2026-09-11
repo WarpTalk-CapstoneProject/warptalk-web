@@ -143,6 +143,11 @@ export const API = {
     consent: (id: string) => `/room-artifacts/${id}/consent`,
     regenerateSummary: (roomId: string) =>
       `/room-artifacts/rooms/${roomId}/summary/regenerate`,
+    // WT-669 — what became of one queued rewrite. The request answers 202 and everything after
+    // that happens out of the caller's sight, so this is where the reason lives when it goes
+    // wrong. Keyed by the request's own id: it is one person's click, not part of the room.
+    summaryRewriteStatus: (roomId: string, requestId: string) =>
+      `/room-artifacts/rooms/${roomId}/summary/regenerate/${requestId}`,
     // Reading a meeting in a shape and language. A GET that can cause work: the first reader of
     // a pair nobody has asked for gets a 202 and the answer lands a moment later. It never
     // changes what any other reader sees, which is what separates it from regenerateSummary.

@@ -143,7 +143,7 @@ export function MeetingControlBar({
   onToggleMuteOnEntry,
   onMuteAll,
   onToggleRecording,
-  onToggleTranscriptPause,
+  onToggleTranscriptPauseInPanel,
 }: {
   meetingEnabled: boolean;
   cameraEnabled: boolean;
@@ -293,13 +293,21 @@ export function MeetingControlBar({
    * is told by toast either way. Omit to hide the record button. */
   onToggleRecording?: () => void;
   /**
-   * WT-605, host-only: stops/resumes writing the transcript down.
+   * WT-605, host-only: opens the transcript panel and then stops/resumes writing it down.
    *
-   * Omit to hide the control — the endpoint gates on the room's HostId, so anyone else pressing
-   * it gets a 403. The STATE is still shown to everybody, in the transcript panel; it is only the
+   * NOT the same handler the panel's own control gets, and the difference is the point of this
+   * prop. The switch itself lives in the Transcript panel's tab row now, beside the thing it
+   * changes. Below `lg` that panel is an overlay drawer the host may have closed, which would
+   * leave them no way to reach it at all — so the dock keeps one entrance, and it opens the
+   * drawer on the Transcript tab BEFORE it flips anything. A control whose effect lands somewhere
+   * the user cannot see is how "the button did nothing" gets reported; this one always ends with
+   * the result on screen.
+   *
+   * Omit to hide the row — the endpoint gates on the room's HostId, so anyone else pressing it
+   * gets a 403. The STATE is still shown to everybody, in the transcript panel; it is only the
    * switch that is the host's.
    */
-  onToggleTranscriptPause?: () => void;
+  onToggleTranscriptPauseInPanel?: () => void;
 }) {
   const [isSettingsMenuOpen, setIsSettingsMenuOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
@@ -537,34 +545,15 @@ export function MeetingControlBar({
         />
       ) : null}
 
-      {/* WT-605. Sits beside Record because both are about what the meeting leaves behind, and
-          they are genuinely independent: a room can be recorded with the transcript paused, or
-          transcribed with no recording.
+      {/* WT-605. The Pause Transcript switch used to sit HERE, between Record and CC, and the
+          move out is the fix rather than a tidy-up. Three of its neighbours change what the
+          meeting does; this one changes what one panel shows, and reading it in that row invited
+          exactly the confusion the ticket forbids — that pausing the transcript pauses the
+          meeting. It now lives in the Transcript panel's tab row, next to the lines it stops.
 
-          Host-only by omission, unlike Record directly above — TranscriptRecordingService gates
-          on IsRoomHostAsync. Every participant is still TOLD, by the notice in the transcript
-          panel and the toast the broadcast raises; it is the switch that is restricted, not the
-          fact. */}
-      {onToggleTranscriptPause ? (
-        <MeetControl
-          label={
-            transcriptPausePending
-              ? "Transcript request in progress"
-              : transcriptPaused
-                ? "Resume transcript"
-                : "Pause transcript"
-          }
-          active={transcriptPaused}
-          disabled={transcriptPausePending}
-          icon={
-            <PauseCircle
-              className={`h-[18px] w-[18px] ${transcriptPausePending ? "animate-pulse" : ""}`}
-              weight={transcriptPaused ? "fill" : "regular"}
-            />
-          }
-          onClick={onToggleTranscriptPause}
-        />
-      ) : null}
+          What stays in the dock is one entrance, in the Settings menu below: the panel is a
+          drawer below `lg` and can be shut, and a switch you can only reach by first knowing to
+          open a drawer is a switch the host loses. */}
 
       <LiveKitTrackControls
         enabled={meetingEnabled}
@@ -744,6 +733,33 @@ export function MeetingControlBar({
                       value={voiceSelection.label}
                       onClick={() => setSettingsSection("voice")}
                       hasSubmenu
+                    />
+                  ) : null}
+                  {/* WT-605, host-only. The switch lives in the Transcript panel's tab row; this
+                      is the way back to it when that panel is a closed drawer, which is what it
+                      is on anything narrower than `lg`.
+
+                      Deliberately not a second switch. It opens the panel on the Transcript tab
+                      and only then flips the state, so the host always watches the result land —
+                      the alternative, a control in the dock that changes something behind a shut
+                      drawer, is the shape this ticket is moving away from. The value says which
+                      state the transcript is in right now, so the row is legible without opening
+                      anything. */}
+                  {onToggleTranscriptPauseInPanel ? (
+                    <SettingsRow
+                      label={transcriptPaused ? "Resume transcript" : "Pause transcript"}
+                      icon={
+                        <PauseCircle
+                          className={`h-4 w-4 ${transcriptPausePending ? "animate-pulse" : ""}`}
+                          weight={transcriptPaused ? "fill" : "regular"}
+                        />
+                      }
+                      active={transcriptPaused}
+                      value={transcriptPaused ? "Paused" : "Recording"}
+                      onClick={() => {
+                        onToggleTranscriptPauseInPanel();
+                        closeSettingsMenu();
+                      }}
                     />
                   ) : null}
                   <div className="my-1 h-[1px] bg-surface-3" />
