@@ -316,12 +316,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
    * Read from the ACTIVE meeting session's translation sessions — the same query, and so the same
    * cache entry, that PersistentMeetingSession derives its own `translationStarted` from — so the
    * popup and the meeting cannot disagree about whether translation is on. The active room is the
-   * one whose meeting session carries the pipeline (LiveKit, the dub, both bridge legs), and
-   * flow 2 makes the offer's room active here before anything starts (`onBridgeRoomActivated`).
-   *
-   * KNOWN GAP: a room nobody opened in this window. The popup's own Start
-   * (BridgeOverlayControls) opens a translation session server-side without making the room
-   * active here, so that case is not seen by this and still falls back to the schedule.
+   * one whose meeting session carries the pipeline (LiveKit, the dub, both bridge legs), and both
+   * ways into a bridge room make it active here before anything starts (`onBridgeRoomActivated`,
+   * below): the offer when it creates the room, and the popup's own Start before it opens a
+   * translation session. So a room nobody opened in this window is seen here too.
    *
    * The trigger used to be told nothing, so at start + one hour a room with no end time left its
    * window mid-translation, and the popup carrying Stop was closed or navigated to the offer.
