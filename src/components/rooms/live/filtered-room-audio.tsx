@@ -4,10 +4,8 @@ import { useEffect } from "react";
 import { RemoteTrackPublication, Track } from "livekit-client";
 import { AudioTrack, isTrackReference, useTracks } from "@livekit/components-react";
 
-import {
-  AI_INTERPRETER_PREFIX,
-  resolveInterpreterTracks,
-} from "@/lib/meeting/interpreter-track";
+import { AI_INTERPRETER_PREFIX } from "@/lib/meeting/interpreter-track";
+import { routeRoomAudio } from "@/lib/meeting/room-audio-routing";
 import { BridgeOutboundAudio } from "./bridge-outbound-audio";
 import { HalfDuplexMic } from "./half-duplex-mic";
 
@@ -59,7 +57,9 @@ import { HalfDuplexMic } from "./half-duplex-mic";
  * as it actually sounds — which is not a mode anyone asked for, and left "turn the dub off
  * to hear the real voice" with no way to do it. TranslationTextDto keeps arriving over
  * SignalR regardless (that path doesn't touch LiveKit tracks), so captions are
- * unaffected — this only silences playback.
+ * unaffected — this only silences playback. It silences THIS listener's playback only: in an
+ * external-bridge meeting the listener's own dub is what the far side hears, and it is sent
+ * whether or not they have chosen to hear dubs themselves (see lib/meeting/room-audio-routing).
  *
  * `translationActive = false` disables the language routing entirely: the room is an
  * ordinary call, so every participant is audible and no interpreter track is played.
@@ -77,6 +77,7 @@ export function FilteredRoomAudio({
   translationActive,
   localUserId,
   bridgeOutboundDeviceId,
+  bridgeStandInIdentity,
   onBridgeOutboundError,
 }: {
   /** normalizeLanguageCode(targetLanguage) — see page.tsx for why this must be computed there, not re-derived here. */
@@ -85,7 +86,10 @@ export function FilteredRoomAudio({
   speakerLanguageByUserId: Record<string, string>;
   /** A real Cartesia voice id this listener explicitly chose, or null for the automatic default. */
   voicePreference: string | null;
-  /** false = transcript-only mode: no audio track is ever wanted, regardless of language/voice. Defaults to true. */
+  /**
+   * false = this listener hears no dubs, only people as they actually sound. Governs what reaches
+   * THEIR speakers and nothing else: the outbound bridge leg is sent regardless. Defaults to true.
+   */
   voiceEnabled?: boolean;
   /** room.status === "in_progress" — false means no STT/MT/TTS pipeline is running, so this is a plain call. */
   translationActive: boolean;
@@ -98,6 +102,13 @@ export function FilteredRoomAudio({
    * side is meant to hear, and this is the device that carries it to them.
    */
   bridgeOutboundDeviceId?: string | null;
+  /**
+   * External-bridge meetings only: the identity this client publishes the far side under. Its
+   * raw track is never subscribed — the host is in the Meet call and hears the far side there, so
+   * playing it here too is the same voice twice. Null until the bridge token has been fetched,
+   * which is before the stand-in can publish anything.
+   */
+  bridgeStandInIdentity?: string | null;
   /** Surfaces a failed hand-off to the virtual device; silence here is indistinguishable from a working bridge. */
   onBridgeOutboundError?: (message: string) => void;
 }) {
@@ -115,78 +126,27 @@ export function FilteredRoomAudio({
   // subscription logic runs, so nothing below ever has to special-case "is this me".
   const trackRefs = tracks.filter(isTrackReference).filter((trackRef) => !trackRef.publication.isLocal);
 
-  // The whole rule lives in lib/meeting/interpreter-track.ts, where it can be tested: it is a
-  // WHOLE-ROOM decision (a speaker's default track is declined only if a track in this
-  // listener's voice exists for that same speaker), so it cannot be expressed as a predicate
-  // over one identity — which is exactly the mistake that discarded every cloned voice.
-  const interpreterTracks = resolveInterpreterTracks({
+  // The whole rule lives in lib/meeting/room-audio-routing.ts, where it can be tested. It is a
+  // WHOLE-ROOM decision — a speaker's default dub is declined only if a track in this listener's
+  // voice exists for that same speaker, and a raw mic is dropped only once its dub exists — so it
+  // cannot be expressed as a predicate over one identity, which is exactly the mistake that
+  // discarded every cloned voice.
+  //
+  // In a bridge room it also carries the two rules voiceEnabled must not override: the host's own
+  // dub is always kept (it is what the far side hears, through BridgeOutboundAudio below), and the
+  // stand-in's raw track is never kept (the host hears the far side in Meet already).
+  const routing = routeRoomAudio({
     identities: trackRefs.map((trackRef) => trackRef.participant.identity),
     targetLanguageNormalized,
+    speakerLanguageByUserId,
     voicePreference,
+    voiceEnabled,
+    translationActive,
+    localUserId,
+    bridgeOutboundReady: bridgeActive,
+    bridgeStandInIdentity,
   });
-
-  /** An interpreter identity this listener would accept → the speaker it dubs, else null. */
-  const dubbedSpeakerId = (identity: string) => interpreterTracks.get(identity) ?? null;
-
-  // Speakers whose dub is ACTUALLY on the wire right now. tts_worker creates an
-  // interpreter bot lazily, on the first synthesized chunk for a (speaker, language,
-  // voice) — see LiveKitTTSPublisher._get_or_create_bot — so between "this listener's
-  // language differs from that speaker's" becoming known and that speaker's first
-  // utterance completing the STT→MT→TTS round trip, the dub simply does not exist yet.
-  // Cutting the raw mic on the language mismatch alone therefore silenced the speaker
-  // for exactly the utterance that would have summoned their interpreter, leaving only
-  // listeners who happen to share the speaker's language able to hear anything at all.
-  const dubbedSpeakerIds = new Set(
-    trackRefs
-      .map((trackRef) => dubbedSpeakerId(trackRef.participant.identity))
-      .filter((speakerId): speakerId is string => speakerId !== null),
-  );
-
-  const isWanted = (identity: string) => {
-    // Voice off means "no dubs", not "no sound".
-    //
-    // This returned false for EVERY track, so turning the switch off did not hand the room
-    // back its real voices — it produced silence. The report is exact: "bật thì nghe tiếng
-    // bên người khác, tắt thì không nghe", and separately "tắt voice clone rồi mà vẫn không
-    // nghe được giọng thật". Both are this line.
-    //
-    // Off now drops the AI interpreter tracks and keeps every human microphone, which is
-    // what the switch was always supposed to mean: hear people as they actually sound.
-    if (!voiceEnabled) {
-      return !identity.startsWith(AI_INTERPRETER_PREFIX);
-    }
-    if (identity.startsWith(AI_INTERPRETER_PREFIX)) {
-      // Never your own dub. The interpreter publishes a track per (speaker, language), and
-      // a speaker who happens to have picked the same listen language as their speak
-      // language is subscribed to the bot that is dubbing THEM — so they hear a synthetic
-      // copy of what they just said, a second behind themselves. Nobody needs a translation
-      // of their own sentence into the language they said it in.
-      const dubbed = dubbedSpeakerId(identity);
-      // ...unless this is a bridge meeting, where your own dub is the outbound leg. It still
-      // never reaches your headphones — BridgeOutboundAudio below renders it to the virtual
-      // device instead of <AudioTrack> — but it does have to stay SUBSCRIBED, and this predicate
-      // is what drives setSubscribed(). Returning false here would unsubscribe the one track the
-      // far side is listening to.
-      if (localUserId && dubbed === localUserId && !bridgeActive) return false;
-      // A lingering bot must not be played once translation has stopped: tts_worker only
-      // sweeps idle bots from inside _get_or_create_bot, so when synthesis stops there is
-      // no next creation to trigger the sweep and the bot stays in the room indefinitely.
-      return translationActive && dubbedSpeakerId(identity) !== null;
-    }
-    // With no pipeline running there is no dub to prefer over anyone, and a stale bot must
-    // not be mistaken for one — this is an ordinary call, so every participant is audible.
-    if (!translationActive) return true;
-    // Real participant's own microphone. Audible if THEY speak the language this
-    // listener chose to hear — otherwise the AI interpreter track above is this
-    // listener's version of that speaker, and the raw original would just double up.
-    const speakerLang = speakerLanguageByUserId[identity];
-    if (!speakerLang || speakerLang === targetLanguageNormalized) return true;
-    // Mismatched language: the dub is preferred, but only once it exists. Falling back
-    // to the untranslated original is a worse listen than the dub and a far better one
-    // than dead air, and it self-corrects — the moment the bot publishes, the identity
-    // list changes, this recomputes, and the raw mic is dropped in favour of the dub.
-    return !dubbedSpeakerIds.has(identity);
-  };
+  const isWanted = (identity: string) => routing.wanted.has(identity);
 
   // trackRefs is a fresh array every render (useTracks), so the effect below keys on
   // this derived, stable string instead — otherwise it would call setSubscribed() on
@@ -208,7 +168,7 @@ export function FilteredRoomAudio({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, trackIdentityFingerprint]);
+  }, [targetLanguageNormalized, speakerLanguageByUserId, voicePreference, voiceEnabled, translationActive, localUserId, bridgeActive, bridgeStandInIdentity, trackIdentityFingerprint]);
 
   const wantedTracks = trackRefs.filter((trackRef) => isWanted(trackRef.participant.identity));
 
@@ -217,8 +177,8 @@ export function FilteredRoomAudio({
   // translation into the user's headphones as well as into Meet — the user would hear a delayed
   // copy of themselves in another language, which is the single most confusing thing this feature
   // can do while otherwise appearing to work.
-  const outboundTrack = bridgeActive
-    ? wantedTracks.find((trackRef) => dubbedSpeakerId(trackRef.participant.identity) === localUserId)
+  const outboundTrack = routing.outboundIdentity
+    ? wantedTracks.find((trackRef) => trackRef.participant.identity === routing.outboundIdentity)
     : undefined;
   const audibleTracks = wantedTracks.filter((trackRef) => trackRef !== outboundTrack);
 
