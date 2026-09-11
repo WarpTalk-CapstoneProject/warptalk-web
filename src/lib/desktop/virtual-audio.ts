@@ -150,9 +150,16 @@ export function describeAudioBridge(status: VirtualAudioStatus | null): AudioBri
       heading: "Audio bridge not available on this system yet",
       // Names the platform gap rather than implying the user did something wrong, and does not
       // suggest an install: there is nothing WarpTalk can detect here even after one.
+      //
+      // WT-578: this said WarpTalk could set the devices up "on macOS today", which stopped being
+      // true when Windows detection shipped (desktop v0.4.0, web v186). A Windows user on an older
+      // desktop build lands in this branch — `supported` comes from the app, and an app without
+      // the detection reports false — and was told their system was not supported, full stop. That
+      // is the one audience for whom the fix is a single update they were given no reason to make.
       message:
         "Translating a meeting in another app needs two virtual audio devices. WarpTalk can set " +
-        "those up on macOS today; support for this system is still being built. Meetings held in " +
+        "those up on macOS and Windows today; support for this system is still being built. On " +
+        "Windows, update the desktop app — detection arrived in v0.4.0. Meetings held in " +
         "WarpTalk itself are unaffected.",
       devices: [],
       action: null,

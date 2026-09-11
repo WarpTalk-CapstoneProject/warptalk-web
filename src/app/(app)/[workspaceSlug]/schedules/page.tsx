@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -1254,24 +1255,71 @@ function PastMeetingDialog({
   onOpenChange: (open: boolean) => void;
   onDownload: (artifact: RoomHistoryArtifact) => void;
 }) {
+  /**
+   * WT-664 — where focus lands when the dialog opens, now that the body scrolls.
+   *
+   * Base UI focuses the first tabbable element by default, which here is the "Hosted by"
+   * chip in the middle of the body. The browser scrolls a focused element into view, so the
+   * dialog opened 319px down its own description — the reader was dropped into the middle of
+   * a sentence. Harmless while nothing scrolled; not harmless now.
+   *
+   * Declared above the `!meeting` guard: a hook below an early return runs a different number
+   * of times on the two renders, which is React error #310.
+   */
+  const bodyRef = useRef<HTMLDivElement>(null);
+
   if (!meeting) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[620px] gap-0 p-0">
-        <DialogHeader className="border-b border-border px-5 py-4">
+      {/*
+       * WT-664 — three bands, and only the middle one is allowed to grow.
+       *
+       * `DialogContent` is `fixed top-1/2 -translate-y-1/2` with no height of its own, so it is
+       * exactly as tall as whatever is inside it. A meeting description is arbitrary user text
+       * (a TipTap field with Markdown enabled — agendas, lists, links), and one long one made
+       * this popup 958px tall inside an 800px window: the title overflowed above the top edge,
+       * the artifacts below the bottom one, and NEITHER could be reached. The page behind a
+       * fixed popup does not scroll, so the only way to read the rest was to zoom the browser
+       * out, which is what the reporter had to do.
+       *
+       * The bound therefore belongs on the dialog (85dvh), and the scroll belongs on the band
+       * that holds the unbounded content. The title stays pinned so you always know which
+       * meeting you are reading, and "Open meeting" stays pinned so a long description can
+       * never push the only action off the bottom.
+       */}
+      <DialogContent
+        initialFocus={bodyRef}
+        className="flex max-h-[85dvh] max-w-[620px] flex-col gap-0 p-0"
+      >
+        <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-12">
           <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle">
             <span className="size-1.5 rounded-full bg-emerald-500" />
             Past meeting
           </div>
-          <DialogTitle className="mt-2 text-[20px] font-semibold leading-6">{meeting.title}</DialogTitle>
-          <DialogDescription className="mt-2 text-[12px] leading-5 text-ink-muted">
-            {meeting.description || "Quick access to the room summary and retained artifacts."}
-          </DialogDescription>
+          {/* break-words, here and on the description: an unbroken string — a pasted URL, a
+              token — has no space to wrap at, and would otherwise widen the popup instead of
+              wrapping inside it. */}
+          <DialogTitle className="mt-2 break-words text-[20px] font-semibold leading-6">
+            {meeting.title}
+          </DialogTitle>
         </DialogHeader>
 
-        <div className="px-5 py-4">
-          <dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-b border-border pb-4">
+        {/* min-h-0 is what makes flex-1 shrinkable: without it a flex child refuses to go below
+            its content height and the scrollbar never appears. */}
+        <div
+          ref={bodyRef}
+          tabIndex={-1}
+          className="min-h-0 flex-1 overflow-y-auto px-5 py-4 outline-none"
+        >
+          {/* Moved out of the header and into the scrolling band — it is the part that grows.
+              whitespace-pre-wrap keeps the line breaks the author typed; without it an agenda
+              written over twenty lines arrives as one wall of text. */}
+          <DialogDescription className="whitespace-pre-wrap break-words text-[12px] leading-5 text-ink-muted">
+            {meeting.description || "Quick access to the room summary and retained artifacts."}
+          </DialogDescription>
+
+          <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-1 border-b border-border pb-4">
             <Detail icon={CalendarBlank} label="When" value={formatDateTime(meeting.occursAt)} />
             <Detail icon={Clock} label="Duration" value={formatDuration(meeting.durationSeconds)} />
             <Detail icon={Users} label="Participants" value={String(meeting.participantCount)} />
@@ -1341,10 +1389,12 @@ function PastMeetingDialog({
               </li>
             )}
           </ul>
+        </div>
 
+        <div className="shrink-0 border-t border-border px-5 py-4">
           <Link
             href={`/${workspaceSlug}/rooms/${meeting.id}`}
-            className="mt-4 flex h-9 w-full items-center justify-center rounded-md border border-border bg-canvas text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
+            className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-canvas text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
           >
             Open meeting
           </Link>

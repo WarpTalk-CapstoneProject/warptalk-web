@@ -75,7 +75,13 @@ export default function BridgeSetupPreviewPage() {
   const [fixture, setFixture] = useState<keyof typeof FIXTURES>("missing");
 
   return (
-    <main className="min-h-[100dvh] bg-[#0b0b0c] px-6 py-10">
+    /*
+      Theme-following, like the wizard it frames. This page forced a near-black background while
+      the wizard hardcoded white text, and the two agreed by accident. Now that the wizard uses
+      tokens, a forced dark ground here would render dark text on black for anyone previewing in
+      the light theme — and the whole point of the page is to review how the wizard looks.
+    */
+    <main className="min-h-[100dvh] bg-canvas px-6 py-10">
       <div className="mx-auto mb-8 flex w-full max-w-2xl flex-wrap gap-2">
         {Object.entries(FIXTURES).map(([key, { label }]) => (
           <button
@@ -84,8 +90,8 @@ export default function BridgeSetupPreviewPage() {
             onClick={() => setFixture(key as keyof typeof FIXTURES)}
             className={`rounded-full border px-3 py-1 text-xs transition ${
               fixture === key
-                ? "border-white/40 bg-white/10 text-white"
-                : "border-white/15 text-white/50 hover:text-white"
+                ? "border-primary/50 bg-primary/10 text-ink"
+                : "border-border text-ink-muted hover:text-ink"
             }`}
           >
             {label}
