@@ -331,6 +331,17 @@ export function PersistentMeetingSession({
     roomId: string;
     sourceId: string;
   } | null>(null);
+  /**
+   * The identity the far side is published under, as the bridge-token response named it.
+   *
+   * FilteredRoomAudio needs it to keep that raw track out of the host's ears: the host is sitting
+   * in the Meet call and hears the far side there already. Learned from the same response that
+   * lets this client publish the stand-in at all, so it is always known before the track exists.
+   * Stamped with its room for the same reason the loopback selection above is.
+   */
+  const [bridgeStandIn, setBridgeStandIn] = useState<{ roomId: string; identity: string } | null>(null);
+  const bridgeStandInIdentity =
+    isBridgeRoom && bridgeStandIn?.roomId === roomId ? bridgeStandIn.identity : null;
   const transcriptPopupOpenedRef = useRef<string | null>(null);
   /**
    * WT-578. The device setup wizard, which until now had no caller outside a dev preview page.
@@ -820,6 +831,10 @@ export function PersistentMeetingSession({
     void (async () => {
       try {
         const { data } = await meetingService.bridgeToken(roomId);
+        // Before the cancellation check and before publishing: which identity is the far side is a
+        // fact about the room, and it has to be in place before the first frame of that track can
+        // reach FilteredRoomAudio, or the host hears one burst of the far side twice.
+        setBridgeStandIn({ roomId, identity: data.participantIdentity });
         const serverUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL?.replace(
           "localhost",
           typeof window !== "undefined" ? window.location.hostname : "localhost",
@@ -3141,6 +3156,7 @@ export function PersistentMeetingSession({
           translationActive={translationStarted}
           localUserId={user?.id}
           bridgeOutboundDeviceId={isBridgeRoom ? bridgeOutboundDeviceId : null}
+          bridgeStandInIdentity={bridgeStandInIdentity}
           onBridgeOutboundError={handleBridgeOutboundError}
         />
         <TrackProcessorsController
