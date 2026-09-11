@@ -350,7 +350,34 @@ export function getLanguageLocale(value?: string) {
  * "EN-US → EN-US, VI-VN" that the history table used to show.
  */
 export function formatLanguageRoute(sourceLanguage?: string, targetLanguages: string[] = []) {
-  const source = getLanguageName(sourceLanguage);
+  return formatRoute(sourceLanguage, targetLanguages, getLanguageName);
+}
+
+/**
+ * The same route in short marks: "VI → EN, JA".
+ *
+ * For a line with no room for names — the calendar's Agenda row prints it after the host and the
+ * head count, in a 12px meta line that already truncates. The marks are `getLanguageCode`'s
+ * (WT-661), so "en-US" and "en-GB" are one "EN" here exactly as they are one "English" above.
+ *
+ * Shares `formatRoute` with the long form rather than re-spelling its dedupe, so the two can never
+ * disagree about which languages a meeting has — only about how to write them down. A missing
+ * source reads "Auto", the long form's own word for it: an empty string would leave a dangling
+ * "→ VI" at the start of the line.
+ */
+export function formatLanguageRouteShort(
+  sourceLanguage?: string,
+  targetLanguages: string[] = [],
+) {
+  return formatRoute(sourceLanguage, targetLanguages, (value) => getLanguageCode(value) || "Auto");
+}
+
+function formatRoute(
+  sourceLanguage: string | undefined,
+  targetLanguages: string[],
+  label: (value?: string) => string,
+) {
+  const source = label(sourceLanguage);
   const seen = new Set<string>([normalizeLanguageCode(sourceLanguage)]);
 
   const targets: string[] = [];
@@ -358,7 +385,7 @@ export function formatLanguageRoute(sourceLanguage?: string, targetLanguages: st
     const code = normalizeLanguageCode(target);
     if (!code || seen.has(code)) continue;
     seen.add(code);
-    targets.push(getLanguageName(target));
+    targets.push(label(target));
   }
 
   return targets.length > 0 ? `${source} → ${targets.join(", ")}` : source;

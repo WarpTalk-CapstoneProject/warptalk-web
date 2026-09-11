@@ -1,4 +1,4 @@
-import type { TranslationRoomDto } from "@/types/translationRoom";
+import type { TranslationRoomDto, TranslationRoomStatus } from "@/types/translationRoom";
 
 /**
  * Calendar-day arithmetic for meetings, in one place.
@@ -167,13 +167,58 @@ export function monthsSpanning(from: Date, to: Date): Date[] {
 }
 
 /**
- * Whether a meeting is over — ended, cancelled, or timed out.
+ * Every status a room can actually be in — the backend `RoomStatus` enum
+ * (TranslationRoomService.Domain.Enums.RoomStatus, and the Postgres `room_status` type behind it),
+ * lowercased the way `normalizeStatus` hands it to the client.
+ *
+ * One list, because the meetings page asks the server for its rooms twice (flat and grouped by
+ * series) and then sorts them into tabs, and each of those used to spell the statuses out by
+ * hand. They spelled them wrong the same way: they asked for `TIMEOUT`, which is not a status —
+ * the server drops a name it cannot parse, silently — and never asked for `EXPIRED` or `FAILED`,
+ * so a scheduled meeting nobody started, or one that failed, appeared in no tab at all, not even
+ * the one labelled All.
+ *
+ * `timeout` is in the client's `TranslationRoomStatus` union but not here: no server writes it,
+ * and asking for it is exactly the mistake above.
+ */
+export const ROOM_STATUSES = [
+  "scheduled",
+  "waiting",
+  "in_progress",
+  "paused",
+  "ended",
+  "cancelled",
+  "expired",
+  "failed",
+] as const satisfies readonly TranslationRoomStatus[];
+
+/**
+ * The statuses a room never leaves — the meeting is over and will not run again.
+ *
+ * `expired` (booked, never started, and its window closed) and `failed` are as over as `ended`:
+ * none of the three can be joined, and all of them belong to History, never to Active.
+ */
+const OVER_ROOM_STATUSES: ReadonlySet<string> = new Set<(typeof ROOM_STATUSES)[number]>([
+  "ended",
+  "cancelled",
+  "expired",
+  "failed",
+]);
+
+/** `ROOM_STATUSES` as the list endpoint's `status` filter: the enum names, comma-separated. */
+export const ALL_ROOM_STATUSES_FILTER = ROOM_STATUSES.map((status) => status.toUpperCase()).join(",");
+
+/**
+ * Whether a meeting is over — ended, cancelled, expired or failed.
  *
  * Lives here beside `isScheduledOn` because the two are always asked together. Picking a day on
  * the meetings list used to answer with the date alone, which dropped the tab's status rule and
  * listed cancelled occurrences under "Active Meetings" — a stopped daily series showed its future
  * dates as Cancelled, which reads as the UI reporting the wrong status for a healthy meeting.
+ *
+ * Every History filter on the meetings list asks this, with or without a day picked, so the two
+ * cannot disagree about which rooms are finished.
  */
 export function isMeetingOver(status: string): boolean {
-  return status === "ended" || status === "cancelled" || status === "timeout";
+  return OVER_ROOM_STATUSES.has(status);
 }

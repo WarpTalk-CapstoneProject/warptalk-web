@@ -10,6 +10,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  ALL_ROOM_STATUSES_FILTER,
+  ROOM_STATUSES,
   daysWithMeetings,
   isMeetingOver,
   isSameDay,
@@ -137,13 +139,38 @@ test("isSameDay ignores the time of day", () => {
 test("a day picked on Active excludes meetings that are over", () => {
   assert.equal(isMeetingOver("cancelled"), true);
   assert.equal(isMeetingOver("ended"), true);
-  assert.equal(isMeetingOver("timeout"), true);
+  // Were missing: a meeting nobody started before its window closed, and one that failed, are
+  // as finished as an ended one. They belong to History, not Active.
+  assert.equal(isMeetingOver("expired"), true);
+  assert.equal(isMeetingOver("failed"), true);
 });
 
 test("a day picked on Active keeps everything still to come", () => {
   for (const live of ["scheduled", "waiting", "in_progress", "paused"]) {
     assert.equal(isMeetingOver(live), false, `${live} is not over`);
   }
+});
+
+// The meetings list asked the server for "…,CANCELLED,TIMEOUT". The server has no TIMEOUT and
+// dropped it without a word, and nothing asked for EXPIRED or FAILED — so those rooms were in no
+// tab at all. The list is pinned to the backend RoomStatus enum here, in the enum's order.
+test("the list asks for exactly the statuses the server has", () => {
+  assert.deepEqual(
+    [...ROOM_STATUSES],
+    ["scheduled", "waiting", "in_progress", "paused", "ended", "cancelled", "expired", "failed"],
+  );
+  assert.equal(
+    ALL_ROOM_STATUSES_FILTER,
+    "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,EXPIRED,FAILED",
+  );
+  assert.doesNotMatch(ALL_ROOM_STATUSES_FILTER, /TIMEOUT/);
+});
+
+test("every status the list fetches lands in exactly one of Active and History", () => {
+  const over = ROOM_STATUSES.filter(isMeetingOver);
+  const notOver = ROOM_STATUSES.filter((status) => !isMeetingOver(status));
+  assert.deepEqual(over, ["ended", "cancelled", "expired", "failed"]);
+  assert.deepEqual(notOver, ["scheduled", "waiting", "in_progress", "paused"]);
 });
 
 // The week view fetches by month, because that is what the cache is keyed by. The one thing that
