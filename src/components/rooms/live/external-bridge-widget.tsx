@@ -25,6 +25,8 @@ export function ExternalBridgeWidget({
   translationStarted,
   bridgeOutboundReady,
   bridgeInboundLoopback,
+  idleDisconnected,
+  onRejoin,
   onToggleMicrophone,
   onStartTranslation,
   onStopTranslation,
@@ -39,6 +41,15 @@ export function ExternalBridgeWidget({
   translationStarted: boolean;
   bridgeOutboundReady: boolean;
   bridgeInboundLoopback: boolean;
+  /**
+   * The idle reaper let go of this meeting: no Meet window and no speech for 15 minutes.
+   *
+   * The session's own "Rejoin meeting" overlay lives in the compact branch this widget replaces, so
+   * a reaped bridge used to have no way back short of leaving the room — and went on saying
+   * "Translation is live" over a connection that was gone.
+   */
+  idleDisconnected: boolean;
+  onRejoin: () => void;
   onToggleMicrophone: () => void;
   onStartTranslation: () => void;
   onStopTranslation: () => void;
@@ -136,63 +147,83 @@ export function ExternalBridgeWidget({
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-border/60 p-3">
-          <div className="flex items-center gap-2 text-xs font-semibold">
-            {translationStarted ? (
-              <CircleCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
-            ) : needsSetup ? (
+        {idleDisconnected ? (
+          <div data-bridge-idle-disconnected className="rounded-lg border border-amber-500/30 bg-amber-500/8 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold">
               <AlertTriangle className="size-3.5 text-amber-600" aria-hidden="true" />
-            ) : (
-              <span className="size-3.5 rounded-full border border-ink-muted/40" />
-            )}
-            {translationStarted
-              ? "Translation is live"
-              : needsSetup
-                ? "Audio devices not set up"
-                : "Translation is ready"}
+              Disconnected
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+              No sign of the Google Meet call for 15 minutes, so WarpTalk stopped using your meeting
+              minutes. Nothing is being translated.
+            </p>
+            <button
+              type="button"
+              onClick={onRejoin}
+              className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[11px] font-semibold text-white transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              Rejoin meeting
+            </button>
           </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
-            {translationStarted
-              ? "Speak into your real microphone. The translated voice is sent to Meet."
-              : needsSetup
-                ? "The virtual microphone Meet listens to is not installed yet."
-                : "Create or join the call in Google Meet, then start WarpTalk here."}
-          </p>
-          {/*
-            WT-578. This was one button that disabled itself when the outbound device was missing,
-            and a greyed-out "Start translation" is the whole bug in miniature: it names the thing
-            the user came to do, refuses to do it, and says nothing about what would change that.
-            With no device the button's job is not to start translation, it is to go and get the
-            device — so it becomes that button rather than a disabled version of another one.
-          */}
-          <button
-            type="button"
-            disabled={isConnecting && !needsSetup}
-            onClick={() => {
-              if (needsSetup) onOpenDeviceSetup();
-              else if (translationStarted) onStopTranslation();
-              else onStartTranslation();
-            }}
-            className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[11px] font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {needsSetup ? (
-              <>
-                <SlidersHorizontal className="size-3" aria-hidden="true" />
-                Set up audio devices
-              </>
-            ) : translationStarted ? (
-              <>
-                <Square className="size-3" fill="currentColor" aria-hidden="true" />
-                Stop translation
-              </>
-            ) : (
-              <>
-                <Play className="size-3" fill="currentColor" aria-hidden="true" />
-                {isConnecting ? "Connecting…" : "Start translation"}
-              </>
-            )}
-          </button>
-        </div>
+        ) : (
+          <div className="rounded-lg border border-border/60 p-3">
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              {translationStarted ? (
+                <CircleCheck className="size-3.5 text-emerald-600" aria-hidden="true" />
+              ) : needsSetup ? (
+                <AlertTriangle className="size-3.5 text-amber-600" aria-hidden="true" />
+              ) : (
+                <span className="size-3.5 rounded-full border border-ink-muted/40" />
+              )}
+              {translationStarted
+                ? "Translation is live"
+                : needsSetup
+                  ? "Audio devices not set up"
+                  : "Translation is ready"}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+              {translationStarted
+                ? "Speak into your real microphone. The translated voice is sent to Meet."
+                : needsSetup
+                  ? "The virtual microphone Meet listens to is not installed yet."
+                  : "Create or join the call in Google Meet, then start WarpTalk here."}
+            </p>
+            {/*
+              WT-578. This was one button that disabled itself when the outbound device was missing,
+              and a greyed-out "Start translation" is the whole bug in miniature: it names the thing
+              the user came to do, refuses to do it, and says nothing about what would change that.
+              With no device the button's job is not to start translation, it is to go and get the
+              device — so it becomes that button rather than a disabled version of another one.
+            */}
+            <button
+              type="button"
+              disabled={isConnecting && !needsSetup}
+              onClick={() => {
+                if (needsSetup) onOpenDeviceSetup();
+                else if (translationStarted) onStopTranslation();
+                else onStartTranslation();
+              }}
+              className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[11px] font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {needsSetup ? (
+                <>
+                  <SlidersHorizontal className="size-3" aria-hidden="true" />
+                  Set up audio devices
+                </>
+              ) : translationStarted ? (
+                <>
+                  <Square className="size-3" fill="currentColor" aria-hidden="true" />
+                  Stop translation
+                </>
+              ) : (
+                <>
+                  <Play className="size-3" fill="currentColor" aria-hidden="true" />
+                  {isConnecting ? "Connecting…" : "Start translation"}
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-border/60 px-4 py-3">

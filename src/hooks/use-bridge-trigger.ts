@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   closeTranscriptWindow,
@@ -24,6 +24,7 @@ import {
   type BridgeWindowLedger,
   type TriggerMeeting,
 } from "@/lib/meeting/bridge-trigger";
+import type { MeetSensorReading } from "@/lib/meeting/meeting-session-lifecycle";
 
 /**
  * The impure half of the bridge trigger: arms the sensor, keeps a clock, opens and closes the
@@ -75,10 +76,23 @@ export interface UseBridgeTriggerOptions {
   translatingRoomId?: string | null;
 }
 
+export interface BridgeTriggerResult {
+  trigger: BridgeTriggerSnapshot;
+  /**
+   * What the Meet sensor last said, for the meeting session's idle reaper.
+   *
+   * Handed down rather than subscribed to a second time, and for two reasons. The desktop reports
+   * a sighting only when it CHANGES, so a listener that arrives after Meet came on screen hears
+   * nothing until the call ends. And the watcher in the desktop's main process is one shared
+   * instance: a second owner's disarm would switch it off under this hook, and the offer with it.
+   */
+  meetSensor: MeetSensorReading | null;
+}
+
 export function useBridgeTrigger({
   meetings,
   translatingRoomId = null,
-}: UseBridgeTriggerOptions): BridgeTriggerSnapshot {
+}: UseBridgeTriggerOptions): BridgeTriggerResult {
   const [presence, setPresence] = useState<MeetPresence | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   /** When the sensor stopped seeing Meet; the offer's grace runs from here. See OFFER_GRACE_MS. */
@@ -277,5 +291,18 @@ export function useBridgeTrigger({
     };
   }, []);
 
-  return trigger;
+  // Memoised so the meeting session below the shell does not see a new object on every clock tick.
+  const meetSensor = useMemo<MeetSensorReading | null>(
+    () =>
+      presence === null
+        ? null
+        : {
+            meetWindowVisible: presence.meetWindowVisible,
+            meetCode: presence.meetCode,
+            meetWindowLostAtMs,
+          },
+    [presence, meetWindowLostAtMs],
+  );
+
+  return { trigger, meetSensor };
 }
