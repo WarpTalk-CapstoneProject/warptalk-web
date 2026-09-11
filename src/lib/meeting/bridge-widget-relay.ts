@@ -353,14 +353,16 @@ export type BridgeWidgetRelayView = {
   pendingLanguage: { language: string; at: number } | null;
 };
 
-export type BridgeWidgetRelayEvent = { roomId: string } & (
+export type BridgeWidgetRelayEventBody =
   | { type: "snapshot-received"; snapshot: BridgeWidgetSnapshot }
   | { type: "no-answer" }
   | { type: "host-gone" }
   | { type: "incompatible" }
   | { type: "language-picked"; language: string; at: number }
-  | { type: "pick-expired"; pickedAt: number }
-);
+  | { type: "pick-expired"; pickedAt: number };
+
+/** Every event names its room, so a view can never absorb news about another meeting. */
+export type BridgeWidgetRelayEvent = { roomId: string } & BridgeWidgetRelayEventBody;
 
 export function initialBridgeWidgetRelayView(roomId: string): BridgeWidgetRelayView {
   return { roomId, status: "waiting", snapshot: null, pendingLanguage: null };

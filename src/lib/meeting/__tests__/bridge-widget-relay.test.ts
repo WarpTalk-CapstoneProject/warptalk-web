@@ -17,7 +17,7 @@ import {
   parseBridgeWidgetMessage,
   reduceBridgeWidgetRelayView,
   type BridgeWidgetMessage,
-  type BridgeWidgetRelayEvent,
+  type BridgeWidgetRelayEventBody,
   type BridgeWidgetRelayView,
   type BridgeWidgetSnapshot,
 } from "../bridge-widget-relay.ts";
@@ -46,9 +46,9 @@ const snapshot = (over: Partial<BridgeWidgetSnapshot> = {}): BridgeWidgetSnapsho
   ...over,
 });
 
-const run = (events: Array<Omit<BridgeWidgetRelayEvent, "roomId">>, roomId = ROOM) =>
+const run = (events: BridgeWidgetRelayEventBody[], roomId = ROOM) =>
   events.reduce<BridgeWidgetRelayView>(
-    (view, event) => reduceBridgeWidgetRelayView(view, { roomId, ...event } as BridgeWidgetRelayEvent),
+    (view, event) => reduceBridgeWidgetRelayView(view, { roomId, ...event }),
     initialBridgeWidgetRelayView(roomId),
   );
 
