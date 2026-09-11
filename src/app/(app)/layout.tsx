@@ -340,7 +340,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       ? activeBridgeRoomId
       : null;
 
-  useBridgeTrigger({ meetings: bridgeTriggerMeetings, translatingRoomId });
+  // The sensor reading goes on to the meeting session: its idle reaper cannot ask the main window
+  // whether a bridge host is still there, because a bridge host never looks at the main window.
+  const { meetSensor } = useBridgeTrigger({ meetings: bridgeTriggerMeetings, translatingRoomId });
 
   /**
    * Flow 2's last mile: the offer window made a room, and this window has to run it.
@@ -696,6 +698,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   key={activeMeetingRoomId}
                   roomId={activeMeetingRoomId}
                   compact={meetingWidgetFloating}
+                  meetSensor={meetSensor}
                   onMeetingClosed={closeMeeting}
                 />
               </MiniMeetingDock>

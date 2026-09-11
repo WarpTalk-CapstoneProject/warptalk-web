@@ -182,6 +182,53 @@ assert.match(
   "the idle reaper must never run against the full-size meeting view",
 );
 
+// --- The reaper and an external bridge ----------------------------------------------------
+// A bridge is compact in the main window on every route and its host never looks at that
+// window, so main-window input alone reaped every bridge at 15 minutes, mid-meeting. The rule is
+// lastSignOfLife, unit-tested on its own; these pin that the session actually feeds it. A pure
+// function with tests and no caller looks healthy from every angle except the one that matters.
+assert.match(
+  appLayout,
+  /const \{ meetSensor \} = useBridgeTrigger\(/,
+  "the shell must take the Meet sensor reading out of useBridgeTrigger — a second subscription in the session would miss a Meet window that was already on screen",
+);
+assert.match(
+  appLayout,
+  /<PersistentMeetingSession[\s\S]*meetSensor=\{meetSensor\}/,
+  "the meeting session must be handed the Meet sensor reading, or a bridge host in Meet reads as idle",
+);
+assert.match(
+  meetingSession,
+  /lastSignOfLife\(\{[\s\S]{0,400}?meetSensor: evidence\.meetSensor,[\s\S]{0,200}?lastSpeechAt: lastSpeechAtRef\.current,/,
+  "the idle poll must run its clock through lastSignOfLife with the Meet sensor and the last speech",
+);
+assert.match(
+  meetingSession,
+  /"TranscriptSegmentReceived",\s*\(segment: TranscriptSegmentDto\) => \{[\s\S]{0,400}?lastSpeechAtRef\.current = Date\.now\(\);[\s\S]{0,40}?if \(!transcriptOpenRef\.current\) return;/,
+  "every transcript segment must stamp the last speech, before the display gate",
+);
+{
+  const params = /export function lastSignOfLife\(\{([^}]*)\}/.exec(lifecycle)?.[1] ?? "";
+  assert.ok(params, "lastSignOfLife must exist in meeting-session-lifecycle.ts");
+  // The one decision most likely to be undone by a well-meaning "fix": a running translation is
+  // the state a forgotten bridge is left in, and the dearest one to leave connected.
+  assert.doesNotMatch(
+    params,
+    /translat/i,
+    "a running translation must not be a sign of life — it is exactly what a forgotten bridge is left doing",
+  );
+}
+assert.match(
+  meetingSession,
+  /const wanted =\s*isBridgeRoom && isHost && translationStarted && hasInboundSource && !meetingIsIdleReaped;/,
+  "an idle reap must also release the stand-in's second LiveKit connection and its capture",
+);
+assert.match(
+  meetingSession,
+  /<ExternalBridgeWidget[\s\S]{0,1200}?idleDisconnected=\{meetingIsIdleReaped\}[\s\S]{0,200}?onRejoin=/,
+  "a reaped bridge must be able to rejoin from its own widget — the compact overlay is never rendered for it",
+);
+
 // --- WT-303: localParticipant is the only source of truth for mic/camera ------------------
 // @livekit/components-react@2.9.21 reads <LiveKitRoom audio/video> only inside its
 // RoomEvent.SignalConnected handler, so a post-connect prop change publishes nothing. Buttons
