@@ -113,6 +113,11 @@ test("an unsupported platform is never told to install something", () => {
   // Must not read as the user's fault, and must not scare them off ordinary WarpTalk meetings.
   assert.match(view.message ?? "", /still being built/);
   assert.match(view.message ?? "", /unaffected/);
+  // WT-578. `supported: false` on win32 is reachable two ways that need opposite answers: a
+  // platform WarpTalk genuinely cannot bridge, and a Windows machine running a desktop build older
+  // than the detection. The copy named macOS alone for months after Windows shipped, so the second
+  // audience — whose fix is one update — was told their system was simply not supported.
+  assert.match(view.message ?? "", /Windows/);
 });
 
 test("unsupported is decided before readiness, whatever the flags say", () => {

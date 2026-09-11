@@ -143,7 +143,11 @@ export default function DesktopBridgeOfferPage() {
       </div>
 
       {error ? (
-        <p role="alert" className="text-[11px] leading-relaxed text-danger">
+        /* `text-destructive`, not `text-danger`: only tokens registered in @theme generate
+           utilities in Tailwind v4, and --color-danger is not one. That class compiled to nothing,
+           so every failure on this window — including "no workspace selected", the one the user
+           can actually act on — was rendered in ordinary body colour. */
+        <p role="alert" className="text-[11px] leading-relaxed text-destructive">
           {error}
         </p>
       ) : null}
