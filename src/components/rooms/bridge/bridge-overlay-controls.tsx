@@ -21,14 +21,6 @@
  *   to, over the same IPC relay flow 2 uses, before the session is opened. See
  *   startBridgeTranslation for why that has to come first.
  *
- * THE ONE CONTROL THAT IS NOT A SERVER FACT
- *   The Windows loopback consent is not on the server and cannot be: it is per meeting and per
- *   machine, and it gates a capture that lives inside the main window's PersistentMeetingSession.
- *   So there is nothing here to mutate and nothing to poll. The main window publishes its consent
- *   state on a BroadcastChannel and this window posts back what the host pressed — the same
- *   one-source-of-truth rule as the rest of the strip, reached over a different wire because the
- *   truth is in the other window rather than in the database. See `BridgeCaptureConsentPanel`.
- *
  * WHY START/STOP IS HOST-ONLY HERE
  *   `/resume` — the endpoint that opens a translation session — gates on IsHostedBy. WT-371's
  *   "participants may start translation" rule lives on a different endpoint that no UI calls, so
@@ -46,7 +38,6 @@ import { useMemo, useState } from "react";
 import { Loader2, Play, Square } from "lucide-react";
 import { toast } from "sonner";
 
-import { BridgeCaptureConsentPanel } from "@/components/rooms/bridge/bridge-capture-consent-panel";
 import { Switch } from "@/components/ui/switch";
 import { activateBridgeRoom } from "@/lib/desktop/bridge";
 import { getLanguageName } from "@/lib/language/languages";
@@ -236,10 +227,6 @@ export function BridgeOverlayControls({
             : "Waiting for the host to start translation."}
         </p>
       )}
-
-      {/* Directly under Start, because pressing Start is what raises the question: the inbound leg
-          asks for the loopback the moment it is asked to carry the far side. */}
-      <BridgeCaptureConsentPanel roomId={roomId} />
 
       <label className="flex items-center gap-2 text-[11px]">
         <span className="shrink-0 text-ink-muted">Your voice</span>

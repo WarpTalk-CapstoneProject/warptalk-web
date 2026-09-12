@@ -1,14 +1,18 @@
 #!/usr/bin/env node
 /**
- * The two WarpBot surfaces must look like one agent.
+ * The WarpBot surfaces must look like one agent.
  *
  * The global widget and the in-meeting chat run the SAME worker over the same stream, and they
  * had drifted into showing its work two different ways: the meeting chat answered in bold violet
  * where the widget answered in ordinary ink, and it kept one live trail pinned to the bottom of
  * the panel where the widget folds a trail under every reply. Same agent, two voices.
  *
+ * WT-525 t5 added a third: the WarpBot tab of the widget that floats over Google Meet. It is a
+ * private 1-to-1 assistant on the global widget's path, so it is held to the widget here — and to
+ * the two things that make it private, which a screenshot cannot show.
+ *
  * Drift like that is invisible to a unit test of either side — each is internally consistent.
- * What catches it is asserting the two files against each other, which is what this does.
+ * What catches it is asserting the files against each other, which is what this does.
  */
 
 import assert from "node:assert/strict";
@@ -20,12 +24,16 @@ const widget = read("src/components/layout/global-chatbot.tsx");
 const chatPanel = read("src/components/rooms/live/chat-panel.tsx");
 const store = read("src/stores/translationRoom-store.ts");
 const session = read("src/components/rooms/live/persistent-meeting-session.tsx");
+const popupPane = read("src/components/rooms/bridge/widget/warpbot-pane.tsx");
+const popupThread = read("src/components/rooms/bridge/widget/warpbot/use-private-warpbot-thread.ts");
+const popupShell = read("src/components/rooms/bridge/widget/widget-shell.tsx");
 
 // ── the same three pieces under every answer ─────────────────────────────────
 
 for (const [surface, source] of [
   ["the widget", widget],
   ["the in-meeting chat", chatPanel],
+  ["the Meet popup's WarpBot tab", popupPane],
 ]) {
   assert.match(
     source,
@@ -185,6 +193,136 @@ assert.match(
   "A finished tool call must FILL a missing target rather than overwrite one already reported for the same call.",
 );
 
+// ── the third surface: the Meet popup's WarpBot tab (WT-525 t5, WT-620) ────────
+
+// Comments stripped, for the reason given above chatPanelCode: both files explain in prose what
+// they deliberately do NOT do, and a check that reads the prose as code fails on correct files.
+// JSX comments go first, so their braces do not survive the block-comment pass.
+const stripComments = (source) =>
+  source
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+const popupPaneCode = stripComments(popupPane);
+const popupThreadCode = stripComments(popupThread);
+
+// Ink, like the widget. The meeting chat's violet was the bug this file was written for; a new
+// surface is the likeliest place for it to come back.
+assert.doesNotMatch(
+  popupPaneCode,
+  /text-primary/,
+  "WarpBot's answer in the popup must be ink, as in the widget — one agent cannot have two voices.",
+);
+
+// A trail folded under EVERY answer, read off the message it belongs to — not one trail for the
+// pane, which would belong to whatever was asked last.
+assert.match(
+  popupPaneCode,
+  /<AssistantWorkTrail\s+steps=\{message\.steps \?\? \[\]\}\s+running=\{false\}/,
+  "The popup must draw each answer's own folded trail under it, as the widget does.",
+);
+
+// Streams: the answer is rendered from the message the chunks append to, not only once persisted.
+assert.match(
+  popupPaneCode,
+  /<AssistantMarkdown>\{message\.content\}<\/AssistantMarkdown>/,
+  "The popup must render the answer as it is written.",
+);
+assert.match(
+  popupThreadCode,
+  /"AssistantMessageChunk"[\s\S]{0,1200}?payload\.delta/,
+  "The popup must append streamed chunks to the answer.",
+);
+
+// Same lifecycle steps, and the turn opens on one: the popup seeds "reading your question" at the
+// send, as the meeting chat's beginAssistantTurn does, rather than waiting on a bare spinner.
+for (const step of ["THINKING_STEP", "WRITING_STEP"]) {
+  assert.match(
+    popupThreadCode,
+    new RegExp(step),
+    `The popup's trail must name the ${step} lifecycle step too — the surfaces show one agent.`,
+  );
+}
+assert.match(
+  popupThreadCode,
+  /const dispatch = async[\s\S]{0,1200}?updateSteps\(\(\) => \[THINKING\]\)/,
+  "The popup must OPEN its turn on the thinking step when the question is sent.",
+);
+
+// The folded trail is read from a ref. The widget reads `steps` in its completed handler from the
+// closure of the effect that registered it — the render in which the conversation id arrived,
+// with an empty trail — so there is nothing to fold. The popup must not inherit that.
+assert.match(
+  popupThreadCode,
+  /"AssistantMessageCompleted"[\s\S]{0,800}?const finishedSteps = stepsRef\.current/,
+  "The popup must fold the trail from stepsRef — the closure's `steps` is an earlier render's empty trail.",
+);
+
+// The same agent: the global widget's hub and its hooks, not a copy of the endpoint.
+for (const [what, pattern] of [
+  ["the assistant hub", /createHubConnection\("\/api\/v1\/assistant\/chat-hub"\)/],
+  ["useCreateAssistantConversation", /useCreateAssistantConversation\(\)/],
+  ["useSendAssistantMessage", /useSendAssistantMessage\(\)/],
+]) {
+  assert.match(widget, pattern, `The widget must use ${what} (the popup is held to it).`);
+  assert.match(popupThreadCode, pattern, `The popup must use ${what}, as the widget does.`);
+}
+
+// PRIVATE. Nothing the popup asks may reach the room: not the meeting chat's send, not its hub.
+// An @WarpBot through the meeting chat would put the question in front of every participant.
+assert.doesNotMatch(
+  `${popupPaneCode}\n${popupThreadCode}`,
+  /useSendMeetingChat|\/api\/v1\/meetings\/chat-hub|"ChatAssistant/,
+  "The popup's WarpBot is private: it must not send through, or listen on, the meeting chat.",
+);
+assert.match(
+  popupPane,
+  /Only you see this conversation\. Nothing is posted to the Google Meet chat\./,
+  "The popup must say, at the top, that the conversation is private and nothing goes to Meet's chat.",
+);
+
+// Exactly two tabs, Transcript and WarpBot. Meet has the call's chat; a participant chat tab here
+// would be a second one, and the one people would mistake this private box for.
+const tabsBlock = popupShell.match(/const TABS[\s\S]*?\];/)?.[0] ?? "";
+assert.deepEqual(
+  [...tabsBlock.matchAll(/id: "(\w+)"/g)].map((match) => match[1]),
+  ["transcript", "warpbot"],
+  "The Meet widget has exactly two tabs, Transcript and WarpBot — no participant chat.",
+);
+
+// The widget's composer: its placeholder, Enter sends, Shift+Enter is a new line.
+for (const [surface, source] of [
+  ["the widget", widget],
+  ["the Meet popup's WarpBot tab", popupPane],
+]) {
+  assert.match(source, /"Ask WarpBot\.\.\."/, `${surface} must use the "Ask WarpBot..." placeholder.`);
+}
+assert.match(
+  popupPaneCode,
+  /event\.key !== "Enter" \|\| event\.shiftKey\) return;/,
+  "In the popup, Enter must send and Shift+Enter must fall through to a new line.",
+);
+
+// WT-580's queue, as the code defines it — imported, never a second literal. The assistant service
+// builds history from completed rows, so a question sent mid-answer is answered against two user
+// turns in a row; the popup holds it exactly as the meeting chat does.
+assert.match(
+  popupThreadCode,
+  /decideAgentSend\(\{\s*asksTheAgent: true,/,
+  "The popup must hold a question asked mid-answer, through decideAgentSend.",
+);
+assert.match(
+  popupPaneCode,
+  /\{MAX_QUEUED_AGENT_ASKS\}/,
+  "The popup must name the queue limit from lib/meeting/assistant-queue, not a copy of it.",
+);
+assert.doesNotMatch(
+  `${popupPaneCode}\n${popupThreadCode}`,
+  /MAX_QUEUED_AGENT_ASKS\s*=/,
+  "The queue limit is defined once, in lib/meeting/assistant-queue.",
+);
+
+
 // ── the widget's folded trail is read from a REF, not from the closure ──────
 //
 // WT-620. The widget registers its hub handlers in an effect keyed on the conversation id only —
@@ -259,5 +397,5 @@ assert.ok(
 );
 
 console.log(
-  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, trail read from a ref, IME Enter)",
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, trail read from a ref, IME Enter; Meet popup: private, two tabs, composer, queue)",
 );
