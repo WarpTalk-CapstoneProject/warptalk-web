@@ -409,6 +409,28 @@ export function GlobalChatbot() {
    * documents, not to catch one label mid-flash.
    */
   const [steps, setSteps] = useState<AssistantStep[]>([]);
+  /**
+   * WT-620 — the same trail, readable from inside the hub handlers.
+   *
+   * Those handlers are registered once per conversation, so the `steps` they close over is the
+   * trail of the render that ran the effect: empty, because the question had not been asked yet.
+   * The completed handler folded that onto the answer, and every finished answer carried an empty
+   * trail. Subscribing again on every step is not the fix — it would drop and re-add the handlers
+   * mid-turn — so the handlers read this ref instead, as the meeting chat and the Meet-popup pane
+   * already do.
+   *
+   * Only correct if EVERY write goes through updateSteps: a raw setSteps leaves the ref holding a
+   * trail the screen no longer shows.
+   */
+  const stepsRef = useRef<AssistantStep[]>([]);
+  const updateSteps = useCallback(
+    (next: (current: AssistantStep[]) => AssistantStep[]) => {
+      const value = next(stepsRef.current);
+      stepsRef.current = value;
+      setSteps(value);
+    },
+    [],
+  );
   /** When the open turn began, so the folded summary can say how long it took. */
   const turnStartedAtRef = useRef<number | null>(null);
   /**
@@ -606,7 +628,7 @@ export function GlobalChatbot() {
     setInputValue("");
     setSelectedContexts([]);
     setIsAiTyping(false);
-    setSteps([]);
+    updateSteps(() => []);
     setIsSlow(false);
     setIsMinimized(false);
     clearPluginCards();
@@ -636,7 +658,7 @@ export function GlobalChatbot() {
       setConversationTitle(detail.title?.trim() || "Chat history");
       setConversationId(detail.id);
       setIsAiTyping(false);
-      setSteps([]);
+      updateSteps(() => []);
       setIsSlow(false);
       setInputValue("");
       setSelectedContexts([]);
@@ -791,7 +813,7 @@ export function GlobalChatbot() {
         // Seeded with the step that is genuinely running: before the first tool call WarpBot is
         // reading the question, which on a slow turn is the longest stretch of the whole thing
         // and used to be drawn as a bare "Thinking..." with no trail at all.
-        setSteps([{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
+        updateSteps(() => [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
         turnStartedAtRef.current = Date.now();
         setIsSlow(false);
         armResponseTimeout();
@@ -817,7 +839,7 @@ export function GlobalChatbot() {
         // but what it ran is exactly what the reader wants left on screen — and writing the
         // answer is itself a step, so the trail names it rather than going quiet for the
         // longest visible part of the turn.
-        setSteps((current) => {
+        updateSteps((current) => {
           const settled = current.map((step) => ({ ...step, done: true }));
           return settled.some((step) => step.tool === WRITING_STEP)
             ? settled
@@ -839,7 +861,7 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setSteps((current) => [
+        updateSteps((current) => [
           // Anything still marked running when a new tool starts has finished — the worker
           // emits a completed for each, but the trail must not show two spinners if one is lost.
           ...current.map((step) => ({ ...step, done: true })),
@@ -862,7 +884,7 @@ export function GlobalChatbot() {
         const body = payload.body?.trim() ?? "";
         if (!title && !body) return;
         setIsAiTyping(true);
-        setSteps((current) => [
+        updateSteps((current) => [
           // The model has moved on from whatever it was doing when it wrote this.
           ...current.map((step) => ({ ...step, done: true })),
           {
@@ -908,7 +930,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         // The hosted web search publishes its started event before OpenAI has said what it is
         // searching for, so this is often the first event that can name the target.
-        setSteps((current) =>
+        updateSteps((current) =>
           withStepDetail(current, payload.toolName ?? "", payload.toolDetail).map((step) => ({
             ...step,
             done: true,
@@ -939,10 +961,13 @@ export function GlobalChatbot() {
         // throwing them away also threw away the only record of which tools an answer came
         // through — the first thing a person checking a surprising answer reaches for. It is one
         // folded line now: over, and still there.
-        const finishedSteps = steps.map((step) => ({ ...step, done: true }));
+        //
+        // From the REF (WT-620): this handler was registered before the turn began, and the
+        // `steps` it closes over is that render's empty trail.
+        const finishedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
         const startedAt = turnStartedAtRef.current;
         turnStartedAtRef.current = null;
-        setSteps([]);
+        updateSteps(() => []);
 
         // Only the completed event carries them: the worker decides which sources the answer
         // pointed at once the whole answer exists, so there is nothing to show mid-stream.
@@ -970,10 +995,11 @@ export function GlobalChatbot() {
         clearResponseTimeout();
         clearPluginCards();
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
-        const failedSteps = steps.map((step) => ({ ...step, done: true }));
+        // From the ref, for the same reason as the completed handler.
+        const failedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
         const failedStartedAt = turnStartedAtRef.current;
         turnStartedAtRef.current = null;
-        setSteps([]);
+        updateSteps(() => []);
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
           role: "assistant",
@@ -1041,7 +1067,7 @@ export function GlobalChatbot() {
       void connection.stop();
       hubConnectionRef.current = null;
     };
-  }, [conversationId, armResponseTimeout, clearResponseTimeout]);
+  }, [conversationId, armResponseTimeout, clearResponseTimeout, clearPluginCards, updateSteps]);
 
   // Calculate mention/slash menu visibility based on @ or leading / characters
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -1077,6 +1103,12 @@ export function GlobalChatbot() {
     // below runs sendMessage() in the same handler, against pre-update state — which is how
     // picking a mention with Enter used to send the literal "@Al" with no mentions attached
     // and leave the chip dangling for the *next* message.
+    //
+    // An IME (Vietnamese Telex, Japanese, Chinese…) owns the keyboard while it composes: its Enter
+    // confirms the candidate, its arrows move through candidates. Sending on that Enter posted half
+    // a word and left the rest in the box, and the menu branches would pick a row mid-word.
+    // Same check as the Meet-popup pane's composer.
+    if (e.nativeEvent.isComposing) return;
     if (slashMenuOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
