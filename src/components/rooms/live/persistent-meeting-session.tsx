@@ -121,12 +121,15 @@ import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/brows
 import { BrowserCaptureConsentModal } from "./browser-capture-consent-modal";
 import { BridgeSetupDialog } from "@/components/rooms/bridge/bridge-setup-dialog";
 import {
+  canOpenTranscriptWindow,
   closeTranscriptWindow,
   listWindowsLoopbackSources,
   openDesktopTranscriptWindow,
   readVirtualAudioStatus,
   type WindowsLoopbackSource,
 } from "@/lib/desktop/bridge";
+import { bridgeConsentSurface } from "@/lib/meeting/bridge-capture-consent-relay";
+import { useBridgeConsentHost } from "@/hooks/use-bridge-consent-host";
 import { selectBridgeTier } from "@/lib/desktop/bridge-tiers";
 import {
   TrackProcessorsController,
@@ -777,6 +780,28 @@ export function PersistentMeetingSession({
   });
   const selectedLoopbackSourceId =
     loopbackSourceSelection?.roomId === roomId ? loopbackSourceSelection.sourceId : null;
+  // Where the host is actually asked. Reading the desktop bridge during render is safe here only
+  // because consent is never "required" during SSR — it needs translationStarted, which no server
+  // render has — so this is "none" on the server either way and cannot mismatch on hydration.
+  const consentSurface = bridgeConsentSurface({
+    consent: consentState,
+    popupAvailable: isBridgeRoom && canOpenTranscriptWindow(),
+  });
+
+  // The relay to the popup. Main stays the one source of truth: it publishes this state and
+  // applies only the intents it has re-checked against it (lib/meeting/bridge-capture-consent-relay).
+  useBridgeConsentHost({
+    enabled: isBridgeRoom && isHost,
+    roomId,
+    consent: consentState,
+    sources: loopbackSources,
+    selectedSourceId: selectedLoopbackSourceId,
+    loadingSources: loopbackSourcesLoading,
+    surface: consentSurface,
+    onSelectSource: (sourceId) => setLoopbackSourceSelection({ roomId, sourceId }),
+    onAnswer: (granted) => setBrowserCaptureAnswer({ roomId, granted }),
+    onReask: () => setBrowserCaptureAnswer(null),
+  });
 
   useEffect(() => {
     if (consentState !== "required") return;
@@ -3757,9 +3782,13 @@ export function PersistentMeetingSession({
         Rendered next to the other modals rather than inside the bridge effect so that opening it
         is a render, not a side effect: an effect that pops a dialog fires again on every dependency
         change, and a consent prompt that reappears is one people click through.
+
+        A bridge host is asked in the always-on-top popup, not here: this window sits behind Google
+        Meet, and the question used to wait in it unseen. The modal is the FALLBACK, for a machine
+        with no popup — `bridgeConsentSurface` is what decides between them.
       */}
       <BrowserCaptureConsentModal
-        open={consentState === "required"}
+        open={consentSurface === "main"}
         sources={loopbackSources}
         selectedSourceId={selectedLoopbackSourceId}
         loadingSources={loopbackSourcesLoading}

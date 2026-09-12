@@ -536,6 +536,249 @@ for (const file of widgetFiles) {
   }
 }
 
+/**
+ * The loopback consent lives on the popup, and both windows share one wire.
+ *
+ * WHAT HAPPENED: the Windows loopback consent — the question that gates capturing the browser
+ * playing Google Meet — was asked with a modal in the main window. In a bridge room that window is
+ * compact and parked behind Meet, so the host never saw the question, never answered it, and the
+ * inbound leg waited on the answer forever: WarpTalk looked connected, the transcript ran, and the
+ * far side was simply never translated. The popup is the surface the host is actually looking at.
+ *
+ * The rules themselves are pure and unit-tested in lib/meeting/bridge-capture-consent-relay.ts.
+ * What a test of that module cannot see is either window quietly stopping to use it — the popup not
+ * rendering the panel, the main window going back to asking unconditionally, a second hand-written
+ * channel name, a hook reading `event.data` raw. All four put the prompt back where nobody is
+ * looking, and all four are checked here, at the call sites.
+ */
+const CONSENT_PANEL = "src/components/rooms/bridge/bridge-capture-consent-panel.tsx";
+const CONSENT_SLOT = `${WIDGET_DIR}/capture-consent-slot.tsx`;
+/** Rendered elements, not imports: a panel that is imported and never placed is invisible. */
+const JSX_PANEL = /<BridgeCaptureConsentPanel\b/;
+const JSX_SLOT = /<CaptureConsentSlot\b/;
+const CONSENT_RELAY = "@/lib/meeting/bridge-capture-consent-relay";
+/** Main window, then popup — the two ends of the relay, in the order a message travels. */
+const CONSENT_HOOKS = [
+  ["src/hooks/use-bridge-consent-host.ts", "the main window"],
+  ["src/hooks/use-bridge-consent-prompt.ts", "the popup"],
+];
+/** The same sentence under four different causes, because it is the same outage every time. */
+const CONSENT_DEFECT =
+  "a bridge host is asked for loopback consent only in a window that is behind Meet, the inbound "
+  + "leg never starts, and the far side is never translated — the exact defect this shipped to fix.";
+
+/**
+ * 10. The popup asks.
+ *
+ * Both links are checked, the shell mounting the slot and the slot mounting the panel, because
+ * either one going missing ends the same way: a widget that looks entirely normal and never asks.
+ */
+const consentPanel = read(CONSENT_PANEL);
+const consentSlot = read(CONSENT_SLOT);
+
+if (!consentSlot) {
+  failures.push(
+    `${CONSENT_SLOT} is missing. The shell passes its slots no props, so this is the one line that `
+      + `hands the panel the room this window floats for; without it ${CONSENT_DEFECT}`,
+  );
+} else if (!JSX_PANEL.test(withoutImports(stripComments(consentSlot)))) {
+  failures.push(
+    `${CONSENT_SLOT} no longer renders BridgeCaptureConsentPanel. Without it ${CONSENT_DEFECT}`,
+  );
+}
+
+if (shell && !JSX_SLOT.test(withoutImports(stripComments(shell)))) {
+  failures.push(
+    `${SHELL} no longer renders CaptureConsentSlot. The question would then sit in a file nothing `
+      + `mounts, which is the WT-577 shape again and invisible here, because the widget looks `
+      + `entirely normal without it. Then ${CONSENT_DEFECT}`,
+  );
+}
+
+if (!consentPanel) {
+  failures.push(
+    `${CONSENT_PANEL} is missing. It is the only place the loopback question is put to a bridge `
+      + `host where they can see it; without it ${CONSENT_DEFECT}`,
+  );
+} else if (!/\buseBridgeConsentPrompt\b/.test(withoutImports(stripComments(consentPanel)))) {
+  failures.push(
+    `${CONSENT_PANEL} no longer calls useBridgeConsentPrompt. The panel would render whatever it `
+      + `last held instead of what the main window is asking, and the host's answer would go `
+      + `nowhere: ${CONSENT_DEFECT}`,
+  );
+}
+
+/**
+ * The opening tag of the first `<Name …>` in `source`, braces balanced, with where it sits.
+ *
+ * callSpan cannot read this one: an attribute list is not an argument list, it ends at `>` rather
+ * than `)`, and it is full of arrow functions whose `=>` would end it early. Braces are what nest
+ * in JSX, so the tag closes at the first `>` seen at brace depth zero — the `/>` of a self-closing
+ * element and the `>` of an open tag alike, and either way that is the whole attribute list.
+ * Strings are not skipped, for the same reason callSpan does not skip them.
+ */
+function jsxOpenTag(source, name) {
+  const match = new RegExp(`<${name}\\b`).exec(source);
+  if (!match) return null;
+  let depth = 0;
+  for (let index = match.index + match[0].length; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "{") depth += 1;
+    else if (character === "}") depth -= 1;
+    else if (character === ">" && depth === 0) {
+      return { start: match.index, end: index + 1, text: source.slice(match.index, index + 1) };
+    }
+  }
+  return null;
+}
+
+/**
+ * 11. The main window no longer asks unconditionally.
+ *
+ * `open={consentState === "required"}` is the line the bug was: the modal opened whenever consent
+ * was outstanding, popup or no popup. It is still the right fallback for a machine that cannot open
+ * one, so the modal stays — but only under the surface decision, and the surface name is read out
+ * of the file rather than assumed, so renaming it cannot turn this check into a formality.
+ */
+const SESSION = "src/components/rooms/live/persistent-meeting-session.tsx";
+const session = read(SESSION);
+if (!session) {
+  failures.push(`${SESSION} is missing; it is the main window's end of the consent relay.`);
+} else {
+  const code = withoutImports(stripComments(session));
+
+  for (const [symbol, what] of [
+    ["bridgeConsentSurface", "decide whether the popup or the modal asks"],
+    ["useBridgeConsentHost", "publish its consent state to the popup and apply what comes back"],
+  ]) {
+    if (!callSpan(code, symbol)) {
+      failures.push(
+        `${SESSION} no longer calls ${symbol} to ${what}. The main window is the one source of `
+          + `truth for the capture, so with this gone ${CONSENT_DEFECT}`,
+      );
+    }
+  }
+
+  const modal = jsxOpenTag(code, "BrowserCaptureConsentModal");
+  const surfaceName = /const\s+(\w+)\s*=\s*bridgeConsentSurface\(/.exec(code)?.[1];
+  if (!modal) {
+    failures.push(
+      `${SESSION} no longer renders BrowserCaptureConsentModal. It is the fallback for a machine `
+        + `with no popup, and without it such a host is never asked at all.`,
+    );
+  } else if (/\bopen=\{\s*consentState\s*===?\s*["']required["']\s*\}/.test(modal.text)) {
+    failures.push(
+      `${SESSION} opens BrowserCaptureConsentModal on consentState === "required" again. That asks `
+        + `in the main window whenever consent is outstanding — including in a bridge room, where `
+        + `this window sits behind Google Meet. The host never sees the question, the inbound leg `
+        + `never starts, and the far side is never translated: the exact defect this shipped to fix.`,
+    );
+  } else if (!surfaceName || !new RegExp(`\\bopen=\\{[^}]*\\b${surfaceName}\\b`).test(modal.text)) {
+    failures.push(
+      `${SESSION} does not open BrowserCaptureConsentModal off the bridgeConsentSurface decision. `
+        + `The modal is the fallback for a machine with no popup; opened on anything else it either `
+        + `asks twice, in two windows, or asks in the one the bridge host cannot see.`,
+    );
+  }
+}
+
+/**
+ * 12. One channel name.
+ *
+ * BroadcastChannel has no error for this: two windows holding two different names each open a
+ * channel, each post happily into it, and neither ever hears the other. The prompt simply never
+ * appears and the leg waits forever — the original bug wearing a different hat. So the literal is
+ * read out of the constants file rather than written here (a rename must not pass quietly), and
+ * nothing else under src/ may spell it out.
+ */
+const REALTIME = "src/constants/realtime.ts";
+const channelName = /\bBRIDGE_CAPTURE_CONSENT\s*:\s*["']([^"']+)["']/.exec(read(REALTIME) ?? "")?.[1];
+if (!channelName) {
+  failures.push(
+    `${REALTIME} no longer defines BROADCAST_CHANNELS.BRIDGE_CAPTURE_CONSENT. It is the one name `
+      + `both bridge windows open; if it moved, point this check at wherever it went rather than `
+      + `leaving it matching nothing and passing.`,
+  );
+} else {
+  // Comments are stripped: prose explaining the channel quotes its name, and that is not a second
+  // copy of it. Only code that spells the literal out is.
+  for (const file of allSources) {
+    if (file === REALTIME) continue;
+    if (stripComments(read(file) ?? "").includes(channelName)) {
+      failures.push(
+        `${file} hardcodes the consent channel name "${channelName}" instead of using `
+          + `BROADCAST_CHANNELS.BRIDGE_CAPTURE_CONSENT. A second copy is how the two windows end up `
+          + `on different channels after a rename: both open a channel, neither hears the other, `
+          + `and ${CONSENT_DEFECT}`,
+      );
+    }
+  }
+
+  for (const [hook, which] of CONSENT_HOOKS) {
+    const source = read(hook);
+    if (!source) {
+      failures.push(`${hook} is missing; it is ${which}'s end of the loopback consent relay.`);
+    } else if (!/\bBROADCAST_CHANNELS\.BRIDGE_CAPTURE_CONSENT\b/.test(stripComments(source))) {
+      failures.push(
+        `${hook} does not open BROADCAST_CHANNELS.BRIDGE_CAPTURE_CONSENT. That leaves ${which} `
+          + `listening on a channel the other end never posts to, and ${CONSENT_DEFECT}`,
+      );
+    }
+  }
+}
+
+/**
+ * 13. Both ends still speak the same protocol.
+ *
+ * parseBridgeConsentMessage is the only thing between these hooks and `postMessage` from any
+ * same-origin page: it checks the version, the shape and the kind. A hook that reaches into
+ * `event.data` directly has stopped validating — it would act on a malformed snapshot, or on a
+ * neighbouring room's, and in the main window that means answering a consent question nobody in
+ * this meeting asked.
+ */
+for (const [hook, which] of CONSENT_HOOKS) {
+  const source = read(hook);
+  if (!source) continue; // Already reported by assertion 12.
+
+  if (!new RegExp(`\\bfrom\\s*["']${CONSENT_RELAY}["']`).test(source)) {
+    failures.push(
+      `${hook} no longer imports from ${CONSENT_RELAY}. That module is the contract both windows `
+        + `share and the only place its rules are tested; a hook carrying its own copy of them `
+        + `drifts from the other end, and ends that disagree about a message are ends that never `
+        + `show the host the prompt — the inbound leg then waits on an answer nobody was asked for.`,
+    );
+  }
+
+  // Every parse call, not just the first: `event.data` is allowed exactly where it is being
+  // validated, so each read has to be shown to sit inside one of these.
+  const code = withoutImports(stripComments(source));
+  const parsed = [];
+  for (let offset = 0; ; ) {
+    const span = callSpan(code.slice(offset), "parseBridgeConsentMessage");
+    if (!span) break;
+    parsed.push({ start: offset + span.start, end: offset + span.end });
+    offset += span.end;
+  }
+
+  if (parsed.length === 0) {
+    failures.push(
+      `${hook} never calls parseBridgeConsentMessage. That leaves ${which} acting on whatever `
+        + `arrived on the channel, unversioned and unchecked, which any same-origin page can post.`,
+    );
+  } else {
+    const raw = [...code.matchAll(/\bevent\.data\b/g)].some(
+      (use) => !parsed.some((span) => use.index >= span.start && use.index < span.end),
+    );
+    if (raw) {
+      failures.push(
+        `${hook} reads event.data outside parseBridgeConsentMessage. A message that has not been `
+          + `through the parser has had neither its protocol version nor its shape checked, and in `
+          + `${which} that is a consent decision taken on an unvalidated postMessage.`,
+      );
+    }
+  }
+}
+
 if (failures.length > 0) {
   console.error("FAIL desktop bridge overlay contract\n");
   for (const failure of failures) console.error(`  - ${failure.replace(/\s+/g, " ")}\n`);
@@ -545,5 +788,7 @@ if (failures.length > 0) {
 console.log(
   "PASS every desktop bridge helper has a caller, the overlay renders the widget and its session "
     + "controls, Start activates the room in the main window, End ends both the meeting and the room "
-    + "with no Leave beside it, and the setup wizard is reachable from a real room",
+    + "with no Leave beside it, the setup wizard is reachable from a real room, and the loopback "
+    + "consent is asked on the widget - with the main window's modal left as the fallback the "
+    + "surface decision picks, one channel name, and both ends parsing what arrives",
 );

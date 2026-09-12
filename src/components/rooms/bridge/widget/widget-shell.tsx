@@ -5,6 +5,7 @@
  *
  *   ┌ header ───────────────────────────────────────────────┐
  *   │ ● Translating  [Transcript paused]        [End · t3]  │
+ *   ├ consent, only while the main window is asking ────────┤
  *   ├ Transcript | WarpBot ─────────────────────────────────┤
  *   │                                                        │
  *   │   TranscriptPane (t2)   or   WarpBotPane (t5)          │
@@ -31,6 +32,7 @@ import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { CaptureConsentSlot } from "./capture-consent-slot";
 import { DockLanguagePill } from "./dock-language-pill";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndSessionButton } from "./end-session";
@@ -61,6 +63,9 @@ export function WidgetShell() {
         <EndedView />
       ) : (
         <>
+          {/* Above the tabs, because it is the question that explains why the transcript has only
+              one side in it — and it must not be reachable only from whichever tab is open. */}
+          <CaptureConsentSlot />
           <WidgetTabs />
           <WidgetDock />
         </>
