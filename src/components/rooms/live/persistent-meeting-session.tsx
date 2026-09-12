@@ -149,8 +149,11 @@ import {
   canConnectToRoom,
   isIdleReaped,
   isRestoredMeetingStale,
+  lastSignOfLife,
   shouldConnectMeeting,
+  type MeetSensorReading,
 } from "@/lib/meeting/meeting-session-lifecycle";
+import { extractMeetCodeFromUrl } from "@/lib/meeting/bridge-trigger";
 import { LiveSubtitleOverlay } from "@/components/rooms/live/live-subtitle-overlay";
 import {
   MeetingSidePanel,
@@ -236,10 +239,16 @@ const TRANSCRIPT_CLOSED_STATUSES = new Set<string>([
 export function PersistentMeetingSession({
   roomId,
   compact,
+  meetSensor = null,
   onMeetingClosed,
 }: {
   roomId: string;
   compact: boolean;
+  /**
+   * What the desktop Meet sensor last said, from the app shell. Only the idle reaper reads it, and
+   * only for an external bridge — see lastSignOfLife. Null off the desktop and before first poll.
+   */
+  meetSensor?: MeetSensorReading | null;
   onMeetingClosed: () => void;
 }) {
   const router = useRouter();
@@ -258,6 +267,9 @@ export function PersistentMeetingSession({
   // Seeded to 0 rather than Date.now(): a clock read during render is impure, and the reaper
   // effect stamps it the moment it starts watching anyway.
   const lastInteractionRef = useRef(0);
+  // When the last transcript segment arrived. For an external bridge, speech in the meeting is a
+  // sign somebody is still in it; see lastSignOfLife.
+  const lastSpeechAtRef = useRef<number | null>(null);
   const idleWarningShownRef = useRef(false);
   const markMeetingInteraction = useCallback(() => {
     lastInteractionRef.current = Date.now();
@@ -817,10 +829,14 @@ export function PersistentMeetingSession({
     const hasInboundSource =
       Boolean(bridgeInboundDeviceId) ||
       (bridgeInboundLoopback && mayCaptureBrowser(consentState) && Boolean(selectedLoopbackSourceId));
-    const wanted = isBridgeRoom && isHost && translationStarted && hasInboundSource;
+    // Not while idle-reaped. This is a SECOND LiveKit connection, which `connect` on <LiveKitRoom>
+    // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
+    // publishing the far side — and billing — into a room nobody was in any more.
+    const wanted =
+      isBridgeRoom && isHost && translationStarted && hasInboundSource && !meetingIsIdleReaped;
     if (!wanted) {
-      // Covers Stop Translation and leaving the room. Not awaited: teardown is fire-and-forget by
-      // nature and an effect cleanup cannot await anyway.
+      // Covers Stop Translation, an idle reap and leaving the room. Not awaited: teardown is
+      // fire-and-forget by nature and an effect cleanup cannot await anyway.
       void bridgeInboundRef.current?.stop();
       bridgeInboundRef.current = null;
       return;
@@ -918,6 +934,7 @@ export function PersistentMeetingSession({
     consentState,
     roomId,
     selectedLoopbackSourceId,
+    meetingIsIdleReaped,
   ]);
 
   // Leaving the page entirely must not strand the second connection: it holds a LiveKit seat and
@@ -1091,10 +1108,23 @@ export function PersistentMeetingSession({
   // effect on `compact` below.
   //
   // Reaping releases the LiveKit connection AND the 3s participants poll (see the query near
-  // the top). It deliberately leaves the two SignalR hubs up: they are one long-lived socket
-  // each rather than a poll, tearing them down would wipe the live transcript store via
+  // the top), and for an external bridge the stand-in's second connection and its capture too
+  // (see the inbound leg). It deliberately leaves the two SignalR hubs up: they are one long-lived
+  // socket each rather than a poll, tearing them down would wipe the live transcript store via
   // resetLiveRoom(), and the translation hub is what delivers TranslationRoomEnded — the signal
   // that retires this session altogether.
+  //
+  // AN EXTERNAL BRIDGE IS ALWAYS COMPACT HERE, AND NOBODY LOOKS AT IT. The host is in Google Meet
+  // with the popup on top, so input in this window says nothing about whether they are still
+  // there, and counting only that input cut every bridge off at 15 minutes, mid-meeting. For a
+  // bridge the clock also runs from a Meet window on screen and from speech in the meeting — the
+  // rule and the reasons, including why a running translation is NOT one of them, are
+  // lastSignOfLife's. Read through a ref so a new sensor reading does not restart the poll.
+  const roomMeetCode = extractMeetCodeFromUrl(room?.externalMeetingUrl);
+  const reaperEvidenceRef = useRef({ isBridgeRoom, meetSensor, roomMeetCode });
+  useEffect(() => {
+    reaperEvidenceRef.current = { isBridgeRoom, meetSensor, roomMeetCode };
+  }, [isBridgeRoom, meetSensor, roomMeetCode]);
 
   // Returning to the full meeting surface is itself an unambiguous "I am here": clear the idle
   // disconnect so <LiveKitRoom> reconnects, and never reap while the meeting owns the screen.
@@ -1125,23 +1155,47 @@ export function PersistentMeetingSession({
     document.addEventListener("visibilitychange", onVisibility);
 
     const tick = window.setInterval(() => {
+      const now = Date.now();
+      const evidence = reaperEvidenceRef.current;
+      // Evidence from outside this window is folded into the same clock as input in it, so a Meet
+      // window or a spoken line also re-arms the warning exactly as a mouse move does.
+      const signOfLife = lastSignOfLife({
+        now,
+        lastInteractionAt: lastInteractionRef.current,
+        isBridgeRoom: evidence.isBridgeRoom,
+        meetSensor: evidence.meetSensor,
+        roomMeetCode: evidence.roomMeetCode,
+        lastSpeechAt: lastSpeechAtRef.current,
+      });
+      if (signOfLife > lastInteractionRef.current) {
+        lastInteractionRef.current = signOfLife;
+        idleWarningShownRef.current = false;
+      }
       const action = evaluateIdleMeeting({
-        now: Date.now(),
+        now,
         lastInteractionAt: lastInteractionRef.current,
         alreadyWarned: idleWarningShownRef.current,
       });
       if (action === "disconnect") {
         setIdleDisconnected(true);
-        toast.info("Meeting disconnected after 15 minutes minimised.", {
-          description: "Reopen the meeting to rejoin.",
-        });
+        if (evidence.isBridgeRoom) {
+          toast.info("WarpTalk disconnected from this meeting.", {
+            description:
+              "No sign of the Google Meet call for 15 minutes. Rejoin from the WarpTalk widget.",
+          });
+        } else {
+          toast.info("Meeting disconnected after 15 minutes minimised.", {
+            description: "Reopen the meeting to rejoin.",
+          });
+        }
         return;
       }
       if (action === "warn") {
         idleWarningShownRef.current = true;
-        toast.warning("Still in the meeting?", {
-          description:
-            "The minimised meeting will disconnect in a minute to stop using your minutes.",
+        toast.warning(evidence.isBridgeRoom ? "Is the Google Meet call over?" : "Still in the meeting?", {
+          description: evidence.isBridgeRoom
+            ? "WarpTalk has not seen Google Meet or heard anyone speak for a while, and will disconnect in a minute to stop using your minutes."
+            : "The minimised meeting will disconnect in a minute to stop using your minutes.",
           duration: MINI_MEETING_IDLE_WARNING_MS,
           action: {
             label: "Stay connected",
@@ -2182,6 +2236,9 @@ export function PersistentMeetingSession({
     connection.on(
       "TranscriptSegmentReceived",
       (segment: TranscriptSegmentDto) => {
+        // Before the gate: whether anybody is still talking is a question about the meeting,
+        // not about whether this client has somewhere to show the words. The idle reaper reads it.
+        lastSpeechAtRef.current = Date.now();
         if (!transcriptOpenRef.current) return;
         addTranscriptSegment({
           ...segment,
@@ -3190,6 +3247,11 @@ export function PersistentMeetingSession({
             translationStarted={translationStarted}
             bridgeOutboundReady={Boolean(bridgeOutboundDeviceId)}
             bridgeInboundLoopback={bridgeInboundLoopback}
+            idleDisconnected={meetingIsIdleReaped}
+            onRejoin={() => {
+              markMeetingInteraction();
+              setIdleDisconnected(false);
+            }}
             onToggleMicrophone={() => setMicrophoneEnabled((current) => !current)}
             onStartTranslation={() => void handleStartWarptalk()}
             onStopTranslation={handleStopWarptalk}

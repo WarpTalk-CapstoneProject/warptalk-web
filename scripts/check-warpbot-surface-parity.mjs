@@ -322,6 +322,80 @@ assert.doesNotMatch(
   "The queue limit is defined once, in lib/meeting/assistant-queue.",
 );
 
+
+// ── the widget's folded trail is read from a REF, not from the closure ──────
+//
+// WT-620. The widget registers its hub handlers in an effect keyed on the conversation id only —
+// on purpose: re-subscribing on every step would drop and re-add the handlers mid-turn. So the
+// handlers see the `steps` state of the render that ran the effect, which is the empty trail
+// before the question was asked. The completed handler folded THAT onto the answer, and every
+// finished answer in the widget carried an empty AssistantWorkTrail while the meeting chat,
+// which reads through a ref, carried the real one. The failed handler had the same bug, on the
+// turn where the trail matters most.
+//
+// Invisible to a type check and to eslint (the effect's deps are deliberately incomplete), and
+// the live trail looks right while the turn runs — it only goes missing at the end. Hence here.
+//
+// Comments stripped first, for the reason given above chatPanelCode: the prose around these
+// handlers talks about `steps` and would be read as code.
+const widgetCode = widget
+  .replace(/\/\*[\s\S]*?\*\//g, "")
+  .replace(/^\s*\/\/.*$/gm, "");
+
+/** One hub handler's body: from its event name to the next `connection.on(`. */
+const hubHandler = (event) => {
+  const start = widgetCode.indexOf(`"${event}"`);
+  assert.notEqual(start, -1, `The widget must subscribe to ${event}.`);
+  const end = widgetCode.indexOf("connection.on(", start);
+  return widgetCode.slice(start, end === -1 ? undefined : end);
+};
+
+for (const event of ["AssistantMessageCompleted", "AssistantMessageFailed"]) {
+  const handler = hubHandler(event);
+  // `steps` read as a value — `steps.map`, `...steps`, `{ steps }` — but not `stepsRef`, not
+  // `msg.steps`, and not the `steps:` key of the message being written.
+  assert.doesNotMatch(
+    handler,
+    /(?<![\w$.])steps\b(?!:)/,
+    `The widget's ${event} handler must not read the \`steps\` state: the effect captured it before the turn began, so the folded trail comes out empty.`,
+  );
+  assert.match(
+    handler,
+    /stepsRef\.current/,
+    `The widget's ${event} handler must read the trail from stepsRef.current.`,
+  );
+}
+// A ref only helps if every write reaches it. One raw setSteps outside the helper and the ref
+// holds a trail the screen no longer shows — New chat would fold the previous conversation's
+// steps onto the next answer.
+assert.equal(
+  (widgetCode.match(/\bsetSteps\(/g) ?? []).length,
+  1,
+  "The widget must write the trail only through updateSteps, so stepsRef never drifts from what is on screen.",
+);
+
+// ── an IME's Enter confirms a word, it does not send ────────────────────────
+//
+// Vietnamese Telex (and Japanese, Chinese…) confirm the candidate with Enter. The widget sent on
+// that keystroke: half a word went out and the rest stayed in the box. The Meet-popup pane already
+// checks isComposing; the widget must too.
+const keydownCode = widgetCode.slice(
+  widgetCode.indexOf("const handleKeyDown"),
+  widgetCode.indexOf("const filteredOptions"),
+);
+const composingGuard = keydownCode.indexOf("if (e.nativeEvent.isComposing) return;");
+assert.notEqual(
+  composingGuard,
+  -1,
+  "The widget's composer must ignore keys while an IME is composing.",
+);
+// First, not merely present: the menu branches handle Enter too, and a guard placed after them
+// lets the IME's Enter pick a mention or a slash command.
+assert.ok(
+  composingGuard < keydownCode.indexOf('e.key === "Enter"'),
+  "The isComposing guard must come before every Enter branch in handleKeyDown, the menu ones included.",
+);
+
 console.log(
-  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming; Meet popup: private, two tabs, composer, queue)",
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, trail read from a ref, IME Enter; Meet popup: private, two tabs, composer, queue)",
 );

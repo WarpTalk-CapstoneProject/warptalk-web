@@ -1,7 +1,7 @@
 "use client";
 
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, SpeakerSlash, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
+import { CaretDown, CaretLeft, CaretRight, Check, ClosedCaptioning, Copy, GearSix, HandPalm, Hash, Layout, Lock, LockOpen, PauseCircle, Play, Record, Screencast, CheckCircle, Microphone, MicrophoneSlash, ShieldCheck, SmileyWink, SpeakerHigh, Stop, Translate, VideoCamera, VideoCameraSlash, WaveSine, UserFocus, X } from "@phosphor-icons/react/dist/ssr";
 import { Track } from "livekit-client";
 import { TrackToggle } from "@livekit/components-react";
 import { MediaDeviceMenuButton } from "@/components/rooms/live/media-device-menu";
@@ -14,6 +14,7 @@ import { describeVoiceSelection } from "@/lib/meeting/voice-selection";
 import { describeCloneCapture } from "@/lib/meeting/clone-capture-state";
 import { CloneCaptureMeter } from "@/components/rooms/live/clone-capture-meter";
 import { FlyoutSurface } from "@/components/rooms/live/flyout";
+import { VoicePanel } from "@/components/rooms/live/voice-panel";
 import { useLocalMicLevels } from "@/hooks/use-local-mic-levels";
 import { MicCheck } from "@/components/rooms/live/mic-check";
 import {
@@ -78,9 +79,6 @@ function useFlyoutDismiss(
 
   return containerRef;
 }
-
-/** Sentinel for the "use my own cloned voice" entry, which is not a provider voice id. */
-const MY_VOICE_OPTION = "__my_voice__";
 
 export function MeetingControlBar({
   meetingEnabled,
@@ -374,18 +372,6 @@ export function MeetingControlBar({
     ownVoiceProfiles,
     hasAudience: voiceCloneHasAudience,
   });
-
-  /**
-   * Picking a provider voice means "do not use mine", so consent is withdrawn alongside it.
-   *
-   * They were independent switches and the clone silently won, which is how somebody could select
-   * a voice from the catalog, see it ticked, and hear something else. Revoking is also the safe
-   * direction for a biometric permission: the only way to turn cloning back on is to ask for it.
-   */
-  function selectProviderVoice(voiceId: string) {
-    onChangeVoicePreference?.(voiceId);
-    if (voiceCloneEnabled) onChangeVoiceCloneConsent?.(false);
-  }
 
   function closeSettingsMenu() {
     setIsSettingsMenuOpen(false);
@@ -847,237 +833,70 @@ export function MeetingControlBar({
               {settingsSection === "voice" ? (
                 <>
                   <SettingsPanelHeader title="Voice" onBack={() => setSettingsSection("root")} />
-                  {onChangeVoiceEnabled ? (
-                    // A switch, not a tap-row. The old row was a button whose LABEL was the
-                    // current state and whose VALUE was an instruction to invert it ("Voice on ·
-                    // Tap for transcript only") — three phrases a reader has to reconcile before
-                    // knowing which state they are in, for what is a boolean. A switch carries
-                    // its state and its affordance in one control, and cannot be misread as a
-                    // caption.
-                    <div className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2">
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">
-                        {voiceEnabled === false ? <SpeakerSlash className="h-4 w-4" /> : <SpeakerHigh className="h-4 w-4" />}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] font-medium text-ink">Voice</span>
-                        <span className="block truncate text-[11px] text-ink-muted">
-                          {voiceEnabled === false
-                            ? "Off — you read translations instead of hearing them."
-                            : "On — translations are spoken to you."}
-                        </span>
-                      </span>
-                      <Switch
-                        checked={voiceEnabled !== false}
-                        onCheckedChange={(checked) => onChangeVoiceEnabled(checked)}
-                        aria-label="Hear translated voice"
-                      />
-                    </div>
-                  ) : null}
-                  {voiceEnabled !== false ? (
-                    <>
-                      <div className="my-1 h-[1px] bg-surface-3" />
-
-                      {/* Right here in the list, not a switch somewhere else. Choosing a voice and
-                          choosing YOUR voice are the same question, and separating them is what
-                          made a whole test session conclude cloning was broken while the worker
-                          was scoring clone samples 1.0.
-
-                          The detail line carries the two facts that were previously unknowable
-                          from inside a meeting: whether this is even reaching anyone, and that
-                          consent is what turns it on. */}
-                      {/* YOUR VOICE — one direction only.
-                          Whose voice a dub is spoken in is the speaker's decision; the listener
-                          chooses the LANGUAGE, and the same voice is rendered once per language.
-                          These options used to be mixed into the list below, which points the
-                          other way, so picking a library voice to LISTEN in silently turned off
-                          your own cloned voice for everybody else in the room. */}
-                      {onChangeDubVoice || onChangeVoiceCloneConsent ? (
-                        <>
-                          <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                            Your voice
-                          </p>
-                          {onChangeVoiceCloneConsent ? (
-                            <VoiceOption
-                              label="My voice"
-                              detail={
-                                voiceCloneHasAudience
-                                  ? "Cloned from how you sound in this meeting"
-                                  : "Nobody is listening in another language yet"
-                              }
-                              value={MY_VOICE_OPTION}
-                              active={Boolean(voiceCloneEnabled) && !dubVoice}
-                              onSelect={() => {
-                                // Both halves, because they are two different settings that
-                                // together mean "clone me": consent is the per-room permission,
-                                // and a dub voice left set would win over the clone entirely.
-                                onChangeDubVoice?.(null);
-                                onChangeVoiceCloneConsent(true);
-                              }}
-                              close={closeSettingsMenu}
-                            />
-                          ) : null}
-                          {onChangeDubVoice
-                            ? (ownVoiceProfiles ?? []).map((profile) => (
-                                <VoiceOption
-                                  key={profile.id}
-                                  label={profile.name}
-                                  detail="A recording you uploaded"
-                                  value={profile.voiceId}
-                                  active={dubVoice === profile.voiceId}
-                                  onSelect={(voiceId) => onChangeDubVoice(voiceId)}
-                                  close={closeSettingsMenu}
-                                />
-                              ))
-                            : null}
-                          {onChangeDubVoice
-                            ? [...(voiceCatalog ?? [])]
-                                .sort(
-                                  (a, b) =>
-                                    (a.gender || "").localeCompare(b.gender || "") ||
-                                    a.name.localeCompare(b.name),
-                                )
-                                .map((voice) => (
-                                  <VoiceOption
-                                    key={`dub-${voice.id}`}
-                                    label={voice.name}
-                                    detail={`A library voice${voice.gender ? ` · ${voice.gender}` : ""}`}
-                                    value={voice.id}
-                                    active={dubVoice === voice.id}
-                                    onSelect={(voiceId) => onChangeDubVoice(voiceId)}
-                                    close={closeSettingsMenu}
-                                  />
-                                ))
-                            : null}
-                          <div className="my-1 h-[1px] bg-surface-3" />
-                          <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                            Stand-in voice
-                          </p>
-                          {/* Said out loud because it is not guessable, and because getting it
-                              wrong is invisible: a voice picked here replaces the stand-in for
-                              people who have NOT chosen how they sound. Anyone who cloned their
-                              voice or picked their own is heard as themselves regardless — see
-                              TTSWorker._resolve_voice_variants. */}
-                          <p className="px-2.5 pb-1 text-[11px] leading-snug text-ink-muted">
-                            Only applies to people who have not chosen a voice of their own.
-                          </p>
-                        </>
-                      ) : null}
-
-                      {/* "Assigned, not matched" is the honest description of the default: the
-                          worker picks deterministically from this language's catalog by hashing
-                          the speaker id, so everyone keeps a stable voice and no two people
-                          sound alike — but nothing compares it to how the speaker actually
-                          sounds. Saying so is what makes the list below worth opening. */}
-                      <VoiceOption
-                        label="Automatic"
-                        detail="Assigned, not matched to your voice"
-                        value=""
-                        active={!voicePreference && !voiceCloneEnabled}
-                        onSelect={(value) => selectProviderVoice(value)}
-                        close={closeSettingsMenu}
-                      />
-                      {/* Grouped by gender, then by name. The label alone still leaves six
-                          mixed rows to read one at a time; clustering them is what turns the
-                          list into "here are the masculine ones". */}
-                      {[...(voiceCatalog ?? [])]
-                        .sort(
-                          (a, b) =>
-                            (a.gender || "").localeCompare(b.gender || "") ||
-                            a.name.localeCompare(b.name),
-                        )
-                        .map((voice) => (
-                        <VoiceOption
-                          key={voice.id}
-                          label={voice.name}
-                          detail={voice.gender || undefined}
-                          value={voice.id}
-                          active={!voiceCloneEnabled && voicePreference === voice.id}
-                          onSelect={(value) => selectProviderVoice(value)}
-                          close={closeSettingsMenu}
-                        />
-                      ))}
-                    </>
-                  ) : null}
-                  {/* What listeners actually get, spelled out under the list. The choice above is
-                      stored either way; this is the only place that says whether it is reaching
-                      anybody. */}
-                  <p className="px-2.5 pb-2 pt-1 text-[11px] leading-snug text-ink-muted">
-                    {voiceSelection.detail}
-                  </p>
-
-                  {/* FLASH MODE — a room setting, kept visually apart from everything above it.
-                      The list above is two questions about VOICE ("how do I sound", "what do I
-                      hear"). This is a third question about SPEED, and it is the only control in
-                      this panel that changes things for other people. Merging it into the list
-                      would repeat the exact mistake this panel was rebuilt to fix, so it gets a
-                      rule, a heading of its own, and a sentence saying who it affects. */}
-                  <div className="my-1 h-[1px] bg-surface-3" />
-                  <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
-                    Room speed
-                  </p>
-                  <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
-                    <span className="min-w-0 text-left">
-                      <span className="block text-[13px] text-ink">Flash mode</span>
-                      <span className="block text-[11px] leading-snug text-ink-subtle">
-                        {onChangeFlashMode
-                          ? "Start translating while people are still speaking. Faster, and still experimental."
-                          : flashModeSource === "room"
-                            ? "Set by the host. Translation starts while people are still speaking."
-                            : flashModeSource === "deployment"
-                              // Nobody set this room. Saying "the host" here named a person who
-                              // had made no such choice, and made a default look like a decision.
-                              ? "Following the platform default. Translation starts while people are still speaking."
-                              // No override and no published default. The switch has to sit
-                              // somewhere, so it sits off — but it is not reporting a reading,
-                              // and claiming one is the whole defect this replaces.
-                              : "Not known right now — the room is using whatever the platform defaults to."}
-                      </span>
-                    </span>
-                    <Switch
-                      size="sm"
-                      className="mt-0.5 shrink-0"
-                      checked={flashModeEnabled}
-                      // A guest sees the switch in the position the host chose and cannot move
-                      // it. Hiding it instead would leave them unable to tell a fast room from a
-                      // slow one, which is the thing they can actually perceive.
-                      disabled={!onChangeFlashMode}
-                      onCheckedChange={(checked) => onChangeFlashMode?.(Boolean(checked))}
-                    />
-                  </div>
-
-                  {/* WT-420. The capture itself, live. Everything below was already known to the
-                      TTS worker and written only to a log — which is why an entire test session
-                      concluded cloning was broken while the worker scored the clip 1.0. */}
-                  {cloneStatus.tone !== "idle" || cloneStatus.title ? (
-                    <div className="mx-2.5 mb-2 rounded-lg bg-surface-2 px-2.5 py-2">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <p className="text-[11px] font-medium text-ink">{cloneStatus.title}</p>
-                        {cloneStatus.quality ? (
-                          <span
-                            className={`text-[10px] uppercase tracking-wide ${
-                              cloneStatus.quality === "good"
-                                ? "text-emerald-600"
-                                : cloneStatus.quality === "fair"
-                                  ? "text-amber-600"
-                                  : "text-ink-muted"
-                            }`}
-                          >
-                            {cloneStatus.quality}
+                  {/* The panel itself is shared with the bridge popup — see voice-panel.tsx and
+                      lib/meeting/voice-panel.ts. Room speed stays here: it is the bar's section, not a
+                      voice, and it rides in the panel's footer slot so it keeps its place above the
+                      capture status. */}
+                  <VoicePanel
+                    mode="meeting"
+                    voiceEnabled={voiceEnabled}
+                    onChangeVoiceEnabled={onChangeVoiceEnabled}
+                    voicePreference={voicePreference}
+                    voiceCatalog={voiceCatalog}
+                    onChangeVoicePreference={onChangeVoicePreference}
+                    voiceCloneEnabled={voiceCloneEnabled}
+                    voiceCloneHasAudience={voiceCloneHasAudience}
+                    onChangeVoiceCloneConsent={onChangeVoiceCloneConsent}
+                    dubVoice={dubVoice}
+                    ownVoiceProfiles={ownVoiceProfiles}
+                    onChangeDubVoice={onChangeDubVoice}
+                    cloneCapture={cloneCapture}
+                    cloneLevels={cloneLevels}
+                    onDone={closeSettingsMenu}
+                    footer={
+                      <>
+                        {/* FLASH MODE — a room setting, kept visually apart from everything above it.
+                            The list above is two questions about VOICE ("how do I sound", "what do I
+                            hear"). This is a third question about SPEED, and it is the only control in
+                            this panel that changes things for other people. Merging it into the list
+                            would repeat the exact mistake this panel was rebuilt to fix, so it gets a
+                            rule, a heading of its own, and a sentence saying who it affects. */}
+                        <div className="my-1 h-[1px] bg-surface-3" />
+                        <p className="px-2.5 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">
+                          Room speed
+                        </p>
+                        <div className="flex w-full items-start justify-between gap-3 px-3 py-2">
+                          <span className="min-w-0 text-left">
+                            <span className="block text-[13px] text-ink">Flash mode</span>
+                            <span className="block text-[11px] leading-snug text-ink-subtle">
+                              {onChangeFlashMode
+                                ? "Start translating while people are still speaking. Faster, and still experimental."
+                                : flashModeSource === "room"
+                                  ? "Set by the host. Translation starts while people are still speaking."
+                                  : flashModeSource === "deployment"
+                                    // Nobody set this room. Saying "the host" here named a person who
+                                    // had made no such choice, and made a default look like a decision.
+                                    ? "Following the platform default. Translation starts while people are still speaking."
+                                    // No override and no published default. The switch has to sit
+                                    // somewhere, so it sits off — but it is not reporting a reading,
+                                    // and claiming one is the whole defect this replaces.
+                                    : "Not known right now — the room is using whatever the platform defaults to."}
+                            </span>
                           </span>
-                        ) : null}
-                      </div>
-                      {cloneStatus.tone === "working" || cloneStatus.progress !== null ? (
-                        <CloneCaptureMeter
-                          levels={cloneLevels}
-                          progress={cloneStatus.progress}
-                          tone={cloneStatus.tone}
-                        />
-                      ) : null}
-                      <p className="mt-1 text-[11px] leading-snug text-ink-muted">
-                        {cloneStatus.detail}
-                      </p>
-                    </div>
-                  ) : null}
+                          <Switch
+                            size="sm"
+                            className="mt-0.5 shrink-0"
+                            checked={flashModeEnabled}
+                            // A guest sees the switch in the position the host chose and cannot move
+                            // it. Hiding it instead would leave them unable to tell a fast room from a
+                            // slow one, which is the thing they can actually perceive.
+                            disabled={!onChangeFlashMode}
+                            onCheckedChange={(checked) => onChangeFlashMode?.(Boolean(checked))}
+                          />
+                        </div>
+                      </>
+                    }
+                  />
                 </>
               ) : null}
             </FlyoutSurface>
@@ -1267,41 +1086,6 @@ function HostControlRow({
         <span className="font-medium">{label}</span>
         <span className="text-[11px] text-ink-muted">{description}</span>
       </span>
-    </button>
-  );
-}
-
-function VoiceOption({
-  label,
-  detail,
-  value,
-  active,
-  onSelect,
-  close,
-}: {
-  label: string;
-  detail?: string;
-  value: string;
-  active: boolean;
-  onSelect: (voiceId: string) => void;
-  close: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onSelect(value);
-        close();
-      }}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
-    >
-      <span className="min-w-0 text-left">
-        <span className="block truncate">{label}</span>
-        {detail ? (
-          <span className="block truncate text-[11px] capitalize text-ink-subtle">{detail}</span>
-        ) : null}
-      </span>
-      {active ? <CheckCircle className="h-3.5 w-3.5 shrink-0 text-ink" weight="fill" /> : null}
     </button>
   );
 }
