@@ -40,8 +40,15 @@ export function BridgeCaptureConsentPanel({ roomId }: { roomId: string }) {
 
   if (view.kind === "listening") {
     return (
+      // PERMISSION, NOT A LIVE READING. This says what the host allowed, because that is the only
+      // thing the snapshot actually knows. Whether a capture is running at this instant is a
+      // separate fact the main window holds and does not publish: the idle reaper stops the inbound
+      // leg without touching the answer, and so does a failed open or a dropped connection. A line
+      // reading "Listening to Chrome" through any of those would be the same lie this relay exists
+      // to remove, only pointing the other way.
       <p className="text-[11px] leading-relaxed text-ink-muted">
-        Listening to {view.sourceName ?? "your browser"} for the other side of the meeting.{" "}
+        WarpTalk may listen to {view.sourceName ?? "your browser"} for the other side of the
+        meeting.{" "}
         <button
           type="button"
           onClick={() => decide(false)}

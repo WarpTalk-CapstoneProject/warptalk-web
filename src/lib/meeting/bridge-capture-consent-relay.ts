@@ -304,6 +304,12 @@ export type BridgeConsentPromptView =
       loadingSources: boolean;
       canConfirm: boolean;
     }
+  /**
+   * The host said yes, and this is which source they said yes TO — a permission, not a live
+   * reading. The main window stops the inbound leg on an idle reap, a failed open and a dropped
+   * connection without any of them changing the answer, so a surface that renders this as
+   * "listening right now" will say so while nothing is being captured.
+   */
   | { kind: "listening"; sourceName: string | null }
   | { kind: "declined" };
 
