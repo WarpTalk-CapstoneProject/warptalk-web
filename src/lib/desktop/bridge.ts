@@ -243,6 +243,20 @@ export async function openTranscriptWindow(roomId: string | null): Promise<boole
 }
 
 /**
+ * Is there a popup this machine can put in front of the host?
+ *
+ * Asked before a question is routed to the floating window rather than shown where the caller
+ * stands: the bridge consent prompt belongs in the popup, but only on a machine that has one, and
+ * a prompt sent to a window that cannot open is a question asked of nobody.
+ *
+ * The per-method guard, not `isDesktopApp()`, because an installed desktop build can lag the web
+ * app it loads - the shell may be present while this particular method is not.
+ */
+export function canOpenTranscriptWindow(): boolean {
+  return typeof getDesktopBridge()?.openTranscriptWindow === "function";
+}
+
+/**
  * Subscribes to "is a Google Meet window on screen", and starts the desktop app looking.
  *
  * Arming is the caller's job to undo: the watcher enumerates every window on the machine on a
