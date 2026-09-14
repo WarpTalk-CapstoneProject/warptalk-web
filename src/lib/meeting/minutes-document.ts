@@ -680,9 +680,14 @@ export function externalGuestNotice(attendance: MinutesAttendance): string | nul
 
 /* ─────────────────────────── Assembly ─────────────────────────── */
 
-/** Every language a translation of this document exists in, in a stable order. */
+/**
+ * Every language this document can be read in besides its own, in a stable order.
+ *
+ * WT-685: read through `cleanTranslations`, so "vi-VN" and "vi" are one language and the record's
+ * own language is never offered as a translation of itself.
+ */
 export function translationLanguagesOf(content: MeetingMinutesContent): string[] {
-  return Object.keys(content.translations ?? {}).sort();
+  return Object.keys(cleanTranslations(content)).sort();
 }
 
 /**
@@ -786,4 +791,86 @@ export function setMinutesItemOwner(
   sections[sectionIndex] = { ...section, items };
 
   return { ...content, sections };
+}
+
+/* ─────────────────────────── Reading in one language ─────────────────────────── */
+
+/*
+ * WT-685 — one biên bản, read in ONE language.
+ *
+ * The page used to hang lines of every stored translation under the original, choosing per section
+ * the first language that happened to pair, alphabetically. One page could carry [ja] under 3.1
+ * and [vi] under 3.2, and a "translation" of the record into its own language printed English under
+ * English tagged [en]. These mirror MinutesLanguageView in warptalk-backend, which shapes the
+ * downloaded file by the same rules, so the screen and the file agree.
+ */
+
+/** What a file downloaded in a reading language contains: that language, or the original beside it. */
+export type MinutesFileMode = "mono" | "bilingual";
+
+const CARRIED_OVER_KEY = "carriedOver";
+
+function bareLanguage(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().split(/[-_]/)[0];
+}
+
+/** What an untranslated section says in place of borrowing another language's words. */
+export function untranslatedNotice(language: string): string {
+  return `This section has not been translated into ${language} yet.`;
+}
+
+/**
+ * The stored translations keyed by bare language code, without the record's own language, keeping
+ * the first spelling of a language that appears twice.
+ */
+export function cleanTranslations(content: MeetingMinutesContent): Record<string, MinutesSection[]> {
+  const original = bareLanguage(content.primaryLanguage);
+  const cleaned: Record<string, MinutesSection[]> = {};
+
+  for (const code of Object.keys(content.translations ?? {}).sort()) {
+    const key = bareLanguage(code);
+    const sections = content.translations?.[code];
+    if (!key || key === original || cleaned[key] || !sections?.length) continue;
+    cleaned[key] = sections;
+  }
+
+  return cleaned;
+}
+
+/** The document in its own language and nothing else — what a reader sees before choosing one. */
+export function originalOnly(content: MeetingMinutesContent): MeetingMinutesContent {
+  return { ...content, translations: null };
+}
+
+function hasWords(section: MinutesSection): boolean {
+  return Boolean(section.text?.trim()) || Boolean(section.items?.some((item) => item.text?.trim()));
+}
+
+/**
+ * The whole document in `language`: every section replaced by its counterpart there, and a section
+ * with none replaced by a notice saying so. `requested` is a reading generated on request for a
+ * language the record does not store, and wins over a stored one.
+ *
+ * Carried-over items are quotations of an earlier meeting's record and stay as they were written.
+ */
+export function readMinutesIn(
+  content: MeetingMinutesContent,
+  language: string,
+  requested?: MinutesSection[] | null,
+): MeetingMinutesContent {
+  const wanted = bareLanguage(language);
+  if (!wanted || wanted === bareLanguage(content.primaryLanguage)) return originalOnly(content);
+
+  const translated = requested?.length ? requested : cleanTranslations(content)[wanted];
+
+  const sections = content.sections.map((section): MinutesSection => {
+    if (section.key === CARRIED_OVER_KEY) return section;
+
+    const counterpart = translated?.find((candidate) => candidate.key === section.key);
+    if (counterpart && hasWords(counterpart)) return counterpart;
+
+    return { key: section.key, kind: "paragraph", text: untranslatedNotice(wanted) };
+  });
+
+  return { ...content, sections, translations: null };
 }

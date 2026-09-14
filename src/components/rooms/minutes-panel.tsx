@@ -55,7 +55,10 @@ import { getErrorMessage } from "@/lib/api/errors";
 import {
   DEFAULT_MINUTES_TEMPLATE,
   formatDocumentMoment,
+  originalOnly,
+  readMinutesIn,
   translationLanguagesOf,
+  type MinutesFileMode,
   type MinutesPolicyFacts,
 } from "@/lib/meeting/minutes-document";
 import { MinutesShareDialog } from "@/components/rooms/minutes-share-dialog";
@@ -161,24 +164,22 @@ export function MinutesPanel({
   const base = draft ?? stored;
 
   /**
-   * READING THE RECORD IN A LANGUAGE IT WAS NOT DRAWN UP IN.
+   * READING THE RECORD IN ONE LANGUAGE. WT-685.
    *
-   * `content.translations` covers the languages the meeting was being interpreted into while it
-   * ran. A reader outside that set — the Japanese reader in a Vietnamese/English room — has no
-   * version of the document at all, so they ask for one and it is generated once.
+   * No language chosen is the original and nothing else. Choosing one shows the WHOLE document in
+   * that language — stored when the meeting was interpreted into it, generated once when it was
+   * not. It used to hang lines of every stored language under the original, picking per section
+   * whichever paired first alphabetically, so one page carried [ja] under 3.1 and [vi] under 3.2.
+   * A section with no translation now says so in place rather than borrowing another language.
    *
-   * The answer is folded INTO `translations` rather than replacing `sections`, which is the whole
-   * design: a signed record is shown beside its original, never instead of it, and folding it in
-   * means the existing bilingual renderer handles it — including `pairByCitation`, which pairs on
-   * the citation and refuses a section outright rather than lining up two halves that might not
-   * correspond. Replacing the body would have thrown that guarantee away and shown a reader
-   * translated prose with nothing to check it against.
+   * The downloaded file follows the same rules (MinutesLanguageView on the server), so what is on
+   * screen is what arrives. The original beside the translation is an option for the FILE only.
    *
-   * Never while editing. The secretary is correcting the original, and a translated column beside
-   * a half-typed correction is a document nobody is reading.
+   * Never while editing: the secretary corrects the original, never a reading of it.
    */
   const [readingLanguage, setReadingLanguage] = useState<string | null>(null);
   const [fetched, setFetched] = useState<MinutesTranslationDto | null>(null);
+  const [fileMode, setFileMode] = useState<MinutesFileMode>("mono");
   const translationPollRef = useRef<number | null>(null);
 
   useEffect(
@@ -189,11 +190,10 @@ export function MinutesPanel({
   );
 
   const view = useMemo<MeetingMinutesContent>(() => {
-    if (!readingLanguage || fetched?.status !== "ready" || !fetched.sections) return base;
-    return {
-      ...base,
-      translations: { ...(base.translations ?? {}), [readingLanguage]: fetched.sections },
-    };
+    if (!readingLanguage || fetched?.status !== "ready" || !fetched.sections) {
+      return originalOnly(base);
+    }
+    return readMinutesIn(base, readingLanguage, fetched.sections);
   }, [base, readingLanguage, fetched]);
 
   /**
@@ -405,7 +405,8 @@ export function MinutesPanel({
     artifactRetentionDays: workspaceSettings?.artifactRetentionDays ?? null,
     retentionFrom: view.closedAt ?? null,
     primaryLanguage: view.primaryLanguage,
-    translationLanguages: translationLanguagesOf(view),
+    // The languages the RECORD carries — not the one being read, which strips them from `view`.
+    translationLanguages: translationLanguagesOf(base),
   };
 
   /**
@@ -421,10 +422,12 @@ export function MinutesPanel({
       // The layout on screen, in both formats, so the file the reader gets is the document they
       // were looking at. Without this the server renders its own default and the switcher
       // silently does not apply to the download.
+      // WT-685: and in the language on screen — alone, or beside the original when asked for.
+      const reading = readingLanguage ? { lang: readingLanguage, mode: fileMode } : undefined;
       const response =
         format === "pdf"
-          ? await meetingMinutesService.downloadPdf(roomId, template)
-          : await meetingMinutesService.downloadDocx(roomId, template);
+          ? await meetingMinutesService.downloadPdf(roomId, template, reading)
+          : await meetingMinutesService.downloadDocx(roomId, template, reading);
       // The server names the file after the minutes number and the meeting, which is what the
       // recipient files it under. Falling back to the number here rather than to something
       // generic keeps that true even if a proxy strips the header.
@@ -519,6 +522,18 @@ export function MinutesPanel({
             {/* Print styles come with a page-shaped layout for almost nothing — see the print
                 block in minutes-document.tsx, which redefines --mm and --pt to real physical
                 units and sends this page alone to the printer at true A4 size. */}
+            {readingLanguage ? (
+              // Only for the file: the page is one language at a time (WT-685), and a reader who
+              // needs the original beside it — a foreign partner's copy — asks for that here.
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={fileMode === "bilingual"}
+                  onChange={(event) => setFileMode(event.target.checked ? "bilingual" : "mono")}
+                />
+                File with the original beside it
+              </label>
+            ) : null}
             <Button
               size="sm"
               variant="outline"

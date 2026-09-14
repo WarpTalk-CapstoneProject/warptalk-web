@@ -2,6 +2,17 @@
  * Centralized API endpoints matching Gateway YARP routes.
  * Base URL is set in apiClient (NEXT_PUBLIC_API_URL).
  */
+
+/** The query string a minutes export takes, with absent values left out entirely. WT-685. */
+function minutesExportQuery(values: { template?: string; lang?: string; mode?: string }): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value) query.set(key, value);
+  }
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
 export const API = {
   auth: {
     /** Upload/replace the signed-in user's avatar (multipart). */
@@ -178,14 +189,18 @@ export const API = {
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
-    exportDocx: (roomId: string, template?: string) =>
-      `/rooms/${roomId}/minutes/export.docx` + (template ? `?template=${encodeURIComponent(template)}` : ""),
     /**
-     * The same document, converted from that .docx — never a second layout, so `template` means
+     * WT-685: `lang` is the one language the file is in (absent = the original) and
+     * `mode=bilingual` puts the original beside exactly that language.
+     */
+    exportDocx: (roomId: string, template?: string, lang?: string, mode?: string) =>
+      `/rooms/${roomId}/minutes/export.docx${minutesExportQuery({ template, lang, mode })}`,
+    /**
+     * The same document, converted from that .docx — never a second layout, so the query means
      * exactly what it means above.
      */
-    exportPdf: (roomId: string, template?: string) =>
-      `/rooms/${roomId}/minutes/export.pdf` + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    exportPdf: (roomId: string, template?: string, lang?: string, mode?: string) =>
+      `/rooms/${roomId}/minutes/export.pdf${minutesExportQuery({ template, lang, mode })}`,
     /** The share dialog's state. GET creates the link, restricted, on first ask. */
     share: (roomId: string) => `/rooms/${roomId}/minutes/share`,
     /** Email travels in the query string: an address contains characters a route segment does not. */
