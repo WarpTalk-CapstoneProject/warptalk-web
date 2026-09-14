@@ -23,9 +23,9 @@
  * WHY THIS FILE IS NOW MOSTLY CHROME
  *   It used to render the whole document itself, as a flat stack of labelled key/value rows and
  *   small section headings — everything present, nothing reading as a record. The document proper
- *   moved into `minutes-document.tsx`, which sets it as an A4 page in one of two templates, and
- *   what is left here is what surrounds a document rather than what is in it: which template, the
- *   margin guides, print, download, and the draft → sign → approve → addendum flow.
+ *   moved into `minutes-document.tsx`, which sets it as an A4 page, and what is left here is what
+ *   surrounds a document rather than what is in it: print, download, who the secretary is, and the
+ *   draft → sign → approve → addendum flow. The page itself is the editor for whoever may edit.
  *
  *   The one thing deliberately kept OUT of the page is the assigned-work list at the bottom. Those
  *   commitments move as people finish them, and a record that changed whenever somebody ticked a
@@ -41,9 +41,7 @@ import {
   DownloadSimple,
   FilePdf,
   FileText,
-  PencilSimple,
   Printer,
-  Ruler,
   ShareNetwork,
   Spinner,
 } from "@phosphor-icons/react/dist/ssr";
@@ -53,13 +51,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { isRecordShared } from "@/lib/meeting/record-sharing";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
-  MINUTES_TEMPLATES,
+  DEFAULT_MINUTES_TEMPLATE,
   formatDocumentMoment,
-  resolveMinutesTemplate,
   translationLanguagesOf,
   type MinutesPolicyFacts,
-  type MinutesTemplateId,
 } from "@/lib/meeting/minutes-document";
 import { MinutesShareDialog } from "@/components/rooms/minutes-share-dialog";
 import {
@@ -70,6 +67,7 @@ import {
 import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { useWorkspace, useWorkspaceSettings } from "@/hooks/use-workspace";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MeetingActionItemDto } from "@/types/meetingActionItem";
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
@@ -77,6 +75,7 @@ import {
   isEditable,
   parseMinutesContent,
   type MeetingMinutesContent,
+  type MinutesAttendance,
 } from "@/types/meetingMinutes";
 import {
   MinutesDocument,
@@ -122,7 +121,8 @@ export function MinutesPanel({
   // you" is one of the three normal answers here rather than a failure.
   const withheld = read === MINUTES_WITHHELD;
   const minutes = withheld ? null : read;
-  const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
+  const { createDraft, save, sign, approve, revise, designateSecretary } =
+    useMeetingMinutesActions(roomId);
 
   /*
    * Everything the document needs that does not live on the minutes row itself.
@@ -139,28 +139,26 @@ export function MinutesPanel({
   const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
   const { data: room } = useTranslationRoom(roomId);
 
+  // WHAT IS BEING TYPED, OR NULL WHEN NOTHING IS.
+  //
+  // The page below IS the editor: whoever may edit types straight into the document, the way they
+  // would in Word, with no Edit mode to enter first. Changes collect in this working copy so an
+  // in-flight refetch cannot overwrite a half-typed line; null means the page shows exactly what is
+  // stored, which is also what Discard goes back to.
   const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
-  const [editing, setEditing] = useState(false);
   const [downloading, setDownloading] = useState<"docx" | "pdf" | null>(null);
   const [sharing, setSharing] = useState(false);
-  const [showGuides, setShowGuides] = useState(false);
-  /**
-   * The reader's template choice for this sitting, or null to follow the default.
-   *
-   * Not persisted, because there is nowhere honest to persist it yet: the template is a property
-   * of the WORKSPACE — a company sends domestic partners one layout and overseas clients the other
-   * — and storing one reader's preference in their own browser would quietly make the same
-   * document look different to different people on the same team. Until a workspace setting exists
-   * this follows the meeting's own language and can be switched per sitting.
-   */
-  const [chosenTemplate, setChosenTemplate] = useState<MinutesTemplateId | null>(null);
+
+  // Host authority for the one action that exists before a document does: drawing it up. The
+  // room page only knows whether the viewer hosts; a workspace Owner/Admin carries the same
+  // authority everywhere else in the record, and the server agrees (RoomHostAccess).
+  const workspaceRole = useWorkspaceRole();
+  const hostAuthority = canManage || workspaceRole === "owner" || workspaceRole === "admin";
 
   const stored = useMemo(() => parseMinutesContent(minutes?.content), [minutes?.content]);
 
   const carriedLanguages = useMemo(() => translationLanguagesOf(stored), [stored]);
-  // Editing works on a copy so an in-flight refetch cannot overwrite what is being typed; the
-  // copy is dropped the moment editing ends, which is also what discards an abandoned edit.
-  const base = editing && draft ? draft : stored;
+  const base = draft ?? stored;
 
   /**
    * READING THE RECORD IN A LANGUAGE IT WAS NOT DRAWN UP IN.
@@ -191,13 +189,12 @@ export function MinutesPanel({
   );
 
   const view = useMemo<MeetingMinutesContent>(() => {
-    if (editing) return base;
     if (!readingLanguage || fetched?.status !== "ready" || !fetched.sections) return base;
     return {
       ...base,
       translations: { ...(base.translations ?? {}), [readingLanguage]: fetched.sections },
     };
-  }, [base, editing, readingLanguage, fetched]);
+  }, [base, readingLanguage, fetched]);
 
   /**
    * Writing an edit back to the slot it came from.
@@ -274,30 +271,29 @@ export function MinutesPanel({
     [roomId],
   );
 
+  // The first keystroke starts the working copy from what is stored; every later one builds on it.
   const edits = useMemo<MinutesEditHandlers>(
     () => ({
-      setAgenda: (value) =>
-        setDraft((current) => (current ? { ...current, agenda: value } : current)),
-      setNotes: (value) =>
-        setDraft((current) => (current ? { ...current, notes: value } : current)),
+      setAgenda: (value) => setDraft((current) => ({ ...(current ?? stored), agenda: value })),
+      setNotes: (value) => setDraft((current) => ({ ...(current ?? stored), notes: value })),
       setSectionText: (sectionIndex, value) =>
         setDraft((current) => {
-          if (!current) return current;
-          const sections = [...current.sections];
+          const doc = current ?? stored;
+          const sections = [...doc.sections];
           sections[sectionIndex] = { ...sections[sectionIndex], text: value };
-          return { ...current, sections };
+          return { ...doc, sections };
         }),
       setItemText: (sectionIndex, itemIndex, value) =>
         setDraft((current) => {
-          if (!current) return current;
-          const sections = [...current.sections];
+          const doc = current ?? stored;
+          const sections = [...doc.sections];
           const items = [...(sections[sectionIndex].items ?? [])];
           items[itemIndex] = { ...items[itemIndex], text: value };
           sections[sectionIndex] = { ...sections[sectionIndex], items };
-          return { ...current, sections };
+          return { ...doc, sections };
         }),
     }),
-    [],
+    [stored],
   );
 
   if (isLoading) {
@@ -341,7 +337,7 @@ export function MinutesPanel({
             times it opened and closed come straight from the room data, and the body comes from the
             summary. You review and sign; the system does not sign for you.
           </p>
-          {canManage ? (
+          {hostAuthority ? (
             // The same Button the Summary tab's "Download summary file" uses, rather than a
             // hand-rolled `bg-ink` one. These two sit in sibling tabs of the same record and are
             // the same kind of act — the primary thing to do with this tab — so a black button
@@ -372,12 +368,20 @@ export function MinutesPanel({
     );
   }
 
-  const editable = isEditable(minutes) && canManage;
+  // What this viewer may do, as the server decided it. The fallbacks only apply to an older server
+  // that does not send the flags, and reproduce the rule it enforced: host authority for all of it.
+  const canEdit = minutes.canEdit ?? (isEditable(minutes) && hostAuthority);
+  const canApprove = minutes.canApprove ?? hostAuthority;
+  const canDesignateSecretary = minutes.canDesignateSecretary ?? false;
 
-  // The reader's pick, else the default. No longer derived from the meeting's language: the
-  // layout is the sender's choice, and a default that changed shape per meeting made the choice
-  // harder to notice than it was worth.
-  const template = chosenTemplate ?? resolveMinutesTemplate();
+  // Typing is live on the page unless the reader has switched to a translated reading, where the
+  // page is showing words that are not the stored document.
+  const editing = canEdit && readingLanguage === null;
+  const dirty = draft !== null;
+
+  // One layout. The Vietnamese one is still drawn by the server for an explicit ?template= export,
+  // but the page no longer offers a choice: every document is read and edited as the same page.
+  const template = DEFAULT_MINUTES_TEMPLATE;
 
   /*
    * The policy block, assembled from what the product genuinely holds.
@@ -402,11 +406,6 @@ export function MinutesPanel({
     primaryLanguage: view.primaryLanguage,
     translationLanguages: translationLanguagesOf(view),
   };
-
-  function beginEdit() {
-    setDraft(structuredClone(stored));
-    setEditing(true);
-  }
 
   /**
    * Download the document in one of its two formats.
@@ -450,9 +449,8 @@ export function MinutesPanel({
     }
   }
 
-  /** Leaving edit mode drops the working copy, which is also what discards an abandoned edit. */
-  function stopEditing() {
-    setEditing(false);
+  /** Back to the stored document. */
+  function discard() {
     setDraft(null);
   }
 
@@ -462,10 +460,11 @@ export function MinutesPanel({
       { minutesId: minutes.id, content: JSON.stringify(draft) },
       {
         onSuccess: () => {
-          stopEditing();
+          // The response is now the stored document, so the working copy has nothing left to hold.
+          setDraft(null);
           toast.success("Minutes saved.");
         },
-        onError: () => toast.error("Could not save the minutes."),
+        onError: (error) => toast.error(getErrorMessage(error, "Could not save the minutes.")),
       },
     );
   }
@@ -500,34 +499,15 @@ export function MinutesPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <TemplateSwitch
-            template={template}
-            onChange={setChosenTemplate}
-            disabled={editing}
-          />
-
+          {/* Disabled only while there are unsaved changes: a translated reading beside a
+              half-typed correction is a document nobody is reading. */}
           <ReadingLanguagePicker
             carried={carriedLanguages}
             reading={readingLanguage}
             busy={fetched?.status === "generating"}
-            disabled={editing}
+            disabled={dirty}
             onChange={readInLanguage}
           />
-
-          <button
-            type="button"
-            onClick={() => setShowGuides((current) => !current)}
-            aria-pressed={showGuides}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px]",
-              showGuides
-                ? "border-ink bg-surface-2 text-ink"
-                : "border-border text-ink-muted hover:text-ink",
-            )}
-          >
-            <Ruler size={13} />
-            Margins
-          </button>
 
           {/* The shared Button, at the size and weight the records page settled on when it grew a
               door to the minutes (#422). That change and this one landed on the same file from
@@ -586,7 +566,7 @@ export function MinutesPanel({
             </Button>
             {/* Sharing is the host's to decide, so the button is theirs alone — a reader who
                 could hand the document on would be deciding for them. */}
-            {canManage ? (
+            {canApprove ? (
               <Button
                 size="sm"
                 variant="outline"
@@ -600,9 +580,9 @@ export function MinutesPanel({
           </div>
         </div>
 
-        {canManage ? (
+        {canEdit || canApprove || canDesignateSecretary ? (
           <div className="flex flex-wrap items-center gap-2">
-            {editing ? (
+            {dirty ? (
               <>
                 <Button
                   size="sm"
@@ -610,36 +590,47 @@ export function MinutesPanel({
                   disabled={save.isPending}
                   className="h-8 rounded-md text-[11px] shadow-none"
                 >
-                  {save.isPending ? "Saving…" : "Save"}
+                  {save.isPending ? "Saving…" : "Save changes"}
                 </Button>
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={stopEditing}
+                  onClick={discard}
+                  disabled={save.isPending}
                   className="h-8 rounded-md text-[11px] shadow-none"
                 >
-                  Cancel
+                  Discard
                 </Button>
                 <span className="text-[11px] text-ink-subtle">
-                  Edit the document itself — every line with a dashed rule under it can be typed
-                  in. Timestamps stay attached to their line.
+                  Unsaved changes. Timestamps stay attached to their line.
                 </span>
               </>
+            ) : editing ? (
+              <span className="text-[11px] text-ink-subtle">
+                Click any line with a dashed rule in the document below to edit it.
+              </span>
             ) : null}
 
-            {!editing && editable ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={beginEdit}
-                className="h-8 rounded-md text-[11px] shadow-none"
-              >
-                <PencilSimple size={14} />
-                Edit
-              </Button>
+            {canDesignateSecretary ? (
+              <SecretaryPicker
+                attendees={stored.attendance.present}
+                value={minutes.secretaryParticipantId ?? null}
+                busy={designateSecretary.isPending}
+                onChange={(participantId) =>
+                  designateSecretary.mutate(
+                    { minutesId: minutes.id, participantId },
+                    {
+                      onSuccess: () =>
+                        toast.success(participantId ? "Secretary assigned." : "Secretary removed."),
+                      onError: (error) =>
+                        toast.error(getErrorMessage(error, "Could not assign the secretary.")),
+                    },
+                  )
+                }
+              />
             ) : null}
 
-            {!editing && editable && minutes.status === "DRAFT" ? (
+            {!dirty && canEdit && minutes.status === "DRAFT" ? (
               <Button
                 size="sm"
                 onClick={() =>
@@ -655,7 +646,7 @@ export function MinutesPanel({
               </Button>
             ) : null}
 
-            {!editing && editable && minutes.status === "IN_REVIEW" ? (
+            {!dirty && canApprove && minutes.status === "IN_REVIEW" ? (
               <Button
                 size="sm"
                 onClick={() =>
@@ -671,7 +662,7 @@ export function MinutesPanel({
               </Button>
             ) : null}
 
-            {!editing && minutes.status === "APPROVED" ? (
+            {canApprove && minutes.status === "APPROVED" ? (
               <Button
                 size="sm"
                 onClick={() =>
@@ -724,7 +715,7 @@ export function MinutesPanel({
           // recorded meeting as an unrecorded one. `null` is only "the room has not loaded".
           transcriptKept={room ? (room.settings?.saveTranscript ?? true) : null}
           timeZone={workspaceSettings?.timezone ?? null}
-          showGuides={showGuides}
+          showGuides={false}
           statusLabel={DOCUMENT_STATUS[minutes.status] ?? minutes.status}
         />
       </div>
@@ -749,13 +740,47 @@ export function MinutesPanel({
 }
 
 /**
- * Which of the two layouts the document is set in.
+ * Who the secretary is — the one person besides host authority who may edit and sign the record.
  *
- * A segmented control rather than a dropdown because there are exactly two and the choice is worth
- * seeing: neither replaces the other, and a reader should be able to tell at a glance which one
- * they are looking at without opening a menu. Disabled while editing — swapping the layout under
- * a half-typed correction moves the field the secretary is in.
+ * Offered only from the people who attended: the server refuses anyone else, and a secretary who
+ * was not in the meeting would be signing for proceedings they never heard. The server also stops
+ * offering this once somebody has signed, because the signature line already names who took
+ * responsibility.
  */
+function SecretaryPicker({
+  attendees,
+  value,
+  busy,
+  onChange,
+}: {
+  attendees: MinutesAttendance["present"];
+  value: string | null;
+  busy: boolean;
+  onChange: (participantId: string | null) => void;
+}) {
+  const candidates = attendees.filter((person) => Boolean(person.participantId));
+
+  return (
+    <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
+      Secretary
+      <select
+        value={value ?? ""}
+        disabled={busy}
+        onChange={(event) => onChange(event.target.value || null)}
+        className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
+      >
+        <option value="">Not assigned</option>
+        {candidates.map((person) => (
+          <option key={person.participantId} value={person.participantId ?? ""}>
+            {person.name}
+          </option>
+        ))}
+      </select>
+      {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
+    </label>
+  );
+}
+
 /**
  * Which language to READ the record in.
  *
@@ -816,43 +841,6 @@ function ReadingLanguagePicker({
         </optgroup>
       </select>
       {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
-    </div>
-  );
-}
-
-function TemplateSwitch({
-  template,
-  onChange,
-  disabled,
-}: {
-  template: MinutesTemplateId;
-  onChange: (next: MinutesTemplateId) => void;
-  disabled: boolean;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label="Document layout"
-      className="inline-flex overflow-hidden rounded-md border border-border"
-    >
-      {MINUTES_TEMPLATES.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          disabled={disabled}
-          title={option.note}
-          aria-pressed={template === option.id}
-          onClick={() => onChange(option.id)}
-          className={cn(
-            "px-2.5 py-1.5 text-[12px] transition-colors disabled:opacity-50",
-            template === option.id
-              ? "bg-surface-2 font-medium text-ink"
-              : "text-ink-muted hover:text-ink",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
     </div>
   );
 }
