@@ -9,6 +9,8 @@ import {
   countPlayableRecordings,
   findPlayableRecording,
   hasPendingRecording,
+  ARTIFACT_OUTPUT_WINDOW_MS,
+  pendingOutputs,
 } from "../meeting-artifacts.ts";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
@@ -27,6 +29,41 @@ const artifact = (
     backendSource: "translation_room_summaries",
     ...over,
   }) as RoomHistoryArtifact;
+
+const ENDED = "2026-09-11T14:30:00Z";
+const endedMs = Date.parse(ENDED);
+
+test("WT-683: straight after the meeting ends, both outputs read as processing, not as nothing", () => {
+  assert.deepEqual(pendingOutputs([], ENDED, endedMs + 20_000), [
+    { type: "transcript_export", state: "processing" },
+    { type: "summary_export", state: "processing" },
+  ]);
+});
+
+test("WT-683: an output that has arrived gets its own row and is not listed as pending", () => {
+  const transcript = artifact({ id: "t", type: "transcript_export" });
+  assert.deepEqual(pendingOutputs([transcript], ENDED, endedMs + 60_000), [
+    { type: "summary_export", state: "processing" },
+  ]);
+  assert.deepEqual(
+    pendingOutputs([transcript, artifact({ id: "s" })], ENDED, endedMs + 60_000),
+    [],
+  );
+});
+
+test("WT-683: past the polling window a missing output is not produced, not still processing", () => {
+  assert.deepEqual(pendingOutputs([], ENDED, endedMs + ARTIFACT_OUTPUT_WINDOW_MS + 1), [
+    { type: "transcript_export", state: "not_produced" },
+    { type: "summary_export", state: "not_produced" },
+  ]);
+});
+
+test("WT-683: without an end time nothing is promised", () => {
+  assert.deepEqual(
+    pendingOutputs([], null).map((output) => output.state),
+    ["not_produced", "not_produced"],
+  );
+});
 
 test("every artifact type has a human label", () => {
   assert.equal(artifactLabel("summary_export"), "AI summary");

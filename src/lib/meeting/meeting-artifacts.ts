@@ -110,6 +110,50 @@ export function hasPendingRecording(
 }
 
 /**
+ * How long after a meeting ends a missing transcript or summary is still "on its way".
+ *
+ * The same fifteen minutes `shouldPollRoomHistory` polls for, on purpose: the page stops asking at
+ * the moment this stops promising, so a row can never say "Processing" to a page that has given up
+ * refetching the answer.
+ */
+export const ARTIFACT_OUTPUT_WINDOW_MS = 15 * 60 * 1000;
+
+export type PendingOutput = {
+  type: "transcript_export" | "summary_export";
+  state: "processing" | "not_produced";
+};
+
+/**
+ * WT-683 — the outputs every ended meeting is owed that have no row yet.
+ *
+ * The finalizer writes the transcript and the AI summary a minute or so after the meeting ends, and
+ * until then the Artifacts tab read "(0) · Nothing has been generated or retained for this meeting
+ * yet." That sentence is true and useless: it cannot be told apart from a meeting whose outputs
+ * failed, so a host who opened the tab straight after ending assumed nothing would ever arrive.
+ *
+ * So the two outputs that are ALWAYS produced get a row of their own before they exist — processing
+ * inside the window, "not produced" after it — and a row that does exist speaks for itself.
+ *
+ * The recording is deliberately not in this list. Nothing on the ended record says whether a
+ * meeting was recorded at all (the egress id lives in MeetingService and never reaches the web), so
+ * a "Recording · Processing" row would be a guess on every meeting nobody recorded. The panel names
+ * it in a note instead.
+ */
+export function pendingOutputs(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+  endedAt: string | null | undefined,
+  nowMs: number = Date.now(),
+): PendingOutput[] {
+  const present = new Set((artifacts ?? []).map((artifact) => artifact.type));
+  const endedMs = endedAt ? Date.parse(endedAt) : Number.NaN;
+  const stillOnItsWay = Number.isFinite(endedMs) && nowMs - endedMs <= ARTIFACT_OUTPUT_WINDOW_MS;
+
+  return (["transcript_export", "summary_export"] as const)
+    .filter((type) => !present.has(type))
+    .map((type) => ({ type, state: stillOnItsWay ? "processing" : "not_produced" }));
+}
+
+/**
  * The format the reader will actually receive — not the one the row is stored as.
  *
  * `artifact.format` is `TranslationRoomArtifact.FileFormat`, which describes the STORED bytes:

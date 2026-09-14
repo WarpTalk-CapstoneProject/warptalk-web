@@ -24,6 +24,7 @@ import {
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
+  pendingOutputs,
 } from "@/lib/meeting/meeting-artifacts";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
@@ -782,14 +783,25 @@ export function SummaryStalenessNotice({
 
 export function ArtifactsPanel({
   artifacts,
+  endedAt,
   busyArtifactId,
   onDownload,
 }: {
   artifacts: RoomHistoryArtifact[];
+  /** When the meeting ended — what decides whether a missing output is still on its way. WT-683. */
+  endedAt?: string | null;
   busyArtifactId: string | null;
   onDownload: (artifact: RoomHistoryArtifact) => void;
 }) {
-  if (!artifacts.length) {
+  // The page refetches every few seconds while anything here is pending (shouldPollRoomHistory),
+  // and every refetch re-renders this, so "processing" turns into a real row or into "not
+  // produced" without a clock of its own.
+  const pending = pendingOutputs(artifacts, endedAt);
+  const stillProcessing =
+    pending.some((output) => output.state === "processing") ||
+    artifacts.some((artifact) => artifact.status === "processing");
+
+  if (!artifacts.length && !stillProcessing) {
     return (
       <div className="flex min-h-[320px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
         <Archive size={28} className="text-ink-muted" />
@@ -842,7 +854,38 @@ export function ArtifactsPanel({
             )}
           </button>
         ))}
+        {pending.map((output) => (
+          <div
+            key={output.type}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left"
+            aria-live="polite"
+          >
+            <span className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-surface-1">
+              {output.state === "processing" ? (
+                <SpinnerGap size={14} className="animate-spin text-ink-muted" />
+              ) : (
+                <WarningCircle size={14} className="text-ink-muted" />
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-medium text-ink">
+                {artifactLabel(output.type)}
+              </span>
+              <span className="mt-0.5 block text-[10px] text-ink-subtle">
+                {output.state === "processing"
+                  ? "Processing · usually ready within a minute of the meeting ending"
+                  : "Not produced for this meeting"}
+              </span>
+            </span>
+          </div>
+        ))}
       </div>
+      {stillProcessing ? (
+        <p className="border-t border-border px-4 py-3 text-[11px] leading-5 text-ink-muted">
+          This page updates on its own. If the meeting was recorded, the recording appears here
+          once it has finished uploading, which can take a few minutes longer.
+        </p>
+      ) : null}
     </div>
   );
 }
