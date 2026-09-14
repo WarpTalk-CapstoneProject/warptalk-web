@@ -19,10 +19,14 @@
  *   console strings the SDK emits — not on anything this page renders.
  *
  * WHY IT IS PUBLIC
- *   There is no middleware in this app and this route sits outside the authenticated groups, which
- *   it must: the recorder is a headless Chrome with no session. It is not a hole — the page grants
- *   nothing. It can only join the room the egress-minted token already names, and it reads no
- *   WarpTalk API at all.
+ *   The recorder is a headless Chrome with no session, so this route must pass the session gate.
+ *   It is not a hole — the page grants nothing. It can only join the room the egress-minted token
+ *   already names, and it reads no WarpTalk API at all.
+ *
+ *   WT-686: this comment used to say "there is no middleware in this app". There is — src/proxy.ts
+ *   — and it redirected the recorder to /login, so startRecording() never ran and LiveKit aborted
+ *   every recording with "Start signal not received". "/egress" is now in its PUBLIC_ROUTES, and
+ *   scripts/check-egress-template-public-contract.mjs fails CI if it is ever taken out again.
  *
  * WHAT IT DELIBERATELY IS NOT
  *   A nice-looking layout. This is a recording surface: black background, no chrome, no controls,

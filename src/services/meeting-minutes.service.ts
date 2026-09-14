@@ -3,7 +3,10 @@ import publicApiClient from "@/lib/api/public-client";
 import { API } from "@/lib/api/endpoints";
 import type { MeetingMinutesDto, MinutesTranslationDto } from "@/types/meetingMinutes";
 import type { WorkspaceMinutesResponse } from "@/types/workspaceMinutes";
-import type { MinutesTemplateId } from "@/lib/meeting/minutes-document";
+import type { MinutesFileMode, MinutesTemplateId } from "@/lib/meeting/minutes-document";
+
+/** The language a downloaded file is in, and whether the original sits beside it. WT-685. */
+type MinutesReading = { lang: string; mode: MinutesFileMode };
 import type { MinutesShare, MinutesShareMode, SharedMinutes } from "@/types/minutesShare";
 
 /**
@@ -87,10 +90,11 @@ export const meetingMinutesService = {
    * downloading without it produced a file that did not match what was on screen — the reader had
    * chosen a layout and the file ignored the choice.
    */
-  async downloadDocx(roomId: string, template?: MinutesTemplateId) {
-    const response = await apiClient.get<Blob>(API.minutes.exportDocx(roomId, template), {
-      responseType: "blob",
-    });
+  async downloadDocx(roomId: string, template?: MinutesTemplateId, reading?: MinutesReading) {
+    const response = await apiClient.get<Blob>(
+      API.minutes.exportDocx(roomId, template, reading?.lang, reading?.mode),
+      { responseType: "blob" },
+    );
     return response;
   },
 
@@ -101,8 +105,11 @@ export const meetingMinutesService = {
    * time, so the file somebody prints and the file somebody edits cannot disagree. 503 means this
    * deployment has no converter — the Word download still works, and the UI says so.
    */
-  async downloadPdf(roomId: string, template?: MinutesTemplateId) {
-    return apiClient.get<Blob>(API.minutes.exportPdf(roomId, template), { responseType: "blob" });
+  async downloadPdf(roomId: string, template?: MinutesTemplateId, reading?: MinutesReading) {
+    return apiClient.get<Blob>(
+      API.minutes.exportPdf(roomId, template, reading?.lang, reading?.mode),
+      { responseType: "blob" },
+    );
   },
 
   // ------------------------------------------------------------------ sharing
