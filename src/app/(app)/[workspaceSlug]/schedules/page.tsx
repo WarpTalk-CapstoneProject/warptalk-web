@@ -25,7 +25,6 @@ import {
   SpinnerGap,
   Translate,
   Users,
-  VideoCamera,
   WarningCircle,
   X,
 } from "@phosphor-icons/react/dist/ssr";
@@ -47,6 +46,7 @@ import {
 } from "@/components/schedules/agenda-navigator";
 import { AgendaRow } from "@/components/schedules/agenda-row";
 import { MeetingStateIcon } from "@/components/schedules/meeting-state-icon";
+import { GoogleMeetMark, isGoogleMeetMeeting } from "@/components/meeting/google-meet-mark";
 import { useMeetingsInRange } from "@/hooks/use-my-meetings";
 import { agendaDayKey, type TimedMeeting } from "@/lib/meeting/agenda-sections";
 import {
@@ -1064,13 +1064,14 @@ function MonthGrid({
 function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => void }) {
   const relation = relationLabel(meeting);
   const time = formatTime(meeting.occursAt);
+  const onGoogleMeet = isGoogleMeetMeeting(meeting);
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      title={`${meeting.title} · ${relation}`}
-      aria-label={`${meeting.title}, ${time}, ${meetingStateLabel(meeting)}, ${relation}`}
+      title={`${meeting.title} · ${relation}${onGoogleMeet ? " · Google Meet" : ""}`}
+      aria-label={`${meeting.title}, ${time}, ${meetingStateLabel(meeting)}, ${relation}${onGoogleMeet ? ", on Google Meet" : ""}`}
       className={cn(
         "group pointer-events-auto flex w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-sm border px-1 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
         MONTH_ROW_HEIGHT_CLASS,
@@ -1081,6 +1082,7 @@ function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => v
       <span className="shrink-0 font-mono text-[11px] leading-none tabular-nums text-ink-muted">
         {time}
       </span>
+      {onGoogleMeet ? <GoogleMeetMark size={11} /> : null}
       <span
         className={cn(
           "min-w-0 truncate text-[12px] leading-4",
@@ -1645,7 +1647,7 @@ function WeekCard({
           onClick={(event) => event.stopPropagation()}
           className="mt-1 inline-flex max-w-full items-center gap-1 rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-medium uppercase text-emerald-700"
         >
-          <VideoCamera size={10} />
+          <GoogleMeetMark size={10} />
           <span className="truncate">Google Meet</span>
         </a>
       ) : null}
@@ -1930,13 +1932,6 @@ function isAhead(timeState: MeetingTimeState) {
  */
 function hasFinished(meeting: MyMeetingItem) {
   return !["scheduled", "waiting", "in_progress", "paused"].includes(meeting.status);
-}
-
-function isGoogleMeetMeeting(meeting: MyMeetingItem) {
-  return (
-    meeting.externalProvider?.toUpperCase() === "GOOGLE_MEET" &&
-    Boolean(meeting.externalMeetingUrl)
-  );
 }
 
 /**

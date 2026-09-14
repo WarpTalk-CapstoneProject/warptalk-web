@@ -25,6 +25,24 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 /** Translating needs two. One language is a recording, not a bridge. */
 const MINIMUM_LANGUAGES = 2;
 
+/** Meet's room code, the whole value. Anything else in the query is ignored rather than trusted. */
+const MEET_CODE = /^[a-z]{3,4}-[a-z]{3,4}-[a-z]{3,4}$/;
+
+/**
+ * The Google Meet link of the call the desktop app saw, or null when it could not read one.
+ *
+ * The desktop passes the room code its sensor read off the browser's own address bar
+ * (warptalk-desktop meet-presence.ts). With it the room is created as a Google Meet meeting: it
+ * stores the link, the schedule shows the Google Meet chip, and the trigger can tell this call
+ * apart from another Meet window. Without it - a picture-in-picture sighting carries no code - the
+ * room is still created, just without the link.
+ */
+function offeredMeetUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const code = new URLSearchParams(window.location.search).get("meetCode")?.trim().toLowerCase();
+  return code && MEET_CODE.test(code) ? `https://meet.google.com/${code}` : null;
+}
+
 export default function DesktopBridgeOfferPage() {
   const router = useRouter();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -71,6 +89,8 @@ export default function DesktopBridgeOfferPage() {
       return;
     }
 
+    const meetUrl = offeredMeetUrl();
+
     try {
       const room = await createRoom.mutateAsync({
         workspaceId: activeWorkspaceId,
@@ -80,6 +100,9 @@ export default function DesktopBridgeOfferPage() {
         // same way, so an impromptu room is shaped exactly like a scheduled one.
         sourceLanguage: selected[0],
         targetLanguages: selected,
+        // Both or neither: the server refuses a provider without a link, and a link without the
+        // provider would skip its Google Meet host check.
+        ...(meetUrl ? { externalProvider: "GOOGLE_MEET", externalMeetingUrl: meetUrl } : {}),
       });
 
       // The popup cannot start translating on its own - the pipeline lives in the main window.

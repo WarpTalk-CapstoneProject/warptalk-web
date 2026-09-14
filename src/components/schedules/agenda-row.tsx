@@ -3,6 +3,7 @@
 import type { KeyboardEvent } from "react";
 import Link from "next/link";
 
+import { GoogleMeetMark, isGoogleMeetMeeting } from "@/components/meeting/google-meet-mark";
 import { UserChip } from "@/components/user/user-chip";
 import { formatLanguageRouteShort } from "@/lib/language/languages";
 import type { TimedMeeting } from "@/lib/meeting/agenda-sections";
@@ -46,6 +47,7 @@ export function AgendaRow({
   const time = formatTime(meeting.occursAt);
   const relation = meeting.isHost ? "You host" : `Invited by ${meeting.hostName}`;
   const stateLabel = meetingStateLabel(meeting);
+  const onGoogleMeet = isGoogleMeetMeeting(meeting);
   const people = describePeople(meeting.participantCount);
   // Short marks, "EN → VI", as the approved design draws them: the full names ("English →
   // Vietnamese") push the route off the end of a meta line that already carries the host and the
@@ -71,7 +73,7 @@ export function AgendaRow({
       // Time, title, relation and state: everything a sighted reader gets from the row at a
       // glance. The visible text is split across columns and an icon, and read in DOM order it
       // would come out as "09:30 Weekly sync You host 4 people" with the state missing entirely.
-      aria-label={`${time}, ${meeting.title}, ${relation}, ${stateLabel}`}
+      aria-label={`${time}, ${meeting.title}${onGoogleMeet ? ", on Google Meet" : ""}, ${relation}, ${stateLabel}`}
       onClick={onOpen}
       onKeyDown={onKeyDown}
       className={cn(
@@ -89,19 +91,24 @@ export function AgendaRow({
       <MeetingStateIcon meeting={meeting} size={13} className="mt-[4px]" />
 
       <div className="min-w-0 flex-1">
-        <p
-          title={meeting.title}
-          className={cn(
-            "truncate text-[13.5px] leading-5",
-            // Weight is the host signal: the meetings you run are the ones you cannot skip, and
-            // that has to read without a badge. Cancelled is muted colour only — never struck
-            // through (removed on purpose in 8953691).
-            meeting.isHost ? "font-semibold" : "font-normal",
-            isCancelled ? "text-ink-muted" : "text-ink",
-          )}
-        >
-          {meeting.title}
-        </p>
+        <div className="flex min-w-0 items-center gap-1.5">
+          {/* Where the call happens, before what it is called: a Google Meet meeting is watched in
+              the browser, not opened here, and that changes what the reader does next. */}
+          {onGoogleMeet ? <GoogleMeetMark size={14} /> : null}
+          <p
+            title={meeting.title}
+            className={cn(
+              "min-w-0 truncate text-[13.5px] leading-5",
+              // Weight is the host signal: the meetings you run are the ones you cannot skip, and
+              // that has to read without a badge. Cancelled is muted colour only — never struck
+              // through (removed on purpose in 8953691).
+              meeting.isHost ? "font-semibold" : "font-normal",
+              isCancelled ? "text-ink-muted" : "text-ink",
+            )}
+          >
+            {meeting.title}
+          </p>
+        </div>
 
         <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] leading-4 text-ink-muted">
           {meeting.isHost ? (
