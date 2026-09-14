@@ -50,6 +50,7 @@ import {
   formatDocumentDate,
   formatDocumentMoment,
   formatDocumentTime,
+  inInternationalLayout,
   motionLines,
   numberClauses,
   planMinutesDocument,
@@ -907,7 +908,10 @@ function GlobalBody({
         Time: {openedTime ?? "not recorded"}
         {closedTime ? ` to ${closedTime}` : ""}
       </Clause>
-      <Clause n={`${detailsPart}.3`}>Location: {content.location || "not recorded"}</Clause>
+      {/* WT-685: the drafter writes this line in Vietnamese; an English document must not. */}
+      <Clause n={`${detailsPart}.3`}>
+        Location: {inInternationalLayout(content.location) || "not recorded"}
+      </Clause>
       {minutes.chairName || minutes.secretaryName ? (
         <Clause n={`${detailsPart}.4`}>
           {minutes.chairName ? `Chair: ${minutes.chairName}` : null}
@@ -936,7 +940,10 @@ function GlobalBody({
       {content.attendance.quorumMet != null ? (
         <Clause n={`${attendancePart}.${content.attendance.absent.length > 0 ? 3 : 2}`}>
           Quorum: {content.attendance.quorumMet ? "met" : "not met"}
-          {content.attendance.quorumRule ? ` — ${content.attendance.quorumRule}` : ""}.
+          {content.attendance.quorumRule
+            ? ` — ${inInternationalLayout(content.attendance.quorumRule)}`
+            : ""}
+          .
         </Clause>
       ) : null}
 
@@ -948,13 +955,14 @@ function GlobalBody({
         <p className="mdoc-body">
           <span className="mdoc-run">Agenda. </span>
           {editing ? (
+            // Edited as stored: the secretary is changing the record, not its English reading.
             <DocField
               value={content.agenda ?? ""}
               placeholder="No agenda recorded."
               onChange={edits.setAgenda}
             />
           ) : (
-            content.agenda
+            inInternationalLayout(content.agenda)
           )}
         </p>
       ) : null}

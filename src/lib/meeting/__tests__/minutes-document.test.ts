@@ -16,6 +16,10 @@ import {
   externalGuestNotice,
   formatDocumentDate,
   formatDocumentTime,
+  inInternationalLayout,
+  DRAFTED_AGENDA_PREFACE,
+  DRAFTED_LOCATION,
+  DRAFTED_QUORUM_RULE,
   isMinutesTemplate,
   motionLines,
   numberClauses,
@@ -36,6 +40,29 @@ import type {
 } from "../../../types/meetingMinutes.ts";
 
 const titleOf = (key: string) => key;
+
+test("WT-685: the International layout reads the drafter's Vietnamese lines in English", () => {
+  assert.equal(inInternationalLayout(DRAFTED_LOCATION), "Online via WarpTalk");
+  assert.equal(inInternationalLayout(DRAFTED_QUORUM_RULE), "a majority of those invited");
+  assert.equal(
+    inInternationalLayout(`${DRAFTED_AGENDA_PREFACE}\nReview Q3`),
+    "From the meeting description at booking:\nReview Q3",
+  );
+});
+
+test("WT-685: a line the secretary wrote is printed as written, not translated", () => {
+  assert.equal(inInternationalLayout("Phòng họp tầng 3"), "Phòng họp tầng 3");
+  assert.equal(inInternationalLayout(null), null);
+  assert.equal(inInternationalLayout(""), "");
+});
+
+test("WT-685: the drafted strings match the backend drafter byte for byte", () => {
+  // MeetingMinutesDrafter.DraftedLocation / DraftedQuorumRule / DraftedAgendaPreface. A drift here
+  // silently puts Vietnamese back into English documents.
+  assert.equal(DRAFTED_LOCATION, "Trực tuyến qua WarpTalk");
+  assert.equal(DRAFTED_QUORUM_RULE, "Quá bán số người được mời");
+  assert.equal(DRAFTED_AGENDA_PREFACE, "Theo mô tả cuộc họp khi đặt lịch:");
+});
 
 const emptyAttendance = (): MinutesAttendance => ({
   present: [],
