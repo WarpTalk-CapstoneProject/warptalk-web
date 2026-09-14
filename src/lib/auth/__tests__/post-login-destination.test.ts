@@ -95,8 +95,10 @@ test("unsafe callbacks fall back exactly as before, then defer to the memory", (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const root = path.resolve(import.meta.dirname, "../../../..");
+// The sign-in screen /login and /desktop-login both render; the routes themselves hold no sign-in
+// code (check-expired-session-lockout-contract.mjs holds them to rendering this).
 const loginPage = readFileSync(
-  path.join(root, "src/app/(auth)/login/page.tsx"),
+  path.join(root, "src/components/auth/login-form.tsx"),
   "utf8",
 );
 const registerPage = readFileSync(

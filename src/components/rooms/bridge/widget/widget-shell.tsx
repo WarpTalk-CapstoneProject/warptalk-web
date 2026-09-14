@@ -3,18 +3,21 @@
 /**
  * The layout of the Meet widget. WT-525, Phase 2.
  *
- *   ┌ header ───────────────────────────────────────────────┐
- *   │ ● Translating  [Transcript paused]        [End · t3]  │
- *   ├ consent, only while the main window is asking ────────┤
- *   ├ Transcript | WarpBot ─────────────────────────────────┤
- *   │                                                        │
- *   │   TranscriptPane (t2)   or   WarpBotPane (t5)          │
- *   │                                                        │
- *   ├ dock ─────────────────────────────────────────────────┤
- *   │ [session t3] │ [language t4]            [settings t4] │
- *   └────────────────────────────────────────────────────────┘
+ *   ┌ Transcript | WarpBot ········ ● Translating  [Transcript paused]  [End · t3] ┐
+ *   ├ consent, only while the main window is asking ───────────────────────────────┤
+ *   │                                                                               │
+ *   │   TranscriptPane (t2)   or   WarpBotPane (t5)                                 │
+ *   │                                                                               │
+ *   ├ dock ────────────────────────────────────────────────────────────────────────┤
+ *   │ [session t3] │ [language t4]                    [Text | Voice] [settings t4] │
+ *   └───────────────────────────────────────────────────────────────────────────────┘
  *
- *   Once `ended`, EndedView (t3) replaces the tabs and the dock; the header stays.
+ *   Once `ended`, EndedView (t3) replaces the tabs and the dock.
+ *
+ * ONE TOP ROW, NOT TWO
+ *   The status and End used to sit in a header row of their own above the tabs. In a window this
+ *   small, floating over the call, that was a whole line spent on one word and one button, so they
+ *   now share the tab row: tabs on the left, status and End on the right.
  *
  * The shell passes its slots NO props — see widget-context.tsx. Adding something a slot needs is
  * a change to the context, never to this file.
@@ -28,12 +31,13 @@
  *     black background WT-577 removed is the complaint that rule exists for.
  */
 
-import { useId, useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 import { CaptureConsentSlot } from "./capture-consent-slot";
 import { DockLanguagePill } from "./dock-language-pill";
+import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
 import { EndSessionButton } from "./end-session";
 import { EndedView } from "./ended-view";
@@ -58,23 +62,21 @@ export function WidgetShell() {
 
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-canvas text-ink">
-      <WidgetHeader />
       {ended ? (
         <EndedView />
       ) : (
-        <>
-          {/* Above the tabs, because it is the question that explains why the transcript has only
+        <WidgetTabs>
+          {/* Above the panes, because it is the question that explains why the transcript has only
               one side in it — and it must not be reachable only from whichever tab is open. */}
           <CaptureConsentSlot />
-          <WidgetTabs />
-          <WidgetDock />
-        </>
+        </WidgetTabs>
       )}
+      {ended ? null : <WidgetDock />}
     </main>
   );
 }
 
-// ── header ───────────────────────────────────────────────────────────────────
+// ── status, at the right end of the tab row ─────────────────────────────────
 
 const STATUS: Record<BridgeWidgetTranslationStatus, { label: string; dot: string } | null> = {
   // Nothing until the sessions query answers — see BridgeWidgetTranslationStatus.
@@ -85,36 +87,37 @@ const STATUS: Record<BridgeWidgetTranslationStatus, { label: string; dot: string
 };
 
 /**
- * Said only when something is wrong. "Live" in the header of a window that is working is noise;
- * the hub here only carries this user's language and voice changes (see
- * use-bridge-widget-state.ts), so a dropped connection matters exactly when somebody tries one.
+ * Said only when something is wrong. "Live" in a window that is working is noise; the hub here
+ * only carries this user's language and voice changes (see use-bridge-widget-state.ts), so a
+ * dropped connection matters exactly when somebody tries one.
  */
 const CONNECTION_NOTE: Partial<Record<BridgeWidgetConnectionState, string>> = {
   reconnecting: "Reconnecting…",
   failed: "Disconnected",
 };
 
-function WidgetHeader() {
-  const { translationStatus, transcriptPaused, connectionState, ended } = useBridgeWidget();
+function WidgetStatus() {
+  const { translationStatus, transcriptPaused, connectionState } = useBridgeWidget();
   const status = STATUS[translationStatus];
   const connectionNote = CONNECTION_NOTE[connectionState];
 
   return (
-    <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-surface-1 px-3.5 py-2">
+    <div
+      className="ml-auto flex min-w-0 items-center gap-2 py-1.5"
+      data-slot="bridge-widget-header-actions"
+    >
       {status ? (
-        <>
+        <span className="flex min-w-0 items-center gap-1.5" role="status">
           <span className={cn("size-2 shrink-0 rounded-full", status.dot)} aria-hidden="true" />
-          <span className="truncate text-[13px] font-semibold">{status.label}</span>
-        </>
-      ) : (
-        <span className="size-2 shrink-0 rounded-full bg-surface-3" aria-hidden="true" />
-      )}
+          <span className="truncate text-[12px] font-semibold">{status.label}</span>
+        </span>
+      ) : null}
 
-      {transcriptPaused && !ended ? (
+      {transcriptPaused ? (
         // Text in ink, amber on the wash only: the amber token is too light to carry 10px text
         // on a light surface by itself.
         <span className="shrink-0 rounded border border-status-waiting/50 bg-status-waiting/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink">
-          Transcript paused
+          Paused
         </span>
       ) : null}
 
@@ -124,17 +127,14 @@ function WidgetHeader() {
         </span>
       ) : null}
 
-      {/* Header actions slot (t3). Right-aligned; gone once the session has ended. */}
-      <div className="ml-auto flex shrink-0 items-center gap-1.5" data-slot="bridge-widget-header-actions">
-        {ended ? null : <EndSessionButton />}
-      </div>
-    </header>
+      <EndSessionButton />
+    </div>
   );
 }
 
 // ── tabs ─────────────────────────────────────────────────────────────────────
 
-function WidgetTabs() {
+function WidgetTabs({ children }: { children?: ReactNode }) {
   const [tab, setTab] = useState<WidgetTab>("transcript");
   const baseId = useId();
   const tabRefs = useRef<Record<WidgetTab, HTMLButtonElement | null>>({
@@ -159,40 +159,45 @@ function WidgetTabs() {
 
   return (
     <>
-      <div
-        role="tablist"
-        aria-label="WarpTalk"
-        onKeyDown={onKeyDown}
-        className="flex shrink-0 gap-0.5 border-b border-border bg-surface-1 px-3"
-      >
-        {TABS.map((entry) => {
-          const selected = entry.id === tab;
-          return (
-            <button
-              key={entry.id}
-              ref={(element) => {
-                tabRefs.current[entry.id] = element;
-              }}
-              type="button"
-              role="tab"
-              id={`${baseId}-tab-${entry.id}`}
-              aria-selected={selected}
-              aria-controls={`${baseId}-panel-${entry.id}`}
-              tabIndex={selected ? 0 : -1}
-              onClick={() => setTab(entry.id)}
-              className={cn(
-                "-mb-px border-b-2 px-2.5 pb-[7px] pt-2 text-xs font-semibold transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-                selected
-                  ? "border-primary text-ink"
-                  : "border-transparent text-ink-subtle hover:text-ink",
-              )}
-            >
-              {entry.label}
-            </button>
-          );
-        })}
+      <div className="flex min-h-11 shrink-0 items-center gap-2 border-b border-border bg-surface-1 pl-3 pr-3">
+        <div
+          role="tablist"
+          aria-label="WarpTalk"
+          onKeyDown={onKeyDown}
+          className="flex shrink-0 gap-0.5 self-end"
+        >
+          {TABS.map((entry) => {
+            const selected = entry.id === tab;
+            return (
+              <button
+                key={entry.id}
+                ref={(element) => {
+                  tabRefs.current[entry.id] = element;
+                }}
+                type="button"
+                role="tab"
+                id={`${baseId}-tab-${entry.id}`}
+                aria-selected={selected}
+                aria-controls={`${baseId}-panel-${entry.id}`}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setTab(entry.id)}
+                className={cn(
+                  "-mb-px border-b-2 px-2.5 pb-[9px] pt-2.5 text-xs font-semibold transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
+                  selected
+                    ? "border-primary text-ink"
+                    : "border-transparent text-ink-subtle hover:text-ink",
+                )}
+              >
+                {entry.label}
+              </button>
+            );
+          })}
+        </div>
+        <WidgetStatus />
       </div>
+
+      {children}
 
       {/* Both panes stay mounted and the inactive one is `hidden`: switching tabs must not throw
           away the transcript's scroll position or a half-typed WarpBot question. */}
@@ -217,11 +222,11 @@ function WidgetTabs() {
 // ── dock ─────────────────────────────────────────────────────────────────────
 
 /**
- * One row: session controls │ language pill ··· settings.
+ * One row: session controls │ language pill ··· Text | Voice, settings.
  *
  * `relative` so the slots' flyouts can open upward from it (`bottom-full`). The left group may
  * shrink — the language pill is the one flexible item — and the right group never does, so the
- * settings button cannot be pushed out of a 320px-wide window.
+ * listening switch and the settings button cannot be pushed out of a 320px-wide window.
  */
 function WidgetDock() {
   return (
@@ -236,6 +241,7 @@ function WidgetDock() {
         <DockLanguagePill />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        <DockListenSwitch />
         <SettingsFlyout />
       </div>
     </section>

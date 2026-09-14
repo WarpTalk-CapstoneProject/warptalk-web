@@ -26,17 +26,30 @@ const authStore = await read("src/stores/auth-store.ts");
 const signalr = await read("src/lib/realtime/signalr.ts");
 const landingRedirect = await read("src/lib/auth/landing-redirect.ts");
 
+// /login and /desktop-login render one shared screen, so its sign-in calls live in the component,
+// and both routes are held to rendering it below — a route that stopped doing so would sign in
+// through code this list no longer reads.
 const callSites = [
-  "src/app/(auth)/login/page.tsx",
+  "src/components/auth/login-form.tsx",
   "src/app/(auth)/register/page.tsx",
-  "src/app/desktop-login/page.tsx",
   "src/app/(app)/workspace/join/page.tsx",
 ];
 const callSiteSources = Object.fromEntries(
   await Promise.all(callSites.map(async (rel) => [rel, await read(rel)])),
 );
+const signInRoutes = ["src/app/(auth)/login/page.tsx", "src/app/desktop-login/page.tsx"];
+const signInRouteSources = Object.fromEntries(
+  await Promise.all(signInRoutes.map(async (rel) => [rel, await read(rel)])),
+);
 
 const checks = [];
+
+for (const [rel, source] of Object.entries(signInRouteSources)) {
+  checks.push([
+    `${rel} renders the shared sign-in screen`,
+    source.includes('from "@/components/auth/login-form"') && /<LoginScreen\s*\/>/.test(source),
+  ]);
+}
 
 // ── One writer ────────────────────────────────────────────────────────────────
 checks.push([

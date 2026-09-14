@@ -12,8 +12,9 @@
  *
  * The bridge runs in both directions at the same time. WarpTalk writes the dubbed voice into the
  * OUTBOUND device and the user picks that as Meet's microphone. macOS reads the far side back
- * from a second virtual device; Windows primary reads it through per-process loopback scoped to
- * the meeting app, so a second paid cable is not part of the path.
+ * from a second virtual device. Windows does the same with the free Hi-Fi Cable when it is
+ * installed, and otherwise reads it through per-process loopback on the browser — which takes every
+ * tab, not only Meet — so a second paid cable is never part of the path.
  *
  * WHY THIS MODULE IS PURE
  *
