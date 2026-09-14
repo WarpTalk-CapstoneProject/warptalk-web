@@ -32,7 +32,12 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { MinutesDocument } from "@/components/rooms/minutes-document";
-import { resolveMinutesTemplate, type MinutesTemplateId } from "@/lib/meeting/minutes-document";
+import {
+  originalOnly,
+  resolveMinutesTemplate,
+  translationLanguagesOf,
+  type MinutesTemplateId,
+} from "@/lib/meeting/minutes-document";
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import { parseMinutesContent } from "@/types/meetingMinutes";
 import type { SharedMinutes } from "@/types/minutesShare";
@@ -62,7 +67,10 @@ export function SharedMinutesView({ token }: { token: string }) {
       (await meetingMinutesService.getShared(token)).data,
   });
 
-  const content = data ? parseMinutesContent(data.minutes.content) : null;
+  // WT-685: the original only. A shared reader has no language picker, and the stored translations
+  // used to be hung under the original line by line in whichever language paired first.
+  const stored = data ? parseMinutesContent(data.minutes.content) : null;
+  const content = stored ? originalOnly(stored) : null;
 
   // The same default the app itself opens with — the layout does not follow the meeting's
   // language, and a recipient who needs the other one downloads it. Derived rather than stored:
@@ -200,7 +208,7 @@ export function SharedMinutesView({ token }: { token: string }) {
           policy={{
             recordOwner: data.minutes.secretaryName,
             primaryLanguage: content.primaryLanguage,
-            translationLanguages: Object.keys(content.translations ?? {}),
+            translationLanguages: stored ? translationLanguagesOf(stored) : [],
           }}
           showGuides={false}
           statusLabel={DOCUMENT_STATUS[data.minutes.status] ?? data.minutes.status}
