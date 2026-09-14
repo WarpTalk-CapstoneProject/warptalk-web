@@ -292,6 +292,7 @@ export function MinutesPanel({
           sections[sectionIndex] = { ...sections[sectionIndex], items };
           return { ...doc, sections };
         }),
+      apply: (change) => setDraft((current) => change(current ?? stored)),
     }),
     [stored],
   );

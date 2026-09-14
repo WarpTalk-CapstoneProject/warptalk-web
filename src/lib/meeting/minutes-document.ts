@@ -701,3 +701,89 @@ export function closingSentence(
     ? `There being no further business, the meeting closed at ${closed}.`
     : "There being no further business, the meeting closed.";
 }
+
+/* ─────────────────────────── Editing the structure ─────────────────────────── */
+
+/**
+ * The section a secretary's own discussion points go into.
+ *
+ * Its own key rather than more lines inside "summary": the summary is one paragraph a model wrote,
+ * and a point somebody adds by hand is a different kind of line. As an items section it numbers on
+ * its own (3.2, 3.3 …) and leaves the model's paragraph intact. The .docx writers title the same
+ * key, so the downloaded file agrees with the page.
+ */
+export const DISCUSSION_KEY = "discussion";
+
+/**
+ * One blank line appended to the section with this key, creating the section when there is none.
+ *
+ * Appends to the LAST items section carrying the key, so a document that already has decisions
+ * grows its decisions and never gains a second "Decisions" heading. A blank line is kept as typed:
+ * approval already skips a blank action item, so an abandoned one creates no task.
+ */
+export function addMinutesItem(content: MeetingMinutesContent, key: string): MeetingMinutesContent {
+  const sections = [...(content.sections ?? [])];
+  let target = -1;
+  sections.forEach((section, index) => {
+    if (section.key === key && section.kind === "items") target = index;
+  });
+
+  if (target === -1) {
+    sections.push({ key, kind: "items", items: [{ text: "" }] });
+  } else {
+    const section = sections[target];
+    sections[target] = { ...section, items: [...(section.items ?? []), { text: "" }] };
+  }
+
+  return { ...content, sections };
+}
+
+/**
+ * Take one line out of the document. A null `itemIndex` is a paragraph section, which IS its line.
+ *
+ * A section left with nothing in it goes too: an empty heading on a signed record reads as
+ * something removed and hidden. Section indices after it shift, which is safe because the page is
+ * laid out again from the working copy after every change.
+ */
+export function removeMinutesClause(
+  content: MeetingMinutesContent,
+  sectionIndex: number,
+  itemIndex: number | null,
+): MeetingMinutesContent {
+  const sections = [...(content.sections ?? [])];
+  const section = sections[sectionIndex];
+  if (!section) return content;
+
+  if (itemIndex == null) {
+    sections.splice(sectionIndex, 1);
+    return { ...content, sections };
+  }
+
+  const items = (section.items ?? []).filter((_, index) => index !== itemIndex);
+  if (items.length === 0) sections.splice(sectionIndex, 1);
+  else sections[sectionIndex] = { ...section, items };
+
+  return { ...content, sections };
+}
+
+/**
+ * Who an action item is assigned to. Spreads the item, so its text and its citation survive — the
+ * citation is what approval uses to recognise the same commitment across versions.
+ */
+export function setMinutesItemOwner(
+  content: MeetingMinutesContent,
+  sectionIndex: number,
+  itemIndex: number,
+  owner: string,
+): MeetingMinutesContent {
+  const sections = [...(content.sections ?? [])];
+  const section = sections[sectionIndex];
+  const item = section?.items?.[itemIndex];
+  if (!section || !item) return content;
+
+  const items = [...(section.items ?? [])];
+  items[itemIndex] = { ...item, owner };
+  sections[sectionIndex] = { ...section, items };
+
+  return { ...content, sections };
+}

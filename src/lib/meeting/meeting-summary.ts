@@ -44,6 +44,9 @@ const SECTION_TITLES: Record<string, string> = {
   // quoting what earlier occurrences left open.
   carriedOver: "Carried over from the last meeting",
   openQuestions: "Open questions",
+  // Not a summary template section either: the minutes editor adds it for points a secretary
+  // writes in by hand (see DISCUSSION_KEY in minutes-document.ts).
+  discussion: "Discussion points",
   progress: "Progress",
   plans: "Plans",
   blockers: "Blockers",

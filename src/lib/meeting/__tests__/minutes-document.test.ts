@@ -32,6 +32,10 @@ import {
   resolveMinutesTemplate,
   romanNumeral,
   translationLanguagesOf,
+  addMinutesItem,
+  DISCUSSION_KEY,
+  removeMinutesClause,
+  setMinutesItemOwner,
 } from "../minutes-document.ts";
 import type {
   MeetingMinutesContent,
@@ -40,6 +44,68 @@ import type {
 } from "../../../types/meetingMinutes.ts";
 
 const titleOf = (key: string) => key;
+
+/* ── Editing the structure ── */
+
+const docWith = (sections: MinutesSection[]): MeetingMinutesContent => ({
+  attendance: emptyAttendance(),
+  sections,
+  votes: [],
+});
+
+const SUMMARY: MinutesSection = { key: "summary", kind: "paragraph", text: "Reviewed the release." };
+
+test("a point added to a document that only has a summary becomes clause 3.2", () => {
+  const next = addMinutesItem(docWith([SUMMARY]), DISCUSSION_KEY);
+
+  assert.deepEqual(next.sections[1], { key: DISCUSSION_KEY, kind: "items", items: [{ text: "" }] });
+  const clauses = numberClauses(3, planMinutesDocument(next.sections).proceedings, titleOf);
+  assert.deepEqual(
+    clauses.map((clause) => clause.clause),
+    ["3.1", "3.2"],
+  );
+});
+
+test("a second decision grows the decisions section instead of opening another one", () => {
+  const twice = addMinutesItem(addMinutesItem(docWith([SUMMARY]), "decisions"), "decisions");
+
+  assert.equal(twice.sections.filter((section) => section.key === "decisions").length, 1);
+  assert.equal(twice.sections[1].items?.length, 2);
+  assert.equal(planMinutesDocument(twice.sections).decisions.length, 1);
+});
+
+test("removing the last line of a section removes its heading too", () => {
+  const withDecision = addMinutesItem(docWith([SUMMARY]), "decisions");
+
+  assert.deepEqual(removeMinutesClause(withDecision, 1, 0).sections, [SUMMARY]);
+});
+
+test("removing one line keeps the other lines and their citations", () => {
+  const doc = docWith([
+    { key: "actionItems", kind: "items", items: [{ text: "A", atMs: 1000 }, { text: "B", atMs: 2000 }] },
+  ]);
+
+  assert.deepEqual(removeMinutesClause(doc, 0, 0).sections[0].items, [{ text: "B", atMs: 2000 }]);
+});
+
+test("removing a paragraph section removes that section and nothing else", () => {
+  const doc = addMinutesItem(docWith([SUMMARY]), "decisions");
+
+  assert.deepEqual(
+    removeMinutesClause(doc, 0, null).sections.map((section) => section.key),
+    ["decisions"],
+  );
+});
+
+test("assigning an owner changes nothing else on the line", () => {
+  const doc = docWith([{ key: "actionItems", kind: "items", items: [{ text: "Ship it", atMs: 5000 }] }]);
+
+  assert.deepEqual(setMinutesItemOwner(doc, 0, 0, "Tu").sections[0].items?.[0], {
+    text: "Ship it",
+    atMs: 5000,
+    owner: "Tu",
+  });
+});
 
 test("WT-685: the International layout reads the drafter's Vietnamese lines in English", () => {
   assert.equal(inInternationalLayout(DRAFTED_LOCATION), "Online via WarpTalk");
