@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SLOT: the header actions of the Meet widget (right end of the header row). Owner: WT-525 t3.
+ * SLOT: the right end of the Meet widget's tab row, after the status. Owner: WT-525 t3.
  *
  * CONTRACT
  *   `export function EndSessionButton()` — no props; read from `useBridgeWidget()`.

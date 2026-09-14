@@ -22,6 +22,7 @@ import {
   initialBridgeWidgetRelayView,
   openBridgeWidgetRelay,
   reduceBridgeWidgetRelayView,
+  type BridgeWidgetIntent,
   type BridgeWidgetRelay,
   type BridgeWidgetRelayView,
 } from "@/lib/meeting/bridge-widget-relay";
@@ -32,6 +33,13 @@ export type BridgeWidgetRelayClient = {
   /** Ask the main window to apply one language to both halves. No-op unless connected. */
   pickLanguage: (language: string) => void;
   setVoiceEnabled: (enabled: boolean) => void;
+  /** "" for the automatic voice. */
+  setVoicePreference: (voiceId: string) => void;
+  /** null to be cloned live. */
+  setDubVoice: (voiceId: string | null) => void;
+  setVoiceCloneConsent: (enabled: boolean) => void;
+  /** 0..1. */
+  setMeetingAudioLevel: (level: number) => void;
   answerBrowserCapture: (answer: { granted: boolean; sourceId?: string }) => void;
 };
 
@@ -84,6 +92,12 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     };
   }, [roomId]);
 
+  /** Every intent after the snapshot request goes only to a main window that has answered. */
+  const sendWhenConnected = useCallback((intent: BridgeWidgetIntent) => {
+    if (viewRef.current.status !== "connected") return;
+    relayRef.current?.send(intent);
+  }, []);
+
   const pickLanguage = useCallback(
     (language: string) => {
       const code = normalizeLanguageCode(language);
@@ -101,22 +115,45 @@ export function useBridgeWidgetRelayClient(roomId: string): BridgeWidgetRelayCli
     [roomId],
   );
 
-  const setVoiceEnabled = useCallback((enabled: boolean) => {
-    if (viewRef.current.status !== "connected") return;
-    relayRef.current?.send({ type: "set-voice-enabled", enabled });
-  }, []);
+  const setVoiceEnabled = useCallback(
+    (enabled: boolean) => sendWhenConnected({ type: "set-voice-enabled", enabled }),
+    [sendWhenConnected],
+  );
+  const setVoicePreference = useCallback(
+    (voiceId: string) => sendWhenConnected({ type: "set-voice-preference", voiceId }),
+    [sendWhenConnected],
+  );
+  const setDubVoice = useCallback(
+    (voiceId: string | null) => sendWhenConnected({ type: "set-dub-voice", voiceId }),
+    [sendWhenConnected],
+  );
+  const setVoiceCloneConsent = useCallback(
+    (enabled: boolean) => sendWhenConnected({ type: "set-voice-clone-consent", enabled }),
+    [sendWhenConnected],
+  );
+  const setMeetingAudioLevel = useCallback(
+    (level: number) => sendWhenConnected({ type: "set-meeting-audio-level", level }),
+    [sendWhenConnected],
+  );
 
   const answerBrowserCapture = useCallback(
-    (answer: { granted: boolean; sourceId?: string }) => {
-      if (viewRef.current.status !== "connected") return;
-      relayRef.current?.send({
+    (answer: { granted: boolean; sourceId?: string }) =>
+      sendWhenConnected({
         type: "answer-browser-capture",
         granted: answer.granted,
         ...(answer.sourceId ? { sourceId: answer.sourceId } : {}),
-      });
-    },
-    [],
+      }),
+    [sendWhenConnected],
   );
 
-  return { view, pickLanguage, setVoiceEnabled, answerBrowserCapture };
+  return {
+    view,
+    pickLanguage,
+    setVoiceEnabled,
+    setVoicePreference,
+    setDubVoice,
+    setVoiceCloneConsent,
+    setMeetingAudioLevel,
+    answerBrowserCapture,
+  };
 }

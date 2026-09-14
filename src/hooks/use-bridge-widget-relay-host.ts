@@ -15,48 +15,17 @@
  *     brings its controls back;
  *   - broadcasts a new snapshot whenever one of the fields changes, from any cause (the native
  *     picker, a remembered-language auto-apply, a relayed intent);
- *   - dispatches `set-language`, `set-voice-enabled` and `answer-browser-capture` to the callbacks;
+ *   - dispatches the language, Text | Voice, voice panel and meeting-audio intents to the callbacks;
  *   - says `host-gone` when it unmounts or the page is going away, so the widget stops offering
  *     controls that would reach nobody.
  *
- * NOT MOUNTED YET — the mount is a separate task, because persistent-meeting-session is being
- * edited in parallel. When it lands, it goes in PersistentMeetingSession below `consentState` /
- * `selectedLoopbackSourceId` (they are declared late, see the note there) and needs the bar's
- * inline `onLanguagePicked` lifted into a named `handleLanguagePicked` so both callers share it:
+ * MOUNTED in PersistentMeetingSession, below the voice handlers it dispatches to. Callbacks may be
+ * fresh closures every render (handleChangeVoiceEnabled is): they are read through a ref, so a new
+ * identity never reopens the channel.
  *
- *   import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
- *   import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
- *
- *   const handleLanguagePicked = useCallback((language: string) =>
- *     updateUserSettings.mutate({ defaultSpeakLanguage: language, defaultListenLanguage: language }),
- *   [updateUserSettings]);   // and pass onLanguagePicked={handleLanguagePicked} to MeetingControlBar
- *
- *   useBridgeWidgetRelayHost({
- *     roomId,
- *     enabled: isBridgeRoom,
- *     speakLanguage: sourceLanguage,
- *     listenLanguage: targetLanguage,
- *     voiceEnabled,
- *     browserCaptureState: consentState,
- *     selectedLoopbackSourceId,
- *     onSetLanguage: (language) =>
- *       applyRelayedLanguagePick(language, {
- *         onChangeSpeakLanguage: handleChangeSpeakLanguage,
- *         onChangeListenLanguage: handleChangeListenLanguage,
- *         onLanguagePicked: handleLanguagePicked,
- *       }),
- *     onSetVoiceEnabled: handleChangeVoiceEnabled,
- *     onAnswerBrowserCapture: ({ granted, sourceId }) => {
- *       if (sourceId) setLoopbackSourceSelection({ roomId, sourceId });
- *       setBrowserCaptureAnswer({ roomId, granted });
- *     },
- *   });
- *
- *   Callbacks may be fresh closures every render (handleChangeVoiceEnabled is): they are read
- *   through a ref, so a new identity never reopens the channel.
- *
- *   The decline toast the consent modal shows here is NOT repeated for a relayed answer — the
- *   user is looking at the widget, which should say it there.
+ * `answer-browser-capture` is still answered by the consent relay of #496
+ * (use-bridge-consent-host), which owns that question end to end. Folding it in here is a separate
+ * change with no visible effect, so `onAnswerBrowserCapture` is left unset by the session today.
  */
 
 import { useEffect, useRef } from "react";
@@ -68,6 +37,7 @@ import {
   openBridgeWidgetRelay,
   type BridgeWidgetRelay,
   type BridgeWidgetSnapshotFields,
+  type BridgeWidgetVoiceSnapshot,
 } from "@/lib/meeting/bridge-widget-relay";
 
 export type BridgeWidgetRelayHostOptions = {
@@ -82,9 +52,18 @@ export type BridgeWidgetRelayHostOptions = {
   /** `consentState` in persistent-meeting-session. Absent reads as nothing to ask. */
   browserCaptureState?: BrowserCaptureConsentState;
   selectedLoopbackSourceId?: string | null;
+  /** What the popup's Voice panel draws. Omit and the popup asks for this window to be reloaded. */
+  voice?: BridgeWidgetVoiceSnapshot;
   /** One normalized code. Apply it with `applyRelayedLanguagePick`, as the native picker does. */
   onSetLanguage: (language: string) => void;
   onSetVoiceEnabled: (enabled: boolean) => void;
+  /** "" means the automatic voice, as `onChangeVoicePreference` takes it. */
+  onSetVoicePreference?: (voiceId: string) => void;
+  /** null means "clone me live", as `onChangeDubVoice` takes it. */
+  onSetDubVoice?: (voiceId: string | null) => void;
+  onSetVoiceCloneConsent?: (enabled: boolean) => void;
+  /** 0..1, already range-checked by the relay. */
+  onSetMeetingAudioLevel?: (level: number) => void;
   /**
    * Called only while `browserCaptureState === "required"` — an answer arriving after the
    * question was settled in this window is dropped (see `acceptsBrowserCaptureAnswer`).
@@ -101,8 +80,13 @@ export function useBridgeWidgetRelayHost({
   micDeviceId,
   browserCaptureState = "not-required",
   selectedLoopbackSourceId,
+  voice,
   onSetLanguage,
   onSetVoiceEnabled,
+  onSetVoicePreference,
+  onSetDubVoice,
+  onSetVoiceCloneConsent,
+  onSetMeetingAudioLevel,
   onAnswerBrowserCapture,
 }: BridgeWidgetRelayHostOptions): void {
   const relayRef = useRef<BridgeWidgetRelay | null>(null);
@@ -113,14 +97,35 @@ export function useBridgeWidgetRelayHost({
     micDeviceId,
     browserCaptureState,
     selectedLoopbackSourceId,
+    voice,
   });
-  const handlersRef = useRef({ onSetLanguage, onSetVoiceEnabled, onAnswerBrowserCapture });
+  const handlersRef = useRef({
+    onSetLanguage,
+    onSetVoiceEnabled,
+    onSetVoicePreference,
+    onSetDubVoice,
+    onSetVoiceCloneConsent,
+    onSetMeetingAudioLevel,
+    onAnswerBrowserCapture,
+  });
 
   // Every render, after commit: the channel's listener reads the latest handlers without the
   // channel having to be reopened for each new closure.
   useEffect(() => {
-    handlersRef.current = { onSetLanguage, onSetVoiceEnabled, onAnswerBrowserCapture };
+    handlersRef.current = {
+      onSetLanguage,
+      onSetVoiceEnabled,
+      onSetVoicePreference,
+      onSetDubVoice,
+      onSetVoiceCloneConsent,
+      onSetMeetingAudioLevel,
+      onAnswerBrowserCapture,
+    };
   });
+
+  // The voice half is an object built fresh every render by the caller; keyed by its content so an
+  // unrelated re-render does not broadcast an identical snapshot.
+  const voiceKey = voice ? JSON.stringify(voice) : "";
 
   // Declared BEFORE the channel effect on purpose. On mount it only records the fields (the
   // channel is not open yet, and the channel effect announces them); after that it is what
@@ -133,9 +138,12 @@ export function useBridgeWidgetRelayHost({
       micDeviceId,
       browserCaptureState,
       selectedLoopbackSourceId,
+      voice,
     };
     fieldsRef.current = fields;
     relayRef.current?.send(buildBridgeWidgetSnapshot(fields, Date.now()));
+    // `voice` is represented by `voiceKey`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     speakLanguage,
     listenLanguage,
@@ -143,6 +151,7 @@ export function useBridgeWidgetRelayHost({
     micDeviceId,
     browserCaptureState,
     selectedLoopbackSourceId,
+    voiceKey,
   ]);
 
   useEffect(() => {
@@ -168,6 +177,19 @@ export function useBridgeWidgetRelayHost({
           break;
         case "set-voice-enabled":
           handlers.onSetVoiceEnabled(message.enabled);
+          break;
+        // The same no-reply rule as set-language, for all four: the field effect reports the result.
+        case "set-voice-preference":
+          handlers.onSetVoicePreference?.(message.voiceId);
+          break;
+        case "set-dub-voice":
+          handlers.onSetDubVoice?.(message.voiceId);
+          break;
+        case "set-voice-clone-consent":
+          handlers.onSetVoiceCloneConsent?.(message.enabled);
+          break;
+        case "set-meeting-audio-level":
+          handlers.onSetMeetingAudioLevel?.(message.level);
           break;
         case "answer-browser-capture":
           if (acceptsBrowserCaptureAnswer(fieldsRef.current.browserCaptureState)) {

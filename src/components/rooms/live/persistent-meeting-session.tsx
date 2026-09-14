@@ -117,6 +117,16 @@ import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { findBridgeDeviceIds, currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { openBridgeInbound } from "@/lib/audio/bridge-inbound-connection";
 import { deviceInboundSource, openLoopbackInboundSource } from "@/lib/audio/bridge-inbound-source";
+import {
+  FAR_SIDE_MONITOR_UNDER_DUB,
+  clampMeetingAudioLevel,
+  farSideMonitorGain,
+  shouldMonitorFarSide,
+  startFarSideMonitor,
+  type FarSideMonitor,
+} from "@/lib/audio/bridge-far-side-monitor";
+import { useBridgeWidgetRelayHost } from "@/hooks/use-bridge-widget-relay-host";
+import { applyRelayedLanguagePick } from "@/lib/meeting/bridge-widget-relay";
 import { browserCaptureConsentState, mayCaptureBrowser } from "@/lib/audio/browser-capture-consent";
 import { BrowserCaptureConsentModal } from "./browser-capture-consent-modal";
 import { BridgeSetupDialog } from "@/components/rooms/bridge/bridge-setup-dialog";
@@ -846,6 +856,15 @@ export function PersistentMeetingSession({
   // Host-only because the token is host-only: a participant calling this would take a 403 on
   // every render, and a 403 here is a settled answer rather than a transient one.
   const bridgeInboundRef = useRef<{ stop: () => Promise<void> } | null>(null);
+  // The host's own ear on the far side, on the virtual-device path only: once Meet's speaker points
+  // at a cable, Meet plays nothing to the host. The gain lives in a ref because `voiceEnabled` is
+  // declared far below this effect; see the effect beside it.
+  const farSideMonitorRef = useRef<FarSideMonitor | null>(null);
+  const farSideMonitorGainRef = useRef(farSideMonitorGain(false));
+  /** Whether WarpTalk is playing the far side to the host right now — the popup's Meeting audio row. */
+  const [farSideMonitoring, setFarSideMonitoring] = useState(false);
+  /** How loud the original sits under a translation, chosen in the popup's Voice panel. */
+  const [farSideMonitorLevel, setFarSideMonitorLevel] = useState(FAR_SIDE_MONITOR_UNDER_DUB);
 
   useEffect(() => {
     // A device endpoint may start straight away; the loopback path may not start until the user has
@@ -902,6 +921,9 @@ export function PersistentMeetingSession({
           source: inbound.source,
           onDisconnected: () => {
             bridgeInboundRef.current = null;
+            void farSideMonitorRef.current?.stop();
+            farSideMonitorRef.current = null;
+            setFarSideMonitoring(false);
             void inbound.dispose();
             toast.error("The external call was disconnected.", {
               description: "WarpTalk has stopped hearing the other side of the meeting.",
@@ -913,7 +935,22 @@ export function PersistentMeetingSession({
         // device path, the track it opened; the source owns whatever it set up to produce a track
         // in the first place — on the loopback path that is a capture running in the main process,
         // which nothing else can reach.
+        // Two-cable bridge: Meet's speaker points at the cable, so the host hears the far side only
+        // if WarpTalk plays it. Best effort — a monitor that cannot start must not take the bridge
+        // down with it; the transcript and the dub still reach the host.
+        let monitor: FarSideMonitor | null = null;
+        if (shouldMonitorFarSide(inbound.source.kind)) {
+          try {
+            monitor = startFarSideMonitor(handles.track, farSideMonitorGainRef.current);
+          } catch {
+            monitor = null;
+          }
+        }
+
         const release = async () => {
+          if (farSideMonitorRef.current === monitor) farSideMonitorRef.current = null;
+          if (monitor) setFarSideMonitoring(false);
+          await monitor?.stop();
           await handles.stop();
           await inbound.dispose();
         };
@@ -926,6 +963,8 @@ export function PersistentMeetingSession({
           return;
         }
         bridgeInboundRef.current = { stop: release };
+        farSideMonitorRef.current = monitor;
+        if (monitor) setFarSideMonitoring(true);
       } catch (error) {
         if (cancelled) return;
         // Said out loud rather than logged: with the outbound leg working, the far side can hear
@@ -1926,6 +1965,15 @@ export function PersistentMeetingSession({
     }
   }
 
+  // The far side's original sits under the translation while this host hears dubs, and returns to
+  // full level when they do not. Written to the ref too, so a monitor started later begins at the
+  // current level instead of jumping to it. See lib/audio/bridge-far-side-monitor.
+  useEffect(() => {
+    const gain = farSideMonitorGain(voiceEnabled, farSideMonitorLevel);
+    farSideMonitorGainRef.current = gain;
+    farSideMonitorRef.current?.setGain(gain);
+  }, [voiceEnabled, farSideMonitorLevel]);
+
   useRegisterAssistantContext(
     room && !compact
       ? {
@@ -2181,6 +2229,50 @@ export function PersistentMeetingSession({
       defaultListenLanguage: listen,
     });
   }
+
+  // WT-434: a one-language pick becomes the remembered profile. Named so the control bar and the
+  // popup's relayed pick share it — a pick made over Google Meet must be remembered just the same.
+  const handleLanguagePicked = useCallback(
+    (language: string) =>
+      updateUserSettings.mutate({
+        defaultSpeakLanguage: language,
+        defaultListenLanguage: language,
+      }),
+    [updateUserSettings],
+  );
+
+  // WT-525: the popup over Google Meet changes this meeting only through here. It sends intents;
+  // these are the same handlers the control bar calls, and the snapshot is what this window holds.
+  // See lib/meeting/bridge-widget-relay for why the popup may not change any of it itself.
+  useBridgeWidgetRelayHost({
+    roomId,
+    enabled: isBridgeRoom,
+    // "auto" is not a language the popup can show, and a snapshot carrying it is rejected whole.
+    speakLanguage: isResolvedSpeakLanguage(sourceLanguage) ? sourceLanguage : null,
+    listenLanguage: targetLanguage,
+    voiceEnabled,
+    browserCaptureState: consentState,
+    selectedLoopbackSourceId,
+    voice: {
+      voicePreference: voicePreference || null,
+      dubVoice: dubVoice ?? null,
+      voiceCloneEnabled,
+      voiceCloneHasAudience,
+      cloneCapture: cloneCaptureState,
+      meetingAudioLevel: farSideMonitoring ? farSideMonitorLevel : null,
+    },
+    onSetLanguage: (language) =>
+      applyRelayedLanguagePick(language, {
+        onChangeSpeakLanguage: handleChangeSpeakLanguage,
+        onChangeListenLanguage: handleChangeListenLanguage,
+        onLanguagePicked: handleLanguagePicked,
+      }),
+    onSetVoiceEnabled: handleChangeVoiceEnabled,
+    onSetVoicePreference: handleChangeVoicePreference,
+    onSetDubVoice: handleChangeDubVoice,
+    onSetVoiceCloneConsent: handleChangeVoiceCloneConsent,
+    onSetMeetingAudioLevel: (level) => setFarSideMonitorLevel(clampMeetingAudioLevel(level)),
+  });
 
   useEffect(() => {
     if (!roomId) return;
@@ -3649,12 +3741,7 @@ export function PersistentMeetingSession({
                     // UI (speak=vi, listen=en) was fossilized — every later meeting's
                     // remembered-language auto-apply resurrected the split however many times
                     // the user picked one language in the bar.
-                    onLanguagePicked={(language) =>
-                      updateUserSettings.mutate({
-                        defaultSpeakLanguage: language,
-                        defaultListenLanguage: language,
-                      })
-                    }
+                    onLanguagePicked={handleLanguagePicked}
                     onChangeVoicePreference={handleChangeVoicePreference}
                     onChangeVoiceCloneConsent={handleChangeVoiceCloneConsent}
                     onChangeVoiceEnabled={handleChangeVoiceEnabled}

@@ -32,13 +32,21 @@
  *   opening the main window and opening the popup).
  *
  *     popup → main   request-snapshot
- *                    set-language           { language }            one pick = speak + listen
- *                    set-voice-enabled      { enabled }
- *                    answer-browser-capture { granted, sourceId? }  the consent modal, answered here
+ *                    set-language             { language }            one pick = speak + listen
+ *                    set-voice-enabled        { enabled }             the dock's Text | Voice
+ *                    set-voice-preference     { voiceId }             "" = the automatic voice
+ *                    set-dub-voice            { voiceId | null }      null = clone me live
+ *                    set-voice-clone-consent  { enabled }
+ *                    set-meeting-audio-level  { level }               0..1, the original under a dub
+ *                    answer-browser-capture   { granted, sourceId? }  the consent modal, answered here
  *                    (reserved: set-mic-device { deviceId } — not accepted yet)
- *     main → popup   snapshot               { speakLanguage, listenLanguage, voiceEnabled,
- *                                               micDeviceId?, browserCapture, at }
- *                    host-gone              the main window left this room's meeting
+ *     main → popup   snapshot                 { speakLanguage, listenLanguage, voiceEnabled,
+ *                                                 micDeviceId?, browserCapture, voice?, at }
+ *                    host-gone                the main window left this room's meeting
+ *
+ *   `voice` is optional on purpose: a main window from before the popup's Voice panel sends a
+ *   snapshot without it, and the popup then says to reload that window instead of drawing a panel
+ *   whose every pick would be dropped as an unknown intent.
  *
  * VERSIONING
  *   `v` changes only when an EXISTING message changes shape. A new message type does not need a
@@ -52,6 +60,7 @@
 
 import { normalizeLanguageCode } from "../language/languages.ts";
 import type { BrowserCaptureConsentState } from "../audio/browser-capture-consent.ts";
+import type { VoiceCloneStateDto } from "../../types/realtime.ts";
 import { applySingleLanguageChoice, describeLanguageChoice } from "./language-choice.ts";
 
 export const BRIDGE_WIDGET_RELAY_VERSION = 1;
@@ -102,8 +111,34 @@ export type BridgeWidgetSnapshot = {
   voiceEnabled: boolean;
   micDeviceId?: string;
   browserCapture: BridgeWidgetBrowserCapture;
+  /** What the popup's Voice panel draws. Absent from a main window that predates the panel. */
+  voice?: BridgeWidgetVoiceSnapshot;
   /** `Date.now()` in the main window when this was built. Same machine, same clock. */
   at: number;
+};
+
+/**
+ * The voice half of the meeting, as the main window's VoicePanel props hold it.
+ *
+ * Only what lives in main-window state or needs its handlers. The voice catalog and the user's own
+ * voice profiles are server facts the popup reads for itself.
+ */
+export type BridgeWidgetVoiceSnapshot = {
+  /** The voice this user HEARS others in, or null for the automatic one. */
+  voicePreference: string | null;
+  /** The voice this user is DUBBED in, or null for "clone me live in this meeting". */
+  dubVoice: string | null;
+  voiceCloneEnabled: boolean;
+  /** Whether anyone listens in another language, so a clone of this user reaches somebody. */
+  voiceCloneHasAudience: boolean;
+  /** WT-420: what the clone pipeline is doing to this user's microphone, or null. */
+  cloneCapture: VoiceCloneStateDto | null;
+  /**
+   * How loud the far side's original plays under a translation, 0..1 — or null where WarpTalk does
+   * not play the call to the host at all (the loopback path, where Meet plays it). Null hides the
+   * control rather than offering one that changes nothing.
+   */
+  meetingAudioLevel: number | null;
 };
 
 /** Popup → main. */
@@ -111,6 +146,10 @@ export type BridgeWidgetIntent =
   | { type: "request-snapshot" }
   | { type: "set-language"; language: string }
   | { type: "set-voice-enabled"; enabled: boolean }
+  | { type: "set-voice-preference"; voiceId: string }
+  | { type: "set-dub-voice"; voiceId: string | null }
+  | { type: "set-voice-clone-consent"; enabled: boolean }
+  | { type: "set-meeting-audio-level"; level: number }
   | { type: "answer-browser-capture"; granted: boolean; sourceId?: string };
 // Reserved for the mic picker: { type: "set-mic-device"; deviceId: string }. Add it here, to
 // INTENT_TYPES and to parseBody together; no version bump (see VERSIONING above).
@@ -144,6 +183,10 @@ const INTENT_TYPES = new Set<string>([
   "request-snapshot",
   "set-language",
   "set-voice-enabled",
+  "set-voice-preference",
+  "set-dub-voice",
+  "set-voice-clone-consent",
+  "set-meeting-audio-level",
   "answer-browser-capture",
 ]);
 const HOST_MESSAGE_TYPES = new Set<string>(["snapshot", "host-gone"]);
@@ -170,6 +213,56 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A playback level between silent and full, or null when the value is not one. */
+function audioLevel(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+}
+
+/** An opaque id, or null — where null is itself a meaningful value. Undefined is malformed. */
+function nullableId(value: unknown): { ok: true; value: string | null } | { ok: false } {
+  if (value === null) return { ok: true, value: null };
+  const id = opaqueId(value);
+  return id ? { ok: true, value: id } : { ok: false };
+}
+
+const CLONE_CAPTURE_METRICS = ["seconds", "requiredSeconds", "score", "activeSpeechRatio"] as const;
+
+function parseCloneCapture(raw: unknown): VoiceCloneStateDto | null {
+  if (!isRecord(raw)) return null;
+  const speakerId = opaqueId(raw.speakerId);
+  if (!speakerId || typeof raw.reason !== "string" || raw.reason.length > 64) return null;
+  const capture: VoiceCloneStateDto = { speakerId, reason: raw.reason };
+  for (const key of CLONE_CAPTURE_METRICS) {
+    const value = raw[key];
+    if (value === undefined || value === null) continue;
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    capture[key] = value;
+  }
+  return capture;
+}
+
+function parseVoice(raw: unknown): BridgeWidgetVoiceSnapshot | null {
+  if (!isRecord(raw)) return null;
+  const voicePreference = nullableId(raw.voicePreference);
+  const dubVoice = nullableId(raw.dubVoice);
+  if (!voicePreference.ok || !dubVoice.ok) return null;
+  if (typeof raw.voiceCloneEnabled !== "boolean" || typeof raw.voiceCloneHasAudience !== "boolean") {
+    return null;
+  }
+  const meetingAudioLevel = raw.meetingAudioLevel === null ? null : audioLevel(raw.meetingAudioLevel);
+  if (meetingAudioLevel === null && raw.meetingAudioLevel !== null) return null;
+  const cloneCapture = raw.cloneCapture === null ? null : parseCloneCapture(raw.cloneCapture);
+  if (cloneCapture === null && raw.cloneCapture !== null) return null;
+  return {
+    voicePreference: voicePreference.value,
+    dubVoice: dubVoice.value,
+    voiceCloneEnabled: raw.voiceCloneEnabled,
+    voiceCloneHasAudience: raw.voiceCloneHasAudience,
+    cloneCapture,
+    meetingAudioLevel,
+  };
+}
+
 /**
  * The body of a message whose envelope already checked out, rebuilt field by field.
  *
@@ -190,6 +283,24 @@ function parseBody(raw: Record<string, unknown>): BridgeWidgetMessageBody | null
       return typeof raw.enabled === "boolean"
         ? { type: "set-voice-enabled", enabled: raw.enabled }
         : null;
+    case "set-voice-preference": {
+      // "" is a real answer — back to the automatic voice — not a missing one.
+      if (raw.voiceId === "") return { type: "set-voice-preference", voiceId: "" };
+      const voiceId = opaqueId(raw.voiceId);
+      return voiceId ? { type: "set-voice-preference", voiceId } : null;
+    }
+    case "set-dub-voice": {
+      const voiceId = nullableId(raw.voiceId);
+      return voiceId.ok ? { type: "set-dub-voice", voiceId: voiceId.value } : null;
+    }
+    case "set-voice-clone-consent":
+      return typeof raw.enabled === "boolean"
+        ? { type: "set-voice-clone-consent", enabled: raw.enabled }
+        : null;
+    case "set-meeting-audio-level": {
+      const level = audioLevel(raw.level);
+      return level === null ? null : { type: "set-meeting-audio-level", level };
+    }
     case "answer-browser-capture": {
       if (typeof raw.granted !== "boolean") return null;
       if (raw.sourceId === undefined) return { type: "answer-browser-capture", granted: raw.granted };
@@ -239,6 +350,11 @@ function parseSnapshot(raw: Record<string, unknown>): BridgeWidgetSnapshot | nul
     if (!micDeviceId) return null;
     snapshot.micDeviceId = micDeviceId;
   }
+  if (raw.voice !== undefined) {
+    const voice = parseVoice(raw.voice);
+    if (!voice) return null;
+    snapshot.voice = voice;
+  }
   return snapshot;
 }
 
@@ -273,6 +389,7 @@ export type BridgeWidgetSnapshotFields = {
   micDeviceId?: string | null;
   browserCaptureState: BrowserCaptureConsentState;
   selectedLoopbackSourceId?: string | null;
+  voice?: BridgeWidgetVoiceSnapshot;
 };
 
 /** The snapshot message the main window sends, from the values it holds. */
@@ -293,6 +410,7 @@ export function buildBridgeWidgetSnapshot(
     at,
   };
   if (fields.micDeviceId) snapshot.micDeviceId = fields.micDeviceId;
+  if (fields.voice) snapshot.voice = fields.voice;
   return snapshot;
 }
 

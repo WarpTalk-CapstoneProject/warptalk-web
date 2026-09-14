@@ -272,3 +272,38 @@ test("the panel view carries the rung, and setup state does not suppress it", ()
   const unsupported = describeAudioBridge(macFullBridge({ supported: false, ready: false }));
   assert.equal(unsupported.tier?.id, "caption-only", "the platform gap still leaves captions");
 });
+
+test("two free cables on Windows are the top rung, above loopback", () => {
+  // VB-CABLE out and Hi-Fi Cable back. The desktop app reports it ready, so this machine gets the
+  // bridge that hears only Meet — even where process loopback is wired and would also qualify.
+  const twoCables = windowsCable({
+    ready: true,
+    bridgeMode: "full",
+    capabilities: {
+      fullBridge: true,
+      outboundOnly: true,
+      captionOnly: true,
+      processLoopback: true,
+      processLoopbackRuntime: "available",
+    },
+    devices: [
+      windowsCable().devices[0]!,
+      {
+        leg: "inbound",
+        driverBundle: "Hi-Fi Cable",
+        deviceName: "Hi-Fi Cable Output (VB-Audio Hi-Fi Cable)",
+        installed: true,
+        providerId: "hifi-cable-free",
+        providerName: "Hi-Fi Cable",
+        providerRole: "primary",
+      },
+    ],
+  });
+
+  assert.equal(selectBridgeTier(twoCables)?.id, "full-bridge");
+  assert.deepEqual(
+    availableBridgeTiers(twoCables).map((tier) => tier.id),
+    ["full-bridge", "loopback-bridge", "outbound-only", "caption-only"],
+  );
+  assert.equal(describeAudioBridge(twoCables).state, "ready");
+});
