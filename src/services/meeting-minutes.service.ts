@@ -56,6 +56,13 @@ export const meetingMinutesService = {
     return apiClient.put<MeetingMinutesDto>(API.minutes.update(roomId, minutesId), { content });
   },
 
+  /** Name the secretary of record, or clear it with null. Host authority; refused once signed. */
+  designateSecretary(roomId: string, minutesId: string, participantId: string | null) {
+    return apiClient.put<MeetingMinutesDto>(API.minutes.secretary(roomId, minutesId), {
+      participantId,
+    });
+  },
+
   sign(roomId: string, minutesId: string) {
     return apiClient.post<MeetingMinutesDto>(API.minutes.sign(roomId, minutesId));
   },

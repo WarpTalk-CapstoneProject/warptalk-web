@@ -173,6 +173,8 @@ export const API = {
       `/rooms/${roomId}/minutes/translation?language=${encodeURIComponent(language)}`,
     draft: (roomId: string) => `/rooms/${roomId}/minutes/draft`,
     update: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}`,
+    secretary: (roomId: string, minutesId: string) =>
+      `/rooms/${roomId}/minutes/${minutesId}/secretary`,
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
