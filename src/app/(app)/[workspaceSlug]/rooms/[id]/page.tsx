@@ -1893,6 +1893,7 @@ function MeetingRecordSection({
       {activeTab === "artifacts" && endedRecord ? (
         <ArtifactsPanel
           artifacts={endedRecord.artifacts}
+          endedAt={endedRecord.endedAt}
           busyArtifactId={busyArtifactId}
           onDownload={downloadArtifact}
         />
