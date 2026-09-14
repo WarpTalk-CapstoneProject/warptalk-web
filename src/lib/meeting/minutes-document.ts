@@ -394,6 +394,7 @@ function zonedParts(value: string, timeZone?: string | null): ZonedParts | null 
  * move together; a string changed on one side stops being translated on the other and prints in
  * Vietnamese again, which is the exact bug this exists for.
  */
+// i18n-allow: stored document DATA to match against, byte for byte — never shown as interface copy.
 export const DRAFTED_LOCATION = "Trực tuyến qua WarpTalk";
 export const DRAFTED_QUORUM_RULE = "Quá bán số người được mời";
 export const DRAFTED_AGENDA_PREFACE = "Theo mô tả cuộc họp khi đặt lịch:";
