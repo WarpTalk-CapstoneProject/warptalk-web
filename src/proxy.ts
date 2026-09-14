@@ -35,6 +35,13 @@ const PUBLIC_ROUTES = [
   // visitor to /login first would break the one flow this feature exists for, since the person
   // holding the link may have no account at all.
   "/minutes/shared",
+  // WT-686. The page LiveKit's recorder opens for every meeting recording. The recorder is a
+  // headless Chrome with no session, so the gate answered it 307 -> /login; the page never called
+  // EgressHelper.startRecording(), LiveKit aborted every egress with "Start signal not received",
+  // and no meeting has had a video since the template was switched on. Public costs nothing: the
+  // page grants no access of its own, joining only the room the egress-minted token already names,
+  // and it calls no WarpTalk API.
+  "/egress",
   "/payment-cancelled",
   "/workspace/payment/plans",
   "/workspace/payment/success",
