@@ -45,7 +45,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { sectionTitle } from "@/lib/meeting/meeting-summary";
 import {
+  addMinutesItem,
   closingSentence,
+  DISCUSSION_KEY,
   externalGuestNotice,
   formatDocumentDate,
   formatDocumentMoment,
@@ -58,7 +60,9 @@ import {
   provenanceLines,
   recordingNotice,
   referenceForAction,
+  removeMinutesClause,
   romanNumeral,
+  setMinutesItemOwner,
   type MinutesClause,
   type MinutesPolicyFacts,
   type MinutesTemplateId,
@@ -93,6 +97,12 @@ export interface MinutesEditHandlers {
   setNotes: (value: string) => void;
   setSectionText: (sectionIndex: number, value: string) => void;
   setItemText: (sectionIndex: number, itemIndex: number, value: string) => void;
+  /**
+   * Any other change to the working copy — adding or removing a line, a new section, an owner, the
+   * title. Takes a pure function of the document so the rule for each change lives, and is tested,
+   * in minutes-document.ts rather than in this component.
+   */
+  apply: (change: (content: MeetingMinutesContent) => MeetingMinutesContent) => void;
 }
 
 export interface MinutesDocumentProps {
@@ -214,6 +224,7 @@ function ClauseText({
   onSeek,
   translated,
   lead,
+  trailing,
 }: {
   clause: MinutesClause;
   editing: boolean;
@@ -222,6 +233,8 @@ function ClauseText({
   translated: { language: string; text: string } | null;
   /** Printed before the text, inside the same paragraph: an item number, or a bold lead-in. */
   lead?: React.ReactNode;
+  /** After the citation, on the same line — the editor's remove control. */
+  trailing?: React.ReactNode;
 }) {
   return (
     <>
@@ -242,6 +255,7 @@ function ClauseText({
         )}
         {clause.owner ? <span className="mdoc-owner"> — {clause.owner}</span> : null}{" "}
         <Citation atMs={clause.atMs} onSeek={onSeek} />
+        {trailing}
       </p>
       {translated ? (
         <p className="mdoc-translated">
@@ -371,6 +385,7 @@ function ActionTable({
               Vietnamese template numbers its parts in Roman numerals and its lines within a part,
               which is not a citable address, so there it is simply the moment on the record. */}
           <th className="mdoc-col-ref">{showRef ? "Ref / recorded at" : "Recorded at"}</th>
+          {editing ? <th className="mdoc-edit-col" aria-label="Remove" /> : null}
         </tr>
       </thead>
       <tbody>
@@ -392,7 +407,19 @@ function ActionTable({
               </td>
               {/* An owner nobody named prints as an ellipsis, the way a blank prints on a paper
                   form — the same rule the .docx writer already follows for a missing date. */}
-              <td>{item.owner || "…………"}</td>
+              <td>
+                {editing ? (
+                  <DocField
+                    value={item.owner ?? ""}
+                    placeholder="Who does it?"
+                    onChange={(next) =>
+                      edits.apply((doc) => setMinutesItemOwner(doc, sectionIndex, itemIndex, next))
+                    }
+                  />
+                ) : (
+                  item.owner || "…………"
+                )}
+              </td>
               {/* The clause reference is printed BESIDE the citation, never instead of it. The
                   reference tells a reader where in the document the task came from; the citation
                   is the control that plays the moment it was said, and this redesign was not
@@ -401,6 +428,15 @@ function ActionTable({
                 {reference ? <span className="mdoc-ref">{reference} </span> : null}
                 <Citation atMs={item.atMs} onSeek={onSeek} />
               </td>
+              {editing ? (
+                <td className="mdoc-edit-col">
+                  <RemoveLine
+                    onRemove={() =>
+                      edits.apply((doc) => removeMinutesClause(doc, sectionIndex, itemIndex))
+                    }
+                  />
+                </td>
+              ) : null}
             </tr>
           );
         })}
@@ -863,9 +899,12 @@ function GlobalBody({
   const detailsPart = ++partNumber;
   const attendancePart = ++partNumber;
   const mattersPart = ++partNumber;
+  // While editing, the Decisions and Action items parts are printed even when empty: a part the
+  // document declines to show is a part nobody can add the first line to. Reading and printing
+  // are unchanged — an empty part still takes no number there.
   const decisionsPart =
-    plan.decisions.length > 0 || content.votes.length > 0 ? ++partNumber : null;
-  const actionsPart = plan.actions.length > 0 ? ++partNumber : null;
+    plan.decisions.length > 0 || content.votes.length > 0 || editing ? ++partNumber : null;
+  const actionsPart = plan.actions.length > 0 || editing ? ++partNumber : null;
   const notesPart = content.notes || editing ? ++partNumber : null;
   const adjournmentPart = ++partNumber;
 
@@ -898,7 +937,17 @@ function GlobalBody({
       />
 
       <p className="mdoc-label">Meeting minutes</p>
-      <p className="mdoc-title">{content.meetingTitle || "Untitled meeting"}</p>
+      <p className="mdoc-title">
+        {editing ? (
+          <DocField
+            value={content.meetingTitle ?? ""}
+            placeholder="Untitled meeting"
+            onChange={(next) => edits.apply((doc) => ({ ...doc, meetingTitle: next }))}
+          />
+        ) : (
+          content.meetingTitle || "Untitled meeting"
+        )}
+      </p>
       {branding.name ? <p className="mdoc-subtitle">{branding.name}</p> : null}
       <p className="mdoc-status">{statusLabel}</p>
 
@@ -910,7 +959,17 @@ function GlobalBody({
       </Clause>
       {/* WT-685: the drafter writes this line in Vietnamese; an English document must not. */}
       <Clause n={`${detailsPart}.3`}>
-        Location: {inInternationalLayout(content.location) || "not recorded"}
+        Location:{" "}
+        {editing ? (
+          // Edited as stored, like the agenda: this is the record, not its English reading.
+          <DocField
+            value={content.location ?? ""}
+            placeholder="Where the meeting was held"
+            onChange={(next) => edits.apply((doc) => ({ ...doc, location: next }))}
+          />
+        ) : (
+          inInternationalLayout(content.location) || "not recorded"
+        )}
       </Clause>
       {minutes.chairName || minutes.secretaryName ? (
         <Clause n={`${detailsPart}.4`}>
@@ -966,7 +1025,7 @@ function GlobalBody({
           )}
         </p>
       ) : null}
-      {matters.length === 0 ? (
+      {matters.length === 0 && !editing ? (
         <p className="mdoc-body">
           No body was carried into these minutes from the meeting&apos;s summary.
         </p>
@@ -986,11 +1045,34 @@ function GlobalBody({
                 translated={
                   translationIndex.get(`${clause.sectionIndex}:${clause.itemIndex}`) ?? null
                 }
+                trailing={
+                  editing ? (
+                    <RemoveLine
+                      onRemove={() =>
+                        edits.apply((doc) =>
+                          removeMinutesClause(doc, clause.sectionIndex, clause.itemIndex),
+                        )
+                      }
+                    />
+                  ) : null
+                }
               />
             </div>
           </div>
         ))
       )}
+      {editing ? (
+        <div className="mdoc-edit-row">
+          <AddLine
+            label="Add point"
+            onAdd={() => edits.apply((doc) => addMinutesItem(doc, DISCUSSION_KEY))}
+          />
+          <AddLine
+            label="Add open question"
+            onAdd={() => edits.apply((doc) => addMinutesItem(doc, "openQuestions"))}
+          />
+        </div>
+      ) : null}
 
       {decisionsPart ? (
         <>
@@ -1006,6 +1088,17 @@ function GlobalBody({
                   onSeek={onSeek}
                   translated={
                     translationIndex.get(`${clause.sectionIndex}:${clause.itemIndex}`) ?? null
+                  }
+                  trailing={
+                    editing ? (
+                      <RemoveLine
+                        onRemove={() =>
+                          edits.apply((doc) =>
+                            removeMinutesClause(doc, clause.sectionIndex, clause.itemIndex),
+                          )
+                        }
+                      />
+                    ) : null
                   }
                 />
               </div>
@@ -1029,6 +1122,19 @@ function GlobalBody({
               </div>
             );
           })}
+          {editing ? (
+            <>
+              {decisions.length === 0 && content.votes.length === 0 ? (
+                <p className="mdoc-body mdoc-edit-hint">No decisions recorded yet.</p>
+              ) : null}
+              <div className="mdoc-edit-row">
+                <AddLine
+                  label="Add decision"
+                  onAdd={() => edits.apply((doc) => addMinutesItem(doc, "decisions"))}
+                />
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -1047,6 +1153,19 @@ function GlobalBody({
               showRef
             />
           ))}
+          {editing ? (
+            <>
+              {plan.actions.length === 0 ? (
+                <p className="mdoc-body mdoc-edit-hint">No action items recorded yet.</p>
+              ) : null}
+              <div className="mdoc-edit-row">
+                <AddLine
+                  label="Add action item"
+                  onAdd={() => edits.apply((doc) => addMinutesItem(doc, "actionItems"))}
+                />
+              </div>
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -1093,6 +1212,30 @@ function GlobalBody({
         attendance={content.attendance}
       />
     </>
+  );
+}
+
+/** Takes a line out of the working copy. Part of the editing surface, never of the printed record. */
+function RemoveLine({ onRemove }: { onRemove: () => void }) {
+  return (
+    <button
+      type="button"
+      className="mdoc-edit-remove"
+      onClick={onRemove}
+      aria-label="Remove this line"
+      title="Remove this line"
+    >
+      Remove
+    </button>
+  );
+}
+
+/** Adds a line or a section. Same rule as RemoveLine: visible while editing, never printed. */
+function AddLine({ label, onAdd }: { label: string; onAdd: () => void }) {
+  return (
+    <button type="button" className="mdoc-edit-btn" onClick={onAdd}>
+      + {label}
+    </button>
   );
 }
 
@@ -1230,6 +1373,23 @@ function MinutesDocumentStyles() {
 .mdoc-body:has(> .mdoc-field) { display: flex; align-items: baseline; gap: calc(2 * var(--pt)); }
 .mdoc-body:has(> .mdoc-field) > .mdoc-field { flex: 1 1 auto; }
 
+/* Structural edit controls: part of the working surface, never of the record, so they are set in
+   the interface's face rather than the document's and are removed from print below. */
+.mdoc-edit-row { display: flex; flex-wrap: wrap; gap: 6px; margin: calc(4 * var(--pt)) 0 calc(10 * var(--pt)); }
+.mdoc-edit-btn {
+  font: 500 12px/1.2 ui-sans-serif, system-ui, sans-serif; color: #3f47a8 !important;
+  background: #f3f4fd; border: 1px dashed #9aa0e6; border-radius: 4px; padding: 3px 8px; cursor: pointer;
+}
+.mdoc-edit-btn:hover { background: #e7e9fb; }
+.mdoc-edit-remove {
+  flex: none; align-self: center; margin-left: 4px;
+  font: 500 11px/1.2 ui-sans-serif, system-ui, sans-serif; color: #8a8a8a !important;
+  background: transparent; border: 0; padding: 0 2px; cursor: pointer;
+}
+.mdoc-edit-remove:hover { color: #b42318 !important; text-decoration: underline; }
+.mdoc-edit-hint { color: #8a8a8a !important; font-style: italic; }
+.mdoc-table .mdoc-edit-col { width: 1%; white-space: nowrap; border-left-style: dashed; }
+
 .mdoc-guides { position: absolute; inset: 0; pointer-events: none; }
 .mdoc-guide-box {
   position: absolute;
@@ -1307,6 +1467,7 @@ function MinutesDocumentStyles() {
   .mdoc-guides { display: none !important; }
   .mdoc-cite-button { text-decoration: none !important; }
   .mdoc-field { border-bottom: 0 !important; }
+  .mdoc-edit-row, .mdoc-edit-remove, .mdoc-edit-hint, .mdoc-edit-col { display: none !important; }
   /* Keep a part and its first lines together, and never break a signature block across pages. */
   .mdoc-part { break-after: avoid; }
   .mdoc-sig, .mdoc-table tr { break-inside: avoid; }

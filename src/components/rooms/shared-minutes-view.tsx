@@ -49,6 +49,7 @@ const NO_EDITS = {
   setNotes: () => {},
   setSectionText: () => {},
   setItemText: () => {},
+  apply: () => {},
 };
 
 export function SharedMinutesView({ token }: { token: string }) {
