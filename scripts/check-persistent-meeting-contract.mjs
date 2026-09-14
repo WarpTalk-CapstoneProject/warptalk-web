@@ -189,7 +189,9 @@ assert.match(
 // function with tests and no caller looks healthy from every angle except the one that matters.
 assert.match(
   appLayout,
-  /const \{ meetSensor \} = useBridgeTrigger\(/,
+  // Other fields may be taken alongside it (the shell also reads `trigger` for the automatic
+  // bridge room); what must not happen is the reading coming from anywhere else.
+  /const \{[^}]*\bmeetSensor\b[^}]*\} = useBridgeTrigger\(/,
   "the shell must take the Meet sensor reading out of useBridgeTrigger — a second subscription in the session would miss a Meet window that was already on screen",
 );
 assert.match(
