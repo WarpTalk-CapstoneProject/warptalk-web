@@ -55,6 +55,7 @@ import { cn } from "@/lib/utils";
 import { isRecordShared } from "@/lib/meeting/record-sharing";
 import {
   MINUTES_TEMPLATES,
+  formatDocumentMoment,
   resolveMinutesTemplate,
   translationLanguagesOf,
   type MinutesPolicyFacts,
@@ -84,17 +85,6 @@ import {
 } from "@/components/rooms/minutes-document";
 import { getLanguageName, languagesInScope } from "@/lib/language/languages";
 import type { MinutesTranslationDto } from "@/types/meetingMinutes";
-
-function formatTime(value: string | null | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : // en-US to match every other formatter in the app. A hardcoded "vi-VN" printed
-      // 20/08/2026 in an otherwise-English document — the same mismatch src/lib/format/currency.ts
-      // documents, where a vi-VN hardcode rendered an English invoice as "90.000đ".
-      date.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" });
-}
 
 /** The short form, for the badge beside the number. */
 const STATUS_LABEL: Record<string, string> = {
@@ -499,7 +489,14 @@ export function MinutesPanel({
           {minutes.version > 1 ? (
             <span className="text-[11px] text-ink-subtle">Revision {minutes.version - 1}</span>
           ) : null}
-          <span className="text-[11px] text-ink-subtle">Drafted {formatTime(minutes.createdAt)}</span>
+          {/* WT-685: this used to be `toLocaleString("en-US")` in the READER's zone — "9/12/26,
+              1:29 PM" beside a document saying 06:29 (UTC+00:00) for the same moment. It now
+              reads the way the document below it does: same template, same workspace zone. */}
+          <span className="text-[11px] text-ink-subtle">
+            Drafted{" "}
+            {formatDocumentMoment(minutes.createdAt, template, workspaceSettings?.timezone ?? null) ??
+              "—"}
+          </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

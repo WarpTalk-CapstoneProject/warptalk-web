@@ -384,6 +384,38 @@ function zonedParts(value: string, timeZone?: string | null): ZonedParts | null 
   };
 }
 
+/* ─────────────────────────── Drafted sentences ─────────────────────────── */
+
+/**
+ * WT-685 — the three sentences the backend drafter writes in Vietnamese, as they are stored.
+ *
+ * Mirrors `MeetingMinutesDrafter.DraftedLocation`, `DraftedQuorumRule` and `DraftedAgendaPreface`
+ * in warptalk-backend, which also translates them for the International .docx. The two lists must
+ * move together; a string changed on one side stops being translated on the other and prints in
+ * Vietnamese again, which is the exact bug this exists for.
+ */
+export const DRAFTED_LOCATION = "Trực tuyến qua WarpTalk";
+export const DRAFTED_QUORUM_RULE = "Quá bán số người được mời";
+export const DRAFTED_AGENDA_PREFACE = "Theo mô tả cuộc họp khi đặt lịch:";
+
+/**
+ * A drafted line as the International layout prints it.
+ *
+ * Only the drafter's own wording is translated. A line the secretary rewrote is no longer the
+ * drafted sentence and is printed exactly as they wrote it — translating a person's words on a
+ * signed record would be the machine editing the minutes. Matching the stored text rather than a
+ * flag is also what fixes every document already drawn up, approved ones included.
+ */
+export function inInternationalLayout(value: string | null | undefined): string | null | undefined {
+  if (!value) return value;
+  if (value === DRAFTED_LOCATION) return "Online via WarpTalk";
+  if (value === DRAFTED_QUORUM_RULE) return "a majority of those invited";
+  if (value.startsWith(DRAFTED_AGENDA_PREFACE)) {
+    return `From the meeting description at booking:${value.slice(DRAFTED_AGENDA_PREFACE.length)}`;
+  }
+  return value;
+}
+
 const pad = (value: number) => String(value).padStart(2, "0");
 
 /**
