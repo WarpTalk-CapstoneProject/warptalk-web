@@ -49,6 +49,7 @@ import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace
 import { isExternalBridge } from "@/lib/meeting/meeting-types";
 import { canJoinTranslationRoom } from "@/lib/meeting/translation-room-access";
 import { useBridgeTrigger } from "@/hooks/use-bridge-trigger";
+import { useBridgeAutoRoom } from "@/hooks/use-bridge-auto-room";
 import { onBridgeRoomActivated } from "@/lib/desktop/bridge";
 import { extractMeetCodeFromUrl, type TriggerMeeting } from "@/lib/meeting/bridge-trigger";
 import {
@@ -340,7 +341,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // The sensor reading goes on to the meeting session: its idle reaper cannot ask the main window
   // whether a bridge host is still there, because a bridge host never looks at the main window.
-  const { meetSensor } = useBridgeTrigger({ meetings: bridgeTriggerMeetings, translatingRoomId });
+  const { trigger: bridgeTrigger, meetSensor } = useBridgeTrigger({
+    meetings: bridgeTriggerMeetings,
+    translatingRoomId,
+  });
+
+  /**
+   * Flow 2: a Google Meet call with no room behind it gets one straight away - reused when this
+   * workspace already has a bridge room for the same call - and this window carries it, which is
+   * what opens the transcript popup. There is no separate "Translate this call?" window any more;
+   * the language is chosen in the popup's dock. See use-bridge-auto-room.ts.
+   *
+   * Created HERE rather than in a popup because this window holds the validated workspace. The old
+   * offer window read the persisted workspace id on its own and once sent a room to a workspace
+   * that had been deleted, which the server refused with a bare 403.
+   */
+  const canCreateMeetings = useWorkspaceStore((state) => state.canCreateMeetings);
+  const bridgeAutoRoomCandidates = useMemo(
+    () =>
+      (workspaceRoomsQuery.data?.rooms ?? []).map((room) => ({
+        id: room.id,
+        translationRoomType: room.translationRoomType,
+        externalMeetingUrl: room.externalMeetingUrl,
+        joinable: canJoinTranslationRoom(room.status),
+      })),
+    [workspaceRoomsQuery.data],
+  );
+  useBridgeAutoRoom({
+    triggerState: bridgeTrigger.state,
+    meetCode: meetSensor?.meetCode,
+    rooms: bridgeAutoRoomCandidates,
+    workspaceId: activeWorkspaceId,
+    canCreateMeetings,
+  });
 
   /**
    * Flow 2's last mile: the offer window made a room, and this window has to run it.

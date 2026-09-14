@@ -353,7 +353,6 @@ if (!widget) {
 for (const [label, source] of [
   [OVERLAY_PAGE, overlayPage],
   [WIZARD, read(WIZARD)],
-  ["src/app/desktop-bridge-offer/page.tsx", read("src/app/desktop-bridge-offer/page.tsx")],
   ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
   if (!source) continue;
@@ -385,7 +384,6 @@ for (const [label, source] of [
   [CONTROLS, controls],
   [WIZARD, read(WIZARD)],
   [WIDGET, widget],
-  ["src/app/desktop-bridge-offer/page.tsx", read("src/app/desktop-bridge-offer/page.tsx")],
   ...widgetFiles.map((file) => [file, read(file)]),
 ]) {
   if (!source) continue;
@@ -458,9 +456,9 @@ if (!layout) {
   const relay = callSpan(withoutImports(stripComments(layout)), "onBridgeRoomActivated");
   if (!relay || !/\bopenMeeting\(/.test(relay.text)) {
     failures.push(
-      `${LAYOUT} no longer turns onBridgeRoomActivated into openMeeting. Both bridge popups - the `
-        + `offer and the transcript's Start - would then ask a main window that does not answer, `
-        + `and translation would run with nothing capturing or dubbing it.`,
+      `${LAYOUT} no longer turns onBridgeRoomActivated into openMeeting. The transcript popup's `
+        + `Start would then ask a main window that does not answer, and translation would run `
+        + `with nothing capturing or dubbing it.`,
     );
   }
 }
