@@ -37,7 +37,6 @@ import {
   pluginWorkspaceBlock,
   pluginsSharingConnection,
   scopesSatisfied,
-  sharedConnectionWarning,
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
@@ -263,6 +262,7 @@ function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
   sharedConnectionPlugins,
+  coveredByExistingGrant,
   isConnecting,
   isDisconnecting,
   isRemoving,
@@ -287,6 +287,11 @@ function ConnectPluginDialog({
   providerConnectionStatus: AssistantPluginConnectionStatus;
   /** The other installed rows this plugin's OAuth grant also backs. */
   sharedConnectionPlugins: AssistantPluginCatalogItemDto[];
+  /**
+   * A connected sibling's grant already covers every scope this plugin needs, so Connect links it
+   * on the server without a trip to the provider. The dialog must not promise a sign-in page then.
+   */
+  coveredByExistingGrant: boolean;
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
@@ -303,9 +308,6 @@ function ConnectPluginDialog({
   const isInstalled = plugin.installationStatus === "installed";
   const isPendingBusy = isDisconnecting || isRemoving;
   const workspaceBlock = pluginWorkspaceBlock(plugin);
-  // Both confirmations need it: "Remove" disconnects on its way out, so it ends the shared grant
-  // for exactly the same set of plugins that "Disconnect" does.
-  const sharedWarning = sharedConnectionWarning(sharedConnectionPlugins);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
@@ -339,7 +341,11 @@ function ConnectPluginDialog({
               {plugin.label}
             </h2>
             <p className="mt-1.5 text-sm text-ink-muted">
-              You will sign in and confirm this on the provider&apos;s own page.
+              {isConnected
+                ? `WarpBot can use ${plugin.label} for you.`
+                : coveredByExistingGrant
+                  ? `Uses the ${plugin.connectedAccountEmail ?? "account"} you already signed in with. No sign-in needed.`
+                  : "You will sign in and confirm this on the provider's own page."}
             </p>
           </div>
         </div>
@@ -353,17 +359,25 @@ function ConnectPluginDialog({
           </p>
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
             <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
-            Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks you
-            first.
+            {/* One text node for the flex row: bare text beside a <span> becomes three flex items,
+                which laid "Tokens stay encrypted. Every", "write" and "action asks you first." out
+                as three columns. */}
+            <span>
+              Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks
+              you first.
+            </span>
           </p>
           {sharedConnectionPlugins.length ? (
             <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
               <PlugsConnected size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
-              One sign-in also covers{" "}
-              <span className="font-medium text-ink">
-                {formatPluginLabelList(sharedConnectionPlugins.map((sibling) => sibling.label))}
+              {/* Each plugin is connected on its own; the sign-in is what they share. Connecting
+                  one never switches the others on, and disconnecting one never takes them down. */}
+              <span>
+                <span className="font-medium text-ink">
+                  {formatPluginLabelList(sharedConnectionPlugins.map((sibling) => sibling.label))}
+                </span>{" "}
+                can reuse this sign-in, but each plugin is connected and disconnected on its own.
               </span>
-              . You can grant only part of it and come back for the rest.
             </p>
           ) : null}
         </div>
@@ -372,21 +386,32 @@ function ConnectPluginDialog({
           <WorkspaceBlockNotice block={workspaceBlock} className="mt-6" />
         ) : null}
 
-        <Button
-          type="button"
-          // Connecting is what workspace policy actually refuses. Disconnect and Remove below stay
-          // live on a blocked row on purpose — see WorkspaceBlockNotice.
-          disabled={isConnecting || workspaceBlock !== null}
-          onClick={onContinue}
-          className={cn("h-10 w-full", workspaceBlock ? "mt-3" : "mt-6")}
-        >
-          {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
-          Continue to {plugin.label}
-          <ArrowSquareOut size={16} />
-        </Button>
+        {/* Not offered once the plugin is connected: "Continue to ..." beside "Connected as ..."
+            read as an unfinished connection. Partially granted still gets it — that is the case
+            Continue actually fixes. */}
+        {isConnected ? null : (
+          <Button
+            type="button"
+            // Connecting is what workspace policy actually refuses. Disconnect and Remove below stay
+            // live on a blocked row on purpose — see WorkspaceBlockNotice.
+            disabled={isConnecting || workspaceBlock !== null}
+            onClick={onContinue}
+            className={cn("h-10 w-full", workspaceBlock ? "mt-3" : "mt-6")}
+          >
+            {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
+            {coveredByExistingGrant ? (
+              <>Connect {plugin.label}</>
+            ) : (
+              <>
+                Continue to {plugin.label}
+                <ArrowSquareOut size={16} />
+              </>
+            )}
+          </Button>
+        )}
 
         {isConnected ? (
-          <div className="mt-4 flex items-center justify-center gap-2 text-xs text-emerald-600">
+          <div className="mt-6 flex items-center justify-center gap-2 text-xs text-emerald-600">
             <CheckCircle size={15} weight="fill" />
             Connected as {plugin.connectedAccountEmail ?? "this account"}
           </div>
@@ -409,20 +434,10 @@ function ConnectPluginDialog({
                 <p className="text-sm leading-6 text-ink-muted">
                   {pendingAction === "disconnect"
                     ? `Disconnect ${plugin.label}? WarpBot loses access to it until you connect the account again.`
-                    : `Remove ${plugin.label}? Its tools disappear from WarpBot and any connected account is disconnected.`}
+                    : `Remove ${plugin.label}? Its tools disappear from WarpBot and it is disconnected.`}
                 </p>
-                {/* The collateral this dialog used to keep to itself. A connection is keyed by
-                    provider, so ending it ends every plugin behind the same grant — a user
-                    disconnecting Drive to tidy up silently lost Calendar and Meet with it. */}
-                {sharedWarning ? (
-                  <p
-                    data-testid="shared-connection-warning"
-                    className="flex items-start gap-2 text-sm leading-6 text-amber-700 dark:text-amber-500"
-                  >
-                    <Warning size={16} weight="fill" className="mt-1 shrink-0" />
-                    <span>{sharedWarning}</span>
-                  </p>
-                ) : null}
+                {/* No sibling warning any more: a disconnect ends this plugin's connection only.
+                    The shared grant is revoked by the server when the last plugin on it goes. */}
                 <div className="flex justify-end gap-2">
                   <Button
                     type="button"
@@ -589,12 +604,24 @@ export default function PluginsPage() {
     [plugins, consentPluginKey],
   );
 
-  // Which other installed plugins go down with this one, because a connection is keyed by provider
-  // and one grant backs several rows. Derived from the catalog, never from a list of Google keys.
+  // Which other installed plugins can reuse this plugin's sign-in, because a grant is keyed by
+  // provider. Derived from the catalog, never from a list of Google keys.
   const sharedConnectionPlugins = useMemo(
     () => (selectedPlugin ? pluginsSharingConnection(selectedPlugin, catalogPlugins) : []),
     [selectedPlugin, catalogPlugins],
   );
+
+  // Mirrors the server's shortcut in ConnectAsync: a connected sibling whose grant already carries
+  // every scope this plugin needs means Connect links it without leaving WarpTalk. Read off the RAW
+  // rows, because it is a question about the grant, not about whether the sibling is usable.
+  const coveredByExistingGrant = useMemo(() => {
+    if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return false;
+    return pluginsSharingConnection(selectedPlugin, plugins).some(
+      (sibling) =>
+        sibling.connectionStatus === "connected"
+        && scopesSatisfied(selectedPlugin.requiredScopes, sibling.grantedScopes),
+    );
+  }, [selectedPlugin, plugins]);
 
   // Purely local: it narrows the catalog already fetched above. There is no marketplace search
   // behind it, and the empty state must not pretend otherwise.
@@ -637,6 +664,13 @@ export default function PluginsPage() {
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId,
       });
+      // The provider's grant already covered this plugin, so the server connected it on the spot.
+      // There is no consent round trip to wait for, only a catalog to re-read.
+      if (result.connected || !result.url) {
+        await refetch();
+        toast.success(`${plugin.label} connected`);
+        return;
+      }
       // `openProviderConsent` reports a blocked pop-up by returning false, and it is the whole
       // reason it has a return value: Safari and Firefox drop the user-gesture grant across the
       // await above. Telling the user to finish something in a window that never opened is the
@@ -770,14 +804,7 @@ export default function PluginsPage() {
   async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
       await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
-      // The confirmation named the siblings; the receipt names them too, so the record of what
-      // just happened is not narrower than what happened.
-      const alsoDisconnected = sharedConnectionPlugins.map((sibling) => sibling.label);
-      toast.success(
-        alsoDisconnected.length
-          ? `${plugin.label} disconnected, along with ${formatPluginLabelList(alsoDisconnected)}`
-          : `${plugin.label} disconnected`,
-      );
+      toast.success(`${plugin.label} disconnected`);
       setSelectedPluginKey(null);
     } catch {
       toast.error(`Could not disconnect ${plugin.label}.`);
@@ -970,6 +997,7 @@ export default function PluginsPage() {
           plugin={withEffectiveConnectionStatus(selectedPlugin)}
           providerConnectionStatus={selectedPlugin.connectionStatus}
           sharedConnectionPlugins={sharedConnectionPlugins}
+          coveredByExistingGrant={coveredByExistingGrant}
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}

@@ -107,8 +107,16 @@ export interface AssistantPluginCatalogItemDto {
   workspacePolicyBlockReason?: string | null;
 }
 
-export interface PluginConnectUrlDto {
-  url: string;
+/**
+ * The answer to "connect this plugin".
+ *
+ * `connected: true` means the provider's existing grant already covered the plugin, so the server
+ * connected it on the spot and there is no consent page to open (`url` is null). Otherwise `url`
+ * is the provider's consent page.
+ */
+export interface PluginConnectResultDto {
+  connected: boolean;
+  url: string | null;
 }
 
 /**

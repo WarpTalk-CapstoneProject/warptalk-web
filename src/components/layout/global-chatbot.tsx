@@ -542,14 +542,20 @@ export function GlobalChatbot() {
           client: isDesktopApp() ? "desktop" : "web",
           workspaceId: activeWorkspaceId ?? undefined,
         });
-        if (openProviderConsent(result.url)) {
+        // The provider's grant already covered it, so there is no consent page to finish.
+        if (result.connected || !result.url) {
+          toast.success(`${plugin.label} connected`);
+          return;
+        }
+        const consentUrl = result.url;
+        if (openProviderConsent(consentUrl)) {
           toast.message(`Finish connecting ${plugin.label} in your browser.`);
         } else {
           // The toast action is a real click, so the open it makes is not blocked.
           toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
             action: {
               label: "Open it",
-              onClick: () => openProviderConsent(result.url),
+              onClick: () => openProviderConsent(consentUrl),
             },
           });
         }
@@ -569,13 +575,16 @@ export function GlobalChatbot() {
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: activeWorkspaceId ?? undefined,
       });
-      if (openProviderConsent(result.url)) {
+      const consentUrl = result.url;
+      if (result.connected || !consentUrl) {
+        toast.success("Plugin connected.");
+      } else if (openProviderConsent(consentUrl)) {
         toast.message("Finish connecting this plugin in your browser.");
       } else {
         toast.error("Your browser blocked the consent window.", {
           action: {
             label: "Open it",
-            onClick: () => openProviderConsent(result.url),
+            onClick: () => openProviderConsent(consentUrl),
           },
         });
       }

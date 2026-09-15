@@ -9,7 +9,6 @@ import {
   pluginWorkspaceBlock,
   pluginsSharingConnection,
   scopesSatisfied,
-  sharedConnectionWarning,
   withEffectiveConnectionStatus,
 } from "../plugin-connection.ts";
 import type { AssistantPluginCatalogItemDto } from "../../../types/assistant.ts";
@@ -172,20 +171,6 @@ describe("WT-646 — disconnecting one plugin ends the grant behind all of them"
   test("a row that cannot be grouped warns about nobody", () => {
     const opaque = plugin({ key: "mcp_thing", requiredScopes: ["mcp:read"] });
     assert.deepEqual(pluginsSharingConnection(opaque, [opaque, drive, calendar]), []);
-  });
-
-  test("the warning names every plugin that goes down, and agrees with itself grammatically", () => {
-    assert.equal(sharedConnectionWarning([]), null);
-
-    const one = sharedConnectionWarning([calendar]);
-    assert.ok(one?.includes("Google Calendar"), one ?? "");
-    assert.ok(one?.includes("shares this account connection"), one ?? "");
-    assert.ok(one?.includes("it is disconnected too"), one ?? "");
-
-    const two = sharedConnectionWarning([calendar, meet]);
-    assert.ok(two?.includes("Google Calendar and Google Meet"), two ?? "");
-    assert.ok(two?.includes("share this account connection"), two ?? "");
-    assert.ok(two?.includes("they are disconnected too"), two ?? "");
   });
 
   test("formatPluginLabelList reads as a sentence, not as an array", () => {
