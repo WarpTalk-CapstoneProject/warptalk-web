@@ -16,6 +16,7 @@ export type DesktopArch = "universal" | "x64" | "arm64";
 export type DesktopAssetKind =
   | "windows-installer"
   | "windows-portable"
+  | "mac-pkg"
   | "mac-dmg"
   | "mac-zip"
   | "linux-appimage"
@@ -121,6 +122,17 @@ export function classifyDesktopAsset(file: RawReleaseFile): DesktopAsset | null 
     };
   }
 
+  // The macOS installer from v0.4.5 on: it also adds WarpTalk Microphone and WarpTalk Speaker,
+  // which a .dmg cannot, so it is the recommended download whenever a release has one.
+  if (lower.endsWith(".pkg")) {
+    return {
+      ...base,
+      platform: "mac",
+      kind: "mac-pkg",
+      label: `${macArchLabel(arch)} (.pkg)`,
+    };
+  }
+
   if (lower.endsWith(".dmg")) {
     return {
       ...base,
@@ -153,7 +165,8 @@ export function classifyDesktopAsset(file: RawReleaseFile): DesktopAsset | null 
 
 /** Installers before portable/archive builds, so the first entry is the one to recommend. */
 const KIND_PRIORITY: Record<DesktopAssetKind, number> = {
-  "mac-dmg": 0,
+  "mac-pkg": 0,
+  "mac-dmg": 1,
   "windows-installer": 0,
   "linux-appimage": 0,
   "linux-deb": 1,
