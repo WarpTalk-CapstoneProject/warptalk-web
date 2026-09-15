@@ -129,10 +129,10 @@ const MAC_NOTE: InstallNote = {
   summary:
     "WarpTalk is signed, but not notarized by Apple yet, so macOS asks you to confirm the first time you open it.",
   steps: [
-    "Open the .dmg and drag WarpTalk into your Applications folder.",
-    "Open WarpTalk from Applications. macOS says it could not verify the app is free of malware — click Done.",
-    "Open System Settings › Privacy & Security, scroll down to Security, and click Open Anyway next to the message about WarpTalk. It appears there for about an hour after step 2.",
-    "Confirm with Touch ID or your password, then choose Open Anyway once more. macOS asks only this once; updates open normally afterwards.",
+    "Open the downloaded WarpTalk .pkg. macOS says it could not verify it is free of malware — click Done.",
+    "Open System Settings › Privacy & Security, scroll down to Security, and click Open Anyway next to the message about WarpTalk. It appears there for about an hour after step 1.",
+    "Confirm with Touch ID or your password, then choose Open Anyway once more and follow the installer. It also adds the WarpTalk Microphone and WarpTalk Speaker audio devices that Google Meet translation uses — nothing to install separately.",
+    "Open WarpTalk from Applications. Updates install on their own afterwards.",
   ],
   footnote:
     "Gatekeeper stays on throughout — you are approving this one app, not turning the check off.",
@@ -147,6 +147,7 @@ const WINDOWS_NOTE: InstallNote = {
     "Run the WarpTalk Setup .exe. Windows shows a blue “Windows protected your PC” screen.",
     "Click More info, just under that message.",
     "Click Run anyway, then continue through the installer as usual.",
+    "Near the end, Windows asks for permission to set up the Google Meet audio cables (VB-CABLE and Hi-Fi Cable by VB-Audio). Click Yes — nothing to install separately.",
   ],
   footnote:
     "On a PC managed by your workplace or school, SmartScreen can block the file outright with no Run anyway button. Nothing on this page gets past that — ask whoever administers the machine, or run WarpTalk in your browser instead.",
