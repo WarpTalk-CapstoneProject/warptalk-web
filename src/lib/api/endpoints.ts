@@ -374,8 +374,8 @@ export const API = {
      * The desktop app opens consent in the system browser, and by the time the callback runs
      * nothing on that request remembers which app started it.
      */
-    pluginConnectUrl: (pluginKey: string, client?: string) =>
-      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url` +
+    pluginConnect: (pluginKey: string, client?: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect` +
       (client ? `?client=${encodeURIComponent(client)}` : ""),
   },
   /**

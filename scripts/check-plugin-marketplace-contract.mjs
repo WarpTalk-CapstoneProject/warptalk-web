@@ -93,29 +93,35 @@ if (!page.includes("withEffectiveConnectionStatus")) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// SILENT DATA LOSS: one disconnect ends the grant behind several plugins
+// ONE GRANT, BUT EACH PLUGIN IS CONNECTED ON ITS OWN
 //
-// A connection is keyed by provider, not by plugin key, so DisconnectAsync ends the Google grant
-// and Drive, Calendar and Meet all go with it. A user disconnecting Drive to tidy up used to lose
-// the other two without ever being told. This block is a guard against that warning being
-// refactored away in a tidy-up of its own — the dialog looks perfectly reasonable without it.
+// A grant is keyed by provider, so one Google sign-in backs Drive, Calendar and Meet. Reading
+// "connected" off that grant switched every sibling on the moment one was connected. The server
+// now records the connection per installation and answers POST /connect with `connected: true`
+// when the grant already covers the plugin, so the page must handle that answer rather than
+// opening a consent window for a URL that is not there.
 // ---------------------------------------------------------------------------------------------
-for (const token of ["pluginsSharingConnection", "sharedConnectionWarning"]) {
-  if (!page.includes(token)) {
-    throw new Error(
-      `Plugins page must call '${token}': disconnecting one plugin ends the shared OAuth grant, and the other plugins behind it have to be named before the user confirms, not discovered afterwards.`,
-    );
-  }
+if (!page.includes("pluginsSharingConnection")) {
+  throw new Error(
+    "Plugins page must derive the plugins that share a sign-in from the catalog (pluginsSharingConnection).",
+  );
 }
 if (!page.includes("sharedConnectionPlugins={sharedConnectionPlugins}")) {
+  throw new Error("The dialog must be handed the sibling list it describes.");
+}
+if (!page.includes("result.connected")) {
   throw new Error(
-    "The disconnect dialog must be handed the sibling list; computing it and not passing it warns nobody.",
+    "Connect must handle `connected: true`: the server linked the plugin with the grant it already had, and there is no consent page to open.",
   );
 }
-if (!page.includes('data-testid="shared-connection-warning"')) {
-  throw new Error(
-    "The disconnect/remove confirmation must render the shared-connection warning, not merely compute it.",
-  );
+// Disconnecting one plugin no longer takes its siblings down, so warning that it does would be
+// the page telling the user something false and scaring them off a harmless action.
+for (const token of ["sharedConnectionWarning", 'data-testid="shared-connection-warning"', "disconnected too"]) {
+  if (page.includes(token)) {
+    throw new Error(
+      `Plugins page must not say disconnecting one plugin disconnects its siblings ('${token}'). Each plugin is disconnected on its own.`,
+    );
+  }
 }
 // The grouping is catalog data. A key or a provider name spelled out here is the frontend
 // re-deciding something the catalog already knows, and it is wrong the day a second multi-product
