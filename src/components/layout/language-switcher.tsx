@@ -20,7 +20,13 @@ import { SUPPORTED_LOCALES, type Locale } from "@/i18n/locale-constants";
  * toasts). Unrelated to a meeting's spoken/translated language, which is
  * chosen per room via `src/lib/language/languages.ts`.
  */
-export function LanguageSwitcher({ className }: { className?: string }) {
+export function LanguageSwitcher({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  compact?: boolean;
+}) {
   const locale = useLocale() as Locale;
   const t = useTranslations("common.languageSwitcher");
   const router = useRouter();
@@ -40,12 +46,14 @@ export function LanguageSwitcher({ className }: { className?: string }) {
         aria-label={t("srLabel")}
         disabled={isPending}
         className={cn(
-          "inline-flex h-9 items-center gap-1.5 rounded-full border border-border/50 px-3 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60",
+          compact
+            ? "inline-flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 text-ink-muted shadow-[0_1px_2px_rgba(0,0,0,0.04)] outline-none transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+            : "inline-flex h-9 items-center gap-1.5 rounded-full border border-border/50 px-3 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60",
           className,
         )}
       >
-        <Globe size={16} weight="regular" />
-        <span>{t(locale)}</span>
+        <Globe size={compact ? 12 : 16} weight="regular" />
+        <span className={compact ? "sr-only" : undefined}>{t(locale)}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6}>
         {SUPPORTED_LOCALES.map((code) => (

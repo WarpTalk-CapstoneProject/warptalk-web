@@ -15,6 +15,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - The host app shell now uses the same light monochrome frosted-glass direction as the dashboard: bright full-screen motion video background, floating white sidebar, acrylic topbar, and scoped frosted styling for shadcn cards, inputs, tabs, and tables.
 - Shared host pages now use the same three-layer shell as `/dashboard`: background video, large transparent rounded glass frame, then inner frosted sidebar/topbar/content surfaces.
 - The topbar shows a glass sidebar trigger, separator, pathname breadcrumbs, command search (`Ctrl+K`), quick action icons for help, notifications, and theme, plus a compact Host profile control.
+- The authenticated topbar also shows a circular globe language control. It opens the existing English/Vietnamese/Japanese selector and refreshes the current route after the locale cookie changes, so the choice applies across dashboard and workspace pages.
 - `/dashboard` now uses the shared host sidebar/topbar shell instead of bypassing the app layout, so navigation state and active-pill motion stay mounted while switching between dashboard pages.
 - Role sidebars use the WarpTalk primary logo when expanded and a compact `W` badge when collapsed.
 - The host sidebar is a fixed-width light frosted navigation surface with Workspace, AI, and Configuration groups, a black active pill, and sign out.
@@ -56,6 +57,7 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - `src/components/layout/admin-sidebar.tsx`
 - `src/components/layout/workspace-sidebar.tsx`
 - `src/components/layout/participant-sidebar.tsx`
+- `src/components/layout/language-switcher.tsx`
 - `src/components/layout/global-chatbot.tsx`
 - `.agents/page-docs/dashboard-inner-pages.md`
 

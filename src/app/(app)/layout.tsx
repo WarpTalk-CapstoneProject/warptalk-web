@@ -21,6 +21,7 @@ import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { NotificationSoundToggle } from "@/components/layout/notification-sound-toggle";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
@@ -514,6 +515,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <NotificationPopover />
             <NotificationSoundToggle />
             <ThemeToggleButton />
+            <LanguageSwitcher compact />
             {/* This was a button with no onClick — the only affordance in the header that did
                 nothing at all. It opens the tour now, which is also where the tour's last step
                 points, so somebody who skipped it knows where it went. */}

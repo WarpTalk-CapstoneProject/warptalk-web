@@ -16,7 +16,7 @@ This is a **from-scratch i18n layer**: before this, `warptalk-web` had none (see
 - **Provider wiring**: `src/app/layout.tsx` is an async Server Component; it reads the resolved locale (`getLocale()`), sets `<html lang={locale}>`, and wraps the existing client `<Providers>` tree in `<NextIntlClientProvider>`.
 - **`next.config.ts`** is wrapped with `createNextIntlPlugin("./src/i18n/request.ts")`.
 - **Message catalogs** live at the repo root in `messages/{en,vi,ja}/*.json` — **outside** `src/`. This is deliberate: `scripts/check-english-ui.mjs` scans only `src/**/*.{ts,tsx}` for non-English characters, so keeping catalogs outside `src/` means that guard keeps doing useful work — it still blocks anyone from pasting raw Vietnamese/Japanese text directly into a component instead of going through the catalog.
-- **Switching locale**: `src/components/layout/language-switcher.tsx` — a dropdown that calls the `setUserLocale` server action, then `router.refresh()`. Wired into the landing navbar, all five auth pages (via `CinematicAuthShell` for forgot/reset/verify, and directly on login/register), and belongs on the authenticated app shell next (see Phase B below).
+- **Switching locale**: `src/components/layout/language-switcher.tsx` — a dropdown that calls the `setUserLocale` server action, then `router.refresh()`. Takes an optional `compact` prop (icon-only, `sr-only` label, sized to match the other 24px circular topbar controls like `ThemeToggleButton`) for tight chrome. Wired into the landing navbar, all five auth pages (via `CinematicAuthShell` for forgot/reset/verify, and directly on login/register), and the authenticated app shell's topbar (`src/app/(app)/layout.tsx`, `compact`).
 
 ## How to add a new translatable string
 
@@ -47,6 +47,7 @@ Per WT-607's own scope ("không cần dịch toàn bộ ứng dụng trong ticke
 - All five auth pages — login, register (+ zod schemas), forgot-password, reset-password, verify-email — and `CinematicAuthShell`/`LegalPlaceholder` shared components.
 - `terms` / `privacy` pages.
 - The primary authenticated app nav in `linear-sidebar.tsx` (`mainNav`, `workspaceNav`, the workspace-switch toasts).
+- The language switcher on the authenticated app shell's topbar (`src/app/(app)/layout.tsx`) — the one piece of Phase A explicitly deferred in the previous pass, now wired in as a `compact` icon-only control alongside `ThemeToggleButton`.
 
 **Not yet migrated — follow the pattern above, page by page:**
 - The ~100 remaining authenticated app pages (dashboard, rooms, admin console, settings, billing, etc.).
@@ -99,4 +100,6 @@ This is not cosmetic fine-tuning — it fixes a real defect found during browser
 - [x] Manual: `/register`, `/forgot-password`, `/reset-password`, `/verify-email` all render translated (the last three via `CinematicAuthShell`).
 - [x] Manual: `/terms` renders translated title/summary/disclaimer through the Server Component `getTranslations` path.
 - [x] Fixed during verification: Japanese hero headline lines overlapped — see "Typography note" above.
-- [ ] Manual: inside a workspace (needs a running backend), confirm the sidebar nav labels translate. Not exercised — the local backend/gateway was not running during this pass, so authenticated routes could not be loaded. The sidebar strings are covered by `test:i18n-catalog` and typecheck, but have not been seen on screen.
+- [x] `2026-09-16` re-run after the branch caught up with 3 rounds of `development` merges: typecheck/lint/`test:contracts`/build all still pass clean on the merged state, so the i18n layer didn't regress against ~5 months of unrelated feature work landing in parallel.
+- [x] `2026-09-16`: the topbar `compact` `LanguageSwitcher` (`src/app/(app)/layout.tsx`) initially rendered its `Globe` icon at `size={16}` inside the same 24px circle its neighbors (`ThemeToggleButton`, the help button) use for a `size={12}` icon — caught by diffing against those sibling components' source, not by looking at a screenshot, and fixed to match.
+- [ ] Manual: inside a workspace (needs a running backend), confirm the sidebar nav labels translate **and** that the new topbar `compact` switcher renders and functions. Not exercised — the local backend/gateway was not running during this or the previous pass, so authenticated routes could not be loaded. These are covered by `test:i18n-catalog`, typecheck, and (for the icon sizing) direct comparison against sibling component source, but have not actually been seen on screen.
