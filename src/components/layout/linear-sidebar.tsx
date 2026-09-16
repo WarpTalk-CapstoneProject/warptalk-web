@@ -421,8 +421,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       {
         section: "Configuration",
         items: [
+          // One row, not two. "Platform config" was a second route for the same subject — the
+          // read-only half — and an admin looking for what the platform is configured to do had to
+          // guess which of the two words it lived under. Merged into the page below on 2026-09-16;
+          // the read-only boundary is now a band inside it.
           { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
-          { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
           // Beside Platform config because it is the same kind of thing: reference data the whole
           // platform runs on. Unlike that page it is writable, which is the point of WT-646 — the
           // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was

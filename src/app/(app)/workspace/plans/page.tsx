@@ -76,7 +76,7 @@ export default function ChoosePlanBeforeWorkspacePage() {
   };
 
   return (
-    <main className="min-h-screen bg-surface-1">
+    <main className="min-h-screen bg-panel">
       <div className="mx-auto w-full max-w-5xl px-4 py-10">
         <button
           type="button"

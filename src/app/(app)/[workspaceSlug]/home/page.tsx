@@ -163,7 +163,7 @@ export default function WorkspaceHomePage() {
   }
 
   return (
-    <div className="min-h-full bg-surface-1 px-4 py-5 text-ink sm:px-5 lg:px-6">
+    <div className="min-h-full bg-panel px-4 py-5 text-ink sm:px-5 lg:px-6">
       <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-3 pb-8">
         {/* First, because it is the only thing here that answers a question rather than
             offering a destination: "what am I in today?". The shortcut grid below used to be

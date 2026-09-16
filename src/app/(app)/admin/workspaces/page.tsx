@@ -355,7 +355,7 @@ export default function AdminWorkspacesPage() {
   // flashed that grey across the whole content area on every load — the greyed-out look this
   // release removes. Wrong for a frame is still wrong.
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <WorkspacesDirectory />
     </Suspense>
   );

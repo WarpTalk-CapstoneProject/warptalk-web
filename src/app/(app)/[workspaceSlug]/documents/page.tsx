@@ -433,7 +433,7 @@ export default function WorkspaceDocumentsPage() {
   });
 
   return (
-    <div className="flex h-full flex-col bg-surface-1 px-4 pb-12 text-ink">
+    <div className="flex h-full flex-col bg-panel px-4 pb-12 text-ink">
       {/* ─── Top Header Section: Title, Search Bar & Upload Button ─── */}
       {/* ─── Pill Category Filters & View Toggle Bar ─── */}
       <div className="flex shrink-0 items-center justify-between gap-4 py-3">

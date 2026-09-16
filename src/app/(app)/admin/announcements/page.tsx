@@ -204,7 +204,7 @@ function AnnouncementRow({ announcement }: { announcement: AdminAnnouncementSumm
 
 export default function AdminAnnouncementsPage() {
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <AnnouncementsList />
     </Suspense>
   );
