@@ -15,6 +15,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
+import { WorkspaceContractBilling } from "@/components/admin/workspace-contract-billing";
 import {
   WorkspaceLifecycleDialog,
   type WorkspaceLifecycleAction,
@@ -430,8 +431,12 @@ function UsageTab({ workspaceId }: { workspaceId: string }) {
   );
 }
 
-/** Credit position and the ledger, with the Adjust Credits door pinned to THIS workspace. */
-function BillingTab({ workspaceId }: { workspaceId: string }) {
+/**
+ * Credit position and the ledger, with the Adjust Credits door pinned to THIS workspace — and the
+ * contract and its invoices, for customers who pay by bank transfer.
+ */
+function BillingTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
+  const workspaceId = workspace.id;
   const analyticsQuery = useAdminWorkspaceAnalytics(workspaceId);
   const [page, setPage] = useState(1);
   const transactionsQuery = useAdminWorkspaceCreditTransactions(workspaceId, page);
@@ -476,6 +481,12 @@ function BillingTab({ workspaceId }: { workspaceId: string }) {
           <AdjustCreditModal workspaceId={workspaceId} />
         </div>
       </div>
+
+      <WorkspaceContractBilling
+        workspaceId={workspaceId}
+        workspaceName={workspace.name}
+        ownerId={workspace.owner.id}
+      />
 
       <TabState
         isError={transactionsQuery.isError}
@@ -769,7 +780,7 @@ export default function AdminWorkspaceDetailPage() {
               </TabsContent>
 
               <TabsContent value="billing" className="mt-4">
-                <BillingTab workspaceId={workspace.id} />
+                <BillingTab workspace={workspace} />
               </TabsContent>
 
               <TabsContent value="audit" className="mt-4">
