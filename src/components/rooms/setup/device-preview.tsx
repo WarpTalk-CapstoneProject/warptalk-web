@@ -53,7 +53,7 @@ export function DevicePreview({
 
   return (
     <div className={cn("space-y-4", className)}>
-      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-canvas">
+      <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-border bg-surface-2">
         {/* A failed getUserMedia leaves the camera *enabled* — nothing turned it off, it never
             started. Rendering the <video> on `cameraEnabled` alone therefore painted an empty
             grey rectangle under the error, which is the picture of a broken app rather than of

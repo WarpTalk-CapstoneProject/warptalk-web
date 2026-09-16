@@ -1774,7 +1774,7 @@ function PastMeetingDialog({
                     onClick={() => onDownload(artifact)}
                     className="group flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-canvas">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-surface-2">
                       <ArtifactIcon artifact={artifact} />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -1809,7 +1809,7 @@ function PastMeetingDialog({
         <div className="shrink-0 border-t border-border px-5 py-4">
           <Link
             href={`/${workspaceSlug}/rooms/${meeting.id}`}
-            className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-canvas text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
+            className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-surface-2 text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
           >
             Open meeting
           </Link>

@@ -133,7 +133,7 @@ export function BridgeCaptureConsentPanel({ roomId }: { roomId: string }) {
         <button
           type="button"
           onClick={() => decide(false)}
-          className="h-7 rounded-lg border border-border bg-surface-1 px-3 text-[11px] font-medium text-ink transition hover:bg-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className="h-7 rounded-lg border border-border bg-surface-1 px-3 text-[11px] font-medium text-ink transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {WINDOWS_CAPTURE_CONSENT.decline}
         </button>

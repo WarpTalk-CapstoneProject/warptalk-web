@@ -37,7 +37,7 @@ export function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduled
           />
         }
       />
-      <PopoverContent align="start" className="w-auto p-3 bg-canvas rounded-xl shadow-xl border-border/50">
+      <PopoverContent align="start" className="w-auto p-3 bg-surface-1 rounded-xl shadow-xl border-border/50">
         <Calendar
           mode="single"
           selected={scheduledAt}

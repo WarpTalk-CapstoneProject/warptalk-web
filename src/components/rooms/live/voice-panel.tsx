@@ -350,7 +350,7 @@ function VoiceOption({
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-[13px] transition-colors ${active ? "bg-surface-2 text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-surface-2"}`}
     >
       <span className="min-w-0 text-left">
         <span className="block truncate">{label}</span>

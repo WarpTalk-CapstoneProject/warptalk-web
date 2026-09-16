@@ -63,7 +63,7 @@ export function TemplatePicker({ value, onChange }: { value: string; onChange: (
       <PopoverTrigger className="flex items-center gap-1 hover:bg-surface-2 px-1.5 py-0.5 rounded transition-colors text-ink cursor-pointer">
         {value} <CaretDown size={12} weight="bold" className="text-ink-muted" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[240px] p-1 bg-canvas rounded-xl shadow-xl border-border/50">
+      <PopoverContent align="start" className="w-[240px] p-1 bg-surface-1 rounded-xl shadow-xl border-border/50">
         <Command className="bg-transparent">
           <CommandList>
             <CommandGroup heading="Meeting Type" className="text-[11px] text-ink-muted">

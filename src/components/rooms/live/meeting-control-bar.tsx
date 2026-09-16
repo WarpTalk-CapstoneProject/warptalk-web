@@ -620,7 +620,7 @@ export function MeetingControlBar({
                       onSendReaction(emoji);
                       setIsReactionMenuOpen(false);
                     }}
-                    className="grid h-8 w-8 place-items-center rounded-md text-lg transition-colors hover:bg-canvas"
+                    className="grid h-8 w-8 place-items-center rounded-md text-lg transition-colors hover:bg-surface-2"
                   >
                     {emoji}
                   </button>
@@ -790,7 +790,7 @@ export function MeetingControlBar({
                       className={`flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors disabled:opacity-60 ${
                         noiseReductionMode === mode
                           ? "bg-primary/10 text-primary"
-                          : "text-ink hover:bg-canvas"
+                          : "text-ink hover:bg-surface-2"
                       }`}
                     >
                       <span className="min-w-0 flex-1">
@@ -1016,7 +1016,7 @@ function SettingsPanelHeader({ title, onBack }: { title: string; onBack: () => v
     <button
       type="button"
       onClick={onBack}
-      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-canvas hover:text-ink"
+      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
     >
       <CaretLeft className="h-3.5 w-3.5" />
       {title}
@@ -1044,7 +1044,7 @@ function SettingsRow({
       type="button"
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
-        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-2"
       }`}
     >
       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>
@@ -1078,7 +1078,7 @@ function HostControlRow({
       aria-checked={toggle ? Boolean(active) : undefined}
       onClick={onClick}
       className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors ${
-        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas"
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-2"
       }`}
     >
       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>
@@ -1170,7 +1170,7 @@ function LayoutOption({
         onSelect(value);
         close();
       }}
-      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-canvas text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-canvas"}`}
+      className={`flex w-full items-center justify-between px-3 py-2 text-[13px] transition-colors ${active ? "bg-surface-2 text-ink font-medium" : "bg-surface-1 text-ink-muted hover:bg-surface-2"}`}
     >
       {label}
       {active ? <CheckCircle className="h-3.5 w-3.5 text-ink" weight="fill" /> : null}
@@ -1275,7 +1275,7 @@ function MeetControl({
       aria-controls={hasPopup && expanded ? controls : undefined}
       className={`grid h-10 w-10 place-items-center rounded-xl transition-colors ${
         disabled
-          ? "cursor-not-allowed bg-canvas text-ink-tertiary"
+          ? "cursor-not-allowed bg-surface-2 text-ink-tertiary"
           : active
           ? "bg-surface-2 text-primary"
           : "bg-transparent text-ink-muted hover:bg-surface-2"
