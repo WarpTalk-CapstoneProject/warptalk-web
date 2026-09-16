@@ -128,7 +128,7 @@
     "test:control-bar-flyouts": "node scripts/check-control-bar-flyouts.mjs",
     "test:meeting-started-notice": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/notifications/__tests__/meeting-started-notice.test.ts",
     "test:billing-in-settings": "node scripts/check-billing-lives-in-settings.mjs",
-    "test:subscription-state": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/subscription-state.test.ts",
+    "test:subscription-state": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/subscription-state.test.ts src/lib/billing/__tests__/admin-subscription-actions.test.ts",
     "test:language-choice": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/language-choice.test.ts",
     "test:voice-selection": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/voice-selection.test.ts",
     "test:voice-panel": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/voice-panel.test.ts",

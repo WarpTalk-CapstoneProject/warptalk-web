@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Cancelling a workspace's subscription, or undoing a cancellation.
+ * Cancelling a workspace's subscription, or undoing a scheduled cancellation (`/reactivate`).
  *
  * Both go through the ordinary `SubscriptionService` endpoints rather than an admin-only route.
  * That is what makes cancelling here the SAME act a workspace owner performs: Stripe is cancelled,
@@ -9,9 +9,10 @@
  * skipped at least one of those and nobody would have found out until a customer kept being
  * charged.
  *
- * The reason is required by this dialog even though the endpoint takes it as optional. It is
- * stored on the subscription and it is the only record of why somebody at WarpTalk reached into a
- * customer's billing.
+ * For cancel, the reason is required by this dialog even though the endpoint takes it as optional.
+ * It is stored on the subscription and it is the only record of why somebody at WarpTalk reached
+ * into a customer's billing. Reactivate asks for none: its endpoint has nowhere to keep one, and
+ * collecting text that is then dropped would claim a record that does not exist.
  */
 
 import { useState } from "react";
@@ -31,11 +32,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { getErrorMessage } from "@/lib/api/errors";
 import type { AdminSubscriptionSummaryDto } from "@/types/admin-subscription";
 
-export type SubscriptionLifecycleAction = "cancel" | "resume";
+export type SubscriptionLifecycleAction = "cancel" | "reactivate";
 
 const COPY: Record<
   SubscriptionLifecycleAction,
-  { title: string; description: string; confirm: string; pending: string }
+  {
+    title: string;
+    description: string;
+    confirm: string;
+    pending: string;
+    /** Only cancel stores a reason; the reactivate endpoint takes no body to put one in. */
+    requiresReason: boolean;
+  }
 > = {
   cancel: {
     title: "Cancel this subscription?",
@@ -43,13 +51,15 @@ const COPY: Record<
       "The Stripe subscription is cancelled, entitlements are republished and the workspace owner is notified. A trial ends immediately; a paid subscription runs to the end of its period.",
     confirm: "Cancel subscription",
     pending: "Cancelling…",
+    requiresReason: true,
   },
-  resume: {
-    title: "Resume this subscription?",
+  reactivate: {
+    title: "Reactivate this subscription?",
     description:
-      "Undoes a cancellation that has not taken effect yet. Billing continues on the existing period.",
-    confirm: "Resume subscription",
-    pending: "Resuming…",
+      "Undoes a cancellation that has not taken effect yet: renewal is switched back on for the period already paid for. Nothing is charged now. It does not lift a service suspension.",
+    confirm: "Reactivate subscription",
+    pending: "Reactivating…",
+    requiresReason: false,
   },
 };
 
@@ -64,7 +74,7 @@ export function SubscriptionLifecycleDialog({
   subscription: AdminSubscriptionSummaryDto | null;
   action: SubscriptionLifecycleAction;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (reason: string) => Promise<unknown>;
+  onSubmit: (reason: string | null) => Promise<unknown>;
   isSaving: boolean;
 }) {
   return (
@@ -97,7 +107,7 @@ function LifecycleForm({
   subscription: AdminSubscriptionSummaryDto;
   action: SubscriptionLifecycleAction;
   onCancel: () => void;
-  onSubmit: (reason: string) => Promise<unknown>;
+  onSubmit: (reason: string | null) => Promise<unknown>;
   onDone: () => void;
   isSaving: boolean;
 }) {
@@ -107,14 +117,14 @@ function LifecycleForm({
 
   const handleSubmit = async () => {
     const trimmed = reason.trim();
-    if (trimmed.length < 10) {
+    if (copy.requiresReason && trimmed.length < 10) {
       setError("Give a reason of at least ten characters. It is the only record of why.");
       return;
     }
 
     try {
       setError(null);
-      await onSubmit(trimmed);
+      await onSubmit(copy.requiresReason ? trimmed : null);
       onDone();
     } catch (err) {
       setError(getErrorMessage(err, "The subscription could not be updated."));
@@ -136,6 +146,7 @@ function LifecycleForm({
           </p>
         </div>
 
+        {copy.requiresReason ? (
         <div>
           <Label htmlFor="lifecycle-reason" className="text-[12px] text-ink-muted">
             Reason
@@ -149,6 +160,7 @@ function LifecycleForm({
             placeholder="Recorded on the subscription."
           />
         </div>
+        ) : null}
 
         {error ? (
           <p

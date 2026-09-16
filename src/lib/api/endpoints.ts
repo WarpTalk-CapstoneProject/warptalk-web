@@ -510,6 +510,13 @@ export const API = {
      * the platform "admin" role before it ever asks the workspace service about membership.
      */
     cancel: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+    /**
+     * Undo a scheduled cancellation (renewal back on, period still running). Not `resume`: that
+     * one lifts an AI-service suspension and refuses a cancelled-but-healthy subscription.
+     */
+    reactivate: (workspaceId: string) =>
+      `/subscriptions/workspace/${workspaceId}/reactivate`,
+    /** Lift an AI-service suspension (overage cap, overdue invoice). Unrelated to cancellation. */
     resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
     /**
      * The one action that IS admin-only (2026-08-17): customers change plans through checkout,
