@@ -127,14 +127,14 @@ export function usePluginConnectUrl() {
       client?: string;
       workspaceId?: string | null;
     }) => {
-      const { data } = await assistantService.getPluginConnectUrl(pluginKey, client, workspaceId);
+      const { data } = await assistantService.connectPlugin(pluginKey, client, workspaceId);
       return data;
     },
-    // Nothing has changed on the server yet — this only obtained a URL — but the catalog is about
-    // to change out from under us at the provider, and `staleTime: 60_000` would otherwise let a
-    // user finish consent, come back inside the minute, and be served the pre-consent answer from
-    // cache. Marking it stale here is what lets the global `refetchOnWindowFocus` do its job on
-    // every plugin surface, not just the one that started the flow.
+    // Either the plugin was just connected on the server (`connected: true`), or the catalog is
+    // about to change out from under us at the provider, and `staleTime: 60_000` would otherwise
+    // let a user finish consent, come back inside the minute, and be served the pre-consent answer
+    // from cache. Marking it stale here is what lets the global `refetchOnWindowFocus` do its job
+    // on every plugin surface, not just the one that started the flow.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
     },

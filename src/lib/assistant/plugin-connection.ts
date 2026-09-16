@@ -52,13 +52,14 @@ export function withEffectiveConnectionStatus(
 }
 
 /* ---------------------------------------------------------------------------------------------
- * WHICH ROWS SHARE ONE OAUTH GRANT — AND THEREFORE GO DOWN TOGETHER
+ * WHICH ROWS SHARE ONE OAUTH GRANT
  *
- *   Since WT-646 a connection is keyed by PROVIDER, not by plugin key: one Google grant backs
- *   google_drive, google_calendar and google_meet. `DisconnectAsync` ends the grant, so
- *   disconnecting Drive disconnects Calendar and Meet as well. That is deliberate — Google revokes
- *   a grant, not an individual token, so the alternative leaves rows we believe are healthy
- *   pointing at something dead — but it is silent data loss unless the user is told first.
+ *   Since WT-646 a grant is keyed by PROVIDER, not by plugin key: one Google grant backs
+ *   google_drive, google_calendar and google_meet. Being CONNECTED is per plugin, though — the
+ *   server stamps it on the installation — so connecting Calendar does not switch Meet on, and
+ *   disconnecting Drive leaves the others alone. The server revokes the grant itself only when the
+ *   last connected plugin on it is disconnected. What sharing still buys is the sign-in: a sibling
+ *   whose scopes the grant already covers connects without a trip to the provider.
  *
  *   The grouping is derived from catalog data, never from a list of Google keys. Hardcoding
  *   "google" here would be wrong the day a second multi-product provider is added, and wrong in
@@ -151,20 +152,6 @@ export function formatPluginLabelList(labels: readonly string[]): string {
   if (labels.length === 0) return "";
   if (labels.length === 1) return labels[0]!;
   return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]!}`;
-}
-
-/**
- * The sentence shown before a disconnect (or a remove, which disconnects on the way out), or null
- * when nothing else goes down with it.
- */
-export function sharedConnectionWarning(
-  siblings: readonly AssistantPluginCatalogItemDto[],
-): string | null {
-  if (siblings.length === 0) return null;
-  const labels = formatPluginLabelList(siblings.map((sibling) => sibling.label));
-  return siblings.length === 1
-    ? `${labels} shares this account connection, so it is disconnected too.`
-    : `${labels} share this account connection, so they are disconnected too.`;
 }
 
 /* ---------------------------------------------------------------------------------------------

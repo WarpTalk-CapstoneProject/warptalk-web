@@ -8,7 +8,7 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
-  PluginConnectUrlDto,
+  PluginConnectResultDto,
   SendAssistantMessageResponse,
 } from "@/types/assistant";
 
@@ -90,8 +90,12 @@ export const assistantService = {
     );
   },
 
-  getPluginConnectUrl(pluginKey: string, client?: string, workspaceId?: string | null) {
-    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey, client), {
+  /**
+   * Connects a plugin. When the provider's grant already covers it the server connects it on the
+   * spot and answers `connected: true` without a URL; otherwise it answers with the consent URL.
+   */
+  connectPlugin(pluginKey: string, client?: string, workspaceId?: string | null) {
+    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), undefined, {
       params: workspaceId ? { workspaceId } : undefined,
     });
   },
