@@ -50,8 +50,11 @@ export default function AiChatPage() {
     useState<PluginOperatorSetupAction | null>(null);
   const connectPlugin = usePluginConnectUrl();
 
-  // Turn-scoped, the same rule the widget and the meeting panel follow: a Connect card left over
-  // from an earlier turn or another conversation would open an OAuth flow nobody asked for.
+  // The same rule the widget and the meeting panel follow: a card lasts until the NEXT turn starts.
+  // Cleared on send and on changing conversation, because a Connect card left over from an earlier
+  // turn or another conversation would open an OAuth flow nobody asked for. Never when its own
+  // turn completes or fails: the card is raised mid-turn and that answer is the one explaining it,
+  // so clearing there erases it before anyone can press it.
   const clearPluginCards = useCallback(() => {
     setPendingPluginConnection(null);
     setPendingPluginSetup(null);
@@ -99,8 +102,7 @@ export default function AiChatPage() {
     );
     const refetchBoth = (payload?: { conversationId?: string }) => {
       if (payload?.conversationId && payload.conversationId !== selectedId) return;
-      // The turn is over, success or failure — the same boundary the widget clears on.
-      clearPluginCards();
+      // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
       void refetchConversationRef.current();
       void refetchConversationsRef.current();
     };
@@ -117,7 +119,7 @@ export default function AiChatPage() {
     return () => {
       void connection.stop();
     };
-  }, [selectedId, clearPluginCards]);
+  }, [selectedId]);
 
   function selectConversation(id: string) {
     if (id !== selectedId) clearPluginCards();
