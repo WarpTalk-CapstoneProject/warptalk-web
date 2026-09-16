@@ -69,7 +69,6 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-  ClockCounterClockwise,
   CheckSquare,
   Files,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
