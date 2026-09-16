@@ -70,7 +70,8 @@ import {
   Buildings,
   ShieldCheck,
   CheckSquare,
-  Files,} from "@phosphor-icons/react/dist/ssr";
+  Files,
+  ListChecks,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -650,6 +651,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         icon: Money,
         label: "Payments",
         href: `/${activeWorkspaceSlug}/settings/billing/payments`,
+        icon: ListChecks,
+        label: "Features",
+        href: `/${activeWorkspaceSlug}/settings/features`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -862,6 +866,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <Money size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Payments
+                  pathname === `/${activeWorkspaceSlug}/settings/features` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/features`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ListChecks size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Features
                     </span>
                   </Link>
                 </div>
