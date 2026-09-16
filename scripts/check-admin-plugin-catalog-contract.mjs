@@ -292,4 +292,24 @@ assert.match(
   "the manifest editor must strip the dead resource keys as it strips pluginKey: the wire still carries them as nulls, and showing an operator three meaningless fields invites one of them to be filled in",
 );
 
+// ── 10 · A tool call's outcome is read from what the recorder writes ─────────
+//
+// McpToolOrchestrator records "success" or an error code. The audit row compared against "ok",
+// which nothing has ever written, so every successful call rendered as a failure. The outcome is
+// described in one place, and the page has to go through it.
+
+assert.match(
+  helpers,
+  /PLUGIN_TOOL_SUCCESS_STATUS = "success"/,
+  "the success status must be \"success\" — that is what McpToolOrchestrator writes into plugin_tool_audits.result_status",
+);
+assert.ok(
+  /describePluginToolOutcome\(entry\.resultStatus\)/.test(detailPage),
+  "the audit row must describe its status through describePluginToolOutcome rather than comparing strings itself",
+);
+assert.ok(
+  !/["']ok["']/.test(detailPage.slice(detailPage.indexOf("function AuditRow"))),
+  "the audit row must not treat \"ok\" as a status: the assistant service never writes it",
+);
+
 console.log("Admin plugin catalog contract passed.");
