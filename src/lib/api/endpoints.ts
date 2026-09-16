@@ -448,6 +448,10 @@ export const API = {
     plan: (id: string) => `/plans/${id}`,
     /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
+    /** POST. Retires one row (is_active=false, effective_to=now); never a delete. */
+    rateCardDeactivate: (id: string) => `/usages/rate-card/${id}/deactivate`,
+    /** POST. Read-only: prices a proposed cost and markup without publishing anything. */
+    rateCardPreview: "/usages/rate-card/preview",
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
@@ -520,6 +524,19 @@ export const API = {
       `/admin/subscriptions/workspace/${workspaceId}/change-plan`,
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
+    /** POST. Creates a contract subscription; refused while the workspace has any active one. */
+    createContract: "/subscriptions/contract",
+    /** GET. The workspace's active subscription, contract overrides included. */
+    active: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+  },
+  /**
+   * Bank-transfer reconciliation for contract workspaces. The invoices themselves are raised by
+   * the billing-cycle close; the only admin write is settling one.
+   */
+  adminInvoices: {
+    workspace: (workspaceId: string) => `/invoices/workspace/${workspaceId}`,
+    /** POST, no body. Marks the invoice and its payment paid. Idempotent on a paid invoice. */
+    markPaid: (invoiceId: string) => `/invoices/${invoiceId}/mark-paid`,
   },
   /**
    * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under

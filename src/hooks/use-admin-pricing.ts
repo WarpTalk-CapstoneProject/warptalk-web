@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { adminPricingService } from "@/services/admin-pricing.service";
+import type { RateCardPreviewRequest } from "@/types/admin-contract-billing";
 import type {
   BillingPolicyDto,
   PlanRequest,
@@ -104,5 +105,20 @@ export function useUpdateAdminPricingConfig() {
     mutationFn: (request: UpdatePricingConfigRequest) =>
       adminPricingService.updatePricingConfig(request),
     onSuccess: invalidate,
+  });
+}
+
+export function useDeactivateAdminRateCard() {
+  const invalidate = useInvalidateAdminPricing();
+  return useMutation({
+    mutationFn: (id: string) => adminPricingService.deactivateRateCard(id),
+    onSuccess: invalidate,
+  });
+}
+
+/** A mutation rather than a query: it is asked on demand, for numbers that are still a draft. */
+export function usePreviewAdminRateCard() {
+  return useMutation({
+    mutationFn: (request: RateCardPreviewRequest) => adminPricingService.previewRateCard(request),
   });
 }
