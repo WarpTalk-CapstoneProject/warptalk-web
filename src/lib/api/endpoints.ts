@@ -312,6 +312,8 @@ export const API = {
     memberRoleChange: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
     verifiedDomains: (workspaceId: string) => `/workspaces/${workspaceId}/verified-domains`,
+    /** Owner/Admin only. Staff actions on this workspace, actor redacted server-side. */
+    auditLog: (workspaceId: string) => `/workspaces/${workspaceId}/audit-log`,
     verifiedDomainDetail: (workspaceId: string, domainId: string) =>
       `/workspaces/${workspaceId}/verified-domains/${domainId}`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
