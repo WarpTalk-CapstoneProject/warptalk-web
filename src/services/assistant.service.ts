@@ -10,6 +10,8 @@ import type {
   AssistantSkillDto,
   PluginConnectResultDto,
   SendAssistantMessageResponse,
+  WorkspacePluginToolAuditDto,
+  WorkspacePluginToolAuditQuery,
 } from "@/types/assistant";
 
 export const assistantService = {
@@ -106,5 +108,22 @@ export const assistantService = {
 
   disablePlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
+  },
+
+  /**
+   * The workspace's plugin activity log. A plain array, not a paged envelope: the server returns
+   * no total, so a caller learns there is another page only by getting a full one back.
+   * Absent filters are left off the query string rather than sent empty.
+   */
+  listWorkspacePluginToolAudits(query: WorkspacePluginToolAuditQuery) {
+    return apiClient.get<WorkspacePluginToolAuditDto[]>(API.assistant.workspacePluginToolAudits, {
+      params: {
+        workspaceId: query.workspaceId,
+        skip: query.skip,
+        take: query.take,
+        ...(query.pluginKey ? { pluginKey: query.pluginKey } : {}),
+        ...(query.userId ? { userId: query.userId } : {}),
+      },
+    });
   },
 };
