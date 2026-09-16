@@ -100,6 +100,9 @@ import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
+import { MessageMentionChips } from "@/components/assistant/message-mention-chips";
+import { mentionCompletion } from "@/lib/assistant/mention-completion";
+import { parseMessageMentions } from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import { cn } from "@/lib/utils";
 import {
@@ -152,6 +155,21 @@ interface ChatMessage {
    */
   steps?: AssistantStep[];
   durationMs?: number;
+  /**
+   * The @mentions this user message went out with, in the wire shape — the same list the request
+   * carried, and the same list `mentionsJson` hands back when the conversation is reopened. One
+   * shape for both paths, so a message drawn a moment after sending and the same message replayed
+   * from history cannot show different chips. See MessageMentionChips.
+   */
+  mentions?: AssistantMentionDto[];
+  /**
+   * The files this user message went out with.
+   *
+   * SENT-SESSION ONLY. Attachments are deliberately not persisted (see ChatAttachmentStrip and
+   * ai_assistant_worker._attach_attachments), so a conversation reopened from history has no
+   * bytes to draw and this is absent. Unlike mentions, that is by design, not a gap.
+   */
+  attachments?: ChatAttachment[];
 }
 
 
@@ -343,6 +361,7 @@ export function GlobalChatbot() {
     string | null
   >(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [composerOverflowing, setComposerOverflowing] = useState(false);
   /**
    * WT-667 — a `rows={1}` textarea is one line tall forever.
    *
@@ -358,6 +377,9 @@ export function GlobalChatbot() {
     if (!element) return;
     element.style.height = "auto";
     element.style.height = `${Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+    // Read here because this is the one place that already measured it. The ghost completion
+    // cannot be drawn over a textarea that is scrolling — see the mirror in the composer.
+    setComposerOverflowing(element.scrollHeight > COMPOSER_MAX_HEIGHT_PX);
   }, []);
   /**
    * Sizing on ATTACH as well as on change, because the widget is a popover: the textarea is
@@ -675,6 +697,7 @@ export function GlobalChatbot() {
             content: message.content,
             failed: message.status === "failed",
             sources: parseAnswerSources(message.sourcesJson),
+            mentions: parseMessageMentions(message.mentionsJson),
           })),
       );
       setConversationTitle(detail.title?.trim() || "Chat history");
@@ -1103,6 +1126,11 @@ export function GlobalChatbot() {
     if (mentionMatch) {
       setMentionMenuOpen(true);
       setMentionQuery(mentionMatch[1]);
+      // Back to the top on every keystroke, the way the slash menu already does it. The
+      // highlight used to keep an index from the previous, longer list: typing one more letter
+      // could leave it past the end, which reads as "nothing is selected" and now also costs
+      // the ghost completion and Tab.
+      setSelectedIndex(0);
     } else {
       setMentionMenuOpen(false);
     }
@@ -1183,6 +1211,19 @@ export function GlobalChatbot() {
         setMentionMenuOpen(false);
         return;
       }
+      // Tab accepts what the ghost text is offering. preventDefault unconditionally, including
+      // on a query that matches nothing: the default would move focus out of the composer to
+      // the paperclip, which is never what somebody mid-"@goo" meant by it.
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        const option = filteredOptions[selectedIndex];
+        if (option) {
+          insertMention(option);
+          return;
+        }
+        setMentionMenuOpen(false);
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         // Guard the index: with a query that matches nothing (e.g. "@zzzz") this used to
@@ -1219,6 +1260,15 @@ export function GlobalChatbot() {
   const filteredOptions = CONTEXT_OPTIONS.filter((opt) =>
     opt.title.toLowerCase().includes(mentionQuery.toLowerCase()),
   );
+
+  // What Tab would finish the typed name with — see mention-completion.ts for when it is empty.
+  const mentionGhost = mentionMenuOpen
+    ? mentionCompletion({
+        draft: inputValue,
+        query: mentionQuery,
+        highlightedTitle: filteredOptions[selectedIndex]?.title,
+      })
+    : "";
 
   const insertMention = (opt: (typeof CONTEXT_OPTIONS)[0]) => {
     setSelectedContexts((prev) => {
@@ -1410,7 +1460,13 @@ export function GlobalChatbot() {
       } catch {
         setMessages((prev) => [
           ...prev,
-          { id: `local-${Date.now()}`, role: "user", content },
+          {
+            id: `local-${Date.now()}`,
+            role: "user",
+            content,
+            mentions,
+            attachments: sentAttachments,
+          },
           {
             id: `conv-failed-${Date.now()}`,
             role: "assistant",
@@ -1424,7 +1480,13 @@ export function GlobalChatbot() {
 
     setMessages((prev) => [
       ...prev,
-      { id: `local-${Date.now()}`, role: "user", content },
+      {
+        id: `local-${Date.now()}`,
+        role: "user",
+        content,
+        mentions,
+        attachments: sentAttachments,
+      },
     ]);
     setIsAiTyping(true);
     clearPluginCards();
@@ -1606,7 +1668,19 @@ export function GlobalChatbot() {
                             />
                           </>
                         ) : (
-                          msg.content
+                          <>
+                            <MessageMentionChips
+                              mentions={msg.mentions ?? []}
+                              plugins={catalogPlugins}
+                            />
+                            {msg.attachments && msg.attachments.length > 0 ? (
+                              <ChatAttachmentStrip
+                                attachments={msg.attachments}
+                                className="mb-1 flex justify-end px-0 pb-0"
+                              />
+                            ) : null}
+                            {msg.content}
+                          </>
                         )}
                       </div>
                     </div>
@@ -1920,26 +1994,55 @@ export function GlobalChatbot() {
                         </button>
                       </span>
                     ))}
-                    <textarea
-                      ref={attachComposer}
-                      value={inputValue}
-                      onChange={handleInput}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handlePaste}
-                      placeholder={
-                        selectedContexts.length > 0
-                          ? ""
-                          : ambientContextDisplay
-                            ? "Ask with page context..."
-                            : "Ask WarpBot..."
-                      }
-                      // WT-667: `resize-none` stays — the height is computed, not dragged. The
-                      // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
-                      // state it used to be. No `self-stretch`: an explicit height is what makes
-                      // the box the size of its text, and stretching fights it.
-                      className="flex-1 min-w-[120px] bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
-                      rows={1}
-                    />
+                    {/* The ghost completion is a MIRROR of the textarea, not a second input. A
+                        textarea paints one colour and gives no way to draw inside it, so the only
+                        way to show "@googl[e Meet]" is to re-render the same string in the same
+                        box, hide it, and let just the grey suffix show through where the caret is.
+
+                        EVERYTHING THAT MOVES A GLYPH MUST AGREE ON BOTH: font size, line height,
+                        wrapping, width, and the absence of padding. Neither sets a line height —
+                        both inherit the same one, and WT-667's six-line cap was measured against
+                        it, so this must not be the change that picks a new one.
+
+                        It is not drawn while the textarea is at its WT-667 cap and scrolling. The
+                        scrollbar then takes width the mirror does not have, so the two wrap at
+                        different points and the suffix lands on the wrong line.
+
+                        aria-hidden: the open menu already announces the option, and hearing the
+                        sentence read back a second time is worse than not hearing the hint. */}
+                    <div className="relative flex-1 min-w-[120px]">
+                      {mentionGhost && !composerOverflowing ? (
+                        <div
+                          aria-hidden
+                          className="pointer-events-none absolute inset-0 overflow-hidden text-[13px] whitespace-pre-wrap break-words"
+                        >
+                          <span className="invisible">{inputValue}</span>
+                          <span className="text-ink-subtle">{mentionGhost}</span>
+                        </div>
+                      ) : null}
+                      <textarea
+                        ref={attachComposer}
+                        value={inputValue}
+                        onChange={handleInput}
+                        onKeyDown={handleKeyDown}
+                        onPaste={handlePaste}
+                        placeholder={
+                          selectedContexts.length > 0
+                            ? ""
+                            : ambientContextDisplay
+                              ? "Ask with page context..."
+                              : "Ask WarpBot..."
+                        }
+                        // WT-667: `resize-none` stays — the height is computed, not dragged. The
+                        // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
+                        // state it used to be. No `self-stretch`: an explicit height is what makes
+                        // the box the size of its text, and stretching fights it. `relative` puts
+                        // the text above the ghost mirror; `block w-full` makes the wrapper, not
+                        // the textarea, the flex item, so both share one width.
+                        className="relative block w-full bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
+                        rows={1}
+                      />
+                    </div>
                   </div>
 
                   <ChatAttachmentStrip
