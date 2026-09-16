@@ -9,15 +9,25 @@
  * count and a running total are the first two things on the page now, because they were the
  * question.
  *
+ * PAYING FROM HERE. An open invoice used to be a dead end: the page said "Unpaid" and offered
+ * nothing to do about it. An Owner now gets a Pay button on every invoice the server would accept
+ * payment for (lib/billing/invoice-payment), which opens Stripe checkout and returns through the
+ * payment success page, where the payment — and so the invoice — is settled. Owner only, matching
+ * the server: an Admin reads invoices but does not spend the workspace's money.
+ *
  * Rows, ruled — not a bordered table with a header band. No shadows. See ../components.
  */
 
 import { ArrowSquareOut, Spinner } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { useInvoiceCheckout } from "@/hooks/use-workspace-payments";
+import { getErrorMessage } from "@/lib/api/errors";
+import { isInvoicePayable } from "@/lib/billing/invoice-payment";
 import { formatMoney } from "@/lib/format/currency";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -46,6 +56,31 @@ export default function WorkspaceInvoicesPage() {
   const workspaceId = activeWorkspaceId || "";
   const role = useWorkspaceRole();
   const [page, setPage] = useState(1);
+  const isOwner = role === "owner";
+  const checkout = useInvoiceCheckout();
+  // Which row's button is spinning. The mutation's own `variables` would do, but it is cleared on
+  // error before the toast renders, and every other row must stay clickable meanwhile.
+  const [payingInvoiceId, setPayingInvoiceId] = useState<string | null>(null);
+
+  // Back from Stripe restores this page from the back/forward cache with the spinner still set and
+  // every Pay button disabled. `pageshow` with `persisted` is exactly that return.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setPayingInvoiceId(null);
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
+  const payInvoice = (invoiceId: string) => {
+    setPayingInvoiceId(invoiceId);
+    checkout.mutate(invoiceId, {
+      onError: (error) => {
+        setPayingInvoiceId(null);
+        toast.error(getErrorMessage(error, "Could not start checkout for this invoice. Please try again."));
+      },
+    });
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["billing", "invoices", workspaceId, page],
@@ -154,6 +189,21 @@ export default function WorkspaceInvoicesPage() {
                     <span className="w-[110px] text-right text-[13px] font-medium tabular-nums text-ink">
                       {formatMoney(invoice.total, invoice.currency)}
                     </span>
+                    {/* Owner only, and only on an invoice the server will take payment for. On
+                        success the browser leaves for Stripe, so the spinner never clears here. */}
+                    {isOwner && isInvoicePayable(invoice) ? (
+                      <BillingButton
+                        tone="primary"
+                        className="w-auto px-3"
+                        disabled={payingInvoiceId !== null}
+                        onClick={() => payInvoice(invoice.id)}
+                      >
+                        {payingInvoiceId === invoice.id ? (
+                          <Spinner className="h-3.5 w-3.5 animate-spin" />
+                        ) : null}
+                        Pay
+                      </BillingButton>
+                    ) : null}
                     {/* Only a real http(s) URL becomes a link. `pdfUrl` is nullable and has been
                         seen carrying a storage key rather than a URL, which renders as a link
                         that navigates nowhere. */}

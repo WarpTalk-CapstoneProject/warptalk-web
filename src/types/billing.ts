@@ -250,6 +250,30 @@ export interface InvoiceDto {
   workspaceName: string | null;
 }
 
+/**
+ * One row of a workspace's payment history.
+ *
+ * Mirrors `WarpTalk.BillingService.Application.DTOs.PaymentTransactionDto` (PaymentDtos.cs) field
+ * for field. `status` is the server's vocabulary — pending | paid | failed | cancelled | refunded |
+ * disputed | subscription_updated — see lib/billing/invoice-payment.
+ */
+export interface PaymentTransactionDto {
+  id: string;
+  subscriptionId: string;
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  paymentMethod: string;
+  provider: string;
+  providerTransactionId: string | null;
+  providerOrderId: string | null;
+  status: string;
+  failureReason: string | null;
+  paidAt: string | null;
+  createdAt: string;
+}
+
 export interface UsageAlertDto {
   workspaceId: string;
   workspaceName: string;

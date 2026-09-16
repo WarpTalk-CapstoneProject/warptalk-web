@@ -539,6 +539,19 @@ export const API = {
     // tenant content stays out of the admin portal (2026-08-17).
     members: (id: string) => `/admin/workspaces/${id}/members`,
   },
+  /**
+   * A workspace's own payments and invoices (billing service; gateway routes `/payments/**` and
+   * `/invoices/**` to the billing cluster).
+   */
+  workspaceBilling: {
+    /** GET. Owner/Admin of the workspace (RequireWorkspaceRole). Paginated. */
+    paymentHistory: (workspaceId: string) => `/payments/workspace/${workspaceId}/history`,
+    /**
+     * POST, no body. Answers `{ url }` — a Stripe checkout page for one open invoice. Owner of the
+     * invoice's workspace only; the server resolves the workspace from the invoice.
+     */
+    invoiceCheckout: (invoiceId: string) => `/invoices/${invoiceId}/checkout`,
+  },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",
     detail: (id: string) => `/admin/global-glossary/${id}`,
