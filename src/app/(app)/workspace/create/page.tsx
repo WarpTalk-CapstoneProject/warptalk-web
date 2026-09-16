@@ -34,16 +34,30 @@ import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
+/**
+ * Mirrors of the columns behind this form.
+ *
+ * The SERVER is what enforces them (WorkspaceConstants.WorkspaceNameMaxLength /
+ * WorkspaceLogoUrlMaxLength) — this form is not the only caller. These exist so the person typing
+ * gets an inline message instead of a failed request.
+ *
+ * The name limit is deliberately tighter than the server's 150: a workspace name is the basis of
+ * its URL slug and a value people read aloud. Loosening it later is safe; tightening it is not.
+ */
+const WORKSPACE_NAME_MAX = 100;
+const WORKSPACE_LOGO_URL_MAX = 500;
+
 const createWorkspaceSchema = z.object({
   name: z
     .string()
     .trim()
     .min(2, "Workspace name must be at least 2 characters")
-    .max(100, "Workspace name must be 100 characters or fewer"),
+    .max(WORKSPACE_NAME_MAX, `Workspace name must be ${WORKSPACE_NAME_MAX} characters or fewer`),
   logoUrl: z
     .string()
     .trim()
     .url("Logo URL must be a valid URL")
+    .max(WORKSPACE_LOGO_URL_MAX, `Logo URL must be ${WORKSPACE_LOGO_URL_MAX} characters or fewer`)
     .optional()
     .or(z.literal("")),
 });

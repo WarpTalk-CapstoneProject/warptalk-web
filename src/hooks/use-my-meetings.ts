@@ -48,6 +48,22 @@ export function useMyMeetings(
 /**
  * The caller's meetings between two instants, however many months that crosses.
  *
+ * NOT `useMyMeetingsInRange` any more, and the rename is about the hook's job, not about the data:
+ * what sets it apart is that it takes a from/to range and stitches months together, where
+ * `useMyMeetings` above serves exactly one month.
+ *
+ * The data behind it IS personal, and that is a real difference from the Meetings page — do not
+ * read the two as the same list in different shapes. Both go through BuildListableRoomsQueryAsync,
+ * but `GET /translation-rooms/my-meetings` pins RoomTimelineScope.Mine (WT-333, FR-333-005): the
+ * caller's own rooms only — hosted, joined, or invited to. The Meetings page's
+ * `GET /translation-rooms` runs at scope Workspace, where a workspace Owner/Admin is widened to
+ * EVERY room in the workspace. The two lists agree only for a plain member, who falls through to
+ * BuildAccessibleRoomsQuery either way.
+ *
+ * The query KEY still says "my-meetings", deliberately: it is shared with `useMyMeetings` so the
+ * two views reuse one another's months, and renaming it would split that cache in half. Same for
+ * the service and the endpoint behind it — those are the API's own name, not this hook's.
+ *
  * Still fetched and cached BY MONTH — one request and one cache entry per month, exactly as
  * `useMyMeetings` does — and merged here. Switching to arbitrary from/to keys would have been
  * less code and worse: a week key and a month key covering the same days are two entries holding
@@ -57,7 +73,7 @@ export function useMyMeetings(
  * Rows are de-duplicated by id, because a meeting near a boundary is returned by both of its
  * months' queries.
  */
-export function useMyMeetingsInRange(
+export function useMeetingsInRange(
   workspaceId: string | null,
   from: Date,
   to: Date,

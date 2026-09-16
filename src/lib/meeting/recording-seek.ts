@@ -64,6 +64,46 @@ export function seekTargetSeconds(sources: SeekSources, atMs: number): number | 
   return seconds;
 }
 
+/**
+ * The same arithmetic backwards: where in the MEETING a position in the recording falls.
+ *
+ * WHY THIS LIVES BESIDE seekTargetSeconds AND NOWHERE ELSE
+ *   Following the recording (the transcript lighting up the line being spoken) needs the inverse of
+ *   seeking, and an inverse computed at the call site is an inverse that drifts. The two clocks are
+ *   subtracted in one order here and the other order there; a change to one origin that is not
+ *   mirrored in the other produces a highlight that is consistently a few seconds off — which reads
+ *   as "the transcript's timings are sloppy" rather than as a bug, and so never gets reported.
+ *
+ * `seconds` is `video.currentTime` VERBATIM — the file axis. The player has no business knowing
+ * about meeting time, so it publishes what the media element told it and this converts.
+ *
+ * Null for the same reason as above, and it matters more in this direction rather than less. A
+ * clamped zero here would mark the meeting's FIRST line as the one being spoken, permanently, on
+ * every meeting whose origins were never recorded — and a reader watching the wrong line light up
+ * while the right words play cannot tell whether the video or the transcript is at fault.
+ */
+export function meetingMsFromRecordingSeconds(
+  sources: SeekSources,
+  seconds: number,
+): number | null {
+  // A media element never reports a negative currentTime, so a negative here is a caller bug and
+  // not a moment before the recording — converting it anyway would light up a line on the strength
+  // of arithmetic nobody intended.
+  if (!Number.isFinite(seconds) || seconds < 0) return null;
+
+  const anchor = toTime(sources.timelineAnchorAt);
+  const recordingStart = toTime(sources.recordingStartedAt);
+  if (anchor === null || recordingStart === null) return null;
+
+  const atMs = recordingStart + seconds * 1000 - anchor;
+  // The lead-in: everything the host recorded before the first transcribed word maps to a moment
+  // BEFORE the meeting's timeline began. There is no line there — not the first one — so nothing
+  // may light up while it plays.
+  if (atMs < 0) return null;
+
+  return atMs;
+}
+
 /** Whether this meeting can align its transcript to its recording at all. */
 export function canAlignToRecording(sources: SeekSources): boolean {
   return toTime(sources.timelineAnchorAt) !== null && toTime(sources.recordingStartedAt) !== null;

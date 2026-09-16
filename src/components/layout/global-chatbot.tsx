@@ -52,13 +52,13 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import {
   useAssistantConversations,
   useAssistantPlugins,
-  useAssistantSkills,
   useCreateAssistantConversation,
   useInstallAssistantPlugin,
   useLoadAssistantConversation,
   usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
+import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import type * as signalR from "@microsoft/signalr";
 import type {
@@ -100,7 +100,7 @@ import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
-import { toDisplayTiles } from "@/lib/assistant/plugin-tiles";
+import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -312,6 +312,15 @@ function getPageContextKey(context: AssistantPageContextDto | null) {
   ].join(":");
 }
 
+/**
+ * WT-667 — how tall the composer is allowed to get before it starts scrolling instead.
+ *
+ * Roughly six lines at `text-[13px]`. The panel it lives in is 412px tall (600px expanded), so
+ * this is the point where growing further would cost more of the conversation than it gains in
+ * draft: past six lines you are re-reading what you wrote, not reading what WarpBot said.
+ */
+const COMPOSER_MAX_HEIGHT_PX = 132;
+
 export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -334,6 +343,41 @@ export function GlobalChatbot() {
     string | null
   >(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  /**
+   * WT-667 — a `rows={1}` textarea is one line tall forever.
+   *
+   * Nothing here ever touched its height, so a long question scrolled INSIDE a 20px window:
+   * you could see the two lines under the caret and nothing else, with a panel of empty space
+   * sitting above it. Re-reading a question before sending it was impossible.
+   *
+   * A textarea reports the height its content wants in `scrollHeight`, but only once it is not
+   * being held to a smaller height — hence resetting to `auto` before measuring. Without that
+   * reset the box can grow and never shrink again, because a tall box reports its own height.
+   */
+  const autoSizeComposer = useCallback((element: HTMLTextAreaElement | null) => {
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight, COMPOSER_MAX_HEIGHT_PX)}px`;
+  }, []);
+  /**
+   * Sizing on ATTACH as well as on change, because the widget is a popover: the textarea is
+   * unmounted while it is closed and remounts with whatever draft was left in state. An effect
+   * keyed on the text alone would not re-run for that, and the draft would come back one line
+   * tall.
+   */
+  const attachComposer = useCallback(
+    (element: HTMLTextAreaElement | null) => {
+      inputRef.current = element;
+      autoSizeComposer(element);
+    },
+    [autoSizeComposer],
+  );
+  // Every path that changes the text lands in `inputValue` — typing, picking a slash command,
+  // a question handed over from the page, the clear on send — so one effect on it covers all
+  // of them, including the shrink back to one line after a message goes out.
+  useEffect(() => {
+    autoSizeComposer(inputRef.current);
+  }, [inputValue, autoSizeComposer]);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
   const activeWorkspaceId = useWorkspaceStore(
@@ -365,6 +409,28 @@ export function GlobalChatbot() {
    * documents, not to catch one label mid-flash.
    */
   const [steps, setSteps] = useState<AssistantStep[]>([]);
+  /**
+   * WT-620 — the same trail, readable from inside the hub handlers.
+   *
+   * Those handlers are registered once per conversation, so the `steps` they close over is the
+   * trail of the render that ran the effect: empty, because the question had not been asked yet.
+   * The completed handler folded that onto the answer, and every finished answer carried an empty
+   * trail. Subscribing again on every step is not the fix — it would drop and re-add the handlers
+   * mid-turn — so the handlers read this ref instead, as the meeting chat and the Meet-popup pane
+   * already do.
+   *
+   * Only correct if EVERY write goes through updateSteps: a raw setSteps leaves the ref holding a
+   * trail the screen no longer shows.
+   */
+  const stepsRef = useRef<AssistantStep[]>([]);
+  const updateSteps = useCallback(
+    (next: (current: AssistantStep[]) => AssistantStep[]) => {
+      const value = next(stepsRef.current);
+      stepsRef.current = value;
+      setSteps(value);
+    },
+    [],
+  );
   /** When the open turn began, so the folded summary can say how long it took. */
   const turnStartedAtRef = useRef<number | null>(null);
   /**
@@ -420,20 +486,28 @@ export function GlobalChatbot() {
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
-  const { data: skills } = useAssistantSkills();
-  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } = useAssistantPlugins();
+  // Scoped to the active workspace, exactly as the Plugins settings page reads it. Unscoped, the
+  // API has no policy to apply and answers with every row unblocked — so a workspace that had
+  // turned plugins off still had them offered here, and the install and connect below went through
+  // the same ungoverned door.
+  const { data: assistantPlugins = [], refetch: refetchAssistantPlugins } =
+    useAssistantPlugins(activeWorkspaceId ?? undefined);
   const installPlugin = useInstallAssistantPlugin();
   const connectPlugin = usePluginConnectUrl();
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
-  // Same per-resource split as the Plugins settings page (see toDisplayTiles), so Drive and
-  // Calendar show as their own rows here too instead of one combined "Google Drive & Calendar".
-  const pluginTiles = useMemo(() => assistantPlugins.flatMap(toDisplayTiles), [assistantPlugins]);
-  const installedAssistantPlugins = useMemo(
-    () => pluginTiles.filter((plugin) => plugin.installationStatus === "installed"),
-    [pluginTiles],
+  // Read through the same helper the Plugins settings page uses, so the Ready/Connect chip below
+  // and the @mention list cannot claim a plugin is usable when its own scopes were declined on a
+  // shared Google connection — see plugin-connection.ts.
+  const catalogPlugins = useMemo(
+    () => assistantPlugins.map(withEffectiveConnectionStatus),
+    [assistantPlugins],
   );
-  // Only a tile that's actually usable can be @mentioned — mentioning a disconnected plugin
+  const installedAssistantPlugins = useMemo(
+    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    [catalogPlugins],
+  );
+  // Only a plugin that's actually usable can be @mentioned — mentioning a disconnected plugin
   // would just tell WarpBot to call a tool that fails with connection_required.
   const mentionablePlugins = useMemo(
     () => installedAssistantPlugins.filter((plugin) => plugin.connectionStatus === "connected"),
@@ -451,21 +525,37 @@ export function GlobalChatbot() {
   const handlePluginAction = async (plugin: AssistantPluginCatalogItemDto) => {
     try {
       if (plugin.installationStatus !== "installed") {
-        await installPlugin.mutateAsync({ pluginKey: plugin.key });
+        await installPlugin.mutateAsync({
+          pluginKey: plugin.key,
+          workspaceId: activeWorkspaceId ?? undefined,
+        });
         toast.success(`${plugin.label} installed`);
         return;
       }
 
       if (plugin.connectionStatus !== "connected") {
-        const result = await connectPlugin.mutateAsync({ pluginKey: plugin.key });
-        if (openProviderConsent(result.url)) {
+        const result = await connectPlugin.mutateAsync({
+          pluginKey: plugin.key,
+          // Sealed into the OAuth state. Without it a desktop user is sent through the system
+          // browser with "web" recorded, the callback never emits client=desktop, and the
+          // warptalk:// hand-back never fires — they finish consent and are left in the browser.
+          client: isDesktopApp() ? "desktop" : "web",
+          workspaceId: activeWorkspaceId ?? undefined,
+        });
+        // The provider's grant already covered it, so there is no consent page to finish.
+        if (result.connected || !result.url) {
+          toast.success(`${plugin.label} connected`);
+          return;
+        }
+        const consentUrl = result.url;
+        if (openProviderConsent(consentUrl)) {
           toast.message(`Finish connecting ${plugin.label} in your browser.`);
         } else {
           // The toast action is a real click, so the open it makes is not blocked.
           toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
             action: {
               label: "Open it",
-              onClick: () => openProviderConsent(result.url),
+              onClick: () => openProviderConsent(consentUrl),
             },
           });
         }
@@ -480,14 +570,21 @@ export function GlobalChatbot() {
 
   const handlePluginConnectionAction = async (pluginKey: string) => {
     try {
-      const result = await connectPlugin.mutateAsync({ pluginKey });
-      if (openProviderConsent(result.url)) {
+      const result = await connectPlugin.mutateAsync({
+        pluginKey,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId: activeWorkspaceId ?? undefined,
+      });
+      const consentUrl = result.url;
+      if (result.connected || !consentUrl) {
+        toast.success("Plugin connected.");
+      } else if (openProviderConsent(consentUrl)) {
         toast.message("Finish connecting this plugin in your browser.");
       } else {
         toast.error("Your browser blocked the consent window.", {
           action: {
             label: "Open it",
-            onClick: () => openProviderConsent(result.url),
+            onClick: () => openProviderConsent(consentUrl),
           },
         });
       }
@@ -540,7 +637,7 @@ export function GlobalChatbot() {
     setInputValue("");
     setSelectedContexts([]);
     setIsAiTyping(false);
-    setSteps([]);
+    updateSteps(() => []);
     setIsSlow(false);
     setIsMinimized(false);
     clearPluginCards();
@@ -570,7 +667,7 @@ export function GlobalChatbot() {
       setConversationTitle(detail.title?.trim() || "Chat history");
       setConversationId(detail.id);
       setIsAiTyping(false);
-      setSteps([]);
+      updateSteps(() => []);
       setIsSlow(false);
       setInputValue("");
       setSelectedContexts([]);
@@ -640,12 +737,12 @@ export function GlobalChatbot() {
       entityId: d.id,
     }));
     // WT-565: an installed, connected plugin is mentionable so the user can point WarpBot at
-    // it directly instead of only reaching it through the Skills popover. entityId is the tile
-    // id (plugin key, or "pluginKey:resourceKey" for a split tile) — see AssistantMentionDto.
+    // it directly instead of only reaching it through the Skills popover. entityId is the real
+    // catalog key — see AssistantMentionDto.
     // Not query-filtered here like the three fetches above: mentionablePlugins is already the
     // full local list, and filteredOptions below re-filters every option by title anyway.
     const pluginOptions: AssistantContextOption[] = mentionablePlugins.map((plugin) => ({
-      id: `plugin-${plugin.tileId}`,
+      id: `plugin-${plugin.key}`,
       title: plugin.label,
       type: "Plugins",
       // PluginGlyph, not a raw <img>: it owns the product-logo fallback and the load-failure
@@ -653,7 +750,7 @@ export function GlobalChatbot() {
       icon: <PluginGlyph plugin={plugin} size="xs" />,
       description: plugin.description,
       entityType: "plugin",
-      entityId: plugin.tileId,
+      entityId: plugin.key,
     }));
     return [...memberOptions, ...roomOptions, ...documentOptions, ...pluginOptions];
   }, [memberResults, roomResults, documentResults, mentionablePlugins]);
@@ -725,7 +822,7 @@ export function GlobalChatbot() {
         // Seeded with the step that is genuinely running: before the first tool call WarpBot is
         // reading the question, which on a slow turn is the longest stretch of the whole thing
         // and used to be drawn as a bare "Thinking..." with no trail at all.
-        setSteps([{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
+        updateSteps(() => [{ key: THINKING_STEP, tool: THINKING_STEP, done: false }]);
         turnStartedAtRef.current = Date.now();
         setIsSlow(false);
         armResponseTimeout();
@@ -751,7 +848,7 @@ export function GlobalChatbot() {
         // but what it ran is exactly what the reader wants left on screen — and writing the
         // answer is itself a step, so the trail names it rather than going quiet for the
         // longest visible part of the turn.
-        setSteps((current) => {
+        updateSteps((current) => {
           const settled = current.map((step) => ({ ...step, done: true }));
           return settled.some((step) => step.tool === WRITING_STEP)
             ? settled
@@ -773,7 +870,7 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; toolName: string; toolDetail?: string }) => {
         if (payload.conversationId !== conversationId) return;
         setIsAiTyping(true);
-        setSteps((current) => [
+        updateSteps((current) => [
           // Anything still marked running when a new tool starts has finished — the worker
           // emits a completed for each, but the trail must not show two spinners if one is lost.
           ...current.map((step) => ({ ...step, done: true })),
@@ -796,7 +893,7 @@ export function GlobalChatbot() {
         const body = payload.body?.trim() ?? "";
         if (!title && !body) return;
         setIsAiTyping(true);
-        setSteps((current) => [
+        updateSteps((current) => [
           // The model has moved on from whatever it was doing when it wrote this.
           ...current.map((step) => ({ ...step, done: true })),
           {
@@ -842,7 +939,7 @@ export function GlobalChatbot() {
         if (payload.conversationId !== conversationId) return;
         // The hosted web search publishes its started event before OpenAI has said what it is
         // searching for, so this is often the first event that can name the target.
-        setSteps((current) =>
+        updateSteps((current) =>
           withStepDetail(current, payload.toolName ?? "", payload.toolDetail).map((step) => ({
             ...step,
             done: true,
@@ -873,10 +970,13 @@ export function GlobalChatbot() {
         // throwing them away also threw away the only record of which tools an answer came
         // through — the first thing a person checking a surprising answer reaches for. It is one
         // folded line now: over, and still there.
-        const finishedSteps = steps.map((step) => ({ ...step, done: true }));
+        //
+        // From the REF (WT-620): this handler was registered before the turn began, and the
+        // `steps` it closes over is that render's empty trail.
+        const finishedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
         const startedAt = turnStartedAtRef.current;
         turnStartedAtRef.current = null;
-        setSteps([]);
+        updateSteps(() => []);
 
         // Only the completed event carries them: the worker decides which sources the answer
         // pointed at once the whole answer exists, so there is nothing to show mid-stream.
@@ -904,10 +1004,11 @@ export function GlobalChatbot() {
         clearResponseTimeout();
         clearPluginCards();
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
-        const failedSteps = steps.map((step) => ({ ...step, done: true }));
+        // From the ref, for the same reason as the completed handler.
+        const failedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
         const failedStartedAt = turnStartedAtRef.current;
         turnStartedAtRef.current = null;
-        setSteps([]);
+        updateSteps(() => []);
         upsertAssistantMessage(payload.messageId, () => ({
           id: payload.messageId,
           role: "assistant",
@@ -975,7 +1076,7 @@ export function GlobalChatbot() {
       void connection.stop();
       hubConnectionRef.current = null;
     };
-  }, [conversationId, armResponseTimeout, clearResponseTimeout]);
+  }, [conversationId, armResponseTimeout, clearResponseTimeout, clearPluginCards, updateSteps]);
 
   // Calculate mention/slash menu visibility based on @ or leading / characters
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -1011,6 +1112,12 @@ export function GlobalChatbot() {
     // below runs sendMessage() in the same handler, against pre-update state — which is how
     // picking a mention with Enter used to send the literal "@Al" with no mentions attached
     // and leave the chip dangling for the *next* message.
+    //
+    // An IME (Vietnamese Telex, Japanese, Chinese…) owns the keyboard while it composes: its Enter
+    // confirms the candidate, its arrows move through candidates. Sending on that Enter posted half
+    // a word and left the rest in the box, and the menu branches would pick a row mid-word.
+    // Same check as the Meet-popup pane's composer.
+    if (e.nativeEvent.isComposing) return;
     if (slashMenuOpen) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -1758,7 +1865,11 @@ export function GlobalChatbot() {
                     onDragLeave={() => setDragDepth((depth) => Math.max(0, depth - 1))}
                     onDrop={handleDrop}
                     className={cn(
-                      "flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[120px] bg-transparent px-2 py-1.5 overflow-y-auto rounded-[10px] transition-colors",
+                      // WT-667: the cap here has to clear the textarea's own (132px) plus a row
+                      // of context chips, or the two scrollbars fight: the box would stop growing
+                      // at 120px and the tray would scroll instead of the text. This one is for
+                      // MANY chips, not for a long message.
+                      "flex flex-wrap items-center gap-1.5 w-full min-h-[38px] max-h-[200px] bg-transparent px-2 py-1.5 overflow-y-auto rounded-[10px] transition-colors",
                       dragDepth > 0 && "bg-primary/5 outline-dashed outline-1 outline-primary/40",
                     )}
                   >
@@ -1793,7 +1904,7 @@ export function GlobalChatbot() {
                       </span>
                     ))}
                     <textarea
-                      ref={inputRef}
+                      ref={attachComposer}
                       value={inputValue}
                       onChange={handleInput}
                       onKeyDown={handleKeyDown}
@@ -1805,7 +1916,11 @@ export function GlobalChatbot() {
                             ? "Ask with page context..."
                             : "Ask WarpBot..."
                       }
-                      className="flex-1 min-w-[120px] bg-transparent resize-none outline-none text-[13px] text-ink placeholder:text-ink-subtle self-stretch"
+                      // WT-667: `resize-none` stays — the height is computed, not dragged. The
+                      // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
+                      // state it used to be. No `self-stretch`: an explicit height is what makes
+                      // the box the size of its text, and stretching fights it.
+                      className="flex-1 min-w-[120px] bg-transparent resize-none overflow-y-auto outline-none text-[13px] text-ink placeholder:text-ink-subtle"
                       rows={1}
                     />
                   </div>
@@ -1859,7 +1974,7 @@ export function GlobalChatbot() {
                     >
                       <PopoverTrigger className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                         <Cube weight="regular" size={14} />
-                        Skills
+                        Tools
                         <CaretDown
                           weight="bold"
                           size={10}
@@ -1873,29 +1988,46 @@ export function GlobalChatbot() {
                         className="p-1.5 w-[300px] bg-surface-1 border border-border shadow-xl rounded-xl"
                       >
                         <div className="flex flex-col gap-2">
+                          {/* The same commands the "/" menu offers, and the same
+                              insertSlashCommand that runs them, so the menu and the keyboard
+                              cannot drift apart. This list used to render the backend's
+                              /assistant/skills, which had no prompt attached and so was
+                              `cursor-default` text -- a menu that looked clickable, was not,
+                              and told nobody what to do with it. */}
                           <section>
                             <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
-                              Skills
+                              Tools
                             </div>
-                            {skills && skills.length > 0 ? (
+                            {availableSlashCommands.length > 0 ? (
                               <ul className="flex flex-col">
-                                {skills.map((skill) => (
-                                  <li
-                                    key={skill.name}
-                                    className="flex cursor-default flex-col gap-0.5 rounded-md px-2.5 py-1.5"
-                                  >
-                                    <span className="text-[12px] font-medium text-ink">
-                                      {skill.label}
-                                    </span>
-                                    <span className="text-[11px] text-ink-subtle">
-                                      {skill.description}
-                                    </span>
+                                {availableSlashCommands.map((command) => (
+                                  <li key={command.command}>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSkillsMenuOpen(false);
+                                        insertSlashCommand(command);
+                                      }}
+                                      className="flex w-full flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-left transition-colors hover:bg-surface-2"
+                                    >
+                                      <span className="flex items-center gap-1.5 text-[12px] font-medium text-ink">
+                                        <span className="font-mono text-[11px] text-ink-subtle">
+                                          {command.command}
+                                        </span>
+                                        {command.label}
+                                      </span>
+                                      <span className="text-[11px] text-ink-subtle">
+                                        {command.description}
+                                      </span>
+                                    </button>
                                   </li>
                                 ))}
                               </ul>
                             ) : (
+                              // Not "loading": availableSlashCommands is filtered by the page
+                              // you are on, so an empty list is an answer, not a wait.
                               <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
-                                Loading skills…
+                                No tools for this page. Open a meeting or a document.
                               </div>
                             )}
                           </section>

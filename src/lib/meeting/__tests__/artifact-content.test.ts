@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 import { readSummaryArtifact } from "../artifact-content.ts";
+import { parseMeetingSummaryContent } from "../../../types/meetingSummary.ts";
 
 /**
  * The exact payload production stored for room 01a0089e on 2026-08-16, escapes and all — this is
@@ -114,21 +115,27 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
   // looks like working code, so it is asserted against the pages themselves.
   //
   // Each page is pinned to the viewer it actually uses, rather than to "any of these": the
-  // meeting's own page renders the summary through SummaryPanel (which reads the same parsed shape
-  // and lays it out as summary, decisions and action items), and the archive renders it through
-  // readableArtifactBody. Requiring one named component of both would be requiring a mount that
-  // neither needs. What they owe the reader is identical, and that is what the second assertion
-  // holds: never the raw payload.
+  // meeting's own page renders the summary through the reading rail (which reads the same parsed
+  // shape and lays it out as an overview and its citable points, beside the transcript), and the
+  // archive renders it through readableArtifactBody. Requiring one named component of both would
+  // be requiring a mount that neither needs. What they owe the reader is identical, and that is
+  // what the second assertion holds: never the raw payload.
+  //
+  // The rail took this over from SummaryPanel when the Summary tab was merged into it — one
+  // summary, one place, beside the transcript it cites.
   //
   // The standalone artifacts page — the other half of the original WT-432 pair — is gone. It was
   // a second view of the Files tab both of these already carry, and nothing linked to it.
   const pages = [
     {
       path: "src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx",
-      viewer: "SummaryPanel",
+      viewer: "TranscriptReadingLayout",
     },
     {
-      path: "src/app/(app)/[workspaceSlug]/history/page.tsx",
+      // /history is deleted. The archive's reading moved into the library that builds every
+      // card's excerpt — which is the file that actually handles a payload now, and therefore
+      // the only one where pinning this assertion still asserts something.
+      path: "src/lib/meeting/artifact-library.ts",
       viewer: "readableArtifactBody",
     },
   ];
@@ -143,5 +150,37 @@ test("neither artifact viewer stringifies JSON at the user any more", () => {
       !source.includes("JSON.stringify(JSON.parse"),
       `${page.path} must not pretty-print JSON at the reader`,
     );
+  }
+});
+
+/**
+ * The language a summary was written in is READ BACK, never guessed at.
+ *
+ * A reader has to be able to see which language the document in front of them is in before
+ * deciding whether to ask for another one, and the only trustworthy source for that is what the
+ * worker recorded when it wrote the summary. Detecting it from the text would be answering a
+ * question we already knew the answer to — and getting it wrong on a two-sentence summary.
+ */
+test("a recorded summary language survives parsing, normalised", () => {
+  const parsed = parseMeetingSummaryContent(
+    JSON.stringify({ summary: "Bot performance was discussed.", summaryLanguage: "EN" }),
+  );
+
+  assert.equal(parsed?.summaryLanguage, "en");
+});
+
+/**
+ * No recorded language is a real answer: it says nobody chose, and the model followed the
+ * transcript. Every summary written before the choice existed is in this state, and the rail
+ * offers "As spoken" for exactly it — so it must not be confused with a language of "".
+ */
+test("a summary with no recorded language reports undefined, not an empty string", () => {
+  for (const content of [
+    JSON.stringify({ summary: "x" }),
+    JSON.stringify({ summary: "x", summaryLanguage: "" }),
+    JSON.stringify({ summary: "x", summaryLanguage: "   " }),
+    JSON.stringify({ summary: "x", summaryLanguage: 7 }),
+  ]) {
+    assert.equal(parseMeetingSummaryContent(content)?.summaryLanguage, undefined);
   }
 });

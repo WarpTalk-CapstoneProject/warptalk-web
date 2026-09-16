@@ -33,7 +33,10 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => readFileSync(join(root, p), "utf8");
 
-const PANEL = "src/components/rooms/meeting-record-panels.tsx";
+// The rail, not the panel. The summary's own tab is gone — it was a second place to read one
+// summary — and everything WT-369 pinned moved with it into the reading rail, unchanged: the same
+// resolved state, the same download gate, the same flag that must not come back.
+const PANEL = "src/components/rooms/meeting-reading-rail.tsx";
 const MAPPING = "src/lib/meeting/room-history-mapping.ts";
 
 /**

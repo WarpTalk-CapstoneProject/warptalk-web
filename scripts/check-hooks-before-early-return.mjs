@@ -59,7 +59,7 @@ const COMPONENT_START = /^export default function \w+\(/;
  * Only a guard counts, and identifying one has to be precise in both directions.
  *
  * Matching any `return` indented two-to-four spaces was the first attempt, and it reported
- * history/page.tsx and rooms/page.tsx — where the `return` belongs to a `useMemo(() => {`
+ * artifacts/page.tsx and rooms/page.tsx — where the `return` belongs to a `useMemo(() => {`
  * callback, not to the component. A check that fails CI on correct code is worse than no
  * check, so an early return is recognised only in the two shapes a guard actually takes:
  *

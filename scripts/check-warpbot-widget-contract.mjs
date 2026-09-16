@@ -25,8 +25,12 @@ const widget = await readFile(
   path.join(root, "src/components/layout/global-chatbot.tsx"),
   "utf8",
 );
+const recordPage = await readFile(
+  path.join(root, "src/app/(app)/[workspaceSlug]/artifacts/[roomId]/page.tsx"),
+  "utf8",
+);
 const historyPage = await readFile(
-  path.join(root, "src/app/(app)/[workspaceSlug]/history/page.tsx"),
+  path.join(root, "src/app/(app)/[workspaceSlug]/artifacts/page.tsx"),
   "utf8",
 );
 
@@ -155,10 +159,19 @@ const checks = [
       ),
   ],
   [
-    "history registers ambient context only with a selected meeting",
-    /useRegisterAssistantContext\(\s*\n\s*selected\s*\n\s*\? \{/.test(
-      historyPage,
-    ) && /: null,\s*\n\s*\);/.test(historyPage),
+    // Was "history registers ambient context only with a selected meeting", asserting the
+    // `selected ? {...} : null` shape the artifacts LIST used to carry. Records open at their own
+    // URL now, so the list has no selected meeting to describe — but the rule it protected is
+    // unchanged and is checked on both halves: the list offers WarpBot nothing, and the record
+    // page offers it a real room id. A context naming a filter name and a count would be exactly
+    // the placeholder entity the sibling @mention rule exists to forbid.
+    "the records list registers no ambient entity",
+    /useRegisterAssistantContext\(null\);/.test(historyPage),
+  ],
+  [
+    "the record page registers the meeting it is showing",
+    /useRegisterAssistantContext\(/.test(recordPage) &&
+      /entityId: group\.roomId,/.test(recordPage),
   ],
 ];
 

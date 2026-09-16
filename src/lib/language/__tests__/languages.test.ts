@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   SUPPORTED_LANGUAGES,
   formatLanguageRoute,
+  formatLanguageRouteShort,
+  getLanguageCode,
   getLanguageName,
   isLanguageAllowedByPolicy,
   languagesInScope,
@@ -65,9 +67,13 @@ test("scopes decide what a picker offers", () => {
   assert.ok(!meeting.includes("zh"));
   assert.equal(getLanguageName("zh-CN"), "Chinese");
 
+  // Every meeting language, since the catalogue is warmed for every language Cartesia publishes.
+  // It used to be ["vi", "en"]: the catalogue only existed for a language after a meeting had
+  // dubbed into it, and this scope was drawn around that limitation. A workspace's policy narrows
+  // it — see voice/library-languages.ts — so this is the ceiling, not what a person is offered.
   assert.deepEqual(
     languagesInScope("voiceCatalog").map((language) => language.code),
-    ["vi", "en"],
+    ["vi", "en", "ja", "ko", "fr", "es"],
   );
 });
 
@@ -84,6 +90,20 @@ test("the language route reads as names, with the source not repeated", () => {
 test("a single-language route is just that language", () => {
   assert.equal(formatLanguageRoute("vi-VN", ["vi-VN"]), "Vietnamese");
   assert.equal(formatLanguageRoute("vi-VN", []), "Vietnamese");
+});
+
+test("the short route reads as codes, with the source not repeated", () => {
+  // The calendar's Agenda row: "EN → VI", never "English → Vietnamese" in a 12px meta line.
+  assert.equal(formatLanguageRouteShort("en-US", ["en-US", "vi-VN"]), "EN → VI");
+  assert.equal(formatLanguageRouteShort("vi-VN", ["vi-VN", "en-US", "ja-JP"]), "VI → EN, JA");
+  // Deduped on the language, not the tag — the same rule the long form applies.
+  assert.equal(formatLanguageRouteShort("en", ["en-GB", "vi"]), "EN → VI");
+  assert.equal(formatLanguageRouteShort("vi-VN", ["vi-VN"]), "VI");
+});
+
+test("the short route never opens on a bare arrow", () => {
+  assert.equal(formatLanguageRouteShort(undefined, ["vi-VN"]), "Auto → VI");
+  assert.equal(formatLanguageRouteShort(undefined, []), "Auto");
 });
 
 test("an empty workspace policy means unrestricted, not forbidden", () => {
@@ -150,4 +170,38 @@ test("an unknown language is passed through rather than guessed at", () => {
   assert.equal(getLanguageName("kl-GL"), "kl-GL");
   assert.equal(getLanguageName(undefined), "Auto");
   assert.equal(getLanguageName(""), "Auto");
+});
+
+/**
+ * WT-661: the short mark beside a language is its ISO-639-1 code, not a flag emoji.
+ *
+ * Two independent defects retired the flag. Windows ships no colour flag glyphs, so a
+ * regional-indicator pair rendered as its two letters and a room configured for English and
+ * Vietnamese read "US · VN". And a flag asserted a country: English was drawn as the United
+ * States, which is wrong for every British, Indian, Nigerian and Australian speaker of it.
+ */
+test("a language's short mark is its own code, from a tag or a bare code", () => {
+  assert.equal(getLanguageCode("vi-VN"), "VI");
+  assert.equal(getLanguageCode("en-US"), "EN");
+  assert.equal(getLanguageCode("ja-JP"), "JA");
+  assert.equal(getLanguageCode("vi"), "VI");
+  assert.equal(getLanguageCode("vi_VN"), "VI");
+});
+
+test("an unknown language degrades to its own tag, not to nothing", () => {
+  // The flag did the opposite: no region meant no glyph, so the badge vanished for any language
+  // the registry had not been taught. A code is available for every tag there is.
+  assert.equal(getLanguageCode("xh"), "XH");
+  assert.equal(getLanguageCode("kl-GL"), "KL");
+});
+
+test("no language means no mark", () => {
+  assert.equal(getLanguageCode(undefined), "");
+  assert.equal(getLanguageCode(""), "");
+});
+
+test("the code never carries a region, which is the whole point", () => {
+  // en-US and en-GB are one language and must produce one mark. The flag produced two, and
+  // neither of them said "English".
+  assert.equal(getLanguageCode("en-GB"), getLanguageCode("en-US"));
 });

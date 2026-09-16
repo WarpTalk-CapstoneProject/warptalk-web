@@ -25,6 +25,10 @@ import {
   useMyJoinRequests,
 } from "@/hooks/use-workspace";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
+import {
+  preferRememberedWorkspace,
+  recallLastWorkspaceSlug,
+} from "@/lib/workspace/last-workspace";
 import { CHECKOUT_PLAN_PARAM, readCheckoutIntent } from "@/lib/billing/checkout-intent";
 import type { WorkspaceInvitationDto } from "@/types/workspace";
 
@@ -147,16 +151,23 @@ export default function WorkspaceOnboardingGatePage() {
         return;
       }
 
-      if (workspacesData?.items && workspacesData.items.length > 0) {
-        const firstWs = workspacesData.items[0];
+      // WT-347: the remembered workspace, not `items[0]`. Sign-in normally lands a returning
+      // account straight in its workspace now, so this runs for a first sign-in on a new browser
+      // or an explicit `/workspace` callback — and when a memory exists here, it still beats the
+      // server's list order for anyone in more than one workspace.
+      const nextWs = preferRememberedWorkspace(
+        workspacesData?.items ?? [],
+        recallLastWorkspaceSlug(user?.id),
+      );
+      if (nextWs) {
         void (async () => {
-          const selection = await selectWorkspace.mutateAsync(firstWs.id);
+          const selection = await selectWorkspace.mutateAsync(nextWs.id);
           applySelectedWorkspace(selection, setActiveWorkspace);
           router.replace(`/${selection.slug}/home`);
         })();
       }
     }
-  }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router]);
+  }, [isAuthenticated, activeWorkspaceId, workspacesData, workspacesLoading, pendingInvitations, pendingInvitationsLoading, selectWorkspace, setActiveWorkspace, router, user?.id]);
 
   async function handleAcceptInvitation(invitationId: string) {
     await acceptInvitation.mutateAsync(invitationId);

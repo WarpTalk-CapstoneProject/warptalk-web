@@ -259,7 +259,6 @@ export function Interactive404({ mode = "not-found", onRetry }: Interactive404Pr
           </Link>
           <nav className="hidden items-center gap-5 text-[11px] text-white/65 md:flex">
             <Link href="/workspace" className="transition hover:text-white">Workspace</Link>
-            <Link href="/history" className="transition hover:text-white">History</Link>
             <Link href="/login" className="rounded-full bg-white px-4 py-2 font-medium text-black transition hover:bg-white/90">
               Contact us <ArrowUpRight weight="light" className="ml-1 inline h-3 w-3" />
             </Link>

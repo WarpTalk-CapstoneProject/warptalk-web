@@ -6,6 +6,7 @@ import type {
   CreateTranscriptRequest,
   PagedResult,
   ProcessAudioChunkRequest,
+  TranscriptCorrectionDto,
   TranscriptDto,
   TranscriptExportDto,
   TranscriptLanguageCoverage,
@@ -97,6 +98,14 @@ export const transcriptService = {
 
   correctSegment(id: string, segmentId: string, data: CreateCorrectionRequest) {
     return apiClient.post<void>(API.transcripts.correctSegment(id, segmentId), data);
+  },
+
+  /**
+   * Every correction ever saved for one segment, in the order the server found them. The host
+   * and everyone who took part may read this — the same access rule as the transcript itself.
+   */
+  corrections(id: string, segmentId: string) {
+    return apiClient.get<TranscriptCorrectionDto[]>(API.transcripts.corrections(id, segmentId));
   },
 
   processAudioChunk(id: string, data: ProcessAudioChunkRequest) {

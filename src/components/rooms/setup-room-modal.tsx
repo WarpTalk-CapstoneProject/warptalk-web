@@ -19,9 +19,8 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { getFlagEmoji } from "@/lib/language/language-flag";
 import { resolvePreJoinLanguages, snapPairIntoOptions } from "@/lib/language/prejoin";
-import { parseTargetLanguages } from "@/lib/language/languages";
+import { getLanguageCode, parseTargetLanguages } from "@/lib/language/languages";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import {
   useJoinLanguagePolicy,
@@ -418,7 +417,7 @@ export function SetupRoomModal() {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent
         overlayClassName="!bg-black/40 !backdrop-blur-none"
-        className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
+        className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-surface-1 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
       >
         <DialogTitle className="sr-only">Setup Room</DialogTitle>
 
@@ -459,7 +458,7 @@ export function SetupRoomModal() {
                 playsInline
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-canvas">
+              <div className="absolute inset-0 flex items-center justify-center bg-surface-1">
                 <div className="flex flex-col items-center gap-3 text-ink-muted">
                   <VideoCameraSlash className="w-12 h-12" weight="light" />
                   <span className="text-[14px] font-medium">Camera is off</span>
@@ -543,14 +542,14 @@ export function SetupRoomModal() {
                     >
                       <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                         <span className="leading-none text-[14px]">
-                          {getFlagEmoji(speakLanguage)}
+                          {getLanguageCode(speakLanguage)}
                         </span>
                         <span className="font-medium text-ink">I speak</span>
                       </SelectTrigger>
                       <SelectContent>
                         {preJoin.options.map((language) => (
                           <SelectItem key={language.locale} value={language.locale}>
-                            {getFlagEmoji(language.locale)} {language.name}
+                            {getLanguageCode(language.locale)} {language.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -568,14 +567,14 @@ export function SetupRoomModal() {
                     >
                       <SelectTrigger className="flex items-center gap-1.5 px-2.5 py-[3px] h-auto border-0 bg-transparent shadow-none rounded-full hover:bg-surface-2 focus:ring-0 [&>svg]:hidden">
                         <span className="leading-none text-[14px]">
-                          {getFlagEmoji(listenLanguage)}
+                          {getLanguageCode(listenLanguage)}
                         </span>
                         <span className="font-medium text-ink">I hear</span>
                       </SelectTrigger>
                       <SelectContent>
                         {preJoin.options.map((language) => (
                           <SelectItem key={language.locale} value={language.locale}>
-                            {getFlagEmoji(language.locale)} {language.name}
+                            {getLanguageCode(language.locale)} {language.name}
                           </SelectItem>
                         ))}
                       </SelectContent>

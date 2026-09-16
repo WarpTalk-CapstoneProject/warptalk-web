@@ -18,9 +18,12 @@ test("a summary written before citations existed still renders", () => {
   });
 
   assert.deepEqual(sections.map((s) => s.key), ["decisions", "actionItems"]);
-  assert.deepEqual(sections[0].items, [{ text: "Cap the room limit at 500", atMs: null }]);
+  // alsoAtMs is [] and never undefined, in the oldest shape too, so no consumer has to guard.
+  assert.deepEqual(sections[0].items, [
+    { text: "Cap the room limit at 500", atMs: null, alsoAtMs: [] },
+  ]);
   assert.deepEqual(sections[1].items, [
-    { text: "Draft the pricing page", owner: "Tu", atMs: null },
+    { text: "Draft the pricing page", owner: "Tu", atMs: null, alsoAtMs: [] },
   ]);
 });
 
@@ -28,7 +31,45 @@ test("a cited item keeps the moment it came from", () => {
   const sections = parseSummarySections({
     decisions: [{ text: "Cap it at 500", atMs: 90210 }],
   });
-  assert.deepEqual(sections[0].items, [{ text: "Cap it at 500", atMs: 90210 }]);
+  assert.deepEqual(sections[0].items, [
+    { text: "Cap it at 500", atMs: 90210, alsoAtMs: [] },
+  ]);
+});
+
+test("a sentence about an exchange keeps every moment it rests on", () => {
+  // One anchor can only light one turn. "Kenji carried on with the install" and the "ok, taking
+  // it" that answered it are two turns by two people, and the sentence covers both.
+  const sections = parseSummarySections({
+    narrative: [{ text: "Kenji carried on with the install", atMs: 45_000, alsoAtMs: [62_000] }],
+  });
+  assert.deepEqual(sections[0].items, [
+    { text: "Kenji carried on with the install", atMs: 45_000, alsoAtMs: [62_000] },
+  ]);
+  assert.equal(sections[0].title, "What happened");
+});
+
+test("supporting moments are ordered forwards and never repeat", () => {
+  // A moment cited twice is one piece of evidence, and a reader stepping through them travels
+  // forwards through the meeting rather than in whatever order the model happened to emit.
+  const sections = parseSummarySections({
+    narrative: [{ text: "x", atMs: 1_000, alsoAtMs: [9_000, 3_000, 9_000, "3000"] }],
+  });
+  assert.deepEqual(sections[0].items[0].alsoAtMs, [3_000, 9_000]);
+});
+
+test("one unusable supporting moment does not cost the sentence the others", () => {
+  const sections = parseSummarySections({
+    narrative: [
+      { text: "x", atMs: 0, alsoAtMs: [5_000, -1, null, "nope", Number.NaN, 7_000.4] },
+      // Not an array at all — an older or a confused writer.
+      { text: "y", atMs: 0, alsoAtMs: "12000" },
+      { text: "z", atMs: 0 },
+    ],
+  });
+  assert.deepEqual(
+    sections[0].items.map((item) => item.alsoAtMs),
+    [[5_000, 7_000], [], []],
+  );
 });
 
 test("template sections nobody hardcoded are picked up", () => {
@@ -63,7 +104,7 @@ test("an item with no text is discarded, cited or not", () => {
   const sections = parseSummarySections({
     decisions: ["", "   ", { text: "", atMs: 5 }, { atMs: 9 }, { text: "kept", atMs: 1 }],
   });
-  assert.deepEqual(sections[0].items, [{ text: "kept", atMs: 1 }]);
+  assert.deepEqual(sections[0].items, [{ text: "kept", atMs: 1, alsoAtMs: [] }]);
 });
 
 test("a nonsense atMs degrades to uncited instead of breaking the row", () => {

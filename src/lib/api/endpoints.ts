@@ -2,6 +2,17 @@
  * Centralized API endpoints matching Gateway YARP routes.
  * Base URL is set in apiClient (NEXT_PUBLIC_API_URL).
  */
+
+/** The query string a minutes export takes, with absent values left out entirely. WT-685. */
+function minutesExportQuery(values: { template?: string; lang?: string; mode?: string }): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(values)) {
+    if (value) query.set(key, value);
+  }
+  const text = query.toString();
+  return text ? `?${text}` : "";
+}
+
 export const API = {
   auth: {
     /** Upload/replace the signed-in user's avatar (multipart). */
@@ -38,6 +49,14 @@ export const API = {
     // voice does real work on the AI side; later calls for the same (voice, language) are
     // served from that render.
     preview: "/auth/voice-profiles/preview",
+    /**
+     * The recording somebody uploaded, played back to them — NOT the clone.
+     *
+     * Separate from `preview` because they answer different questions: preview is the clone
+     * speaking a fixed sentence, this is the original. Hearing one without the other says nothing
+     * about how good the clone is.
+     */
+    sample: (profileId: string) => `/auth/voice-profiles/${profileId}/sample`,
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
@@ -135,17 +154,84 @@ export const API = {
     consent: (id: string) => `/room-artifacts/${id}/consent`,
     regenerateSummary: (roomId: string) =>
       `/room-artifacts/rooms/${roomId}/summary/regenerate`,
+    // WT-669 — what became of one queued rewrite. The request answers 202 and everything after
+    // that happens out of the caller's sight, so this is where the reason lives when it goes
+    // wrong. Keyed by the request's own id: it is one person's click, not part of the room.
+    summaryRewriteStatus: (roomId: string, requestId: string) =>
+      `/room-artifacts/rooms/${roomId}/summary/regenerate/${requestId}`,
+    // Reading a meeting in a shape and language. A GET that can cause work: the first reader of
+    // a pair nobody has asked for gets a 202 and the answer lands a moment later. It never
+    // changes what any other reader sees, which is what separates it from regenerateSummary.
+    summary: (roomId: string, template: string, language?: string) => {
+      const query = new URLSearchParams({ template });
+      // Only when chosen. An absent `language` and an empty one mean the same thing to the
+      // server, but sending the empty one makes two spellings of one request — and so two
+      // entries in anything that keys on the URL.
+      if (language) query.set("language", language);
+      return `/room-artifacts/rooms/${roomId}/summary?${query.toString()}`;
+    },
+    summaryRenderings: (roomId: string) =>
+      `/room-artifacts/rooms/${roomId}/summary/renderings`,
   },
   // Biên bản họp. Its own group rather than an artifact route: minutes are not an output a job
   // produced, they are a record with a lifecycle and a signature.
   minutes: {
     byRoom: (roomId: string) => `/rooms/${roomId}/minutes`,
+    // Reading the record in a language it was not drawn up in. A GET that can cause work —
+    // the first reader of a language pays for a model call and the answer lands a moment
+    // later — but it writes nothing to the document.
+    translation: (roomId: string, language: string) =>
+      `/rooms/${roomId}/minutes/translation?language=${encodeURIComponent(language)}`,
     draft: (roomId: string) => `/rooms/${roomId}/minutes/draft`,
     update: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}`,
+    secretary: (roomId: string, minutesId: string) =>
+      `/rooms/${roomId}/minutes/${minutesId}/secretary`,
     sign: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/sign`,
     approve: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/approve`,
     revise: (roomId: string, minutesId: string) => `/rooms/${roomId}/minutes/${minutesId}/revise`,
-    exportDocx: (roomId: string) => `/rooms/${roomId}/minutes/export.docx`,
+    /**
+     * WT-685: `lang` is the one language the file is in (absent = the original) and
+     * `mode=bilingual` puts the original beside exactly that language.
+     */
+    exportDocx: (roomId: string, template?: string, lang?: string, mode?: string) =>
+      `/rooms/${roomId}/minutes/export.docx${minutesExportQuery({ template, lang, mode })}`,
+    /**
+     * The same document, converted from that .docx — never a second layout, so the query means
+     * exactly what it means above.
+     */
+    exportPdf: (roomId: string, template?: string, lang?: string, mode?: string) =>
+      `/rooms/${roomId}/minutes/export.pdf${minutesExportQuery({ template, lang, mode })}`,
+    /** The share dialog's state. GET creates the link, restricted, on first ask. */
+    share: (roomId: string) => `/rooms/${roomId}/minutes/share`,
+    /** Email travels in the query string: an address contains characters a route segment does not. */
+    sharePerson: (roomId: string, email: string) =>
+      `/rooms/${roomId}/minutes/share/people?email=${encodeURIComponent(email)}`,
+    sharePeople: (roomId: string) => `/rooms/${roomId}/minutes/share/people`,
+    /**
+     * Every current biên bản in the workspace this caller may read.
+     *
+     * Anchored on the workspace rather than on a room because the Artifacts library asks a
+     * question no room can answer: which meetings left a written record at all. The gateway
+     * routes this one path to the translation-room service ahead of its own workspaces
+     * catch-all — see workspace-minutes-route.
+     */
+    forWorkspace: (workspaceId: string) => `/workspaces/${workspaceId}/minutes`,
+  },
+  /**
+   * Reading a biên bản from a share link.
+   *
+   * The only unauthenticated routes the web calls. The token IS the credential, so these are
+   * requested through publicApiClient — which never refreshes a session or redirects to /login
+   * on a 401, because a visitor with no account is not an expired session.
+   */
+  sharedMinutes: {
+    byToken: (token: string) => `/shared/minutes/${encodeURIComponent(token)}`,
+    exportDocx: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.docx`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
+    exportPdf: (token: string, template?: string) =>
+      `/shared/minutes/${encodeURIComponent(token)}/export.pdf`
+      + (template ? `?template=${encodeURIComponent(template)}` : ""),
   },
   // Work a meeting produced. Readable where the meeting is; closeable by the person it was
   // given to, or the host.
@@ -212,17 +298,6 @@ export const API = {
     setLock: (roomId: string) => `/meetings/rooms/${roomId}/lock`,
     setMuteOnEntry: (roomId: string) => `/meetings/rooms/${roomId}/mute-on-entry`,
     setRecording: (roomId: string) => `/meetings/rooms/${roomId}/recording`,
-    pollsList: (roomId: string) => `/meetings/rooms/${roomId}/polls`,
-    pollsCreate: (roomId: string) => `/meetings/rooms/${roomId}/polls`,
-    pollsVote: (roomId: string, pollId: string) => `/meetings/rooms/${roomId}/polls/${pollId}/vote`,
-    pollsClose: (roomId: string, pollId: string) => `/meetings/rooms/${roomId}/polls/${pollId}/close`,
-    questionsList: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
-    questionsAsk: (roomId: string) => `/meetings/rooms/${roomId}/questions`,
-    questionsUpvote: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/upvote`,
-    questionsAnswer: (roomId: string, questionId: string) => `/meetings/rooms/${roomId}/questions/${questionId}/answer`,
-    breakoutsStart: (roomId: string) => `/meetings/rooms/${roomId}/breakouts`,
-    breakoutsEnd: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/end`,
-    breakoutsMyAssignment: (roomId: string) => `/meetings/rooms/${roomId}/breakouts/my-assignment`,
   },
   workspaces: {
     base: "/workspaces",
@@ -260,6 +335,10 @@ export const API = {
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,
+    /** Replaces a rejected document's file in place, keeping its id and its history. WT-633. */
+    documentRevision: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/revision`,
+    /** A document's approval and feedback history, newest first. WT-633. */
+    documentHistory: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/history`,
     documentDownload: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/download`,
     documentPolicies: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies`,
     documentPolicyDetail: (workspaceId: string, docId: string, policyId: string) => `/workspaces/${workspaceId}/documents/${docId}/policies/${policyId}`,
@@ -290,8 +369,46 @@ export const API = {
       `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
     pluginConnection: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
-    pluginConnectUrl: (pluginKey: string) =>
-      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect-url`,
+    /**
+     * `client` tells the API which surface is asking, so it can seal that into the OAuth state.
+     * The desktop app opens consent in the system browser, and by the time the callback runs
+     * nothing on that request remembers which app started it.
+     */
+    pluginConnect: (pluginKey: string, client?: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect` +
+      (client ? `?client=${encodeURIComponent(client)}` : ""),
+    /**
+     * Which plugin tools WarpBot ran in one workspace, newest first. Owner/Admin of that workspace
+     * only — the assistant service asks the workspace service for the caller's role and fails
+     * closed. Query: `workspaceId` (required), `pluginKey`, `userId`, `skip`, `take` (clamped to
+     * 200 server-side). Not the system-admin audit under `adminPluginCatalog.audits`.
+     */
+    workspacePluginToolAudits: "/assistant/mcp/tools/audits",
+  },
+  /**
+   * The system-admin half of the plugin catalog (assistant service, WT-646).
+   *
+   * Separate from `assistant.plugins` above because the audiences are separate: those routes are
+   * what a signed-in user's plugins page calls, these write the global catalog every user reads
+   * and are gated on the platform-admin policy. Keeping them apart is what stops a user-facing
+   * component reaching for an admin URL by autocomplete.
+   *
+   * `catalog` is a RESERVED plugin key on the server for the reason this shape makes visible: it
+   * is a literal route segment sitting where `{pluginKey}` sits, and ASP.NET gives the literal
+   * precedence.
+   */
+  adminPluginCatalog: {
+    base: "/assistant/plugins/catalog",
+    detail: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}`,
+    oauth: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/oauth`,
+    tools: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/tools`,
+    rediscover: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/rediscover`,
+    audits: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
   },
   /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
@@ -331,6 +448,10 @@ export const API = {
     plan: (id: string) => `/plans/${id}`,
     /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
+    /** POST. Retires one row (is_active=false, effective_to=now); never a delete. */
+    rateCardDeactivate: (id: string) => `/usages/rate-card/${id}/deactivate`,
+    /** POST. Read-only: prices a proposed cost and markup without publishing anything. */
+    rateCardPreview: "/usages/rate-card/preview",
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
@@ -338,6 +459,16 @@ export const API = {
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
     base: "/admin/notifications",
+    detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
+  },
+  /**
+   * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
+   * controller lives on the workspace service's own prefix and is gated there. Other services'
+   * outboxes are not reachable from here.
+   */
+  adminWorkspaceOutbox: {
+    deadLetters: "/workspaces/outbox/dead-letters",
+    replay: (eventId: string) => `/workspaces/outbox/${encodeURIComponent(eventId)}/replay`,
   },
   adminAuditLog: {
     base: "/admin/audit-log",
@@ -393,6 +524,27 @@ export const API = {
       `/admin/subscriptions/workspace/${workspaceId}/change-plan`,
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
+    /** POST. Creates a contract subscription; refused while the workspace has any active one. */
+    createContract: "/subscriptions/contract",
+    /** GET. The workspace's active subscription, contract overrides included. */
+    active: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+  },
+  /**
+   * Bank-transfer reconciliation for contract workspaces. The invoices themselves are raised by
+   * the billing-cycle close; the only admin write is settling one.
+   */
+  adminInvoices: {
+    workspace: (workspaceId: string) => `/invoices/workspace/${workspaceId}`,
+    /** POST, no body. Marks the invoice and its payment paid. Idempotent on a paid invoice. */
+    markPaid: (invoiceId: string) => `/invoices/${invoiceId}/mark-paid`,
+  },
+  /**
+   * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under
+   * /admin/billing so the gateway's existing admin-billing route carries it.
+   */
+  adminSalesLeads: {
+    base: "/admin/billing/sales-leads",
+    status: (id: string) => `/admin/billing/sales-leads/${id}/status`,
   },
   /** Per-workspace analytics + ledger, served by the billing service (WT-206). */
   adminWorkspaceAnalytics: {
@@ -411,6 +563,19 @@ export const API = {
     // Membership facts only. The knowledge route that used to sit beside these is gone:
     // tenant content stays out of the admin portal (2026-08-17).
     members: (id: string) => `/admin/workspaces/${id}/members`,
+  },
+  /**
+   * A workspace's own payments and invoices (billing service; gateway routes `/payments/**` and
+   * `/invoices/**` to the billing cluster).
+   */
+  workspaceBilling: {
+    /** GET. Owner/Admin of the workspace (RequireWorkspaceRole). Paginated. */
+    paymentHistory: (workspaceId: string) => `/payments/workspace/${workspaceId}/history`,
+    /**
+     * POST, no body. Answers `{ url }` — a Stripe checkout page for one open invoice. Owner of the
+     * invoice's workspace only; the server resolves the workspace from the invoice.
+     */
+    invoiceCheckout: (invoiceId: string) => `/invoices/${invoiceId}/checkout`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",

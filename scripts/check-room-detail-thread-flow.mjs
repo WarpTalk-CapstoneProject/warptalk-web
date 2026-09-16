@@ -9,6 +9,10 @@ const sidePanel = await readFile(
   path.join(root, "src/components/rooms/live/side-panel/meeting-side-panel.tsx"),
   "utf8",
 );
+const meetingEndpoints = await readFile(
+  path.join(root, "src/lib/api/endpoints.ts"),
+  "utf8",
+);
 
 // The transcript panel's own props, so a host gate cannot be added to it without failing a check.
 const transcriptPanelStart = sidePanel.indexOf("<TranscriptPanel");
@@ -17,7 +21,10 @@ const transcriptPanelCall = transcriptPanelStart < 0
   : sidePanel.slice(transcriptPanelStart, sidePanel.indexOf("/>", transcriptPanelStart));
 
 const checks = [
-  ["user chips open a popover profile dropdown", page.includes("function UserChip(") && page.includes("<PopoverContent")],
+  // The chip and the panel it opens were split into a trigger plus `PersonPopover`, so pinning
+  // the old `UserChip` name asserted a shape rather than the behaviour this line is named for.
+  // What must stay true is that a person's chip opens a popover — check that, not the symbol.
+  ["user chips open a popover profile dropdown", page.includes("function PersonPopover(") && page.includes("<PopoverTrigger") && page.includes("<PopoverContent")],
   ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
@@ -25,8 +32,15 @@ const checks = [
   // the "Meeting access" copy cannot drift. The styling it must keep is the same as before;
   // only the place it is written down changed.
   ["join meeting button keeps white text on purple primary", page.includes("function RoomEntryButton(") && page.includes("\"rounded-md text-[13px] !text-white [&_svg]:!text-white\"")],
-  ["room detail uses a themed surface-1 background", page.includes("bg-surface-1 text-ink")],
-  ["visible host fallback label is removed", !page.includes("\"Host\"") && !page.includes(">Host<")],
+  // The page ground, which moved from surface-1 to panel on 2026-09-16: surface-1 is the card
+  // colour now, and this page is mostly cards. What the line guards is unchanged — a THEMED
+  // ground rather than a hardcoded white.
+  ["room detail uses a themed panel background", page.includes("bg-panel text-ink")],
+  // VISIBLE label, which is what the ticket removed and what this line is named for. Banning the
+  // string outright also banned `role: "Host"` -- the role as DATA, which the row now carries as
+  // a badge -- and even the comment explaining why the fallback must not return it. The defect
+  // was a role word rendered where a person's name goes, so guard the render and the return.
+  ["visible host fallback label is removed", !page.includes(">Host<") && !page.includes('return "Host"')],
   // WT-191: an invitee who already joined must appear once, not as a participant row
   // plus a duplicate "pending"/"accepted" invitation row. That needs toUserIdentity to
   // carry an email, and the dedupe to compare emails rather than an email against a UUID.
@@ -36,6 +50,8 @@ const checks = [
   ["live side panel removes notes polls and q-and-a tabs", !sidePanel.includes('label="Notes"') && !sidePanel.includes('label="Polls"') && !sidePanel.includes('label="Q&A"')],
   ["live side panel does not fetch removed feature badges", !sidePanel.includes("usePolls(") && !sidePanel.includes("useQuestions(")],
   ["live room no longer subscribes to removed polls and q-and-a events", !livePage.includes('connection.on("PollCreated"') && !livePage.includes('connection.on("QuestionAsked"')],
+  ["live room no longer subscribes to removed breakout events", !livePage.includes('connection.on("BreakoutsStarted"') && !livePage.includes('connection.on("BreakoutsEnded"')],
+  ["meeting API exposes no retired collaboration endpoints", !meetingEndpoints.includes("pollsList") && !meetingEndpoints.includes("questionsList") && !meetingEndpoints.includes("breakoutsStart")],
   // This has now flipped twice. 2026-07-30 pinned "never auto-starts"; WT-183 replaced it with
   // auto-start because a room stayed "Waiting" in the list while its host was already inside;
   // WT-248 reverted that, because starting to record and translate a conversation unasked is
@@ -49,7 +65,13 @@ const checks = [
   // more. Reading it as "translation is running" showed Stop from the moment a meeting opened:
   // the host was never offered Start, no TranslationRoomSession was ever created, the audio
   // routes never left READY, and translation could not begin at all.
-  ["transcription follows the room being open, not translation", livePage.includes('const meetingLive = room?.status === "in_progress"') && livePage.includes("meetingLiveRef.current")],
+  // ...and transcription follows neither. `meetingLive` still exists and still means "the room
+  // is open", because that is the right question for the translation-session query below. It is
+  // NOT the right question for the transcript: participants join and talk before anybody presses
+  // Start, and gating the broadcast handlers on it is what left production with an empty caption
+  // lane and an empty transcript panel for the first half of a meeting. The transcript gate is
+  // now stated as a refusal — see TRANSCRIPT_CLOSED_STATUSES.
+  ["transcription follows the room being open, not translation", livePage.includes('const meetingLive = room?.status === "in_progress"') && livePage.includes("const TRANSCRIPT_CLOSED_STATUSES")],
   ["translation running is read from an active session, not room status", livePage.includes("useTranslationRoomSessions") && livePage.includes('session.status === "ACTIVE"') && livePage.includes("warptalkStarted={translationStarted}")],
   // Stop must end the translation SESSION, not pause the room. Pausing sets the room to PAUSED,
   // which the AI workers read as "ignore this room's microphone" — so the old Stop took the
@@ -60,13 +82,20 @@ const checks = [
   // `room.status === "paused" ? resumeRoom : startRoom` did — started nothing and said it had.
   ["start translation goes through resume, the only path that opens a session", livePage.includes("resumeRoom.mutateAsync(room.id)") && !livePage.includes('room.status === "paused" ? resumeRoom : startRoom')],
   ["starting translation opens the transcript side panel", livePage.includes("setRightSidebarOpen(true)") && livePage.includes('setSidePanelMode("transcript")')],
-  ["paused rooms reject transcript broadcasts", livePage.includes("if (!meetingLiveRef.current) return;")],
+  // A PAUSED room must still reject transcript broadcasts — pausing is a deliberate "stop reading
+  // my microphone" — and so must one that has ended. Both are in TRANSCRIPT_CLOSED_STATUSES, and
+  // the guard reads that rather than asking whether translation's sibling has been pressed.
+  ["paused and ended rooms reject transcript broadcasts", livePage.includes("if (!transcriptOpenRef.current) return;") && livePage.includes('"paused",') && livePage.includes('"ended",')],
   // The transcript belongs to everyone in the room, and the backend agrees — TranscriptReadAccess
   // is host OR participant. Starting and stopping TRANSLATION is host-only because it spends a
   // billed pipeline; the transcript panel and the caption lane must not pick up a host gate by
   // association with it.
   ["the live transcript panel is not host-gated", transcriptPanelCall.length > 0 && !transcriptPanelCall.includes("isHost")],
-  ["captions follow the meeting, not the viewer's role", livePage.includes("enabled={meetingLive && subtitlesEnabled}")],
+  // Captions follow the CC control and nothing else. This used to be pinned as
+  // `enabled={meetingLive && subtitlesEnabled}` — the role-free part was the point, and the
+  // meetingLive half rode along until it turned out to hide the lane for every minute before
+  // Start. check-caption-lane-not-gated-on-start.mjs owns that rule in full now.
+  ["captions follow the meeting, not the viewer's role", livePage.includes("enabled={subtitlesEnabled}") && !livePage.includes("enabled={isHost && subtitlesEnabled}")],
   // WT-371 splits the two halves of what used to be one rule.
   //
   // STOPPING stays strictly host-only, and the reason above is why: translation spends a billed

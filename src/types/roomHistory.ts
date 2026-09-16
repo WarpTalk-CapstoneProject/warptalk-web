@@ -20,7 +20,22 @@ export type RoomArtifactType =
 
 export type RoomArtifactStatus = "ready" | "processing" | "expired" | "missing" | "failed" | "deleted";
 
-export type RoomConsentStatus = "granted" | "limited" | "declined" | "not_required";
+/**
+ * `"required"` is here because the wire has no verdict to report.
+ *
+ * `TranslationRoomArtifactDto` carries ONE consent field — `consentRequired: bool` — and nothing
+ * that says whether the consent it requires was ever given. The mapper used to answer that
+ * unanswerable question with `consentRequired ? "granted" : "not_required"`, which is exactly
+ * backwards and backwards in the dangerous direction: it reported PERMISSION EXISTS for precisely
+ * the artifacts still waiting on it. Nothing renders this field today, which is why it went
+ * unnoticed — and why it had to be fixed before something does.
+ */
+export type RoomConsentStatus =
+  | "granted"
+  | "limited"
+  | "declined"
+  | "required"
+  | "not_required";
 
 import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
 
@@ -82,6 +97,9 @@ export interface TranslationRoomSummaryArtifact {
   translations?: Record<string, MeetingSummarySection>;
   /** Which template produced this summary; absent on pre-template summaries. */
   templateKey?: string;
+  /** ISO 639-1 the summary was written in, as recorded by the worker that wrote it. Absent
+   *  means nobody chose one and the model followed the transcript. */
+  summaryLanguage?: string;
   /** Normalised sections carrying their citations — what the Summary tab renders. */
   sections?: MeetingSummarySectionView[];
 }

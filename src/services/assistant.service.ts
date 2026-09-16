@@ -8,8 +8,10 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
-  PluginConnectUrlDto,
+  PluginConnectResultDto,
   SendAssistantMessageResponse,
+  WorkspacePluginToolAuditDto,
+  WorkspacePluginToolAuditQuery,
 } from "@/types/assistant";
 
 export const assistantService = {
@@ -61,16 +63,43 @@ export const assistantService = {
     return apiClient.get<AssistantSkillDto[]>(API.assistant.skills);
   },
 
-  listPlugins() {
-    return apiClient.get<AssistantPluginCatalogItemDto[]>(API.assistant.plugins);
+  /**
+   * WT-646 — `workspaceId` is optional at the endpoint and it changes what comes back, not which
+   * rows come back: supplied, every row carries that workspace's verdict in
+   * `workspacePolicyBlockReason`; omitted, no workspace policy is applied at all and the field is
+   * always absent.
+   *
+   * The catalog itself stays personal either way. A plugin is installed and connected by a person,
+   * not by a workspace, and the workspace only gets to say whether its members may use plugins here
+   * — so this names the workspace the user is browsing from rather than scoping the list to it.
+   */
+  listPlugins(workspaceId?: string | null) {
+    return apiClient.get<AssistantPluginCatalogItemDto[]>(API.assistant.plugins, {
+      params: workspaceId ? { workspaceId } : undefined,
+    });
   },
 
-  installPlugin(pluginKey: string) {
-    return apiClient.post<AssistantPluginCatalogItemDto>(API.assistant.installPlugin(pluginKey));
+  /**
+   * `workspaceId` is what makes the refusal real rather than advisory: without it the server
+   * applies no policy and installs a plugin the page has just told the user their workspace does
+   * not permit.
+   */
+  installPlugin(pluginKey: string, workspaceId?: string | null) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(
+      API.assistant.installPlugin(pluginKey),
+      undefined,
+      { params: workspaceId ? { workspaceId } : undefined },
+    );
   },
 
-  getPluginConnectUrl(pluginKey: string) {
-    return apiClient.get<PluginConnectUrlDto>(API.assistant.pluginConnectUrl(pluginKey));
+  /**
+   * Connects a plugin. When the provider's grant already covers it the server connects it on the
+   * spot and answers `connected: true` without a URL; otherwise it answers with the consent URL.
+   */
+  connectPlugin(pluginKey: string, client?: string, workspaceId?: string | null) {
+    return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), undefined, {
+      params: workspaceId ? { workspaceId } : undefined,
+    });
   },
 
   disconnectPlugin(pluginKey: string) {
@@ -79,5 +108,22 @@ export const assistantService = {
 
   disablePlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
+  },
+
+  /**
+   * The workspace's plugin activity log. A plain array, not a paged envelope: the server returns
+   * no total, so a caller learns there is another page only by getting a full one back.
+   * Absent filters are left off the query string rather than sent empty.
+   */
+  listWorkspacePluginToolAudits(query: WorkspacePluginToolAuditQuery) {
+    return apiClient.get<WorkspacePluginToolAuditDto[]>(API.assistant.workspacePluginToolAudits, {
+      params: {
+        workspaceId: query.workspaceId,
+        skip: query.skip,
+        take: query.take,
+        ...(query.pluginKey ? { pluginKey: query.pluginKey } : {}),
+        ...(query.userId ? { userId: query.userId } : {}),
+      },
+    });
   },
 };

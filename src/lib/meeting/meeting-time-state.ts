@@ -79,37 +79,72 @@ const ATTENDED_PARTICIPANT_STATUSES: readonly string[] = [
  */
 const ABSENT_PARTICIPANT_STATUSES: readonly string[] = ["invited", "waiting", "rejected"];
 
+/**
+ * Invitation states that prove the viewer was EXPECTED — asked (`pending`) or asked and said yes
+ * (`accepted`). The same two states `RoomReadAccess.InvitationStatusesGrantingRead` lets through on
+ * the server, which matters: they are exactly the invitations that can have put the room on this
+ * timeline in the first place.
+ *
+ * An allow-list for the same reason the server's is one. `declined` — or any state added later —
+ * says nothing about whether the person turned up, so it falls through to "no evidence" rather
+ * than being read as a no-show.
+ */
+const EXPECTING_INVITATION_STATUSES: readonly string[] = ["pending", "accepted"];
+
 /** What the resolver needs from a meeting. A structural subset of `MyMeetingItem`. */
 export interface MeetingTimeStateInput {
   status: TranslationRoomStatus;
   /** The instant the row is filed under — same fallback chain the server sorts by. */
   occursAt: string;
   participants: readonly Pick<RoomHistoryParticipant, "userId" | "status">[];
+  /**
+   * The viewer's OWN invitation to this room, as the server stored it (PENDING / ACCEPTED /
+   * DECLINED). Only My Meetings sends it. Absent or null means "no invitation" or "a backend too
+   * old to say" — the two are treated alike, as no evidence, never as "was not invited".
+   */
+  viewerInvitationStatus?: string | null;
 }
 
 /**
  * Whether the viewer was ever in this room.
  *
  * Three-valued on purpose. `null` is "no evidence either way" and is NOT a synonym for false:
- * a payload with no roster, a roster with no row for the viewer, a status nobody here recognises,
- * or a signed-out/unknown viewer all land there.
+ * a payload with no roster, a roster with no row for the viewer and no invitation for them either,
+ * a status nobody here recognises, or a signed-out/unknown viewer all land there.
  *
- * A KNOWN LIMIT, so nobody rediscovers it as a bug. `RoomReadAccess.IsReadableBy` puts a room on
- * your timeline by three routes — you host it, you have a participant row, or an INVITATION carries
- * your email — and the third leaves no participant row at all. Such a meeting is genuinely missed
- * and this returns `null` for it, so it reads as `joined`. That is the deliberate direction to be
- * wrong in: telling someone they missed a meeting they attended is a false claim about their own
- * history, and the payload carries nothing that could distinguish "invited by email, never came"
- * from "the roster was not sent". Closing it needs the invitation on the DTO, not a guess here.
+ * The viewer's participant row, when there is one, is the whole answer. It records what happened
+ * in the room; an invitation only records what was asked beforehand, so an ACCEPTED invitation
+ * next to a `connected` row is still "attended", and an unrecognised row status next to a PENDING
+ * invitation is still "no evidence".
+ *
+ * WITHOUT a row, the invitation decides. `RoomReadAccess.IsReadableBy` puts a room on your timeline
+ * by three routes — you host it, you have a participant row, or an INVITATION carries your email —
+ * and the third leaves no participant row at all. That used to be a known limit here: the payload
+ * could not tell "invited by email, never came" from "no roster evidence", so such a meeting came
+ * back `null` and read as `joined`. My Meetings now carries `viewerInvitationStatus`, and the server
+ * never deletes a participant row — joining or knocking at the lobby writes one, and being
+ * admitted, refused or kicked only changes its status — so "expected, and no row" is a real
+ * no-show, not a missing field. It is reported as `false`.
+ *
+ * With no invitation field (the archive, or an older backend), a missing row stays `null`: the
+ * conservative direction, because telling someone they missed a meeting they attended is a false
+ * claim about their own history.
  */
 export function viewerAttended(
   participants: readonly Pick<RoomHistoryParticipant, "userId" | "status">[],
   viewerUserId: string | null,
+  viewerInvitationStatus?: string | null,
 ): boolean | null {
+  // Even with an invitation in hand: not knowing who is looking means not knowing whether one of
+  // those rows is theirs, and a row would outrank the invitation.
   if (!viewerUserId) return null;
 
   const row = participants.find((participant) => participant.userId === viewerUserId);
-  if (!row) return null;
+  if (!row) {
+    const invitation =
+      typeof viewerInvitationStatus === "string" ? viewerInvitationStatus.trim().toLowerCase() : "";
+    return EXPECTING_INVITATION_STATUSES.includes(invitation) ? false : null;
+  }
 
   const status = typeof row.status === "string" ? row.status.trim().toLowerCase() : "";
   if (ATTENDED_PARTICIPANT_STATUSES.includes(status)) return true;
@@ -134,7 +169,8 @@ export function viewerAttended(
  *     never-happened case, and it needs no viewer: nobody attended, because there was nothing to
  *     attend.
  *  3. Otherwise the meeting is over → `joined` if the viewer was in it, `missed` if the roster says
- *     they never were, and `joined` when there is nothing to say either way. That last fallback is
+ *     they never were — or if they have no roster row at all but were invited (see
+ *     `viewerAttended`) — and `joined` when there is nothing to say either way. That last fallback is
  *     the conservative one and is deliberate: with no evidence, this keeps the behaviour the page
  *     has always had rather than accusing a user of missing something on the strength of a field
  *     that happened to be absent.
@@ -165,5 +201,7 @@ export function resolveMeetingTimeState(
     return options.now - occursAt > MISSED_GRACE_MS ? "missed" : "upcoming";
   }
 
-  return viewerAttended(meeting.participants, options.viewerUserId) === false ? "missed" : "joined";
+  return viewerAttended(meeting.participants, options.viewerUserId, meeting.viewerInvitationStatus) === false
+    ? "missed"
+    : "joined";
 }

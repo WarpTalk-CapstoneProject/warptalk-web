@@ -43,20 +43,26 @@ const checks = [
     // Transcripts page behind it, are gone — a meeting's transcript, AI summary and files
     // are three tabs on that meeting's own page, below its description. What WT-225/228
     // actually needs is that the saved record is reachable, and it is reachable there.
+    // The summary no longer has a tab of its own either: it is rendered by the reading rail
+    // beside the transcript it cites, which is what <TranscriptReadingLayout brings. Same rule,
+    // one fewer place to read the same summary.
     "WT-225/228 the saved meeting record is reachable from the meeting",
     roomDetailPage.includes("<MeetingRecordSection") &&
-      roomDetailPage.includes("<SummaryPanel") &&
+      roomDetailPage.includes("<TranscriptReadingLayout") &&
       roomDetailPage.includes("<ArtifactsPanel"),
   ],
   [
-    // The gate this opens is now named for what it actually governs: the room being LIVE,
-    // which is what transcript broadcasts follow. Translation has its own signal (an ACTIVE
-    // TranslationRoomSession) and is not what TranslationRoomStarted announces. The race WT-226
-    // is about is unchanged — the first STT result can beat the REST refetch, so the flag must
-    // be set before it.
+    // The gate this opens is now named for what it actually governs: whether an arriving
+    // transcript broadcast still has somewhere to land. Translation has its own signal (an
+    // ACTIVE TranslationRoomSession) and is not what TranslationRoomStarted announces.
+    //
+    // It was `meetingLiveRef` and meant `status === "in_progress"`, which also made it the gate
+    // that dropped every segment before anybody pressed Start — see TRANSCRIPT_CLOSED_STATUSES.
+    // The race WT-226 is about is unchanged: the first STT result can beat the REST refetch, so
+    // the flag must be set before it. It still matters for a room being resumed from PAUSED.
     "WT-226 the live gate is opened synchronously before the room refetch race",
-    startedHandler.indexOf("meetingLiveRef.current = true") >= 0 &&
-      startedHandler.indexOf("meetingLiveRef.current = true") <
+    startedHandler.indexOf("transcriptOpenRef.current = true") >= 0 &&
+      startedHandler.indexOf("transcriptOpenRef.current = true") <
         startedHandler.indexOf("refetchRoom"),
   ],
   [

@@ -75,7 +75,7 @@ export function DateField({
             // The row this sits in toggles the whole setting when clicked.
             onClick={(event) => event.stopPropagation()}
             className={cn(
-              "flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border/60 bg-canvas px-1.5 text-[12px] tabular-nums text-ink focus:outline-none focus:ring-1 focus:ring-ink/20",
+              "flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border/60 bg-surface-2 px-1.5 text-[12px] tabular-nums text-ink focus:outline-none focus:ring-1 focus:ring-ink/20",
               className,
             )}
           >
@@ -86,7 +86,7 @@ export function DateField({
       />
       <PopoverContent
         align="end"
-        className="w-auto rounded-xl border-border/50 bg-canvas p-3 shadow-xl"
+        className="w-auto rounded-xl border-border/50 bg-surface-1 p-3 shadow-xl"
         onClick={(event) => event.stopPropagation()}
       >
         <Calendar

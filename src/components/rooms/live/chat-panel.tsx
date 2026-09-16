@@ -117,8 +117,8 @@ function ChatSenderAvatar({
   displayName: string;
 }) {
   const identity = useMeetingIdentity(userId, displayName);
-  // No flag: the row already prints the message's language beside the name.
-  return <ParticipantAvatar identity={identity} size="sm" showFlag={false} className="mt-0.5" />;
+  // No code badge: the row already prints the message's language beside the name.
+  return <ParticipantAvatar identity={identity} size="sm" showCode={false} className="mt-0.5" />;
 }
 
 export function ChatPanel({
@@ -684,6 +684,8 @@ export function ChatPanel({
     try {
       setSendError(null);
       const result = await connectPlugin.mutateAsync({ pluginKey });
+      // Connected on the server already: the provider's grant covered it, nothing to open.
+      if (result.connected || !result.url) return;
       if (!openProviderConsent(result.url)) {
         // Blocked popup, most likely: the user gesture is gone by the time the mutation
         // resolves. Saying nothing leaves them waiting on a window that never opened.

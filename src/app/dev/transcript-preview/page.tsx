@@ -26,7 +26,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 
 import { MeetingFeedbackMenu } from "@/components/rooms/feedback-menu";
+import { TranscriptReadingLayout } from "@/components/rooms/meeting-reading-rail";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
+import type { MeetingSummarySectionView } from "@/lib/meeting/meeting-summary";
+import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto, TranscriptTranslationDto } from "@/types/transcript";
 
 const TU = "019f0d00-0de0-7000-9000-000000000001";
@@ -128,6 +131,154 @@ const TRANSLATIONS: TranscriptTranslationDto[] = TRANSLATED.map(
   }),
 );
 
+/**
+ * A summary of the fixture above, with citations, so Option C's rail has something real to point
+ * at. One item in each shape deliberately carries NO moment: the rail must refuse to offer a jump
+ * for it and say so, and that refusal is the part worth looking at — it is the rule that stops an
+ * unverifiable claim appearing in a column whose whole argument is that claims have sources.
+ *
+ * The `narrative` section is what the traceable template emits in place of the flat overview
+ * paragraph, and it is here for the same reason the rest of this page is: there is otherwise no
+ * way to look at it without a real meeting written in that template. Two of its sentences are
+ * chosen for the two cases that are easy to get wrong —
+ *   · 24s + 41s land in DIFFERENT turns, so hovering it must light two blocks of the transcript
+ *     at once and scrolling to either one must light the sentence back;
+ *   · 54s + 56s are one utterance the recogniser split, so they land in the SAME turn and the
+ *     rail must publish that block once rather than twice.
+ */
+const SUMMARY_SECTIONS: MeetingSummarySectionView[] = [
+  {
+    key: "narrative",
+    title: "What happened",
+    items: [
+      {
+        text: "Tuan read the demo out in Japanese, and Tu checked that both languages stayed on screen while he did.",
+        atMs: 24_000,
+        alsoAtMs: [41_000],
+      },
+      {
+        text: "The dub ran about a second behind the speaker, though the translation itself came out right.",
+        atMs: 54_000,
+        alsoAtMs: [56_000],
+      },
+      {
+        text: "They agreed to leave the written summary in Vietnamese.",
+        atMs: 70_000,
+        alsoAtMs: [],
+      },
+      // No moment: a sentence nobody actually said, which is the one this section must draw
+      // without a left bar and without making it clickable.
+      {
+        text: "Nothing was settled about which language the export should default to.",
+        atMs: null,
+        alsoAtMs: [],
+      },
+    ],
+  },
+  {
+    key: "decisions",
+    title: "Decisions",
+    items: [
+      {
+        text: "The demo will be read out in Japanese first, with the Vietnamese dub running behind it.",
+        atMs: 24_000,
+        alsoAtMs: [],
+      },
+      {
+        text: "Both languages stay visible at once rather than the panel switching between them.",
+        atMs: 41_000,
+        alsoAtMs: [],
+      },
+    ],
+  },
+  {
+    key: "actionItems",
+    title: "Action items",
+    items: [
+      {
+        owner: "Tuan",
+        text: "Check why the dub is running about a second behind the speaker.",
+        atMs: 54_000,
+        alsoAtMs: [],
+      },
+      { owner: "Tu", text: "Keep the written summary in Vietnamese.", atMs: 70_000, alsoAtMs: [] },
+      // No moment recorded — the shape every summary written before citations existed still has.
+      {
+        owner: "Tu",
+        text: "Ask the team which language the export should default to.",
+        atMs: null,
+        alsoAtMs: [],
+      },
+    ],
+  },
+];
+
+/**
+ * A recording that exists as a row but cannot actually be fetched from a laptop.
+ *
+ * That is enough for the thing this page is for: the pip's frame, its 16:9 ratio at ≥1280px, its
+ * collapse to a bare transport bar below that, and the consent sentence that has to be readable
+ * BEFORE the press which records the consent. Pressing Play here fails with a toast, which is
+ * itself an honest thing to be able to look at.
+ */
+const RECORDING: RoomHistoryArtifact = {
+  id: "preview-recording",
+  type: "recording",
+  title: "Meeting recording",
+  description: "The meeting as it was held.",
+  status: "ready",
+  format: "mp4",
+  durationSeconds: 84,
+  consentRequired: true,
+  recordingStartedAt: "2026-08-21T00:16:00.000Z",
+  backendSource: "translation_room_recordings",
+};
+
+/**
+ * The ended record the rail reads, now that the rail carries the WHOLE summary rather than a list
+ * of its citable points. Everything below the sections is here because the rail renders it: the
+ * template the summary was written in, and the artifact its Download button points at.
+ *
+ * The flat `summary` string is kept and is deliberately NOT drawn here: a summary carrying a
+ * narrative gives the paragraph over to the sentences, and leaving the string in the fixture is
+ * what makes that substitution visible rather than merely asserted.
+ */
+const PREVIEW_RECORD: EndedRoomHistoryItem = {
+  id: "preview-room",
+  workspaceId: "preview-workspace",
+  hostId: TU,
+  hostName: "Tu",
+  title: "Sprint review — 20 Aug",
+  translationRoomCode: "preview",
+  status: "ended",
+  startedAt: "2026-08-21T00:16:00.000Z",
+  endedAt: "2026-08-21T00:18:00.000Z",
+  durationSeconds: 120,
+  sourceLanguage: "vi-VN",
+  targetLanguages: ["ja-JP"],
+  participants: [],
+  participantCount: 2,
+  artifacts: [RECORDING],
+  retention: { kind: "not_configured" },
+  consent: { recording: "required", transcript: "not_required", summary: "not_required" },
+  summary: {
+    id: "preview-summary",
+    translationRoomId: "preview-room",
+    summary:
+      "The demo will run in Japanese with the Vietnamese dub behind it, and the dub's one-second lag is being looked into.",
+    keyPoints: [],
+    decisions: [],
+    actionItems: [],
+    modelUsed: "preview",
+    processingTimeMs: 0,
+    generatedAt: "2026-08-21T00:18:30.000Z",
+    // Traceable, because the sections above carry a narrative — the picker would otherwise name a
+    // shape this fixture is not in.
+    templateKey: "traceable",
+    sections: SUMMARY_SECTIONS,
+  },
+};
+
 export default function TranscriptPreviewPage() {
   // ?theme=light / ?theme=dark. Both themes have to be looked at, and the machine doing the
   // looking follows the OS — which pins it to one of them and hides every regression in the
@@ -176,6 +327,50 @@ export default function TranscriptPreviewPage() {
         </div>
       </section>
 
+      {/* Option C. Widen and narrow the window across 1024px and 1280px to see all three
+          breakpoints: two regions with a 16:9 pip, two regions with a 320px rail and the pip
+          collapsed to its transport bar, and the stacked layout with the summary on top. Hover a
+          claim to light its paragraph, scroll the transcript to watch the claims light themselves,
+          and press J / K / Space / `/` with focus on nothing in particular.
+
+          The narrative at the top is the part to tab through rather than hover: a keyboard reader
+          has to get the same left bar, the same moments at the right edge, and the same lit turns
+          a pointer gets, and the fourth sentence has to be unreachable because it has no source. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
+          Option C · the transcript beside what it amounts to
+        </h2>
+        <div className="rounded-[14px] border border-border bg-surface-1 p-5">
+          <TranscriptReadingLayout
+            record={PREVIEW_RECORD}
+            segments={SEGMENTS}
+            hasTranscript
+            recording={RECORDING}
+            seek={null}
+            onConsentGranted={() => {}}
+            onJumpToMoment={() => {}}
+            speakerDirectory={SPEAKER_DIRECTORY}
+            transcript={
+              <MeetingTranscriptArtifact
+                segments={SEGMENTS}
+                translations={TRANSLATIONS}
+                preferredLanguage="vi-VN"
+                baseTime="2026-08-21T00:16:00.000Z"
+                roomId="preview-room"
+                currentUserId={TU}
+                isEnded
+                onCopy={() => {}}
+                onSeekToRecording={() => {}}
+                transcriptId="preview-transcript"
+                transcriptStatus="finalized"
+                canEdit
+                speakerDirectory={SPEAKER_DIRECTORY}
+              />
+            }
+          />
+        </div>
+      </section>
+
       <section className="flex flex-col gap-2">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
           Ended meeting · host · the reader speaks Vietnamese
@@ -194,6 +389,8 @@ export default function TranscriptPreviewPage() {
             transcriptStatus="finalized"
             canEdit
             speakerDirectory={SPEAKER_DIRECTORY}
+            meetingStartedAt="2026-08-21T00:10:00.000Z"
+            meetingEndedAt="2026-08-21T00:52:00.000Z"
           />
         </div>
       </section>

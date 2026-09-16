@@ -284,7 +284,7 @@ function AuditRow({ entry }: { entry: AdminAuditLogEntryDto }) {
 
 export default function AdminAuditPage() {
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <AuditLog />
     </Suspense>
   );

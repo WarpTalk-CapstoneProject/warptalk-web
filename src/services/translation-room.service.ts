@@ -1,6 +1,10 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type { ArtifactAccessLevel } from "@/lib/meeting/record-sharing";
+import type {
+  SummaryRenderingDto,
+  SummaryRenderingSummaryDto,
+} from "@/types/meetingSummary";
 import {
   normalizeNoiseReductionMode,
   type NoiseReductionMode,
@@ -559,15 +563,62 @@ export const translationRoomService = {
   },
 
   /**
-   * Ask for this meeting's summary to be written again in a different shape.
+   * Ask for this meeting's summary to be written again — in a different shape, a different
+   * language, or both.
    *
    * Answers 202, not 200 — the summary is not rewritten when this resolves. It arrives on
    * the artifact, so the caller has to refetch rather than trust the response body.
+   *
+   * Omitting `language` means "leave the language alone", which the AI side reads as "follow
+   * the transcript". The field is left off the body entirely rather than sent empty, so the
+   * request looks exactly like one from before the choice existed.
    */
-  regenerateSummary(roomId: string, templateKey: string) {
-    return apiClient.post<{ message: string }>(
+  regenerateSummary(roomId: string, templateKey: string, language?: string) {
+    // `requestId` is how the caller finds out what happened. Everything past the 202 is
+    // asynchronous, and without it the only signal a rewrite ever gave was the summary quietly
+    // changing — or, for every way it can fail, nothing at all. Empty when the server redirected
+    // the request to finalization, which is a different pipeline with nothing to poll.
+    return apiClient.post<{ message: string; requestId: string }>(
       API.roomArtifacts.regenerateSummary(roomId),
-      { templateKey },
+      language ? { templateKey, language } : { templateKey },
+    );
+  },
+
+  /**
+   * What became of one queued rewrite: `pending`, `completed`, or `failed` with the reason the
+   * worker wrote.
+   *
+   * `pending` covers both "still running" and "the answer expired before anyone asked", because
+   * nothing can tell those apart and guessing would be worse than waiting — the caller keeps its
+   * own deadline for that.
+   */
+  getSummaryRewriteStatus(roomId: string, requestId: string) {
+    return apiClient.get<{ status: string; error?: string | null }>(
+      API.roomArtifacts.summaryRewriteStatus(roomId, requestId),
+    );
+  },
+
+  /**
+   * This meeting's summary in a shape and language, generating that rendering if nobody has
+   * asked for the pair yet.
+   *
+   * Reading, not rewriting. This never changes what another reader sees, which is the whole
+   * reason it is a different call from regenerateSummary — asking for a language through THAT
+   * one replaced the room's summary for everybody.
+   *
+   * Resolves with `status: "generating"` and no content the first time a pair is asked for. That
+   * is neither an error nor an empty summary: the caller polls this same method until `ready`.
+   */
+  getSummaryRendering(roomId: string, templateKey: string, language?: string) {
+    return apiClient.get<SummaryRenderingDto>(
+      API.roomArtifacts.summary(roomId, templateKey, language),
+    );
+  },
+
+  /** Which renderings the room already holds, so a picker can say which choices are instant. */
+  getSummaryRenderings(roomId: string) {
+    return apiClient.get<SummaryRenderingSummaryDto[]>(
+      API.roomArtifacts.summaryRenderings(roomId),
     );
   },
 

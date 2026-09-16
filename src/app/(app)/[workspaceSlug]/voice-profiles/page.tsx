@@ -23,7 +23,11 @@ import {
   WorkspaceToolbarDivider,
 } from "@/components/workspace/page-chrome";
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
+import { useWorkspaceSettings } from "@/hooks/use-workspace";
+import { useWorkspaceStore } from "@/stores/workspace-store";
+import { resolveLibraryLanguage, voiceLibraryLanguages } from "@/lib/voice/library-languages";
 import { getLanguageLocale } from "@/lib/language/languages";
+import { ownVoiceProfiles } from "@/lib/voice/profile-status";
 
 type VoiceView = "all" | "mine" | "library" | "attention";
 
@@ -60,13 +64,36 @@ export default function VoiceProfilesPage() {
   const [view, setView] = useState<VoiceView>("all");
   const [search, setSearch] = useState("");
   // Bare ISO-639-1: what the AI worker keys its catalog by, and what the whole page shares.
-  const [language, setLanguage] = useState("vi");
+  // What the person CHOSE — see `language` below for what is actually shown.
+  const [chosenLanguage, setLanguage] = useState("vi");
+
+  // The workspace's allowed target languages decide what the library may be browsed in. Nobody
+  // in this workspace can be dubbed into anything else, so offering — or fetching — another
+  // language's catalogue is voices nobody here could ever hear.
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
+  // Settled, not merely successful: a failed read leaves the policy unknown, which the whole app
+  // reads as unrestricted — the same answer the create-room picker gives, so the two agree.
+  const policyReady = settingsQuery.isFetched;
+  const libraryLanguages = useMemo(
+    () => voiceLibraryLanguages(settingsQuery.data?.allowedTargetLanguages),
+    [settingsQuery.data?.allowedTargetLanguages],
+  );
+  // The default is Vietnamese, which a workspace may not allow. Snapped to a permitted language
+  // BEFORE anything reads it, so the picker never shows a value outside its own options and the
+  // catalogue is never fetched for a language the workspace excludes.
+  const language = resolveLibraryLanguage(chosenLanguage, libraryLanguages) ?? chosenLanguage;
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
   const profiles = useMemo(() => data ?? [], [data]);
+  // "Your voices" and the "Mine" count mean voices this person MADE. A library pick is stored
+  // in the same table as a nameless pointer row, and unfiltered it showed up beside their own
+  // recordings as "Untitled profile", counted as one of theirs, and could be chosen as the
+  // voice they are dubbed in. See profile-status.ts.
+  const ownProfiles = useMemo(() => ownVoiceProfiles(profiles), [profiles]);
   const needingAttention = useMemo(
-    () => profiles.filter((profile) => profileState(profile).tone !== "ready").length,
-    [profiles],
+    () => ownProfiles.filter((profile) => profileState(profile).tone !== "ready").length,
+    [ownProfiles],
   );
 
   const showMine = view !== "library";
@@ -84,7 +111,7 @@ export default function VoiceProfilesPage() {
             />
             <WorkspaceFilterPill
               label={t("filters.mine")}
-              count={profiles.length}
+              count={ownProfiles.length}
               selected={view === "mine"}
               onClick={() => setView("mine")}
             />
@@ -131,15 +158,15 @@ export default function VoiceProfilesPage() {
           <>
             {/* Permission first: it is what the rest of the rail is allowed to do. */}
             <VoiceConsentCard />
-            <MyDubVoicePicker profiles={profiles} language={language} />
+            <MyDubVoicePicker profiles={ownProfiles} language={language} />
             <ListeningVoiceSummary profiles={profiles} language={language} />
-            <VoiceProfileSummary profiles={profiles} />
+            <VoiceProfileSummary profiles={ownProfiles} />
           </>
         }
       >
         {showMine ? (
           <VoiceProfileList
-            profiles={profiles}
+            profiles={ownProfiles}
             isLoading={isLoading}
             search={search}
             onlyNeedingAttention={view === "attention"}
@@ -151,6 +178,11 @@ export default function VoiceProfilesPage() {
           <LibraryVoiceList
             profiles={profiles}
             language={language}
+            languages={libraryLanguages}
+            // No permitted language at all is a real policy — one naming only languages Cartesia
+            // publishes nothing in. Treated as not ready, so it never fetches, and the list shows
+            // its loading line rather than a catalogue for a language the workspace excludes.
+            policyReady={policyReady && libraryLanguages.length > 0}
             onLanguageChange={setLanguage}
             search={search}
           />

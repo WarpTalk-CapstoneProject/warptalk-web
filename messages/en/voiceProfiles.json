@@ -29,6 +29,7 @@
     "description": "How you sound to people listening in another language.",
     "cloneLiveOption": "Clone my voice live in the meeting",
     "myVoice": "My voice",
+    "voiceYouPicked": "A voice you picked",
     "yourVoicesGroup": "Your voices",
     "libraryVoicesGroup": "Library voices · {language}",
     "ariaLabel": "The voice you are dubbed in",
@@ -43,29 +44,32 @@
     "title": "Library voices",
     "languageAriaLabel": "Language for the voice library",
     "loading": "Loading voices…",
-    "noVoicesTitle": "No voices for {language} yet",
-    "noVoicesDescription": "They appear after the first translation into this language in a meeting.",
+    "noVoicesTitle": "No library voices for {language}",
+    "noVoicesDescription": "Cartesia publishes no voices in this language, or the library is still loading after a restart.",
     "noMatch": "No library voice matches that search.",
-    "youHearThis": "You hear this",
-    "yourDefault": "Your default",
+    "youHearThis": "Stand-in",
+    "yourDefault": "Your stand-in",
     "clear": "Clear",
     "use": "Use",
     "toasts": {
-      "setAsHeard": "Set as the voice you hear for this language.",
+      "setAsHeard": "Saved — used for speakers in this language who have no voice of their own.",
       "clearedAutomatic": "Cleared — back to the automatic voice.",
-      "saveFailed": "Could not save the voice you hear."
+      "saveFailed": "Could not save the stand-in voice."
     }
   },
   "listeningSummary": {
-    "title": "Voices you hear",
-    "description": "Used for a speaker in {language} who has not picked a voice of their own.",
+    "title": "Stand-in voice",
+    "description": "Used for a speaker in {language} who has not picked a voice of their own. Anyone who has, you hear as themselves.",
     "automatic": "Automatic",
+    "loading": "Loading…",
+    "savedVoice": "Saved voice",
+    "unavailable": "Not offered for {language} right now, so the automatic voice is used until it is. The catalogue fills after the first translation into this language.",
     "clear": "Clear",
-    "previewLabel": "the voice you hear",
+    "previewLabel": "the stand-in voice",
     "hint": "Press Use on a library voice to pick one for this language.",
     "toasts": {
       "cleared": "Cleared — back to the automatic voice.",
-      "clearFailed": "Could not clear the voice you hear."
+      "clearFailed": "Could not clear the stand-in voice."
     }
   },
   "yourVoices": {
@@ -75,6 +79,7 @@
     "emptyDescription": "Record one clear sample and WarpTalk can speak your translations in your own voice. Until then a library voice is used.",
     "noMatch": "None of your voices match this filter.",
     "untitledProfile": "Untitled profile",
+    "thisVoiceProfile": "this voice profile",
     "dubbingYou": "Dubbing you",
     "noLanguage": "No language",
     "ready": "Ready",

@@ -29,6 +29,7 @@
     "description": "Cách bạn nghe được với người nghe ngôn ngữ khác.",
     "cloneLiveOption": "Nhân bản giọng tôi trực tiếp trong cuộc họp",
     "myVoice": "Giọng của tôi",
+    "voiceYouPicked": "Giọng bạn đã chọn",
     "yourVoicesGroup": "Giọng của bạn",
     "libraryVoicesGroup": "Giọng thư viện · {language}",
     "ariaLabel": "Giọng lồng tiếng cho bạn",
@@ -43,29 +44,32 @@
     "title": "Giọng thư viện",
     "languageAriaLabel": "Ngôn ngữ cho thư viện giọng nói",
     "loading": "Đang tải giọng nói…",
-    "noVoicesTitle": "Chưa có giọng cho {language}",
-    "noVoicesDescription": "Chúng xuất hiện sau bản dịch đầu tiên sang ngôn ngữ này trong một cuộc họp.",
+    "noVoicesTitle": "Không có giọng thư viện nào cho {language}",
+    "noVoicesDescription": "Cartesia chưa công bố giọng nào cho ngôn ngữ này, hoặc thư viện vẫn đang tải lại sau khi khởi động lại.",
     "noMatch": "Không có giọng thư viện nào khớp tìm kiếm.",
-    "youHearThis": "Bạn nghe giọng này",
-    "yourDefault": "Mặc định của bạn",
+    "youHearThis": "Giọng thay thế",
+    "yourDefault": "Giọng thay thế của bạn",
     "clear": "Xóa",
     "use": "Dùng",
     "toasts": {
-      "setAsHeard": "Đã đặt làm giọng bạn nghe cho ngôn ngữ này.",
+      "setAsHeard": "Đã lưu — dùng cho người nói ngôn ngữ này chưa có giọng riêng.",
       "clearedAutomatic": "Đã xóa — quay về giọng tự động.",
-      "saveFailed": "Không thể lưu giọng bạn nghe."
+      "saveFailed": "Không thể lưu giọng thay thế."
     }
   },
   "listeningSummary": {
-    "title": "Giọng bạn nghe",
-    "description": "Dùng cho người nói {language} chưa chọn giọng riêng.",
+    "title": "Giọng thay thế",
+    "description": "Dùng cho người nói {language} chưa chọn giọng riêng. Ai đã chọn thì bạn sẽ nghe đúng giọng của họ.",
     "automatic": "Tự động",
+    "loading": "Đang tải…",
+    "savedVoice": "Giọng đã lưu",
+    "unavailable": "Hiện chưa có cho {language}, nên giọng tự động được dùng cho đến khi có. Danh mục sẽ được lấp đầy sau bản dịch đầu tiên sang ngôn ngữ này.",
     "clear": "Xóa",
-    "previewLabel": "giọng bạn nghe",
+    "previewLabel": "giọng thay thế",
     "hint": "Bấm Dùng trên một giọng thư viện để chọn cho ngôn ngữ này.",
     "toasts": {
       "cleared": "Đã xóa — quay về giọng tự động.",
-      "clearFailed": "Không thể xóa giọng bạn nghe."
+      "clearFailed": "Không thể xóa giọng thay thế."
     }
   },
   "yourVoices": {
@@ -75,6 +79,7 @@
     "emptyDescription": "Ghi âm một mẫu rõ ràng và WarpTalk có thể đọc bản dịch bằng giọng của chính bạn. Đến lúc đó, một giọng thư viện sẽ được dùng.",
     "noMatch": "Không có giọng nào khớp bộ lọc này.",
     "untitledProfile": "Hồ sơ chưa đặt tên",
+    "thisVoiceProfile": "hồ sơ giọng nói này",
     "dubbingYou": "Đang lồng tiếng cho bạn",
     "noLanguage": "Chưa có ngôn ngữ",
     "ready": "Sẵn sàng",

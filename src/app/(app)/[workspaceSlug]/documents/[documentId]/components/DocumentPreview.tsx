@@ -33,6 +33,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Spinner, Warning } from "@phosphor-icons/react";
 
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { IMAGE_EXTENSIONS } from "@/constants/workspace-document";
 import { WorkspaceService } from "@/services/workspace.service";
 
 /** Extensions we can show without converting anything. */
@@ -46,7 +47,6 @@ const TEXT_EXTENSIONS = [
   ".yml",
   ".yaml",
 ];
-const IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"];
 const MARKDOWN_EXTENSIONS = [".md", ".markdown"];
 const WORD_EXTENSIONS = [".docx"];
 const SHEET_EXTENSIONS = [".xlsx", ".xlsm"];

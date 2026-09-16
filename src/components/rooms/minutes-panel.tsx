@@ -19,72 +19,94 @@
  *   closing note. A rich-text surface over a structured document would have to flatten it to
  *   HTML and parse it back, and every round trip is a chance to lose a citation — which is the
  *   one thing on a summary line that lets a reader check it.
+ *
+ * WHY THIS FILE IS NOW MOSTLY CHROME
+ *   It used to render the whole document itself, as a flat stack of labelled key/value rows and
+ *   small section headings — everything present, nothing reading as a record. The document proper
+ *   moved into `minutes-document.tsx`, which sets it as an A4 page, and what is left here is what
+ *   surrounds a document rather than what is in it: print, download, who the secretary is, and the
+ *   draft → sign → approve → addendum flow. The page itself is the editor for whoever may edit.
+ *
+ *   The one thing deliberately kept OUT of the page is the assigned-work list at the bottom. Those
+ *   commitments move as people finish them, and a record that changed whenever somebody ticked a
+ *   box would stop being a record. It sits below the page, as work, not as part of the document.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CheckCircle,
   CheckSquare,
   Square,
   XSquare,
   ClockCounterClockwise,
   DownloadSimple,
+  FilePdf,
   FileText,
-  PencilSimple,
-  Sparkle,
+  Printer,
+  ShareNetwork,
   Spinner,
-  Warning,
 } from "@phosphor-icons/react/dist/ssr";
+import { isAxiosError } from "axios";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { sectionTitle } from "@/lib/meeting/meeting-summary";
-import { useMeetingMinutes, useMeetingMinutesActions } from "@/hooks/use-meeting-minutes";
+import { isRecordShared } from "@/lib/meeting/record-sharing";
+import { getErrorMessage } from "@/lib/api/errors";
+import {
+  DEFAULT_MINUTES_TEMPLATE,
+  formatDocumentMoment,
+  originalOnly,
+  readMinutesIn,
+  translationLanguagesOf,
+  type MinutesFileMode,
+  type MinutesPolicyFacts,
+} from "@/lib/meeting/minutes-document";
+import { MinutesShareDialog } from "@/components/rooms/minutes-share-dialog";
+import {
+  MINUTES_WITHHELD,
+  useMeetingMinutes,
+  useMeetingMinutesActions,
+} from "@/hooks/use-meeting-minutes";
 import { useRoomActionItems, useUpdateActionItemStatus } from "@/hooks/use-meeting-action-items";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { useWorkspace, useWorkspaceSettings } from "@/hooks/use-workspace";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { MeetingActionItemDto } from "@/types/meetingActionItem";
 import { meetingMinutesService } from "@/services/meeting-minutes.service";
 import {
-  counterpartOf,
   isEditable,
-  pairByCitation,
   parseMinutesContent,
   type MeetingMinutesContent,
-  type MeetingMinutesDto,
-  type MinutesItem,
-  type MinutesSection,
+  type MinutesAttendance,
 } from "@/types/meetingMinutes";
+import {
+  MinutesDocument,
+  printDocument,
+  type MinutesEditHandlers,
+} from "@/components/rooms/minutes-document";
+import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import type { MinutesTranslationDto } from "@/types/meetingMinutes";
 
-function formatTime(value: string | null | undefined): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? "—"
-    : // en-US to match every other formatter in the app. A hardcoded "vi-VN" printed
-      // 20/08/2026 in an otherwise-English document — the same mismatch src/lib/format/currency.ts
-      // documents, where a vi-VN hardcode rendered an English invoice as "90.000đ".
-      date.toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" });
-}
-
-function formatOffset(atMs: number | null | undefined): string | null {
-  if (atMs == null || atMs < 0) return null;
-  const total = Math.floor(atMs / 1000);
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
+/** The short form, for the badge beside the number. */
 const STATUS_LABEL: Record<string, string> = {
   DRAFT: "Draft",
   IN_REVIEW: "Signed by secretary",
   APPROVED: "Approved",
 };
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex gap-2 text-[13px]">
-      <span className="w-36 shrink-0 text-ink-muted">{label}</span>
-      <span className="text-ink">{value}</span>
-    </div>
-  );
-}
+/**
+ * The long form, printed ON THE FACE of the document.
+ *
+ * A record whose draft status lives only in the app's chrome becomes an unmarked record the
+ * moment somebody prints or forwards it — which is exactly when being able to tell a draft from
+ * a signed document matters. So the status says what is missing, not just what state it is in.
+ */
+const DOCUMENT_STATUS: Record<string, string> = {
+  DRAFT: "Draft — not signed and not approved",
+  IN_REVIEW: "Signed by the secretary — not yet approved by the chair",
+  APPROVED: "Approved",
+};
 
 export function MinutesPanel({
   roomId,
@@ -97,23 +119,211 @@ export function MinutesPanel({
   /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
   onSeek?: (atMs: number) => void;
 }) {
-  const { data: minutes, isLoading } = useMeetingMinutes(roomId);
-  const { createDraft, save, sign, approve, revise } = useMeetingMinutesActions(roomId);
+  const { data: read, isLoading } = useMeetingMinutes(roomId);
+  // WT-651: an unapproved document follows the room's artifactAccess policy, so "not shared with
+  // you" is one of the three normal answers here rather than a failure.
+  const withheld = read === MINUTES_WITHHELD;
+  const minutes = withheld ? null : read;
+  const { createDraft, save, sign, approve, revise, designateSecretary } =
+    useMeetingMinutesActions(roomId);
 
+  /*
+   * Everything the document needs that does not live on the minutes row itself.
+   *
+   * All three are already-warm caches rather than new traffic on the common path: the room is the
+   * same query key the room page fetched to render this tab at all, and the workspace and its
+   * settings are the shell's own. They are read HERE rather than passed in as props because the
+   * room page that renders this panel is another branch's file — reaching for the data directly is
+   * what lets the document carry a letterhead and a retention window without editing it.
+   */
+  const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const { data: workspace } = useWorkspace(workspaceId ?? "");
+  const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
+  const { data: room } = useTranslationRoom(roomId);
+
+  // WHAT IS BEING TYPED, OR NULL WHEN NOTHING IS.
+  //
+  // The page below IS the editor: whoever may edit types straight into the document, the way they
+  // would in Word, with no Edit mode to enter first. Changes collect in this working copy so an
+  // in-flight refetch cannot overwrite a half-typed line; null means the page shows exactly what is
+  // stored, which is also what Discard goes back to.
   const [draft, setDraft] = useState<MeetingMinutesContent | null>(null);
-  const [editing, setEditing] = useState(false);
-  const [downloading, setDownloading] = useState(false);
+  const [downloading, setDownloading] = useState<"docx" | "pdf" | null>(null);
+  const [sharing, setSharing] = useState(false);
+
+  // Host authority for the one action that exists before a document does: drawing it up. The
+  // room page only knows whether the viewer hosts; a workspace Owner/Admin carries the same
+  // authority everywhere else in the record, and the server agrees (RoomHostAccess).
+  const workspaceRole = useWorkspaceRole();
+  const hostAuthority = canManage || workspaceRole === "owner" || workspaceRole === "admin";
 
   const stored = useMemo(() => parseMinutesContent(minutes?.content), [minutes?.content]);
-  // Editing works on a copy so an in-flight refetch cannot overwrite what is being typed; the
-  // copy is dropped the moment editing ends, which is also what discards an abandoned edit.
-  const view = editing && draft ? draft : stored;
+
+  const carriedLanguages = useMemo(() => translationLanguagesOf(stored), [stored]);
+  const base = draft ?? stored;
+
+  /**
+   * READING THE RECORD IN ONE LANGUAGE. WT-685.
+   *
+   * No language chosen is the original and nothing else. Choosing one shows the WHOLE document in
+   * that language — stored when the meeting was interpreted into it, generated once when it was
+   * not. It used to hang lines of every stored language under the original, picking per section
+   * whichever paired first alphabetically, so one page carried [ja] under 3.1 and [vi] under 3.2.
+   * A section with no translation now says so in place rather than borrowing another language.
+   *
+   * The downloaded file follows the same rules (MinutesLanguageView on the server), so what is on
+   * screen is what arrives. The original beside the translation is an option for the FILE only.
+   *
+   * Never while editing: the secretary corrects the original, never a reading of it.
+   */
+  const [readingLanguage, setReadingLanguage] = useState<string | null>(null);
+  const [fetched, setFetched] = useState<MinutesTranslationDto | null>(null);
+  const [fileMode, setFileMode] = useState<MinutesFileMode>("mono");
+  const translationPollRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (translationPollRef.current !== null) window.clearInterval(translationPollRef.current);
+    },
+    [],
+  );
+
+  const view = useMemo<MeetingMinutesContent>(() => {
+    if (!readingLanguage || fetched?.status !== "ready" || !fetched.sections) {
+      return originalOnly(base);
+    }
+    return readMinutesIn(base, readingLanguage, fetched.sections);
+  }, [base, readingLanguage, fetched]);
+
+  /**
+   * Writing an edit back to the slot it came from.
+   *
+   * The document lays sections out into parts for reading and flattens them into numbered clauses.
+   * Every one of those clauses carries the index of the stored section (and item) it was built
+   * from, so this writes back by index and never by the order anything appeared on the page. Each
+   * update SPREADS the item rather than replacing it, which is how the citation survives a
+   * reworded sentence: only `text` is touched.
+   */
+  const readInLanguage = useCallback(
+    (language: string) => {
+      if (translationPollRef.current !== null) {
+        window.clearInterval(translationPollRef.current);
+        translationPollRef.current = null;
+      }
+
+      // Back to the document as it stands. Not a fetch: the original is always already here.
+      if (!language) {
+        setReadingLanguage(null);
+        setFetched(null);
+        return;
+      }
+
+      setReadingLanguage(language);
+      setFetched({ language, sections: null, status: "generating" });
+
+      const stopAt = Date.now() + 90_000;
+
+      const read = async () => {
+        try {
+          const { data } = await meetingMinutesService.getTranslation(roomId, language);
+          // A reader who changed their mind while this was out must not have the old answer land
+          // on top of the new one.
+          let superseded = false;
+          setFetched((current) => {
+            if (current && current.language !== data.language) {
+              superseded = true;
+              return current;
+            }
+            return data;
+          });
+          return superseded || data.status !== "generating";
+        } catch {
+          setReadingLanguage(null);
+          setFetched(null);
+          toast.error("Could not read this record in that language.");
+          return true;
+        }
+      };
+
+      void (async () => {
+        if (await read()) return;
+        translationPollRef.current = window.setInterval(() => {
+          if (Date.now() > stopAt) {
+            if (translationPollRef.current !== null) {
+              window.clearInterval(translationPollRef.current);
+              translationPollRef.current = null;
+            }
+            setReadingLanguage(null);
+            setFetched(null);
+            toast.error("That reading has not arrived. Try again.");
+            return;
+          }
+          void read().then((done) => {
+            if (done && translationPollRef.current !== null) {
+              window.clearInterval(translationPollRef.current);
+              translationPollRef.current = null;
+            }
+          });
+        }, 4000);
+      })();
+    },
+    [roomId],
+  );
+
+  // The first keystroke starts the working copy from what is stored; every later one builds on it.
+  const edits = useMemo<MinutesEditHandlers>(
+    () => ({
+      setAgenda: (value) => setDraft((current) => ({ ...(current ?? stored), agenda: value })),
+      setNotes: (value) => setDraft((current) => ({ ...(current ?? stored), notes: value })),
+      setSectionText: (sectionIndex, value) =>
+        setDraft((current) => {
+          const doc = current ?? stored;
+          const sections = [...doc.sections];
+          sections[sectionIndex] = { ...sections[sectionIndex], text: value };
+          return { ...doc, sections };
+        }),
+      setItemText: (sectionIndex, itemIndex, value) =>
+        setDraft((current) => {
+          const doc = current ?? stored;
+          const sections = [...doc.sections];
+          const items = [...(sections[sectionIndex].items ?? [])];
+          items[itemIndex] = { ...items[itemIndex], text: value };
+          sections[sectionIndex] = { ...sections[sectionIndex], items };
+          return { ...doc, sections };
+        }),
+      apply: (change) => setDraft((current) => change(current ?? stored)),
+    }),
+    [stored],
+  );
 
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 p-6 text-[13px] text-ink-muted">
         <Spinner size={14} className="animate-spin" />
         Loading minutes…
+      </div>
+    );
+  }
+
+  if (withheld) {
+    return (
+      <div className="p-6">
+        <div className="max-w-lg space-y-3">
+          <h3 className="text-[14px] font-semibold text-ink">Still a draft</h3>
+          {/* The same distinction summary-absence.ts draws, in this document's own words: the
+              minutes exist and are being worked on, and what is missing is permission rather than
+              the document. A flat "unauthorized" here would send somebody who WAS at the meeting
+              looking for a broken page instead of asking the host.
+
+              Says what changes it, in the terms the server uses: signing is the act that publishes
+              a biên bản, so "once it is signed" is the answer, not "once it is shared". */}
+          <p className="text-[13px] leading-relaxed text-ink-muted">
+            These minutes have been drawn up but nobody has signed them yet. A draft stays with the
+            people who can act on it; you will be able to read it here once the host or the
+            secretary signs it.
+          </p>
+        </div>
       </div>
     );
   }
@@ -128,9 +338,13 @@ export function MinutesPanel({
             times it opened and closed come straight from the room data, and the body comes from the
             summary. You review and sign; the system does not sign for you.
           </p>
-          {canManage ? (
-            <button
-              type="button"
+          {hostAuthority ? (
+            // The same Button the Summary tab's "Download summary file" uses, rather than a
+            // hand-rolled `bg-ink` one. These two sit in sibling tabs of the same record and are
+            // the same kind of act — the primary thing to do with this tab — so a black button
+            // beside a primary one read as a different, heavier control than it is.
+            <Button
+              size="sm"
               onClick={() =>
                 createDraft.mutate(undefined, {
                   onError: () =>
@@ -138,15 +352,15 @@ export function MinutesPanel({
                 })
               }
               disabled={createDraft.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
+              className="h-8 rounded-md text-[11px] shadow-none"
             >
               {createDraft.isPending ? (
                 <Spinner size={14} className="animate-spin" />
               ) : (
                 <FileText size={14} />
-              )}
+              )}{" "}
               Draft minutes
-            </button>
+            </Button>
           ) : (
             <p className="text-[12px] text-ink-subtle">Only the meeting chair can draft the minutes.</p>
           )}
@@ -155,38 +369,92 @@ export function MinutesPanel({
     );
   }
 
-  const editable = isEditable(minutes) && canManage;
+  // What this viewer may do, as the server decided it. The fallbacks only apply to an older server
+  // that does not send the flags, and reproduce the rule it enforced: host authority for all of it.
+  const canEdit = minutes.canEdit ?? (isEditable(minutes) && hostAuthority);
+  const canApprove = minutes.canApprove ?? hostAuthority;
+  const canDesignateSecretary = minutes.canDesignateSecretary ?? false;
 
-  function beginEdit() {
-    setDraft(structuredClone(stored));
-    setEditing(true);
-  }
+  // Typing is live on the page unless the reader has switched to a translated reading, where the
+  // page is showing words that are not the stored document.
+  const editing = canEdit && readingLanguage === null;
+  const dirty = draft !== null;
 
-  async function downloadDocx() {
-    setDownloading(true);
+  // One layout. The Vietnamese one is still drawn by the server for an explicit ?template= export,
+  // but the page no longer offers a choice: every document is read and edited as the same page.
+  const template = DEFAULT_MINUTES_TEMPLATE;
+
+  /*
+   * The policy block, assembled from what the product genuinely holds.
+   *
+   *   classification  — the stored document's own field. Nothing derives one: see the comment on
+   *                     `MeetingMinutesContent.classification`. Absent today, so no row prints.
+   *   record owner    — the secretary named on the minutes row.
+   *   circulation     — the room's `artifactAccess`, read through the same helper the sharing
+   *                     banner uses. `null` while the room query is in flight, so a document being
+   *                     read before that resolves prints no circulation line rather than "host
+   *                     only" — the difference between not knowing and knowing it is private.
+   *   retention       — the workspace's own artifact retention window, counted from the closing
+   *                     time the minutes recorded.
+   *   language        — what was spoken, and what the record was also produced in.
+   */
+  const policy: MinutesPolicyFacts = {
+    classification: view.classification,
+    recordOwner: minutes.secretaryName,
+    recordShared: room ? isRecordShared(room.settings?.artifactAccess) : null,
+    artifactRetentionDays: workspaceSettings?.artifactRetentionDays ?? null,
+    retentionFrom: view.closedAt ?? null,
+    primaryLanguage: view.primaryLanguage,
+    // The languages the RECORD carries — not the one being read, which strips them from `view`.
+    translationLanguages: translationLanguagesOf(base),
+  };
+
+  /**
+   * Download the document in one of its two formats.
+   *
+   * The PDF is a conversion of the very .docx the other button hands over, made server-side — not
+   * a second layout rendered from the same data. Two renderers would drift, and a signed record
+   * whose Word copy and PDF copy differ is worse than having no PDF.
+   */
+  async function download(format: "docx" | "pdf") {
+    setDownloading(format);
     try {
-      const response = await meetingMinutesService.downloadDocx(roomId);
-      // The server names the file after the minutes number, which is what the recipient files it
-      // under. Falling back to the number here rather than to something generic keeps that true
-      // even if a proxy strips the header.
+      // The layout on screen, in both formats, so the file the reader gets is the document they
+      // were looking at. Without this the server renders its own default and the switcher
+      // silently does not apply to the download.
+      // WT-685: and in the language on screen — alone, or beside the original when asked for.
+      const reading = readingLanguage ? { lang: readingLanguage, mode: fileMode } : undefined;
+      const response =
+        format === "pdf"
+          ? await meetingMinutesService.downloadPdf(roomId, template, reading)
+          : await meetingMinutesService.downloadDocx(roomId, template, reading);
+      // The server names the file after the minutes number and the meeting, which is what the
+      // recipient files it under. Falling back to the number here rather than to something
+      // generic keeps that true even if a proxy strips the header.
       const disposition = String(response.headers?.["content-disposition"] ?? "");
       const named = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
-      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.docx`;
+      link.download = named ? decodeURIComponent(named) : `${minutes!.minutesNo}.${format}`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch {
-      toast.error("Could not download the minutes.");
+    } catch (error) {
+      // 503 is this deployment having no converter, which is a different sentence from a failed
+      // download: the Word file still works, and the person should be told to take that instead.
+      const status = isAxiosError(error) ? error.response?.status : undefined;
+      toast.error(
+        status === 503
+          ? "PDF conversion is unavailable here. The Word file still downloads."
+          : "Could not download the minutes.",
+      );
     } finally {
-      setDownloading(false);
+      setDownloading(null);
     }
   }
 
-  /** Leaving edit mode drops the working copy, which is also what discards an abandoned edit. */
-  function stopEditing() {
-    setEditing(false);
+  /** Back to the stored document. */
+  function discard() {
     setDraft(null);
   }
 
@@ -196,491 +464,410 @@ export function MinutesPanel({
       { minutesId: minutes.id, content: JSON.stringify(draft) },
       {
         onSuccess: () => {
-          stopEditing();
+          // The response is now the stored document, so the working copy has nothing left to hold.
+          setDraft(null);
           toast.success("Minutes saved.");
         },
-        onError: () => toast.error("Could not save the minutes."),
+        onError: (error) => toast.error(getErrorMessage(error, "Could not save the minutes.")),
       },
     );
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <MinutesHeader minutes={minutes} />
-
-      <section className="space-y-1.5">
-        <Field label="Meeting" value={view.meetingTitle || "—"} />
-        <Field label="Location" value={view.location || "—"} />
-        <Field label="Opened at" value={formatTime(view.openedAt)} />
-        <Field label="Closed at" value={formatTime(view.closedAt)} />
-        {view.scheduledAt ? (
-          <Field label="Scheduled for" value={formatTime(view.scheduledAt)} />
-        ) : null}
-      </section>
-
-      <Attendance content={view} />
-
-      <EditableBlock
-        title="Agenda"
-        value={view.agenda ?? ""}
-        editing={editing}
-        placeholder="No agenda recorded."
-        onChange={(next) => setDraft((current) => (current ? { ...current, agenda: next } : current))}
-      />
-
-      <Sections content={view} editing={editing} setDraft={setDraft} onSeek={onSeek} />
-
-      <ApprovedWork roomId={roomId} />
-
-      <Votes content={view} />
-
-      <EditableBlock
-        title="Secretary's notes"
-        value={view.notes ?? ""}
-        editing={editing}
-        placeholder="No additional notes."
-        onChange={(next) => setDraft((current) => (current ? { ...current, notes: next } : current))}
-      />
-
-      <Signatures minutes={minutes} />
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-        <button
-          type="button"
-          onClick={downloadDocx}
-          disabled={downloading}
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink disabled:opacity-60"
-        >
-          {downloading ? (
-            <Spinner size={14} className="animate-spin" />
-          ) : (
-            <DownloadSimple size={14} />
-          )}
-          Download Word
-        </button>
-        <span className="text-[11px] text-ink-subtle">
-          Open it in Word or Google Docs to print or export a PDF.
-        </span>
-      </div>
-
-      {canManage ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
-          {editing ? (
-            <>
-              <button
-                type="button"
-                onClick={commit}
-                disabled={save.isPending}
-                className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
-              >
-                {save.isPending ? "Saving…" : "Save"}
-              </button>
-              <button
-                type="button"
-                onClick={stopEditing}
-                className="rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
-              >
-                Cancel
-              </button>
-            </>
+    <div className="space-y-4 py-4">
+      {/* Chrome. All of it hidden from the printer — what gets printed is the page below. */}
+      <div className="space-y-3 px-6 print:hidden">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-3">
+          <span className="font-mono text-[13px] font-semibold text-ink">{minutes.minutesNo}</span>
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[11px] font-medium",
+              minutes.status === "APPROVED"
+                ? "bg-semantic-success/10 text-semantic-success"
+                : "bg-surface-2 text-ink-muted",
+            )}
+          >
+            {STATUS_LABEL[minutes.status] ?? minutes.status}
+          </span>
+          {minutes.version > 1 ? (
+            <span className="text-[11px] text-ink-subtle">Revision {minutes.version - 1}</span>
           ) : null}
-
-          {!editing && editable ? (
-            <button
-              type="button"
-              onClick={beginEdit}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
-            >
-              <PencilSimple size={14} />
-              Edit
-            </button>
-          ) : null}
-
-          {!editing && editable && minutes.status === "DRAFT" ? (
-            <button
-              type="button"
-              onClick={() =>
-                sign.mutate(minutes.id, {
-                  onSuccess: () => toast.success("Minutes signed."),
-                  onError: () => toast.error("Could not sign the minutes."),
-                })
-              }
-              disabled={sign.isPending}
-              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
-            >
-              Sign as secretary
-            </button>
-          ) : null}
-
-          {!editing && editable && minutes.status === "IN_REVIEW" ? (
-            <button
-              type="button"
-              onClick={() =>
-                approve.mutate(minutes.id, {
-                  onSuccess: () => toast.success("Minutes approved."),
-                  onError: () => toast.error("Could not approve the minutes."),
-                })
-              }
-              disabled={approve.isPending}
-              className="rounded-md bg-ink px-3 py-1.5 text-[13px] font-medium text-canvas disabled:opacity-60"
-            >
-              Approve as chair
-            </button>
-          ) : null}
-
-          {!editing && minutes.status === "APPROVED" ? (
-            <button
-              type="button"
-              onClick={() =>
-                revise.mutate(minutes.id, {
-                  onSuccess: () => toast.success("Addendum opened."),
-                  onError: () => toast.error("Could not open an addendum."),
-                })
-              }
-              disabled={revise.isPending}
-              className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-[13px] text-ink"
-            >
-              <ClockCounterClockwise size={14} />
-              Draft an addendum
-            </button>
-          ) : null}
+          {/* WT-685: this used to be `toLocaleString("en-US")` in the READER's zone — "9/12/26,
+              1:29 PM" beside a document saying 06:29 (UTC+00:00) for the same moment. It now
+              reads the way the document below it does: same template, same workspace zone. */}
+          <span className="text-[11px] text-ink-subtle">
+            Drafted{" "}
+            {formatDocumentMoment(minutes.createdAt, template, workspaceSettings?.timezone ?? null) ??
+              "—"}
+          </span>
         </div>
-      ) : null}
-    </div>
-  );
-}
 
-function MinutesHeader({ minutes }: { minutes: MeetingMinutesDto }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border pb-4">
-      <span className="font-mono text-[13px] font-semibold text-ink">{minutes.minutesNo}</span>
-      <span
-        className={cn(
-          "rounded-full px-2 py-0.5 text-[11px] font-medium",
-          minutes.status === "APPROVED"
-            ? "bg-semantic-success/10 text-semantic-success"
-            : "bg-surface-2 text-ink-muted",
-        )}
-      >
-        {STATUS_LABEL[minutes.status] ?? minutes.status}
-      </span>
-      {minutes.version > 1 ? (
-        <span className="text-[11px] text-ink-subtle">Revision {minutes.version - 1}</span>
-      ) : null}
-      <span className="text-[11px] text-ink-subtle">Drafted {formatTime(minutes.createdAt)}</span>
-    </div>
-  );
-}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Disabled only while there are unsaved changes: a translated reading beside a
+              half-typed correction is a document nobody is reading. */}
+          <ReadingLanguagePicker
+            carried={carriedLanguages}
+            reading={readingLanguage}
+            busy={fetched?.status === "generating"}
+            disabled={dirty}
+            onChange={readInLanguage}
+          />
 
-function Attendance({ content }: { content: MeetingMinutesContent }) {
-  const { attendance } = content;
+          {/* The shared Button, at the size and weight the records page settled on when it grew a
+              door to the minutes (#422). That change and this one landed on the same file from
+              opposite directions: it restyled the action row of the old stacked panel, and this
+              replaced the panel with a document. The row survives either way, so it takes their
+              styling rather than keeping a second hand-rolled one beside it. */}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* Print styles come with a page-shaped layout for almost nothing — see the print
+                block in minutes-document.tsx, which redefines --mm and --pt to real physical
+                units and sends this page alone to the printer at true A4 size. */}
+            {readingLanguage ? (
+              // Only for the file: the page is one language at a time (WT-685), and a reader who
+              // needs the original beside it — a foreign partner's copy — asks for that here.
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={fileMode === "bilingual"}
+                  onChange={(event) => setFileMode(event.target.checked ? "bilingual" : "mono")}
+                />
+                File with the original beside it
+              </label>
+            ) : null}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={printDocument}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              <Printer size={13} />
+              Print
+            </Button>
+            {/* WT-654 named the layout on this button because the server had only one writer to
+                render with, and a download that ignored the switcher above had to at least say so.
+                That is no longer the case: there are two writers now, the export takes ?template=,
+                and `download()` sends whatever layout is on screen. So the label goes back to
+                naming the FORMAT, which is the only thing that distinguishes it from the button
+                beside it — the layout is the switcher's business, and both files follow it.
 
-  return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">Attendees</h4>
+                Left as it was, the button was worse than imprecise: a reader on the international
+                layout was handed a global-en file under a promise of the Vietnamese one. */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => download("docx")}
+              disabled={downloading !== null}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              {downloading === "docx" ? (
+                <Spinner size={13} className="animate-spin" />
+              ) : (
+                <DownloadSimple size={13} />
+              )}
+              Download Word
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => download("pdf")}
+              disabled={downloading !== null}
+              className="h-8 rounded-md text-[11px] shadow-none"
+            >
+              {downloading === "pdf" ? (
+                <Spinner size={13} className="animate-spin" />
+              ) : (
+                <FilePdf size={13} />
+              )}
+              Download PDF
+            </Button>
+            {/* Sharing is the host's to decide, so the button is theirs alone — a reader who
+                could hand the document on would be deciding for them. */}
+            {canApprove ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setSharing(true)}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                <ShareNetwork size={13} />
+                Share
+              </Button>
+            ) : null}
+          </div>
+        </div>
 
-      <ul className="space-y-1">
-        {attendance.present.length === 0 ? (
-          <li className="text-[13px] text-ink-subtle">Nobody was recorded entering the room.</li>
-        ) : (
-          attendance.present.map((person) => (
-            <li key={person.participantId} className="flex flex-wrap items-center gap-2 text-[13px]">
-              <span className="text-ink">{person.name}</span>
-              {person.role === "HOST" ? (
-                <span className="text-[11px] text-ink-muted">Chair</span>
-              ) : null}
-              {person.isExternal ? (
-                <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] text-ink-muted">
-                  External guest
+        {canEdit || canApprove || canDesignateSecretary ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {dirty ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={commit}
+                  disabled={save.isPending}
+                  className="h-8 rounded-md text-[11px] shadow-none"
+                >
+                  {save.isPending ? "Saving…" : "Save changes"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={discard}
+                  disabled={save.isPending}
+                  className="h-8 rounded-md text-[11px] shadow-none"
+                >
+                  Discard
+                </Button>
+                <span className="text-[11px] text-ink-subtle">
+                  Unsaved changes. Timestamps stay attached to their line.
                 </span>
-              ) : null}
-              {person.speakLanguage ? (
-                <span className="text-[11px] text-ink-subtle">{person.speakLanguage}</span>
-              ) : null}
-              <span className="text-[11px] text-ink-subtle">{formatTime(person.joinedAt)}</span>
-            </li>
-          ))
-        )}
-      </ul>
+              </>
+            ) : editing ? (
+              <span className="text-[11px] text-ink-subtle">
+                Click any line with a dashed rule in the document below to edit it.
+              </span>
+            ) : null}
 
-      {attendance.absent.length > 0 ? (
-        <div className="space-y-1 pt-1">
-          <h4 className="text-[13px] font-semibold text-ink">Absent</h4>
-          <ul className="space-y-1">
-            {attendance.absent.map((person) => (
-              <li key={person.participantId} className="text-[13px] text-ink">
-                {person.name}
-                {person.reason ? (
-                  <span className="text-ink-muted"> — {person.reason}</span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+            {canDesignateSecretary ? (
+              <SecretaryPicker
+                attendees={stored.attendance.present}
+                value={minutes.secretaryParticipantId ?? null}
+                busy={designateSecretary.isPending}
+                onChange={(participantId) =>
+                  designateSecretary.mutate(
+                    { minutesId: minutes.id, participantId },
+                    {
+                      onSuccess: () =>
+                        toast.success(participantId ? "Secretary assigned." : "Secretary removed."),
+                      onError: (error) =>
+                        toast.error(getErrorMessage(error, "Could not assign the secretary.")),
+                    },
+                  )
+                }
+              />
+            ) : null}
 
-      {/* The rule is printed beside the verdict. A bare "met/not met" would not tell the reader
-          what bar was applied, and quorum is exactly the line somebody later disputes. */}
-      {attendance.quorumMet != null ? (
-        <p className="flex items-center gap-1.5 pt-1 text-[12px] text-ink-muted">
-          {attendance.quorumMet ? (
-            <CheckCircle size={13} className="text-semantic-success" />
-          ) : (
-            <Warning size={13} className="text-status-error" />
-          )}
-          {attendance.presentCount}/{attendance.invitedCount} invited attendees present —{" "}
-          {attendance.quorumMet ? "quorum met" : "quorum not met"}
-          {attendance.quorumRule ? ` (${attendance.quorumRule.toLowerCase()})` : ""}
-        </p>
-      ) : null}
-    </section>
-  );
-}
-
-function Sections({
-  content,
-  editing,
-  setDraft,
-  onSeek,
-}: {
-  content: MeetingMinutesContent;
-  editing: boolean;
-  setDraft: React.Dispatch<React.SetStateAction<MeetingMinutesContent | null>>;
-  onSeek?: (atMs: number) => void;
-}) {
-  if (content.sections.length === 0) {
-    return (
-      <section className="space-y-2">
-        <h4 className="text-[13px] font-semibold text-ink">Proceedings</h4>
-        <p className="text-[13px] text-ink-subtle">
-          This meeting&apos;s summary has no body to carry into the minutes. The secretary writes
-          straight into the notes below.
-        </p>
-      </section>
-    );
-  }
-
-  return (
-    <>
-      {content.sections.map((section, sectionIndex) => {
-        // Once per section, not once per line: the pairing rule scans both arrays, and calling it
-        // inside the item map made it quadratic for no reason.
-        const paired = pairedFor(section, content.translations);
-
-        return (
-        <section key={`${section.key}-${sectionIndex}`} className="space-y-2">
-          <h4 className="text-[13px] font-semibold text-ink">{sectionTitle(section.key)}</h4>
-
-          {section.kind === "paragraph" ? (
-            editing ? (
-              <textarea
-                value={section.text ?? ""}
-                onChange={(event) =>
-                  setDraft((current) => {
-                    if (!current) return current;
-                    const sections = [...current.sections];
-                    sections[sectionIndex] = { ...sections[sectionIndex], text: event.target.value };
-                    return { ...current, sections };
+            {!dirty && canEdit && minutes.status === "DRAFT" ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  sign.mutate(minutes.id, {
+                    onSuccess: () => toast.success("Minutes signed."),
+                    onError: () => toast.error("Could not sign the minutes."),
                   })
                 }
-                rows={4}
-                className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
-              />
-            ) : (
-              <>
-                <p className="text-[13px] leading-relaxed text-ink">{section.text}</p>
-                <Translations
-                  section={section}
-                  translations={content.translations}
-                  pairedLanguage={null}
-                />
-              </>
-            )
-          ) : (
-            <ul className="relative space-y-0.5 before:absolute before:bottom-3 before:left-[3.5px] before:top-3 before:w-px before:bg-border">
-              {/*
-                A spine, not a column of loose bullets.
+                disabled={sign.isPending}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                Sign as secretary
+              </Button>
+            ) : null}
 
-                Every line in the minutes is anchored to a moment in the recording, and the dots
-                were already there — one per line, with the timestamp beside it wired to onSeek.
-                What was missing is the thread between them: without it the eye has to find each
-                dot on its own, and the list reads as prose rather than as a timeline somebody can
-                run down to reach a moment. The rule is drawn on the list and the dots sit on it,
-                so alignment cannot drift when a line wraps.
+            {!dirty && canApprove && minutes.status === "IN_REVIEW" ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  approve.mutate(minutes.id, {
+                    onSuccess: () => toast.success("Minutes approved."),
+                    onError: () => toast.error("Could not approve the minutes."),
+                  })
+                }
+                disabled={approve.isPending}
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                Approve as chair
+              </Button>
+            ) : null}
 
-                The dot itself seeks. The timestamp still does too — it is the labelled, obvious
-                control — but the dot is the one under the reader's eye while they are scanning,
-                and making the thing you are already looking at clickable is the whole point.
-              */}
-              {(section.items ?? []).map((item, itemIndex) => {
-                const offset = formatOffset(item.atMs);
-                const seekable = Boolean(onSeek) && item.atMs != null;
-                return (
-                  <li
-                    key={itemIndex}
-                    className="group relative -mx-2 flex items-start gap-2 rounded-md px-2 py-1.5 text-[13px] transition-colors hover:bg-surface-2"
-                  >
-                    {seekable ? (
-                      <button
-                        type="button"
-                        onClick={() => onSeek!(item.atMs!)}
-                        aria-label={`Play the recording from ${offset}`}
-                        // z-[1] and a ring the colour of the page: the dot has to sit ON the
-                        // rule rather than have it run visibly through the middle of it.
-                        className="relative z-[1] mt-[6px] size-[7px] shrink-0 rounded-full bg-hairline-strong ring-2 ring-surface-1 transition-colors group-hover:bg-primary"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="relative z-[1] mt-[6px] size-[7px] shrink-0 rounded-full bg-hairline-strong ring-2 ring-surface-1"
-                      />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      {editing ? (
-                        <input
-                          value={item.text}
-                          onChange={(event) =>
-                            setDraft((current) => {
-                              if (!current) return current;
-                              const sections = [...current.sections];
-                              const items = [...(sections[sectionIndex].items ?? [])];
-                              items[itemIndex] = { ...items[itemIndex], text: event.target.value };
-                              sections[sectionIndex] = { ...sections[sectionIndex], items };
-                              return { ...current, sections };
-                            })
-                          }
-                          className="w-full rounded border border-border bg-surface-1 px-2 py-1 text-[13px] text-ink"
-                        />
-                      ) : (
-                        <span className="text-ink">{item.text}</span>
-                      )}
-                      {item.owner ? (
-                        <span className="ml-1.5 text-[12px] text-ink-muted">— {item.owner}</span>
-                      ) : null}
-                      {paired && paired.pairs[itemIndex] ? (
-                        <TranslatedLine
-                          language={paired.language}
-                          text={paired.pairs[itemIndex].translated.text}
-                        />
-                      ) : null}
-                    </div>
-                    {/* The citation stays on the line even while editing: it is what lets a
-                        reader check a signed statement, and losing it silently would remove the
-                        only thing making the line verifiable. */}
-                    {offset ? (
-                      onSeek && item.atMs != null ? (
-                        <button
-                          type="button"
-                          onClick={() => onSeek(item.atMs!)}
-                          className="shrink-0 font-mono text-[11px] text-ink-subtle hover:text-ink"
-                        >
-                          {offset}
-                        </button>
-                      ) : (
-                        <span className="shrink-0 font-mono text-[11px] text-ink-subtle">{offset}</span>
-                      )
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {section.kind === "items" ? (
-            <Translations
-              section={section}
-              translations={content.translations}
-              pairedLanguage={paired?.language ?? null}
-            />
-          ) : null}
-        </section>
-        );
-      })}
-    </>
-  );
-}
-
-/**
- * The first language whose translation of this section pairs line-by-line, if any.
- *
- * Deterministic in language order so the same document does not reorder itself between renders.
- */
-function pairedFor(
-  section: MinutesSection,
-  translations: Record<string, MinutesSection[]> | null | undefined,
-): { language: string; pairs: { original: MinutesItem; translated: MinutesItem }[] } | null {
-  if (!translations) return null;
-
-  for (const language of Object.keys(translations).sort()) {
-    const pairs = pairByCitation(section.items, counterpartOf(section, translations[language])?.items);
-    if (pairs) return { language, pairs };
-  }
-  return null;
-}
-
-/**
- * A translated line, set smaller and indented under the original.
- *
- * The subordination is the point: in a bilingual record it must be unmistakable which text is
- * what somebody said and which is a rendering of it. A translation typeset identically to the
- * original is one somebody will later quote as the original.
- */
-function TranslatedLine({ language, text }: { language: string; text: string }) {
-  return (
-    <p className="ml-4 mt-0.5 text-[12px] italic leading-relaxed text-ink-muted">
-      <span className="mr-1 font-mono text-[10px] not-italic text-ink-subtle">[{language}]</span>
-      {text}
-    </p>
-  );
-}
-
-/** Every language's rendering of one section, paired to the original line where it can be. */
-function Translations({
-  section,
-  translations,
-  pairedLanguage,
-}: {
-  section: MinutesSection;
-  translations: Record<string, MinutesSection[]> | null | undefined;
-  /** Already shown line-by-line above; printing it again as a block would duplicate it. */
-  pairedLanguage: string | null;
-}) {
-  if (!translations) return null;
-
-  return (
-    <>
-      {Object.entries(translations).map(([language, sections]) => {
-        if (language === pairedLanguage) return null;
-        const counterpart = counterpartOf(section, sections);
-        if (!counterpart) return null;
-
-        if (counterpart.kind === "paragraph") {
-          return counterpart.text ? (
-            <TranslatedLine key={language} language={language} text={counterpart.text} />
-          ) : null;
-        }
-
-        const items = counterpart.items ?? [];
-        if (items.length === 0) return null;
-
-        // A block, because nothing here may be claimed to translate any particular line above.
-        return (
-          <div key={language} className="mt-1">
-            {items.map((item: MinutesItem, index: number) => (
-              <TranslatedLine key={index} language={language} text={item.text} />
-            ))}
+            {canApprove && minutes.status === "APPROVED" ? (
+              <Button
+                size="sm"
+                onClick={() =>
+                  revise.mutate(minutes.id, {
+                    onSuccess: () => toast.success("Addendum opened."),
+                    onError: () => toast.error("Could not open an addendum."),
+                  })
+                }
+                disabled={revise.isPending}
+                variant="outline"
+                className="h-8 rounded-md text-[11px] shadow-none"
+              >
+                <ClockCounterClockwise size={14} />
+                Draft an addendum
+              </Button>
+            ) : null}
           </div>
-        );
-      })}
-    </>
+        ) : null}
+      </div>
+
+      {/* The document. The surround is a token colour; the page inside it is not — see the
+          component's own comment on why a printed page does not follow the viewer's theme. */}
+      <div className="bg-surface-2 print:bg-transparent">
+        {/* A REFUSAL A READER CAN ACT ON.
+          "This cannot be translated because a person edited it" is a fact; a picker that silently
+          does nothing is a bug to whoever clicked it. The document below stays exactly as it is —
+          the reading was never going to replace it. */}
+      {fetched?.status === "unavailable" && fetched.unavailableReason ? (
+        <div className="mx-6 mb-3 rounded-md border border-border bg-surface-1 px-3 py-2 text-[12px] leading-5 text-ink-muted print:hidden">
+          {fetched.unavailableReason}
+        </div>
+      ) : null}
+
+      <MinutesDocument
+          minutes={minutes}
+          content={view}
+          template={template}
+          editing={editing}
+          edits={edits}
+          onSeek={onSeek}
+          branding={{
+            // The workspace's own name and mark, never WarpTalk's. The store's copy is what the
+            // shell already has; the detail query only adds the logo.
+            name: workspace?.name ?? workspaceName ?? null,
+            logoUrl: workspace?.logoUrl ?? null,
+          }}
+          policy={policy}
+          // Absent reads as TRUE (WT-587): every room created before `saveTranscript` existed
+          // keeps its transcript, and a client that cannot see the field must never render a
+          // recorded meeting as an unrecorded one. `null` is only "the room has not loaded".
+          transcriptKept={room ? (room.settings?.saveTranscript ?? true) : null}
+          timeZone={workspaceSettings?.timezone ?? null}
+          showGuides={false}
+          statusLabel={DOCUMENT_STATUS[minutes.status] ?? minutes.status}
+        />
+      </div>
+
+      <div className="px-6 print:hidden">
+        <ApprovedWork roomId={roomId} />
+      </div>
+
+      {/* Mounted only while it is open: asking for the sharing state is what CREATES the link,
+          and a link should come into being when somebody opens this dialog, not when a page
+          renders. */}
+      {sharing ? (
+        <MinutesShareDialog
+          roomId={roomId}
+          open={sharing}
+          onOpenChange={setSharing}
+          documentStatus={minutes.status}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Who the secretary is — the one person besides host authority who may edit and sign the record.
+ *
+ * Offered only from the people who attended: the server refuses anyone else, and a secretary who
+ * was not in the meeting would be signing for proceedings they never heard. The server also stops
+ * offering this once somebody has signed, because the signature line already names who took
+ * responsibility.
+ */
+function SecretaryPicker({
+  attendees,
+  value,
+  busy,
+  onChange,
+}: {
+  attendees: MinutesAttendance["present"];
+  value: string | null;
+  busy: boolean;
+  onChange: (participantId: string | null) => void;
+}) {
+  const candidates = attendees.filter((person) => Boolean(person.participantId));
+
+  return (
+    <label className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
+      Secretary
+      <select
+        value={value ?? ""}
+        disabled={busy}
+        onChange={(event) => onChange(event.target.value || null)}
+        className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
+      >
+        <option value="">Not assigned</option>
+        {candidates.map((person) => (
+          <option key={person.participantId} value={person.participantId ?? ""}>
+            {person.name}
+          </option>
+        ))}
+      </select>
+      {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
+    </label>
+  );
+}
+
+/**
+ * Which language to READ the record in.
+ *
+ * A dropdown and not a segmented control, unlike the layout beside it: the layout has two options
+ * and the choice is worth seeing at a glance, while this list is as long as the languages the
+ * product speaks.
+ *
+ * The two groups are labelled because they cost different things. A language the document was
+ * drawn up in is already here and appears instantly; anything else is written on request, once,
+ * and the first reader waits for it. One flat list would make a model call look like a click.
+ *
+ * Disabled while editing — the secretary is correcting the original, and a translated column
+ * beside a half-typed correction is a document nobody is reading.
+ */
+function ReadingLanguagePicker({
+  carried,
+  reading,
+  busy,
+  disabled,
+  onChange,
+}: {
+  carried: string[];
+  reading: string | null;
+  busy: boolean;
+  disabled: boolean;
+  onChange: (language: string) => void;
+}) {
+  const offered = languagesInScope("chatTarget").filter(
+    (language) => !carried.includes(language.code),
+  );
+
+  return (
+    <div className="inline-flex items-center gap-1.5">
+      <select
+        value={reading ?? ""}
+        disabled={disabled || busy}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="Read this record in"
+        title="Read this record in another language"
+        className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
+      >
+        <option value="">As drawn up</option>
+        {carried.length > 0 ? (
+          <optgroup label="Drawn up in">
+            {carried.map((code) => (
+              <option key={code} value={code}>
+                {getLanguageName(code)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        <optgroup label="Written on request">
+          {offered.map((language) => (
+            <option key={language.code} value={language.code}>
+              {language.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+      {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
+    </div>
   );
 }
 
 /**
  * The commitments this meeting produced, as things somebody can tick off.
  *
- * Distinct from the "Action items" section above it, and deliberately so: that section is the
- * RECORD of what was said, frozen with the document. This is the WORK, and it moves. A record that
- * changed whenever somebody finished a task would stop being a record.
+ * Distinct from the "Action assignments" part of the document above it, and deliberately so: that
+ * part is the RECORD of what was said, frozen with the document. This is the WORK, and it moves. A
+ * record that changed whenever somebody finished a task would stop being a record — which is why
+ * this sits below the page rather than on it.
  *
  * Empty until the minutes are approved, because a draft's commitments are proposals.
  */
@@ -701,8 +888,14 @@ function ApprovedWork({ roomId }: { roomId: string }) {
   }
 
   return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">Assigned work</h4>
+    <section className="space-y-2 border-t border-border pt-4">
+      <div>
+        <h4 className="text-[13px] font-semibold text-ink">Assigned work</h4>
+        <p className="text-[11.5px] text-ink-subtle">
+          Not part of the record — the document keeps what the meeting decided, this tracks whether
+          it got done.
+        </p>
+      </div>
       <ul className="space-y-1.5">
         {items.map((item) => (
           <li key={item.id} className="flex items-start gap-2 text-[13px]">
@@ -752,108 +945,6 @@ function ApprovedWork({ roomId }: { roomId: string }) {
           </li>
         ))}
       </ul>
-    </section>
-  );
-}
-
-function Votes({ content }: { content: MeetingMinutesContent }) {
-  if (content.votes.length === 0) return null;
-
-  return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">Votes</h4>
-      <ul className="space-y-1">
-        {content.votes.map((vote, index) => (
-          <li key={index} className="text-[13px] text-ink">
-            {vote.topic}
-            <span className="ml-2 text-ink-muted">
-              For {vote.forCount} · Against {vote.againstCount} · Abstain{" "}
-              {vote.abstainCount}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Signatures({ minutes }: { minutes: MeetingMinutesDto }) {
-  return (
-    <section className="space-y-1.5 border-t border-border pt-4">
-      {/* Three lines, never two. The machine that produced the draft and the person answerable
-          for the content are different facts, and collapsing them is exactly the claim this
-          product must not make. */}
-      <div className="flex gap-2 text-[13px]">
-        <span className="w-36 shrink-0 text-ink-muted">Drafted by</span>
-        <span className="flex items-center gap-1.5 text-ink">
-          <Sparkle size={13} className="text-ink-subtle" />
-          {minutes.draftedByEngine ?? "—"}
-          <span className="text-[11px] text-ink-subtle">{formatTime(minutes.draftedAt)}</span>
-        </span>
-      </div>
-
-      <div className="flex gap-2 text-[13px]">
-        <span className="w-36 shrink-0 text-ink-muted">Secretary of record</span>
-        <span className="text-ink">
-          {minutes.secretaryName ?? "Not signed"}
-          {minutes.secretarySignedAt ? (
-            <span className="ml-1.5 text-[11px] text-ink-subtle">
-              {formatTime(minutes.secretarySignedAt)}
-            </span>
-          ) : null}
-          {minutes.secretarySignedAt ? (
-            <span className="ml-1.5 text-[11px] text-ink-subtle">
-              {minutes.editCountVsDraft > 0
-                ? `${minutes.editCountVsDraft} change(s) from the draft`
-                : "unchanged from the draft"}
-            </span>
-          ) : null}
-        </span>
-      </div>
-
-      <div className="flex gap-2 text-[13px]">
-        <span className="w-36 shrink-0 text-ink-muted">Approved by chair</span>
-        <span className="text-ink">
-          {minutes.chairName ?? "Not approved"}
-          {minutes.chairApprovedAt ? (
-            <span className="ml-1.5 text-[11px] text-ink-subtle">
-              {formatTime(minutes.chairApprovedAt)}
-            </span>
-          ) : null}
-        </span>
-      </div>
-    </section>
-  );
-}
-
-function EditableBlock({
-  title,
-  value,
-  editing,
-  placeholder,
-  onChange,
-}: {
-  title: string;
-  value: string;
-  editing: boolean;
-  placeholder: string;
-  onChange: (next: string) => void;
-}) {
-  return (
-    <section className="space-y-2">
-      <h4 className="text-[13px] font-semibold text-ink">{title}</h4>
-      {editing ? (
-        <textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          rows={3}
-          className="w-full rounded-md border border-border bg-surface-1 p-2 text-[13px] text-ink"
-        />
-      ) : value ? (
-        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink">{value}</p>
-      ) : (
-        <p className="text-[13px] text-ink-subtle">{placeholder}</p>
-      )}
     </section>
   );
 }

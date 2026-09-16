@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowsClockwise, Megaphone, PaperPlaneTilt, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
@@ -171,7 +172,10 @@ function AnnouncementRow({ announcement }: { announcement: AdminAnnouncementSumm
   const isDraft = announcement.status.toLowerCase() === "draft";
 
   return (
-    <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
+    <Link
+      href={`/admin/announcements/${announcement.id}`}
+      className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-2 md:flex-row md:items-center md:gap-0"
+    >
       <div className="min-w-0 flex-1">
         <p className="truncate text-[13px] font-medium text-ink">{announcement.title}</p>
         <p className="truncate text-[11px] text-ink-subtle">{announcement.type}</p>
@@ -198,13 +202,13 @@ function AnnouncementRow({ announcement }: { announcement: AdminAnnouncementSumm
       <div className="w-[190px] shrink-0 text-[12px] text-ink-muted md:text-right">
         {formatWhen(announcement.createdAt)}
       </div>
-    </div>
+    </Link>
   );
 }
 
 export default function AdminAnnouncementsPage() {
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <AnnouncementsList />
     </Suspense>
   );

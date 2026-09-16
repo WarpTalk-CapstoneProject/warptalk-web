@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -20,7 +21,11 @@ import {
 } from "@/components/workspace/page-chrome";
 import { getErrorMessage } from "@/lib/api/errors";
 import { useSetPreferredVoice, useVoiceCatalog } from "@/hooks/use-voice-profiles";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { describeSavedVoice } from "@/lib/voice/voice-preference";
+import { isLibraryVoicePointer } from "@/lib/voice/profile-status";
+import { getLanguageName, type SupportedLanguage } from "@/lib/language/languages";
+import { LanguageFlag } from "@/components/voice/language-flag";
+import { VoiceOrb } from "@/components/voice/voice-orb";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
@@ -33,19 +38,32 @@ function bareLanguage(language: string) {
   return language.split(/[-_]/)[0]?.toLowerCase() ?? language;
 }
 
-const LANGUAGES = languagesInScope("voiceCatalog");
+/**
+ * The stand-in voice this person picked for speakers who chose none, for one language.
+ *
+ * `isLibraryVoicePointer` is the whole correctness of this hook. Without it the predicate below
+ * — provider "cartesia", has a provider voice, right language — also matches this person's OWN
+ * finished clone, because a clone lives in the Cartesia account too and the collect path writes
+ * the same provider. The rail then showed somebody their own voice's raw provider id as their
+ * "stand-in", a UUID it had no way to name because a personal clone is not in the public
+ * catalogue. See profile-status.ts for why a missing name is the marker.
+ */
+function usePreferredVoice(profiles: VoiceProfileDto[], language: string) {
+  return useMemo(
+    () =>
+      profiles.find(
+        (profile) =>
+          isLibraryVoicePointer(profile) &&
+          profile.provider === "cartesia" &&
+          bareLanguage(profile.language ?? "") === language,
+      ) ?? null,
+    [profiles, language],
+  );
+}
 
-/** Which catalogue voice this person currently hears other people in, for one language. */
+/** Just the id, for the callers that only need to know which row is active. */
 function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
-  return useMemo(() => {
-    const match = profiles.find(
-      (profile) =>
-        profile.provider === "cartesia" &&
-        profile.providerVoiceId &&
-        bareLanguage(profile.language ?? "") === language,
-    );
-    return match?.providerVoiceId ?? null;
-  }, [profiles, language]);
+  return usePreferredVoice(profiles, language)?.providerVoiceId ?? null;
 }
 
 /**
@@ -64,16 +82,30 @@ function usePreferredVoiceId(profiles: VoiceProfileDto[], language: string) {
 export function LibraryVoiceList({
   profiles,
   language,
+  languages,
+  policyReady,
   onLanguageChange,
   search,
 }: {
   profiles: VoiceProfileDto[];
   language: string;
+  /**
+   * The languages this workspace may browse — voice-library scope, narrowed by the workspace's
+   * allowed target languages. See voice/library-languages.ts.
+   */
+  languages: readonly SupportedLanguage[];
+  /**
+   * Whether the workspace policy has arrived. Until it has, nothing is fetched: an unknown policy
+   * reads as "unrestricted", so fetching early would pull a catalogue the workspace may not allow
+   * and only then snap away from it — which is precisely the fetch this is meant to prevent.
+   */
+  policyReady: boolean;
   onLanguageChange: (language: string) => void;
   search: string;
 }) {
   const t = useTranslations("voiceProfiles.library");
-  const catalogQuery = useVoiceCatalog(language);
+  const catalogQuery = useVoiceCatalog(language, policyReady);
+  const current = languages.find((item) => item.code === language);
   const setPreferred = useSetPreferredVoice();
   const currentVoiceId = usePreferredVoiceId(profiles, language);
 
@@ -107,22 +139,34 @@ export function LibraryVoiceList({
       actions={
         <Select value={language} onValueChange={(value) => onLanguageChange(value ?? language)}>
           <SelectTrigger
-            className="h-[28px] w-[152px] rounded-full text-[12.5px]"
+            className="h-[30px] w-[168px] rounded-full text-[12.5px]"
             aria-label={t("languageAriaLabel")}
           >
-            <SelectValue />
+            {/* A bare <SelectValue /> renders the raw VALUE, so the closed control read "en" while
+                the open list said "English". Rendered explicitly so the two always agree. */}
+            <SelectValue>
+              {() => (
+                <span className="flex min-w-0 items-center gap-2">
+                  <LanguageFlag region={current?.region} />
+                  <span className="truncate">{current?.name ?? getLanguageName(language)}</span>
+                </span>
+              )}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {LANGUAGES.map((item) => (
+            {languages.map((item) => (
               <SelectItem key={item.code} value={item.code}>
-                {item.name}
+                <span className="flex items-center gap-2">
+                  <LanguageFlag region={item.region} />
+                  {item.name}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       }
     >
-      {catalogQuery.isLoading ? (
+      {!policyReady || catalogQuery.isLoading ? (
         <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">{t("loading")}</p>
       ) : voices.length === 0 ? (
         // A cold catalog is the normal state before the AI worker's first synthesis for this
@@ -132,6 +176,10 @@ export function LibraryVoiceList({
             kind="voice-profiles"
             className="min-h-[240px]"
             title={t("noVoicesTitle", { language: getLanguageName(language) })}
+            // The old sentence — "they appear after the first translation into this language in a
+            // meeting" — described the lazy cache the catalogue used to be. It is warmed for every
+            // language now, so empty means Cartesia publishes none here, or the worker has only
+            // just restarted and has not walked the library yet.
             description={t("noVoicesDescription")}
           />
         </div>
@@ -140,11 +188,27 @@ export function LibraryVoiceList({
           {t("noMatch")}
         </p>
       ) : (
-        filtered.map((voice) => {
+        // BOUNDED, WITH THE SCROLLBAR HIDDEN — and a fade, because hiding the bar removes the only
+        // sign that the list goes on. Four hundred English voices laid out in full pushed everything
+        // below the library off the page; bounded, the list stays one module among the others and
+        // still scrolls by wheel, trackpad and touch.
+        //
+        // The fade is a mask on the scroller itself rather than an overlay, so nothing sits on top
+        // of the rows to intercept a click on the last one.
+        <div
+          className={cn(
+            "max-h-[420px] overflow-y-auto overscroll-contain",
+            "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+            filtered.length > 7 &&
+              "[mask-image:linear-gradient(to_bottom,black_calc(100%-48px),transparent)]",
+          )}
+        >
+        {filtered.map((voice) => {
           const active = voice.id === currentVoiceId;
           return (
             <VoiceLine
               key={voice.id}
+              avatar={<VoiceOrb voiceId={voice.id} />}
               tone="library"
               name={voice.name}
               badge={active ? <VoiceChip tone="active">{t("youHearThis")}</VoiceChip> : undefined}
@@ -166,14 +230,24 @@ export function LibraryVoiceList({
               }
             />
           );
-        })
+        })}
+        </div>
       )}
     </WorkspaceListModule>
   );
 }
 
 /**
- * What this person hears other people in, for the language the catalogue is showing.
+ * The stand-in voice: what a speaker who has chosen nothing sounds like TO THIS READER.
+ *
+ * WHY IT IS NOT CALLED "VOICES YOU HEAR" ANY MORE
+ *     That title promised something the product deliberately does not do, and a reader who
+ *     believed it would conclude the feature was broken. Whose voice a dub is spoken in is the
+ *     SPEAKER's decision — TTSWorker._resolve_voice_variants returns early on a speaker who
+ *     cloned their voice or picked one, and never renders a listener's alternative for them.
+ *     Only the LANGUAGE is the listener's. What is set here replaces the automatic
+ *     hashed-from-speaker-id stand-in, and only for people who have expressed no preference at
+ *     all. The old title read as a veto over everyone.
  *
  * A readout, not a second picker: the list on the left is the editor, and giving the same
  * setting two controls is how the page ended up with three independent language dropdowns that
@@ -187,29 +261,63 @@ export function ListeningVoiceSummary({
   language: string;
 }) {
   const t = useTranslations("voiceProfiles.listeningSummary");
-  const currentVoiceId = usePreferredVoiceId(profiles, language);
-  const { data: catalog = [] } = useVoiceCatalog(language);
+  const current = usePreferredVoice(profiles, language);
+  const currentVoiceId = current?.providerVoiceId ?? null;
+  const catalogQuery = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
 
-  const name = useMemo(() => {
-    if (!currentVoiceId) return null;
-    return catalog.find((voice) => voice.id === currentVoiceId)?.name ?? currentVoiceId;
-  }, [catalog, currentVoiceId]);
+  // The name stored on the row is the fallback the catalogue cannot provide once its cache has
+  // expired — captured when the pick was made, which is the one moment it was warm.
+  const label = useMemo(
+    () =>
+      describeSavedVoice(
+        currentVoiceId,
+        catalogQuery.data ?? [],
+        catalogQuery.isLoading,
+        current?.displayName,
+      ),
+    [currentVoiceId, catalogQuery.data, catalogQuery.isLoading, current?.displayName],
+  );
+
+  const headline =
+    label.state === "named"
+      ? label.name
+      : label.state === "loading"
+        ? t("loading")
+        : label.state === "unavailable"
+          ? (label.name ?? t("savedVoice"))
+          : t("automatic");
 
   return (
     <WorkspaceRailModule
       title={t("title")}
       description={t("description", { language: getLanguageName(language) })}
     >
-      <p className="text-[13px] font-medium text-ink">{name ?? t("automatic")}</p>
+      <p className="text-[13px] font-medium text-ink">{headline}</p>
+      {label.state === "unavailable" ? (
+        // Said plainly instead of shown as a name, because it is not one and because the
+        // preference genuinely is not being applied — resolveSavedVoiceForLanguage drops an id
+        // the catalogue does not currently offer rather than sending a voice that would
+        // silently fall back. The id itself is not shown: a UUID is not an answer to "which
+        // voice is this".
+        <p className="text-[11.5px] leading-snug text-ink-subtle">
+          {t("unavailable", { language: getLanguageName(language) })}
+        </p>
+      ) : null}
       {currentVoiceId ? (
         <div className="flex items-center justify-between gap-2">
-          <VoicePreviewButton
-            voiceId={currentVoiceId}
-            language={language}
-            label={t("previewLabel")}
-            variant="inline"
-          />
+          {/* Only when the catalogue can name it: previewing an id the catalogue does not
+              offer is refused by IsVoiceChoosableByAsync, so the button could only fail. */}
+          {label.state === "named" ? (
+            <VoicePreviewButton
+              voiceId={currentVoiceId}
+              language={language}
+              label={t("previewLabel")}
+              variant="inline"
+            />
+          ) : (
+            <span />
+          )}
           <Button
             variant="ghost"
             size="sm"

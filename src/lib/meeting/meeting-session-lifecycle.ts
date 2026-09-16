@@ -110,6 +110,89 @@ export function isIdleReaped({
   return compact && idleDisconnected;
 }
 
+/**
+ * What the desktop app's Google Meet sensor last said, as the app shell hands it down.
+ *
+ * Null is an answer of its own: the sensor has said nothing at all. That is a browser tab, macOS
+ * (the sensor has no implementation off Windows, and the desktop reports nothing rather than
+ * "absent"), a desktop build older than the sensor, or a first poll that is not back yet. Null must
+ * never be read as "Meet is gone" — that would reap every bridge host on those platforms.
+ */
+export interface MeetSensorReading {
+  meetWindowVisible: boolean;
+  /** The Meet room code the sighting's address carried. Absent for picture-in-picture. */
+  meetCode?: string;
+  /** When the sensor stopped seeing a Meet window; null while one is up or none has been seen. */
+  meetWindowLostAtMs: number | null;
+}
+
+/**
+ * When a MINIMISED session last showed that somebody is still in its meeting. The idle budget
+ * runs from here.
+ *
+ * AN ORDINARY MEETING
+ *   Input in this window, and nothing else — the rule the reaper has always had.
+ *
+ * AN EXTERNAL BRIDGE
+ *   Input in this window is the wrong question. The host is in Google Meet with the always-on-top
+ *   popup beside it, and the main window renders the bridge compact on every route, so nobody looks
+ *   at it by design. Asking it for pointer moves reaped every bridge at 15 minutes, mid-meeting:
+ *   the dub, both bridge legs and the loopback went with LiveKit while the popup still said
+ *   translation was running. A bridge is alive while there is evidence its Meet call is:
+ *
+ *   1. Meet is on screen, per the desktop sensor. That is the host in the call right now, so it
+ *      holds the clock at `now` for as long as it lasts. Except when the sighting's code names a
+ *      DIFFERENT Meet call from the room's — the same test the trigger uses. Otherwise a bridge room
+ *      forgotten this morning would be kept alive, and billing, by an unrelated call this afternoon.
+ *   2. The moment the sensor lost sight of Meet. The budget runs from the call leaving the screen,
+ *      not from whenever the main window was last touched.
+ *   3. Speech in the meeting — the last transcript segment. This is what works where the sensor
+ *      does not: a browser tab, macOS, an older desktop build, a Meet window the sensor cannot
+ *      read. It is also the thing the pipeline bills for, so "somebody is talking" is the honest
+ *      measure of a meeting worth keeping connected.
+ *
+ * DELIBERATELY NOT A SIGN OF LIFE
+ *   - Translation running. It is the state a forgotten bridge is left in — nobody presses Stop on
+ *     the way out of a call — and the most expensive one. Counting it would switch the reaper off
+ *     in exactly the case it exists for.
+ *   - The backend's abandoned/idle sweeps (backend #390). They count people, and the host's live
+ *     hub connection counts as one, so an app left open on a forgotten bridge is never swept. They
+ *     are the backstop for an app that closed or crashed; for one that stayed open, this is still
+ *     the only thing that lets go.
+ */
+export function lastSignOfLife({
+  now,
+  lastInteractionAt,
+  isBridgeRoom,
+  meetSensor,
+  roomMeetCode,
+  lastSpeechAt,
+}: {
+  now: number;
+  /** Input in this window. */
+  lastInteractionAt: number;
+  isBridgeRoom: boolean;
+  meetSensor: MeetSensorReading | null;
+  /** The Meet code from the room's stored Meet URL, when it has one. */
+  roomMeetCode?: string;
+  /** When the last transcript segment arrived, or null if none has. */
+  lastSpeechAt: number | null;
+}): number {
+  if (!isBridgeRoom) return lastInteractionAt;
+
+  // A code that is merely absent proves nothing either way — Meet's picture-in-picture window
+  // carries none — so only a code that disagrees refuses the sighting.
+  const differentCall =
+    Boolean(meetSensor?.meetCode) && Boolean(roomMeetCode) && meetSensor?.meetCode !== roomMeetCode;
+  if (meetSensor?.meetWindowVisible && !differentCall) return now;
+
+  return Math.max(
+    lastInteractionAt,
+    meetSensor?.meetWindowLostAtMs ?? Number.NEGATIVE_INFINITY,
+    lastSpeechAt ?? Number.NEGATIVE_INFINITY,
+  );
+}
+
 export type IdleAction = "none" | "warn" | "disconnect";
 
 /**

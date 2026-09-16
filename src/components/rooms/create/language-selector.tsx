@@ -2,8 +2,7 @@ import React from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
-import { getFlagEmoji } from "@/lib/language/language-flag";
-import { isLanguageAllowedByPolicy, languagesInScope } from "@/lib/language/languages";
+import { getLanguageCode, isLanguageAllowedByPolicy, languagesInScope } from "@/lib/language/languages";
 import { LanguageLabel } from "@/components/language/language-label";
 import { cn } from "@/lib/utils";
 import { normalizeLanguage } from "@/lib/language/language-profile";
@@ -104,7 +103,7 @@ export function LanguageSelector({
             <Plus weight="bold" size={12} className="text-ink-muted" />
           </div>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[210px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
+        <PopoverContent align="start" className="w-[210px] rounded-xl bg-surface-1 border-border/50 p-1.5 shadow-xl z-[100]">
           <Command className="bg-transparent">
             <CommandList>
               <CommandGroup heading="Meeting languages" className="text-[11px] text-ink-muted">
@@ -128,7 +127,7 @@ export function LanguageSelector({
                       )}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-[14px] leading-none">{getFlagEmoji(language.code)}</span>
+                        <span className="text-[14px] leading-none">{getLanguageCode(language.code)}</span>
                         <span className="truncate font-medium text-ink">{language.label}</span>
                       </div>
                       <div data-slot="command-shortcut" className="flex shrink-0 ml-auto items-center">

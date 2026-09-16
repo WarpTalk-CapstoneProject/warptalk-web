@@ -19,22 +19,44 @@ import {
   Check,
   CheckCircle,
   ChevronDown,
+  Clock,
   Copy,
   Download,
   FileText,
   GitCommitVertical,
+  History,
   Languages,
   Loader2,
+  Lock,
   MessageSquare,
   Pencil,
+  Play,
+  Search,
+  X,
 } from "lucide-react";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   describeTranscriptAbsence,
   transcriptAbsenceMessage,
 } from "@/lib/meeting/transcript-absence";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,25 +65,53 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
+  useSegmentCorrections,
   useTranscriptLanguageBackfill,
   useTranslationRefreshAfterCorrection,
 } from "@/hooks/use-transcripts";
+import {
+  formatMeetingDuration,
+  resolveMeetingDurationSeconds,
+} from "@/lib/meeting/room-history-mapping";
+import { correctionAuthorName } from "@/lib/transcript/correction-history";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+// WT-605. The pause-window read lives with the other transcript hooks, not with the room
+// ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
+// existed, and two hooks of the same name over the same endpoint is how they drift.
+import { useTranscriptPauseWindows } from "@/hooks/use-transcripts";
 import {
   TranscriptSpeakerAvatar,
   TranscriptSpeakerStripe,
 } from "@/components/rooms/transcript-speaker-avatar";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
-import { getFlagEmoji } from "@/lib/language/language-flag";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
+import { getLanguageCode, getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
+import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
+  READING_LINE_OFFSET_PX,
+  readingAnchorAt,
+  shouldShowLanguageChip,
+  splitOnQuery,
+  stepAnchorKey,
+  type LanguageMark,
+  type ReadingAnchor,
+} from "@/lib/transcript/document-reading";
+import {
+  distributePauseGapsAcrossBlocks,
+  firstTranslationStart,
+  formatTranscriptPauseGapRun,
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
   pendingCorrections,
+  resolveTranscriptPauseGaps,
+  splitSegmentsAroundPauseGaps,
   type GroupedSavedTranscriptSegment,
+  type TranscriptPauseGap,
 } from "@/lib/transcript/transcript-display";
 import {
   AS_SPOKEN,
@@ -89,18 +139,94 @@ import type {
 } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
-/** The room page's InlineChip, in the one shape this panel uses it. */
-function TranscriptChip({ children, icon }: { children: ReactNode; icon?: ReactNode }) {
+/** The room page's InlineChip, in the one shape this panel uses it.
+ *
+ *  12px, not 11: WT-311(d) — these chips ARE the transcript's header, and at 11px muted the
+ *  facts on it (how many entries, how long, when translation started) were the smallest text on
+ *  the page. The icon stays 14px so the chip does not grow with it. */
+function TranscriptChip({
+  children,
+  icon,
+  title,
+}: {
+  children: ReactNode;
+  icon?: ReactNode;
+  title?: string;
+}) {
   return (
-    <span className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[11px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+    <span
+      title={title}
+      className="inline-flex h-6 max-w-full items-center gap-1.5 rounded-full border border-border bg-surface-1 px-2 text-[12px] font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+    >
       {icon}
       <span className="truncate">{children}</span>
     </span>
   );
 }
 
+/** A timestamp as the wall clock the reader keeps — "09:41", not the ISO string. */
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 /** How the transcript is laid out: as the conversation, as a document, or on a timeline. */
 type TranscriptLayout = "chat" | "document" | "timeline";
+
+/**
+ * Whether this reader has asked the system not to animate.
+ *
+ * Read at the moment of the scroll rather than held in state: the setting can change while a record
+ * page is open, and a stale answer here means a surface that keeps animating itself after somebody
+ * has just turned animation off. The guard is for SSR and for the jsdom-shaped environments that
+ * have `window` but not `matchMedia`.
+ */
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * WT-655(C3) — "Follow playback", after the reader has scrolled away from it.
+ *
+ * Same floating shape as ScrollToLatestChip, deliberately: they answer the same kind of question
+ * ("take me back to the thing that is moving") and appear in the same corner of the same scroller,
+ * so two different shapes would read as two unrelated systems. Filled rather than outlined, because
+ * unlike Latest this one is offered rarely and is the more specific of the two answers.
+ *
+ * `tabIndex`/`aria-hidden` while invisible for the same reason the Latest chip carries them: a
+ * focusable invisible button is a trap that scrolls the page for no visible reason.
+ */
+function FollowPlaybackChip({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute inset-x-0 bottom-3 z-10 flex justify-center transition-opacity duration-150 print:hidden",
+        visible ? "opacity-100" : "opacity-0",
+      )}
+    >
+      <button
+        type="button"
+        tabIndex={visible ? 0 : -1}
+        aria-hidden={!visible}
+        onClick={onClick}
+        title="Scroll with the recording again"
+        className={cn(
+          "inline-flex items-center gap-1.5 rounded-full bg-ink py-1.5 pl-2.5 pr-3.5 text-[12px] font-medium text-canvas shadow-[0_2px_10px_rgba(0,0,0,0.14)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1",
+          visible ? "pointer-events-auto" : "pointer-events-none",
+        )}
+      >
+        <Play className="size-3.5 fill-current" />
+        Follow playback
+      </button>
+    </div>
+  );
+}
 
 /**
  * The saved meeting transcript, rendered as a distinct artifact participants can read
@@ -133,12 +259,14 @@ export function MeetingTranscriptArtifact({
   onCopy,
   transcriptId,
   transcriptStatus,
-  highlightedSegmentId,
+  highlightedSegmentIds,
   canEdit,
   onSegmentsChanged,
   speakerDirectory,
   transcriptErrorCode,
   transcriptLoading,
+  meetingStartedAt,
+  meetingEndedAt,
 }: {
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
@@ -156,9 +284,15 @@ export function MeetingTranscriptArtifact({
   /** Needed to correct or finalize; omit and the section stays read-only. */
   transcriptId?: string;
   transcriptStatus?: string;
-  /** Set when a summary citation jumped here; the row is marked so the reader can see
-   *  which line the claim came from rather than landing in an anonymous wall of text. */
-  highlightedSegmentId?: string | null;
+  /** Set when a summary citation jumped here; the rows are marked so the reader can see
+   *  which lines the claim came from rather than landing in an anonymous wall of text.
+   *
+   *  A SET, not one id: a sentence summarising an exchange rests on several turns by several
+   *  speakers, and ringing only the first of them told the reader the claim came from half of
+   *  its own evidence. Membership is asked once per rendered line on a column that can be several
+   *  hundred rows, so the caller hands over something that can answer in constant time rather
+   *  than a list this panel would have to scan. Absent means no citation is pointing here. */
+  highlightedSegmentIds?: ReadonlySet<string>;
   /**
    * WT-516: the server's code when the transcript lookup FAILED — `FORBIDDEN`, `NOT_FOUND`, a
    * status. Without it this panel cannot tell "you may not read this" from "there is nothing",
@@ -175,6 +309,14 @@ export function MeetingTranscriptArtifact({
    *  all, so this is the only place one exists. Omit it and every speaker is initials, which is
    *  what most of them are anyway. */
   speakerDirectory?: Readonly<Record<string, { fullName?: string | null; avatarUrl?: string | null }>>;
+  /**
+   * WT-311(c): when the MEETING ran — the room's own `startedAt`/`endedAt`, never the
+   * translation session's. A host who never pressed Start Translation still held a meeting, and
+   * its length was being read off a session that did not exist and coming out as "0m". A
+   * missing end renders as "—" rather than as a number.
+   */
+  meetingStartedAt?: string | null;
+  meetingEndedAt?: string | null;
 }) {
   // Memoised on the fetched rows rather than recomputed per render: the language options and
   // the translation index are derived from these, and rebuilding them on every keystroke of a
@@ -210,7 +352,38 @@ export function MeetingTranscriptArtifact({
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
   const showSessionLabels = blocks.length > 1;
+  // WT-605. Independent of the translation-session grouping above — pausing the transcript and
+  // pausing translation are different, unrelated actions.
+  const pauseWindowsQuery = useTranscriptPauseWindows(roomId);
+  const pauseGaps = resolveTranscriptPauseGaps(pauseWindowsQuery.data ?? [], baseTime);
+  // NO withoutSegmentsInOpenPauseGaps HERE, AND THAT IS THE DECISION RATHER THAN AN OMISSION.
+  //
+  // The live panel filters lines that fall in a still-open window because it is fed by the
+  // realtime store, which keeps carrying speech through a pause so the caption lane can. This
+  // panel is fed by the DATABASE, and a paused transcript is precisely one nothing is written
+  // into — so the filter would have nothing to remove on any healthy meeting.
+  //
+  // What it WOULD do is fail dangerously on an unhealthy one. A window left open — a room that
+  // crashed mid-pause, or ended before the backend closed it — has no upper bound, so the rule
+  // would delete every line after the pause began from the saved record, permanently and with no
+  // sign that anything was removed. A safety net that can silently swallow the second half of a
+  // meeting is not cheap. The divider below already tells the reader where the hole is; a hole is
+  // what this surface has to show, not one it should make.
+
   const totalCount = grouped.length;
+  // WT-311(d): when translation first started, from the sessions the meeting actually ran. Null
+  // when it never did, and then the header simply does not claim it.
+  const translationStartedAt = useMemo(
+    () => firstTranslationStart(sessionsQuery.data ?? []),
+    [sessionsQuery.data],
+  );
+  // WT-311(c): the meeting's own length. Only once it is over — a running meeting has no
+  // duration yet, and "—" beside "Live" would read as a broken clock rather than an open one.
+  const meetingDuration = isEnded
+    ? formatMeetingDuration(
+        resolveMeetingDurationSeconds({ startedAt: meetingStartedAt, endedAt: meetingEndedAt }),
+      )
+    : null;
   const absence = describeTranscriptAbsence({
     lineCount: totalCount,
     isEnded,
@@ -223,7 +396,19 @@ export function MeetingTranscriptArtifact({
   // default is derived, so it follows the transcript as it loads instead of being frozen by an
   // effect that ran while the segments were still in flight.
   const [chosenLanguage, setChosenLanguage] = useState<string | null>(null);
-  const [layout, setLayout] = useState<TranscriptLayout>("chat");
+  /**
+   * The rail beside this column, when there is one.
+   *
+   * Null on /dev/transcript-preview and anywhere else this panel is rendered on its own, and every
+   * use of it below is guarded — the two-way sync is an addition to the document layout, not a
+   * precondition for it.
+   */
+  const sync = useReadingSync();
+  // Document, when a summary rail is sitting beside it. That pairing IS the reading posture the
+  // rail exists for: a claim on the right and the paragraph it came from on the left. Opening on
+  // bubbles there would make the reader's first action changing the layout.
+  const [layout, setLayout] = useState<TranscriptLayout>(sync ? "document" : "chat");
+  const isReading = layout === "document";
   const scrollerRef = useRef<HTMLDivElement>(null);
   // On `blocks` and `layout` both: switching between the three views rebuilds the list at a
   // different height, and the reader's distance from the bottom changes without them scrolling.
@@ -257,6 +442,11 @@ export function MeetingTranscriptArtifact({
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
   // with one part missing. Counted here and said out loud below, rather than left for the reader
   // to discover one line at a time.
+  //
+  // Counted over `grouped`, so it is in the same unit as `totalCount` and as the "Saved · N
+  // entries" chip: one per ROW the panel draws, not one per stored STT chunk. That is the whole
+  // reason TranscriptLanguageStatus prints this number instead of the server's — see the note
+  // there — and it is why anything added to this reduce has to be a fact about a rendered line.
   const incompleteCount = useMemo(() => {
     if (displayLanguage === AS_SPOKEN) return 0;
     return grouped.reduce((count, line) => {
@@ -268,6 +458,348 @@ export function MeetingTranscriptArtifact({
   function toggleOriginal(segmentId: string) {
     setRevealedOriginals((current) => ({ ...current, [segmentId]: !current[segmentId] }));
   }
+
+  /* ─────────────────────────────────────────────────────────────────────────────────────────
+     Reading mode: the document as speaker turns, and the wire to the rail beside it.
+     ───────────────────────────────────────────────────────────────────────────────────────── */
+
+  /**
+   * The document as TURNS rather than as utterances.
+   *
+   * This is the single largest change reading mode makes, and it is a vertical-space change before
+   * it is an aesthetic one. Finalized STT chunks arrive every few seconds, so one person talking
+   * for two minutes is twenty rows — twenty repetitions of their name, their face and their
+   * timestamp, wrapped around one paragraph of speech. Grouped on the same ~30-second window the
+   * timeline already uses (groupIntoSpeakerTurns), that becomes one block with the name printed
+   * once, and a meeting stops being taller than the thing it is a record of.
+   */
+  const readingTurns = useMemo(
+    () => blocks.flatMap((block) => groupIntoSpeakerTurns(block.segments)),
+    [blocks],
+  );
+
+  // Each window is drawn in exactly ONE session block. Passing the whole list to every block —
+  // which is what the render below used to do — makes splitSegmentsAroundPauseGaps' trailing pass
+  // repeat every late pause once per translation session, so a meeting with three sessions showed
+  // one pause three times, at three different points in the record.
+  const gapsPerBlock = distributePauseGapsAcrossBlocks(
+    blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+    pauseGaps,
+  );
+
+  /**
+   * Which lines print a language chip.
+   *
+   * Computed over the whole document in one pass, because the rule is about a CHANGE and a change
+   * is only visible from the line before it — a per-row decision cannot see one. A Vietnamese
+   * meeting read as spoken prints "VI" once, at the top, instead of four hundred times down the
+   * right margin. See shouldShowLanguageChip for why the two warning states are exempt.
+   */
+  const languageChipLineIds = useMemo(() => {
+    if (!isReading) return null;
+
+    const ids = new Set<string>();
+    let previous: LanguageMark | null = null;
+    for (const turn of readingTurns) {
+      for (const line of turn.lines) {
+        const resolved = resolveTranscriptLine(line, translationIndex, displayLanguage);
+        const mark: LanguageMark = {
+          language: (resolved.spokenLanguage || "?").toLowerCase(),
+          state: resolved.isPartial
+            ? "partial"
+            : resolved.isUntranslated
+              ? "untranslated"
+              : resolved.isTranslated
+                ? "translated"
+                : "spoken",
+        };
+        if (shouldShowLanguageChip(mark, previous)) ids.add(line.id);
+        previous = mark;
+      }
+    }
+    return ids;
+  }, [isReading, readingTurns, translationIndex, displayLanguage]);
+
+  // Ctrl+F over a page, not a filter over a list — see splitOnQuery. Opened by the toolbar button
+  // or by `/`, which is the key a person reading a document already reaches for.
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const documentRef = useRef<HTMLDivElement>(null);
+  const scrollFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
+
+  /**
+   * Where every turn sits inside the scroller, measured rather than assumed.
+   *
+   * Rect arithmetic, not `offsetTop`: `offsetTop` is relative to the nearest POSITIONED ancestor,
+   * and this column has picked up and lost one of those twice already (the highlight ring, the
+   * scroll-to-latest chip). Subtracting the two bounding boxes and adding the scroll offset gives
+   * the distance from the top of the scrolled content whatever the positioning happens to be.
+   *
+   * The start and end of each block are read off the element rather than out of a second copy of
+   * the turn list, so there is exactly one thing that can be stale: the DOM.
+   */
+  /*
+   * Pulled off the context ONE FIELD AT A TIME, and this is load-bearing rather than tidy.
+   *
+   * The context value changes identity whenever anything in it changes — including `readingKey`,
+   * which this column is itself the one setting. A callback that closed over the whole `sync`
+   * would therefore be rebuilt by its own output, the effect below would re-run, and the position
+   * would be recomputed from the scrollbar the instant J or K moved it: the key would snap back to
+   * wherever the scroll happened to be, and on a document short enough not to scroll at all the
+   * two keys would appear to do nothing whatsoever. Both of these are stable — one is a `useState`
+   * setter, the other only changes when the document is actually re-measured.
+   */
+  const publishAnchors = sync?.publishAnchors;
+  const anchors = sync?.anchors;
+  const setReadingKey = sync?.setReadingKey;
+  const markedKeys = sync?.markedKeys;
+
+  /**
+   * The blocks the rail is pointing at, as a lookup rather than a list.
+   *
+   * A summary sentence rests on every turn it was drawn from, so this is a set of keys and not one
+   * key — and it is asked once per block on a document that is routinely several hundred of them,
+   * every time a pointer crosses a rail item. Scanning the list per block would make the cost of
+   * hovering one claim the product of the two, which is the same trap groupCitationsByAnchor is
+   * written against on the other side of this wire. Built once per render off the array, the way
+   * languageChipLineIds above is; the provider only hands over a new array when the keys actually
+   * changed, so this rebuilds when the answer can have changed and not when a render happens.
+   *
+   * Null while nothing is marked, so the common case costs no allocation at all.
+   */
+  const markedKeySet = useMemo(
+    () => (markedKeys && markedKeys.length > 0 ? new Set(markedKeys) : null),
+    [markedKeys],
+  );
+
+  const measureAnchors = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!publishAnchors || !scroller) return;
+
+    const scrollerTop = scroller.getBoundingClientRect().top - scroller.scrollTop;
+    const measured: ReadingAnchor[] = [];
+    for (const node of scroller.querySelectorAll<HTMLElement>("[data-reading-turn]")) {
+      const key = node.dataset.readingTurn;
+      if (!key) continue;
+      measured.push({
+        key,
+        startMs: Number(node.dataset.startMs ?? 0),
+        endMs: Number(node.dataset.endMs ?? 0),
+        offsetTop: node.getBoundingClientRect().top - scrollerTop,
+      });
+    }
+    publishAnchors(measured);
+  }, [publishAnchors]);
+
+  useEffect(() => {
+    if (!publishAnchors) return;
+    // Leaving reading mode retracts the anchors rather than leaving the last ones standing: a rail
+    // still pointing at blocks that are no longer on screen would highlight nothing and look
+    // broken, which is worse than a rail that admits it has nothing to point at.
+    if (!isReading) {
+      publishAnchors([]);
+      return;
+    }
+
+    measureAnchors();
+
+    // Heights change without a re-render here: a translation arrives, a chip wraps, a correction
+    // editor opens. An observer is the only thing that sees those; a one-shot measurement on mount
+    // would leave every anchor below the change pointing at the wrong pixel.
+    const content = documentRef.current;
+    if (!content || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => measureAnchors());
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [publishAnchors, isReading, measureAnchors, readingTurns, displayLanguage]);
+
+  /** The second direction of the sync: what the reader is looking at, told to the rail. */
+  const reportReadingPosition = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!anchors || !setReadingKey || !scroller) return;
+    const anchor = readingAnchorAt(anchors, scroller.scrollTop + READING_LINE_OFFSET_PX);
+    setReadingKey(anchor?.key ?? null);
+  }, [anchors, setReadingKey]);
+
+  // Once per publish, so the rail lights up on arrival instead of waiting for the first scroll.
+  // `reportReadingPosition` changes identity with the anchor list, which is exactly the moment
+  // the answer can have changed without anybody scrolling.
+  useEffect(() => {
+    reportReadingPosition();
+  }, [reportReadingPosition]);
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current !== null) cancelAnimationFrame(scrollFrameRef.current);
+    },
+    [],
+  );
+
+  function handleReadingScroll() {
+    if (!anchors || scrollFrameRef.current !== null) return;
+    // One report per frame. Scroll fires far faster than the rail can usefully be repainted, and
+    // an unthrottled handler over a thousand-block meeting is how a reading surface starts
+    // dropping frames on exactly the meetings worth reading.
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = null;
+      reportReadingPosition();
+    });
+  }
+
+  const scrollToTurn = useCallback((key: string, options?: { center?: boolean }) => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const node = scroller.querySelector<HTMLElement>(
+      `[data-reading-turn="${CSS.escape(key)}"]`,
+    );
+    if (!node) return;
+    const box = node.getBoundingClientRect();
+    const offset = box.top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    /* CENTRED for a block the recording is playing, just under the top edge for one the reader
+       jumped to. Different jobs: a jump is "start reading here", and the answer is at the top with
+       the rest of the meeting below it. Following playback is "keep this in view while it moves",
+       and a line pinned to the top edge has the next thirty seconds of talking below it and no
+       context above — which is exactly what a reader following an argument needs. Centred also
+       means the block does not have to move again the instant the speaker changes. */
+    const top = options?.center
+      ? offset - Math.max(0, (scroller.clientHeight - box.height) / 2)
+      // Just above the reading line, not at the very top edge: landing a block flush against the
+      // top puts it exactly where readingAnchorAt stops counting it as the one being read.
+      : offset - 24;
+    scroller.scrollTo({
+      top: Math.max(0, top),
+      // Somebody who asked the system not to animate has asked that of a surface which, while
+      // following a recording, animates itself every twenty seconds unprompted. Honouring it here
+      // is not a nicety.
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
+  }, []);
+
+  /* ─────────────────────────────────────────────────────────────────────────────────────────
+     WT-655(C) — the transcript follows the recording.
+
+     Wave 1 gave the reader transcript → video: click a timestamp and the recording seeks. This is
+     the other direction, and it is the one that makes a record watchable rather than merely
+     searchable: while the recording plays, the line being spoken is marked and the column scrolls
+     to keep it in view.
+
+     THE THREE RULES THAT KEEP IT FROM BEING ANNOYING
+       1. The mark is a TEXT COLOUR, never a background. Background is already spoken for twice over
+          here — hover, and the row a summary citation jumped to (`highlighted`). A third meaning on
+          the same property is how a reader stops being able to read any of them.
+       2. A manual scroll switches following off, and only the reader switches it back on. Being
+          dragged back to the playhead after deliberately scrolling away is the single worst thing a
+          surface like this can do.
+       3. Nothing moves while the recording is paused. No polling, no highlight, no scrolling —
+          which is why `isPlaying` is published by the player rather than inferred from the playhead
+          having stopped changing.
+     ───────────────────────────────────────────────────────────────────────────────────────── */
+
+  /* One field at a time, for the reason spelled out above `publishAnchors`: the context value now
+     also changes identity about four times a second while the recording plays, so anything closing
+     over the whole `sync` would be rebuilt at that rate. */
+  const syncPlayingKey = sync?.playingKey ?? null;
+  const isPlaying = sync?.isPlaying ?? false;
+  const isFollowing = sync?.isFollowing ?? false;
+  const setFollowing = sync?.setFollowing;
+  // The scroller only exists once there is a transcript to put in it — see `absence`.
+  const hasScroller = !absence;
+
+  /**
+   * Which block the recording is playing, or null.
+   *
+   * The moment is resolved to a block by the sync provider, with `anchorForMs` — the same function
+   * the rail resolves a citation with, deliberately not a second implementation. The transcript has
+   * no end times to work with, so a line stays marked through the silence after it until the next
+   * one begins; that is correct, and blanking the mark during gaps would make it flicker on every
+   * breath the speaker took.
+   *
+   * Gated here on `onSeekToRecording`, which is a fact about this column rather than about the
+   * playhead. A meeting with no recording, or one whose clocks cannot be reconciled, offers no
+   * seek — and by exactly the same rule nothing in it may light up as playing, because there is
+   * nothing playing it could honestly refer to.
+   */
+  const canFollowPlayback = Boolean(onSeekToRecording);
+  const playingKey = canFollowPlayback ? syncPlayingKey : null;
+
+  /**
+   * Keep the playing block in view.
+   *
+   * Keyed on `playingKey` rather than on the playhead, so this fires once when the line CHANGES
+   * instead of four times a second — a smooth scroll restarted every 250ms never arrives anywhere,
+   * and the column would crawl.
+   */
+  useEffect(() => {
+    if (!isReading || !isFollowing || !isPlaying || !playingKey) return;
+    scrollToTurn(playingKey, { center: true });
+  }, [isReading, isFollowing, isPlaying, playingKey, scrollToTurn]);
+
+  /**
+   * The reader taking the scroll back.
+   *
+   * `wheel` and `touchmove`, NOT `scroll`. The auto-scroll above fires `scroll` itself, so listening
+   * for that would have following switch itself off the first time it worked — and the reader would
+   * be left with a pill they never asked for after a single line. These two events only happen when
+   * a hand is on the wheel or the glass.
+   *
+   * Keyboard scrolling (Page Down, arrows) is not caught here, deliberately: J and K move the
+   * reading position through the navigator, which is a different gesture with its own behaviour.
+   */
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !setFollowing || !isReading) return;
+    const stopFollowing = () => setFollowing(false);
+    scroller.addEventListener("wheel", stopFollowing, { passive: true });
+    scroller.addEventListener("touchmove", stopFollowing, { passive: true });
+    return () => {
+      scroller.removeEventListener("wheel", stopFollowing);
+      scroller.removeEventListener("touchmove", stopFollowing);
+    };
+    // `hasScroller`, because the element does not exist while the panel is explaining an absent
+    // transcript — the listeners have to be attached when it appears rather than only on mount.
+  }, [setFollowing, isReading, hasScroller]);
+
+  /** Both conditions, and it is the AND that matters — see the chip's own note below. */
+  const showFollowPill = Boolean(isReading && canFollowPlayback && !isFollowing && isPlaying);
+
+  /**
+   * Seeking is also a request to follow.
+   *
+   * Somebody who clicked 07:16 wants to hear what happened at 07:16 — and then what happened next.
+   * Leaving following off there would mark the line they picked, play past it, and leave the mark
+   * behind on a sentence that has finished.
+   */
+  const seekToMoment = useCallback(
+    (atMs: number) => {
+      if (!onSeekToRecording) return;
+      setFollowing?.(true);
+      onSeekToRecording(atMs);
+    },
+    [onSeekToRecording, setFollowing],
+  );
+
+  // J, K and `/` are handled by the provider — it is the only thing that can see a keypress aimed
+  // at nothing in particular — and it needs this column to carry them out. Registered while
+  // reading mode is on and withdrawn when it is not, so the keys go quiet in the layouts that have
+  // no turns to step through rather than moving something the reader cannot see.
+  useEffect(() => {
+    if (!sync || !isReading) return;
+    sync.registerNavigator({
+      step: (delta) => {
+        const nextKey = stepAnchorKey(sync.anchors, sync.readingKey, delta);
+        if (!nextKey) return;
+        sync.setReadingKey(nextKey);
+        scrollToTurn(nextKey);
+      },
+      focusSearch: () => setSearchOpen(true),
+    });
+    return () => sync.registerNavigator(null);
+  }, [sync, isReading, scrollToTurn]);
 
   /**
    * Everything one line needs, whichever layout is drawing it.
@@ -288,8 +820,11 @@ export function MeetingTranscriptArtifact({
       ),
       isSelf: Boolean(currentUserId) && segment.speakerParticipantId === currentUserId,
       time: base ? segmentTime(segment.startTimeMs) : null,
-      onSeek: onSeekToRecording ? () => onSeekToRecording(segment.startTimeMs) : undefined,
-      highlighted: highlightedSegmentId === segment.id,
+      // The gate stays on `onSeekToRecording`, not on the wrapper: `seekToMoment` exists whether or
+      // not a seek is possible, and gating on it would make every timestamp look clickable on a
+      // meeting with no recording. See TranscriptLineTime.
+      onSeek: onSeekToRecording ? () => seekToMoment(segment.startTimeMs) : undefined,
+      highlighted: highlightedSegmentIds?.has(segment.id) ?? false,
       // A chip on every line of a transcript that IS in one language is noise. Shown when the
       // line is not simply "spoken in the language you asked for", which makes its absence
       // meaningful: no chip means these are the speaker's own words.
@@ -297,6 +832,17 @@ export function MeetingTranscriptArtifact({
         displayLanguage === AS_SPOKEN || resolved.isTranslated || resolved.isUntranslated,
       revealed: Boolean(revealedOriginals[segment.id]),
       onToggleReveal: () => toggleOriginal(segment.id),
+      // WT-311(f): only a line somebody has corrected has a history, and only a SAVED transcript
+      // has an id to ask for it by — the live tab has neither, and renders nothing here.
+      history:
+        segment.isCorrected && transcriptId ? (
+          <TranscriptVersionHistory
+            transcriptId={transcriptId}
+            segmentIds={segment.mergedSegmentIds}
+            currentUserId={currentUserId}
+            speakerDirectory={speakerDirectory}
+          />
+        ) : null,
       canCorrect,
       // WT-589: in batch mode every line is open at once, so the three layouts need no changes —
       // they already ask "is this row being edited" and render `editor` when it is.
@@ -370,6 +916,10 @@ export function MeetingTranscriptArtifact({
   const batchContainerRef = useRef<HTMLDivElement>(null);
   const refreshTranslationsAfterCorrection = useTranslationRefreshAfterCorrection(transcriptId);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  // WT-311(a): finalizing is irreversible — it locks the wording for good — and a bare button
+  // called "Finalize" did it on one click with nothing on screen saying so. The dialog is the
+  // one place that sentence is said before it is too late to matter.
+  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
 
   const isFinalized = transcriptStatus === "finalized";
   const canCorrect = Boolean(canEdit && transcriptId) && !isFinalized;
@@ -508,7 +1058,7 @@ export function MeetingTranscriptArtifact({
     try {
       await transcriptService.finalize(transcriptId);
       onSegmentsChanged?.();
-      toast.success("Transcript finalized.");
+      toast.success("Transcript finalized and locked.");
     } catch {
       toast.error("Could not finalize the transcript.");
     } finally {
@@ -542,16 +1092,44 @@ export function MeetingTranscriptArtifact({
        Transcript tab, not a section of its own. The action row stays: copy, download and
        finalize act on the transcript specifically, not on the record as a whole. */
     <div ref={batchContainerRef}>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      {/* Every control here acts on the reading of the transcript, and a sheet of paper cannot be
+          read from — so none of them are printed. See the print rules on the scroller below. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 print:hidden">
         <div className="flex flex-wrap items-center gap-2">
           <TranscriptChip icon={<FileText className="size-3.5" />}>
             {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
             {totalCount === 1 ? "entry" : "entries"}
           </TranscriptChip>
+          {/* WT-311(c): from the room's own start and end. It used to come off the translation
+              session, so a meeting whose host never pressed Start Translation read "0m". */}
+          {meetingDuration ? (
+            <TranscriptChip
+              icon={<Clock className="size-3.5" />}
+              title="How long the meeting ran, from when it was started to when it was ended"
+            >
+              Duration {meetingDuration}
+            </TranscriptChip>
+          ) : null}
+          {/* WT-311(d): translation is a thing the host switches on partway through, and when
+              they did is the fact that explains why the first stretch of a transcript has no
+              translations. Absent when translation never ran. */}
+          {translationStartedAt ? (
+            <TranscriptChip
+              icon={<Languages className="size-3.5" />}
+              title={new Date(translationStartedAt).toLocaleString()}
+            >
+              Translation started {clockTime(translationStartedAt)}
+            </TranscriptChip>
+          ) : null}
           {/* Said out loud, because after finalizing the pencils simply stop appearing and
               that on its own reads as the page having broken. */}
           {isFinalized ? (
-            <TranscriptChip icon={<CheckCircle className="size-3.5" />}>Finalized</TranscriptChip>
+            <TranscriptChip
+              icon={<Lock className="size-3.5" />}
+              title="The wording is approved and locked. No further edits are possible."
+            >
+              Finalized &amp; locked
+            </TranscriptChip>
           ) : null}
         </div>
         {totalCount > 0 ? (
@@ -567,6 +1145,29 @@ export function MeetingTranscriptArtifact({
               busyLanguage={backfill.coverage?.status === "running" ? backfill.coverage.targetLanguage : null}
             />
             <TranscriptLayoutToggle value={layout} onChange={setLayout} />
+            {/* Offered in reading mode only, because that is the only layout that marks matches in
+                place — the other two draw one row per utterance, where a match highlighted inside a
+                bubble is as hard to find as the word was. `/` opens the same field. */}
+            {isReading ? (
+              <button
+                type="button"
+                title="Find in this transcript"
+                aria-label="Find in this transcript"
+                aria-pressed={searchOpen}
+                onClick={() => {
+                  // Closing clears the term: leaving a filter's marks behind a closed control is
+                  // how a reader ends up staring at highlights they cannot explain.
+                  if (searchOpen) setQuery("");
+                  setSearchOpen((current) => !current);
+                }}
+                className={cn(
+                  "grid size-[26px] place-items-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink",
+                  searchOpen ? "bg-surface-2 text-ink" : "",
+                )}
+              >
+                <Search className="size-3.5" />
+              </button>
+            ) : null}
             <div className="mx-0.5 h-4 w-px bg-border" />
             <button
               type="button"
@@ -630,20 +1231,56 @@ export function MeetingTranscriptArtifact({
                 </button>
               )
             ) : null}
+            {/* WT-311(a): "Finalize & lock", with the lock in the label, because locking is what
+                it does — the old "Finalize" read as "mark done" and silently made the transcript
+                uneditable forever. The click opens the confirmation below; the request is sent
+                from there. */}
             {canCorrect && !isBatchEditing ? (
               <button
                 type="button"
-                onClick={() => void finalizeTranscript()}
+                onClick={() => setIsFinalizeDialogOpen(true)}
                 disabled={isFinalizing}
+                title="Approve the wording and lock it. No further edits are possible afterwards."
                 className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
               >
-                <CheckCircle className="size-3.5" />
-                {isFinalizing ? "Finalizing…" : "Finalize"}
+                <Lock className="size-3.5" />
+                {isFinalizing ? "Finalizing…" : "Finalize & lock"}
               </button>
             ) : null}
           </div>
         ) : null}
       </div>
+
+      <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+        <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Finalize and lock this transcript?</DialogTitle>
+            <DialogDescription className="pt-2 text-ink-subtle">
+              Once finalized, the transcript is approved and locked. No further edits are
+              possible.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsFinalizeDialogOpen(false)}
+              className="border-border bg-surface-2 text-ink hover:bg-surface-3"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={isFinalizing}
+              onClick={() => {
+                setIsFinalizeDialogOpen(false);
+                void finalizeTranscript();
+              }}
+            >
+              <Lock />
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* What is still not in the chosen language, and what is being done about it. This used to
           be a footnote and nothing more — an honest one, but a reader told that 113 of 285 lines
@@ -680,66 +1317,171 @@ export function MeetingTranscriptArtifact({
            not its markup, and the word alone fails it. Containing the scroll would stop
            the page at the end of the transcript, which is the trap that ticket removed. */
         <div className="relative">
+        {/* Sits above the scroller rather than floating over it: a find bar laid on top of the
+            first line hides the thing it just found. */}
+        {isReading && searchOpen ? (
+          <TranscriptFindBar
+            ref={searchInputRef}
+            value={query}
+            onChange={setQuery}
+            onClose={() => {
+              setQuery("");
+              setSearchOpen(false);
+            }}
+          />
+        ) : null}
         <div
           ref={scrollerRef}
-          className="max-h-[min(60vh,560px)] space-y-1 overflow-y-auto rounded-xl border border-border bg-surface-1 p-4"
+          onScroll={isReading ? handleReadingScroll : undefined}
+          className={cn(
+            // The print rules are the reward the spec promised for laying this out as a document:
+            // a page of paper has no viewport to bound and no scrollbar to scroll, so the frame
+            // that makes this readable on screen is exactly what has to go on paper.
+            "max-h-[min(60vh,560px)] overflow-y-auto rounded-xl border border-border bg-surface-1 p-4 print:max-h-none print:overflow-visible print:rounded-none print:border-0 print:bg-transparent print:p-0",
+            // Taller in reading mode: the rail beside it is scrolling independently, so a short
+            // column would leave the reader scrubbing a letterbox next to a half-empty rail.
+            isReading ? "max-h-[min(72vh,720px)]" : "",
+          )}
         >
-          {blocks.map((block) => (
+          <div
+            ref={documentRef}
+            className={cn(
+              /* The measure is NOT declared here, and that is deliberate rather than an omission.
+                 Custom properties inherit, so a `--reading-measure` set on this wrapper would
+                 shadow the one the rail sets on its own grid — a declaration on a descendant
+                 always beats an ancestor's, whatever the media query on it — and the 52ch
+                 comparison measure would silently never apply. The default lives where it can be
+                 overridden: in the `var(..., 66ch)` fallback on the paragraph itself, which is
+                 also what makes this column read correctly with no rail beside it at all. */
+              isReading ? "mx-auto w-full max-w-[820px]" : "space-y-1",
+            )}
+          >
+          {blocks.map((block, blockIndex) => (
             <div key={block.sessionNumber} className={layout === "chat" ? "space-y-2" : "space-y-0.5"}>
               {showSessionLabels ? (
                 <TranscriptSessionDivider sessionNumber={block.sessionNumber} session={block.session} />
               ) : null}
-              {layout === "timeline"
-                ? // One dot per stretch of the meeting a person held, so the rail shows who had
-                  // the floor and when — the thing neither of the other two layouts can show at
-                  // a glance, because both of them draw one row per utterance.
-                  groupIntoSpeakerTurns(block.segments).map((turn, index) => (
-                    <TranscriptTimelineTurn
-                      key={turn.key}
-                      speaker={resolveTranscriptSpeaker(
-                        turn.speakerId,
-                        turn.speakerName,
-                        speakerDirectory,
-                      )}
-                      speakerName={turn.speakerName}
-                      time={base ? segmentTime(turn.startTimeMs) : null}
-                      onSeek={
-                        onSeekToRecording
-                          ? () => onSeekToRecording(turn.startTimeMs)
-                          : undefined
-                      }
-                      // The rail starts AT the first dot rather than above it — a line hanging
-                      // off the top of the transcript reads as content scrolled out of view.
-                      isFirst={index === 0}
-                      rows={turn.lines.map(buildRow)}
-                    />
-                  ))
-                : block.segments.map((segment) => {
-                    const row = buildRow(segment);
-                    return layout === "chat" ? (
-                      <TranscriptChatRow
-                        key={segment.id}
-                        {...row}
-                        speakerName={
-                          row.isSelf ? "You" : segment.speakerName || "Unknown speaker"
-                        }
-                      />
-                    ) : (
-                      <TranscriptDocumentRow
-                        key={segment.id}
-                        {...row}
-                        // No "You" here. A document names the people in it, and a record that
-                        // reads differently depending on who opened it is not a record.
-                        speakerName={segment.speakerName || "Unknown speaker"}
-                      />
-                    );
-                  })}
+              {/* Two changes met here and both are kept. WT-605 splits a session wherever the
+                  host paused the transcript, so a divider can say the record stops and restarts
+                  rather than leaving an unexplained jump in the timestamps; Option C draws the
+                  document as one block per speaker TURN instead of one row per utterance. They
+                  compose: the pause split is the outer loop, and each run between pauses is laid
+                  out in whichever of the three shapes the reader chose. Every layout reads
+                  `sub.segments`, never `block.segments` — grouping turns across a pause would
+                  merge speech from either side of it into one block and hide the very gap the
+                  divider is there to announce. */}
+              {splitSegmentsAroundPauseGaps(block.segments, gapsPerBlock[blockIndex] ?? []).map((sub, subIndex) => (
+                <div
+                  key={sub.gapsBefore.map((gap) => gap.window.id).join("+") || `${block.sessionNumber}-${subIndex}`}
+                >
+                  {sub.gapsBefore.length ? (
+                    <TranscriptPauseDivider gaps={sub.gapsBefore} meetingEnded={isEnded} />
+                  ) : null}
+                  {layout === "timeline"
+                    ? // One dot per stretch of the meeting a person held, so the rail shows who had
+                      // the floor and when — the thing neither of the other two layouts can show at
+                      // a glance, because both of them draw one row per utterance.
+                      groupIntoSpeakerTurns(sub.segments).map((turn, index) => (
+                        <TranscriptTimelineTurn
+                          key={turn.key}
+                          speaker={resolveTranscriptSpeaker(
+                            turn.speakerId,
+                            turn.speakerName,
+                            speakerDirectory,
+                          )}
+                          speakerName={turn.speakerName}
+                          time={base ? segmentTime(turn.startTimeMs) : null}
+                          onSeek={
+                            onSeekToRecording
+                              ? () => seekToMoment(turn.startTimeMs)
+                              : undefined
+                          }
+                          // The rail starts AT the first dot rather than above it — a line hanging
+                          // off the top of the transcript reads as content scrolled out of view.
+                          isFirst={index === 0}
+                          rows={turn.lines.map(buildRow)}
+                        />
+                      ))
+                    : layout === "document"
+                      ? // One block per TURN, not per utterance: the name, the face and the
+                        // timestamp are printed once for a stretch of talking rather than once per
+                        // STT chunk.
+                        groupIntoSpeakerTurns(sub.segments).map((turn) => (
+                          <TranscriptDocumentTurn
+                            key={turn.key}
+                            turnKey={turn.key}
+                            startTimeMs={turn.startTimeMs}
+                            endTimeMs={turn.lines[turn.lines.length - 1].endTimeMs}
+                            speaker={resolveTranscriptSpeaker(
+                              turn.speakerId,
+                              turn.speakerName,
+                              speakerDirectory,
+                            )}
+                            // No "You" here. A document names the people in it, and a record that
+                            // reads differently depending on who opened it is not a record.
+                            speakerName={turn.speakerName}
+                            elapsed={formatCitationTime(turn.startTimeMs)}
+                            clock={base ? segmentTime(turn.startTimeMs) : null}
+                            onSeek={
+                              onSeekToRecording
+                                ? () => seekToMoment(turn.startTimeMs)
+                                : undefined
+                            }
+                            marked={markedKeySet?.has(turn.key) ?? false}
+                            reading={sync?.readingKey === turn.key}
+                            // Only ever true for the block the recording is actually playing —
+                            // `playingKey` is null without a recording behind this record.
+                            playing={playingKey === turn.key}
+                            query={query}
+                            rows={turn.lines.map((line) => {
+                              const row = buildRow(line);
+                              return languageChipLineIds
+                                ? { ...row, showLanguage: languageChipLineIds.has(line.id) }
+                                : row;
+                            })}
+                          />
+                        ))
+                      : sub.segments.map((segment) => {
+                          const row = buildRow(segment);
+                          return (
+                            <TranscriptChatRow
+                              key={segment.id}
+                              {...row}
+                              speakerName={
+                                row.isSelf ? "You" : segment.speakerName || "Unknown speaker"
+                              }
+                            />
+                          );
+                        })}
+                </div>
+              ))}
             </div>
           ))}
+          </div>
         </div>
         {/* A record of an hour-long meeting is hundreds of rows. Somebody reading the middle of it
-            had no way back to the end but dragging the scrollbar the length of the room. */}
-        <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
+            had no way back to the end but dragging the scrollbar the length of the room.
+            Lifted a row when the follow pill is out: two floating chips in the same place is one
+            chip covering the other, and which one wins would depend on render order. */}
+        <ScrollToLatestChip
+          visible={isAway}
+          onClick={scrollToLatest}
+          className={showFollowPill ? "bottom-12" : undefined}
+        />
+        {/* WT-655(C3). Offered only while following is OFF and the recording is PLAYING — the two
+            conditions together. Off-and-paused needs no pill: nothing is moving, so there is
+            nothing to catch up with, and a control offering to chase a stopped playhead is a
+            control that appears to do nothing. */}
+        <FollowPlaybackChip
+          visible={showFollowPill}
+          onClick={() => {
+            setFollowing?.(true);
+            // Recentre immediately rather than waiting for the playhead to cross into the next
+            // block: from where the reader is standing, pressing this and watching nothing happen
+            // for twenty seconds is the button not working.
+            if (playingKey) scrollToTurn(playingKey, { center: true });
+          }}
+        />
         </div>
       )}
     </div>
@@ -753,19 +1495,51 @@ function TranscriptSessionDivider({
   sessionNumber: number;
   session: TranslationRoomSessionDto | null;
 }) {
-  const started = session?.startedAt
-    ? new Date(session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : null;
-  const ended = session?.endedAt
-    ? new Date(session.endedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-    : "now";
+  const started = session?.startedAt ? clockTime(session.startedAt) : null;
+  const ended = session?.endedAt ? clockTime(session.endedAt) : "now";
 
   return (
-    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    /* 11px, up from 10 (WT-311(d)): this divider is where a reader learns when translation
+       started and stopped, and it was the smallest text on the page. */
+    <div className="flex items-center gap-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       <div className="h-px flex-1 bg-border" />
       <span>
         Translation {sessionNumber}
         {started ? ` · ${started}–${ended}` : ""}
+      </span>
+      <div className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+/**
+ * WT-605. The gap left by a Pause Transcript window — no line was recorded here, only
+ * translation/dubbing/subtitles were still running. Same visual language as
+ * TranscriptSessionDivider above, deliberately distinct wording so the two are never mistaken
+ * for one another.
+ *
+ * `meetingEnded` is why this takes the flag at all. An unclosed window printed "10:15 PM–now" on
+ * the record of a meeting that finished last March, which is a claim about the reader's present
+ * that nothing on this page can support. On a finished meeting the honest end of an open window
+ * is the end of the meeting, and that is what it says.
+ *
+ * The whole sentence — the "Transcript paused" opening included — comes out of
+ * formatTranscriptPauseGapRun, so this panel and the live one cannot end up phrasing the same
+ * four cases differently. It is a sentence naming two moments now rather than a label with a
+ * range, which is also why it is no longer uppercased: see the live panel's own divider.
+ */
+function TranscriptPauseDivider({
+  gaps,
+  meetingEnded,
+}: {
+  gaps: readonly TranscriptPauseGap[];
+  meetingEnded: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
+      <div className="h-px flex-1 bg-border" />
+      <span className="text-center">
+        {formatTranscriptPauseGapRun(gaps, { meetingEnded })}
       </span>
       <div className="h-px flex-1 bg-border" />
     </div>
@@ -781,10 +1555,28 @@ function TranscriptSessionDivider({
  * gap exists and nothing is filling it (the live tab, which has no saved transcript to work on);
  * or there is nothing to say.
  *
- * The counts come from the server when they are there, because the client only knows about the
- * translations it has fetched, and the whole point of a running backfill is that more are
- * arriving. `incompleteCount` is the fallback — it also catches a merged utterance with one part
- * translated, which the server's per-segment count cannot see.
+ * EVERY NUMBER PRINTED HERE IS A COUNT OF RENDERED ROWS (2026-09-09)
+ *   It used to print the server's counts when a coverage response had arrived
+ *   (`coverage?.missing ?? incompleteCount`, `coverage?.totalSegments ?? totalCount`) and the
+ *   client's when it had not — and those two are not the same unit. The server counts STORED
+ *   SEGMENTS, one per finalized STT chunk; this panel merges the consecutive chunks of one
+ *   continuous utterance into a single row, which is what "entry" means everywhere else on this
+ *   surface: the toolbar chip says "Saved · N entries" and the tab label says "Transcript (N)",
+ *   both of them `grouped.length`.
+ *
+ *   So one finished meeting read "Transcript (7)", "Saved · 7 entries" and "1 of 13 entries is
+ *   not in English yet" at the same moment. All three numbers were true; nothing on screen said
+ *   that the 13 was counted in a unit the reader cannot see, and the sentence read as though six
+ *   entries were hidden. Worse, the unit CHANGED under the reader: the same sentence said "of 7"
+ *   until the coverage query resolved and "of 13" after it.
+ *
+ *   The server's answer is not discarded — `coverage.status` is still what decides which of these
+ *   four states this is, and only the server can know that a backfill is running or has failed.
+ *   What is dropped is printing its per-segment arithmetic in a sentence about rows.
+ *
+ *   `incompleteCount` is also the stricter count of the two: it catches a merged utterance with
+ *   one part translated and one part missing, which the server sees as coverage for one segment
+ *   and a shortfall on another, and never as one line the reader cannot fully read.
  */
 function TranscriptLanguageStatus({
   language,
@@ -812,8 +1604,8 @@ function TranscriptLanguageStatus({
   const name = getLanguageName(language);
   const running = coverage?.status === "running" || isStarting;
   const failed = coverage?.status === "failed";
-  const missing = coverage?.missing ?? incompleteCount;
-  const total = coverage?.totalSegments ?? totalCount;
+  const missing = incompleteCount;
+  const total = totalCount;
   const done = Math.max(0, total - missing);
 
   if (running) {
@@ -935,7 +1727,7 @@ function TranscriptLanguageMenu({
           {options.map((option) => (
             <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
               <TranscriptLanguageItem
-                label={`${getFlagEmoji(option.code)} ${getLanguageName(option.code)}`.trim()}
+                label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
                 detail={languageDetail(option, busyLanguage === option.code)}
                 selected={!asSpoken && option.code === value}
               />
@@ -1032,6 +1824,24 @@ function TranscriptLayoutToggle({
 }
 
 /**
+ * The lines one transcript row renders.
+ *
+ * `paragraphs` describe where the SPEAKER stopped, so they only apply to what the speaker said.
+ * A row showing a TRANSLATION is a different text with its own sentence structure — MT writes
+ * proper stops, so punctuation alone is the right and only signal there. Using the spoken turn's
+ * pauses to break a translated line would cut it at positions that mean nothing in that language.
+ */
+function transcriptLines(
+  segment: GroupedSavedTranscriptSegment,
+  resolved: ResolvedTranscriptLine,
+): string[] {
+  if (resolved.isTranslated) return splitIntoSentences(resolved.text);
+
+  const paragraphs = segment.paragraphs?.length ? segment.paragraphs : [resolved.text];
+  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
+}
+
+/**
  * Everything a transcript line needs, whichever way it is laid out.
  *
  * The speaker's name is NOT here: the chat and document layouts print it per line and disagree
@@ -1050,6 +1860,8 @@ type TranscriptRowBase = {
   showLanguage: boolean;
   revealed: boolean;
   onToggleReveal: () => void;
+  /** WT-311(f): the "Version history" chip on a corrected line; null when it has none. */
+  history: ReactNode;
   canCorrect: boolean;
   isEditing: boolean;
   onStartEdit: () => void;
@@ -1071,6 +1883,7 @@ function TranscriptChatRow({
   showLanguage,
   revealed,
   onToggleReveal,
+  history,
   canCorrect,
   isEditing,
   onStartEdit,
@@ -1105,6 +1918,9 @@ function TranscriptChatRow({
             />
           ) : null}
           {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
+          {/* On the label line, not in the bubble: the bubble's corner already holds the pencil,
+              and a second control there would sit on top of the text it is about. */}
+          {history}
         </div>
         {isEditing ? (
           editor
@@ -1126,9 +1942,22 @@ function TranscriptChatRow({
               {/* Only on the incoming side. The reader's own bubble is already the one solid
                   colour on the page, and a second stripe on it would compete with that. */}
               {isSelf ? null : <TranscriptSpeakerStripe speaker={speaker} />}
-              <p className={cn("text-[13px] leading-6", isSelf ? "text-white" : "text-ink")}>
-                {resolved.text}
-              </p>
+              {/* One line per sentence. The bubble is a speaking TURN, so it stays whole; what
+                  changes is that the sentences inside it stop running together. A turn with no
+                  terminal punctuation — which Vietnamese STT produces constantly — comes back as
+                  a single line and renders exactly as it did before. */}
+              {transcriptLines(segment, resolved).map((sentence, at) => (
+                <p
+                  key={`${segment.id}-s-${at}`}
+                  className={cn(
+                    "text-[13px] leading-6",
+                    at > 0 && "mt-1",
+                    isSelf ? "text-white" : "text-ink",
+                  )}
+                >
+                  {sentence}
+                </p>
+              ))}
               {canCorrect ? (
                 <button
                   type="button"
@@ -1155,77 +1984,297 @@ function TranscriptChatRow({
 }
 
 /**
- * The transcript as a document: names down the left, what was said beside them.
+ * The find field over the reading column.
  *
- * A fixed name column rather than an inline "Name:" prefix, so the sentences start on the same
- * x for every speaker and the eye can run down one column of text — which is the whole reason
- * to read a meeting this way instead of as bubbles.
+ * A find, not a filter. It marks matches where they stand and leaves every sentence around them
+ * on screen — a transcript read as a document is read for its flow, and a search that deletes the
+ * context around the answer has taken away the thing the reader came to check. See splitOnQuery.
  */
-function TranscriptDocumentRow({
-  segment,
-  resolved,
+function TranscriptFindBar({
+  ref,
+  value,
+  onChange,
+  onClose,
+}: {
+  ref: React.Ref<HTMLInputElement>;
+  value: string;
+  onChange: (value: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-2.5 py-1.5 print:hidden">
+      <Search className="size-3.5 shrink-0 text-muted-foreground" />
+      <input
+        ref={ref}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onClose();
+          }
+        }}
+        // Accent-insensitive on both sides, so "manh" finds "Mạnh" — said out loud because a
+        // reader who types it unaccented and gets nothing concludes the word is not there.
+        placeholder="Find in this transcript — accents optional"
+        aria-label="Find in this transcript"
+        className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-subtle"
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close find"
+        className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/** One line of the reading column, with the reader's search term marked where it stands. */
+function TranscriptReadingText({ text, query }: { text: string; query: string }) {
+  if (!query.trim()) return <>{text}</>;
+
+  return (
+    <>
+      {splitOnQuery(text, query).map((slice, index) =>
+        slice.isMatch ? (
+          <mark
+            key={index}
+            className="rounded-[3px] bg-primary/25 px-0.5 text-ink print:bg-transparent print:underline"
+          >
+            {slice.text}
+          </mark>
+        ) : (
+          <span key={index}>{slice.text}</span>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * The transcript as a document: one block per speaker turn, read down a single column.
+ *
+ * THE FOUR NUMBERS THIS BLOCK IS
+ *   66ch — the measure, as a `ch` and never a percentage. A percentage means the column grows with
+ *   the window, and a 100-character line is unreadable however wide the screen that holds it is;
+ *   capping in `ch` turns the extra width into margin instead of into line length. The value comes
+ *   in on `--reading-measure` so the rail can narrow it to 52ch when the recording pip is open and
+ *   the reader is comparing the two.
+ *
+ *   1.75 — the leading. Vietnamese stacks tone marks above and vowel marks below the same letter,
+ *   so the vertical space a line actually occupies is taller than the font metrics claim; at the
+ *   1.5 the rest of this file uses, the marks of one line touch the letters of the next.
+ *
+ *   56px — the timestamp gutter. Out of the text and into its own column, mono and tabular, so the
+ *   times form a straight edge the eye can run down and none of them push a sentence sideways.
+ *
+ *   ~30s — the grouping window, borrowed from groupIntoSpeakerTurns rather than reinvented here.
+ *
+ * The timestamp is ELAPSED time, not the wall clock the other layouts print. The rail beside this
+ * column cites moments as "1:24" — that is what a summary citation is — and a gutter answering
+ * "07:16 AM" beside it would leave the reader with two clocks and no way to see they are the same
+ * one. The wall clock survives on the control's tooltip, where it costs nothing.
+ */
+function TranscriptDocumentTurn({
+  turnKey,
+  startTimeMs,
+  endTimeMs,
   speaker,
   speakerName,
-  time,
+  elapsed,
+  clock,
   onSeek,
-  highlighted,
+  marked,
+  reading,
+  playing,
+  query,
+  rows,
+}: {
+  turnKey: string;
+  startTimeMs: number;
+  endTimeMs: number;
+  speaker: TranscriptSpeaker;
+  speakerName: string;
+  /** Milliseconds from the start of the meeting, as mm:ss. The gutter. */
+  elapsed: string;
+  /** The wall clock, for the tooltip, when the transcript knows when the meeting began. */
+  clock: string | null;
+  onSeek?: () => void;
+  /** A summary claim in the rail is pointing here right now — at this block among however many
+   *  others it rests on, because one sentence can summarise an exchange. */
+  marked: boolean;
+  /** This is the block under the reader's eye — the direction of the sync people forget. */
+  reading: boolean;
+  /**
+   * WT-655(C1) — the recording is playing THIS block right now.
+   *
+   * Rendered as a change of TEXT COLOUR and nothing else. The three background marks below are
+   * already three states on one property, and a fourth would be unreadable; more importantly, a
+   * playing line moves every twenty seconds or so, and a moving background is a strobe. Colour on
+   * the words themselves puts the mark where the reader is already looking.
+   */
+  playing: boolean;
+  query: string;
+  rows: TranscriptRowBase[];
+}) {
+  // A citation lands on a LINE; the block is what has to look selected, because the block is what
+  // the reader sees as one thing here.
+  const highlighted = rows.some((row) => row.highlighted);
+
+  return (
+    <div
+      id={`transcript-turn-${turnKey}`}
+      data-reading-turn={turnKey}
+      data-start-ms={startTimeMs}
+      data-end-ms={endTimeMs}
+      className={cn(
+        "relative grid scroll-mt-4 grid-cols-[56px_minmax(0,1fr)] gap-x-3.5 rounded-lg border-l-2 border-transparent py-3 pl-3 pr-2 transition-colors",
+        // Every block keeps its page: a speaker turn split across a page break loses the name
+        // that says whose words the second half is.
+        "print:break-inside-avoid print:border-l-0 print:py-2 print:pl-0",
+        // Three marks, in the order they win. The one the reader is looking at is the quietest —
+        // it is feedback, not a selection, and a loud one would make the whole column strobe as
+        // they scroll. The rail's pointer is the loud one, because the reader asked for it.
+        reading && !marked && !highlighted ? "bg-surface-2/50" : "",
+        marked ? "border-l-primary bg-primary/[0.07]" : "",
+        highlighted ? "bg-primary/10 ring-1 ring-primary/30" : "",
+      )}
+    >
+      {/* The stripe runs the height of everything one person said — which in this layout is the
+          whole block, so it draws exactly the boundary the reader is looking for. */}
+      <TranscriptSpeakerStripe speaker={speaker} className="my-1.5 left-[-2px] print:hidden" />
+
+      {/* The gutter is this layout's seek target, and the rule TranscriptLineTime spells out
+          applies here for the same reason: the block beside it stays selectable prose, so the
+          timestamp grows and the block is not a button. 10.5px is the smallest type on the page —
+          6.75px above and below its leading-none line box makes exactly 24px of height, and -my
+          returns all of it, so the digits stay on the 5px of top padding this column was measured
+          with. Flex, not a line of text, so the target is a flex item and takes its position from
+          the box rather than from a synthesized baseline. The play mark goes LEFT of the digits:
+          their right edge is the straight edge this column exists to draw, and nothing may move
+          it. */}
+      <div
+        className={cn(
+          "flex items-start justify-end pt-[5px] text-right font-mono text-[10.5px] tabular-nums leading-none",
+          // The gutter takes the playing colour too. It is the one part of this block that reads as
+          // a position in the recording, so leaving it grey while the words beside it are marked
+          // would separate the mark from the clock it is about.
+          playing ? "text-primary" : "text-ink-subtle",
+        )}
+      >
+        {onSeek ? (
+          <button
+            type="button"
+            onClick={onSeek}
+            title={
+              clock
+                ? `Play the recording from here — ${clock}`
+                : "Play the recording from here"
+            }
+            className="group/seek -mx-1 -my-[6.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[6.75px] hover:text-ink"
+          >
+            <Play
+              aria-hidden
+              className="size-3 shrink-0 fill-current opacity-0 transition-opacity motion-reduce:transition-none group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"
+            />
+            <span className="underline-offset-2 group-hover/seek:underline">{elapsed}</span>
+          </button>
+        ) : (
+          // No recording behind this record: the gutter is a printed time, not a control.
+          <span title={clock ?? undefined}>{elapsed}</span>
+        )}
+      </div>
+
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+          <TranscriptSpeakerAvatar speaker={speaker} />
+          <span className="truncate" title={speakerName}>
+            {speakerName}
+          </span>
+        </p>
+        <div className="mt-1.5 space-y-2">
+          {rows.map((row) => (
+            <TranscriptDocumentLine
+              key={row.segment.id}
+              {...row}
+              query={query}
+              playing={playing}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** One utterance inside a reading block. No name and no time — the block above carries both. */
+function TranscriptDocumentLine({
+  segment,
+  resolved,
   showLanguage,
   revealed,
   onToggleReveal,
+  history,
   canCorrect,
   isEditing,
   onStartEdit,
   editor,
-}: TranscriptRowProps) {
+  query,
+  playing,
+}: TranscriptRowBase & { query: string; playing: boolean }) {
+  if (isEditing) {
+    return <div id={`transcript-segment-${segment.id}`}>{editor}</div>;
+  }
+
   return (
-    <div
-      id={`transcript-segment-${segment.id}`}
-      className={cn(
-        "group/line relative grid scroll-mt-4 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-3 rounded-md py-1 pl-3 pr-1.5 transition-colors hover:bg-surface-2/60",
-        highlighted ? "bg-primary/10 ring-1 ring-primary/30" : "",
-      )}
-    >
-      {/* Consecutive rows by one person stack their stripes into a single unbroken line down the
-          left of the block, which is the whole point: a document draws one row per utterance, so
-          a paragraph somebody spoke is a dozen rows that look like a dozen speakers. */}
-      <TranscriptSpeakerStripe speaker={speaker} className="my-px" />
-      <div className="flex items-center gap-2">
-        {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
-        <TranscriptSpeakerAvatar speaker={speaker} />
-        <span
-          className="w-[108px] shrink-0 truncate text-[13px] font-semibold text-ink"
-          title={speakerName}
-        >
-          {speakerName}:
-        </span>
+    <div id={`transcript-segment-${segment.id}`} className="group/line flex scroll-mt-4 gap-2">
+      <div className="min-w-0 flex-1">
+        {/* Sentences, not one block. The reading rail is where a whole meeting is read end to
+            end, so a turn that runs three sentences together is the hardest place to follow.
+            Highlighting still runs per sentence, so a search match inside any of them is found. */}
+        {transcriptLines(segment, resolved).map((sentence, at) => (
+          <p
+            key={`${segment.id}-r-${at}`}
+            className={cn(
+              "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] transition-colors",
+              // WT-655(C1): the playing line, and the ONLY thing that changes is the colour of the
+              // words. Printed pages get the ink colour whatever the player is doing — a mark about
+              // a video means nothing on paper.
+              playing ? "text-primary print:text-ink" : "text-ink",
+              at > 0 && "mt-1",
+            )}
+          >
+            <TranscriptReadingText text={sentence} query={query} />
+          </p>
+        ))}
+        {revealed && resolved.isTranslated ? (
+          <TranscriptSpokenOriginal resolved={resolved} />
+        ) : null}
       </div>
-      <div className="min-w-0">
-        {isEditing ? (
-          editor
-        ) : (
-          <>
-            <p className="text-[13px] leading-6 text-ink">{resolved.text}</p>
-            {revealed && resolved.isTranslated ? (
-              <TranscriptSpokenOriginal resolved={resolved} />
-            ) : null}
-          </>
-        )}
-      </div>
-      <div className="flex items-center gap-1">
-        {showLanguage && !isEditing ? (
+      <div className="flex shrink-0 items-start gap-1 pt-1.5 print:hidden">
+        {/* WT-311: the version-history entry point, which development does not have. Hidden while
+            editing — the editor is the history's own next entry, and offering to browse revisions
+            of a line you are mid-way through rewriting reads as a way to lose the rewrite. */}
+        {!isEditing ? history : null}
+        {/* Only where the answer CHANGED — see shouldShowLanguageChip. Its absence is the message:
+            no chip means this line is in the same language, said the same way, as the one above. */}
+        {showLanguage ? (
           <TranscriptLineLanguage
             resolved={resolved}
             revealed={revealed}
             onToggleReveal={onToggleReveal}
           />
         ) : null}
-        {canCorrect && !isEditing ? (
+        {canCorrect ? (
           <button
             type="button"
             aria-label="Edit transcript line"
             title="Edit this line"
             onClick={onStartEdit}
-            className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink group-hover/line:opacity-100 focus-visible:opacity-100"
+            className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink focus-visible:opacity-100 group-hover/line:opacity-100"
           >
             <Pencil className="size-3.5" />
           </button>
@@ -1264,8 +2313,15 @@ function TranscriptTimelineTurn({
   return (
     <div className="grid grid-cols-[58px_16px_minmax(0,1fr)] gap-x-1">
       {/* Wide enough for "07:16 AM" on one line. At 46px it wrapped the meridiem onto a second
-          row, which put a two-line label beside a one-line name on every single turn. */}
-      <div className="whitespace-nowrap pt-[7px] text-right">
+          row, which put a two-line label beside a one-line name on every single turn.
+
+          A flex column rather than a line of text, so the enlarged timestamp target is a flex
+          item: an inline-flex box in a line of text takes its baseline from its own bottom edge
+          and would drop the digits below the name beside them. `items-start` because the grid
+          stretches this cell to the height of the whole turn. The reserved play mark can reach
+          past the 58px on a locale that prints a meridiem — it reaches into the scroller's own
+          padding, which is why nothing is clipped and the digits stay where they were. */}
+      <div className="flex items-start justify-end whitespace-nowrap pt-[7px] text-right">
         {time ? <TranscriptLineTime time={time} onSeek={onSeek} /> : null}
       </div>
 
@@ -1321,6 +2377,7 @@ function TranscriptTimelineLine({
   showLanguage,
   revealed,
   onToggleReveal,
+  history,
   canCorrect,
   isEditing,
   onStartEdit,
@@ -1342,6 +2399,7 @@ function TranscriptTimelineLine({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1 pt-0.5">
+        {history}
         {showLanguage ? (
           <TranscriptLineLanguage
             resolved={resolved}
@@ -1365,7 +2423,31 @@ function TranscriptTimelineLine({
   );
 }
 
+/**
+ * The timestamp on a line, and — when there is a recording behind it — the way into it.
+ *
+ * The target is the TIMESTAMP and deliberately not the row. Every other product that does this
+ * makes the whole line clickable, and every other product's line carries nothing else; ours also
+ * carries inline correction editing, the way back to what was spoken, and the thing every reader
+ * of a transcript does without being told, which is drag across the words to quote them. A row
+ * that is a <button> cannot be selected with a mouse, so making it one would buy a bigger seek
+ * target with the reading.
+ *
+ * So the target does not move, it grows. What was ~11px of mono text — a target under half the
+ * 24px a pointer can be expected to hit — is padded out to 24px tall, and the negative margin
+ * hands that height straight back to the line box so no row it sits in is a pixel taller than it
+ * was. The visible text is untouched: only the area that answers a click changes.
+ *
+ * The play mark is what says the label DOES something; a timestamp on its own reads as a label.
+ * It is always in the layout and only ever fades in, because a mark that appeared at hover width
+ * would shove the timestamp sideways exactly as the pointer arrived at it. It sits to the LEFT of
+ * the digits: both callers right-align this column, and the digits' right edge is the straight
+ * edge the eye runs down.
+ */
 function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => void }) {
+  // No recording, no target. A meeting whose record has no video is read as a document, and
+  // nothing in a document may look clickable — so this stays a plain span with no hit area to
+  // enlarge and no mark to reveal, exactly as it was.
   if (!onSeek) {
     return <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{time}</span>;
   }
@@ -1375,9 +2457,17 @@ function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => voi
       type="button"
       onClick={onSeek}
       title="Play the recording from here"
-      className="shrink-0 rounded font-mono text-[11px] text-muted-foreground underline-offset-2 hover:text-ink hover:underline"
+      // 3.75px above and below an 11px/1.5 line box is 24px of height, and -my gives all of it
+      // back. -mx does the same for the 4px of horizontal reach.
+      className="group/seek -mx-1 -my-[3.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[3.75px] font-mono text-[11px] text-muted-foreground hover:text-ink"
     >
-      {time}
+      <Play
+        aria-hidden
+        className="size-3 shrink-0 fill-current opacity-0 transition-opacity motion-reduce:transition-none group-hover/seek:opacity-100 group-focus-visible/seek:opacity-100"
+      />
+      {/* Underlined on the span rather than the button: the mark is a mark, not a word, and an
+          underline running under it reads as a broken glyph. */}
+      <span className="underline-offset-2 group-hover/seek:underline">{time}</span>
     </button>
   );
 }
@@ -1455,6 +2545,117 @@ function TranscriptSpokenOriginal({ resolved }: { resolved: ResolvedTranscriptLi
 }
 
 /**
+ * WT-311(f): a corrected line says so, and shows how it got there.
+ *
+ * A correction rewrites the line in place, so without this the reader had no way to tell an
+ * edited sentence from an original one, let alone see what it said before. The chip is visible
+ * at rest rather than on hover — "this was changed" is a fact about the record, not a control —
+ * and it is labelled by what it opens, because "Edited" alone reads as a status, not a door —
+ * and the history behind it is fetched only when somebody opens it: the list mounts with the
+ * popover, and the hook inside it does the asking.
+ *
+ * A popover rather than a modal: the reader is comparing a revision with the line it sits
+ * beside, and a modal would cover the line.
+ */
+function TranscriptVersionHistory({
+  transcriptId,
+  segmentIds,
+  currentUserId,
+  speakerDirectory,
+}: {
+  transcriptId: string;
+  /** Every stored segment behind this rendered line — corrections are recorded per segment. */
+  segmentIds: readonly string[];
+  currentUserId?: string;
+  speakerDirectory?: Readonly<Record<string, { fullName?: string | null }>>;
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        aria-label="Version history"
+        title="This line was corrected — show its version history"
+        className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-border bg-surface-1 px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
+      >
+        <History className="size-3" />
+        Version history
+      </PopoverTrigger>
+      {/* Portaled by the primitive, so the transcript's own scroll frame cannot clip it — the
+          frame is overflow-y-auto, which the browser computes as clipping on both axes. */}
+      <PopoverContent align="start" className="w-[340px] max-w-[calc(100vw-2rem)] p-0">
+        <TranscriptCorrectionList
+          transcriptId={transcriptId}
+          segmentIds={segmentIds}
+          currentUserId={currentUserId}
+          speakerDirectory={speakerDirectory}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** The revisions themselves, newest first. Mounted only while the popover is open. */
+function TranscriptCorrectionList({
+  transcriptId,
+  segmentIds,
+  currentUserId,
+  speakerDirectory,
+}: {
+  transcriptId: string;
+  segmentIds: readonly string[];
+  currentUserId?: string;
+  speakerDirectory?: Readonly<Record<string, { fullName?: string | null }>>;
+}) {
+  const query = useSegmentCorrections(transcriptId, segmentIds);
+
+  return (
+    <div className="max-h-[320px] overflow-y-auto">
+      <div className="border-b border-border px-3 py-2">
+        <p className="text-[12px] font-semibold text-ink">Version history</p>
+        <p className="text-[11px] text-muted-foreground">
+          Newest first. Each entry is one saved correction.
+        </p>
+      </div>
+      {query.isLoading ? (
+        <p className="flex items-center gap-2 px-3 py-3 text-[12px] text-muted-foreground">
+          <Loader2 className="size-3.5 shrink-0 animate-spin" />
+          Loading…
+        </p>
+      ) : query.isError ? (
+        <p className="px-3 py-3 text-[12px] text-muted-foreground">
+          Could not load the version history. Close this and try again.
+        </p>
+      ) : !query.data?.length ? (
+        // The line is marked corrected and the server holds no rows for it. Say that rather than
+        // nothing: an empty popover reads as a request that never returned.
+        <p className="px-3 py-3 text-[12px] text-muted-foreground">
+          No corrections are recorded for this line.
+        </p>
+      ) : (
+        <ol className="divide-y divide-border">
+          {query.data.map((correction) => (
+            <li key={correction.id} className="space-y-1 px-3 py-2.5">
+              <p className="text-[12px] leading-5 text-ink">{correction.correctedText}</p>
+              <p className="text-[11px] leading-5 text-muted-foreground line-through decoration-muted-foreground/60">
+                {correction.originalText}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {correctionAuthorName(correction.userId, currentUserId, speakerDirectory)} ·{" "}
+                <time dateTime={correction.createdAt}>
+                  {new Date(correction.createdAt).toLocaleString([], {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  })}
+                </time>
+              </p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+/**
  * WT-589: one line inside batch mode. A field, not a form.
  *
  * No Save/Cancel pair of its own — that is the whole point. Three hundred of them would be six
@@ -1501,7 +2702,7 @@ function TranscriptBatchLineEditor({
       }}
       aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
       rows={Math.min(6, Math.max(1, Math.ceil(value.length / 80)))}
-      className="w-full min-w-0 resize-y rounded-md border border-dashed border-primary/50 bg-canvas px-2.5 py-1.5 text-[13px] leading-6 text-ink outline-none focus:border-solid focus:border-primary disabled:opacity-60"
+      className="w-full min-w-0 resize-y rounded-md border border-dashed border-primary/50 bg-surface-2 px-2.5 py-1.5 text-[13px] leading-6 text-ink outline-none focus:border-solid focus:border-primary disabled:opacity-60"
     />
   );
 }
@@ -1539,7 +2740,7 @@ function TranscriptLineEditor({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
-        className="min-h-24 w-full resize-y rounded-md border border-border bg-canvas px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
+        className="min-h-24 w-full resize-y rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
       />
       <div className="flex justify-end gap-2">
         <button

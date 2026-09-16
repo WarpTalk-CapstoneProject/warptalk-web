@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type {
+  AdminAnnouncementDetailDto,
   AdminAnnouncementPageDto,
   AdminAnnouncementQuery,
   AdminAnnouncementSummaryDto,
@@ -23,6 +24,13 @@ export const adminAnnouncementService = {
     const { data } = await apiClient.get<AdminAnnouncementPageDto>(
       API.adminAnnouncements.base,
       { params: query },
+    );
+    return data;
+  },
+
+  get: async (id: string): Promise<AdminAnnouncementDetailDto> => {
+    const { data } = await apiClient.get<AdminAnnouncementDetailDto>(
+      API.adminAnnouncements.detail(id),
     );
     return data;
   },

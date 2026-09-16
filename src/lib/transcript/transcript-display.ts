@@ -3,8 +3,9 @@
 // imports here get away with it only because they are `import type` and erase before runtime —
 // this one is a real value.
 import { normalizeLanguageCode } from "../language/languages.ts";
+import { appendParagraph, joinTranscriptText, startsNewParagraph } from "./sentence-flow.ts";
 import type { TranscriptSegmentDto } from "@/types/realtime";
-import type { TranscriptSegmentDto as SavedTranscriptSegmentDto } from "@/types/transcript";
+import type { TranscriptSegmentDto as SavedTranscriptSegmentDto, TranscriptPauseWindowDto } from "@/types/transcript";
 import type { TranslationRoomSessionDto } from "@/types/translationRoom";
 
 type SpeakerParticipant = {
@@ -18,6 +19,20 @@ export type AnimatedWordToken = {
   index: number;
 };
 
+/**
+ * How long one person has to stop talking before the next thing they say is a NEW bubble.
+ *
+ * WHAT THIS NUMBER IS MEASURED AGAINST
+ *   A chunk boundary is not the end of a sentence. The ingress worker closes a chunk after
+ *   `vad_silence_hangover_ms` (576) or `vad_short_turn_hangover_ms` (864) of silence, and a
+ *   Vietnamese speaker draws breath mid-sentence at 300–700ms — so almost every chunk boundary
+ *   falls INSIDE a sentence, and a bubble per chunk is a bubble per breath.
+ *
+ *   This threshold therefore has to sit well clear of the hangover. 2.5s is a pause somebody
+ *   notices in a conversation: long enough that a breath, a "ừm", or a sentence cut by the 6s
+ *   `chunk_duration_ms` cap all stay in one bubble, short enough that genuinely finishing a
+ *   thought and starting another one reads as two.
+ */
 const MAX_UTTERANCE_GAP_MS = 2_500;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -156,6 +171,16 @@ export function dedupeTranscriptSegments(
  */
 export type GroupedTranscriptSegment = TranscriptSegmentDto & {
   mergedSegmentIds: string[];
+  /**
+   * The turn's text broken where the SPEAKER stopped, not where a chunk ended.
+   *
+   * `originalText` stays the whole thing — search, copy and corrections all read it, and a
+   * correction has to be diffed against what was said, not against how it was laid out. This is
+   * the same text, split at the silences long enough to be an end of thought
+   * (`SENTENCE_PAUSE_MS`), which is the only sentence signal available for free: Vietnamese STT
+   * routinely returns no terminal punctuation, and the pause was measured either way.
+   */
+  paragraphs: string[];
 };
 
 export function groupTranscriptSegments(
@@ -164,7 +189,7 @@ export function groupTranscriptSegments(
   const utterances: GroupedTranscriptSegment[] = [];
 
   for (const segment of segments) {
-    // Control markers are dropped here, not only in the saved-transcript path. The filter used
+    // Rows nobody said are dropped here, not only in the saved-transcript path. The filter used
     // to live solely in groupSavedTranscriptSegments, so `__MEETING_END__` was invisible on the
     // room detail page and perfectly visible in the LIVE panel during the meeting — attributed
     // to "System", timestamped 0:00, with a 100% confidence badge beside it.
@@ -172,17 +197,32 @@ export function groupTranscriptSegments(
     // Dropping before the merge matters as much as dropping at all: a marker absorbed into a
     // neighbouring utterance stops being a segment of its own and becomes part of a real line's
     // text, where no later filter can find it.
-    if (isTranscriptControlMarker(segment.originalText)) continue;
+    //
+    // BOTH guards run, and they catch different things. isRenderableTranscriptSegment reads only
+    // the TEXT — it adds the empty-row case and misses a marker whose text was mangled on the
+    // way, and production holds a `__MEETING_END__a`. That one still arrives as speaker
+    // `system`, which is the tell only isTranscriptSystemSegment reads.
+    if (isTranscriptSystemSegment(segment)) continue;
+    if (!isRenderableTranscriptSegment(segment.originalText)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameUtterance(previous, segment)) {
-      utterances.push({ ...segment, mergedSegmentIds: [segment.segmentId] });
+      utterances.push({
+        ...segment,
+        mergedSegmentIds: [segment.segmentId],
+        paragraphs: segment.originalText?.trim() ? [segment.originalText.trim()] : [],
+      });
       continue;
     }
 
     utterances[utterances.length - 1] = {
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
+      paragraphs: appendParagraph(
+        previous.paragraphs,
+        segment.originalText,
+        startsNewParagraph(previous.endTimeMs, segment.startTimeMs),
+      ),
       translatedText: appendText(previous.translatedText, segment.translatedText) || undefined,
       // Merged per language. Concatenating into one slot the way translatedText does would
       // splice a Vietnamese sentence onto an English one whenever the two bubbles carried
@@ -237,6 +277,88 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
 }
 
 /**
+ * Whether a segment came from the pipeline rather than from a person.
+ *
+ * `isTranscriptControlMarker` reads the text, and the text is not the only tell. When the meeting
+ * service publishes a sentinel it does so as speaker `system`, and the transcript consumer
+ * persists that as NO participant id, the display name "System" and the pseudo-language
+ * "system" (TranscriptConsumerPollingPolicy.TryResolveSpeaker). A marker whose text was mangled
+ * on the way — production holds a `__MEETING_END__a` — still carries every one of those, so a
+ * line is dropped on ANY of them.
+ *
+ * WT-311: this is why the empty state was inconsistent. A transcript holding nothing but such a
+ * row rendered as a list of one "System 00:00 …" line on some meetings and as "No transcript
+ * recorded" on others, depending on which of the tells the row happened to carry. The saved
+ * and live shapes name the speaker id differently (`speakerParticipantId` and `speakerId`);
+ * both are read so the two paths cannot disagree.
+ */
+export function isTranscriptSystemSegment(segment: {
+  originalText?: string | null;
+  originalLanguage?: string | null;
+  speakerName?: string | null;
+  speakerParticipantId?: string | null;
+  speakerId?: string | null;
+}): boolean {
+  if (isTranscriptControlMarker(segment.originalText)) return true;
+  if ((segment.originalLanguage ?? "").trim().toLowerCase() === "system") return true;
+
+  const speakerId = (segment.speakerParticipantId ?? segment.speakerId ?? "").trim();
+  if (speakerId.toLowerCase() === "system") return true;
+  // A person always speaks as a participant id. "System" with no id is the persisted sentinel;
+  // a participant who happens to be called System has an id and is kept.
+  return !speakerId && (segment.speakerName ?? "").trim().toLowerCase() === "system";
+}
+
+/**
+ * WT-311: when translation FIRST started in a meeting — the earliest session with a start.
+ *
+ * Sessions arrive oldest-first, but that is a convention of the endpoint rather than a
+ * guarantee, and the header line built from this must not move when a refetch reorders them.
+ * Null when translation never ran, which is a real state and not a missing one.
+ */
+export function firstTranslationStart<T extends { startedAt?: string | null }>(
+  sessions: readonly T[],
+): string | null {
+  let earliest: { at: number; iso: string } | null = null;
+  for (const session of sessions) {
+    if (!session.startedAt) continue;
+    const at = Date.parse(session.startedAt);
+    if (!Number.isFinite(at)) continue;
+    if (!earliest || at < earliest.at) earliest = { at, iso: session.startedAt };
+  }
+  return earliest?.iso ?? null;
+}
+
+/**
+ * Whether a stored row is a line of the meeting at all — the client's copy of the rule the
+ * backend translates by (TranscriptTranslationBackfillService.IsTranslatableSegment).
+ *
+ * Two kinds of row get written into a transcript that nobody said. Control markers are one, and
+ * they were already filtered here. The other is a row with NO TEXT: stt_worker publishes a
+ * trailing `text=""` marker when an audio chunk finishes, and until the ingress consumer grew a
+ * guard for it (TranscriptRedisConsumerService, "silently accumulating stray empty rows over a
+ * long conversation") every chunk of every meeting left one behind. Those rows are still in every
+ * transcript recorded before that guard.
+ *
+ * WHY THIS HAS TO BE THE SAME RULE ON BOTH SIDES (2026-09-09)
+ *   The backend excludes an empty row from BOTH halves of its translation coverage: it is not
+ *   counted in `totalSegments` and it is never queued into `missing`, because there is nothing to
+ *   translate. This side kept it — as a blank bubble of its own, or, when it fell between two
+ *   chunks of one person talking, absorbed into that utterance's `mergedSegmentIds`.
+ *
+ *   An id in that list is a promise that a translation exists for it. resolveTranscriptLine reads
+ *   `covered < segmentIds.length` off it, so an utterance that swallowed one empty row was
+ *   PERMANENTLY `isPartial`: the panel marked it incomplete, the language picker refused to say
+ *   "The whole meeting", and the "N entries are not in English yet — Translate them" line could
+ *   never reach zero, because the only thing standing between it and zero was a row the server
+ *   will not translate and no reader can see.
+ */
+export function isRenderableTranscriptSegment(text: string | null | undefined): boolean {
+  const trimmed = (text ?? "").trim();
+  return trimmed.length > 0 && !isTranscriptControlMarker(trimmed);
+}
+
+/**
  * A saved utterance. `id` is the FIRST segment folded into it — the same partial identity
  * `GroupedTranscriptSegment` carries on the live side, and for the same reason: anything keyed
  * by the segment ids the backend emitted has to read `mergedSegmentIds` instead.
@@ -247,6 +369,8 @@ export function isTranscriptControlMarker(text: string | null | undefined): bool
  */
 export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
   mergedSegmentIds: string[];
+  /** See GroupedTranscriptSegment.paragraphs — the same text, split at the speaker's own stops. */
+  paragraphs: string[];
 };
 
 /**
@@ -254,8 +378,10 @@ export type GroupedSavedTranscriptSegment = SavedTranscriptSegmentDto & {
  * stream) so consecutive segments from the same speaker render as one continuous
  * block instead of a new line per finalized STT chunk.
  *
- * Control markers are dropped first, so they can never be merged into a neighbouring
- * utterance and become part of a real line's text.
+ * Rows nobody said — control markers, and rows with no text at all — are dropped first, so they
+ * can never be merged into a neighbouring utterance: as part of a real line's text in the first
+ * case, and as an id in `mergedSegmentIds` that no translation will ever cover in the second.
+ * See isRenderableTranscriptSegment.
  */
 export function groupSavedTranscriptSegments(
   segments: SavedTranscriptSegmentDto[],
@@ -263,18 +389,35 @@ export function groupSavedTranscriptSegments(
   const utterances: GroupedSavedTranscriptSegment[] = [];
 
   for (const segment of segments) {
-    if (isTranscriptControlMarker(segment.originalText)) continue;
+    // Both guards. isRenderableTranscriptSegment reads only the text, and the text is not the
+    // only tell: a marker mangled on the way — production holds a `__MEETING_END__a` — still
+    // arrives as speaker `system`, which only isTranscriptSystemSegment catches.
+    if (isTranscriptSystemSegment(segment)) continue;
+    if (!isRenderableTranscriptSegment(segment.originalText)) continue;
 
     const previous = utterances[utterances.length - 1];
     if (!previous || !belongsToSameSavedUtterance(previous, segment)) {
-      utterances.push({ ...segment, mergedSegmentIds: [segment.id] });
+      utterances.push({
+        ...segment,
+        mergedSegmentIds: [segment.id],
+        paragraphs: segment.originalText?.trim() ? [segment.originalText.trim()] : [],
+      });
       continue;
     }
 
     utterances[utterances.length - 1] = {
       ...previous,
       originalText: appendText(previous.originalText, segment.originalText),
+      paragraphs: appendParagraph(
+        previous.paragraphs,
+        segment.originalText,
+        startsNewParagraph(previous.endTimeMs, segment.startTimeMs),
+      ),
       endTimeMs: Math.max(previous.endTimeMs, segment.endTimeMs),
+      // A correction to ANY chunk of the sentence is a correction to the sentence. Read off the
+      // first chunk alone, an edit to the second half of a long utterance left the line showing
+      // no history at all.
+      isCorrected: previous.isCorrected || segment.isCorrected,
       mergedSegmentIds: [...previous.mergedSegmentIds, segment.id],
     };
   }
@@ -422,6 +565,496 @@ export function groupSegmentsByTranslationSession<T extends { startTimeMs: numbe
   return blocks;
 }
 
+/**
+ * WT-605. Where one [Pause Transcript, Resume Transcript] window falls in MEETING-RELATIVE time
+ * (the same units as `segment.startTimeMs`), so the panel can draw a "Transcript paused at HH:MM
+ * and resumed at HH:MM" divider between the segments on either side of it — the transcript-pause
+ * counterpart to `groupSegmentsByTranslationSession`'s "Translation N" dividers.
+ */
+export type TranscriptPauseGap = {
+  window: TranscriptPauseWindowDto;
+  startMs: number;
+  /** null while the transcript is CURRENTLY paused for this room. */
+  endMs: number | null;
+};
+
+/**
+ * Complaints about the pause machinery, in development only and once per distinct `key`.
+ *
+ * WHY DEV-ONLY, AND WHY NOT A THROW
+ *   Everything this channel reports is a DATA condition — a room with no timeline anchor, a
+ *   broadcast that has outrun its window list. A participant in a real meeting can do nothing
+ *   about any of it, and taking their transcript down with an exception over it would turn a
+ *   degraded panel into no panel at all. The people who can act on it are the ones running the
+ *   app locally, so that is who is told.
+ *
+ * WHY IT IS DEDUPED BY KEY
+ *   Both callers sit on render paths — inside `useMemo`s that recompute whenever a segment
+ *   arrives, which during a busy meeting is several times a second, and twice per pass again
+ *   under StrictMode. An un-deduped warn would bury the console in copies of one fact and be
+ *   muted by the second developer who saw it. Once per condition per page load is the most it
+ *   can be worth saying.
+ *
+ * The alternative considered and rejected was returning a richer result type from
+ * `resolveTranscriptPauseGaps` and making every caller unpack it: that spreads the handling of a
+ * rare fault across every divider on two panels, and the panel that actually depends on the answer
+ * (the live one) already asks the sharper question below.
+ */
+const warnedPauseConditions = new Set<string>();
+
+function warnAboutPauseGapsInDev(key: string, message: string): void {
+  if (process.env.NODE_ENV === "production") return;
+  if (warnedPauseConditions.has(key)) return;
+  warnedPauseConditions.add(key);
+  console.warn(`[transcript-pause] ${message}`);
+}
+
+/**
+ * Whether the gap list is about to filter NOTHING while the transcript is known to be paused —
+ * the one state in which `withoutSegmentsInOpenPauseGaps` is a no-op and says so to nobody.
+ *
+ * THIS IS THE DESIGN'S MOST DANGEROUS FAILURE, BECAUSE IT IS THE QUIET ONE
+ *   Every gap in the list is anchored against `baseTime`, and `resolveTranscriptPauseGaps` returns
+ *   [] when there is none to anchor against. No gaps means no OPEN gap; no open gap means the
+ *   filter keeps every segment; and the panel then prints, underneath its own amber "nothing said
+ *   from now on is written down" banner, the exact words the pause exists to withhold. Nothing
+ *   errors, nothing is red, and every other assertion about the feature stays true.
+ *
+ *   A missing `baseTime` is not the only route in. A broadcast reaches this client a round trip
+ *   before the window list catches up, and `resolveTranscriptPause` gives a broadcast-learned pause
+ *   no `since` at all — so `withLivePauseGap` has no instant to synthesize from and the list stays
+ *   empty for the length of that fetch. Asking about the OUTCOME ("is there an open gap to match?")
+ *   rather than about either cause is what makes one check cover both.
+ *
+ * Answers and, in development, says so out loud once — see warnAboutPauseGapsInDev.
+ */
+export function pauseFilterHasNothingToMatch(
+  pause: { paused: boolean } | null | undefined,
+  gaps: readonly TranscriptPauseGap[],
+): boolean {
+  if (!pause?.paused) return false;
+  if (gaps.some((gap) => gap.endMs === null)) return false;
+
+  warnAboutPauseGapsInDev(
+    "no-open-gap-while-paused",
+    "The transcript is paused but the gap list holds no open window, so nothing is being "
+      + "withheld. Check that the panel has a baseTime and that the pause-window refetch landed.",
+  );
+  return true;
+}
+
+/**
+ * Converts each window's wall-clock StartedAt/EndedAt into meeting-relative ms. Returns []
+ * without a `baseTime` to anchor against — old data, or a room with no timeline anchor yet —
+ * same "nothing to compute a position with" fallback `groupSegmentsByTranslationSession` takes.
+ *
+ * Dropping windows for want of an anchor is not the same as having none, and the difference is
+ * invisible from the return value: see pauseFilterHasNothingToMatch for what an empty list costs
+ * the live panel. Said out loud here, in dev, because this is the only place that can tell the
+ * two apart.
+ */
+export function resolveTranscriptPauseGaps(
+  windows: readonly TranscriptPauseWindowDto[],
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  if (Number.isNaN(baseMs) || !windows.length) {
+    if (Number.isNaN(baseMs) && windows.length) {
+      warnAboutPauseGapsInDev(
+        "no-base-time",
+        `${windows.length} pause window(s) cannot be placed: baseTime is `
+          + `${baseTime === undefined ? "missing" : `unusable (${baseTime})`}. No divider will be `
+          + "drawn and, on the live panel, nothing said during a pause will be withheld.",
+      );
+    }
+    return [];
+  }
+
+  return windows
+    .filter((window) => window.startedAt)
+    .map((window) => ({
+      window,
+      startMs: new Date(window.startedAt).getTime() - baseMs,
+      endMs: window.endedAt ? new Date(window.endedAt).getTime() - baseMs : null,
+    }))
+    .sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
+ * A run of transcript with the pause windows that sit immediately above it.
+ *
+ * `gapsBefore` is a LIST rather than one window because two pauses with nobody speaking between
+ * them are one hole in the record, not two: drawn as two dividers they stack against each other
+ * with nothing in between, which reads as a rendering fault rather than as two decisions the host
+ * made. The renderer collapses a run into a single divider — see formatTranscriptPauseGapRun.
+ */
+export type TranscriptPauseBlock<T> = {
+  gapsBefore: TranscriptPauseGap[];
+  segments: T[];
+};
+
+/**
+ * WT-657. The gap list, plus the pause the room is in RIGHT NOW if the window list does not
+ * already know about it.
+ *
+ * THE WINDOW LIST IS NOT WRONG, IT IS LATE
+ *   `applyTranscriptPause` in persistent-meeting-session fires `pauseWindowsQuery.refetch()` on
+ *   BOTH broadcasts, on EVERY participant — the query key is room-scoped and shared, so the panel
+ *   is reading the same cache that refetch fills. The list therefore does catch up on its own.
+ *   What it cannot do is catch up instantly: between `TranscriptPaused` landing and that round
+ *   trip resolving, this client holds `paused: true` next to a window list with no open window.
+ *
+ *   That interval is short and it is exactly when the words are arriving. Anything derived from
+ *   the windows alone renders nothing during it — so a viewer would watch lines pile up under the
+ *   paused notice for as long as the fetch takes, which is the reported bug in miniature. Folding
+ *   the broadcast in closes the race rather than papering over a hole.
+ *
+ * `since` is a wall-clock instant and gaps are meeting-relative, hence `baseTime` — the same
+ * anchor `resolveTranscriptPauseGaps` uses, and the same "nothing to anchor against" fallback.
+ *
+ * WT-605 consumes this beyond the divider it was written for: the gaps this returns are what
+ * `withoutSegmentsInOpenPauseGaps` filters against, so the live pause suppresses lines from the
+ * instant the broadcast lands rather than from whenever the refetch comes back.
+ */
+export function withLivePauseGap(
+  gaps: readonly TranscriptPauseGap[],
+  pause: { paused: boolean; since: string | null } | undefined,
+  baseTime?: string,
+): TranscriptPauseGap[] {
+  if (!pause?.paused) return [...gaps];
+  // Already known from the window list — the host's case. Adding a second open gap would split the
+  // same pause in two and draw its divider twice.
+  if (gaps.some((gap) => gap.endMs === null)) return [...gaps];
+
+  const baseMs = baseTime ? new Date(baseTime).getTime() : NaN;
+  const sinceMs = pause.since ? new Date(pause.since).getTime() : NaN;
+  if (Number.isNaN(baseMs) || Number.isNaN(sinceMs)) return [...gaps];
+
+  return [
+    ...gaps,
+    {
+      // Synthetic: the real row exists server-side, but this viewer has not been sent it. Only
+      // `startMs`/`endMs` are read for splitting; `id` keys the divider's React element.
+      window: { id: `live-pause-${pause.since}`, startedAt: pause.since!, endedAt: null },
+      startMs: sinceMs - baseMs,
+      endMs: null,
+    } as TranscriptPauseGap,
+  ].sort((left, right) => left.startMs - right.startMs);
+}
+
+/**
+ * Splits an already-chronological list of segments into blocks around each pause gap.
+ *
+ * A SEGMENT CAN FALL INSIDE A GAP, AND THE DOCSTRING HERE USED TO DENY IT (WT-605, WT-657)
+ *   It claimed "no segment is ever expected to fall INSIDE a gap — the segments spoken during it
+ *   were never persisted". That is true of the SAVED transcript and false of the live one, which
+ *   is where the bug was found: pausing stops the record growing, it does not stop
+ *   `TranscriptSegmentReceived`, because the caption lane and the transcript panel read the same
+ *   store and captions deliberately keep running through a pause. WT-657 diagnosed that same lie
+ *   independently, from the other end — the panel and the notice asserting opposite things.
+ *
+ *   So a gap's block opens at the moment the pause ENDED, not at the moment it began. Opening it
+ *   at `startMs` put every line spoken during the pause BELOW the "Transcript paused" divider,
+ *   where it reads as having been said after the host resumed: the record then asserts the
+ *   opposite of what happened. Above the divider it reads as "and from here, nothing", which is
+ *   what the mark is for.
+ *
+ *   A gap still open has no end to reach, so nothing can open its block from inside the loop; it
+ *   is emitted by the trailing pass below, after every line already in hand. On the live panel
+ *   those lines are gone before they get here (withoutSegmentsInOpenPauseGaps); on the saved one
+ *   the case is a chunk finalized either side of the pause boundary, and this is where it lands.
+ *
+ *   No `recorded` flag rides along, because nothing downstream may render an unrecorded line —
+ *   see withoutSegmentsInOpenPauseGaps for the product decision that settles it. A flag here
+ *   would be an invitation to draw those lines dimmed instead of dropping them, which is the one
+ *   outcome the panel must not produce.
+ *
+ * Independent of, and applied on top of, `groupSegmentsByTranslationSession`: a room can pause
+ * translation and pause transcript at different, unrelated moments, so callers run this within
+ * each translation-session block rather than instead of that grouping. The gaps handed in must be
+ * the ones belonging to THAT block — see distributePauseGapsAcrossBlocks, without which the
+ * trailing pass below redraws every late gap once per session.
+ */
+export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
+  segments: readonly T[],
+  gaps: readonly TranscriptPauseGap[],
+): Array<TranscriptPauseBlock<T>> {
+  if (!gaps.length) return [{ gapsBefore: [], segments: [...segments] }];
+
+  const blocks: Array<TranscriptPauseBlock<T>> = [{ gapsBefore: [], segments: [] }];
+
+  function openGap(gap: TranscriptPauseGap) {
+    const last = blocks[blocks.length - 1];
+    // Nothing was said between this pause and the one before it, so the two are one stretch of
+    // missing record. Folding them into one block is what lets the divider say so once.
+    if (last.gapsBefore.length > 0 && last.segments.length === 0) {
+      last.gapsBefore.push(gap);
+      return;
+    }
+    blocks.push({ gapsBefore: [gap], segments: [] });
+  }
+
+  let gapIndex = 0;
+  for (const segment of segments) {
+    while (
+      gapIndex < gaps.length
+      && gaps[gapIndex].endMs !== null
+      && segment.startTimeMs >= gaps[gapIndex].endMs!
+    ) {
+      openGap(gaps[gapIndex]);
+      gapIndex += 1;
+    }
+    blocks[blocks.length - 1].segments.push(segment);
+  }
+
+  // A gap with no segment after it — the room is still paused, or nobody has spoken since
+  // resuming — would otherwise vanish here instead of rendering its divider. Trailing blocks
+  // stay empty; the divider itself is drawn from `gapsBefore`, not from having lines to hold.
+  while (gapIndex < gaps.length) {
+    openGap(gaps[gapIndex]);
+    gapIndex += 1;
+  }
+
+  return blocks;
+}
+
+/**
+ * Which translation-session block each pause window should be drawn in — one entry per block,
+ * in the same order.
+ *
+ * WHY THIS EXISTS (WT-605, the duplicate-divider bug)
+ *   Both panels called `splitSegmentsAroundPauseGaps(block.segments, pauseGaps)` inside their
+ *   `blocks.map` — every block handed the WHOLE gap list. The trailing pass in that function
+ *   emits every gap that sits after the block's last segment, so with two or more translation
+ *   sessions the same pause was drawn once in each block: "Transcript paused · 10:15–10:20"
+ *   appearing three times down a transcript, which reads as three pauses.
+ *
+ *   The fix belongs here rather than in the renderer because it is the only place that can see
+ *   all the blocks at once, which is exactly the knowledge the per-block call is missing.
+ *
+ * A gap goes to the block holding the first line spoken after it ENDED — the same boundary
+ * splitSegmentsAroundPauseGaps opens its block on, so the two cannot disagree about where the
+ * divider lands. A gap nothing follows (still open, or nobody spoke again) goes to the last
+ * block, where the trailing pass will draw it.
+ *
+ * Takes start TIMES rather than the blocks themselves, which is a concession to the React
+ * Compiler rather than a taste: handing it the segment arrays makes it treat every block as
+ * possibly mutated here, and it then gives up memoizing the whole saved-transcript panel. Times
+ * are all this decision has ever needed.
+ */
+export function distributePauseGapsAcrossBlocks(
+  /** One entry per translation-session block, in order — the start times of its segments. */
+  blockStartTimes: readonly (readonly number[])[],
+  gaps: readonly TranscriptPauseGap[],
+): TranscriptPauseGap[][] {
+  const perBlock: TranscriptPauseGap[][] = blockStartTimes.map(() => []);
+  if (!blockStartTimes.length) return perBlock;
+
+  for (const gap of gaps) {
+    let target = blockStartTimes.length - 1;
+    if (gap.endMs !== null) {
+      const endMs = gap.endMs;
+      const found = blockStartTimes.findIndex((times) => times.some((time) => time >= endMs));
+      if (found !== -1) target = found;
+    }
+    perBlock[target].push(gap);
+  }
+
+  return perBlock;
+}
+
+/** A pause this short prints the same clock time at both ends, so it prints its length instead. */
+const SHORT_PAUSE_MS = 60_000;
+
+function defaultPauseClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * Whole seconds of a stretch shorter than a minute, or null when it is longer or unmeasurable.
+ *
+ * Never 0s: a pause the host lifted immediately still happened, and rounding it away would print
+ * a divider saying nothing was missed for no measurable stretch of time.
+ */
+function secondsIfUnderAMinute(
+  startedAt: string,
+  endedAt: string | null | undefined,
+): number | null {
+  if (!endedAt) return null;
+  const lengthMs = Date.parse(endedAt) - Date.parse(startedAt);
+  if (!Number.isFinite(lengthMs) || lengthMs < 0 || lengthMs >= SHORT_PAUSE_MS) return null;
+  return Math.max(1, Math.round(lengthMs / 1_000));
+}
+
+/**
+ * The WHOLE text of one transcript-pause divider, for a run of one or more windows.
+ *
+ * TWO MARKS, NOT A RANGE (product owner, 2026-09-10)
+ *   The label used to be a range with a prefix bolted on by each panel — "Transcript paused ·
+ *   10:15 PM–10:18 PM". A range reads as a duration somebody has to subtract; the two moments the
+ *   reader actually wants are when the record stopped and when it started again, said as moments.
+ *   So the sentence names both: "Transcript paused at 10:15 PM and resumed at 10:18 PM".
+ *
+ *   The prefix moved in here with it. Split across the module and two JSX files, one panel could
+ *   say "Transcript paused ·" while the other said something else, and the sentence would only be
+ *   grammatical by coincidence — the second mark has to agree with the first in every branch below.
+ *
+ * FOUR CASES, AND EACH ONE IS A DIFFERENT SENTENCE BECAUSE EACH IS A DIFFERENT FACT
+ *   still open, live  — there IS no second mark yet. "…and not resumed yet" says the pause is the
+ *                       reader's present, without inventing a time for something that has not
+ *                       happened.
+ *   still open, ended — the record of a meeting that finished mid-pause. There is no "now" on that
+ *                       page months later, and "not resumed yet" would promise a resume that can
+ *                       never come; the meeting ending IS what closed the hole.
+ *   under a minute    — both marks format to the same minute, so "paused at 10:15 PM and resumed
+ *                       at 10:15 PM" reads as a broken clock rather than as a short pause. The
+ *                       length replaces the second mark, which is the one honest thing left to say.
+ *   a run of windows  — see TranscriptPauseBlock.gapsBefore. Consecutive pauses with nothing said
+ *                       between them are one hole in the record and are named once, with the count,
+ *                       so the two marks are the run's outer edges rather than one pause's.
+ *
+ * `formatTime` is injectable so the tests can assert the SHAPE of the sentence without depending on
+ * the machine's locale and time zone, which is otherwise what decides whether this reads
+ * "10:15 PM" or "22:15".
+ */
+export function formatTranscriptPauseGapRun(
+  gaps: readonly TranscriptPauseGap[],
+  options: {
+    /** True on the saved record of a meeting that is over — see the ended case above. */
+    meetingEnded?: boolean;
+    formatTime?: (iso: string) => string;
+  } = {},
+): string {
+  if (!gaps.length) return "";
+
+  const formatTime = options.formatTime ?? defaultPauseClock;
+  const first = gaps[0];
+  const last = gaps[gaps.length - 1];
+  const pausedAt = formatTime(first.window.startedAt);
+  const resumedAt = last.window.endedAt ? formatTime(last.window.endedAt) : null;
+  // Measured across the whole RUN, so two pauses inside one minute cannot print the same mark
+  // twice either — the sub-minute case is about what the clock can resolve, not about how many
+  // windows produced the hole.
+  const seconds = secondsIfUnderAMinute(first.window.startedAt, last.window.endedAt);
+
+  if (gaps.length > 1) {
+    if (!resumedAt) {
+      return options.meetingEnded
+        ? `Transcript paused ${gaps.length} times since ${pausedAt}, still paused when the meeting ended`
+        : `Transcript paused ${gaps.length} times since ${pausedAt}, not resumed yet`;
+    }
+    return seconds === null
+      ? `Transcript paused ${gaps.length} times between ${pausedAt} and ${resumedAt}`
+      : `Transcript paused ${gaps.length} times at ${pausedAt}, for ${seconds}s`;
+  }
+
+  if (!resumedAt) {
+    return options.meetingEnded
+      ? `Transcript paused at ${pausedAt} and still paused when the meeting ended`
+      : `Transcript paused at ${pausedAt} and not resumed yet`;
+  }
+
+  return seconds === null
+    ? `Transcript paused at ${pausedAt} and resumed at ${resumedAt}`
+    : `Transcript paused at ${pausedAt} for ${seconds}s`;
+}
+
+/**
+ * The lines that are actually being written down: everything except what was said while a pause
+ * window is STILL OPEN. WT-605, and the defect the tester reported.
+ *
+ * DROPPED, NOT DIMMED — THE PRODUCT OWNER'S RULING OF 2026-09-10
+ *   WT-657 fixed the same defect the other way: keep the lines, mark them unrecorded, render them
+ *   at reduced opacity under a caption. Both designs are honest; only one of them is the product.
+ *   The ruling, verbatim: "khi host chủ động pause transcript là sẵn sàng cho tinh thần chỉ dịch
+ *   bằng audio dubbing và voice clone, không persist ở transcript và DB" — a host who pauses the
+ *   transcript is opting into translation carried by audio dubbing and voice clone ALONE, with
+ *   nothing persisted to the transcript or the database.
+ *
+ *   So the panel must not show what will not be kept. A dimmed line is still a line on screen: it
+ *   gets read, quoted and screenshotted, and it is absent from the record the meeting is judged
+ *   by — which makes the panel and the saved transcript disagree about what was said. The gap the
+ *   divider draws is the honest artefact of that decision, and the placeholder below the list is
+ *   where the absence explains itself.
+ *
+ * WHY THE FILTER IS HERE AND NOT AT THE STORE OR THE GATEWAY
+ *   Pausing the transcript stops the RECORD growing and nothing else — the product decision of
+ *   2026-09-09 is explicit that the caption lane keeps showing words through a pause. The overlay
+ *   (live-subtitle-overlay) reads the very same `transcriptSegments` store the transcript panel
+ *   reads, so a gate at the store or in `addTranscriptSegment` would take the captions down with
+ *   the transcript — killing the exact promise the paused banner prints two inches above it.
+ *
+ *   A store gate would not even be sufficient. `addOrMergeTranslationText` in
+ *   translationRoom-store CREATES a segment when a TranslationTextReceived arrives with no join
+ *   key to merge into, so the translation lane rebuilds a bubble whatever the STT lane was
+ *   allowed to do. Filtering at the point of render is immune to how a segment got into the
+ *   store, which is the only property that makes this rule hold.
+ *
+ * WHY ONLY OPEN WINDOWS, WHEN A CLOSED ONE DESCRIBES A PAUSE JUST AS REAL
+ *   `startTimeMs` is an offset into the audio INGRESS TRACK, and that track resets to zero when
+ *   it reconnects (see formatTranscriptClockTime, which exists because of it). Against a CLOSED
+ *   window — a bounded interval somewhere in the middle of the meeting — a post-reconnect line
+ *   can land inside that interval by arithmetic alone and be deleted from the panel although it
+ *   was recorded perfectly. That is the direction this rule must never fail in: hiding words that
+ *   WERE written down is worse than the bug being fixed, and it is silent.
+ *
+ *   An open window has no upper bound, so the only lines it can match are the ones arriving now —
+ *   and a line arriving now is, by definition, one that is not being recorded. `receivedAt` is
+ *   read as a second, independent tell for the same reason: it is stamped on arrival in wall
+ *   clock, so it survives the ingress reset that `startTimeMs` does not.
+ *
+ * THE GAPS HANDED IN MUST HAVE PASSED THROUGH withLivePauseGap
+ *   This filter is only ever as current as the list it is given, and the window list lags the
+ *   broadcast by one round trip (see withLivePauseGap). Fed from `resolveTranscriptPauseGaps`
+ *   alone there is no open window to match during that interval, so this returns every segment
+ *   untouched and the panel prints exactly the lines the pause exists to withhold — the reported
+ *   bug, surviving its own fix for as long as the fetch takes.
+ *
+ *   That gap-closing is WT-657's, carried over from the design this one replaced. The rendering
+ *   decision changed; the observation that the window list alone is not a live enough source did
+ *   not, and it is load-bearing here.
+ *
+ * The count comes back with the lines because the panel says so on screen: a stretch where words
+ * are visibly being spoken and nothing appears needs to explain itself, or the panel looks broken.
+ */
+export function withoutSegmentsInOpenPauseGaps<
+  T extends { startTimeMs: number; receivedAt?: number | null },
+>(
+  segments: readonly T[],
+  gaps: readonly TranscriptPauseGap[],
+): { segments: T[]; hiddenCount: number } {
+  const open = gaps.filter((gap) => gap.endMs === null);
+  if (!open.length) return { segments: [...segments], hiddenCount: 0 };
+
+  const kept: T[] = [];
+  let hiddenCount = 0;
+
+  for (const segment of segments) {
+    if (open.some((gap) => fallsInsideOpenPauseGap(segment, gap))) {
+      hiddenCount += 1;
+      continue;
+    }
+    kept.push(segment);
+  }
+
+  return { segments: kept, hiddenCount };
+}
+
+function fallsInsideOpenPauseGap(
+  segment: { startTimeMs: number; receivedAt?: number | null },
+  gap: TranscriptPauseGap,
+): boolean {
+  if (segment.startTimeMs >= gap.startMs) return true;
+
+  // The ingress clock reset while the pause was on, so this line's offset is small again and the
+  // comparison above says it predates a pause it was actually spoken during. `receivedAt` is
+  // wall-clock and cannot be rewound that way.
+  const receivedAt = segment.receivedAt;
+  if (typeof receivedAt !== "number") return false;
+  const pausedAt = Date.parse(gap.window.startedAt);
+  return Number.isFinite(pausedAt) && receivedAt >= pausedAt;
+}
+
 export function resolveTranscriptSpeakerName(
   segment: TranscriptSegmentDto,
   participants: readonly SpeakerParticipant[],
@@ -539,6 +1172,28 @@ export function formatTranscriptTimestamp(timeMs: number): string {
     : `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+/**
+ * Whether two consecutive segments from one speaker are still the same utterance, by time alone.
+ *
+ * OVERLAP IS NOT A NEW UTTERANCE
+ *   The rule used to be `gapMs >= 0 && gapMs <= MAX`, and the lower bound is the bug. A NEGATIVE
+ *   gap means the second segment starts before the first one ended — segments that overlap are
+ *   the same person still talking, which is the strongest possible evidence for merging, and it
+ *   was being read as the strongest possible evidence for splitting.
+ *
+ *   It was not a rare edge either. Until the STT worker was corrected, every segment was stamped
+ *   late by the length of its own chunk, so a 6s chunk (the `chunk_duration_ms` cap) followed by
+ *   the short chunk carrying the rest of the same sentence produced a gap of about MINUS 4.8
+ *   seconds — reliably, on exactly the sentences that had been cut mid-word. That is why
+ *   transcripts broke "ở mỗi chunk".
+ *
+ *   Both halves are fixed: the stamps are right at the source now, and a negative gap here can no
+ *   longer split a sentence even if some other producer reintroduces one.
+ */
+function withinOneUtterance(previousEndMs: number, nextStartMs: number): boolean {
+  return nextStartMs - previousEndMs <= MAX_UTTERANCE_GAP_MS;
+}
+
 function belongsToSameUtterance(previous: TranscriptSegmentDto, next: TranscriptSegmentDto): boolean {
   if (previous.speakerId !== next.speakerId) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
@@ -551,8 +1206,7 @@ function belongsToSameUtterance(previous: TranscriptSegmentDto, next: Transcript
   const hasTimeline = previous.endTimeMs > 0 && next.startTimeMs > 0;
   if (!hasTimeline) return true;
 
-  const gapMs = next.startTimeMs - previous.endTimeMs;
-  return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
+  return withinOneUtterance(previous.endTimeMs, next.startTimeMs);
 }
 
 function belongsToSameSavedUtterance(
@@ -564,8 +1218,7 @@ function belongsToSameSavedUtterance(
   if (previousSpeaker !== nextSpeaker) return false;
   if (previous.originalLanguage !== next.originalLanguage) return false;
 
-  const gapMs = next.startTimeMs - previous.endTimeMs;
-  return gapMs >= 0 && gapMs <= MAX_UTTERANCE_GAP_MS;
+  return withinOneUtterance(previous.endTimeMs, next.startTimeMs);
 }
 
 /**
@@ -600,11 +1253,15 @@ export function pendingCorrections<T extends { id: string; originalText: string 
   });
 }
 
+/**
+ * How two halves of one utterance become one line.
+ *
+ * The rule moved to `sentence-flow.ts` when it grew a partial-overlap case: this used to catch
+ * only a TOTAL overlap and glue everything else with a space, so "chúng ta sẽ" followed by
+ * "ta sẽ bắt đầu" rendered as "chúng ta sẽ ta sẽ bắt đầu". Kept exported here because
+ * transcript-language.ts joins a merged utterance's per-language translations and has to do it
+ * the same way — two copies of "how do two halves become one" is one copy too many.
+ */
 export function appendText(current?: string, incoming?: string): string {
-  const left = current?.trim() || "";
-  const right = incoming?.trim() || "";
-  if (!left) return right;
-  if (!right || left === right || left.endsWith(right)) return left;
-  if (right.startsWith(left)) return right;
-  return `${left} ${right}`;
+  return joinTranscriptText(current, incoming);
 }

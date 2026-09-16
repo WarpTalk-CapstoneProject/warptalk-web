@@ -64,6 +64,28 @@ export interface TranscriptTranslationDto {
 }
 
 /**
+ * One saved revision of a segment's wording — a row in transcript_corrections.
+ * Source: WarpTalk.TranscriptService.Application.DTOs.TranscriptCorrectionDto.
+ *
+ * Only the editor's USER ID is stored; there is no name on the row. The client resolves it
+ * against the workspace member list, the same directory the transcript's faces come from.
+ */
+export interface TranscriptCorrectionDto {
+  id: string;
+  segmentId: string;
+  userId: string;
+  originalText: string;
+  correctedText: string;
+  /** "STT" | "MT" | "SPEAKER" | "TIMING", as the server spells them. */
+  correctionType: string;
+  status: string;
+  triggeredRetranslation: boolean;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+}
+
+/**
  * How much of a transcript can be read in one language.
  *
  * The live pipeline only translates into whatever target was selected at that moment, so a

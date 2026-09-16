@@ -1,49 +1,38 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { QUERY_KEYS } from "@/constants/realtime";
 import { readMeetingInviteNotice } from "@/lib/notifications/meeting-started-notice";
-import { notificationService } from "@/services/notification.service";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { NotificationMessageDto } from "@/types/notification";
+import { cn } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
-import {
-  CalendarClock,
-  Check,
-  CheckCircle2,
-  CreditCard,
-  Info,
-  Megaphone,
-  UserPlus,
-  Video,
-  Wrench,
-} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
 interface NotificationItemProps {
   notification: NotificationMessageDto;
-  onRead?: () => void;
+  /**
+   * Unread when the panel was opened. Opening the bell marks everything read on the server, so
+   * `isRead` is true for every row a moment later; this is what keeps "which of these are new"
+   * visible for as long as the panel stays open.
+   */
+  fresh?: boolean;
   onNavigate?: () => void;
 }
 
-export function NotificationItem({
-  notification,
-  onRead,
-  onNavigate,
-}: NotificationItemProps) {
+/**
+ * One notification, in the ElevenLabs shape: a quiet card with the title, the body and the time
+ * stacked on the left and at most one action on the right.
+ *
+ * No per-type icon and no tinted background. With coloured icons, a tinted unread row and a badge
+ * all competing, nothing stood out; a single small dot now marks what is new. There is no
+ * per-row "mark as read" either — opening the bell already did that (NotificationPopover).
+ */
+export function NotificationItem({ notification, fresh = false, onNavigate }: NotificationItemProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
-
-  const markReadMutation = useMutation({
-    mutationFn: () => notificationService.markAsRead(notification.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      onRead?.();
-    },
-  });
 
   /**
    * An invitation can be answered from the bell, not only from the popup that appeared once.
@@ -67,9 +56,6 @@ export function NotificationItem({
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.WORKSPACE_ROOMS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.MEETINGS] });
       toast.success("Invitation accepted", { description: invite?.title });
-      // Answering it is reading it. Leaving the row unread after an explicit yes would keep the
-      // badge counting a question that has been answered.
-      if (!notification.isRead) markReadMutation.mutate();
     },
     onError: () => {
       toast.error("Could not accept the invitation", {
@@ -78,50 +64,10 @@ export function NotificationItem({
     },
   });
 
-  const getIcon = () => {
-    switch (notification.type) {
-      case "SYSTEM":
-        return <Info className="h-5 w-5 text-blue-500" />;
-      case "PROMOTION":
-        return <Megaphone className="h-5 w-5 text-emerald-500" />;
-      case "MAINTENANCE":
-        return <Wrench className="h-5 w-5 text-orange-500" />;
-      case "MEETING_REMINDER":
-        return <CalendarClock className="h-5 w-5 text-blue-500" />;
-      // The two meeting types that reached this switch and fell through to the megaphone:
-      // MEETING_INVITED has been sent since invitations rang the bell, and MEETING_STARTED is
-      // new in WT-341. A meeting that is live now is the one notification worth acting on
-      // immediately, so it gets the loudest colour in the list.
-      case "MEETING_INVITED":
-        return <UserPlus className="h-5 w-5 text-blue-500" />;
-      case "MEETING_STARTED":
-        return <Video className="h-5 w-5 text-emerald-500" />;
-      case "BILLING_PAYMENT_SUCCEEDED":
-      case "BILLING_PAYMENT_FAILED":
-      case "BILLING_PAYMENT_REFUNDED":
-      case "BILLING_PAYMENT_DISPUTED":
-        return <CreditCard className="h-5 w-5 text-violet-500" />;
-      case "ANNOUNCEMENT":
-      default:
-        return <Megaphone className="h-5 w-5 text-primary" />;
-    }
-  };
-
   const handleOpen = () => {
     if (!notification.actionUrl) return;
-    if (!notification.isRead) {
-      markReadMutation.mutate();
-    }
     onNavigate?.();
     router.push(notification.actionUrl);
-  };
-
-  const handleMarkRead = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!notification.isRead) {
-      markReadMutation.mutate();
-    }
   };
 
   return (
@@ -135,70 +81,69 @@ export function NotificationItem({
           handleOpen();
         }
       }}
-      className={`group relative flex items-start gap-3 p-4 transition-colors hover:bg-surface-2/30 ${notification.actionUrl ? "cursor-pointer" : ""} ${
-        notification.isRead ? "opacity-75" : "bg-primary/5"
-      }`}
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[14px] py-3.5 pr-3.5 pl-4 outline-none transition-colors",
+        "hover:bg-ink/[0.045] focus-visible:bg-ink/[0.045] focus-visible:ring-2 focus-visible:ring-primary",
+        notification.actionUrl && "cursor-pointer",
+      )}
     >
-      <div className="mt-0.5 shrink-0">{getIcon()}</div>
-
-      <div className="flex-1 space-y-1 min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <p
-            className={`text-sm font-medium leading-none ${!notification.isRead ? "text-ink" : "text-ink/80"}`}
-          >
+      <div className="min-w-0">
+        <p
+          className={cn(
+            "flex items-baseline gap-2 text-[14px] leading-[1.45] text-ink",
+            fresh ? "font-semibold" : "font-medium",
+          )}
+        >
+          {/* Always laid out, only painted when fresh, so read and new titles start at the same x. */}
+          <span
+            aria-hidden
+            className={cn(
+              "size-1.5 shrink-0 -translate-y-0.5 rounded-full bg-primary",
+              !fresh && "invisible",
+            )}
+          />
+          <span className="min-w-0">
             {notification.title}
-          </p>
-          <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-            {formatDistanceToNow(new Date(notification.createdAt), {
-              addSuffix: true,
-            })}
+            {notification.actionUrl ? (
+              <span aria-hidden className="font-normal text-ink-muted">
+                {" "}
+                →
+              </span>
+            ) : null}
+            {fresh ? <span className="sr-only"> (new)</span> : null}
           </span>
-        </div>
-
-        <p className="text-xs text-muted-foreground line-clamp-2">
+        </p>
+        <p className="mt-1.5 ml-3.5 line-clamp-3 text-[13.5px] leading-[1.55] text-ink-muted">
           {notification.content}
         </p>
-
-        {invite?.roomId ? (
-          <div className="pt-1.5">
-            {accepted ? (
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600">
-                <Check className="h-3 w-3" />
-                Accepted
-              </span>
-            ) : (
-              <Button
-                size="sm"
-                // stopPropagation, because the whole row is a link to the meeting. Without it,
-                // Accept would also navigate — and a click that both answers and leaves the page
-                // makes it impossible to tell whether the answer landed.
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  acceptMutation.mutate();
-                }}
-                disabled={acceptMutation.isPending}
-                className="h-6 gap-1 rounded-full px-2.5 text-[11px]"
-              >
-                <Check className="h-3 w-3" />
-                {acceptMutation.isPending ? "Accepting…" : "Accept"}
-              </Button>
-            )}
-          </div>
-        ) : null}
+        <p className="mt-2.5 ml-3.5 text-xs text-ink-subtle">
+          {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+        </p>
       </div>
 
-      {!notification.isRead && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleMarkRead}
-          className="h-6 w-6 shrink-0 rounded-full text-primary hover:bg-primary/10 hover:text-primary-hover absolute top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity md:opacity-100"
-          title="Mark as read"
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
+      {invite?.roomId ? (
+        accepted ? (
+          <span className="text-[12.5px] font-semibold whitespace-nowrap text-emerald-600">
+            Accepted
+          </span>
+        ) : (
+          <button
+            type="button"
+            // stopPropagation, because the whole row is a link to the meeting. Without it,
+            // Accept would also navigate — and a click that both answers and leaves the page
+            // makes it impossible to tell whether the answer landed.
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              acceptMutation.mutate();
+            }}
+            disabled={acceptMutation.isPending}
+            className="h-7 rounded-full bg-primary px-3 text-[12.5px] font-semibold whitespace-nowrap text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+          >
+            {acceptMutation.isPending ? "Accepting…" : "Accept"}
+          </button>
+        )
+      ) : null}
     </div>
   );
 }

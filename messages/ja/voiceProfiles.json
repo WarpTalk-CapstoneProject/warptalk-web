@@ -29,6 +29,7 @@
     "description": "別の言語を聞いている人にどう聞こえるか。",
     "cloneLiveOption": "ミーティング中にライブで声を複製する",
     "myVoice": "自分の声",
+    "voiceYouPicked": "選択した声",
     "yourVoicesGroup": "自分の声",
     "libraryVoicesGroup": "ライブラリの声・{language}",
     "ariaLabel": "吹き替えに使う声",
@@ -43,29 +44,32 @@
     "title": "ライブラリの音声",
     "languageAriaLabel": "音声ライブラリの言語",
     "loading": "音声を読み込み中…",
-    "noVoicesTitle": "{language}の音声はまだありません",
-    "noVoicesDescription": "この言語への最初の翻訳の後に表示されます。",
+    "noVoicesTitle": "{language}のライブラリ音声はありません",
+    "noVoicesDescription": "この言語にはCartesiaの音声が公開されていないか、再起動後にライブラリがまだ読み込み中です。",
     "noMatch": "検索に一致するライブラリの音声はありません。",
-    "youHearThis": "あなたが聞く声",
-    "yourDefault": "あなたの既定",
+    "youHearThis": "代役の声",
+    "yourDefault": "あなたの代役",
     "clear": "クリア",
     "use": "使用",
     "toasts": {
-      "setAsHeard": "この言語で聞く声として設定しました。",
+      "setAsHeard": "保存しました — 自分の声を持たない、この言語の話者に使われます。",
       "clearedAutomatic": "クリアしました — 自動音声に戻ります。",
-      "saveFailed": "聞く声を保存できませんでした。"
+      "saveFailed": "代役の声を保存できませんでした。"
     }
   },
   "listeningSummary": {
-    "title": "あなたが聞く声",
-    "description": "自分の声を選んでいない{language}の話者に使われます。",
+    "title": "代役の声",
+    "description": "自分の声を選んでいない{language}の話者に使われます。選んでいる人は、その人自身の声で聞こえます。",
     "automatic": "自動",
+    "loading": "読み込み中…",
+    "savedVoice": "保存済みの声",
+    "unavailable": "現在{language}では提供されていないため、利用可能になるまで自動音声が使われます。この言語への最初の翻訳の後にカタログが埋まります。",
     "clear": "クリア",
-    "previewLabel": "あなたが聞く声",
+    "previewLabel": "代役の声",
     "hint": "ライブラリの音声で「使用」を押すと、この言語用に選択できます。",
     "toasts": {
       "cleared": "クリアしました — 自動音声に戻ります。",
-      "clearFailed": "聞く声をクリアできませんでした。"
+      "clearFailed": "代役の声をクリアできませんでした。"
     }
   },
   "yourVoices": {
@@ -75,6 +79,7 @@
     "emptyDescription": "はっきりとしたサンプルを1つ録音すると、WarpTalkはあなたの声で翻訳を話せます。それまではライブラリの音声が使われます。",
     "noMatch": "このフィルターに一致する声はありません。",
     "untitledProfile": "無題のプロファイル",
+    "thisVoiceProfile": "この音声プロファイル",
     "dubbingYou": "吹き替え中",
     "noLanguage": "言語未設定",
     "ready": "準備完了",

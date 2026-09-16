@@ -16,6 +16,7 @@ import {
   groupAssetsByPlatform,
   type DesktopAsset,
 } from "@/lib/desktop-releases";
+import { buildInstallNotes, type InstallNote } from "@/lib/desktop/install-notes";
 import {
   fetchLatestDesktopRelease,
   getReleasesPageUrl,
@@ -148,6 +149,55 @@ function DesktopAssetRows({
   );
 }
 
+/**
+ * One "the OS will stop you, here is the way through" block, beside the downloads it applies to.
+ *
+ * The content — which platforms get a note, what it says, and when the macOS one disappears —
+ * lives in `@/lib/desktop/install-notes` rather than here, so the rules that matter (Open Anyway
+ * rather than a quarantine-stripping shell command; the note deleting itself once builds are
+ * notarized) can be asserted by a contract test instead of trusted to review.
+ */
+function InstallNoteSection({ note }: { note: InstallNote }) {
+  return (
+    <section className="grid gap-8 border-t border-white/10 py-9 md:grid-cols-[280px_1fr]">
+      <div>
+        <h2 className="text-[13px] font-semibold leading-5 text-white">{note.title}</h2>
+        <p className="mt-1 max-w-[260px] text-[12px] leading-5 text-white/48">
+          {note.summary}
+        </p>
+      </div>
+
+      <div>
+        <ol className="divide-y divide-white/10">
+          {note.steps.map((step, index) => (
+            <li key={step} className="flex min-h-12 items-start gap-3 py-2.5">
+              <span className="mt-px inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-[11px] font-semibold text-white/70">
+                {index + 1}
+              </span>
+              <span className="text-[13px] leading-[18px] text-white/72">{step}</span>
+            </li>
+          ))}
+        </ol>
+
+        <p className="mt-3 text-[11px] leading-5 text-white/38">
+          {note.footnote}
+          {note.link ? (
+            <>
+              {" "}
+              <Link
+                href={note.link.href}
+                className="text-white/52 underline decoration-white/20 underline-offset-4 transition hover:text-white"
+              >
+                {note.link.label}
+              </Link>
+            </>
+          ) : null}
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function firstAsset(assets: DesktopAsset[]) {
   return assets[0] ?? null;
 }
@@ -156,6 +206,11 @@ export default async function DownloadPage() {
   const release = await fetchLatestDesktopRelease();
   const releasesPageUrl = getReleasesPageUrl();
   const grouped = groupAssetsByPlatform(release?.assets ?? []);
+  const installNotes = buildInstallNotes({
+    version: release?.version ?? null,
+    hasMacAsset: grouped.mac.length > 0,
+    hasWindowsAsset: grouped.windows.length > 0,
+  });
 
   const desktopRows: DownloadRow[] = [
     firstAsset(grouped.mac)
@@ -282,6 +337,9 @@ export default async function DownloadPage() {
             description="A focused desktop experience for live translation, system audio capture, and meeting workflows outside the browser."
             rows={desktopRows}
           />
+          {installNotes.map((note) => (
+            <InstallNoteSection key={note.platform} note={note} />
+          ))}
         </section>
       </main>
 

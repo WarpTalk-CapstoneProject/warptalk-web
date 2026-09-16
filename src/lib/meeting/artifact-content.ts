@@ -11,6 +11,7 @@
  */
 
 import { parseMeetingSummaryContent } from "../../types/meetingSummary.ts";
+import { parseSummarySections } from "./meeting-summary.ts";
 import type { MeetingSummaryContent } from "@/types/meetingSummary";
 
 /**
@@ -35,4 +36,43 @@ export function readSummaryArtifact(
     summary.insufficientData !== undefined;
 
   return carriesSummary ? summary : undefined;
+}
+
+/**
+ * An artifact's stored content as something a person can read.
+ *
+ * A summary export stores JSON and a transcript export stores markdown, so one of the two has to
+ * be unwrapped before it reaches a reader. Never throws and never mangles: anything that is not a
+ * summary payload comes back exactly as it arrived, which is what a transcript needs.
+ *
+ * Lived inline in the history page, where the artifact library could not reach it — and a second
+ * copy of it there would have been a second answer to "what does this summary say", which is how
+ * the room page and the archive came to disagree about artifact labels before.
+ */
+export function readableArtifactBody(raw: string): string {
+  const summary = readSummaryArtifact(raw);
+  if (!summary) return raw;
+
+  if (summary.insufficientData === true) {
+    return summary.summary || "The assistant could not generate a summary for this meeting.";
+  }
+
+  const lines: string[] = [summary.summary.trim()];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return lines.join("\n");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return lines.join("\n");
+  }
+
+  for (const section of parseSummarySections(parsed as Record<string, unknown>)) {
+    const items = section.items.map((item) => `• ${item.owner ? `${item.owner}: ` : ""}${item.text}`);
+    if (items.length) lines.push("", section.title, ...items);
+  }
+
+  return lines.join("\n");
 }

@@ -104,7 +104,7 @@ export function InviteToMeetingDialog({
             rows={3}
             autoFocus
             placeholder="name@company.com, another@company.com"
-            className="w-full resize-none rounded-md border border-border bg-canvas px-3 py-2 text-[13px] text-ink placeholder:text-ink-subtle focus:border-primary focus:outline-none"
+            className="w-full resize-none rounded-md border border-border bg-surface-2 px-3 py-2 text-[13px] text-ink placeholder:text-ink-subtle focus:border-primary focus:outline-none"
           />
 
           {parsed.length > 0 ? (

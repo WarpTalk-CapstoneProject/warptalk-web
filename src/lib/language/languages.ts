@@ -34,7 +34,16 @@ export type LanguageScope =
   | "meeting"
   /** Selectable when recording a voice profile. */
   | "voiceProfile"
-  /** Has a provider voice library worth browsing. */
+  /**
+   * Has a provider voice library worth browsing.
+   *
+   * Every meeting language, since warptalk-ai warms the catalogue for every language Cartesia
+   * publishes (ai#163). Before that the catalogue was a by-product of dubbing — filled for one
+   * language during a meeting, capped at six voices, gone after six hours — so only the two
+   * languages with meetings in them ever had anything, and this scope was drawn around that
+   * limitation rather than around what exists. A workspace's own policy narrows it further; see
+   * voice/library-languages.ts.
+   */
   | "voiceCatalog"
   /** Selectable as a glossary pair language. */
   | "glossary"
@@ -73,28 +82,28 @@ export const SUPPORTED_LANGUAGES: SupportedLanguage[] = [
     locale: "ja-JP",
     name: "Japanese",
     region: "JP",
-    scopes: ["meeting", "voiceProfile", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceProfile", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "ko",
     locale: "ko-KR",
     name: "Korean",
     region: "KR",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "fr",
     locale: "fr-FR",
     name: "French",
     region: "FR",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     code: "es",
     locale: "es-ES",
     name: "Spanish",
     region: "ES",
-    scopes: ["meeting", "glossary", "chatTarget"],
+    scopes: ["meeting", "voiceCatalog", "glossary", "chatTarget"],
   },
   {
     // Seeded and translatable, but deliberately not a meeting language — no scope puts it in
@@ -307,6 +316,27 @@ export function getLanguageRegion(value?: string) {
   return getLanguageByCode(value)?.region ?? "";
 }
 
+/**
+ * WT-661: the short mark that stands for a language where there is no room for its name — "EN",
+ * "VI", "JA".
+ *
+ * This replaced a flag emoji, for two independent reasons. Windows ships no colour flag glyphs in
+ * Segoe UI Emoji, so a regional-indicator pair fell back to rendering its two letters and a room
+ * configured for English and Vietnamese read "US · VN" — raw country codes sitting where a
+ * language belongs. And a flag was the wrong mark even where it rendered: English is not the
+ * United States, so a British, Indian, Nigerian or Australian participant was shown a US flag to
+ * mean the language they speak.
+ *
+ * The ISO-639-1 code, which is what the language actually is, has neither problem: it needs no
+ * emoji font and it makes no claim about a country.
+ *
+ * Derived from `normalizeLanguageCode` rather than from the registry's `region`, so an unknown
+ * language degrades to its own tag ("xh" -> "XH") instead of to nothing.
+ */
+export function getLanguageCode(value?: string) {
+  return normalizeLanguageCode(value).toUpperCase();
+}
+
 /** The locale tag for a language, for surfaces that store tags rather than bare codes. */
 export function getLanguageLocale(value?: string) {
   return getLanguageByCode(value)?.locale ?? value ?? "";
@@ -320,7 +350,34 @@ export function getLanguageLocale(value?: string) {
  * "EN-US → EN-US, VI-VN" that the history table used to show.
  */
 export function formatLanguageRoute(sourceLanguage?: string, targetLanguages: string[] = []) {
-  const source = getLanguageName(sourceLanguage);
+  return formatRoute(sourceLanguage, targetLanguages, getLanguageName);
+}
+
+/**
+ * The same route in short marks: "VI → EN, JA".
+ *
+ * For a line with no room for names — the calendar's Agenda row prints it after the host and the
+ * head count, in a 12px meta line that already truncates. The marks are `getLanguageCode`'s
+ * (WT-661), so "en-US" and "en-GB" are one "EN" here exactly as they are one "English" above.
+ *
+ * Shares `formatRoute` with the long form rather than re-spelling its dedupe, so the two can never
+ * disagree about which languages a meeting has — only about how to write them down. A missing
+ * source reads "Auto", the long form's own word for it: an empty string would leave a dangling
+ * "→ VI" at the start of the line.
+ */
+export function formatLanguageRouteShort(
+  sourceLanguage?: string,
+  targetLanguages: string[] = [],
+) {
+  return formatRoute(sourceLanguage, targetLanguages, (value) => getLanguageCode(value) || "Auto");
+}
+
+function formatRoute(
+  sourceLanguage: string | undefined,
+  targetLanguages: string[],
+  label: (value?: string) => string,
+) {
+  const source = label(sourceLanguage);
   const seen = new Set<string>([normalizeLanguageCode(sourceLanguage)]);
 
   const targets: string[] = [];
@@ -328,7 +385,7 @@ export function formatLanguageRoute(sourceLanguage?: string, targetLanguages: st
     const code = normalizeLanguageCode(target);
     if (!code || seen.has(code)) continue;
     seen.add(code);
-    targets.push(getLanguageName(target));
+    targets.push(label(target));
   }
 
   return targets.length > 0 ? `${source} → ${targets.join(", ")}` : source;

@@ -82,29 +82,50 @@ if (!endpoints) {
 const SURFACES = [
   [
     "src/components/voice/voice-profile-list.tsx",
-    "the voice profile list — where somebody checks an uploaded recording before trusting it",
+    "VoiceSampleButton",
+    "the voice profile list — where somebody hears the recording they made, so the clone has something to be compared against",
   ],
   [
     "src/components/voice/library-voice-list.tsx",
+    "VoicePreviewButton",
     "the voice library — where somebody picks the voice they hear other people in",
   ],
   [
     "src/components/voice/my-dub-voice-picker.tsx",
+    "VoicePreviewButton",
     "the dub-voice picker — where somebody decides how they will sound",
   ],
 ];
 
-for (const [path, why] of SURFACES) {
+/*
+ * The profile list plays the ORIGINAL, the other two play the CLONE, and that difference is the
+ * feature rather than an inconsistency.
+ *
+ * The list used to render VoicePreviewButton like the others, which meant the recording somebody
+ * uploaded was not audible anywhere in the product — only the clone made from it. "Is this a good
+ * clone of me?" is a question about the distance between two sounds, and one of them was missing.
+ * If a refactor puts VoicePreviewButton back on this row, that is the regression, not a tidy-up.
+ */
+for (const [path, expected, why] of SURFACES) {
   const source = read(path);
   if (!source) {
     failures.push(`${path} is missing.`);
     continue;
   }
-  if (!source.includes("VoicePreviewButton")) {
+  if (!source.includes(expected)) {
     failures.push(
-      `${path} no longer renders VoicePreviewButton, so ${why} has no way to hear anything.`,
+      `${path} no longer renders ${expected}, so ${why} has no way to hear anything.`,
     );
   }
+}
+
+// The list must play the original and nothing else: rendering the clone here too is how the two
+// halves of the comparison collapse back into one.
+const listSource = read("src/components/voice/voice-profile-list.tsx");
+if (listSource && listSource.includes("VoicePreviewButton")) {
+  failures.push(
+    "src/components/voice/voice-profile-list.tsx renders VoicePreviewButton. That row is the ORIGINAL recording; the clone belongs to the rail modules, and playing it in both places leaves the original inaudible.",
+  );
 }
 
 /**
@@ -129,10 +150,60 @@ if (!page) {
   }
 }
 
+/**
+ * 6. WT-632 — hearing the RAW sample, which is a different thing from every check above.
+ *
+ * Everything to this point is about the CLONE: a synthesized sentence in a voice that only
+ * exists once the profile has been saved and the AI side has finished with it. That left the
+ * one moment where listening actually changes a decision — while the take can still be
+ * re-recorded — with no way to listen at all. The tester's report was precisely this: pressing
+ * play produced "the preview is taking longer than expected", and the original recording could
+ * never be heard back.
+ *
+ * The requirement is that the dialog plays the LOCAL file. Routing it through the preview
+ * endpoint would reintroduce the bug in a new place — there is no cloned voice to render yet,
+ * so it could only fail — which is why the negative assertion is here beside the positive one.
+ */
+const DIALOG = "src/components/voice/create-voice-profile-dialog.tsx";
+const dialog = read(DIALOG);
+if (!dialog) {
+  failures.push(`${DIALOG} is missing — a voice profile could not be created at all.`);
+} else {
+  if (!dialog.includes("URL.createObjectURL")) {
+    failures.push(
+      `${DIALOG} no longer holds the recorded sample as an object URL, so nothing in the dialog ` +
+        `can play back what was just recorded or uploaded (WT-632). Somebody would have to save ` +
+        `the profile and wait for a clone to find out how the take sounded.`,
+    );
+  }
+  if (!dialog.includes("URL.revokeObjectURL")) {
+    failures.push(
+      `${DIALOG} creates an object URL for the sample and never revokes one. Every re-record ` +
+        `pins another audio file in memory for the life of the page.`,
+    );
+  }
+  if (!/aria-label=\{[^}]*[Pp]lay the sample/.test(dialog)) {
+    failures.push(
+      `${DIALOG} has no labelled control for playing the sample back. The audio would be held ` +
+        `and unreachable, which is the same silence WT-632 reported.`,
+    );
+  }
+  if (dialog.includes("VoiceProfileService.preview") || dialog.includes("VoicePreviewButton")) {
+    failures.push(
+      `${DIALOG} routes the raw sample through the preview endpoint. That endpoint renders a ` +
+        `CLONE, which does not exist until the profile is saved — so it can only ever time out ` +
+        `here. Play the local file instead.`,
+    );
+  }
+}
+
 if (failures.length > 0) {
   console.error("FAIL voice preview contract\n");
   for (const failure of failures) console.error(`  - ${failure}\n`);
   process.exit(1);
 }
 
-console.log("PASS voice preview button, its service, its endpoint, its surfaces and the page agree");
+console.log(
+  "PASS voice preview button, its service, its endpoint, its surfaces, the page, and the raw " +
+    "sample playback in the create dialog all agree",
+);

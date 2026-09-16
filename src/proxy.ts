@@ -29,6 +29,19 @@ const PUBLIC_ROUTES = [
   // same reason. Gating this behind the session would also make the page unreachable
   // from the marketing site, which is where most visitors arrive from.
   "/download",
+  // A biên bản opened from a share link. Public here in the sense that the GATE must not stop it:
+  // the token in the URL is the credential, and the server decides whether it opens — including
+  // answering 401 for a restricted link, which the page turns into a sign-in prompt. Bouncing the
+  // visitor to /login first would break the one flow this feature exists for, since the person
+  // holding the link may have no account at all.
+  "/minutes/shared",
+  // WT-686. The page LiveKit's recorder opens for every meeting recording. The recorder is a
+  // headless Chrome with no session, so the gate answered it 307 -> /login; the page never called
+  // EgressHelper.startRecording(), LiveKit aborted every egress with "Start signal not received",
+  // and no meeting has had a video since the template was switched on. Public costs nothing: the
+  // page grants no access of its own, joining only the room the egress-minted token already names,
+  // and it calls no WarpTalk API.
+  "/egress",
   "/payment-cancelled",
   "/workspace/payment/plans",
   "/workspace/payment/success",

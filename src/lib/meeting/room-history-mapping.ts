@@ -206,6 +206,14 @@ export function shouldPollRoomHistory(
   rooms: Array<{
     endedAt?: string | null;
     artifacts: Array<{ type: string; status: ArtifactStatus }>;
+    /** The parsed summary, when the row carries one. Optional so callers that do not have it
+     *  behave exactly as before. */
+    summary?: {
+      summary?: string;
+      decisions?: unknown[];
+      actionItems?: unknown[];
+      insufficientData?: boolean;
+    } | null;
   }>,
   options: { nowMs?: number; windowMs?: number } = {},
 ): boolean {
@@ -226,8 +234,48 @@ export function shouldPollRoomHistory(
     const hasTranscript = room.artifacts.some(
       (artifact) => artifact.type === "transcript_export",
     );
-    return !hasSummary || !hasTranscript;
+    if (!hasSummary || !hasTranscript) return true;
+
+    // AN EMPTY SUMMARY ARTIFACT IS NOT A FINISHED ONE.
+    //
+    // The finalizer writes a placeholder when the AI worker produced nothing inside its 90s
+    // window, and TWO separate recoveries can still fill it in afterwards: the late-summary
+    // sweep (WT-379) and the fallback that summarises the SAVED transcript. Both replace the
+    // content of this same row, so the artifact never appears or changes status — and this
+    // predicate, which only ever asked whether the row EXISTED, stopped polling the moment the
+    // placeholder was written. The recovered summary then sat in the database until somebody
+    // reloaded the page by hand, which is indistinguishable from it never having arrived.
+    //
+    // Still bounded by the same window above: this cannot poll forever, it only keeps asking
+    // for as long as a summary is plausibly still on its way.
+    return summaryIsEmpty(room.summary);
   });
+}
+
+/**
+ * Whether a summary row carries nothing a reader could read.
+ *
+ * `insufficientData` is the finalizer saying so outright; the content check catches the row it
+ * writes when the assistant returned a shape with no points in it.
+ */
+function summaryIsEmpty(
+  summary:
+    | {
+        summary?: string;
+        decisions?: unknown[];
+        actionItems?: unknown[];
+        insufficientData?: boolean;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!summary) return true;
+  if (summary.insufficientData) return true;
+  return (
+    !summary.summary?.trim()
+    && !(summary.decisions?.length ?? 0)
+    && !(summary.actionItems?.length ?? 0)
+  );
 }
 
 /** Server pagination arithmetic, shared by both paged views. */

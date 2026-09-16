@@ -1,8 +1,11 @@
 {
   "emailRequired": "Vui lòng nhập email",
   "emailInvalid": "Địa chỉ email không hợp lệ",
+  "emailMax": "Email không được vượt quá {max} ký tự",
   "passwordMin6": "Mật khẩu phải có ít nhất 6 ký tự",
   "passwordMin8": "Mật khẩu phải có ít nhất 8 ký tự",
+  "passwordMax": "Mật khẩu không được vượt quá {max} ký tự",
   "fullNameRequired": "Vui lòng nhập tên của bạn",
+  "fullNameMax": "Tên đầy đủ không được vượt quá {max} ký tự",
   "passwordsDoNotMatch": "Mật khẩu xác nhận không khớp"
 }

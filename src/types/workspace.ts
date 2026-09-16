@@ -39,6 +39,17 @@ export interface VerifiedDomainDto {
   verifiedAt?: string | null;
 }
 
+/**
+ * Spelled exactly as the backend enumerates them (WorkspaceConstants), because the settings
+ * document is read, modified and written back whole — the value this client sends is the value it
+ * was given. The server compares ordinally and rejects anything else rather than rounding it to
+ * the nearest supported value, so "internal" is a validation error here, not a synonym.
+ */
+export type MinutesClassification = "Internal" | "Confidential" | "Public";
+
+/** `vn-nd30` = Nghị định 30/2020 conventions; `global-en` = A4 / 25.4mm / sans 11pt / decimal clauses. */
+export type MinutesTemplate = "vn-nd30" | "global-en";
+
 export interface WorkspaceSettingsDto {
   defaultLanguage: string;
   timezone: string;
@@ -72,6 +83,28 @@ export interface WorkspaceSettingsDto {
   /** Where the language ceiling came from. */
   maxLanguagesCeilingSource?: string | null;
   artifactRetentionDays: number;
+  /**
+   * The classification new minutes in this workspace open at. WT-643.
+   *
+   * Printed on the face of the minutes document, in the policy block beside retention and
+   * circulation. It is stored here because the document writer refuses to print an assurance it
+   * cannot back: with nowhere to read a classification from, the line was simply left off, and
+   * the alternative — letting the writer pick one — would mean a document generator deciding for
+   * itself how sensitive a record is.
+   *
+   * Defaults to "Internal" server-side. Not a per-document label; overriding a single document is
+   * a separate question this field does not answer.
+   */
+  minutesClassification: MinutesClassification;
+  /**
+   * Which of the two presentation templates this workspace's minutes open in and export as.
+   *
+   * Neither is a translation of the other — they are two presentations of the same stored record,
+   * and a workspace files under one convention or the other. Defaults to "vn-nd30" server-side,
+   * because that is the document this system already writes; defaulting to the other would have
+   * restyled every existing workspace's minutes on the day the setting appeared.
+   */
+  minutesTemplate: MinutesTemplate;
   invitationExpiryDays: number;
   verifiedDomains: string[];
   allowExternalCollaboration: boolean;
@@ -242,6 +275,45 @@ export interface WorkspaceDocumentDto {
   downloadUrl?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Why the last AI ingestion attempt did not complete, or null when it succeeded or was skipped. */
+  ingestionFailureReason?: string | null;
+  /**
+   * Why a reviewer rejected this document. WT-633.
+   *
+   * DETAIL ROUTE ONLY — the list evaluates access for every row it returns, and carrying this
+   * would add a second audit query per document, so it is absent (not null, absent) from a listed
+   * document. It also OUTLIVES the rejection: re-uploading sets the status back to
+   * `pending_approval` and the reason stays, because the feedback being answered should still be
+   * readable while the answer is under review. Read it together with `status`, never alone.
+   */
+  rejectionReason?: string | null;
+}
+
+/**
+ * The document already holding the bytes someone just tried to upload. WT-666.
+ *
+ * Absent from a 409 body means the caller may not open that document — the collision is real, but
+ * naming it would be a way to learn that a document they cannot see exists. Say "already in this
+ * workspace" without a name in that case.
+ */
+export interface DocumentDuplicateDto {
+  documentId: string;
+  name: string;
+  fileName: string;
+  status: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+/** One entry in a document's approval and feedback history. WT-633. */
+export interface DocumentHistoryEntryDto {
+  id: string;
+  /** The raw audit action — `UploadDocument`, `RejectDocument`, `Reuploaded`, and so on. */
+  action: string;
+  actorId?: string | null;
+  actionAt: string;
+  /** The reviewer's rejection reason or the uploader's revision note. Null for other actions. */
+  reason?: string | null;
 }
 
 export interface WorkspaceDocumentAccessPolicyDto {

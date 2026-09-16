@@ -1,24 +1,29 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
+import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { useSelectWorkspace, useWorkspaces } from "@/hooks/use-workspace";
 import { Spinner } from "@phosphor-icons/react";
+import { rememberLastWorkspaceSlug } from "@/lib/workspace/last-workspace";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { normalizeWorkspaceRole } from "@/lib/workspace/workspace-role";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { WorkspacePaywall } from "@/components/workspace/workspace-paywall";
+import { isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { UsageWarningBanner } from "@/components/billing/usage-warning-banner";
 
 export default function WorkspaceSlugLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
+  const pathname = usePathname() ?? "";
   const workspaceSlug = normalizeWorkspaceSlug(params.workspaceSlug);
 
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace);
+  const currentUserId = useAuthStore((s) => s.user?.id);
   const selectWorkspace = useSelectWorkspace();
   const syncedWorkspaceIdRef = useRef<string | null>(null);
 
@@ -100,6 +105,15 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       activeWorkspaceSlug !== workspaceSlug ||
       activeWorkspaceId !== targetWorkspace.id);
 
+  // WT-347: this is the one moment at which "the workspace this account is in" is a confirmed
+  // fact — the server has just re-selected it for this user — so it is the one place the memory
+  // the login page reads is written. Not in the store: the store is session-scoped and is wiped
+  // by the very sign-in that needs the answer. See lib/workspace/last-workspace.ts.
+  useEffect(() => {
+    if (isSyncing || !workspaceSlug || !currentUserId) return;
+    rememberLastWorkspaceSlug(currentUserId, workspaceSlug);
+  }, [isSyncing, workspaceSlug, currentUserId]);
+
   // `workspaceSlug` is nullable and the effect above redirects when it is null — but the redirect
   // happens after this render, so without the guard the paywall below would be handed an empty
   // slug and judge a workspace that is not the one being opened.
@@ -110,6 +124,15 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
       </div>
     );
   }
+
+  /**
+   * The activation landing is the one route the paywall lets through while a workspace is UNPAID,
+   * so it is also the one place the banner's "inside the paywall" reasoning has to be restated by
+   * hand. A workspace with no plan has no cycle and no balance: the banner has nothing to say
+   * there, and would only poll an endpoint that answers BILLING_SUBSCRIPTION_NOT_FOUND every two
+   * minutes for as long as somebody looks at the plan grid.
+   */
+  const showUsageWarning = !isWorkspaceActivationPath(pathname);
 
   // WT-515/WT-554 — no plan, no workspace. Wrapped here rather than per page because a paywall
   // with a page-shaped hole in it is not a paywall: /rooms could be gated and /documents
@@ -124,7 +147,7 @@ export default function WorkspaceSlugLayout({ children }: { children: React.Reac
           also need to be told its credits are low. Above the page rather than on one page,
           because the meeting that stops mid-sentence is the thing this exists to prevent and the
           person it happens to was not on the billing screen at the time. */}
-      <UsageWarningBanner workspaceSlug={workspaceSlug} />
+      {showUsageWarning && <UsageWarningBanner workspaceSlug={workspaceSlug} />}
       {children}
     </WorkspacePaywall>
   );

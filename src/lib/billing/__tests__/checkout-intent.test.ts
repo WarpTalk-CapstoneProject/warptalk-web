@@ -92,12 +92,16 @@ test("the get-started path is unchanged for a visitor who chose no plan", () => 
 test("after the workspace exists the buyer continues at its plan grid", () => {
   // The grid, not a checkout session: creating one needs an amount and currency only the grid has
   // resolved, and it is the last moment the buyer can see what they are about to be charged.
+  //
+  // And the LANDING's grid specifically. Anyone reaching this has a workspace that was created
+  // and not paid for, and the paywall redirects such a workspace off /{slug}/payment/plans — a
+  // redirect that would drop the query string and lose the plan they picked.
   assert.equal(
     checkoutContinuationPath("acme", "business"),
-    `/acme/payment/plans?${CHECKOUT_PLAN_PARAM}=business`,
+    `/acme/activate?${CHECKOUT_PLAN_PARAM}=business`,
   );
 });
 
 test("someone who created a workspace without buying is not sent to the plan grid", () => {
-  assert.equal(checkoutContinuationPath("acme", null), "/acme/payment/plans");
+  assert.equal(checkoutContinuationPath("acme", null), "/acme/activate");
 });

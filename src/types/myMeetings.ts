@@ -71,6 +71,17 @@ export interface MyMeetingItem {
 
   /** True when the viewer is the host, which is what the row badges instead of an RSVP state. */
   isHost: boolean;
+
+  /**
+   * The viewer's own invitation to this meeting (PENDING / ACCEPTED / DECLINED), or null when the
+   * server reported none — including a server too old to report it.
+   *
+   * Carried because the roster cannot answer "did I go?" for a meeting reached by an emailed
+   * invitation alone: that route writes no participant row, so a finished meeting the viewer never
+   * opened used to read as Joined. `resolveMeetingTimeState` reads it only when the viewer has no
+   * roster row; a row always wins.
+   */
+  viewerInvitationStatus?: string | null;
   externalProvider?: "GOOGLE_MEET" | string | null;
   externalMeetingUrl?: string | null;
   externalCalendarEventId?: string | null;

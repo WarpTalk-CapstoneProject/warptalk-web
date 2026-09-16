@@ -1,8 +1,11 @@
 {
   "emailRequired": "Email is required",
   "emailInvalid": "Invalid email address",
+  "emailMax": "Email cannot exceed {max} characters",
   "passwordMin6": "Password must be at least 6 characters",
   "passwordMin8": "Password must be at least 8 characters",
+  "passwordMax": "Password cannot exceed {max} characters",
   "fullNameRequired": "Please enter your name",
+  "fullNameMax": "Full name cannot exceed {max} characters",
   "passwordsDoNotMatch": "Passwords do not match"
 }

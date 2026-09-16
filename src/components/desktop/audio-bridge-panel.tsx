@@ -16,6 +16,7 @@
 import {
   ArrowClockwise,
   CheckCircle,
+  ClosedCaptioning,
   Info,
   Microphone,
   SpeakerHigh,
@@ -23,7 +24,11 @@ import {
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useState } from "react";
 
-import { readVirtualAudioStatus, requestVirtualAudioInstall } from "@/lib/desktop/bridge";
+import {
+  openTranscriptWindow,
+  readVirtualAudioStatus,
+  requestVirtualAudioInstall,
+} from "@/lib/desktop/bridge";
 import {
   describeAudioBridge,
   shouldShowAudioBridge,
@@ -42,6 +47,21 @@ const TONE = {
     iconClass: "text-amber-500",
     ring: "border-amber-500/25 bg-amber-500/[0.04]",
   },
+  "outbound-only": {
+    icon: Info,
+    iconClass: "text-sky-500",
+    ring: "border-sky-500/25 bg-sky-500/[0.04]",
+  },
+  "installed-not-running": {
+    icon: Warning,
+    iconClass: "text-amber-500",
+    ring: "border-amber-500/25 bg-amber-500/[0.04]",
+  },
+  "caption-only": {
+    icon: Info,
+    iconClass: "text-amber-500",
+    ring: "border-amber-500/25 bg-amber-500/[0.04]",
+  },
   "unsupported-platform": {
     icon: Info,
     iconClass: "text-ink-muted",
@@ -54,13 +74,17 @@ const TONE = {
  *   own section pattern. It is a prop rather than page markup because the panel renders NOTHING
  *   in a browser — a header supplied by the page would survive on its own and leave every
  *   non-desktop user staring at an empty titled section.
+ * @param roomId When given, the caption-window offer appears on the rungs that have one. Optional
+ *   because the settings page has no room in hand: there the tier is information, not an action.
  */
 export function AudioBridgePanel({
   className,
   label,
+  roomId,
 }: {
   className?: string;
   label?: string;
+  roomId?: string;
 }) {
   const [view, setView] = useState<AudioBridgeView>(() => describeAudioBridge(null));
   const [checking, setChecking] = useState(true);
@@ -153,12 +177,55 @@ export function AudioBridgePanel({
             </ul>
           ) : null}
 
+          {view.tier ? (
+            // The rung the machine will actually run, stated before anything else on the card can
+            // be mistaken for a verdict. A green "ready" heading and a bridge running one rung
+            // down are both true at once often enough that leaving this implicit is how a user
+            // ends up believing the far side is being translated when it is not.
+            <div className="mt-3 rounded-lg border border-border bg-surface-1 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-subtle">
+                  Right now
+                </span>
+                <span className="text-[12px] font-medium text-ink">{view.tier.label}</span>
+              </div>
+              <p className="mt-1 text-[11px] leading-5 text-ink-muted">{view.tier.summary}</p>
+
+              {view.tier.losses.length > 0 ? (
+                <ul className="mt-1.5 flex flex-col gap-1">
+                  {view.tier.losses.map((loss) => (
+                    <li
+                      key={loss}
+                      className="flex gap-1.5 text-[11px] leading-5 text-ink-subtle"
+                    >
+                      <span aria-hidden className="select-none">
+                        —
+                      </span>
+                      <span>{loss}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {roomId && !view.tier.hearsFarSide ? (
+                <button
+                  type="button"
+                  onClick={() => void openTranscriptWindow(roomId)}
+                  className="mt-2 inline-flex h-7 items-center gap-1.5 rounded-lg border border-border px-2.5 text-[11px] font-medium text-ink-muted transition hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ClosedCaptioning size={13} />
+                  Show live captions
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
           {view.foreignDrivers.length > 0 ? (
             // Named because "I already have a virtual microphone" is the first thing people say
             // when asked to install one, and naming theirs is how that conversation ends.
             <p className="mt-2.5 text-[11px] leading-5 text-ink-subtle">
-              Other virtual audio drivers on this Mac: {view.foreignDrivers.join(", ")}. WarpTalk
-              does not use them.
+              Other virtual audio drivers on this device: {view.foreignDrivers.join(", ")}.
+              WarpTalk does not use them.
             </p>
           ) : null}
 

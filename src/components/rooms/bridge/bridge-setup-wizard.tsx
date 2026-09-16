@@ -12,16 +12,37 @@
  * third is not: what Meet has selected lives inside Google's page. The last step therefore asks
  * rather than asserts, and says why, because a green tick that means "we hope so" is worse than
  * no tick at all.
+ *
+ * CAMERA IS OUT OF SCOPE, AND THAT IS A DECISION — WT-578 / WT-525
+ *   WT-525 asked for "device settings (Voice/Camera)". Audio is bridged because it has to be:
+ *   WarpTalk SYNTHESISES a new voice, and that voice has no way into Meet except a virtual
+ *   microphone Meet is pointed at. Video is not synthesised anywhere in the product — there is no
+ *   translated, dubbed or generated picture to carry — so a virtual camera would be a second
+ *   driver to install, a second permission to grant and a second thing to break, in order to pass
+ *   the user's own webcam through unchanged. Meet already reads that camera directly.
+ *
+ *   So WarpTalk ships no virtual camera and does not select a camera on the user's behalf. The
+ *   wizard says so where the user is looking for it, rather than leaving the absence to be
+ *   rediscovered as a missing feature. Revisit only if something ever alters the picture — a
+ *   translated slide overlay, a captioned video feed — because that is the first moment a virtual
+ *   camera would carry anything the user cannot already get.
+ *
+ * WHY THE COLOURS ARE TOKENS
+ *   This was written against a dark preview page and hardcoded `text-white` throughout. It now
+ *   opens inside a meeting, over whichever theme the user chose, so every colour here is a
+ *   semantic token; a hardcoded white would render invisible-on-white for half the users.
  */
 
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { getDesktopBridge } from "@/lib/desktop/bridge";
 import {
   checkVirtualBridge,
-  INBOUND_DEVICE_LABEL,
-  OUTBOUND_DEVICE_LABEL,
+  currentBridgeDeviceLabels,
+  WINDOWS_CABLES_DOWNLOAD_PAGE,
   type BridgeCheckResult,
+  type BridgeDeviceLabels,
   type DeviceProbe,
 } from "@/lib/audio/virtual-bridge-check";
 
@@ -45,14 +66,14 @@ function StepShell({
     <section
       className={`rounded-2xl border p-5 transition ${
         state === "active"
-          ? "border-white/25 bg-white/[0.04]"
-          : "border-white/10 bg-transparent opacity-70"
+          ? "border-primary/40 bg-primary/[0.05]"
+          : "border-border bg-transparent opacity-70"
       }`}
     >
       <header className="mb-3 flex items-center gap-3">
         <span
           className={`grid size-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${
-            state === "done" ? "bg-emerald-400 text-black" : "bg-white/15 text-white"
+            state === "done" ? "bg-emerald-500 text-white" : "bg-surface-3 text-ink"
           }`}
           aria-hidden
         >
@@ -60,7 +81,7 @@ function StepShell({
         </span>
         <h2 className="text-[15px] font-medium">{title}</h2>
       </header>
-      <div className="pl-9 text-sm text-white/65">{children}</div>
+      <div className="pl-9 text-sm text-ink-muted">{children}</div>
     </section>
   );
 }
@@ -72,18 +93,21 @@ function ProbeRow({ probe }: { probe: DeviceProbe }) {
       : "carries the meeting's audio back to you";
 
   const verdict = !probe.present
-    ? { tone: "text-white/40", text: "Not installed" }
+    ? { tone: "text-ink-subtle", text: probe.optional ? "Not installed (optional)" : "Not installed" }
     : probe.error
-      ? { tone: "text-amber-300", text: probe.error }
+      ? { tone: "text-amber-600 dark:text-amber-400", text: probe.error }
       : probe.carriesSignal
-        ? { tone: "text-emerald-300", text: "Carrying audio" }
-        : { tone: "text-red-300", text: "Installed, but no sound came through" };
+        ? { tone: "text-emerald-600 dark:text-emerald-400", text: "Carrying audio" }
+        // `destructive`, not `danger`: only tokens registered in @theme generate utilities in
+        // Tailwind v4, and --color-danger is not one of them. `text-danger` compiles to nothing,
+        // so the one verdict that means "your bridge is broken" would render in body colour.
+        : { tone: "text-destructive", text: "Installed, but no sound came through" };
 
   return (
-    <li className="flex items-baseline justify-between gap-4 border-b border-white/5 py-2 last:border-0">
+    <li className="flex items-baseline justify-between gap-4 border-b border-border/60 py-2 last:border-0">
       <span>
-        <span className="font-medium text-white/85">{probe.expectedLabel}</span>
-        <span className="block text-xs text-white/45">{role}</span>
+        <span className="font-medium text-ink">{probe.expectedLabel}</span>
+        <span className="block text-xs text-ink-subtle">{role}</span>
       </span>
       <span className={`shrink-0 text-xs ${verdict.tone}`}>{verdict.text}</span>
     </li>
@@ -92,9 +116,18 @@ function ProbeRow({ probe }: { probe: DeviceProbe }) {
 
 export function BridgeSetupWizard({
   onReady,
+  readyLabel = "Start translating",
   runCheck = checkVirtualBridge,
 }: {
   onReady?: () => void;
+  /**
+   * What the final button does, in the caller's words.
+   *
+   * The wizard is opened at two different moments: before translation, where finishing it starts
+   * the meeting, and again mid-meeting when a device drops, where translation is already running
+   * and "Start translating" would be a lie about what the button is about to do.
+   */
+  readyLabel?: string;
   /** Injectable so the dev preview can render states a laptop without the devices cannot reach. */
   runCheck?: () => Promise<BridgeCheckResult>;
 }) {
@@ -102,17 +135,50 @@ export function BridgeSetupWizard({
   const [checking, setChecking] = useState(false);
   const [meetConfirmed, setMeetConfirmed] = useState(false);
   const [copied, setCopied] = useState(false);
+  /**
+   * Resolved after mount, not during render.
+   *
+   * The device names depend on the platform, and the platform is read from `navigator`, which the
+   * server does not have. Computing them in render would make the server emit the macOS names and
+   * the client replace them with the Windows ones — a hydration mismatch on the one piece of text
+   * the user is meant to copy exactly. Null until mount, and the instructions wait for it.
+   */
+  const [labels, setLabels] = useState<BridgeDeviceLabels | null>(null);
+  /** Only the desktop app can install drivers; a browser tab has no bridge to ask. */
+  const [canInstall, setCanInstall] = useState(false);
+  const [installing, setInstalling] = useState(false);
+
+  useEffect(() => {
+    setLabels(currentBridgeDeviceLabels());
+    setCanInstall(Boolean(getDesktopBridge()?.installVirtualAudio));
+  }, []);
 
   const check = useCallback(async () => {
     setChecking(true);
     try {
-      setResult(await runCheck());
+      const outcome = await runCheck();
+      setResult(outcome);
+      // The check knows which pair this machine really has — BlackHole on a Mac set up before the
+      // rename — so the instructions follow it rather than the platform default.
+      if (outcome.labels) setLabels(outcome.labels);
     } catch {
       setResult({ probes: [], ready: false, needsPermission: true });
     } finally {
       setChecking(false);
     }
   }, [runCheck]);
+
+  const install = useCallback(async () => {
+    const bridge = getDesktopBridge();
+    if (!bridge?.installVirtualAudio) return;
+    setInstalling(true);
+    try {
+      const outcome = await bridge.installVirtualAudio();
+      if (outcome.started) await check();
+    } finally {
+      setInstalling(false);
+    }
+  }, [check]);
 
   // Run once on open so the common case — everything already installed — needs no clicks.
   useEffect(() => {
@@ -121,12 +187,18 @@ export function BridgeSetupWizard({
 
   const devicesReady = result?.ready === true;
   const ready = devicesReady && meetConfirmed;
+  const isWindows = labels?.platform === "windows";
+  // Whether the far side arrives on its own cable. On Windows without Hi-Fi Cable it does not, and
+  // telling the user to point Meet's speaker at a device that is not there would silence the call.
+  const inboundViaDevice = Boolean(result?.probes.find((probe) => probe.leg === "inbound")?.present);
+  const speakerToSet =
+    labels?.meetSpeaker && (!labels.inboundOptional || inboundViaDevice) ? labels.meetSpeaker : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-white">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-ink">
       <header>
         <h1 className="text-xl font-semibold">Set up your external meeting</h1>
-        <p className="mt-1 text-sm text-white/55">
+        <p className="mt-1 text-sm text-ink-muted">
           Your meeting runs on Google Meet. WarpTalk sits beside it, translating what you say into
           the call and what the call says back to you.
         </p>
@@ -137,16 +209,59 @@ export function BridgeSetupWizard({
         title="Install the two audio devices"
         state={devicesReady ? "done" : "active"}
       >
-        {devicesReady ? (
+        {devicesReady && (!isWindows || inboundViaDevice) ? (
           <p>Both devices are installed and working.</p>
+        ) : devicesReady ? (
+          <p>
+            VB-CABLE is installed and working. Hi-Fi Cable is not, so WarpTalk will listen to your whole
+            browser instead and other tabs may be translated too. Install Hi-Fi Cable from the{" "}
+            <a className="underline hover:text-ink" href={WINDOWS_CABLES_DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
+              VB-Audio download page
+            </a>{" "}
+            to hear only Google Meet.
+          </p>
+        ) : isWindows ? (
+          <>
+            <p className="mb-3">
+              WarpTalk uses two free drivers from VB-Audio, both on the same page:{" "}
+              <span className="font-medium text-ink">VB-CABLE</span> carries your translated voice into
+              the meeting, and <span className="font-medium text-ink">Hi-Fi Cable</span> carries the
+              meeting back to WarpTalk.
+            </p>
+            <p className="mb-2 text-xs text-ink-subtle">
+              <a className="underline hover:text-ink" href={WINDOWS_CABLES_DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
+                Open the VB-Audio download page
+              </a>
+              , install both, and restart if an installer asks. Then open Windows Sound settings and set
+              Hi-Fi Cable Input and Hi-Fi Cable Output to the same format, 48000 Hz — Hi-Fi Cable passes
+              no sound when its two sides differ.
+            </p>
+            <p className="text-xs text-ink-subtle">
+              Hi-Fi Cable is optional. Without it WarpTalk listens to your whole browser, so sound from
+              other tabs gets translated too.
+            </p>
+          </>
         ) : (
           <>
             <p className="mb-3">
-              WarpTalk needs two virtual audio devices to pass sound to and from Meet. It uses
-              BlackHole, which is free and open source.
+              WarpTalk needs two virtual audio devices to pass sound to and from Meet:{" "}
+              <span className="font-medium text-ink">WarpTalk Microphone</span> and{" "}
+              <span className="font-medium text-ink">WarpTalk Speaker</span>. The WarpTalk desktop app
+              installs both, and macOS asks for your password once.
+            </p>
+            {canInstall && (
+              <div className="mb-3">
+                <Button type="button" size="sm" onClick={() => void install()} disabled={installing}>
+                  {installing ? "Installing…" : "Install audio devices"}
+                </Button>
+              </div>
+            )}
+            <p className="mb-2 text-xs text-ink-subtle">
+              Already using BlackHole? It still works: WarpTalk uses BlackHole 2ch and BlackHole 16ch
+              when its own devices are not installed. To set BlackHole up instead:
             </p>
             <div className="mb-3 flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto rounded-lg bg-black/40 px-3 py-2 font-mono text-xs">
+              <code className="flex-1 overflow-x-auto rounded-lg bg-surface-2 px-3 py-2 font-mono text-xs text-ink">
                 {BREW_COMMAND}
               </code>
               <Button
@@ -162,9 +277,9 @@ export function BridgeSetupWizard({
                 {copied ? "Copied" : "Copy"}
               </Button>
             </div>
-            <p className="text-xs text-white/45">
+            <p className="text-xs text-ink-subtle">
               No Homebrew?{" "}
-              <a className="underline hover:text-white" href={DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
+              <a className="underline hover:text-ink" href={DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
                 Download it directly
               </a>
               . Either way macOS asks for your password, and the devices only appear after you
@@ -180,17 +295,41 @@ export function BridgeSetupWizard({
         state={!devicesReady ? "todo" : meetConfirmed ? "done" : "active"}
       >
         <p className="mb-3">
-          In your Meet tab, open Settings → Audio and set both:
+          In your Meet tab, open Settings → Audio and set
+          {speakerToSet ? " both:" : ":"}
         </p>
         <ul className="mb-3 space-y-1">
           <li>
-            Microphone → <span className="font-medium text-white/85">{OUTBOUND_DEVICE_LABEL}</span>
+            Microphone → <span className="font-medium text-ink">{labels?.meetMicrophone ?? "…"}</span>
           </li>
+          {/*
+            Only where a second virtual device carries the far side. On Windows without Hi-Fi Cable,
+            process loopback reads the browser's own output instead, so there is nothing to change
+            here — and pointing Meet's speaker at a missing device would only make the call inaudible.
+          */}
+          {speakerToSet ? (
+            <li>
+              Speakers → <span className="font-medium text-ink">{speakerToSet}</span>. You will hear
+              the call through WarpTalk instead, a little quieter while a translation is playing.
+            </li>
+          ) : (
+            <li>
+              Speakers → <span className="font-medium text-ink">leave as they are</span>, so you
+              can still hear the call. WarpTalk listens to the browser directly.
+            </li>
+          )}
+          {/*
+            The camera line is here, in the list of things to set, because that is where somebody
+            looking for a camera setting will look — and finding nothing is what WT-525 reported.
+            The decision behind it is at the top of this file.
+          */}
           <li>
-            Speakers → <span className="font-medium text-white/85">{INBOUND_DEVICE_LABEL}</span>
+            Camera → <span className="font-medium text-ink">leave it alone</span>. WarpTalk
+            translates voices, not pictures, so Meet keeps using your real camera and there is no
+            virtual one to install.
           </li>
         </ul>
-        <p className="mb-3 text-xs text-white/45">
+        <p className="mb-3 text-xs text-ink-subtle">
           Keep your own microphone and headphones selected here in WarpTalk. Meet talks to the
           virtual devices; you talk to your real ones.
         </p>
@@ -204,7 +343,7 @@ export function BridgeSetupWizard({
           />
           <span>
             I&apos;ve set both in Meet.
-            <span className="block text-xs text-white/45">
+            <span className="block text-xs text-ink-subtle">
               WarpTalk can&apos;t check this one — what Meet has selected lives inside Google&apos;s
               page, out of reach. This is the one step you confirm yourself.
             </span>
@@ -214,7 +353,7 @@ export function BridgeSetupWizard({
 
       <StepShell index={3} title="Test the connection" state={devicesReady ? "done" : "active"}>
         {result?.needsPermission && (
-          <p className="mb-3 text-amber-300">
+          <p className="mb-3 text-amber-600 dark:text-amber-400">
             Allow microphone access so WarpTalk can see your audio devices, then test again.
           </p>
         )}
@@ -230,19 +369,19 @@ export function BridgeSetupWizard({
         <Button type="button" variant="secondary" size="sm" onClick={() => void check()} disabled={checking}>
           {checking ? "Testing…" : "Test again"}
         </Button>
-        <p className="mt-2 text-xs text-white/45">
+        <p className="mt-2 text-xs text-ink-subtle">
           Plays a short tone into each device and listens for it coming back.
         </p>
       </StepShell>
 
       <footer className="flex items-center justify-between gap-4 pt-2">
-        <p className="text-xs text-white/45">
+        <p className="text-xs text-ink-subtle">
           {ready
             ? "Everything checked. Your meeting will translate both ways."
             : "Finish the steps above to start."}
         </p>
         <Button type="button" disabled={!ready} onClick={onReady}>
-          Start translating
+          {readyLabel}
         </Button>
       </footer>
     </div>
