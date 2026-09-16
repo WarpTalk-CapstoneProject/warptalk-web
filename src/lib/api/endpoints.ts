@@ -21,6 +21,10 @@ export const API = {
     registerInvited: "/auth/register-invited",
     login: "/auth/login",
     googleLogin: "/auth/google-login",
+    /** Attach Google to the signed-in account. Body `{ idToken }`; the Google email must match. */
+    googleLink: "/auth/google/link",
+    /** Detach Google. Refused (MIN_AUTH_METHOD_REQUIRED) when the account has no password. */
+    googleUnlink: "/auth/google/unlink",
     refresh: "/auth/refresh",
     logout: "/auth/logout",
     me: "/auth/me",

@@ -71,7 +71,9 @@ import {
   ShieldCheck,
   CheckSquare,
   Files,
-  ListChecks,} from "@phosphor-icons/react/dist/ssr";
+  ListChecks,
+  Bell,
+  LinkSimple,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -607,6 +609,20 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           : "/workspace",
       },
       {
+        icon: Bell,
+        label: "Notifications",
+        href: activeWorkspaceSlug
+          ? `/${activeWorkspaceSlug}/settings/account/notifications`
+          : "/workspace",
+      },
+      {
+        icon: LinkSimple,
+        label: "Connected accounts",
+        href: activeWorkspaceSlug
+          ? `/${activeWorkspaceSlug}/settings/account/connected-accounts`
+          : "/workspace",
+      },
+      {
         icon: PlugsConnected,
         label: "Plugins",
         href: "/settings/plugins",
@@ -695,11 +711,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           </Link>
         </div>
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
-          {settingsItems.map((item, index) => (
+          {settingsItems.map((item) => (
             <div
               key={item.href}
               className={cn(
-                index === 2 && "mt-3 border-t border-border/50 pt-3",
+                // Keyed on the row, not its index, so Personal rows can be added above it.
+                item.href === "/settings/plugins" && "mt-3 border-t border-border/50 pt-3",
               )}
             >
               <NavLink item={item} pathname={pathname} collapsed />
@@ -770,6 +787,30 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                   Profile
+                </span>
+              </Link>
+            </div>
+
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === `/${activeWorkspaceSlug}/settings/account/notifications` ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/notifications` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <Bell size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Notifications
+                </span>
+              </Link>
+            </div>
+
+            <div className={cn(
+              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+              pathname === `/${activeWorkspaceSlug}/settings/account/connected-accounts` ? "bg-surface-2" : "hover:bg-surface-2"
+            )}>
+              <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/connected-accounts` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                <LinkSimple size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                  Connected accounts
                 </span>
               </Link>
             </div>
