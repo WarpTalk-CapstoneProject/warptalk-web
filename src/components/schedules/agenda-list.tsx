@@ -326,7 +326,10 @@ export function AgendaList({
   return (
     <div
       ref={attachScroller}
-      className="h-full min-h-0 overflow-y-auto overscroll-contain bg-surface-1"
+      // The page's scrolling content area, so it takes the page ground. It was `bg-surface-1` —
+      // the card colour — which since the ground moved to `bg-panel` made the whole agenda column
+      // a white slab filling a grey page.
+      className="h-full min-h-0 overflow-y-auto overscroll-contain bg-panel"
     >
       {sections.map((week) => (
         <section key={week.key} aria-label={`Week of ${week.label}`}>

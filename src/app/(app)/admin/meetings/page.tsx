@@ -337,7 +337,7 @@ function MeetingRow({ meeting }: { meeting: AdminMeetingSummaryDto }) {
 
 export default function AdminMeetingsPage() {
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <MeetingsDirectory />
     </Suspense>
   );

@@ -32,7 +32,10 @@ const checks = [
   // the "Meeting access" copy cannot drift. The styling it must keep is the same as before;
   // only the place it is written down changed.
   ["join meeting button keeps white text on purple primary", page.includes("function RoomEntryButton(") && page.includes("\"rounded-md text-[13px] !text-white [&_svg]:!text-white\"")],
-  ["room detail uses a themed surface-1 background", page.includes("bg-surface-1 text-ink")],
+  // The page ground, which moved from surface-1 to panel on 2026-09-16: surface-1 is the card
+  // colour now, and this page is mostly cards. What the line guards is unchanged — a THEMED
+  // ground rather than a hardcoded white.
+  ["room detail uses a themed panel background", page.includes("bg-panel text-ink")],
   // VISIBLE label, which is what the ticket removed and what this line is named for. Banning the
   // string outright also banned `role: "Host"` -- the role as DATA, which the row now carries as
   // a badge -- and even the comment explaining why the fallback must not return it. The defect

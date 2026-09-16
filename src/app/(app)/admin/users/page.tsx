@@ -459,7 +459,7 @@ function UserRow({
 export default function AdminUsersPage() {
   // Same ground as the page it stands in for — see check-admin-surface-contract.
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <UsersDirectory />
     </Suspense>
   );

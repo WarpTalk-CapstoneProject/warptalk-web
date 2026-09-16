@@ -516,7 +516,7 @@ export default function MeetingsPageLinear() {
   }, [rooms, rowSource, activeTab, dayFilter, isAllView, searchQuery]);
 
   return (
-    <div className="flex flex-col h-full bg-surface-1">
+    <div className="flex flex-col h-full bg-panel">
       {/* View Tabs & Actions */}
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         {/* The chip style this page defined now lives in FilterChip, so Knowledge, Documents and

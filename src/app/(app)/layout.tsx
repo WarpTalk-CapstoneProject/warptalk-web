@@ -549,7 +549,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Main Column */}
       <div className="relative flex flex-col flex-1 overflow-hidden min-w-0">
         {/* Main content box */}
-        <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-surface-1 shadow-sm">
+        {/* The box every workspace page renders inside. `bg-panel`, not `bg-surface-1`: this is the
+            page's ground, and surface-1 is the card colour — painted here, every card in the
+            product sat on its own colour and vanished (owner's call, 2026-09-16). */}
+        <div className="relative flex flex-col flex-1 overflow-hidden mt-1.5 mr-1.5 mb-0 rounded-xl border border-border bg-panel shadow-sm">
           {/* Top bar */}
         <header
           className={cn(
@@ -761,9 +764,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               open={rightSidebarOpen}
               width={260}
               side="right"
-              className="bg-surface-1"
+              className="bg-panel"
             >
-              <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-surface-1">
+              {/* The rail shares the page's ground rather than the card colour: it sits inside the
+                  same box as the content, so painting it surface-1 made a 260px white slab down
+                  the side of a grey page. */}
+              <aside className="flex h-full w-[260px] shrink-0 flex-col overflow-hidden border-l border-border bg-panel">
               {/* Members, not "Properties".
                   The panel used to be a header over the sentence "Select an item to view its
                   properties and actions" — and nothing in the app ever published an item for it

@@ -478,7 +478,7 @@ function SubscriptionRow({
 
 export default function AdminSubscriptionsPage() {
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <SubscriptionsDirectory />
     </Suspense>
   );

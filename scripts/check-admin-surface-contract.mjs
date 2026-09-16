@@ -9,9 +9,15 @@
 //     a workspace, and a switcher there invites acting on one tenant while reading about all.
 //
 //  2. AdminPage painted `bg-canvas`. Its own file comment says it exists to match the workspace
-//     pages — and `WorkspacePage`, the frame those pages use, paints `bg-surface-1`. `canvas` is
-//     the darker ground the app reserves for the chrome AROUND a page, so the entire admin portal
-//     rendered its content in the sidebar's colour and read as permanently greyed out.
+//     pages — and `canvas` is the darkest ground the app has, the one reserved for the chrome
+//     AROUND a page, so the entire admin portal rendered its content in the sidebar's colour and
+//     read as permanently greyed out.
+//
+//     The ground both frames share is now `bg-panel` (owner's call, 2026-09-16). It was
+//     `bg-surface-1`, white, until cards on a white page turned out to have nothing but a hairline
+//     holding them apart; the ladder is canvas (chrome) → panel (page) → surface-1 (cards). What
+//     this check has always been about is unchanged: the two frames name the SAME ground, and
+//     neither of them is the chrome's.
 //
 //  3. The nav is going to grow one row per release as Users, Subscriptions, Plans, Meetings,
 //     Health, Audit and Announcements land. A row added before its page exists is a link to a
@@ -68,19 +74,25 @@ checks.push([
 // ── 2 · The ground is the page ground, not the chrome ground ─────────────────
 checks.push([
   "AdminPage paints the same ground as WorkspacePage",
-  /export function AdminPage\(\{[\s\S]{0,400}?bg-surface-1/.test(chrome),
+  /export function AdminPage\(\{[\s\S]{0,400}?bg-panel/.test(chrome),
 ]);
 checks.push([
   "AdminPage does not paint the chrome's grey",
   !/export function AdminPage\(\{[\s\S]{0,400}?bg-canvas/.test(chrome),
 ]);
+checks.push([
+  // The other half of the ladder: a page painted surface-1 is painted the CARD colour, which is
+  // what made every card on it disappear.
+  "AdminPage is not painted the card colour either",
+  !/export function AdminPage\(\{[\s\S]{0,400}?bg-surface-1/.test(chrome),
+]);
 
 const workspacePageChrome = await read("src/components/workspace/page-chrome.tsx");
 checks.push([
-  // If WorkspacePage ever moves off surface-1, this pair stops agreeing and someone has to
+  // If WorkspacePage ever moves off panel, this pair stops agreeing and someone has to
   // decide again rather than discovering the drift on screen.
   "WorkspacePage still uses the ground AdminPage is matching",
-  /export function WorkspacePage\(\{[\s\S]{0,400}?bg-surface-1/.test(workspacePageChrome),
+  /export function WorkspacePage\(\{[\s\S]{0,400}?bg-panel/.test(workspacePageChrome),
 ]);
 
 // ── 3 · No admin page repaints the grey itself ───────────────────────────────

@@ -30,11 +30,15 @@ import { cn } from "@/lib/utils";
 /**
  * The measure. Wider than a document, because these pages are tables about a whole platform.
  *
- * `bg-surface-1`, not `bg-canvas`. This file set out to match the workspace pages and then
- * diverged from them on the one thing a reader notices first: `WorkspacePage` — the frame every
- * workspace screen uses — paints `bg-surface-1`, and `canvas` is the darker ground the app
- * reserves for the chrome AROUND a page. So the admin portal rendered its content on the colour
- * the sidebar uses, and read as permanently greyed out beside every other screen in the product.
+ * `bg-panel`, not `bg-canvas` and not `bg-surface-1`. This file set out to match the workspace
+ * pages and then diverged from them on the one thing a reader notices first: `canvas` is the
+ * darkest ground the app has, the one reserved for the chrome AROUND a page. So the admin portal
+ * rendered its content on the colour the sidebar uses, and read as permanently greyed out beside
+ * every other screen in the product.
+ *
+ * The shared ground moved to `panel` on 2026-09-16 (owner's call) and this moved with it. It was
+ * `surface-1` — which is now the CARD colour, so a page painted with it is a page every card on
+ * it sinks into. The ladder: canvas (chrome) → panel (this) → surface-1 (`AdminPanel` below).
  *
  * Kept as its own component rather than switching to `WorkspacePage`: these pages are a centred
  * 1480px measure with their own padding, and `WorkspacePage` is a full-bleed flex column whose
@@ -49,7 +53,7 @@ export function AdminPage({
   className?: string;
 }) {
   return (
-    <main className={cn("min-h-full bg-surface-1 text-ink", className)}>
+    <main className={cn("min-h-full bg-panel text-ink", className)}>
       <div className="mx-auto w-full max-w-[1480px] px-5 py-6 lg:px-8">{children}</div>
     </main>
   );
@@ -77,7 +81,10 @@ export function AdminPageHeader({
           {eyebrowIcon}
           {eyebrow}
         </div>
-        <h1 className="text-[30px] font-semibold leading-none tracking-tight">{title}</h1>
+        {/* 22px, not 30px (owner's call, 2026-09-16). The 30px was copied from the room detail and
+            history pages, and beside a console made of 13px tables and 11px labels it read as a
+            different document entirely. */}
+        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">{title}</h1>
         {description ? (
           <p className="mt-2 max-w-2xl text-[13px] text-ink-muted">{description}</p>
         ) : null}

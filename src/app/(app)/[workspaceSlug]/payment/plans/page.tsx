@@ -359,7 +359,7 @@ export default function WorkspacePlansPage() {
        website's /pricing, rendered inside a workspace the user has already signed into and paid
        attention to. It is a settings screen. It gets the settings chrome: the same toolbar row
        every other workspace page has, with the one real choice (monthly or yearly) in it. */
-    <div className="flex h-full min-h-0 flex-col bg-surface-1 text-ink">
+    <div className="flex h-full min-h-0 flex-col bg-panel text-ink">
       <div className="flex shrink-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="flex min-w-[260px] flex-1 items-center gap-3">
           <Link
