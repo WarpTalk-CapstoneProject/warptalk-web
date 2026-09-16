@@ -79,6 +79,9 @@ import {
   buildParticipantIdentities,
 } from "@/lib/meeting/participant-identity";
 import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identity-context";
+import { parseAssistantQuestions } from "@/components/layout/assistant-question-card";
+import { parsePluginConnectionAction } from "@/components/layout/plugin-connection-action-card";
+import { parsePluginOperatorSetupAction } from "@/components/layout/plugin-operator-setup-card";
 import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
@@ -2831,9 +2834,25 @@ export function PersistentMeetingSession({
     chatConnection.on(
       "ChatAssistantQuestion",
       (payload: { questionsJson?: string }) => {
-        useTranslationRoomStore
-          .getState()
-          .setAssistantQuestionsJson(payload?.questionsJson ?? null);
+        // Routed by what the payload carries, not stored whole (WT-688). The worker sends one card
+        // per event — a question, a Connect prompt, or an operator-setup notice — and all three
+        // used to land in one slot that every event overwrote, so a setup notice arriving after a
+        // question erased the half-answered question and rendered nothing in its place. An event
+        // now replaces only the kind of card it actually carries.
+        const json = payload?.questionsJson;
+        if (!json) return;
+        const store = useTranslationRoomStore.getState();
+        if (parseAssistantQuestions(json).length) store.setAssistantQuestionsJson(json);
+        // Enforced here rather than assumed of the worker, exactly as the WarpBot widget does it.
+        // "Press Connect" and "no button will help" cannot both be true of one failure, so setup
+        // wins: it is the one saying the registration ladder is already exhausted.
+        if (parsePluginOperatorSetupAction(json)) {
+          store.setAssistantPluginSetupJson(json);
+          store.setAssistantPluginConnectionJson(null);
+        } else if (parsePluginConnectionAction(json)) {
+          store.setAssistantPluginConnectionJson(json);
+          store.setAssistantPluginSetupJson(null);
+        }
       },
     );
 

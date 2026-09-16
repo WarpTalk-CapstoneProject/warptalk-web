@@ -97,7 +97,22 @@ interface TranslationRoomStoreState {
    * one arrives. Anyone who reloads or joins late sees the persisted message and never this.
    */
   assistantDraft: string;
+  /**
+   * The three cards WarpBot can raise mid-turn, one slot each (WT-688).
+   *
+   * All three arrive on the same ChatAssistantQuestion event, and they used to share ONE slot that
+   * every event overwrote. The worker sends one card per event, so an operator-setup event landing
+   * after a question replaced the question's payload with one the question card cannot read: the
+   * half-answered card vanished, and — the panel having no setup card — nothing took its place.
+   * Separate slots let an event replace only the kind of card it actually carries.
+   *
+   * Raw JSON rather than parsed actions, like the questions before them: this store is imported by
+   * node-run tests that cannot resolve the card modules, and it has no business knowing what a
+   * card means. The session routes each payload; the panel parses what it renders.
+   */
   assistantQuestionsJson: string | null;
+  assistantPluginConnectionJson: string | null;
+  assistantPluginSetupJson: string | null;
   /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
@@ -176,6 +191,8 @@ interface TranslationRoomStoreState {
    */
   appendAssistantDraft: (delta?: string | null) => void;
   setAssistantQuestionsJson: (questionsJson: string | null) => void;
+  setAssistantPluginConnectionJson: (pluginConnectionJson: string | null) => void;
+  setAssistantPluginSetupJson: (pluginSetupJson: string | null) => void;
   sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
@@ -197,6 +214,8 @@ const initialState = {
   assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
   assistantDraft: "",
   assistantQuestionsJson: null as string | null,
+  assistantPluginConnectionJson: null as string | null,
+  assistantPluginSetupJson: null as string | null,
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -444,7 +463,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       // A turn that died without an answer leaves its half-written draft behind; the next
       // question must not open under somebody else's unfinished sentence.
       assistantDraft: "",
+      // Every card belongs to the turn that raised it. A Connect card left over from the last
+      // question would open an OAuth flow this one never asked for.
       assistantQuestionsJson: null,
+      assistantPluginConnectionJson: null,
+      assistantPluginSetupJson: null,
       assistantActivityAt: Date.now(),
     })),
 
@@ -594,6 +617,20 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       assistantActivityAt: Date.now(),
     }),
 
+  // Both stamp activity like the questions setter: a card arriving is the worker showing a sign of
+  // life mid-turn, and a connect-only event must not leave the slow-turn deadline running.
+  setAssistantPluginConnectionJson: (assistantPluginConnectionJson) =>
+    set({
+      assistantPluginConnectionJson,
+      assistantActivityAt: Date.now(),
+    }),
+
+  setAssistantPluginSetupJson: (assistantPluginSetupJson) =>
+    set({
+      assistantPluginSetupJson,
+      assistantActivityAt: Date.now(),
+    }),
+
   sealAssistantTrail: (messageId) =>
     set((state) => {
       // Nothing to attach, or this answer already has its trail. Either way, leave it alone:
@@ -631,6 +668,8 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         // server never saved.
         assistantDraft: "",
         assistantQuestionsJson: null,
+        assistantPluginConnectionJson: null,
+        assistantPluginSetupJson: null,
       };
     }),
 
