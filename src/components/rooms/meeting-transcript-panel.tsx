@@ -483,7 +483,7 @@ export function MeetingTranscriptArtifact({
   // repeat every late pause once per translation session, so a meeting with three sessions showed
   // one pause three times, at three different points in the record.
   const gapsPerBlock = distributePauseGapsAcrossBlocks(
-    blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+    blocks.map((block) => block.segments.map(({ startTimeMs }) => ({ startTimeMs }))),
     pauseGaps,
   );
 

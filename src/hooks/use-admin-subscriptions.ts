@@ -73,16 +73,11 @@ export function useChangeAdminSubscriptionPlan() {
   });
 }
 
-export function useResumeAdminSubscription() {
+export function useReactivateAdminSubscription() {
   const invalidate = useInvalidateAdminSubscriptions();
   return useMutation({
-    mutationFn: ({
-      workspaceId,
-      request,
-    }: {
-      workspaceId: string;
-      request: AdminSubscriptionLifecycleRequest;
-    }) => adminSubscriptionService.resume(workspaceId, request),
+    mutationFn: ({ workspaceId }: { workspaceId: string }) =>
+      adminSubscriptionService.reactivate(workspaceId),
     onSuccess: invalidate,
   });
 }

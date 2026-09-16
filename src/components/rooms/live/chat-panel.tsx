@@ -19,6 +19,12 @@ import {
   PluginConnectionActionCard,
   parsePluginConnectionAction,
 } from "@/components/layout/plugin-connection-action-card";
+import {
+  PluginOperatorSetupCard,
+  parsePluginOperatorSetupAction,
+} from "@/components/layout/plugin-operator-setup-card";
+import { isDesktopApp } from "@/lib/desktop/bridge";
+import { toast } from "sonner";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
@@ -147,6 +153,9 @@ export function ChatPanel({
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  // Scopes the Connect card's request. Unscoped, the API has no workspace policy to apply, so a
+  // workspace that had turned plugins off would still have them connected from inside a meeting.
+  const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const participants = useTranslationRoomStore((state) => state.participants);
   const assistantState = useTranslationRoomStore((state) => state.assistantState);
   /**
@@ -165,6 +174,17 @@ export function ChatPanel({
   const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
   const assistantQuestionsJson = useTranslationRoomStore((state) => state.assistantQuestionsJson);
   const setAssistantQuestionsJson = useTranslationRoomStore((state) => state.setAssistantQuestionsJson);
+  // One slot per card, so dismissing one never takes another with it (WT-688).
+  const assistantPluginConnectionJson = useTranslationRoomStore(
+    (state) => state.assistantPluginConnectionJson,
+  );
+  const setAssistantPluginConnectionJson = useTranslationRoomStore(
+    (state) => state.setAssistantPluginConnectionJson,
+  );
+  const assistantPluginSetupJson = useTranslationRoomStore((state) => state.assistantPluginSetupJson);
+  const setAssistantPluginSetupJson = useTranslationRoomStore(
+    (state) => state.setAssistantPluginSetupJson,
+  );
   const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
   const assistantFinishedAt = useTranslationRoomStore((state) => state.assistantFinishedAt);
@@ -676,16 +696,30 @@ export function ChatPanel({
   const pendingAssistantQuestions = assistantQuestionsJson
     ? parseAssistantQuestions(assistantQuestionsJson)
     : [];
-  const pendingPluginConnection = assistantQuestionsJson
-    ? parsePluginConnectionAction(assistantQuestionsJson)
+  const pendingPluginConnection = assistantPluginConnectionJson
+    ? parsePluginConnectionAction(assistantPluginConnectionJson)
+    : null;
+  const pendingPluginSetup = assistantPluginSetupJson
+    ? parsePluginOperatorSetupAction(assistantPluginSetupJson)
     : null;
 
   async function handlePluginConnectionAction(pluginKey: string) {
     try {
       setSendError(null);
-      const result = await connectPlugin.mutateAsync({ pluginKey });
-      // Connected on the server already: the provider's grant covered it, nothing to open.
-      if (result.connected || !result.url) return;
+      // Scoped and client-tagged the way the WarpBot widget sends it: the workspace so its plugin
+      // policy applies, the client so the server picks the redirect for the surface that asked.
+      const result = await connectPlugin.mutateAsync({
+        pluginKey,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId: activeWorkspaceId ?? undefined,
+      });
+      // Connected on the server already: the provider's grant covered it, nothing to open. Said
+      // out loud, because this is the common case for a second Google plugin — and returning
+      // silently left the button flipping back to "Connect", which reads as a click that failed.
+      if (result.connected || !result.url) {
+        toast.success("Plugin connected.");
+        return;
+      }
       if (!openProviderConsent(result.url)) {
         // Blocked popup, most likely: the user gesture is gone by the time the mutation
         // resolves. Saying nothing leaves them waiting on a window that never opened.
@@ -970,8 +1004,18 @@ export function ChatPanel({
             <PluginConnectionActionCard
               action={pendingPluginConnection}
               disabled={connectPlugin.isPending}
-              onDismiss={() => setAssistantQuestionsJson(null)}
+              onDismiss={() => setAssistantPluginConnectionJson(null)}
               onConnect={handlePluginConnectionAction}
+            />
+          </div>
+        ) : null}
+        {/* No button, because none would help: the provider has no registration WarpTalk can use
+            until an administrator sets one up. Without this card a meeting was told nothing. */}
+        {pendingPluginSetup ? (
+          <div className="pl-10">
+            <PluginOperatorSetupCard
+              action={pendingPluginSetup}
+              onDismiss={() => setAssistantPluginSetupJson(null)}
             />
           </div>
         ) : null}

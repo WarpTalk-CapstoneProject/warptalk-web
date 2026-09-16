@@ -30,7 +30,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { usePreviewAdminRateCard } from "@/hooks/use-admin-pricing";
 import { getErrorMessage } from "@/lib/api/errors";
+import { formatAdminMoney } from "@/lib/billing/admin-money";
+import {
+  canSaveRateCard,
+  formatMarginRatio,
+  previewableInputs,
+  type PricingInputs,
+} from "@/lib/billing/rate-card-preview";
 import {
   PLAN_BILLING_CYCLE,
   PLAN_CURRENCIES,
@@ -38,6 +46,7 @@ import {
   validatePlanRequest,
 } from "@/lib/billing/plan-request";
 import { cn } from "@/lib/utils";
+import type { RateCardPreviewDto } from "@/types/admin-contract-billing";
 import type {
   PlanRequest,
   PricingConfigDto,
@@ -666,7 +675,45 @@ function RateCardEditForm({
   const set = <K extends keyof RateCardDraft>(key: K, value: RateCardDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
+  // Preview-before-save. A change to cost or markup changes what real usage is charged, so it is
+  // priced by the server first — and a preview of other numbers than the ones saved does not count.
+  const previewMutation = usePreviewAdminRateCard();
+  const [preview, setPreview] = useState<{ inputs: PricingInputs; result: RateCardPreviewDto } | null>(
+    null,
+  );
+  const storedInputs: PricingInputs = {
+    providerUnitCostUsd: card.providerUnitCostUsd,
+    markupMultiplier: card.markupMultiplier,
+  };
+  const optionalNumber = (value: string) => (value.trim() === "" ? null : toNumber(value));
+  const draftInputs: PricingInputs = {
+    providerUnitCostUsd: optionalNumber(draft.providerUnitCostUsd),
+    markupMultiplier: optionalNumber(draft.markupMultiplier),
+  };
+  const previewable = previewableInputs(draftInputs);
+  const saveGate = canSaveRateCard(storedInputs, draftInputs, preview?.inputs ?? null);
+
+  const handlePreview = async () => {
+    if (!previewable) return;
+    try {
+      setError(null);
+      const result = await previewMutation.mutateAsync(previewable);
+      setPreview({ inputs: previewable, result });
+    } catch (err) {
+      setPreview(null);
+      setError(getErrorMessage(err, "The pricing preview could not be calculated."));
+    }
+  };
+
   const handleSave = async () => {
+    if (!saveGate.ok) {
+      setError(
+        saveGate.reason === "preview-stale"
+          ? "Cost or markup changed since the preview. Preview again before saving."
+          : "Preview the new pricing before saving a change to cost or markup.",
+      );
+      return;
+    }
     const unitPrice = toNumber(draft.unitPrice);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
       setError("Unit price must be a positive amount.");
@@ -766,6 +813,60 @@ function RateCardEditForm({
               </Field>
             </div>
 
+        <div className="rounded-lg border border-hairline/60 px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[13px] text-ink">Pricing preview</p>
+              <p className="mt-0.5 text-[11px] text-ink-subtle">
+                {previewable
+                  ? "Prices one unit at this cost and markup against the stored FX rate and credit value. Publishes nothing."
+                  : "Enter both a provider cost and a markup to preview."}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handlePreview()}
+              disabled={!previewable || previewMutation.isPending || isSaving}
+            >
+              {previewMutation.isPending ? "Pricing…" : "Preview"}
+            </Button>
+          </div>
+          {preview ? (
+            <dl
+              className={cn(
+                "mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px]",
+                !saveGate.ok && "opacity-50",
+              )}
+            >
+              <dt className="text-ink-muted">Credits per unit</dt>
+              <dd className="text-right tabular-nums text-ink">{preview.result.unitPriceCredits}</dd>
+              <dt className="text-ink-muted">Customer price</dt>
+              <dd className="text-right tabular-nums text-ink">
+                {formatAdminMoney({ amount: preview.result.customerPriceVnd, currency: "VND" })} (VND)
+              </dd>
+              <dt className="text-ink-muted">Provider cost</dt>
+              <dd className="text-right tabular-nums text-ink">
+                {formatAdminMoney({ amount: preview.result.providerCostVnd, currency: "VND" })} (VND)
+              </dd>
+              <dt className="text-ink-muted">Margin</dt>
+              <dd
+                className={cn(
+                  "text-right font-semibold tabular-nums",
+                  preview.result.marginVnd < 0 ? "text-destructive" : "text-ink",
+                )}
+              >
+                {formatAdminMoney({ amount: preview.result.marginVnd, currency: "VND" })} ·{" "}
+                {formatMarginRatio(preview.result.marginRatio)}
+              </dd>
+              <dt className="col-span-2 mt-1 font-mono text-[10px] text-ink-subtle">
+                {preview.result.formula} · FX {preview.result.fxRateUsdVnd} · credit{" "}
+                {preview.result.creditValueVnd} VND
+              </dt>
+            </dl>
+          ) : null}
+        </div>
+
         <ToggleField
           label="Active"
           hint="An inactive card stops being charged against; the row stays for the invoices that used it."
@@ -780,8 +881,112 @@ function RateCardEditForm({
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
           Cancel
         </Button>
-        <Button onClick={() => void handleSave()} disabled={isSaving}>
+        <Button onClick={() => void handleSave()} disabled={isSaving || !saveGate.ok}>
           {isSaving ? "Saving…" : "Save rate card"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+/**
+ * Retiring a rate card. Typed confirmation, because it is the least reversible write on the page:
+ * the card leaves the active list the moment it is retired, and this screen reads only that list,
+ * so nothing here can bring it back. Until a new rate is published for the identity, usage that
+ * resolves to it cannot be priced and is not charged.
+ */
+export function RateCardDeactivateDialog({
+  card,
+  onOpenChange,
+  onConfirm,
+  isSaving,
+}: {
+  card: UsageRateCardDto | null;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (card: UsageRateCardDto) => Promise<unknown>;
+  isSaving: boolean;
+}) {
+  return (
+    <Dialog open={card !== null} onOpenChange={(next) => (isSaving ? undefined : onOpenChange(next))}>
+      <DialogContent className="gap-0 sm:max-w-md">
+        {card ? (
+          <RateCardDeactivateForm
+            key={card.id}
+            card={card}
+            isSaving={isSaving}
+            onCancel={() => onOpenChange(false)}
+            onConfirm={async () => {
+              await onConfirm(card);
+              onOpenChange(false);
+            }}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RateCardDeactivateForm({
+  card,
+  isSaving,
+  onCancel,
+  onConfirm,
+}: {
+  card: UsageRateCardDto;
+  isSaving: boolean;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const matches = typed.trim() === card.chargeType;
+
+  const handleConfirm = async () => {
+    if (!matches) return;
+    try {
+      setError(null);
+      await onConfirm();
+    } catch (err) {
+      setError(getErrorMessage(err, "The rate card could not be deactivated."));
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Deactivate this rate card?</DialogTitle>
+        <DialogDescription>
+          It stops pricing new usage now and leaves this list — it cannot be reactivated from this
+          screen. Usage that resolves to it is not charged until a new rate is published for the
+          identity. The row itself stays, because settled charges point at it.
+        </DialogDescription>
+      </DialogHeader>
+
+      <div className="mt-4 grid gap-3">
+        <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 font-mono text-[11px] text-ink-muted">
+          {card.chargeType} · {card.provider}
+          {card.model ? ` · ${card.model}` : ""} · per {card.unit} ·{" "}
+          {formatAdminMoney({ amount: card.unitPrice, currency: card.currency })} ({card.currency})
+        </p>
+        <Field label={`Type ${card.chargeType} to confirm`} htmlFor="card-deactivate-confirm">
+          <Input
+            id="card-deactivate-confirm"
+            className="font-mono"
+            autoComplete="off"
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            disabled={isSaving}
+          />
+        </Field>
+        <FormError message={error} />
+      </div>
+
+      <DialogFooter className="mt-5">
+        <Button variant="outline" onClick={onCancel} disabled={isSaving}>
+          Back
+        </Button>
+        <Button variant="destructive" onClick={() => void handleConfirm()} disabled={!matches || isSaving}>
+          {isSaving ? "Deactivating…" : "Deactivate"}
         </Button>
       </DialogFooter>
     </>

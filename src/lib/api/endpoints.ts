@@ -21,6 +21,10 @@ export const API = {
     registerInvited: "/auth/register-invited",
     login: "/auth/login",
     googleLogin: "/auth/google-login",
+    /** Attach Google to the signed-in account. Body `{ idToken }`; the Google email must match. */
+    googleLink: "/auth/google/link",
+    /** Detach Google. Refused (MIN_AUTH_METHOD_REQUIRED) when the account has no password. */
+    googleUnlink: "/auth/google/unlink",
     refresh: "/auth/refresh",
     logout: "/auth/logout",
     me: "/auth/me",
@@ -34,6 +38,14 @@ export const API = {
      * needed it. Answers 204 for any address, so it says nothing about who has an account.
      */
     resendVerification: "/auth/resend-verification-request",
+    /**
+     * The caller's own signed-in sessions (refresh-token families). There is deliberately no
+     * endpoint for ending the CURRENT one here — that is `logout`, which clears the cookies in the
+     * same response; the server answers 409 if `revokeSession` is pointed at it.
+     */
+    sessions: "/auth/sessions",
+    revokeSession: (id: string) => `/auth/sessions/${id}`,
+    revokeOtherSessions: "/auth/sessions/revoke-others",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",
@@ -305,6 +317,7 @@ export const API = {
     get: (id: string) => `/workspaces/${id}`,
     select: (id: string) => `/workspaces/${id}/select`,
     settings: (id: string) => `/workspaces/${id}/settings`,
+    entitlements: (id: string) => `/workspaces/${id}/entitlements`,
     members: (workspaceId: string) => `/workspaces/${workspaceId}/members`,
     memberDetail: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}`,
     memberRole: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role`,
@@ -312,6 +325,8 @@ export const API = {
     memberRoleChange: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
     verifiedDomains: (workspaceId: string) => `/workspaces/${workspaceId}/verified-domains`,
+    /** Owner/Admin only. Staff actions on this workspace, actor redacted server-side. */
+    auditLog: (workspaceId: string) => `/workspaces/${workspaceId}/audit-log`,
     verifiedDomainDetail: (workspaceId: string, domainId: string) =>
       `/workspaces/${workspaceId}/verified-domains/${domainId}`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
@@ -377,6 +392,13 @@ export const API = {
     pluginConnect: (pluginKey: string, client?: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect` +
       (client ? `?client=${encodeURIComponent(client)}` : ""),
+    /**
+     * Which plugin tools WarpBot ran in one workspace, newest first. Owner/Admin of that workspace
+     * only — the assistant service asks the workspace service for the caller's role and fails
+     * closed. Query: `workspaceId` (required), `pluginKey`, `userId`, `skip`, `take` (clamped to
+     * 200 server-side). Not the system-admin audit under `adminPluginCatalog.audits`.
+     */
+    workspacePluginToolAudits: "/assistant/mcp/tools/audits",
   },
   /**
    * The system-admin half of the plugin catalog (assistant service, WT-646).
@@ -441,6 +463,10 @@ export const API = {
     plan: (id: string) => `/plans/${id}`,
     /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
+    /** POST. Retires one row (is_active=false, effective_to=now); never a delete. */
+    rateCardDeactivate: (id: string) => `/usages/rate-card/${id}/deactivate`,
+    /** POST. Read-only: prices a proposed cost and markup without publishing anything. */
+    rateCardPreview: "/usages/rate-card/preview",
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
@@ -448,6 +474,16 @@ export const API = {
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
     base: "/admin/notifications",
+    detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
+  },
+  /**
+   * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
+   * controller lives on the workspace service's own prefix and is gated there. Other services'
+   * outboxes are not reachable from here.
+   */
+  adminWorkspaceOutbox: {
+    deadLetters: "/workspaces/outbox/dead-letters",
+    replay: (eventId: string) => `/workspaces/outbox/${encodeURIComponent(eventId)}/replay`,
   },
   adminAuditLog: {
     base: "/admin/audit-log",
@@ -493,6 +529,13 @@ export const API = {
      * the platform "admin" role before it ever asks the workspace service about membership.
      */
     cancel: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+    /**
+     * Undo a scheduled cancellation (renewal back on, period still running). Not `resume`: that
+     * one lifts an AI-service suspension and refuses a cancelled-but-healthy subscription.
+     */
+    reactivate: (workspaceId: string) =>
+      `/subscriptions/workspace/${workspaceId}/reactivate`,
+    /** Lift an AI-service suspension (overage cap, overdue invoice). Unrelated to cancellation. */
     resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
     /**
      * The one action that IS admin-only (2026-08-17): customers change plans through checkout,
@@ -503,6 +546,27 @@ export const API = {
       `/admin/subscriptions/workspace/${workspaceId}/change-plan`,
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
+    /** POST. Creates a contract subscription; refused while the workspace has any active one. */
+    createContract: "/subscriptions/contract",
+    /** GET. The workspace's active subscription, contract overrides included. */
+    active: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+  },
+  /**
+   * Bank-transfer reconciliation for contract workspaces. The invoices themselves are raised by
+   * the billing-cycle close; the only admin write is settling one.
+   */
+  adminInvoices: {
+    workspace: (workspaceId: string) => `/invoices/workspace/${workspaceId}`,
+    /** POST, no body. Marks the invoice and its payment paid. Idempotent on a paid invoice. */
+    markPaid: (invoiceId: string) => `/invoices/${invoiceId}/mark-paid`,
+  },
+  /**
+   * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under
+   * /admin/billing so the gateway's existing admin-billing route carries it.
+   */
+  adminSalesLeads: {
+    base: "/admin/billing/sales-leads",
+    status: (id: string) => `/admin/billing/sales-leads/${id}/status`,
   },
   /** Per-workspace analytics + ledger, served by the billing service (WT-206). */
   adminWorkspaceAnalytics: {
@@ -521,6 +585,19 @@ export const API = {
     // Membership facts only. The knowledge route that used to sit beside these is gone:
     // tenant content stays out of the admin portal (2026-08-17).
     members: (id: string) => `/admin/workspaces/${id}/members`,
+  },
+  /**
+   * A workspace's own payments and invoices (billing service; gateway routes `/payments/**` and
+   * `/invoices/**` to the billing cluster).
+   */
+  workspaceBilling: {
+    /** GET. Owner/Admin of the workspace (RequireWorkspaceRole). Paginated. */
+    paymentHistory: (workspaceId: string) => `/payments/workspace/${workspaceId}/history`,
+    /**
+     * POST, no body. Answers `{ url }` — a Stripe checkout page for one open invoice. Owner of the
+     * invoice's workspace only; the server resolves the workspace from the invoice.
+     */
+    invoiceCheckout: (invoiceId: string) => `/invoices/${invoiceId}/checkout`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",

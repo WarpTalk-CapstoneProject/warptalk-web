@@ -176,6 +176,13 @@ const NAV_EXEMPT = new Set([
   // Reached from /admin/plugins, one row at a time. A nav row per catalog entry would be a nav
   // that changes shape whenever someone adds a plugin.
   `${ADMIN_ROOT}/plugins/[pluginKey]/page.tsx`,
+  // Reached by clicking a name in /admin/users. Same reasoning as the two above: a nav row per
+  // account is not a nav. Exempt from the nav check, NOT from being reachable — the directory row
+  // links to it, which is the whole point of the page existing.
+  `${ADMIN_ROOT}/users/[userId]/page.tsx`,
+  // Reached from /admin/announcements by clicking a row. One notice's full record, not a
+  // destination of its own.
+  `${ADMIN_ROOT}/announcements/[id]/page.tsx`,
 ]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;
