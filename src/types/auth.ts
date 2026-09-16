@@ -15,6 +15,13 @@ export interface UserDto {
   timezone?: string;
   emailVerified: boolean;
   roles: string[];
+  /**
+   * Sign-in methods, read by Settings > Connected accounts. Optional because an auth service
+   * older than the fields omits them — and absent must read as "unknown", never as false. See
+   * lib/auth/google-link-state.ts.
+   */
+  googleLinked?: boolean;
+  hasPassword?: boolean;
 }
 
 /**

@@ -81,6 +81,18 @@ export const authService = {
     return apiClient.put<UserDto>(API.auth.me, data);
   },
 
+  /**
+   * Same credential the login button sends: `useGoogleLogin` yields an OAuth access token, which
+   * the auth service's verifier accepts only when Google minted it for WarpTalk's client id.
+   */
+  linkGoogle(idToken: string) {
+    return apiClient.post<void>(API.auth.googleLink, { idToken });
+  },
+
+  unlinkGoogle() {
+    return apiClient.post<void>(API.auth.googleUnlink, {});
+  },
+
   changePassword(data: ChangePasswordRequest) {
     return apiClient.post<void>(API.auth.changePassword, data);
   },
