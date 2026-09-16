@@ -521,6 +521,14 @@ export const API = {
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
   },
+  /**
+   * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under
+   * /admin/billing so the gateway's existing admin-billing route carries it.
+   */
+  adminSalesLeads: {
+    base: "/admin/billing/sales-leads",
+    status: (id: string) => `/admin/billing/sales-leads/${id}/status`,
+  },
   /** Per-workspace analytics + ledger, served by the billing service (WT-206). */
   adminWorkspaceAnalytics: {
     analytics: (id: string) => `/admin/billing/workspaces/${id}/analytics`,

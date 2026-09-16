@@ -47,6 +47,7 @@ import {
   GearSix,
   Gauge,
   Globe,
+  Handshake,
   Heartbeat,
   House,
   Keyboard,
@@ -412,6 +413,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
           { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
           { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
+          { icon: Handshake, label: "Sales leads", href: "/admin/sales-leads" },
         ],
       },
       {
