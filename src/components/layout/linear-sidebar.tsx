@@ -51,6 +51,7 @@ import {
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
+  EnvelopeSimple,
   PlugsConnected,
   SignOut,
   Plus,
@@ -418,6 +419,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Star, label: "Feedback", href: "/admin/feedback" },
           { icon: Archive, label: "Audit log", href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
+          { icon: EnvelopeSimple, label: "Email templates", href: "/admin/email-templates" },
         ],
       },
       {
