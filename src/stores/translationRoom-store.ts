@@ -163,6 +163,19 @@ interface TranslationRoomStoreState {
   /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
   noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
   /**
+   * A new WarpBot turn has started in the room — possibly one somebody ELSE asked — so the previous
+   * turn's cards go.
+   *
+   * Cards outlive their own turn's answer (see sealAssistantTrail), so something has to end them
+   * on every participant's screen, and beginAssistantTurn only runs on the asker's. The session
+   * calls this on ChatAssistantResponsePending, which the meeting service broadcasts exactly once
+   * per request, on the worker's first chunk or tool call. A card can only be raised inside a tool
+   * call, after that tool call's started event, so the signal always lands BEFORE its own turn's
+   * card and never erases it. Not a store-side guess from the state machine: idle -> thinking can
+   * recur mid-turn on a client that did not ask.
+   */
+  clearAssistantCards: () => void;
+  /**
    * A tool WarpBot reached for has FINISHED, and what it was aimed at.
    *
    * Folded into the step already running for that tool rather than appended: OpenAI's hosted web
@@ -463,8 +476,9 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       // A turn that died without an answer leaves its half-written draft behind; the next
       // question must not open under somebody else's unfinished sentence.
       assistantDraft: "",
-      // Every card belongs to the turn that raised it. A Connect card left over from the last
-      // question would open an OAuth flow this one never asked for.
+      // Every card belongs to the turn that raised it, and lives until the next one starts —
+      // here. A Connect card left over from the last question would open an OAuth flow this one
+      // never asked for.
       assistantQuestionsJson: null,
       assistantPluginConnectionJson: null,
       assistantPluginSetupJson: null,
@@ -506,8 +520,20 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
               },
             ]
           : carried,
+        // No card clearing here, although idle -> thinking looks like a turn starting. On a client
+        // that did not ask, the panel's answer baseline is stale, so the state can drop back to
+        // idle mid-turn and a later tool call of the SAME turn re-enters this branch — which would
+        // erase the card that turn just raised. See clearAssistantCards for the signal that fires
+        // exactly once per turn.
         assistantActivityAt: Date.now(),
       };
+    }),
+
+  clearAssistantCards: () =>
+    set({
+      assistantQuestionsJson: null,
+      assistantPluginConnectionJson: null,
+      assistantPluginSetupJson: null,
     }),
 
   noteAssistantToolFinished: (toolName = null, toolDetail = null) =>
@@ -667,9 +693,12 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         // final answer, so a client that kept its own accumulation would keep a sentence the
         // server never saved.
         assistantDraft: "",
-        assistantQuestionsJson: null,
-        assistantPluginConnectionJson: null,
-        assistantPluginSetupJson: null,
+        // The cards are NOT cleared here, and must not be. A card is raised mid-turn — when the
+        // plugin tool returns — and the answer that lands next is the one explaining it ("connect
+        // Google Calendar", "confirm this write"). Clearing on that answer erased the card moments
+        // after it appeared, before anyone could press it: in a meeting that made a plugin write
+        // effectively impossible to approve. A card lives until the NEXT turn starts: the asker's
+        // beginAssistantTurn, and clearAssistantCards for everyone else in the room (WT-688).
       };
     }),
 

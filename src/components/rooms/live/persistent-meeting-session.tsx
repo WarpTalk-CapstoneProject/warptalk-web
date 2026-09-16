@@ -2861,7 +2861,11 @@ export function PersistentMeetingSession({
       // moment somebody sends an @agent mention, because waiting for this round trip leaves
       // the send looking ignored — and when the answer is fast, this signal arrives and is
       // cleared in the same breath, so nothing is ever seen. The panel owns the deadline.
-      useTranslationRoomStore.getState().noteAssistantActivity();
+      const store = useTranslationRoomStore.getState();
+      // The one per-turn signal every participant receives, and it always precedes the turn's own
+      // card — so this ends the PREVIOUS turn's cards, including on screens that did not ask.
+      store.clearAssistantCards();
+      store.noteAssistantActivity();
     });
 
     let cancelled = false;
