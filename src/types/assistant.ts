@@ -61,6 +61,34 @@ export interface McpToolDescriptorDto {
   parameters: Record<string, unknown>;
 }
 
+/**
+ * One recorded plugin tool call in a workspace, as its Owner or Admin sees it. WT-646.
+ *
+ * Mirrors `PluginToolAuditDto` in the assistant service. Deliberately carries no argument text:
+ * the row's `input_summary` holds what a member typed (search terms, event titles, file names),
+ * and the server leaves it out of this view on purpose. Do not add it here.
+ */
+export interface WorkspacePluginToolAuditDto {
+  id: string;
+  userId: string;
+  conversationId?: string | null;
+  pluginKey: string;
+  toolName: string;
+  /** "success", or the error code the call failed with (e.g. `permission_denied`). */
+  resultStatus: string;
+  /** What the provider says the call touched — a file or event id — when it says anything. */
+  providerResourceRef?: string | null;
+  createdAt: string;
+}
+
+export interface WorkspacePluginToolAuditQuery {
+  workspaceId: string;
+  pluginKey?: string;
+  userId?: string;
+  skip: number;
+  take: number;
+}
+
 export interface AssistantPluginCatalogItemDto {
   key: string;
   label: string;
