@@ -479,6 +479,15 @@ export function GlobalChatbot() {
     setInputValue(prompt);
     setIsMinimized(false);
     setIsOpen(true);
+    // When the panel was already open, initialFocus below does not run again and focus stays on
+    // the hint that was clicked — Enter would press that instead of sending. Wait a frame so the
+    // textarea holds the new value before the caret is put at its end.
+    requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
   }, [pendingPrompt, consumePendingPrompt]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversationTitle, setConversationTitle] = useState("New chat");
@@ -1508,6 +1517,10 @@ export function GlobalChatbot() {
             <PopoverContent
               align="end"
               sideOffset={8}
+              // Base UI focuses the first focusable element on open, which is the minimize button
+              // in the header: typing went nowhere and Enter pressed minimize, so the panel hid
+              // instead of sending. The composer is what the panel is opened for.
+              initialFocus={inputRef}
               className={`p-0 bg-surface-1 border border-border shadow-xl rounded-xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out ${isExpanded ? "w-[680px] h-[600px]" : "w-[460px] h-[412px]"}`}
             >
               {/* Chat Header */}
