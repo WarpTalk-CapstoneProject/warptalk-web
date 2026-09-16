@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowsClockwise, PencilSimple, Plus, Tag, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowsClockwise,
+  PencilSimple,
+  Plus,
+  Prohibit,
+  Tag,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +22,7 @@ import {
   PlanCreateDialog,
   PlanEditDialog,
   PricingConfigDialog,
+  RateCardDeactivateDialog,
   RateCardEditDialog,
 } from "@/components/admin/pricing-editors";
 import {
@@ -21,6 +30,7 @@ import {
   useAdminPricingConfig,
   useAdminRateCards,
   useCreateAdminPlan,
+  useDeactivateAdminRateCard,
   useUpdateAdminPlan,
   useUpdateAdminPricingConfig,
   useUpsertAdminRateCard,
@@ -151,9 +161,11 @@ function PlanRow({ plan, onEdit }: { plan: PlanDto; onEdit: (plan: PlanDto) => v
 function RateCardRow({
   card,
   onEdit,
+  onDeactivate,
 }: {
   card: UsageRateCardDto;
   onEdit: (card: UsageRateCardDto) => void;
+  onDeactivate: (card: UsageRateCardDto) => void;
 }) {
   const margin = resolveRateCardMargin(card);
   const tone = marginTone(margin);
@@ -209,10 +221,14 @@ function RateCardRow({
         from {formatDate(card.effectiveFrom)}
       </div>
 
-      <div className="shrink-0 md:ml-3">
+      <div className="flex shrink-0 gap-1.5 md:ml-3">
         <Button variant="outline" size="sm" onClick={() => onEdit(card)}>
           <PencilSimple size={13} />
           Edit
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => onDeactivate(card)}>
+          <Prohibit size={13} />
+          Deactivate
         </Button>
       </div>
     </div>
@@ -245,6 +261,7 @@ export default function AdminPlansPage() {
   const updatePlan = useUpdateAdminPlan();
   const createPlan = useCreateAdminPlan();
   const upsertRateCard = useUpsertAdminRateCard();
+  const deactivateRateCard = useDeactivateAdminRateCard();
   const updateConfig = useUpdateAdminPricingConfig();
 
   /**
@@ -256,6 +273,7 @@ export default function AdminPlansPage() {
    */
   const [editingPlan, setEditingPlan] = useState<PlanDto | null>(null);
   const [editingCard, setEditingCard] = useState<UsageRateCardDto | null>(null);
+  const [retiringCard, setRetiringCard] = useState<UsageRateCardDto | null>(null);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
 
@@ -358,7 +376,7 @@ export default function AdminPlansPage() {
             <ul>
               {rateCards.map((card) => (
                 <li key={card.id}>
-                  <RateCardRow card={card} onEdit={setEditingCard} />
+                  <RateCardRow card={card} onEdit={setEditingCard} onDeactivate={setRetiringCard} />
                 </li>
               ))}
             </ul>
@@ -426,10 +444,10 @@ export default function AdminPlansPage() {
       </AdminPanel>
 
       <p className="mt-4 text-[12px] text-ink-muted">
-        Editable, within what the API allows. There is no create and no delete on this screen
-        because there is none on the API: a plan is named on every invoice ever raised against it,
-        so it is retired with its Active switch rather than removed. A new rate-card identity
-        still arrives with the migration that registers it.
+        Editable, within what the API allows. Nothing here is deleted: a plan is named on every
+        invoice ever raised against it, so it is retired with its Active switch, and a rate card is
+        retired with Deactivate because settled charges point at it. A new rate-card identity still
+        arrives with the migration that registers it.
       </p>
 
       <PlanCreateDialog
@@ -462,6 +480,18 @@ export default function AdminPlansPage() {
         }}
         onSubmit={(request) => upsertRateCard.mutateAsync(request)}
         isSaving={upsertRateCard.isPending}
+      />
+
+      <RateCardDeactivateDialog
+        card={retiringCard}
+        onOpenChange={(open) => {
+          if (!open) setRetiringCard(null);
+        }}
+        onConfirm={async (card) => {
+          await deactivateRateCard.mutateAsync(card.id);
+          toast.success(`${card.chargeType} rate card deactivated.`);
+        }}
+        isSaving={deactivateRateCard.isPending}
       />
 
       <PricingConfigDialog

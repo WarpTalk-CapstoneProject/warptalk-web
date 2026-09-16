@@ -1,4 +1,5 @@
 import apiClient from "@/lib/api/client";
+import { API } from "@/lib/api/endpoints";
 import type {
   CreditBalanceDto,
   BillingReportDto,
@@ -8,6 +9,7 @@ import type {
   PagedResult,
   SubscriptionDto,
   InvoiceDto,
+  PaymentTransactionDto,
   UsageAlertDto,
   TopWorkspaceDto,
   UsageChartDto,
@@ -296,6 +298,33 @@ export const billingService = {
       },
     );
     return data;
+  },
+
+  /**
+   * Every payment recorded against this workspace — card checkouts, invoice-rail payments, failed
+   * and refunded ones included — newest first as the server orders them. Owner/Admin only.
+   */
+  getWorkspacePaymentHistory: async (
+    workspaceId: string,
+    pageNumber = 1,
+    pageSize = 20,
+  ): Promise<PagedResult<PaymentTransactionDto>> => {
+    const { data } = await apiClient.get<PagedResult<PaymentTransactionDto>>(
+      API.workspaceBilling.paymentHistory(workspaceId),
+      { params: { pageNumber, pageSize } },
+    );
+    return data;
+  },
+
+  /**
+   * A Stripe checkout URL for one open invoice. The caller becomes the buyer; the server checks
+   * that they own the invoice's workspace and refuses a paid or void invoice.
+   */
+  createInvoiceCheckout: async (invoiceId: string): Promise<string> => {
+    const { data } = await apiClient.post<{ url: string }>(
+      API.workspaceBilling.invoiceCheckout(invoiceId),
+    );
+    return data.url;
   },
 
   /**

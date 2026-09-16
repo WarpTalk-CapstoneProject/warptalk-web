@@ -3,7 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { assistantService } from "@/services/assistant.service";
 import type { ChatAttachment } from "@/lib/assistant/attachments";
-import type { AssistantMentionDto, AssistantPageContextDto } from "@/types/assistant";
+import type {
+  AssistantMentionDto,
+  AssistantPageContextDto,
+  WorkspacePluginToolAuditQuery,
+} from "@/types/assistant";
 
 /**
  * Prefix of every plugin-catalog query, whatever workspace it names. Invalidating this invalidates
@@ -93,6 +97,26 @@ export function useAssistantPlugins(workspaceId?: string | null) {
       return data;
     },
     staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * The workspace's plugin activity log (Owner/Admin). Pass `enabled: false` until the caller's role
+ * is known to be Owner or Admin — a Member's request is a guaranteed 403.
+ *
+ * `placeholderData` keeps the previous page on screen while the next one loads, so paging and
+ * filtering do not flash the table empty.
+ */
+export function useWorkspacePluginToolAudits(query: WorkspacePluginToolAuditQuery, enabled: boolean) {
+  return useQuery({
+    queryKey: ["assistant", "plugin-tool-audits", query] as const,
+    queryFn: async () => {
+      const { data } = await assistantService.listWorkspacePluginToolAudits(query);
+      return data;
+    },
+    enabled: enabled && !!query.workspaceId,
+    placeholderData: (previous) => previous,
+    staleTime: 15_000,
   });
 }
 

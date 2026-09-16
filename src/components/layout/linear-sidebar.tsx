@@ -41,22 +41,27 @@ import {
   CreditCard,
   ChartLine,
   Receipt,
+  Money,
   BookOpen,
   FileText,
   GearSix,
   Gauge,
   Globe,
+  Handshake,
   Heartbeat,
   House,
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
+  EnvelopeSimple,
   PlugsConnected,
+  ClockCounterClockwise,
   SignOut,
   Plus,
   Sliders,
   SquaresFour,
   Star,
+  Tray,
   User,
   Users,
   Waveform,
@@ -408,6 +413,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
           { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
           { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
+          { icon: Handshake, label: "Sales leads", href: "/admin/sales-leads" },
         ],
       },
       {
@@ -415,9 +421,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
           { icon: Heartbeat, label: "System health", href: "/admin/health" },
+          { icon: Tray, label: "Event outbox", href: "/admin/outbox" },
           { icon: Star, label: "Feedback", href: "/admin/feedback" },
           { icon: Archive, label: "Audit log", href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
+          { icon: EnvelopeSimple, label: "Email templates", href: "/admin/email-templates" },
         ],
       },
       {
@@ -613,6 +621,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
       });
+      // Beside Workspace settings because it is the evidence for the plugin switch that lives there.
+      settingsItems.push({
+        icon: ClockCounterClockwise,
+        label: "Plugin activity",
+        href: `/${activeWorkspaceSlug}/settings/plugin-activity`,
+      });
       settingsItems.push({
         icon: CreditCard,
         label: "Billing",
@@ -631,6 +645,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         icon: Receipt,
         label: "Invoices",
         href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
+      });
+      settingsItems.push({
+        icon: Money,
+        label: "Payments",
+        href: `/${activeWorkspaceSlug}/settings/billing/payments`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
@@ -772,6 +791,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </span>
                   </Link>
                 </div>
+                {/* Plugin activity sits under Workspace Settings: that page holds the one plugin switch,
+                    and this is the record of what it let through and refused. Owner/Admin. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/plugin-activity` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/plugin-activity`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Plugin activity
+                    </span>
+                  </Link>
+                </div>
                 {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
                     than `===` so the row stays lit while the reader is off buying a plan at
                     /payment/plans, which is where this page's primary action sends them. */}
@@ -813,6 +845,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Invoices
+                    </span>
+                  </Link>
+                </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing/payments` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing/payments`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Money size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Payments
                     </span>
                   </Link>
                 </div>
