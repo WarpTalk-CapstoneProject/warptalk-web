@@ -137,7 +137,7 @@
     "test:create-workspace-payload": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/create-workspace-payload.test.ts",
     "test:noise-suppression-failure": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/noise-suppression-failure.test.ts",
     "test:summary-absence": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/summary-absence.test.ts",
-    "test:admin-surface": "node scripts/check-admin-surface-contract.mjs",
+    "test:admin-surface": "node scripts/check-admin-surface-contract.mjs && node scripts/check-admin-email-catalog.mjs",
     "test:admin-money": "node --experimental-strip-types --test src/lib/billing/__tests__/admin-money.test.ts",
     "test:rate-card-margin": "node --experimental-strip-types --test src/lib/billing/__tests__/rate-card-margin.test.ts",
     "test:admin-feedback-view": "node --experimental-strip-types --test src/lib/feedback/__tests__/admin-feedback-view.test.ts",
