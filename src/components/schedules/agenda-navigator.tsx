@@ -224,7 +224,10 @@ export function AgendaSidebarCalendar({
     <aside
       aria-label="Agenda navigator"
       className={cn(
-        "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5 lg:flex",
+        // Matches the other left rail on this page — schedules/page.tsx renders one or the other,
+        // and with only that one moved to `bg-panel` the rail changed colour depending on which
+        // branch was live. A rail is told apart by its border, not by being a lighter slab.
+        "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-panel px-3 py-5 lg:flex",
         className,
       )}
     >

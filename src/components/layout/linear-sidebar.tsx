@@ -41,25 +41,29 @@ import {
   CreditCard,
   ChartLine,
   Receipt,
+  Money,
   BookOpen,
   FileText,
   GearSix,
   Gauge,
   Globe,
+  Handshake,
   Heartbeat,
   House,
   Keyboard,
   MagnifyingGlass,
   PaperPlaneTilt,
+  EnvelopeSimple,
   PlugsConnected,
+  ClockCounterClockwise,
   SignOut,
   Plus,
   Sliders,
   SquaresFour,
   Star,
+  Tray,
   User,
   Users,
-  Warning,
   Waveform,
   X,
   Brain,
@@ -360,9 +364,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
    * chrome would flip to the main app nav on the way, dropping the reader out of Settings at the
    * one moment they most need the way back to Billing.
    */
+  // `/advanced` was a third entry here until its two cards moved to /settings/security on
+  // 2026-09-16. Security lives under /settings, so `includes("/settings")` already covers it —
+  // but the line had to go WITH the route: left behind it would have matched nothing, and
+  // removed without moving the page it would have dropped the reader out of Settings.
   const isSettingsPage =
     pathname.includes("/settings") ||
-    pathname.includes("/advanced") ||
     pathname.includes("/payment");
 
   /**
@@ -406,6 +413,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
           { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
           { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
+          { icon: Handshake, label: "Sales leads", href: "/admin/sales-leads" },
         ],
       },
       {
@@ -413,16 +421,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
           { icon: Heartbeat, label: "System health", href: "/admin/health" },
+          { icon: Tray, label: "Event outbox", href: "/admin/outbox" },
           { icon: Star, label: "Feedback", href: "/admin/feedback" },
           { icon: Archive, label: "Audit log", href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
+          { icon: EnvelopeSimple, label: "Email templates", href: "/admin/email-templates" },
         ],
       },
       {
         section: "Configuration",
         items: [
+          // One row, not two. "Platform config" was a second route for the same subject — the
+          // read-only half — and an admin looking for what the platform is configured to do had to
+          // guess which of the two words it lived under. Merged into the page below on 2026-09-16;
+          // the read-only boundary is now a band inside it.
           { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
-          { icon: Sliders, label: "Platform config", href: "/admin/configuration" },
           // Beside Platform config because it is the same kind of thing: reference data the whole
           // platform runs on. Unlike that page it is writable, which is the point of WT-646 — the
           // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
@@ -608,6 +621,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
       });
+      // Beside Workspace settings because it is the evidence for the plugin switch that lives there.
+      settingsItems.push({
+        icon: ClockCounterClockwise,
+        label: "Plugin activity",
+        href: `/${activeWorkspaceSlug}/settings/plugin-activity`,
+      });
       settingsItems.push({
         icon: CreditCard,
         label: "Billing",
@@ -627,6 +646,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         label: "Invoices",
         href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
       });
+      settingsItems.push({
+        icon: Money,
+        label: "Payments",
+        href: `/${activeWorkspaceSlug}/settings/billing/payments`,
+      });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
       settingsItems.push({
@@ -635,11 +659,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         href: `/${activeWorkspaceSlug}/settings/member-roles`,
       });
     }
-    if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
+    // Security, not Advanced: Owner AND Admin, because an Admin reads the access settings and
+    // changes the ones that are theirs to change. The owner-only half — verified domains and the
+    // danger zone — gates itself inside the page.
+    if (isOwnerOrAdmin && activeWorkspaceSlug) {
       settingsItems.push({
-        icon: Warning,
-        label: "Advanced",
-        href: `/${activeWorkspaceSlug}/advanced`,
+        icon: ShieldCheck,
+        label: "Security",
+        href: `/${activeWorkspaceSlug}/settings/security`,
       });
     }
 
@@ -764,6 +791,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </span>
                   </Link>
                 </div>
+                {/* Plugin activity sits under Workspace Settings: that page holds the one plugin switch,
+                    and this is the record of what it let through and refused. Owner/Admin. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/plugin-activity` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/plugin-activity`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Plugin activity
+                    </span>
+                  </Link>
+                </div>
                 {/* WT-380 — Billing belongs here, not on the app's main nav. `startsWith` rather
                     than `===` so the row stays lit while the reader is off buying a plan at
                     /payment/plans, which is where this page's primary action sends them. */}
@@ -808,6 +848,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </span>
                   </Link>
                 </div>
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+                  pathname === `/${activeWorkspaceSlug}/settings/billing/payments` ? "bg-surface-2" : "hover:bg-surface-2"
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/billing/payments`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <Money size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Payments
+                    </span>
+                  </Link>
+                </div>
                 {role?.toLowerCase() === "owner" && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
@@ -819,15 +870,15 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </Link>
                   </div>
                 )}
-                {role?.toLowerCase() === "owner" && (
+                {isOwnerOrAdmin && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/advanced` ? "bg-surface-2 text-destructive" : "hover:bg-surface-2 hover:text-destructive"
+                    pathname === `/${activeWorkspaceSlug}/settings/security` ? "bg-surface-2" : "hover:bg-surface-2"
                   )}>
-                    <Link href={`/${activeWorkspaceSlug}/advanced`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                      <Warning size={16} className="shrink-0 text-destructive/80 group-hover:text-destructive transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">
-                        Advanced
+                    <Link href={`/${activeWorkspaceSlug}/settings/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                      <ShieldCheck size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                        Security
                       </span>
                     </Link>
                   </div>

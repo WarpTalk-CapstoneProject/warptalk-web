@@ -22,6 +22,9 @@
   --color-ink-subtle: #8a8f98;
   --color-ink-tertiary: #62666d;
   --color-canvas: var(--canvas);
+  /* The ground a page's content sits on, one step lighter than the canvas the shell paints.
+     Registering it here is what makes `bg-panel` exist at all — see the ladder under :root. */
+  --color-panel: var(--panel);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
@@ -98,7 +101,9 @@
   );
 
   /* Linear Light Mode */
-  --background: #f7f8f9;
+  /* Tracks --canvas: `bg-background` and `bg-canvas` both mean "the shell's ground", and the two
+     drifting is how a stray shadcn surface ends up a shade off the sidebar beside it. */
+  --background: #f1f2f4;
   --foreground: #111214;
   --card: #ffffff;
   --card-foreground: #111214;
@@ -108,22 +113,36 @@
   --primary-foreground: #ffffff;
   --secondary: #ffffff;
   --secondary-foreground: #111214;
-  --muted: #f2f3f5;
+  /* Both track --surface-2, the fill for things nested inside a card. */
+  --muted: #f0f1f4;
   --muted-foreground: #5E6470;
-  --accent: #f2f3f5;
+  --accent: #f0f1f4;
   --accent-foreground: #111214;
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
-  --border: #ebecef;
-  --input: #ebecef;
+  --border: #e3e5e9;
+  --input: #e3e5e9;
   --ring: #5e6ad2;
-  --canvas: #f7f8f8;
+  /* THE THREE-LAYER GROUND (owner's call, 2026-09-16).
+     canvas — the shell: sidebar, top bar, whatever frames a page.
+     panel  — the page's own content area.
+     surface-1 — cards, inputs, anything raised ABOVE the content.
+
+     It used to be white-on-white: the page was surface-1 and so was every card on it, separated
+     by a hairline alone, and the owner's complaint was that the cards disappeared into the page
+     ("màu trắng làm các component khác bị chìm"). A card reads as a card because the ground
+     behind it is darker, so the ground is what moved — not the card. */
+  --canvas: #f1f2f4;
+  --panel: #f7f8f9;
   --surface-1: #ffffff;
-  --surface-2: #f2f3f5;
-  --surface-3: #e5e7eb;
-  --surface-4: #d1d5db;
-  --hairline: #ebecef;
-  --hairline-strong: #d1d5db;
+  --surface-2: #f0f1f4;
+  --surface-3: #e4e6ea;
+  --surface-4: #d0d3da;
+  --hairline: #e3e5e9;
+  --hairline-strong: #d0d3da;
+  /* Barely there on purpose. The border and the ground do the separating; the shadow only says
+     which side is up. Anything heavier reads as a different product. */
+  --shadow-card: 0 1px 1px rgba(17, 18, 20, 0.035);
   --hairline-tertiary: #9ca3af;
   --radius: 8px;
 
@@ -155,30 +174,39 @@
   /* Linear Dark Mode */
   --background: #010102;
   --foreground: #f7f8f8;
-  --card: #0f1011;
+  /* Kept in step with --surface-1: `bg-card` and `bg-surface-1` name the same level, and letting
+     them drift is how a shadcn Card ends up a different shade from the card beside it. */
+  --card: #131415;
   --card-foreground: #f7f8f8;
-  --popover: #0f1011;
+  --popover: #131415;
   --popover-foreground: #f7f8f8;
   --primary: #5e6ad2;
   --primary-foreground: #ffffff;
-  --secondary: #0f1011;
+  --secondary: #131415;
   --secondary-foreground: #f7f8f8;
-  --muted: #0f1011;
+  --muted: #1c1d20;
   --muted-foreground: #8a8f98;
-  --accent: #141516;
+  --accent: #1c1d20;
   --accent-foreground: #f7f8f8;
   --destructive: #e5484d;
   --destructive-foreground: #ffffff;
-  --border: #23252a;
-  --input: #23252a;
+  --border: #232428;
+  --input: #232428;
   --ring: #5e69d1;
-  --canvas: #010102;
-  --surface-1: #0f1011;
-  --surface-2: #141516;
-  --surface-3: #18191a;
-  --surface-4: #191a1b;
-  --hairline: #23252a;
-  --hairline-strong: #34343a;
+  /* The same ladder as light, and it has to BE a ladder here too: the old dark mode put the page
+     at #010102 and every card at #0f1011, which worked, but the cards now need a third step above
+     a panel that is itself lifted off the shell. */
+  --canvas: #050506;
+  --panel: #0a0b0c;
+  --surface-1: #131415;
+  --surface-2: #1c1d20;
+  --surface-3: #25272a;
+  --surface-4: #2d2f33;
+  --hairline: #232428;
+  --hairline-strong: #313338;
+  /* A cast shadow on a near-black ground is invisible; the step between panel and card is what
+     separates them. Kept non-none so the rule still resolves. */
+  --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.4);
 
   /* On a dark card the light can be what it actually is: white, with the accent in it. */
   --step-shimmer-base: #8a8f98;
@@ -323,8 +351,10 @@
 }
 
 @layer utilities {
+  /* One token, two themes. This was a fixed two-layer shadow that sat on every card in the
+     product; against the new grey ground it read as a lifted slab. */
   .shadow-linear {
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 2px 8px rgba(0,0,0,0.03);
+    box-shadow: var(--shadow-card);
   }
 
   @keyframes shiny {

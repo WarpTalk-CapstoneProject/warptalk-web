@@ -606,7 +606,9 @@ export default function AdminWorkspaceBillingPage({
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-ink border border-hairline">
+                            {/* surface-1, not surface-2: the card around this is already
+                                surface-2, so the tile has to go UP a step to stay visible. */}
+                            <span className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-1 text-ink border border-hairline">
                               <Icon className="h-4 w-4" />
                             </span>
                             <div>

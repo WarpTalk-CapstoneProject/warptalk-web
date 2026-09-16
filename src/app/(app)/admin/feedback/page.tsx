@@ -357,7 +357,7 @@ function CommentRow({ comment }: { comment: AdminFeedbackCommentDto }) {
 
 export default function AdminFeedbackPage() {
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <FeedbackReport />
     </Suspense>
   );

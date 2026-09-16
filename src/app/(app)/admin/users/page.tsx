@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowsClockwise,
@@ -386,15 +387,23 @@ function UserRow({
 }) {
   return (
     <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      {/* The NAME is the link, not the row. Four action buttons sit at the other end of this
+          strip, and an anchor wrapping them would be an interactive element inside an interactive
+          element — invalid HTML that browsers resolve by dropping one of the two. */}
+      <Link
+        href={`/admin/users/${user.id}`}
+        className="group flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+      >
         <span className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-2 text-[11px] font-semibold uppercase text-ink-muted">
           {user.fullName.slice(0, 2)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-ink">{user.fullName}</p>
+          <p className="truncate text-[13px] font-medium text-ink group-hover:underline">
+            {user.fullName}
+          </p>
           <p className="truncate text-[11px] text-ink-subtle">{user.email}</p>
         </div>
-      </div>
+      </Link>
 
       <div className="w-[110px] shrink-0">
         <UserStatusBadge status={user.status} />
@@ -459,7 +468,7 @@ function UserRow({
 export default function AdminUsersPage() {
   // Same ground as the page it stands in for — see check-admin-surface-contract.
   return (
-    <Suspense fallback={<div className="min-h-full bg-surface-1" />}>
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
       <UsersDirectory />
     </Suspense>
   );

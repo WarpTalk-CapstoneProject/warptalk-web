@@ -30,7 +30,7 @@ export function SettingsPanelHeader({
       type="button"
       onClick={onBack}
       aria-label={`Back from ${title}`}
-      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-canvas hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      className="mb-1 flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-semibold text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
     >
       <CaretLeft className="h-3.5 w-3.5" />
       {title}
@@ -60,7 +60,7 @@ export function SettingsRow({
       className={cn(
         "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary",
-        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-canvas",
+        active ? "bg-primary/10 text-primary" : "text-ink hover:bg-surface-2",
       )}
     >
       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2">{icon}</span>

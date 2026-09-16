@@ -30,7 +30,7 @@ export function MeetingReadyCard({
   return (
     <div
       data-meeting-ready-card
-      className="absolute bottom-4 left-4 z-30 w-[320px] max-w-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-canvas/95 p-4 shadow-xl backdrop-blur"
+      className="absolute bottom-4 left-4 z-30 w-[320px] max-w-[calc(100%-2rem)] rounded-2xl border border-border/60 bg-surface-1/95 p-4 shadow-xl backdrop-blur"
     >
       <button
         type="button"

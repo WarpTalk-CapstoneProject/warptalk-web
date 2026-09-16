@@ -88,7 +88,7 @@ export function ArtifactCard({
     >
       {/* The thumbnail: the document, in miniature. `select-none` because this is a picture of
           text, not text somebody should be dragging out of a card. */}
-      <div className="relative h-[168px] shrink-0 select-none overflow-hidden border-b border-border bg-canvas px-3.5 pt-3.5">
+      <div className="relative h-[168px] shrink-0 select-none overflow-hidden border-b border-border bg-surface-2 px-3.5 pt-3.5">
         {/* The meeting names itself first now. The kind used to lead here, which is what made two
             cards for one meeting read as two unrelated things. */}
         <p className="line-clamp-2 text-[11px] font-semibold leading-4 text-ink" title={group.roomTitle}>

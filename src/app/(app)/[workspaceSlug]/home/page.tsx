@@ -53,7 +53,7 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
           "grid size-9 shrink-0 place-items-center rounded-[9px] border transition-colors",
           action.featured
             ? "border-white/20 bg-white/12 text-white"
-            : "border-border bg-canvas text-primary group-hover:border-primary/30 group-hover:bg-primary/10"
+            : "border-border bg-surface-2 text-primary group-hover:border-primary/30 group-hover:bg-primary/10"
         )}
       >
         <Icon size={18} weight="duotone" />
@@ -163,7 +163,7 @@ export default function WorkspaceHomePage() {
   }
 
   return (
-    <div className="min-h-full bg-surface-1 px-4 py-5 text-ink sm:px-5 lg:px-6">
+    <div className="min-h-full bg-panel px-4 py-5 text-ink sm:px-5 lg:px-6">
       <div className="mx-auto flex w-full max-w-[1220px] flex-col gap-3 pb-8">
         {/* First, because it is the only thing here that answers a question rather than
             offering a destination: "what am I in today?". The shortcut grid below used to be

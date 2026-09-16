@@ -485,10 +485,11 @@ export default function CalendarPage() {
   // for all three.
   const showError = meetings.isError && !meetings.isPartial && !meetings.isLoading;
 
-  // bg-surface-1, the same white Meetings and Members open onto. A workspace page that brings
-  // its own wash reads as bolted on from somewhere else.
+  // bg-panel, the same ground Meetings and Members open onto. A workspace page that brings its
+  // own wash reads as bolted on from somewhere else — and surface-1 is now the CARD colour, so a
+  // page painted with it is a page its own cards sink into (owner's call, 2026-09-16).
   return (
-    <main className="flex h-full flex-col bg-surface-1 text-ink">
+    <main className="flex h-full flex-col bg-panel text-ink">
       {/* No eyebrow, no 30px title, no description — the house rule in
           components/workspace/page-chrome. The route name is already in the top bar and the
           sidebar, so "Personal timeline / My meetings / Upcoming meetings you host..." was the
@@ -581,7 +582,9 @@ export default function CalendarPage() {
         ) : (
           <aside
             className={cn(
-              "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-surface-1 px-3 py-5",
+              // A rail inside the page, not a card on it: it takes the page's ground and is told
+              // apart by its border, the same way the members rail in (app)/layout.tsx is.
+              "hidden w-[290px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border bg-panel px-3 py-5",
               view === "week" && "lg:flex",
             )}
           >
@@ -674,7 +677,7 @@ export default function CalendarPage() {
                 />
               </div>
               {meetings.isLoading ? (
-                <div className="absolute inset-0 z-20 bg-surface-1">
+                <div className="absolute inset-0 z-20 bg-panel">
                   <LoadingState />
                 </div>
               ) : null}
@@ -1774,7 +1777,7 @@ function PastMeetingDialog({
                     onClick={() => onDownload(artifact)}
                     className="group flex w-full items-center gap-3 text-left disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-canvas">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-surface-2">
                       <ArtifactIcon artifact={artifact} />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -1809,7 +1812,7 @@ function PastMeetingDialog({
         <div className="shrink-0 border-t border-border px-5 py-4">
           <Link
             href={`/${workspaceSlug}/rooms/${meeting.id}`}
-            className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-canvas text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
+            className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-surface-2 text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
           >
             Open meeting
           </Link>

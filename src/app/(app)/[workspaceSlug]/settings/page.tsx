@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,8 +9,6 @@ import {
   Lock,
   Spinner,
   Copy,
-  Plus,
-  Trash,
   Checks,
   Warning,
 } from "@phosphor-icons/react";
@@ -28,7 +25,6 @@ import {
   useWorkspace,
   useWorkspaceSettings,
   usePatchWorkspaceSettings,
-  useVerifiedDomains,
 } from "@/hooks/use-workspace";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -184,9 +180,6 @@ export default function WorkspaceSettingsPage() {
   const workspaceQuery = useWorkspace(activeWorkspaceId || "");
   const settingsQuery = useWorkspaceSettings(activeWorkspaceId || "");
   const patchSettingsMutation = usePatchWorkspaceSettings(activeWorkspaceId || "");
-  const verifiedDomainsQuery = useVerifiedDomains(activeWorkspaceId || "");
-
-  const [newKeyword, setNewKeyword] = useState("");
   const initializedWorkspaceRef = useRef<string | null>(null);
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
 
@@ -372,39 +365,6 @@ export default function WorkspaceSettingsPage() {
     commitTopLevel("allowedTargetLanguages", next);
   };
 
-  const verifiedDomainList = verifiedDomainsQuery.data || [];
-  const activeDomains = verifiedDomainList.map((vd: { domain: string }) => vd.domain);
-
-  const keywords = watchAll.aiUsagePolicy?.dlp?.keywordsBlacklist || [];
-  const handleAddKeyword = () => {
-    const trimmed = newKeyword.trim();
-    if (!trimmed) return;
-    if (keywords.includes(trimmed)) {
-      toast.error("Keyword already in blacklist.");
-      return;
-    }
-    const policy = {
-      ...watchAll.aiUsagePolicy,
-      dlp: {
-        ...watchAll.aiUsagePolicy.dlp,
-        keywordsBlacklist: [...keywords, trimmed],
-      },
-    };
-    commitPolicy("aiUsagePolicy.dlp.keywordsBlacklist", policy);
-    setNewKeyword("");
-  };
-
-  const handleRemoveKeyword = (keywordToRemove: string) => {
-    const policy = {
-      ...watchAll.aiUsagePolicy,
-      dlp: {
-        ...watchAll.aiUsagePolicy.dlp,
-        keywordsBlacklist: keywords.filter((k) => k !== keywordToRemove),
-      },
-    };
-    commitPolicy("aiUsagePolicy.dlp.keywordsBlacklist", policy);
-  };
-
   const effectiveSaveStatus = autoSave.status;
 
   return (
@@ -414,7 +374,7 @@ export default function WorkspaceSettingsPage() {
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
-          <p className="text-xs text-ink-muted">Configure your workspace defaults, collaboration boundaries, and AI scanning policies.</p>
+          <p className="text-xs text-ink-muted">Workspace defaults for meetings, minutes and translation. Access and data protection live in Security.</p>
         </div>
         <AutoSaveStatusBadge
           status={effectiveSaveStatus}
@@ -696,32 +656,8 @@ export default function WorkspaceSettingsPage() {
               </Select>
             </div>
 
-            {/* Invitation Expiry Days */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Invitation Expiry Days</span>
-                <span className="text-[11px] text-ink-muted">Days before a workspace invitation link expires (1 - 365 days).</span>
-              </div>
-              <Input
-                type="number"
-                min={1}
-                max={365}
-                {...register("invitationExpiryDays", { valueAsNumber: true })}
-                onBlur={(event) => commitNumericField("invitationExpiryDays", event.currentTarget.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    commitNumericField("invitationExpiryDays", event.currentTarget.value);
-                    event.currentTarget.blur();
-                  }
-                }}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-                className="w-[140px] h-8 text-xs bg-surface-2 border-hairline"
-              />
-              {errors.invitationExpiryDays?.message && (
-                <span className="text-[11px] text-destructive">{errors.invitationExpiryDays.message}</span>
-              )}
-            </div>
+            {/* Invitation expiry moved to Settings › Security (2026-09-16) — how long a way IN
+                stays open is an access question, and it now sits beside the rest of them. */}
 
             {/* Allowed Target Languages */}
             <div className="py-3.5 px-4 flex flex-col gap-2">
@@ -799,78 +735,13 @@ export default function WorkspaceSettingsPage() {
           </div>
         </div>
 
-        {/* Section 2: Collaboration & Security */}
+        {/* External collaboration and the internal-membership status moved to
+            Settings › Security (2026-09-16), where verified domains — the thing that decides what
+            that status reports — now lives beside them. */}
+
+        {/* Section 2: AI & translation */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">Enterprise & External Collaboration</div>
-          <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
-
-            {/* Allow External Collaboration */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5 max-w-[70%]">
-                <span className="text-xs font-semibold text-ink">Allow External Collaboration</span>
-                <span className="text-[11px] text-ink-muted">Allow external participants to join rooms.</span>
-              </div>
-              <Switch
-                checked={watchAll.allowExternalCollaboration}
-                onCheckedChange={(val) => commitTopLevel("allowExternalCollaboration", val)}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
-            </div>
-
-            {/*
-              How membership is decided — a status, not a switch.
-
-              This was a toggle. It could not be one: the value is derived from whether the
-              workspace holds a verified domain, so a switch offered a second way to set one fact
-              and let a workspace claim to require a domain while holding none. Adding the first
-              domain below turns this on; revoking the last one turns it off.
-            */}
-            {/*
-              How membership is decided — a status, not a control.
-
-              This was a toggle. It could not be one: the value is derived from whether the
-              workspace holds a verified domain, so a switch offered a second way to set one fact
-              and let a workspace claim to require a domain while holding none.
-
-              The domains themselves are managed in Advanced settings, not here. Adding one hands
-              whoever holds this workspace the power to classify every future joiner on that
-              domain as Internal — too much to sit one click away from the default language.
-              Admins can read this summary; only the owner can change what it reports.
-            */}
-            <div className="py-3.5 px-4 flex items-start justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-semibold text-ink">Internal membership</span>
-                <span className="text-[11px] text-ink-muted">
-                  {activeDomains.length > 0
-                    ? `Decided by verified domain — ${activeDomains.join(", ")}. Only addresses on these domains can be invited as internal members.`
-                    : "Assigned by hand. You choose internal or external for each person you invite."}
-                </span>
-                {isOwner && (
-                  <Link
-                    href={`/${activeWorkspaceSlug}/advanced`}
-                    className="mt-0.5 w-fit text-[11px] font-medium text-primary hover:underline"
-                  >
-                    Manage verified domains in Advanced settings →
-                  </Link>
-                )}
-              </div>
-              <span
-                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                  activeDomains.length > 0
-                    ? "border-primary/20 bg-primary/10 text-primary"
-                    : "border-hairline bg-surface-2 text-ink-muted"
-                }`}
-              >
-                {activeDomains.length > 0 ? "Domain-verified" : "Manual"}
-              </span>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Section 3: AI Policy & Advanced */}
-        <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">AI Ingestion & Security Guardrails</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">AI &amp; Translation</div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
 
             {/* Global Glossary */}
@@ -889,90 +760,9 @@ export default function WorkspaceSettingsPage() {
               />
             </div>
 
-            {/* Redact PII */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Redact Personal Identifiable Information (PII)</span>
-                <span className="text-[11px] text-ink-muted">Automatically detect and mask sensitive identifiers (e.g. emails, phone numbers, SSNs).</span>
-              </div>
-              <Switch
-                checked={watchAll.aiUsagePolicy?.redactPii?.enabled ?? false}
-                onCheckedChange={(val) => commitPolicy(
-                  "aiUsagePolicy.redactPii.enabled",
-                  { ...watchAll.aiUsagePolicy, redactPii: { ...watchAll.aiUsagePolicy.redactPii, enabled: val } },
-                )}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
-            </div>
-
-            {/* Data Loss Prevention */}
-            <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Data Loss Prevention (DLP)</span>
-                <span className="text-[11px] text-ink-muted">Block or flag designated restricted terminology or sensitive keywords.</span>
-              </div>
-              <Switch
-                checked={watchAll.aiUsagePolicy?.dlp?.enabled ?? false}
-                onCheckedChange={(val) => commitPolicy(
-                  "aiUsagePolicy.dlp.enabled",
-                  { ...watchAll.aiUsagePolicy, dlp: { ...watchAll.aiUsagePolicy.dlp, enabled: val } },
-                )}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
-            </div>
-
-            {/* DLP Blacklist Keywords */}
-            {watchAll.aiUsagePolicy?.dlp?.enabled && (
-              <div className="py-4 px-4 flex flex-col gap-3 bg-surface-2/50">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-semibold text-ink">DLP Restricted Keywords</span>
-                  <span className="text-[11px] text-ink-muted">Words that will trigger DLP alerts or redaction during streaming translation.</span>
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder="Enter keyword (e.g., Confidential, Internal-Only)"
-                    value={newKeyword}
-                    onChange={(e) => setNewKeyword(e.target.value)}
-                    disabled={isSubmitting || !isOwnerOrAdmin}
-                    className="h-8 text-xs bg-surface-1 border-hairline flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddKeyword();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddKeyword}
-                    disabled={isSubmitting || !isOwnerOrAdmin || !newKeyword.trim()}
-                    className="flex h-8 px-3 items-center justify-center gap-1 rounded bg-surface-3 hover:bg-surface-4 font-semibold transition text-xs border border-hairline cursor-pointer text-ink"
-                  >
-                    <Plus size={12} /> Add Keyword
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {keywords.length === 0 ? (
-                    <span className="text-[10px] text-ink-muted italic">No blacklist keywords configured.</span>
-                  ) : (
-                    keywords.map((kw) => (
-                      <div key={kw} className="flex items-center gap-1.5 bg-surface-1 border border-hairline px-2 py-0.5 rounded text-xs">
-                        <span className="font-mono text-[10px] text-ink">{kw}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveKeyword(kw)}
-                          disabled={isSubmitting || !isOwnerOrAdmin}
-                          className="text-ink-muted hover:text-destructive transition-colors ml-1 cursor-pointer"
-                        >
-                          <Trash size={11} />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
+            {/* PII redaction and the restricted-keyword list moved to Settings › Security
+                (2026-09-16). They decide what LEAVES a meeting, which is an access question; the
+                glossary above decides how words are translated, which is not. */}
 
           </div>
         </div>

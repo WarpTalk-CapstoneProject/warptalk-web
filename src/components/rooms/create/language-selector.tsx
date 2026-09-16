@@ -103,7 +103,7 @@ export function LanguageSelector({
             <Plus weight="bold" size={12} className="text-ink-muted" />
           </div>
         </PopoverTrigger>
-        <PopoverContent align="start" className="w-[210px] rounded-xl bg-canvas border-border/50 p-1.5 shadow-xl z-[100]">
+        <PopoverContent align="start" className="w-[210px] rounded-xl bg-surface-1 border-border/50 p-1.5 shadow-xl z-[100]">
           <Command className="bg-transparent">
             <CommandList>
               <CommandGroup heading="Meeting languages" className="text-[11px] text-ink-muted">

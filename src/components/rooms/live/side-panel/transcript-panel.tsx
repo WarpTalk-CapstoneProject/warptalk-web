@@ -166,7 +166,7 @@ export function TranscriptPanel({
   const gapsPerBlock = useMemo(
     () =>
       distributePauseGapsAcrossBlocks(
-        blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+        blocks.map((block) => block.segments.map(({ startTimeMs, receivedAt }) => ({ startTimeMs, receivedAt }))),
         pauseGaps,
       ),
     [blocks, pauseGaps],

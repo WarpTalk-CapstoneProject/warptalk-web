@@ -389,7 +389,7 @@ export default function WorkspaceMembersPage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-surface-1 text-ink">
+    <div className="flex h-full flex-col bg-panel text-ink">
       {/* Filter, Search, and Action triggers - Unified horizontal design */}
       {/* flex-wrap, because this row has to survive a narrow main. With both side
           panels open the content area is under 500px, and the action group alone needs

@@ -483,7 +483,7 @@ export function MeetingTranscriptArtifact({
   // repeat every late pause once per translation session, so a meeting with three sessions showed
   // one pause three times, at three different points in the record.
   const gapsPerBlock = distributePauseGapsAcrossBlocks(
-    blocks.map((block) => block.segments.map((segment) => segment.startTimeMs)),
+    blocks.map((block) => block.segments.map(({ startTimeMs }) => ({ startTimeMs }))),
     pauseGaps,
   );
 
@@ -2702,7 +2702,7 @@ function TranscriptBatchLineEditor({
       }}
       aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
       rows={Math.min(6, Math.max(1, Math.ceil(value.length / 80)))}
-      className="w-full min-w-0 resize-y rounded-md border border-dashed border-primary/50 bg-canvas px-2.5 py-1.5 text-[13px] leading-6 text-ink outline-none focus:border-solid focus:border-primary disabled:opacity-60"
+      className="w-full min-w-0 resize-y rounded-md border border-dashed border-primary/50 bg-surface-2 px-2.5 py-1.5 text-[13px] leading-6 text-ink outline-none focus:border-solid focus:border-primary disabled:opacity-60"
     />
   );
 }
@@ -2740,7 +2740,7 @@ function TranscriptLineEditor({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
-        className="min-h-24 w-full resize-y rounded-md border border-border bg-canvas px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
+        className="min-h-24 w-full resize-y rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
       />
       <div className="flex justify-end gap-2">
         <button

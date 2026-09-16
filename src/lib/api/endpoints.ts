@@ -377,6 +377,13 @@ export const API = {
     pluginConnect: (pluginKey: string, client?: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect` +
       (client ? `?client=${encodeURIComponent(client)}` : ""),
+    /**
+     * Which plugin tools WarpBot ran in one workspace, newest first. Owner/Admin of that workspace
+     * only — the assistant service asks the workspace service for the caller's role and fails
+     * closed. Query: `workspaceId` (required), `pluginKey`, `userId`, `skip`, `take` (clamped to
+     * 200 server-side). Not the system-admin audit under `adminPluginCatalog.audits`.
+     */
+    workspacePluginToolAudits: "/assistant/mcp/tools/audits",
   },
   /**
    * The system-admin half of the plugin catalog (assistant service, WT-646).
@@ -441,6 +448,10 @@ export const API = {
     plan: (id: string) => `/plans/${id}`,
     /** GET reads the active cards; PUT upserts one, matched on its identity columns. */
     rateCard: "/usages/rate-card",
+    /** POST. Retires one row (is_active=false, effective_to=now); never a delete. */
+    rateCardDeactivate: (id: string) => `/usages/rate-card/${id}/deactivate`,
+    /** POST. Read-only: prices a proposed cost and markup without publishing anything. */
+    rateCardPreview: "/usages/rate-card/preview",
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
@@ -448,6 +459,16 @@ export const API = {
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
     base: "/admin/notifications",
+    detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
+  },
+  /**
+   * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
+   * controller lives on the workspace service's own prefix and is gated there. Other services'
+   * outboxes are not reachable from here.
+   */
+  adminWorkspaceOutbox: {
+    deadLetters: "/workspaces/outbox/dead-letters",
+    replay: (eventId: string) => `/workspaces/outbox/${encodeURIComponent(eventId)}/replay`,
   },
   adminAuditLog: {
     base: "/admin/audit-log",
@@ -503,6 +524,27 @@ export const API = {
       `/admin/subscriptions/workspace/${workspaceId}/change-plan`,
     contractTerms: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/contract-terms`,
+    /** POST. Creates a contract subscription; refused while the workspace has any active one. */
+    createContract: "/subscriptions/contract",
+    /** GET. The workspace's active subscription, contract overrides included. */
+    active: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+  },
+  /**
+   * Bank-transfer reconciliation for contract workspaces. The invoices themselves are raised by
+   * the billing-cycle close; the only admin write is settling one.
+   */
+  adminInvoices: {
+    workspace: (workspaceId: string) => `/invoices/workspace/${workspaceId}`,
+    /** POST, no body. Marks the invoice and its payment paid. Idempotent on a paid invoice. */
+    markPaid: (invoiceId: string) => `/invoices/${invoiceId}/mark-paid`,
+  },
+  /**
+   * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under
+   * /admin/billing so the gateway's existing admin-billing route carries it.
+   */
+  adminSalesLeads: {
+    base: "/admin/billing/sales-leads",
+    status: (id: string) => `/admin/billing/sales-leads/${id}/status`,
   },
   /** Per-workspace analytics + ledger, served by the billing service (WT-206). */
   adminWorkspaceAnalytics: {
@@ -521,6 +563,19 @@ export const API = {
     // Membership facts only. The knowledge route that used to sit beside these is gone:
     // tenant content stays out of the admin portal (2026-08-17).
     members: (id: string) => `/admin/workspaces/${id}/members`,
+  },
+  /**
+   * A workspace's own payments and invoices (billing service; gateway routes `/payments/**` and
+   * `/invoices/**` to the billing cluster).
+   */
+  workspaceBilling: {
+    /** GET. Owner/Admin of the workspace (RequireWorkspaceRole). Paginated. */
+    paymentHistory: (workspaceId: string) => `/payments/workspace/${workspaceId}/history`,
+    /**
+     * POST, no body. Answers `{ url }` — a Stripe checkout page for one open invoice. Owner of the
+     * invoice's workspace only; the server resolves the workspace from the invoice.
+     */
+    invoiceCheckout: (invoiceId: string) => `/invoices/${invoiceId}/checkout`,
   },
   adminGlobalGlossary: {
     base: "/admin/global-glossary",

@@ -166,7 +166,7 @@ export function PeoplePanel({
 
   return (
     <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-canvas p-3">
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-2 p-3">
         <p className="text-[12px] font-medium text-ink-subtle">Room Code</p>
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold tracking-wide text-ink">
@@ -361,7 +361,7 @@ function ParticipantRow({
 
   return (
     <>
-      <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-canvas">
+      <div className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-surface-2">
         <div className="flex items-center gap-2.5 min-w-0">
           {/* The badges to the right say where someone is relative to THIS room; the dot says
               whether they are reachable in the app at all — which is the difference between an
@@ -402,7 +402,7 @@ function ParticipantRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className="grid h-6 w-6 place-items-center rounded-sm bg-canvas text-ink-subtle group-hover:hidden">
+          <span className="grid h-6 w-6 place-items-center rounded-sm bg-surface-2 text-ink-subtle group-hover:hidden">
             {audioEnabled ? (
               <Microphone className="h-3.5 w-3.5" />
             ) : (
