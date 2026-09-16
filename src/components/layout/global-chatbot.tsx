@@ -452,11 +452,15 @@ export function GlobalChatbot() {
     useState<PluginConnectionAction | null>(null);
   const [pendingPluginSetup, setPendingPluginSetup] =
     useState<PluginOperatorSetupAction | null>(null);
-  // Both plugin cards are turn-scoped. Nothing but a click used to clear them, so a Connect
-  // card outlived the turn that raised it: still there under a successful answer, still there
-  // after New chat - where pressing Connect opened an OAuth flow the current turn never asked
-  // for - and two of them could stack up, one per error code. The meeting panel already gets
-  // this right by clearing in beginAssistantTurn; this is the same rule.
+  // Both plugin cards last until the NEXT turn starts. Nothing but a click used to clear them, so
+  // a Connect card survived New chat - where pressing Connect opened an OAuth flow the current
+  // turn never asked for - and two of them could stack up, one per error code. So they clear when
+  // a message is sent, on New chat, and when a conversation is opened, as the meeting panel does
+  // in beginAssistantTurn.
+  //
+  // NOT when the turn that raised them completes or fails. A card is raised mid-turn, when the
+  // plugin tool returns, and the answer that lands next is the one explaining it; clearing there
+  // erased the card moments after it appeared, before anyone could press it (WT-688).
   const clearPluginCards = useCallback(() => {
     setPendingPluginConnection(null);
     setPendingPluginSetup(null);
@@ -970,7 +974,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
-        clearPluginCards();
+        // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
 
         // Folded onto the answer, not deleted.
         //
@@ -1011,7 +1015,7 @@ export function GlobalChatbot() {
         setIsAiTyping(false);
         setIsSlow(false);
         clearResponseTimeout();
-        clearPluginCards();
+        // The plugin cards stay: a turn that failed after raising one still needs it pressed.
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
         // From the ref, for the same reason as the completed handler.
         const failedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
@@ -1085,7 +1089,7 @@ export function GlobalChatbot() {
       void connection.stop();
       hubConnectionRef.current = null;
     };
-  }, [conversationId, armResponseTimeout, clearResponseTimeout, clearPluginCards, updateSteps]);
+  }, [conversationId, armResponseTimeout, clearResponseTimeout, updateSteps]);
 
   // Calculate mention/slash menu visibility based on @ or leading / characters
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
