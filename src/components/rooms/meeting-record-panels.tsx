@@ -803,7 +803,7 @@ export function ArtifactsPanel({
 
   if (!artifacts.length && !stillProcessing) {
     return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center border border-border bg-canvas p-8 text-center">
+      <div className="flex min-h-[320px] flex-col items-center justify-center border border-border bg-surface-2 p-8 text-center">
         <Archive size={28} className="text-ink-muted" />
         <h3 className="mt-4 text-[15px] font-semibold">No retained artifacts</h3>
         <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
@@ -814,7 +814,7 @@ export function ArtifactsPanel({
   }
 
   return (
-    <div className="min-h-[320px] border border-border bg-canvas">
+    <div className="min-h-[320px] border border-border bg-surface-2">
       <div className="flex h-10 items-center justify-between border-b border-border px-4">
         <span className="text-[10px] font-medium text-ink-subtle">
           RETAINED ARTIFACTS

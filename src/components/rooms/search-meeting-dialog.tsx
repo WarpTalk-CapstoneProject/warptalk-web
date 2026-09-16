@@ -190,7 +190,7 @@ export function SearchMeetingDialog() {
                 showIcon={false}
                 className="h-full text-[15px] placeholder:text-ink-muted"
               />
-              <kbd className="ml-auto shrink-0 rounded-full border border-border bg-canvas px-2 py-1 text-[11px] font-medium text-ink-subtle">
+              <kbd className="ml-auto shrink-0 rounded-full border border-border bg-surface-2 px-2 py-1 text-[11px] font-medium text-ink-subtle">
                 ⌘K
               </kbd>
             </div>

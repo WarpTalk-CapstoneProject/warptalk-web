@@ -53,7 +53,7 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
           "grid size-9 shrink-0 place-items-center rounded-[9px] border transition-colors",
           action.featured
             ? "border-white/20 bg-white/12 text-white"
-            : "border-border bg-canvas text-primary group-hover:border-primary/30 group-hover:bg-primary/10"
+            : "border-border bg-surface-2 text-primary group-hover:border-primary/30 group-hover:bg-primary/10"
         )}
       >
         <Icon size={18} weight="duotone" />

@@ -176,7 +176,7 @@ export function ArtifactRecordView({
         </div>
 
         {entry.body ? (
-          <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-canvas px-4 py-3.5 font-sans text-[11.5px] leading-[1.65] text-ink">
+          <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-surface-2 px-4 py-3.5 font-sans text-[11.5px] leading-[1.65] text-ink">
             {entry.body}
           </pre>
         ) : (
@@ -262,7 +262,7 @@ function Unreadable({ entry }: { entry: LibraryEntry }) {
         : WarningCircle;
 
   return (
-    <div className="flex items-start gap-2.5 rounded-md border border-border bg-canvas px-4 py-4">
+    <div className="flex items-start gap-2.5 rounded-md border border-border bg-surface-2 px-4 py-4">
       <Icon
         size={15}
         className={cn("mt-px shrink-0 text-ink-subtle", entry.absence === "generating" && "animate-spin")}

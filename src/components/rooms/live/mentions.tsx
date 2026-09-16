@@ -87,7 +87,7 @@ export const MentionList = forwardRef<MentionListHandle, MentionListProps>(
             <button
               className={`w-full text-left px-3 py-1.5 text-[13px] ${
                 index === selectedIndex
-                  ? "bg-canvas text-primary"
+                  ? "bg-surface-2 text-primary"
                   : "text-ink bg-transparent"
               }`}
               key={index}

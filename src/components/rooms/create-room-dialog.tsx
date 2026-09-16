@@ -488,7 +488,7 @@ export function CreateRoomDialog() {
       <DialogContent
         overlayClassName="!bg-black/40 !backdrop-blur-none"
         className={cn(
-          "max-w-[calc(100vw-2rem)] w-full p-0 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden [transition-property:height,top,bottom,max-height,transform] duration-300",
+          "max-w-[calc(100vw-2rem)] w-full p-0 border-border/60 bg-surface-1 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden [transition-property:height,top,bottom,max-height,transform] duration-300",
           createdRoomId
             ? "sm:max-w-[500px] !top-[25%] !-translate-y-[25%]"
             : "sm:max-w-[750px] top-[12vh] !translate-y-0",

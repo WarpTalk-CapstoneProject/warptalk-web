@@ -417,7 +417,7 @@ export function SetupRoomModal() {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent
         overlayClassName="!bg-black/40 !backdrop-blur-none"
-        className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-white dark:bg-zinc-950 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
+        className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-surface-1 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
       >
         <DialogTitle className="sr-only">Setup Room</DialogTitle>
 
@@ -458,7 +458,7 @@ export function SetupRoomModal() {
                 playsInline
               />
             ) : (
-              <div className="absolute inset-0 flex items-center justify-center bg-canvas">
+              <div className="absolute inset-0 flex items-center justify-center bg-surface-1">
                 <div className="flex flex-col items-center gap-3 text-ink-muted">
                   <VideoCameraSlash className="w-12 h-12" weight="light" />
                   <span className="text-[14px] font-medium">Camera is off</span>

@@ -146,12 +146,15 @@ export function OptionsMenu({
 
   return (
     <Popover>
-      <PopoverTrigger className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full border border-border/60 bg-white text-ink-muted shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors hover:border-border hover:bg-surface-1 hover:text-ink dark:bg-transparent">
+      {/* `bg-surface-1`, not a hardcoded white: this is a raised control and it has to follow the
+          theme. The hover moves to surface-2 because the old hover was surface-1, which is now the
+          resting colour — the button would have had no hover state at all. */}
+      <PopoverTrigger className="flex h-[26px] w-[26px] cursor-pointer items-center justify-center rounded-full border border-border/60 bg-surface-1 text-ink-muted shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-colors hover:border-border hover:bg-surface-2 hover:text-ink dark:bg-transparent">
         <DotsThree weight="bold" size={16} />
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[262px] rounded-xl border-border/50 bg-canvas p-1.5 shadow-xl"
+        className="w-[262px] rounded-xl border-border/50 bg-surface-1 p-1.5 shadow-xl"
       >
         {!hasScheduledAt && (
           <button
@@ -221,7 +224,7 @@ export function OptionsMenu({
                       className={`flex-1 cursor-pointer rounded-md border px-1.5 py-1 text-[11px] font-medium capitalize transition-colors ${
                         cadence === type
                           ? "border-transparent bg-ink text-canvas"
-                          : "border-border/60 bg-canvas text-ink-muted hover:text-ink"
+                          : "border-border/60 bg-surface-2 text-ink-muted hover:text-ink"
                       }`}
                     >
                       {type.toLowerCase()}
@@ -251,7 +254,7 @@ export function OptionsMenu({
                           className={`h-6 flex-1 cursor-pointer rounded border text-[10px] font-medium transition-colors ${
                             selected
                               ? "border-transparent bg-primary/15 text-primary"
-                              : "border-border/60 bg-canvas text-ink-muted hover:text-ink"
+                              : "border-border/60 bg-surface-2 text-ink-muted hover:text-ink"
                           }`}
                         >
                           {option.short.charAt(0)}
@@ -277,7 +280,7 @@ export function OptionsMenu({
                       placeholder="1–31"
                       onChange={(e) => changeMonthDay(e.target.value)}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-7 w-[124px] rounded-md border border-border/60 bg-canvas px-1.5 text-[12px] tabular-nums text-ink focus:ring-1 focus:ring-ink/20 focus:outline-none"
+                      className="h-7 w-[124px] rounded-md border border-border/60 bg-surface-2 px-1.5 text-[12px] tabular-nums text-ink focus:ring-1 focus:ring-ink/20 focus:outline-none"
                     />
                   </label>
                 )}

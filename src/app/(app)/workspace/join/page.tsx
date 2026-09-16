@@ -314,7 +314,7 @@ function JoinWorkspaceContent() {
                           placeholder="First Name"
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
-                          className="bg-canvas border-border text-[13px] h-[34px]"
+                          className="bg-surface-2 border-border text-[13px] h-[34px]"
                           required
                         />
                       </div>
@@ -324,7 +324,7 @@ function JoinWorkspaceContent() {
                           placeholder="Last Name"
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
-                          className="bg-canvas border-border text-[13px] h-[34px]"
+                          className="bg-surface-2 border-border text-[13px] h-[34px]"
                           required
                         />
                       </div>
@@ -340,7 +340,7 @@ function JoinWorkspaceContent() {
                         placeholder="you@company.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="bg-canvas border-border pl-9 text-[13px] h-[34px]"
+                        className="bg-surface-2 border-border pl-9 text-[13px] h-[34px]"
                         required
                       />
                     </div>
@@ -355,7 +355,7 @@ function JoinWorkspaceContent() {
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="bg-canvas border-border pl-9 text-[13px] h-[34px]"
+                        className="bg-surface-2 border-border pl-9 text-[13px] h-[34px]"
                         required
                       />
                     </div>
@@ -456,7 +456,7 @@ function JoinWorkspaceContent() {
                   placeholder="e.g. acme or warptalk.app/workspace/acme"
                   value={slugOrUrl}
                   onChange={(e) => setSlugOrUrl(e.target.value)}
-                  className="bg-canvas border-border text-[13px] h-[36px] focus-visible:ring-1 focus-visible:ring-primary outline-none"
+                  className="bg-surface-2 border-border text-[13px] h-[36px] focus-visible:ring-1 focus-visible:ring-primary outline-none"
                   required
                 />
               </div>
