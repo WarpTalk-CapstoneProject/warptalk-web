@@ -455,6 +455,16 @@ export const API = {
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
     base: "/admin/notifications",
+    detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
+  },
+  /**
+   * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
+   * controller lives on the workspace service's own prefix and is gated there. Other services'
+   * outboxes are not reachable from here.
+   */
+  adminWorkspaceOutbox: {
+    deadLetters: "/workspaces/outbox/dead-letters",
+    replay: (eventId: string) => `/workspaces/outbox/${encodeURIComponent(eventId)}/replay`,
   },
   adminAuditLog: {
     base: "/admin/audit-log",
