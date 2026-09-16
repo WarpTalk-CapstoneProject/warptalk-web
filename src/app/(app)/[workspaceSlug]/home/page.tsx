@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import {
   ChartBar,
   ClockCounterClockwise,
@@ -86,6 +87,7 @@ function QuickActionCard({ action, index }: { action: QuickAction; index: number
 }
 
 export default function WorkspaceHomePage() {
+  const t = useTranslations("home");
   const activeWorkspaceSlug = useWorkspaceStore((s) => s.activeWorkspaceSlug);
   const role = useWorkspaceRole();
   const setCreateRoomModalOpen = useUIStore((s) => s.setCreateRoomModalOpen);
@@ -103,7 +105,7 @@ export default function WorkspaceHomePage() {
     ...(canCreateMeetings
       ? [
           {
-            title: "Create room",
+            title: t("actions.createRoom"),
             icon: Plus,
             onClick: () => setCreateRoomModalOpen(true),
             featured: true,
@@ -111,32 +113,32 @@ export default function WorkspaceHomePage() {
         ]
       : []),
     {
-      title: "Find meeting",
+      title: t("actions.findMeeting"),
       icon: MagnifyingGlass,
       onClick: () => setSearchMeetingModalOpen(true),
     },
     {
-      title: "Join by code",
+      title: t("actions.joinByCode"),
       icon: Keyboard,
       href: "/join",
     },
     {
-      title: "Meetings",
+      title: t("actions.meetings"),
       icon: VideoCamera,
       href: `/${slug}/rooms`,
     },
     {
-      title: "History",
+      title: t("actions.history"),
       icon: ClockCounterClockwise,
       href: `/${slug}/history`,
     },
     {
-      title: "Documents",
+      title: t("actions.documents"),
       icon: FileText,
       href: `/${slug}/documents`,
     },
     {
-      title: "Members",
+      title: t("actions.members"),
       icon: Users,
       href: `/${slug}/members`,
     },
@@ -145,17 +147,17 @@ export default function WorkspaceHomePage() {
   if (isOwnerOrAdmin) {
     quickActions.push(
       {
-        title: "Billing",
+        title: t("actions.billing"),
         icon: CreditCard,
         href: `/${slug}/settings/billing`,
       },
       {
-        title: "Dashboard",
+        title: t("actions.dashboard"),
         icon: ChartBar,
         href: `/${slug}/dashboard`,
       },
       {
-        title: "Settings",
+        title: t("actions.settings"),
         icon: GearSix,
         href: `/${slug}/settings`,
       }
@@ -171,7 +173,7 @@ export default function WorkspaceHomePage() {
         <MeetingDayPanel />
 
         <div className="mt-2">
-          <h2 className="text-[15px] font-semibold text-ink">Quick jumps</h2>
+          <h2 className="text-[15px] font-semibold text-ink">{t("quickJumps")}</h2>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">

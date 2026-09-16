@@ -6,7 +6,19 @@ import { getUserLocale } from "@/i18n/locale";
  * page/feature area gets migrated onto the translation catalog — see
  * `.agents/page-docs/i18n-localization.md` for the full workflow.
  */
-const NAMESPACES = ["common", "auth", "landing", "legal", "validation"] as const;
+const NAMESPACES = [
+  "common",
+  "auth",
+  "landing",
+  "legal",
+  "validation",
+  "home",
+  "dashboard",
+  "tasks",
+  "voiceProfiles",
+  "knowledge",
+  "aiChat",
+] as const;
 
 async function loadMessages(locale: string) {
   const entries = await Promise.all(

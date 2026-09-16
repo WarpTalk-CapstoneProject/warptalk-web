@@ -1,0 +1,15 @@
+{
+  "quickJumps": "Lối tắt",
+  "actions": {
+    "createRoom": "Tạo cuộc họp",
+    "findMeeting": "Tìm cuộc họp",
+    "joinByCode": "Tham gia bằng mã",
+    "meetings": "Cuộc họp",
+    "history": "Lịch sử",
+    "documents": "Tài liệu",
+    "members": "Thành viên",
+    "billing": "Thanh toán",
+    "dashboard": "Bảng điều khiển",
+    "settings": "Cài đặt"
+  }
+}

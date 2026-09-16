@@ -29,19 +29,43 @@ const SHORT_LABELS: Record<string, string> = {
   document_translation: "Document translation",
 };
 
+/**
+ * Optional i18n hook, defaulted to the English constants above so callers that have not
+ * migrated yet keep compiling and keep today's copy — same pattern as
+ * `getPlanDescription`/`buildFeatureList` in `src/lib/utils.ts`.
+ */
+type UsageLabelTranslator = (key: string) => string;
+
+const SHORT_LABEL_KEYS: Record<string, string> = {
+  translation: "usageLabels.translation",
+  voice_translation: "usageLabels.translation",
+  speech_to_text: "usageLabels.speechToText",
+  text_to_speech: "usageLabels.textToSpeech",
+  voice_cloning: "usageLabels.voiceCloning",
+  summary: "usageLabels.summary",
+  meeting_summary: "usageLabels.summary",
+  chat: "usageLabels.chat",
+  ai_assistant: "usageLabels.chat",
+  document_translation: "usageLabels.documentTranslation",
+};
+
 /** Short enough for a table row or a legend. Falls back to the raw name, de-underscored. */
-export function usageTypeLabel(usageType: string): string {
+export function usageTypeLabel(usageType: string, t?: UsageLabelTranslator): string {
+  const key = SHORT_LABEL_KEYS[usageType.toLowerCase()];
+  if (t && key) return t(key);
   return SHORT_LABELS[usageType.toLowerCase()] ?? usageType.replace(/_/g, " ");
 }
 
 /** The long form, for a breakdown that is read like a bill. */
-export function usageTypeDetailLabel(usageType: string): string {
+export function usageTypeDetailLabel(usageType: string, t?: UsageLabelTranslator): string {
   if (usageType === "translation" || usageType === "voice_translation")
-    return "Real-time Translation (Speech-to-Text / STT)";
+    return t ? t("usageLabels.detailTranslation") : "Real-time Translation (Speech-to-Text / STT)";
   if (usageType === "summary" || usageType === "meeting_summary")
-    return "AI Meeting Insights (Summarization)";
-  if (usageType === "chat") return "AI Workspace Co-pilot Chat";
-  if (usageType === "text_to_speech") return "AI Voice Synthesis (Text-to-Speech / TTS)";
-  if (usageType === "voice_cloning") return "Custom AI Voice Cloning (Voice Cloning)";
+    return t ? t("usageLabels.detailSummary") : "AI Meeting Insights (Summarization)";
+  if (usageType === "chat") return t ? t("usageLabels.detailChat") : "AI Workspace Co-pilot Chat";
+  if (usageType === "text_to_speech")
+    return t ? t("usageLabels.detailTextToSpeech") : "AI Voice Synthesis (Text-to-Speech / TTS)";
+  if (usageType === "voice_cloning")
+    return t ? t("usageLabels.detailVoiceCloning") : "Custom AI Voice Cloning (Voice Cloning)";
   return usageType.replace(/_/g, " ");
 }

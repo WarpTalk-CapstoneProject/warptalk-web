@@ -1,0 +1,15 @@
+{
+  "conversations": "Trò chuyện AI",
+  "new": "Mới",
+  "loadingConversations": "Đang tải cuộc trò chuyện…",
+  "loadConversationsFailed": "Không thể tải cuộc trò chuyện.",
+  "emptyConversations": "Tạo một cuộc trò chuyện để hỏi WarpTalk AI về không gian làm việc này.",
+  "defaultTitle": "WarpTalk AI",
+  "loadingMessages": "Đang tải tin nhắn…",
+  "loadMessagesFailed": "Không thể tải cuộc trò chuyện này.",
+  "emptyMessages": "Đặt câu hỏi về cuộc họp, bản ghi hoặc tài liệu của không gian làm việc.",
+  "messageFailed": "Xử lý tin nhắn thất bại.",
+  "inputPlaceholder": "Hỏi WarpTalk AI về không gian làm việc này…",
+  "sending": "Đang gửi…",
+  "send": "Gửi"
+}

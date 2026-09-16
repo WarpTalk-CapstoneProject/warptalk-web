@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus } from "@phosphor-icons/react";
 
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
@@ -53,6 +54,7 @@ type VoiceView = "all" | "mine" | "library" | "attention";
  *     different answers.
  */
 export default function VoiceProfilesPage() {
+  const t = useTranslations("voiceProfiles");
   const { data, isLoading } = useVoiceProfiles();
 
   const [view, setView] = useState<VoiceView>("all");
@@ -76,23 +78,23 @@ export default function VoiceProfilesPage() {
         filters={
           <>
             <WorkspaceFilterPill
-              label="All voices"
+              label={t("filters.allVoices")}
               selected={view === "all"}
               onClick={() => setView("all")}
             />
             <WorkspaceFilterPill
-              label="Mine"
+              label={t("filters.mine")}
               count={profiles.length}
               selected={view === "mine"}
               onClick={() => setView("mine")}
             />
             <WorkspaceFilterPill
-              label="Library"
+              label={t("filters.library")}
               selected={view === "library"}
               onClick={() => setView("library")}
             />
             <WorkspaceFilterPill
-              label="Needs attention"
+              label={t("filters.needsAttention")}
               count={needingAttention}
               selected={view === "attention"}
               onClick={() => setView("attention")}
@@ -104,8 +106,8 @@ export default function VoiceProfilesPage() {
             <ExpandingSearchDock
               value={search}
               onValueChange={setSearch}
-              placeholder="Search voices..."
-              ariaLabel="Search voices"
+              placeholder={t("search.placeholder")}
+              ariaLabel={t("search.ariaLabel")}
               collapsedWidth={28}
               expandedWidth={220}
               className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
@@ -118,7 +120,7 @@ export default function VoiceProfilesPage() {
               onClick={() => setIsCreateOpen(true)}
               icon={<Plus size={13} weight="bold" />}
             >
-              Create profile
+              {t("createProfile")}
             </WorkspacePrimaryButton>
           </>
         }

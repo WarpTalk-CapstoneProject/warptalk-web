@@ -26,6 +26,7 @@ import {
   Clock,
 } from "@phosphor-icons/react/dist/ssr";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { useTranslations } from "next-intl";
 
 import { AdminFilterTabs, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { Button } from "@/components/ui/button";
@@ -38,10 +39,10 @@ import {
   orderKnowledgeChunks,
   shouldShowPager,
   sourceLabel,
-  SOURCE_TABS,
-  SOURCE_FALLBACK_LABELS,
+  sourceTypeLabel,
+  translatedSourceTabs,
 } from "@/lib/knowledge/knowledge-view";
-import { FACT_CATEGORIES } from "@/types/workspace-knowledge";
+import { FACT_CATEGORIES, isKnownFactCategory } from "@/types/workspace-knowledge";
 import type {
   WorkspaceKnowledgeChunkDto,
   WorkspaceKnowledgePageDto,
@@ -55,8 +56,11 @@ const SOURCE_ICONS: Record<string, typeof FileText> = {
 };
 
 function SourceCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
+  const t = useTranslations("knowledge.table");
+  const tKnowledge = useTranslations("knowledge");
   const Icon = SOURCE_ICONS[chunk.sourceType] ?? Brain;
-  const typeLabel = SOURCE_FALLBACK_LABELS[chunk.sourceType] || chunk.sourceType;
+  const label = sourceLabel(chunk, tKnowledge);
+  const typeLabel = sourceTypeLabel(chunk.sourceType, tKnowledge);
 
   return (
     <div className="flex items-start gap-2.5 min-w-0">
@@ -65,8 +69,8 @@ function SourceCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
       </div>
       <div className="min-w-0">
         {/* Line 1: Source Title */}
-        <div className="truncate text-[12px] font-medium text-ink" title={sourceLabel(chunk)}>
-          {sourceLabel(chunk)}
+        <div className="truncate text-[12px] font-medium text-ink" title={label}>
+          {label}
         </div>
         {/* Line 2: Subtitle for Source Type & Chunk Index */}
         <div className="text-[10px] text-ink-subtle truncate flex items-center gap-1 mt-0.5">
@@ -74,7 +78,7 @@ function SourceCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
           {chunk.chunkIndex != null ? (
             <>
               <span>•</span>
-              <span className="tabular-nums">Chunk #{chunk.chunkIndex}</span>
+              <span className="tabular-nums">{t("chunkNumber", { index: chunk.chunkIndex })}</span>
             </>
           ) : null}
         </div>
@@ -84,6 +88,7 @@ function SourceCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
 }
 
 function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
+  const t = useTranslations("knowledge.table");
   const isExpired = chunk.retentionState === "expired";
   const isDeleted = chunk.deletionState === "deleted";
   const isEnabled = chunk.aiRetrieval && !isExpired && !isDeleted;
@@ -93,40 +98,40 @@ function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
       <div className="flex flex-col items-start gap-1">
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          AI Ready
+          {t("aiReady")}
         </span>
       </div>
     );
   }
 
   // Disabled State with Reason
-  let reasonLabel = "Disabled by Owner";
+  let reasonLabel = t("disabledByOwner");
   let ReasonIcon = Prohibit;
   let iconColor = "text-ink-subtle";
 
   const failureReason = chunk.ingestionFailureReason?.toLowerCase();
   if (failureReason === "dlp_detected") {
-    reasonLabel = "DLP Restricted";
+    reasonLabel = t("dlpRestricted");
     ReasonIcon = Prohibit;
     iconColor = "text-rose-500";
   } else if (failureReason === "security_scan_timeout") {
-    reasonLabel = "Scan Timeout";
+    reasonLabel = t("scanTimeout");
     ReasonIcon = Clock;
     iconColor = "text-amber-500";
   } else if (failureReason === "security_scan_failed") {
-    reasonLabel = "Scan Failed";
+    reasonLabel = t("scanFailed");
     ReasonIcon = Warning;
     iconColor = "text-amber-500";
   } else if (failureReason === "embedding_failed" || failureReason === "embedding_publish_failed") {
-    reasonLabel = "VectorDB Fail";
+    reasonLabel = t("vectorDbFail");
     ReasonIcon = Warning;
     iconColor = "text-rose-500";
   } else if (failureReason === "pii_unmasked") {
-    reasonLabel = "Unmasked PII";
+    reasonLabel = t("unmaskedPii");
     ReasonIcon = Warning;
     iconColor = "text-amber-500";
   } else if (isExpired || failureReason === "retention_expired") {
-    reasonLabel = "Retention Expired";
+    reasonLabel = t("retentionExpired");
     ReasonIcon = Clock;
     iconColor = "text-ink-subtle";
   }
@@ -135,7 +140,7 @@ function StateCell({ chunk }: { chunk: WorkspaceKnowledgeChunkDto }) {
     <div className="flex flex-col items-start gap-1">
       <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-medium text-rose-600 dark:text-rose-400 border border-rose-500/20">
         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-        Disabled
+        {t("disabled")}
       </span>
       <span className="text-[10px] text-ink-subtle flex items-center gap-1">
         <ReasonIcon size={11} className={cn("shrink-0", iconColor)} />
@@ -166,6 +171,9 @@ export function KnowledgeTable({
   onSelect,
   emptyHint,
 }: KnowledgeTableProps) {
+  const t = useTranslations("knowledge.table");
+  const tKnowledge = useTranslations("knowledge");
+  const tCategories = useTranslations("knowledge.factCategories");
   const allItems = useMemo(() => orderKnowledgeChunks(data?.items ?? []), [data?.items]);
   
   // Apply Retrieval Filter (All / Enabled / Disabled)
@@ -197,17 +205,17 @@ export function KnowledgeTable({
   return (
     <>
       <AdminFilterTabs
-        tabs={SOURCE_TABS}
+        tabs={translatedSourceTabs(tKnowledge)}
         value={filters.sourceTab}
         onChange={filters.setSourceTab}
-        label="Filter indexed knowledge by source"
-        trailing={items.length ? `${items.length} on this page` : undefined}
+        label={t("filterBySourceAriaLabel")}
+        trailing={items.length ? t("onThisPage", { count: items.length }) : undefined}
       />
 
       {/* Quick Tab Filter for Retrieval State */}
       <div className="py-2 flex items-center gap-2 border-b border-border/40 mb-2">
         <span className="text-[11px] font-medium text-ink-subtle uppercase tracking-wider mr-1">
-          WarpBot Retrieval:
+          {t("retrievalLabel")}
         </span>
         <button
           type="button"
@@ -219,7 +227,7 @@ export function KnowledgeTable({
               : "text-ink-muted hover:text-ink hover:bg-surface-2",
           )}
         >
-          All Knowledge
+          {t("allKnowledge")}
         </button>
         <button
           type="button"
@@ -232,7 +240,7 @@ export function KnowledgeTable({
           )}
         >
           <Lightning size={12} weight="fill" className="text-emerald-500 shrink-0" />
-          <span>Enabled in WarpBot</span>
+          <span>{t("enabledInWarpBot")}</span>
         </button>
         <button
           type="button"
@@ -245,16 +253,16 @@ export function KnowledgeTable({
           )}
         >
           <Prohibit size={12} className="text-rose-500 shrink-0" />
-          <span>Disabled in WarpBot</span>
+          <span>{t("disabledInWarpBot")}</span>
         </button>
       </div>
 
-      <FilterChipGroup label="Filter facts by category" className="pb-3">
+      <FilterChipGroup label={t("filterByCategoryAriaLabel")} className="pb-3">
         <FilterChip
           selected={factCategory === null}
           onClick={() => filters.setFactCategory(null)}
         >
-          All facts
+          {t("allFacts")}
         </FilterChip>
         {availableCategories.map((category) => (
           <FilterChip
@@ -262,7 +270,7 @@ export function KnowledgeTable({
             selected={factCategory === category}
             onClick={() => filters.setFactCategory(category)}
           >
-            {category}
+            {isKnownFactCategory(category) ? tCategories(category) : category}
           </FilterChip>
         ))}
       </FilterChipGroup>
@@ -270,20 +278,20 @@ export function KnowledgeTable({
       <AdminPanel>
         {isError ? (
           <div className="px-5 py-12 text-center">
-            <p className="text-[13px] text-ink">Could not read the index.</p>
+            <p className="text-[13px] text-ink">{t("readError")}</p>
             <p className="mt-1 text-[12px] text-ink-muted">
-              This is not the same as an empty workspace — the store did not answer.
+              {t("readErrorDetail")}
             </p>
             <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>
-              Try again
+              {t("tryAgain")}
             </Button>
           </div>
         ) : isLoading ? (
-          <div className="px-5 py-12 text-center text-[13px] text-ink-muted">Loading…</div>
+          <div className="px-5 py-12 text-center text-[13px] text-ink-muted">{t("loading")}</div>
         ) : items.length === 0 ? (
           <PagePlaceholder
             kind="knowledge"
-            title="Nothing indexed yet"
+            title={t("emptyTitle")}
             description={emptyHint}
           />
         ) : (
@@ -291,10 +299,10 @@ export function KnowledgeTable({
             <table className="w-full min-w-[860px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-border text-[10px] uppercase tracking-wide text-ink-subtle">
-                  <th className="px-4 py-2.5 font-medium">Source</th>
-                  <th className="px-4 py-2.5 font-medium">Fact</th>
-                  <th className="px-4 py-2.5 font-medium">Indexed text</th>
-                  <th className="px-4 py-2.5 font-medium">State</th>
+                  <th className="px-4 py-2.5 font-medium">{t("sourceColumn")}</th>
+                  <th className="px-4 py-2.5 font-medium">{t("factColumn")}</th>
+                  <th className="px-4 py-2.5 font-medium">{t("textColumn")}</th>
+                  <th className="px-4 py-2.5 font-medium">{t("stateColumn")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -313,7 +321,7 @@ export function KnowledgeTable({
                     }
                     tabIndex={onSelect ? 0 : undefined}
                     role={onSelect ? "button" : undefined}
-                    aria-label={onSelect ? `Open ${sourceLabel(chunk)}` : undefined}
+                    aria-label={onSelect ? t("openAria", { label: sourceLabel(chunk, tKnowledge) }) : undefined}
                     className={cn(
                       "border-b border-border/60 align-top last:border-0",
                       onSelect &&
@@ -329,7 +337,9 @@ export function KnowledgeTable({
                           <p className="text-[12px] leading-relaxed text-ink">{chunk.fact}</p>
                           {chunk.factCategory ? (
                             <span className="mt-1.5 inline-block rounded bg-surface-2 px-1.5 py-0.5 text-[10px] capitalize text-ink-muted">
-                              {chunk.factCategory}
+                              {isKnownFactCategory(chunk.factCategory)
+                                ? tCategories(chunk.factCategory)
+                                : chunk.factCategory}
                             </span>
                           ) : null}
                         </>
@@ -344,7 +354,7 @@ export function KnowledgeTable({
                         </p>
                       ) : (
                         <span className="text-[11px] text-ink-subtle">
-                          Indexed before content was kept
+                          {t("indexedBeforeText")}
                         </span>
                       )}
                     </td>
@@ -364,8 +374,7 @@ export function KnowledgeTable({
         // broken. Facts are extracted at index time, so anything stored before the extractor
         // shipped has none, and a workspace that has turned off external AI never will.
         <p className="mt-3 text-[11px] text-ink-subtle">
-          No facts on these rows. They were indexed before fact extraction, or this workspace
-          has external AI processing turned off — re-upload a document to extract facts for it.
+          {t("noFactsHint")}
         </p>
       ) : null}
 
@@ -377,7 +386,7 @@ export function KnowledgeTable({
             disabled={!canGoBack(cursorStack) || isFetching}
             onClick={filters.goBack}
           >
-            Back
+            {t("back")}
           </Button>
           <Button
             variant="outline"
@@ -385,7 +394,7 @@ export function KnowledgeTable({
             disabled={!data?.nextCursor || isFetching}
             onClick={() => filters.goNext(data?.nextCursor ?? null)}
           >
-            Next
+            {t("next")}
           </Button>
         </div>
       ) : null}

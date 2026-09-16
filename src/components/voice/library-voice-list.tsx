@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -71,6 +72,7 @@ export function LibraryVoiceList({
   onLanguageChange: (language: string) => void;
   search: string;
 }) {
+  const t = useTranslations("voiceProfiles.library");
   const catalogQuery = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
   const currentVoiceId = usePreferredVoiceId(profiles, language);
@@ -89,24 +91,24 @@ export function LibraryVoiceList({
         onSuccess: () =>
           toast.success(
             voiceId
-              ? "Set as the voice you hear for this language."
-              : "Cleared — back to the automatic voice.",
+              ? t("toasts.setAsHeard")
+              : t("toasts.clearedAutomatic"),
           ),
         onError: (error) =>
-          toast.error(getErrorMessage(error, "Could not save the voice you hear.")),
+          toast.error(getErrorMessage(error, t("toasts.saveFailed"))),
       },
     );
   }
 
   return (
     <WorkspaceListModule
-      title="Library voices"
+      title={t("title")}
       count={catalogQuery.isLoading ? undefined : voices.length}
       actions={
         <Select value={language} onValueChange={(value) => onLanguageChange(value ?? language)}>
           <SelectTrigger
             className="h-[28px] w-[152px] rounded-full text-[12.5px]"
-            aria-label="Language for the voice library"
+            aria-label={t("languageAriaLabel")}
           >
             <SelectValue />
           </SelectTrigger>
@@ -121,7 +123,7 @@ export function LibraryVoiceList({
       }
     >
       {catalogQuery.isLoading ? (
-        <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">Loading voices…</p>
+        <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">{t("loading")}</p>
       ) : voices.length === 0 ? (
         // A cold catalog is the normal state before the AI worker's first synthesis for this
         // language — say so plainly instead of showing it as a failure.
@@ -129,13 +131,13 @@ export function LibraryVoiceList({
           <PagePlaceholder
             kind="voice-profiles"
             className="min-h-[240px]"
-            title={`No voices for ${getLanguageName(language)} yet`}
-            description="They appear after the first translation into this language in a meeting."
+            title={t("noVoicesTitle", { language: getLanguageName(language) })}
+            description={t("noVoicesDescription")}
           />
         </div>
       ) : filtered.length === 0 ? (
         <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">
-          No library voice matches that search.
+          {t("noMatch")}
         </p>
       ) : (
         filtered.map((voice) => {
@@ -145,9 +147,9 @@ export function LibraryVoiceList({
               key={voice.id}
               tone="library"
               name={voice.name}
-              badge={active ? <VoiceChip tone="active">You hear this</VoiceChip> : undefined}
+              badge={active ? <VoiceChip tone="active">{t("youHearThis")}</VoiceChip> : undefined}
               secondary={voice.gender ? capitalise(voice.gender) : "—"}
-              statusText={active ? "Your default" : undefined}
+              statusText={active ? t("yourDefault") : undefined}
               actions={
                 <>
                   <VoicePreviewButton voiceId={voice.id} language={language} label={voice.name} />
@@ -158,7 +160,7 @@ export function LibraryVoiceList({
                     disabled={setPreferred.isPending}
                     onClick={() => choose(active ? null : voice.id)}
                   >
-                    {active ? "Clear" : "Use"}
+                    {active ? t("clear") : t("use")}
                   </Button>
                 </>
               }
@@ -184,6 +186,7 @@ export function ListeningVoiceSummary({
   profiles: VoiceProfileDto[];
   language: string;
 }) {
+  const t = useTranslations("voiceProfiles.listeningSummary");
   const currentVoiceId = usePreferredVoiceId(profiles, language);
   const { data: catalog = [] } = useVoiceCatalog(language);
   const setPreferred = useSetPreferredVoice();
@@ -195,16 +198,16 @@ export function ListeningVoiceSummary({
 
   return (
     <WorkspaceRailModule
-      title="Voices you hear"
-      description={`Used for a speaker in ${getLanguageName(language)} who has not picked a voice of their own.`}
+      title={t("title")}
+      description={t("description", { language: getLanguageName(language) })}
     >
-      <p className="text-[13px] font-medium text-ink">{name ?? "Automatic"}</p>
+      <p className="text-[13px] font-medium text-ink">{name ?? t("automatic")}</p>
       {currentVoiceId ? (
         <div className="flex items-center justify-between gap-2">
           <VoicePreviewButton
             voiceId={currentVoiceId}
             language={language}
-            label="the voice you hear"
+            label={t("previewLabel")}
             variant="inline"
           />
           <Button
@@ -216,19 +219,19 @@ export function ListeningVoiceSummary({
               setPreferred.mutate(
                 { language, voiceId: null },
                 {
-                  onSuccess: () => toast.success("Cleared — back to the automatic voice."),
+                  onSuccess: () => toast.success(t("toasts.cleared")),
                   onError: (error) =>
-                    toast.error(getErrorMessage(error, "Could not clear the voice you hear.")),
+                    toast.error(getErrorMessage(error, t("toasts.clearFailed"))),
                 },
               )
             }
           >
-            Clear
+            {t("clear")}
           </Button>
         </div>
       ) : (
         <p className="text-[11.5px] text-ink-subtle">
-          Press Use on a library voice to pick one for this language.
+          {t("hint")}
         </p>
       )}
     </WorkspaceRailModule>

@@ -31,6 +31,7 @@ export function DashboardHero({
   description,
   actionLabel,
   actionHref,
+  dismissLabel,
   /** Bumped when the message changes, so a new banner is not hidden by an old dismissal. */
   messageKey,
 }: {
@@ -38,6 +39,7 @@ export function DashboardHero({
   description: string;
   actionLabel: string;
   actionHref: string;
+  dismissLabel: string;
   messageKey: string;
 }) {
   // Read after mount, never during render: localStorage does not exist while the server renders
@@ -75,7 +77,7 @@ export function DashboardHero({
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss"
+        aria-label={dismissLabel}
         className="absolute right-3 top-3 z-10 grid size-6 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <X size={11} weight="bold" />

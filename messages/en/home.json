@@ -1,0 +1,15 @@
+{
+  "quickJumps": "Quick jumps",
+  "actions": {
+    "createRoom": "Create room",
+    "findMeeting": "Find meeting",
+    "joinByCode": "Join by code",
+    "meetings": "Meetings",
+    "history": "History",
+    "documents": "Documents",
+    "members": "Members",
+    "billing": "Billing",
+    "dashboard": "Dashboard",
+    "settings": "Settings"
+  }
+}

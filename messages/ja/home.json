@@ -1,0 +1,15 @@
+{
+  "quickJumps": "ショートカット",
+  "actions": {
+    "createRoom": "ミーティングを作成",
+    "findMeeting": "ミーティングを検索",
+    "joinByCode": "コードで参加",
+    "meetings": "ミーティング",
+    "history": "履歴",
+    "documents": "ドキュメント",
+    "members": "メンバー",
+    "billing": "請求",
+    "dashboard": "ダッシュボード",
+    "settings": "設定"
+  }
+}

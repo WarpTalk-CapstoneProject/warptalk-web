@@ -38,21 +38,32 @@ A few spots keep English-only text on purpose, called out inline in the code wit
 - **`src/app/page.tsx`**: the hand-tuned SVG story-board branch labels (`live`, `low latency`, `room signal`, crossing-diagram language names, `decisions`/`questions`/etc.) and the small `feature-wave-labels`/`feature-language-line` word chips. These are positioned/sized against exact English character widths in a bespoke animation; translating them needs per-locale layout re-tuning, not a blind string swap.
 - **`src/app/page.tsx`**'s `LoadingScreen` splash (`loaderWords`, the `WalpTalk` wordmark) — transient branding, not information-bearing.
 
-## What's migrated (Phase A) vs. what's next (Phase B)
+## What's migrated (Phase A + Phase B batches) vs. what's next
 
-Per WT-607's own scope ("không cần dịch toàn bộ ứng dụng trong ticket đầu tiên này nếu blast radius quá lớn"), this rollout is intentionally a vertical slice + a repeatable pattern, not a full-app pass in one PR.
+Per WT-607's own scope ("không cần dịch toàn bộ ứng dụng trong ticket đầu tiên này nếu blast radius quá lớn"), this rollout is a sequence of small, independently-verified batches (typecheck + lint + `test:i18n-catalog` + `test:contracts` + build, then a commit, per batch) rather than a full-app pass in one PR. Batch order and the layout-safety strategy are in the plan history; this section tracks actual progress.
 
-**Done:**
+**Done — Phase A (landing/auth/legal/nav):**
 - Landing page (`src/app/page.tsx`) — nav, hero, feature/signal copy, pricing chrome, footer.
 - All five auth pages — login, register (+ zod schemas), forgot-password, reset-password, verify-email — and `CinematicAuthShell`/`LegalPlaceholder` shared components.
 - `terms` / `privacy` pages.
-- The primary authenticated app nav in `linear-sidebar.tsx` (`mainNav`, `workspaceNav`, the workspace-switch toasts).
-- The language switcher on the authenticated app shell's topbar (`src/app/(app)/layout.tsx`) — the one piece of Phase A explicitly deferred in the previous pass, now wired in as a `compact` icon-only control alongside `ThemeToggleButton`.
+- The primary authenticated app nav in `linear-sidebar.tsx` (`mainNav`, `workspaceNav`, the workspace-switch toasts) and the topbar's `compact` `LanguageSwitcher`.
+
+**Done — Phase B batch 1 (core workspace, light pages):**
+- `home`, `tasks`, `ai-chat` pages — fully self-contained, no notable subcomponents.
+- `dashboard` page **and its five subcomponents** (`dashboard-hero`, `cycle-summary`, `member-usage`, `usage-breakdown`, `usage-trend`) — including proper ICU plural forms (`{count, plural, one {...} other {...}}`) for "N day(s)"/"N document(s)"/"N charge(s)", which Phase A's simpler `{count}`-substitution pattern didn't need but this batch's English source text actually required for correctness.
+- `knowledge` page **and its two subcomponents** (`knowledge-table`, `knowledge-chunk-sheet`) — including the shared lib `src/lib/knowledge/knowledge-view.ts` (`sourceLabel`, new `sourceTypeLabel`, `translatedSourceTabs`, all with the optional-translator pattern) and `src/lib/billing/usage-labels.ts` (`usageTypeLabel`/`usageTypeDetailLabel`, same pattern) — both **shared with not-yet-migrated pages** (the admin Knowledge tab, the billing pages), so those keep compiling and keep today's English via the same default-parameter trick as `getPlanDescription`.
+- `voice-profiles` page **and all five of its subcomponents** (`voice-consent-card`, `my-dub-voice-picker`, `library-voice-list`, `voice-profile-list`, `create-voice-profile-dialog`).
+
+**A hard exception, found and deliberately preserved — not a gap to fix later:** the five consent statement labels in `create-voice-profile-dialog.tsx` (`CONSENT_ITEMS`) are **never routed through i18n**. The server hashes that exact English text (`VoiceProfileConsentContract.CanonicalContractText`) and the hash is the only record of what a person agreed to — translating the display text would desynchronize the on-screen wording from what the hash actually attests to. Only the chrome around them (dialog title, buttons, other fields) is translated. See the comment at that file's `CONSENT_ITEMS` declaration before ever touching it.
+
+**A `isKnownFactCategory` lesson worth repeating**: it was first added to `src/lib/knowledge/knowledge-view.ts`, which has a **hard contract-test-enforced constraint** (`check-admin-knowledge-contract.mjs`) requiring that file to stay free of *value* imports (type-only), so `node:test` can exercise it without a module resolver. Importing `FACT_CATEGORIES` as a value there broke that contract. Fixed by moving the helper to `src/types/workspace-knowledge.ts`, which already owns `FACT_CATEGORIES` as a value export. **Before adding a helper to a `lib/*-view.ts` file, check whether a contract script asserts that file's import shape.**
+
+**Contract tests updated to stay meaningful, not weakened:** `scripts/check-admin-knowledge-contract.mjs` used to `assert.match` the page/component *source* against literal English strings ("Only a workspace Owner or Admin can see what has been indexed", "Could not read the index", "Nothing indexed yet") to prove a gate/state existed. Once those strings became `t("key")` calls, the literal-text assertions started failing — correctly, since the literal text really was gone from the source. Fixed by asserting **both halves of the same guarantee**: the component source calls the expected translation key, AND `messages/en/<namespace>.json` still carries the original English wording at that key. This is the general fix pattern for any future contract test that breaks the same way — never delete the assertion, split it in two.
 
 **Not yet migrated — follow the pattern above, page by page:**
-- The ~100 remaining authenticated app pages (dashboard, rooms, admin console, settings, billing, etc.).
-- The admin console nav and the settings-page collapsed nav inside `linear-sidebar.tsx` (same file as the migrated nav — deliberately scoped out this pass, see `app-layout.md`).
-- The remaining `toast(...)` call sites outside the migrated files (~60+ across the app).
+- The ~90 remaining authenticated app pages per the batch plan: rooms/history/schedules (batch 2), documents/glossary/members (batch 3), settings/billing (batch 4), admin console — 13 pages (batch 5), platform billing/workspace lifecycle (batch 6), standalone routes (batch 7), the live meeting room — highest-risk, done last (batch 8).
+- The admin console nav and the settings-page collapsed nav inside `linear-sidebar.tsx` (same file as the migrated nav — deliberately scoped out, covered by batch 5).
+- The remaining `toast(...)` call sites outside the migrated files.
 - Email templates under `src/emails` (React Email renders server-side without the request-scoped locale cookie readily available; needs the recipient's saved locale preference passed explicitly at send time).
 - Persisting a user's locale preference server-side (`warptalk-backend`) so it follows them across devices — today it's a browser cookie only, which is enough for a working feature but not cross-device.
 
@@ -67,6 +78,7 @@ Per WT-607's own scope ("không cần dịch toàn bộ ứng dụng trong ticke
 - `src/app/terms/page.tsx`, `src/app/privacy/page.tsx`, `src/components/legal/legal-placeholder.tsx`
 - `src/components/layout/linear-sidebar.tsx`
 - `scripts/check-english-ui.mjs` (doc comment only — logic unchanged)
+- **Phase B batch 1**: `src/app/(app)/[workspaceSlug]/{home,tasks,ai-chat,dashboard,knowledge,voice-profiles}/page.tsx`; `src/app/(app)/[workspaceSlug]/dashboard/components/*.tsx`; `src/components/knowledge/{knowledge-table,knowledge-chunk-sheet}.tsx`; `src/components/voice/{voice-consent-card,my-dub-voice-picker,library-voice-list,voice-profile-list,create-voice-profile-dialog}.tsx`; `src/lib/knowledge/knowledge-view.ts`; `src/lib/billing/usage-labels.ts`; `src/types/workspace-knowledge.ts`; `messages/{en,vi,ja}/{home,tasks,aiChat,dashboard,knowledge,voiceProfiles}.json`; `src/i18n/request.ts` (namespaces registered); `scripts/check-admin-knowledge-contract.mjs` (assertions updated to the i18n-aware pattern above).
 
 ## Typography note — CJK needs different metrics
 
@@ -103,3 +115,5 @@ This is not cosmetic fine-tuning — it fixes a real defect found during browser
 - [x] `2026-09-16` re-run after the branch caught up with 3 rounds of `development` merges: typecheck/lint/`test:contracts`/build all still pass clean on the merged state, so the i18n layer didn't regress against ~5 months of unrelated feature work landing in parallel.
 - [x] `2026-09-16`: the topbar `compact` `LanguageSwitcher` (`src/app/(app)/layout.tsx`) initially rendered its `Globe` icon at `size={16}` inside the same 24px circle its neighbors (`ThemeToggleButton`, the help button) use for a `size={12}` icon — caught by diffing against those sibling components' source, not by looking at a screenshot, and fixed to match.
 - [ ] Manual: inside a workspace (needs a running backend), confirm the sidebar nav labels translate **and** that the new topbar `compact` switcher renders and functions. Not exercised — the local backend/gateway was not running during this or the previous pass, so authenticated routes could not be loaded. These are covered by `test:i18n-catalog`, typecheck, and (for the icon sizing) direct comparison against sibling component source, but have not actually been seen on screen.
+- [x] `2026-09-16` Phase B batch 1 (`home`/`tasks`/`ai-chat`/`dashboard`/`knowledge`/`voice-profiles` + their subcomponents): `typecheck`, `lint` (0 errors), `test:i18n-catalog` (23 subtests), and `test:contracts` (full chain, exit 0 — including the two `check-admin-knowledge-contract.mjs` assertions repaired for the i18n-aware pattern) all pass; production `build` succeeds.
+- [ ] Manual in-browser verification of batch 1's authenticated pages was **not possible** in this environment: `warptalk-backend`'s gateway isn't running, and `src/proxy.ts` gates every `(app)/[workspaceSlug]/*` route behind an `HttpOnly` access-token cookie that can't be set from a script — the middleware always redirects to `/login` before the page renders. This is a real gap, not a formality: the layout-safety analysis for this batch (knowledge-table's badge column, the various `Workspace*Module`/`Workspace*Pill` components) was done by reading source and cross-checking against the CSS classes already verified safe in the Phase A exploration, **not** by looking at the rendered page. Re-verify visually the first time a local backend is available, starting with `[workspaceSlug]/knowledge` in `ja` (the batch's one real risk zone: the State column's badge pills).
