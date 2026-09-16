@@ -38,6 +38,14 @@ export const API = {
      * needed it. Answers 204 for any address, so it says nothing about who has an account.
      */
     resendVerification: "/auth/resend-verification-request",
+    /**
+     * The caller's own signed-in sessions (refresh-token families). There is deliberately no
+     * endpoint for ending the CURRENT one here — that is `logout`, which clears the cookies in the
+     * same response; the server answers 409 if `revokeSession` is pointed at it.
+     */
+    sessions: "/auth/sessions",
+    revokeSession: (id: string) => `/auth/sessions/${id}`,
+    revokeOtherSessions: "/auth/sessions/revoke-others",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",

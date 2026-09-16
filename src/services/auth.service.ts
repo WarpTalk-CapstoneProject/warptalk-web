@@ -8,6 +8,7 @@ import type {
   RegisterRequest,
   UpdateProfileRequest,
   UserDto,
+  UserSessionDto,
   UserSettingsDto,
   UpdateUserSettingsRequest,
 } from "@/types/auth";
@@ -48,6 +49,21 @@ export const authService = {
     return apiClient.post<void>(API.auth.logout, {}, {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     });
+  },
+
+  /** My live sessions; the one making this request carries `isCurrent`. */
+  getSessions() {
+    return apiClient.get<UserSessionDto[]>(API.auth.sessions);
+  },
+
+  /** End one of my OTHER sessions. The current one ends through the auth store's logout(). */
+  revokeSession(id: string) {
+    return apiClient.delete<void>(API.auth.revokeSession(id));
+  },
+
+  /** End every session except this one. */
+  revokeOtherSessions() {
+    return apiClient.post<void>(API.auth.revokeOtherSessions);
   },
 
   getProfile() {
