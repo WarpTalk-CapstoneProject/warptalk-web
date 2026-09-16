@@ -1,40 +1,203 @@
-// The two in-chat plugin cards are turn-scoped, and nothing but a user click used to say so.
-// A Connect card that outlives its turn is not cosmetic: it sits under a successful answer, it
-// survives New chat, and pressing it there opens an OAuth flow the current turn never asked for.
-// The two cards could also stack, one per error code, even though "press Connect" and "no button
-// will help" cannot both be true of the same failure.
+// WarpBot's in-chat cards — a question or write confirmation, a Connect prompt, an operator-setup
+// notice — last until the NEXT turn starts. Both ends of that rule have broken before.
+//
+// Cleared too late: nothing but a user click used to end a card, so a Connect card survived New
+// chat, where pressing it opened an OAuth flow the current turn never asked for, and two cards
+// could stack up, one per error code.
+//
+// Cleared too early: the fix for that also cleared the cards when their own turn's answer landed.
+// But a card is raised MID-turn, when the plugin tool returns, and the answer that arrives next is
+// the one explaining it ("connect Google Calendar", "confirm this write"). Clearing there erased
+// the card moments after it appeared, before anyone could press it — and in a meeting, a plugin
+// write's Confirm card with it, so a write could not realistically be approved (WT-688).
+//
+// So every surface is checked for both halves: the cards ARE cleared where a new turn or a
+// different conversation begins, and are NOT cleared where a turn completes or fails. Each check
+// reads the one handler or function it is about, not the whole file, so a clear that moves from
+// the right place to the wrong one cannot keep the count and pass.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
-const source = readFileSync(join(root, "src/components/layout/global-chatbot.tsx"), "utf8");
 
-function assertIncludes(token, message) {
+function read(relativePath) {
+  return readFileSync(join(root, relativePath), "utf8");
+}
+
+/** The source from `start` up to the first `end` after it. Fails loudly when either is missing. */
+function slice(source, file, start, end) {
+  const from = source.indexOf(start);
+  if (from === -1) {
+    throw new Error(
+      `${file}: could not find ${JSON.stringify(start)}, so the card lifecycle there cannot be checked. If it was renamed, update this script to the new name rather than deleting the check.`,
+    );
+  }
+  const to = source.indexOf(end, from + start.length);
+  if (to === -1) {
+    throw new Error(
+      `${file}: could not find where ${JSON.stringify(start)} ends, so the card lifecycle there cannot be checked. Update this script to the new shape.`,
+    );
+  }
+  return source.slice(from, to);
+}
+
+function assertIncludes(source, token, message) {
   if (!source.includes(token)) throw new Error(message);
 }
 
+function assertNotIncludes(source, token, message) {
+  if (source.includes(token)) throw new Error(message);
+}
+
+const ERASED_ON_ARRIVAL =
+  "A card is raised mid-turn and the answer that lands next is the one explaining it, so clearing it when the turn ends erases it before anyone can press it.";
+
+// --- The WarpBot widget ---------------------------------------------------------------------------
+
+const widgetFile = "src/components/layout/global-chatbot.tsx";
+const widget = read(widgetFile);
+
 assertIncludes(
+  widget,
   "const clearPluginCards = useCallback(",
-  "global-chatbot must clear both plugin cards from one place.",
+  "global-chatbot must clear both plugin cards from one place, so no boundary can clear one and forget the other.",
 );
 
-// Turn boundaries: start, success, failure — plus both ways of changing conversation.
-const clearCalls = source.match(/clearPluginCards\(\)/g) ?? [];
-if (clearCalls.length < 5) {
-  throw new Error(
-    `Plugin cards must be cleared on every turn and conversation boundary; found ${clearCalls.length} clearPluginCards() calls, expected at least 5.`,
+for (const [name, start] of [
+  ["sending a message", "const sendMessage = async ("],
+  ["New chat", "const startNewConversation = () => {"],
+  ["opening a conversation from history", "const openConversationFromHistory = async ("],
+]) {
+  assertIncludes(
+    slice(widget, widgetFile, start, "\n  };"),
+    "clearPluginCards()",
+    `global-chatbot must clear the plugin cards on ${name}. A card left over from an earlier turn or conversation offers an OAuth flow the current turn never asked for.`,
   );
+}
+
+for (const event of ["AssistantMessageCompleted", "AssistantMessageFailed"]) {
+  const handler = slice(widget, widgetFile, `"${event}",`, "connection.on(");
+  for (const clear of [
+    "clearPluginCards()",
+    "setPendingPluginConnection(null)",
+    "setPendingPluginSetup(null)",
+  ]) {
+    assertNotIncludes(
+      handler,
+      clear,
+      `global-chatbot must not clear the plugin cards in its ${event} handler. ${ERASED_ON_ARRIVAL}`,
+    );
+  }
 }
 
 // Exclusivity is enforced, not assumed of the worker: one payload carrying both keys must not
 // render both cards, and the operator-setup card is the one that wins.
 assertIncludes(
+  widget,
   "if (pluginSetup) {",
   "The operator-setup card must be chosen explicitly, not set unconditionally.",
 );
 assertIncludes(
+  widget,
   "} else if (pluginConnection) {",
   "The connect card must be the else branch of the operator-setup card, so the two cannot both render.",
+);
+
+// --- /ai-chat ---------------------------------------------------------------------------------------
+
+const aiChatFile = "src/app/(app)/[workspaceSlug]/ai-chat/page.tsx";
+const aiChat = read(aiChatFile);
+
+assertIncludes(
+  slice(aiChat, aiChatFile, "async function sendContent(", "\n  }\n"),
+  "clearPluginCards()",
+  "/ai-chat must clear the plugin cards when a message is sent: that is where the next turn starts.",
+);
+assertIncludes(
+  slice(aiChat, aiChatFile, "function selectConversation(", "\n  }\n"),
+  "clearPluginCards()",
+  "/ai-chat must clear the plugin cards when switching conversation, or a Connect card from one conversation is offered in another.",
+);
+assertIncludes(
+  slice(aiChat, aiChatFile, "async function handleCreateConversation(", "\n  }\n"),
+  "selectConversation(",
+  "/ai-chat's New conversation must go through selectConversation, which is what clears the plugin cards.",
+);
+
+// The whole hub effect, not one handler: on this page no hub event starts a turn — the page's own
+// send does — so nothing registered on the connection has any reason to clear a card. The one
+// exception is cut out first: the AssistantQuestion handler nulls one plugin card while setting the
+// other, which is the setup-beats-Connect exclusivity, not the end of a turn.
+const aiChatHubEffect = slice(aiChat, aiChatFile, "createHubConnection(", "return () => {");
+const aiChatHub = aiChatHubEffect.replace(
+  slice(aiChatHubEffect, aiChatFile, '"AssistantQuestion",', "\n    );"),
+  "",
+);
+for (const clear of [
+  "clearPluginCards()",
+  "setPendingPluginConnection(null)",
+  "setPendingPluginSetup(null)",
+]) {
+  assertNotIncludes(
+    aiChatHub,
+    clear,
+    `/ai-chat must not clear the plugin cards from a hub event handler such as AssistantMessageCompleted or AssistantMessageFailed. ${ERASED_ON_ARRIVAL}`,
+  );
+}
+
+// --- The meeting panel's store ----------------------------------------------------------------------
+// Behaviour is also pinned by src/stores/__tests__/assistant-trail.test.ts; this keeps the shape the
+// tests rely on from being routed around.
+
+const storeFile = "src/stores/translationRoom-store.ts";
+const store = read(storeFile);
+const CARD_SLOTS = [
+  "assistantQuestionsJson: null",
+  "assistantPluginConnectionJson: null",
+  "assistantPluginSetupJson: null",
+];
+
+const seal = slice(store, storeFile, "sealAssistantTrail: (messageId) =>", "\n    }),");
+for (const slot of CARD_SLOTS) {
+  assertNotIncludes(
+    seal,
+    slot,
+    `The meeting store must not clear ${slot.split(":")[0]} in sealAssistantTrail, which runs when the answer arrives. ${ERASED_ON_ARRIVAL} In a meeting this is also the write-confirmation card.`,
+  );
+}
+
+const beginTurn = slice(store, storeFile, "beginAssistantTurn: () =>", "\n    })),");
+for (const slot of CARD_SLOTS) {
+  assertIncludes(
+    beginTurn,
+    slot,
+    `The meeting store must clear ${slot.split(":")[0]} in beginAssistantTurn. Cards outlive their own answer, so the next turn is the only thing that ends them on the asker's screen.`,
+  );
+}
+
+const clearCards = slice(store, storeFile, "clearAssistantCards: () =>", "\n    }),");
+for (const slot of CARD_SLOTS) {
+  assertIncludes(
+    clearCards,
+    slot,
+    `The meeting store's clearAssistantCards must clear ${slot.split(":")[0]}. It is what ends the previous turn's cards on the screens of participants who did not ask.`,
+  );
+}
+
+const noteActivity = slice(store, storeFile, "noteAssistantActivity: (toolName = null", "\n    }),");
+for (const slot of CARD_SLOTS) {
+  assertNotIncludes(
+    noteActivity,
+    slot,
+    `The meeting store must not clear ${slot.split(":")[0]} in noteAssistantActivity, even on idle -> thinking. On a client that did not ask, the panel's answer baseline is stale and drops the state to idle mid-turn, so a later tool call of the same turn would look like a new turn and erase the card that turn just raised.`,
+  );
+}
+
+const sessionFile = "src/components/rooms/live/persistent-meeting-session.tsx";
+assertIncludes(
+  slice(read(sessionFile), sessionFile, '"ChatAssistantResponsePending"', "\n    });"),
+  "clearAssistantCards()",
+  "The meeting session must clear the previous turn's cards on ChatAssistantResponsePending. Only the asker's panel runs beginAssistantTurn; this is the once-per-turn signal every other participant receives, and it always arrives before that turn's own card.",
 );
 
 console.log("Plugin card lifecycle contract passed.");
