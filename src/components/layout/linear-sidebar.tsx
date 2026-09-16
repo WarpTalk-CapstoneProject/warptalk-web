@@ -59,7 +59,6 @@ import {
   Star,
   User,
   Users,
-  Warning,
   Waveform,
   X,
   Brain,
@@ -360,9 +359,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
    * chrome would flip to the main app nav on the way, dropping the reader out of Settings at the
    * one moment they most need the way back to Billing.
    */
+  // `/advanced` was a third entry here until its two cards moved to /settings/security on
+  // 2026-09-16. Security lives under /settings, so `includes("/settings")` already covers it —
+  // but the line had to go WITH the route: left behind it would have matched nothing, and
+  // removed without moving the page it would have dropped the reader out of Settings.
   const isSettingsPage =
     pathname.includes("/settings") ||
-    pathname.includes("/advanced") ||
     pathname.includes("/payment");
 
   /**
@@ -638,11 +640,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         href: `/${activeWorkspaceSlug}/settings/member-roles`,
       });
     }
-    if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
+    // Security, not Advanced: Owner AND Admin, because an Admin reads the access settings and
+    // changes the ones that are theirs to change. The owner-only half — verified domains and the
+    // danger zone — gates itself inside the page.
+    if (isOwnerOrAdmin && activeWorkspaceSlug) {
       settingsItems.push({
-        icon: Warning,
-        label: "Advanced",
-        href: `/${activeWorkspaceSlug}/advanced`,
+        icon: ShieldCheck,
+        label: "Security",
+        href: `/${activeWorkspaceSlug}/settings/security`,
       });
     }
 
@@ -822,15 +827,15 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </Link>
                   </div>
                 )}
-                {role?.toLowerCase() === "owner" && (
+                {isOwnerOrAdmin && (
                   <div className={cn(
                     "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/advanced` ? "bg-surface-2 text-destructive" : "hover:bg-surface-2 hover:text-destructive"
+                    pathname === `/${activeWorkspaceSlug}/settings/security` ? "bg-surface-2" : "hover:bg-surface-2"
                   )}>
-                    <Link href={`/${activeWorkspaceSlug}/advanced`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                      <Warning size={16} className="shrink-0 text-destructive/80 group-hover:text-destructive transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-destructive transition-colors truncate">
-                        Advanced
+                    <Link href={`/${activeWorkspaceSlug}/settings/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                      <ShieldCheck size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                        Security
                       </span>
                     </Link>
                   </div>
