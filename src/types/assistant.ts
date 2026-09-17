@@ -153,6 +153,82 @@ export interface AssistantPluginCatalogItemDto {
    * and this field is always absent.
    */
   workspacePolicyBlockReason?: string | null;
+  /**
+   * Whether the workspace the catalog was listed for has this plugin (plugin marketplace,
+   * 2026-09-17). `added`: a marketplace plugin the workspace has. `private`: an MCP plugin the
+   * workspace's Owner created, visible only there. `not_added`: a member may ask the Owner for it.
+   * Absent when the catalog was listed without a workspace, or by a server older than the marketplace.
+   */
+  workspaceAvailability?: WorkspacePluginAvailability | null;
+  /** `pending` when the caller has already asked this workspace's Owner for the plugin. */
+  requestStatus?: PluginRequestStatus | null;
+}
+
+export type WorkspacePluginAvailability = "added" | "private" | "not_added";
+
+export type PluginRequestStatus = "pending" | "approved" | "declined";
+
+/** One plugin as the workspace Owner's Plugins page shows it. */
+export interface WorkspacePluginItemDto {
+  key: string;
+  provider: string;
+  label: string;
+  description: string;
+  avatarUrl?: string | null;
+  kind: string;
+  availability: WorkspacePluginAvailability;
+  /** Only for a private plugin, which the Owner created and may edit. */
+  mcpServerUrl?: string | null;
+  /** Null for a row seeded by the transition, and for every marketplace candidate. */
+  addedBy?: string | null;
+  addedAt?: string | null;
+  /**
+   * Distinct members who have run one of its tools in this workspace. Connections are personal, so
+   * "members connected" is not something the server can count per workspace; this is.
+   */
+  membersUsedCount: number;
+}
+
+export interface WorkspacePluginRequestDto {
+  id: string;
+  workspaceId: string;
+  pluginKey: string;
+  pluginLabel: string;
+  pluginAvatarUrl?: string | null;
+  requestedBy: string;
+  reason?: string | null;
+  status: PluginRequestStatus;
+  createdAt: string;
+  decidedBy?: string | null;
+  decidedAt?: string | null;
+}
+
+/** GET /assistant/workspaces/{id}/plugins — Owner or Admin. */
+export interface WorkspacePluginsOverviewDto {
+  workspaceId: string;
+  /**
+   * False while the workspace is still on the pre-marketplace "Allow personal plugins" default:
+   * every marketplace plugin then reads as added (or none does, if the switch was off), and the
+   * Owner's first change turns that into an explicit list.
+   */
+  isCurated: boolean;
+  /** Only the Owner changes the list; an Admin reads it. */
+  canManage: boolean;
+  inWorkspace: WorkspacePluginItemDto[];
+  marketplace: WorkspacePluginItemDto[];
+  pendingRequests: WorkspacePluginRequestDto[];
+}
+
+export interface CreatePrivatePluginRequest {
+  label: string;
+  mcpServerUrl: string;
+  description?: string;
+}
+
+export interface UpdatePrivatePluginRequest {
+  label?: string;
+  description?: string;
+  mcpServerUrl?: string;
 }
 
 /**

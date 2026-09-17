@@ -25,6 +25,7 @@ import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useAssistantPlugins,
   useDisableAssistantPlugin,
@@ -33,6 +34,8 @@ import {
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
+import { useRequestPlugin } from "@/hooks/use-workspace-plugins";
+import { memberPluginAction, PLUGIN_REQUEST_REASON_MAX } from "@/lib/assistant/plugin-availability";
 import {
   formatPluginLabelList,
   pluginWorkspaceBlock,
@@ -637,6 +640,101 @@ function ConnectPluginDialog({
 }
 
 /**
+ * Asking the workspace Owner for a plugin the workspace has not added (plugin marketplace,
+ * 2026-09-17). The same shape as ConnectPluginDialog on purpose — WarpTalk on one side, the plugin
+ * on the other — because it is the same moment for the member: they want this plugin.
+ */
+function RequestPluginDialog({
+  plugin,
+  workspaceName,
+  isSending,
+  onClose,
+  onSend,
+}: {
+  plugin: AssistantPluginCatalogItemDto;
+  workspaceName: string | null;
+  isSending: boolean;
+  onClose: () => void;
+  onSend: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Ask for ${plugin.label}`}
+        data-testid="plugin-request-dialog"
+        className="relative max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl"
+      >
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Close request dialog"
+          onClick={onClose}
+          className="absolute right-4 top-4"
+        >
+          <X size={16} />
+        </Button>
+
+        <div className="flex flex-col items-center gap-5 text-center">
+          <div className="flex items-center gap-4">
+            <div className="grid size-14 place-items-center rounded-xl border border-border bg-surface-1">
+              <WarpTalkBrand compact className="h-6 w-[27px]" />
+            </div>
+            <span aria-hidden className="flex w-12 items-center gap-1.5 text-ink-subtle">
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+              <ShieldCheck size={15} />
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+            </span>
+            <PluginGlyph plugin={plugin} size="lg" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold leading-snug tracking-tight">Ask for {plugin.label}</h2>
+            <p className="mx-auto mt-1.5 max-w-[400px] text-sm text-ink-muted">
+              Only a workspace owner can add plugins to {workspaceName?.trim() || "this workspace"}.
+              They&apos;ll get a notification, and you&apos;ll hear back either way.
+            </p>
+          </div>
+        </div>
+
+        <form
+          className="mt-5 flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSend(reason);
+          }}
+        >
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            <span>
+              Why do you need it? <span className="font-normal text-ink-muted">Optional</span>
+            </span>
+            <Textarea
+              value={reason}
+              maxLength={PLUGIN_REQUEST_REASON_MAX}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder={`e.g. Use ${plugin.label} with meeting action items`}
+              className="min-h-20 bg-surface-1 text-sm"
+            />
+          </label>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSending}>
+              {isSending ? <Spinner className="animate-spin" size={14} /> : null}
+              Send request
+            </Button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+/**
  * How long after opening consent a focus event is still assumed to be the browser's, not the user's.
  *
  * A tab that opens behind the current one hands focus straight back, and a focus event in that same
@@ -685,6 +783,7 @@ export default function PluginsPage() {
   // workspace-shaped (the [workspaceSlug] route redirects here), and the store is where the rest of
   // the shell reads the active workspace on routes like this one.
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
 
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();
@@ -692,6 +791,9 @@ export default function PluginsPage() {
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
   const updateToolPolicy = useUpdatePluginToolPolicy();
+  const requestPlugin = useRequestPlugin(workspaceId);
+  // The row whose Request dialog is open, by key for the same reason as selectedPluginKey below.
+  const [requestPluginKey, setRequestPluginKey] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
   // The KEY, not the row. Holding the object froze the dialog at the moment it opened: it kept
@@ -738,6 +840,11 @@ export default function PluginsPage() {
   const selectedPlugin = useMemo(
     () => plugins.find((plugin) => plugin.key === selectedPluginKey) ?? null,
     [plugins, selectedPluginKey],
+  );
+
+  const requestPluginRow = useMemo(
+    () => plugins.find((plugin) => plugin.key === requestPluginKey) ?? null,
+    [plugins, requestPluginKey],
   );
 
   const consentPluginKey = consent?.pluginKey ?? null;
@@ -945,6 +1052,17 @@ export default function PluginsPage() {
     };
   }, [consent, settleConsent]);
 
+  async function sendPluginRequest(plugin: AssistantPluginCatalogItemDto, reason: string) {
+    if (!workspaceId) return;
+    try {
+      await requestPlugin.mutateAsync({ pluginKey: plugin.key, reason });
+      setRequestPluginKey(null);
+      toast.success("Request sent to your workspace owner");
+    } catch {
+      toast.error(`Could not ask for ${plugin.label}.`);
+    }
+  }
+
   /** WT-687 — one tool or a whole group; the catalog refetch brings the resolved choices back. */
   async function saveToolPolicy(
     plugin: AssistantPluginCatalogItemDto,
@@ -1051,7 +1169,7 @@ export default function PluginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <div className="border-b border-border pb-3">
+        <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
           {/* Was "Featured", above the entire catalog, when nothing selected the rows under it.
               `isFeatured` reaches this page now and drives the ordering, so featured rows really
               do come first — but they are still every row in one list, and heading the whole list
@@ -1059,6 +1177,9 @@ export default function PluginsPage() {
               layout change (it has its own empty, filtered and two-column cases) and belongs with
               whoever designs it, not smuggled in behind a sort. */}
           <h2 className="text-sm font-semibold text-ink">All plugins</h2>
+          {workspaceId && workspaceName ? (
+            <span className="truncate text-xs text-ink-muted">{workspaceName} decides which ones you can connect</span>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -1110,6 +1231,10 @@ export default function PluginsPage() {
               // is adding the plugin, so that is the only button that goes dead.
               const isInstalled = plugin.installationStatus === "installed";
               const isBlockedFromAdding = workspaceBlock !== null && !isInstalled;
+              // The marketplace's verdict, when the server sends one: a plugin the workspace has not
+              // added becomes a Request, and the old block notice is not rendered beside it.
+              const action = memberPluginAction(plugin, workspaceName);
+              const hasAvailability = plugin.workspaceAvailability != null;
 
               return (
                 <div
@@ -1124,29 +1249,66 @@ export default function PluginsPage() {
                     <PluginGlyph plugin={plugin} />
                     <button
                       type="button"
-                      onClick={() => setSelectedPluginKey(plugin.key)}
+                      onClick={() =>
+                        action.kind === "connect" ? setSelectedPluginKey(plugin.key) : undefined
+                      }
                       className="min-w-0 text-left"
                     >
                       <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
-                      <div className="truncate text-xs text-ink-muted">{plugin.description}</div>
+                      <div className="truncate text-xs text-ink-muted">{action.subtitle ?? plugin.description}</div>
                     </button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
-                      onClick={() => void handlePrimaryAction(plugin)}
-                    >
-                      {pluginActionLabel(plugin)}
-                    </Button>
+                    {action.kind === "request" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!workspaceId || requestPlugin.isPending}
+                        onClick={() => setRequestPluginKey(plugin.key)}
+                      >
+                        Request
+                      </Button>
+                    ) : action.kind === "requested" ? (
+                      <Button type="button" size="sm" variant="outline" disabled>
+                        Requested
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
+                        onClick={() => void handlePrimaryAction(plugin)}
+                      >
+                        {pluginActionLabel(plugin)}
+                      </Button>
+                    )}
+                    {action.caption ? (
+                      <span
+                        data-testid="plugin-availability-caption"
+                        className="col-start-2 col-end-4 -mt-1.5 text-[11.5px] text-ink-subtle"
+                      >
+                        {action.caption}
+                      </span>
+                    ) : null}
                   </div>
-                  {workspaceBlock ? <WorkspaceBlockNotice block={workspaceBlock} /> : null}
+                  {/* A server older than the marketplace sends no availability, only the sentence. */}
+                  {workspaceBlock && !hasAvailability ? <WorkspaceBlockNotice block={workspaceBlock} /> : null}
                 </div>
               );
             })}
           </div>
         )}
       </section>
+
+      {requestPluginRow ? (
+        <RequestPluginDialog
+          plugin={requestPluginRow}
+          workspaceName={workspaceName}
+          isSending={requestPlugin.isPending}
+          onClose={() => setRequestPluginKey(null)}
+          onSend={(reason) => void sendPluginRequest(requestPluginRow, reason)}
+        />
+      ) : null}
 
       {selectedPlugin ? (
         <ConnectPluginDialog

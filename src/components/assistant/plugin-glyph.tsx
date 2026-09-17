@@ -38,7 +38,8 @@ export function PluginGlyph({
   size = "md",
   className,
 }: {
-  plugin: AssistantPluginCatalogItemDto;
+  /** Only the logo and the label are read, so the owner page's workspace rows fit too. */
+  plugin: Pick<AssistantPluginCatalogItemDto, "avatarUrl" | "label">;
   size?: PluginGlyphSize;
   className?: string;
 }) {
