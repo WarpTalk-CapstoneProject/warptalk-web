@@ -1,0 +1,128 @@
+{
+  "header": {
+    "title": "Plugins",
+    "subtitle": "Work with WarpBot across your favorite tools."
+  },
+  "search": {
+    "placeholder": "Filter plugins"
+  },
+  "installed": {
+    "title": "Installed",
+    "empty": "No plugins installed yet."
+  },
+  "allPlugins": {
+    "title": "All plugins",
+    "workspaceDecides": "{workspaceName} decides which ones you can connect"
+  },
+  "loading": "Loading plugins...",
+  "error": {
+    "message": "Could not load plugins.",
+    "retry": "Retry"
+  },
+  "empty": {
+    "withQuery": "No plugin in this catalog matches \"{query}\".",
+    "withoutQuery": "No plugins are available yet.",
+    "filterNote": "This filters the plugins WarpTalk offers today. It does not search a wider marketplace.",
+    "clearFilter": "Clear filter"
+  },
+  "actionLabels": {
+    "connect": "Connect",
+    "manage": "Manage",
+    "reconnect": "Reconnect",
+    "request": "Request",
+    "requested": "Requested"
+  },
+  "memberAction": {
+    "addedByWorkspace": "Added by your workspace",
+    "notAddedYet": "Not added to {workspaceName} yet",
+    "waitingForOwner": "Waiting for your workspace owner",
+    "thisWorkspace": "this workspace"
+  },
+  "consentNotice": {
+    "awaitingHeadline": "Finish connecting {label} in your browser",
+    "blockedHeadline": "Your browser blocked the {label} sign-in window",
+    "blockedDetail": "Allow pop-ups for WarpTalk, or open it yourself.",
+    "unconfirmedHeadline": "WarpTalk did not receive a {label} connection",
+    "unconfirmedDetail": "If you closed or cancelled the provider page, nothing was changed.",
+    "partialHeadline": "{label} is still missing a permission it needs",
+    "partialDetail": "Your account is connected, but a permission this plugin asks for was not approved.",
+    "openBrowser": "Open browser",
+    "tryAgain": "Try again",
+    "dismissAria": "Dismiss connection notice"
+  },
+  "consentCallbackErrors": {
+    "access_denied": "You cancelled the sign-in, so nothing was connected.",
+    "permission_denied": "That sign-in link had already been used or expired. Start the connection again.",
+    "unknown_plugin": "That plugin is no longer available.",
+    "plugin_not_installed": "That plugin is not installed for this account. Install it, then connect.",
+    "connection_required": "The provider did not return lasting access. Connect again and approve the request.",
+    "provider_configuration": "WarpTalk's connection to this provider is not configured correctly. Nothing is wrong with your account.",
+    "provider_unavailable": "The provider could not complete the sign-in. Try again in a moment.",
+    "provider_account_mismatch": "You signed in with a different account than the one already connected. Disconnect the connected account first, then connect this one.",
+    "generic": "{label} could not be connected. Start the connection again.",
+    "refSuffix": " (ref {ref})"
+  },
+  "toasts": {
+    "defaultPluginLabel": "The plugin",
+    "partialPermission": "{label} is connected, but a permission it needs was not approved.",
+    "connected": "{label} connected",
+    "couldNotConnect": "Could not connect {label}.",
+    "couldNotStartConnection": "Could not start the {label} connection.",
+    "requestSent": "Request sent to your workspace owner",
+    "couldNotAsk": "Could not ask for {label}.",
+    "couldNotSavePolicy": "Could not save what WarpBot may do in {label}.",
+    "disconnected": "{label} disconnected",
+    "couldNotDisconnect": "Could not disconnect {label}.",
+    "removed": "{label} removed",
+    "couldNotFinishRemoving": "Could not finish removing {label}."
+  },
+  "permissionList": {
+    "empty": "This plugin publishes its permissions when you connect. The provider's consent screen lists exactly what it is asking for before you approve.",
+    "heading": "Authorizing allows this plugin to"
+  },
+  "toolPolicy": {
+    "heading": "What WarpBot may do",
+    "allGroup": "All {group}",
+    "writeWarning": "WarpBot can change data in {label} without asking for the write tools you allowed.",
+    "allow": "Allow",
+    "ask": "Ask",
+    "block": "Block",
+    "readOnlyTools": "Read-only tools",
+    "writeTools": "Write tools",
+    "allowedCount": "allowed",
+    "askCount": "ask",
+    "blockedCount": "blocked"
+  },
+  "connectDialog": {
+    "closeAria": "Close plugin dialog",
+    "titleWarpBot": "WarpBot",
+    "titleWantsAccess": "by WarpTalk wants access to your {label}",
+    "subtitleConnected": "WarpBot can use {label} for you.",
+    "subtitleReused": "Uses the sign-in you already gave WarpTalk for {siblingLabel}. No new sign-in.",
+    "subtitleDefault": "You will sign in and confirm this on the provider's own page.",
+    "notOwned": "WarpTalk is not owned or operated by this provider.",
+    "tokensEncrypted": "Tokens stay encrypted. <b>Write</b> actions ask you first unless you allow them.",
+    "sharedConnectionNote": "<b>{labels}</b> can reuse this sign-in, but each plugin is connected and disconnected on its own.",
+    "continueTo": "Continue to {label}",
+    "connectLabel": "Connect {label}",
+    "connectedToWarpTalk": "Connected to WarpTalk",
+    "partiallyGranted": "Signed in, but a permission {label} needs was not approved. Continue to approve it.",
+    "manageThisPlugin": "Manage this plugin for your own account",
+    "disconnect": "Disconnect",
+    "remove": "Remove",
+    "cancel": "Cancel",
+    "confirmDisconnect": "Disconnect {label}? WarpBot loses access to it until you connect the account again.",
+    "confirmRemove": "Remove {label}? Its tools disappear from WarpBot and it is disconnected."
+  },
+  "requestDialog": {
+    "closeAria": "Close request dialog",
+    "ariaLabel": "Ask for {label}",
+    "title": "Ask for {label}",
+    "onlyOwnerCanAdd": "Only a workspace owner can add plugins to {workspaceName}. They'll get a notification, and you'll hear back either way.",
+    "defaultWorkspaceName": "this workspace",
+    "reasonLabel": "Why do you need it?",
+    "optional": "Optional",
+    "reasonPlaceholder": "e.g. Use {label} with meeting action items",
+    "sendRequest": "Send request"
+  }
+}
