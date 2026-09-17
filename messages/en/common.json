@@ -24,7 +24,75 @@
       "settings": "Settings"
     },
     "switchWorkspaceSuccess": "Switched to workspace \"{name}\"",
-    "switchWorkspaceError": "Failed to switch workspace"
+    "switchWorkspaceError": "Failed to switch workspace",
+    "workspaceSection": "Workspace",
+    "platformSection": "Platform",
+    "platformConsole": "Platform console",
+    "searchMeetings": "Search meetings",
+    "switchWorkspaceLabel": "Switch workspace",
+    "workspaceFallback": "Workspace",
+    "inviteTeamMembers": "Invite team members",
+    "inviteTeamMembersBody": "Bring your team in to collaborate and share workspace rooms.",
+    "dismissInvite": "Dismiss for {days} days",
+    "dismissInviteAria": "Dismiss the invite suggestion",
+    "profileFallback": "Profile",
+    "signOut": "Sign out",
+    "memberFallback": "Member",
+    "internalFallback": "Internal",
+    "roleLabels": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "membershipLabels": {
+      "internal": "Internal",
+      "external": "External"
+    },
+    "joinDialog": {
+      "title": "Join Translation Room",
+      "description": "Enter the meeting code provided by your host to join the room.",
+      "codeLabel": "Meeting code",
+      "codePlaceholder": "e.g. ROOM-abc-123",
+      "join": "Join"
+    },
+    "workspaceMenu": {
+      "settings": "Settings",
+      "inviteAndManageMembers": "Invite and manage members",
+      "downloadDesktopApp": "Download desktop app",
+      "switchWorkspace": "Switch workspace",
+      "account": "Account",
+      "createOrJoinWorkspace": "Create or join a workspace...",
+      "addAnAccount": "Add an account...",
+      "logOut": "Log out"
+    },
+    "adminQuickLinks": {
+      "overview": "Overview",
+      "workspaces": "Workspaces",
+      "billing": "Billing",
+      "globalGlossary": "Global Glossary"
+    },
+    "settingsNav": {
+      "backToApp": "Back to app",
+      "personal": "Personal",
+      "workspaceSection": "Workspace",
+      "preferences": "Preferences",
+      "settingsLabel": "Settings",
+      "profile": "Profile",
+      "notifications": "Notifications",
+      "connectedAccounts": "Connected accounts",
+      "sessionsDevices": "Sessions & devices",
+      "plugins": "Plugins",
+      "workspaceSettingsCollapsed": "Workspace settings",
+      "workspaceSettingsExpanded": "Workspace Settings",
+      "pluginActivity": "Plugin activity",
+      "billing": "Billing",
+      "usage": "Usage",
+      "invoices": "Invoices",
+      "features": "Features",
+      "memberRoles": "Member roles",
+      "security": "Security",
+      "auditLog": "Audit log"
+    }
   },
   "meetingDayStrip": {
     "previousWeek": "Previous week",

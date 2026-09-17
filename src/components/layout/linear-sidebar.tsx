@@ -126,6 +126,20 @@ function navRowTone(active: boolean): string {
     : "hover:bg-surface-3/60";
 }
 
+type SidebarT = ReturnType<typeof useTranslations>;
+
+function roleLabel(t: SidebarT, role: string | null | undefined): string {
+  const key = role?.toLowerCase();
+  if (key && t.has(`roleLabels.${key}`)) return t(`roleLabels.${key}`);
+  return t("memberFallback");
+}
+
+function membershipLabel(t: SidebarT, membershipType: string | null | undefined): string {
+  const key = membershipType?.toLowerCase();
+  if (key && t.has(`membershipLabels.${key}`)) return t(`membershipLabels.${key}`);
+  return t("internalFallback");
+}
+
 /**
  * The pending-count pill the mock gives Workspace → Plugins. Beside the label when expanded; on the
  * collapsed rail it rides the icon's corner, because there is no label to sit beside.
@@ -648,42 +662,42 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     const settingsItems: NavItem[] = [
       {
         icon: Sliders,
-        label: "Preferences",
+        label: t("settingsNav.preferences"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/preferences`
           : "/workspace",
       },
       {
         icon: User,
-        label: "Profile",
+        label: t("settingsNav.profile"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/profile`
           : "/workspace",
       },
       {
         icon: Bell,
-        label: "Notifications",
+        label: t("settingsNav.notifications"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/notifications`
           : "/workspace",
       },
       {
         icon: LinkSimple,
-        label: "Connected accounts",
+        label: t("settingsNav.connectedAccounts"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/connected-accounts`
           : "/workspace",
       },
       {
         icon: Devices,
-        label: "Sessions & devices",
+        label: t("settingsNav.sessionsDevices"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/sessions`
           : "/workspace",
       },
       {
         icon: PlugsConnected,
-        label: "Plugins",
+        label: t("settingsNav.plugins"),
         href: "/settings/plugins",
       },
     ];
@@ -691,7 +705,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
       settingsItems.push({
         icon: GearSix,
-        label: "Workspace settings",
+        label: t("settingsNav.workspaceSettingsCollapsed"),
         // Exact, or `/settings/billing` would light this row up too — NavLink treats a nav item as
         // active for anything below its href, and every settings page is below this one.
         exact: true,
@@ -700,7 +714,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
-        label: "Plugins",
+        label: t("settingsNav.plugins"),
         exact: true,
         href: `/${activeWorkspaceSlug}/settings/plugins`,
         badge: pluginRequestBadge,
@@ -708,12 +722,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       // Beside the workspace's plugin list because it is the record of what that list let through.
       settingsItems.push({
         icon: ClockCounterClockwise,
-        label: "Plugin activity",
+        label: t("settingsNav.pluginActivity"),
         href: `/${activeWorkspaceSlug}/settings/plugin-activity`,
       });
       settingsItems.push({
         icon: CreditCard,
-        label: "Billing",
+        label: t("settingsNav.billing"),
         // Exact now that Usage and Invoices live BELOW it. Without this, NavLink's
         // treat-descendants-as-active rule lights Billing up while the reader is on either child,
         // and two rows in the same group read as selected at once.
@@ -722,24 +736,24 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       });
       settingsItems.push({
         icon: ChartLine,
-        label: "Usage",
+        label: t("settingsNav.usage"),
         href: `/${activeWorkspaceSlug}/settings/billing/usage`,
       });
       settingsItems.push({
         icon: Receipt,
-        label: "Invoices",
+        label: t("settingsNav.invoices"),
         href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
       });
       settingsItems.push({
         icon: ListChecks,
-        label: "Features",
+        label: t("settingsNav.features"),
         href: `/${activeWorkspaceSlug}/settings/features`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
       settingsItems.push({
         icon: Users,
-        label: "Member roles",
+        label: t("settingsNav.memberRoles"),
         href: `/${activeWorkspaceSlug}/settings/member-roles`,
       });
     }
@@ -749,13 +763,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
       settingsItems.push({
         icon: ShieldCheck,
-        label: "Security",
+        label: t("settingsNav.security"),
         href: `/${activeWorkspaceSlug}/settings/security`,
       });
       // Staff actions on this workspace. Same audience as the endpoint behind it.
       settingsItems.push({
         icon: ClockCounterClockwise,
-        label: "Audit log",
+        label: t("settingsNav.auditLog"),
         href: `/${activeWorkspaceSlug}/settings/audit-log`,
       });
     }
@@ -765,8 +779,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
           <Link
             href={appHref}
-            title="Back to app"
-            aria-label="Back to app"
+            title={t("settingsNav.backToApp")}
+            aria-label={t("settingsNav.backToApp")}
             className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <CaretLeft size={16} weight="bold" />
@@ -792,8 +806,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 ? `/${activeWorkspaceSlug}/settings/account/profile`
                 : "/workspace"
             }
-            title={user.fullName || "Profile"}
-            aria-label={user.fullName || "Profile"}
+            title={user.fullName || t("profileFallback")}
+            aria-label={user.fullName || t("profileFallback")}
             className="m-3 grid size-10 place-items-center rounded-xl border border-border/50 bg-surface-1 transition hover:border-border/80 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <Avatar className="size-8 rounded-lg">
@@ -818,14 +832,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             className="flex items-center gap-2 px-1.5 py-1 -ml-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer w-full"
           >
             <CaretLeft size={14} weight="bold" />
-            <span>Back to app</span>
+            <span>{t("settingsNav.backToApp")}</span>
           </Link>
         </div>
 
         {/* Settings Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <div className="px-2 mb-2 flex items-center h-[24px]">
-            <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Personal</span>
+            <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">{t("settingsNav.personal")}</span>
           </div>
 
           <div className="flex flex-col gap-px">
@@ -836,7 +850,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/preferences` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Sliders size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Settings
+                  {t("settingsNav.settingsLabel")}
                 </span>
               </Link>
             </div>
@@ -848,7 +862,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Profile
+                  {t("settingsNav.profile")}
                 </span>
               </Link>
             </div>
@@ -860,7 +874,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/notifications` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Bell size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Notifications
+                  {t("settingsNav.notifications")}
                 </span>
               </Link>
             </div>
@@ -872,7 +886,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/connected-accounts` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <LinkSimple size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Connected accounts
+                  {t("settingsNav.connectedAccounts")}
                 </span>
               </Link>
             </div>
@@ -884,7 +898,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/sessions` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Devices size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Sessions &amp; devices
+                  {t("settingsNav.sessionsDevices")}
                 </span>
               </Link>
             </div>
@@ -896,7 +910,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Plugins
+                  {t("settingsNav.plugins")}
                 </span>
               </Link>
             </div>
@@ -905,7 +919,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {isOwnerOrAdmin && activeWorkspaceSlug && (
               <>
                 <div className="px-2 mt-6 mb-2 flex items-center h-[24px]">
-                  <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Workspace</span>
+                  <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">{t("settingsNav.workspaceSection")}</span>
                 </div>
                 <div className={cn(
                   "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
@@ -914,7 +928,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Workspace Settings
+                      {t("settingsNav.workspaceSettingsExpanded")}
                     </span>
                   </Link>
                 </div>
@@ -927,7 +941,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/plugins`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <PuzzlePiece size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Plugins
+                      {t("settingsNav.plugins")}
                     </span>
                   </Link>
                   {pluginRequestBadge ? <NavBadge count={pluginRequestBadge} /> : null}
@@ -941,7 +955,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/plugin-activity`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Plugin activity
+                      {t("settingsNav.pluginActivity")}
                     </span>
                   </Link>
                 </div>
@@ -963,7 +977,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/billing`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Billing
+                      {t("settingsNav.billing")}
                     </span>
                   </Link>
                 </div>
@@ -974,7 +988,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Usage
+                      {t("settingsNav.usage")}
                     </span>
                   </Link>
                 </div>
@@ -985,7 +999,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/billing/invoices`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Invoices
+                      {t("settingsNav.invoices")}
                     </span>
                   </Link>
                 </div>
@@ -996,7 +1010,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/features`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ListChecks size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Features
+                      {t("settingsNav.features")}
                     </span>
                   </Link>
                 </div>
@@ -1007,7 +1021,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/settings/member-roles`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Member roles</span>
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">{t("settingsNav.memberRoles")}</span>
                     </Link>
                   </div>
                 )}
@@ -1019,7 +1033,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <Link href={`/${activeWorkspaceSlug}/settings/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <ShieldCheck size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                       <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                        Security
+                        {t("settingsNav.security")}
                       </span>
                     </Link>
                   </div>
@@ -1032,7 +1046,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <Link href={`/${activeWorkspaceSlug}/settings/audit-log`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                       <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                        Audit log
+                        {t("settingsNav.auditLog")}
                       </span>
                     </Link>
                   </div>
@@ -1063,11 +1077,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   {user.email}
                 </span>
                 <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
-                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {roleLabel(t, role)}
                   {" · "}
-                  {membershipType
-                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-                    : "Internal"}
+                  {membershipLabel(t, membershipType)}
                 </span>
               </div>
               <button
@@ -1077,7 +1089,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
-                title="Sign out"
+                title={t("signOut")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
               </button>
@@ -1106,10 +1118,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         <DropdownMenu>
           <DropdownMenuTrigger
             title={
-              collapsed ? activeWorkspaceName || "Switch workspace" : undefined
+              collapsed ? activeWorkspaceName || t("switchWorkspaceLabel") : undefined
             }
             aria-label={
-              collapsed ? activeWorkspaceName || "Switch workspace" : undefined
+              collapsed ? activeWorkspaceName || t("switchWorkspaceLabel") : undefined
             }
             className={cn(
               "flex min-w-0 cursor-pointer items-center gap-2 rounded-md transition-colors hover:bg-surface-2",
@@ -1131,7 +1143,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {!collapsed && (
               <>
                 <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
-                  {activeWorkspaceName || "Workspace"}
+                  {activeWorkspaceName || t("workspaceFallback")}
                 </span>
                 <CaretDown
                   size={12}
@@ -1148,7 +1160,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
               >
-                <span>Settings</span>
+                <span>{t("workspaceMenu.settings")}</span>
                 <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
               </DropdownMenuItem>
             )}
@@ -1158,7 +1170,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               onClick={() => setIsInviteModalOpen(true)}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <span>Invite and manage members</span>
+              <span>{t("workspaceMenu.inviteAndManageMembers")}</span>
             </DropdownMenuItem>
 
             {/* 3. Download desktop app */}
@@ -1168,7 +1180,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               }}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <span>Download desktop app</span>
+              <span>{t("workspaceMenu.downloadDesktopApp")}</span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator className="bg-border/60 my-1" />
@@ -1176,7 +1188,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {/* 4. Switch workspace (Submenu) */}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]">
-                <span>Switch workspace</span>
+                <span>{t("workspaceMenu.switchWorkspace")}</span>
                 <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono mr-1">O then W</DropdownMenuShortcut>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-[250px] bg-popover border border-border shadow-lg rounded-xl p-1 text-ink text-[13px]">
@@ -1214,7 +1226,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
                 <DropdownMenuSeparator className="bg-border/60 my-1" />
                 <div className="px-2.5 py-1 text-[11px] font-medium text-ink-subtle">
-                  Account
+                  {t("workspaceMenu.account")}
                 </div>
                 {/*
                   The gateway, not the create form. The label has always promised BOTH, and
@@ -1226,13 +1238,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   onClick={() => router.push("/workspace")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
-                  <span>Create or join a workspace...</span>
+                  <span>{t("workspaceMenu.createOrJoinWorkspace")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => router.push("/login")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
-                  <span>Add an account...</span>
+                  <span>{t("workspaceMenu.addAnAccount")}</span>
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -1244,7 +1256,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               onClick={() => logout()}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <span>Log out</span>
+              <span>{t("workspaceMenu.logOut")}</span>
               <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">Alt ⇧ Q</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -1253,7 +1265,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
             <button
               onClick={() => setSearchMeetingModalOpen(true)}
-              aria-label="Search meetings"
+              aria-label={t("searchMeetings")}
               className="flex size-7 items-center justify-center rounded-[6px] hover:bg-surface-2 hover:text-ink transition-colors"
             >
               <MagnifyingGlass size={16} weight="regular" />
@@ -1268,8 +1280,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             onClick={() => setSearchMeetingModalOpen(true)}
-            title="Search meetings"
-            aria-label="Search meetings"
+            title={t("searchMeetings")}
+            aria-label={t("searchMeetings")}
             className="mb-2 grid size-9 w-full place-items-center rounded-[6px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <MagnifyingGlass size={16} weight="regular" />
@@ -1291,7 +1303,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         ) : (
           <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
             <span className="text-[12px] font-medium text-ink-subtle">
-              Workspace
+              {t("workspaceSection")}
             </span>
           </div>
         )}
@@ -1313,7 +1325,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             ) : (
               <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
                 <span className="text-[12px] font-medium text-ink-subtle">
-                  Platform
+                  {t("platformSection")}
                 </span>
               </div>
             )}
@@ -1321,7 +1333,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Gauge,
-                  label: "Overview",
+                  label: t("adminQuickLinks.overview"),
                   href: "/admin",
                   exact: true,
                 }}
@@ -1331,7 +1343,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Users,
-                  label: "Workspaces",
+                  label: t("adminQuickLinks.workspaces"),
                   href: "/admin/workspaces",
                 }}
                 pathname={pathname}
@@ -1340,7 +1352,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: CreditCard,
-                  label: "Billing",
+                  label: t("adminQuickLinks.billing"),
                   href: "/admin/billing",
                 }}
                 pathname={pathname}
@@ -1349,7 +1361,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Globe,
-                  label: "Global Glossary",
+                  label: t("adminQuickLinks.globalGlossary"),
                   href: "/admin/global-glossary",
                 }}
                 pathname={pathname}
@@ -1382,9 +1394,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
                 <PaperPlaneTilt size={17} weight="duotone" />
               </span>
-              <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
+              <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">{t("inviteTeamMembers")}</span>
               <span className="mt-1 block pr-5 text-[12px] leading-5 text-ink-muted">
-                Bring your team in to collaborate and share workspace rooms.
+                {t("inviteTeamMembersBody")}
               </span>
             </button>
             <button
@@ -1392,8 +1404,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               onClick={() =>
                 dismissInviteSuggestion(activeWorkspaceId, Date.now())
               }
-              title={`Dismiss for ${INVITE_SNOOZE_DAYS} days`}
-              aria-label="Dismiss the invite suggestion"
+              title={t("dismissInvite", { days: INVITE_SNOOZE_DAYS })}
+              aria-label={t("dismissInviteAria")}
               className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-md text-ink-subtle opacity-0 transition hover:bg-surface-3 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
             >
               <X size={11} weight="bold" />
@@ -1407,8 +1419,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             onClick={() => setIsInviteModalOpen(true)}
-            title="Invite team members"
-            aria-label="Invite team members"
+            title={t("inviteTeamMembers")}
+            aria-label={t("inviteTeamMembers")}
             className="grid size-10 w-full place-items-center rounded-xl border border-border/50 bg-surface-1 text-ink-muted transition-colors hover:border-border/80 hover:bg-surface-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <PaperPlaneTilt size={17} weight="duotone" />
@@ -1430,8 +1442,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             onSignOut={logout}
             trigger={
           <div
-            title={collapsed ? user.fullName || "Profile" : undefined}
-            aria-label={collapsed ? user.fullName || "Profile" : undefined}
+            title={collapsed ? user.fullName || t("profileFallback") : undefined}
+            aria-label={collapsed ? user.fullName || t("profileFallback") : undefined}
             className={cn(
               "flex items-center bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80",
               collapsed ? "justify-center p-1" : "gap-2.5 p-2",
@@ -1456,13 +1468,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   {user.email}
                 </span>
                 <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
-                  {role
-                    ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}`
-                    : "Member"}
+                  {roleLabel(t, role)}
                   {" · "}
-                  {membershipType
-                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-                    : "Internal"}
+                  {membershipLabel(t, membershipType)}
                 </span>
               </div>
             )}
@@ -1474,7 +1482,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
-                title="Sign out"
+                title={t("signOut")}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1497,17 +1505,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
         <DialogContent className="sm:max-w-[425px] !top-[25%] !translate-y-[-25%]">
           <DialogHeader>
-            <DialogTitle>Join Translation Room</DialogTitle>
+            <DialogTitle>{t("joinDialog.title")}</DialogTitle>
             <DialogDescription>
-              Enter the meeting code provided by your host to join the room.
+              {t("joinDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleJoin} className="grid gap-4 pt-2">
             <div className="grid gap-2">
-              <Label htmlFor="code" className="text-foreground font-medium text-[13px]">Meeting code</Label>
+              <Label htmlFor="code" className="text-foreground font-medium text-[13px]">{t("joinDialog.codeLabel")}</Label>
               <Input
                 id="code"
-                placeholder="e.g. ROOM-abc-123"
+                placeholder={t("joinDialog.codePlaceholder")}
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 autoComplete="off"
@@ -1521,7 +1529,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 disabled={!joinCode.trim()}
                 className="disabled:bg-surface-2 disabled:text-ink-muted disabled:opacity-100 min-w-[80px] text-white"
               >
-                Join
+                {t("joinDialog.join")}
               </Button>
             </div>
           </form>

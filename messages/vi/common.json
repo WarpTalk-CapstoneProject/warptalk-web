@@ -24,7 +24,75 @@
       "settings": "Cài đặt"
     },
     "switchWorkspaceSuccess": "Đã chuyển sang không gian làm việc \"{name}\"",
-    "switchWorkspaceError": "Không thể chuyển không gian làm việc"
+    "switchWorkspaceError": "Không thể chuyển không gian làm việc",
+    "workspaceSection": "Không gian làm việc",
+    "platformSection": "Nền tảng",
+    "platformConsole": "Bảng điều khiển nền tảng",
+    "searchMeetings": "Tìm cuộc họp",
+    "switchWorkspaceLabel": "Chuyển không gian làm việc",
+    "workspaceFallback": "Không gian làm việc",
+    "inviteTeamMembers": "Mời thành viên nhóm",
+    "inviteTeamMembersBody": "Mời nhóm của bạn cùng cộng tác và chia sẻ phòng họp trong không gian làm việc.",
+    "dismissInvite": "Ẩn trong {days} ngày",
+    "dismissInviteAria": "Ẩn gợi ý mời thành viên",
+    "profileFallback": "Hồ sơ",
+    "signOut": "Đăng xuất",
+    "memberFallback": "Thành viên",
+    "internalFallback": "Nội bộ",
+    "roleLabels": {
+      "owner": "Chủ sở hữu",
+      "admin": "Quản trị viên",
+      "member": "Thành viên"
+    },
+    "membershipLabels": {
+      "internal": "Nội bộ",
+      "external": "Bên ngoài"
+    },
+    "joinDialog": {
+      "title": "Tham gia phòng dịch",
+      "description": "Nhập mã cuộc họp do người tổ chức cung cấp để tham gia phòng.",
+      "codeLabel": "Mã cuộc họp",
+      "codePlaceholder": "vd. ROOM-abc-123",
+      "join": "Tham gia"
+    },
+    "workspaceMenu": {
+      "settings": "Cài đặt",
+      "inviteAndManageMembers": "Mời và quản lý thành viên",
+      "downloadDesktopApp": "Tải ứng dụng máy tính",
+      "switchWorkspace": "Chuyển không gian làm việc",
+      "account": "Tài khoản",
+      "createOrJoinWorkspace": "Tạo hoặc tham gia không gian làm việc...",
+      "addAnAccount": "Thêm tài khoản...",
+      "logOut": "Đăng xuất"
+    },
+    "adminQuickLinks": {
+      "overview": "Tổng quan",
+      "workspaces": "Không gian làm việc",
+      "billing": "Thanh toán",
+      "globalGlossary": "Thuật ngữ toàn cục"
+    },
+    "settingsNav": {
+      "backToApp": "Quay lại ứng dụng",
+      "personal": "Cá nhân",
+      "workspaceSection": "Không gian làm việc",
+      "preferences": "Tùy chọn",
+      "settingsLabel": "Cài đặt",
+      "profile": "Hồ sơ",
+      "notifications": "Thông báo",
+      "connectedAccounts": "Tài khoản đã liên kết",
+      "sessionsDevices": "Phiên & thiết bị",
+      "plugins": "Plugin",
+      "workspaceSettingsCollapsed": "Cài đặt không gian làm việc",
+      "workspaceSettingsExpanded": "Cài đặt không gian làm việc",
+      "pluginActivity": "Hoạt động plugin",
+      "billing": "Thanh toán",
+      "usage": "Mức sử dụng",
+      "invoices": "Hóa đơn",
+      "features": "Tính năng",
+      "memberRoles": "Vai trò thành viên",
+      "security": "Bảo mật",
+      "auditLog": "Nhật ký kiểm tra"
+    }
   },
   "meetingDayStrip": {
     "previousWeek": "Tuần trước",
