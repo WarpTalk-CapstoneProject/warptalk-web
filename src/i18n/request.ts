@@ -35,6 +35,7 @@ const NAMESPACES = [
   "artifacts",
   "members",
   "pluginsPage",
+  "schedules",
 ] as const;
 
 async function loadMessages(locale: string) {
