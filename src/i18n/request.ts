@@ -29,6 +29,7 @@ const NAMESPACES = [
   "settingsSessions",
   "rooms",
   "artifacts",
+  "members",
 ] as const;
 
 async function loadMessages(locale: string) {
