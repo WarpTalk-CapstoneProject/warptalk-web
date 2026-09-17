@@ -1,6 +1,7 @@
 {
   "languageSwitcher": {
     "srLabel": "Đổi ngôn ngữ",
+    "switching": "Đang đổi ngôn ngữ…",
     "en": "English",
     "vi": "Tiếng Việt",
     "ja": "日本語"

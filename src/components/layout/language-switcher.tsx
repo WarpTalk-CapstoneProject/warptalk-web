@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import { cn } from "@/lib/utils";
 import { setUserLocale } from "@/i18n/actions";
 import { SUPPORTED_LOCALES, type Locale } from "@/i18n/locale-constants";
@@ -52,7 +53,11 @@ export function LanguageSwitcher({
           className,
         )}
       >
-        <Globe size={compact ? 12 : 16} weight="regular" />
+        {isPending ? (
+          <LumidotSpinner label={t("switching")} />
+        ) : (
+          <Globe size={compact ? 12 : 16} weight="regular" />
+        )}
         <span className={compact ? "sr-only" : undefined}>{t(locale)}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" sideOffset={6}>

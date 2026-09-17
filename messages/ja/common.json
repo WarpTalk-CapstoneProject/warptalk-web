@@ -1,6 +1,7 @@
 {
   "languageSwitcher": {
     "srLabel": "言語を切り替える",
+    "switching": "言語を切り替えています…",
     "en": "English",
     "vi": "Tiếng Việt",
     "ja": "日本語"
