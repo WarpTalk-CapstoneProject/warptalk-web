@@ -642,20 +642,47 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     parts.push({ label: t("sidebar.nav.members") });
                   } else if (feature === "documents") {
                     parts.push({ label: t("sidebar.nav.documents") });
+                  } else if (feature === "schedules") {
+                    parts.push({ label: t("sidebar.nav.schedules") });
+                  } else if (feature === "voice-profiles") {
+                    parts.push({ label: t("sidebar.nav.voiceProfiles") });
+                  } else if (feature === "glossary") {
+                    parts.push({ label: t("sidebar.nav.glossary") });
+                  } else if (feature === "tasks") {
+                    parts.push({ label: t("sidebar.nav.myTasks") });
+                  } else if (feature === "knowledge") {
+                    parts.push({ label: t("sidebar.nav.knowledge") });
                   } else if (feature === "settings") {
                     const sub = segments[2];
+                    const SETTINGS_SUB_KEYS: Record<string, string> = {
+                      plugins: "plugins",
+                      "plugin-activity": "pluginActivity",
+                      billing: "billing",
+                      features: "features",
+                      "member-roles": "memberRoles",
+                      security: "security",
+                      "audit-log": "auditLog",
+                    };
+                    const ACCOUNT_LEAF_KEYS: Record<string, string> = {
+                      profile: "profile",
+                      preferences: "preferences",
+                      notifications: "notifications",
+                      "connected-accounts": "connectedAccounts",
+                      sessions: "sessionsDevices",
+                    };
                     if (sub === "account") {
                       parts.push({ label: t("sidebar.settingsNav.settingsLabel"), href: `/${slug}/settings` });
                       const leaf = segments[3];
-                      if (leaf === "profile") {
-                        parts.push({ label: t("sidebar.settingsNav.profile") });
-                      } else if (leaf === "preferences") {
-                        parts.push({ label: t("sidebar.settingsNav.preferences") });
-                      } else {
-                        parts.push({ label: leaf || t("topbar.account") });
-                      }
+                      const leafKey = leaf ? ACCOUNT_LEAF_KEYS[leaf] : undefined;
+                      parts.push({ label: leafKey ? t(`sidebar.settingsNav.${leafKey}`) : t("topbar.account") });
                     } else {
-                      parts.push({ label: t("sidebar.settingsNav.settingsLabel") });
+                      const subKey = sub ? SETTINGS_SUB_KEYS[sub] : undefined;
+                      if (subKey) {
+                        parts.push({ label: t("sidebar.settingsNav.settingsLabel"), href: `/${slug}/settings` });
+                        parts.push({ label: t(`sidebar.settingsNav.${subKey}`) });
+                      } else {
+                        parts.push({ label: t("sidebar.settingsNav.settingsLabel") });
+                      }
                     }
                   } else if (feature === "billing") {
                     parts.push({ label: t("sidebar.settingsNav.billing") });
