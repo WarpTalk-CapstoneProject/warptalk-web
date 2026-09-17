@@ -251,7 +251,7 @@ export interface AdminPluginToolAuditEntryDto {
   toolName: string;
   /** The leading 500 characters of the tool arguments. Can hold whatever a user typed. */
   inputSummary: string | null;
-  /** `"ok"`, or the error code the call failed with — the recorder writes the code as the status. */
+  /** `"success"`, or the error code the call stopped on — the recorder writes the code as the status. */
   resultStatus: string;
   providerResourceRef: string | null;
   createdAt: string;

@@ -15,6 +15,7 @@ export const WORKSPACE_KEYS = {
   list: (page: number, pageSize: number, search: string) => ["workspaces", "list", { page, pageSize, search }] as const,
   detail: (id: string) => ["workspaces", "detail", id] as const,
   settings: (id: string) => ["workspaces", "settings", id] as const,
+  entitlements: (id: string) => ["workspaces", "entitlements", id] as const,
   verifiedDomains: (id: string) => ["workspaces", "verified-domains", id] as const,
   members: (workspaceId: string, page: number, pageSize: number, search: string) =>
     ["workspaces", "members", workspaceId, { page, pageSize, search }] as const,
@@ -78,6 +79,19 @@ export function useWorkspaceSettings(id: string) {
   return useQuery({
     queryKey: WORKSPACE_KEYS.settings(id),
     queryFn: () => WorkspaceService.getSettings(id),
+    enabled: !!id,
+    staleTime: 60000,
+  });
+}
+
+/**
+ * The workspace's resolved entitlements. Read-only; changes arrive through billing, so a minute of
+ * staleness costs nothing a reader would notice.
+ */
+export function useWorkspaceEntitlements(id: string) {
+  return useQuery({
+    queryKey: WORKSPACE_KEYS.entitlements(id),
+    queryFn: () => WorkspaceService.getEntitlements(id),
     enabled: !!id,
     staleTime: 60000,
   });

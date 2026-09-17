@@ -15,6 +15,13 @@ export interface AssistantMessageDto {
    * cited nothing.
    */
   sourcesJson?: string | null;
+  /**
+   * The @mentions a USER message was sent with, as the JSON array the send path stored:
+   * [{ entityType, entityId, label, workspaceId }] — see lib/assistant/message-mentions. Absent on
+   * every answer, on a message sent with no mentions, and on anything sent before the column
+   * existed.
+   */
+  mentionsJson?: string | null;
 }
 
 export interface AssistantConversationDto {
