@@ -1,0 +1,159 @@
+{
+  "tabs": {
+    "active": "Đang diễn ra",
+    "history": "Lịch sử",
+    "all": "Tất cả"
+  },
+  "search": {
+    "placeholder": "Tìm cuộc họp...",
+    "ariaLabel": "Tìm cuộc họp"
+  },
+  "filterMeetingsAria": "Lọc cuộc họp",
+  "toolbar": {
+    "filter": "Lọc",
+    "displayOptions": "Tùy chọn hiển thị",
+    "newMeeting": "Cuộc họp mới",
+    "joinViaCode": "Tham gia bằng mã"
+  },
+  "dayStrip": {
+    "clearDay": "Bỏ chọn ngày"
+  },
+  "group": {
+    "heading": "Cuộc họp {tab}",
+    "showEvery": "Hiện mọi cuộc họp {tab}"
+  },
+  "empty": {
+    "noneOnDay": "Không có cuộc họp {tab} vào {date}",
+    "noneFound": "Không có cuộc họp {tab} nào",
+    "clearDayHint": "Bỏ bộ lọc ngày để xem mọi cuộc họp ở trạng thái này.",
+    "getStartedHint": "Tạo một cuộc họp hoặc tham gia bằng mã để bắt đầu."
+  },
+  "row": {
+    "copyInviteLink": "Sao chép liên kết mời",
+    "inviteLinkCopied": "Đã sao chép liên kết mời",
+    "invited": "Được mời",
+    "occurrenceCount": "{count} cuộc họp trong lịch này",
+    "occurrenceCountShort": "{count, plural, other {# cuộc họp}}",
+    "occupancyTitle": "{seats} trong phòng, tối đa {capacity} chỗ",
+    "occupancySr": "người tham gia trong phòng, trên tổng {capacity} chỗ",
+    "noDate": "Chưa có ngày"
+  },
+  "repeatBadge": {
+    "label": "Lặp lại",
+    "description": "Thuộc một lịch lặp lại"
+  },
+  "status": {
+    "inProgress": "Đang diễn ra",
+    "waiting": "Đang chờ",
+    "scheduled": "Đã lên lịch",
+    "ended": "Đã kết thúc",
+    "cancelled": "Đã hủy",
+    "failed": "Thất bại",
+    "expired": "Đã hết hạn",
+    "paused": "Tạm dừng"
+  },
+  "joinDialog": {
+    "title": "Tham gia phòng dịch",
+    "description": "Nhập mã cuộc họp do người tổ chức cung cấp để vào phòng.",
+    "codeLabel": "Mã cuộc họp",
+    "codePlaceholder": "ví dụ ROOM-abc-123",
+    "join": "Tham gia"
+  },
+  "create": {
+    "editTitle": "Chỉnh sửa cuộc họp",
+    "createTitle": "Tạo cuộc họp mới",
+    "srDescription": "Cấu hình và tạo một phòng dịch mới",
+    "collapse": "Thu gọn",
+    "expand": "Mở rộng",
+    "workspaceFallback": "Không gian làm việc",
+    "bridgeNotice": {
+      "line1": "Cuộc gọi của bạn diễn ra trên <meet>Google Meet</meet>. WarpTalk sẽ hoạt động song song: phòng này có hai chỗ — bạn, và một chỗ đại diện cho tất cả những người ở phía bên kia. <src>Ngôn ngữ nguồn</src> là ngôn ngữ bạn nói; <tgt>ngôn ngữ đích</tgt> là ngôn ngữ cuộc gọi nghe được.",
+      "line2": "Cần cài hai thiết bị âm thanh ảo và trỏ Meet vào chúng. Việc kiểm tra cấu hình sẽ chạy khi bạn mở phòng."
+    },
+    "titlePlaceholder": "Tiêu đề cuộc họp",
+    "descriptionPlaceholder": "Thêm mô tả...",
+    "dailyPill": "Hằng ngày {time}",
+    "footer": {
+      "starting": "Đang bắt đầu...",
+      "saving": "Đang lưu...",
+      "saveChanges": "Lưu thay đổi",
+      "startMeeting": "Bắt đầu cuộc họp",
+      "createRoom": "Tạo phòng"
+    },
+    "success": {
+      "title": "Đã tạo cuộc họp thành công",
+      "instant": "“{title}” đã được tạo nhưng chưa mở. Hãy chia sẻ liên kết, hoặc bắt đầu từ trang cuộc họp.",
+      "scheduled": "“{title}” đã được đặt lịch. Chia sẻ liên kết ngay; nó sẽ mở khi cuộc họp bắt đầu.",
+      "roomCode": "Mã phòng",
+      "copyInviteLink": "Sao chép liên kết mời",
+      "configure": "Cấu hình",
+      "viewInCalendar": "Xem trên lịch"
+    },
+    "errors": {
+      "requiredFields": "Vui lòng điền đầy đủ các trường bắt buộc.",
+      "selectWorkspace": "Vui lòng chọn một không gian làm việc trước khi tạo phòng.",
+      "updateFailed": "Cập nhật phòng thất bại.",
+      "createFailed": "Tạo phòng thất bại.",
+      "startFailed": "Đã tạo phòng nhưng không thể bắt đầu."
+    },
+    "toasts": {
+      "roomUpdated": "Đã cập nhật phòng thành công.",
+      "roomCreated": "Đã tạo phòng thành công. Lời mời đã được gửi!",
+      "inviteLinkCopied": "Đã sao chép liên kết mời.",
+      "recurringCreated": "{sentence} lúc {time} — {count, plural, other {# cuộc họp}}."
+    },
+    "invite": {
+      "inviteByEmail": "Mời qua email",
+      "emailPlaceholder": "ten@congty.com...",
+      "invalidEmail": "Nhập đầy đủ một địa chỉ email.",
+      "alreadyInvited": "Email này đã được mời.",
+      "memberNoValidEmail": "Thành viên này của không gian làm việc không có email hợp lệ.",
+      "suggestedMembers": "Thành viên gợi ý trong không gian làm việc",
+      "peopleCount": "{count} người",
+      "people": "Người tham gia"
+    },
+    "language": {
+      "heading": "Ngôn ngữ cuộc họp",
+      "blocked": "Bị chặn",
+      "blockedReason": "{language} không được phép theo chính sách ngôn ngữ của không gian làm việc này.",
+      "blockedFooter": "Các ngôn ngữ bị chặn không được phép theo chính sách ngôn ngữ của không gian làm việc này. Quản trị viên có thể thay đổi điều này trong cài đặt không gian làm việc."
+    },
+    "options": {
+      "dateAndTime": "Ngày & Giờ",
+      "repeat": "Lặp lại",
+      "timeEachDay": "Giờ mỗi ngày",
+      "turnOnDaily": "Bật lặp lại hằng ngày",
+      "turnOffDaily": "Tắt lặp lại hằng ngày",
+      "cadence": {
+        "daily": "hằng ngày",
+        "weekly": "hằng tuần",
+        "monthly": "hằng tháng"
+      },
+      "dayOfMonth": "Ngày trong tháng",
+      "dayOfMonthAria": "Ngày trong tháng",
+      "monthSkipped": "Những tháng không có ngày {day} sẽ được bỏ qua.",
+      "repeatUntil": "Lặp lại đến",
+      "requireApproval": "Yêu cầu phê duyệt",
+      "turnOnApproval": "Bật yêu cầu phê duyệt để tham gia",
+      "turnOffApproval": "Tắt yêu cầu phê duyệt để tham gia",
+      "anyoneCanStartTranslation": "Bất kỳ ai cũng có thể bắt đầu dịch",
+      "onlyHostCanStart": "Chỉ người tổ chức mới có thể bắt đầu dịch",
+      "letAnyoneStart": "Cho phép mọi người trong phòng bắt đầu dịch",
+      "saveTranscript": "Lưu bản ghi cuộc họp",
+      "saveTranscriptHint": "Phụ đề và bản dịch vẫn hoạt động. Cuộc họp này sẽ không có bản ghi, tóm tắt hay biên bản sau đó.",
+      "keepTranscript": "Giữ bản ghi cho cuộc họp này",
+      "dontKeepTranscript": "Không lưu lại thông tin cuộc họp này"
+    },
+    "startTime": {
+      "label": "Giờ bắt đầu",
+      "remove": "Xóa lịch"
+    },
+    "dateField": {
+      "pickDate": "Chọn ngày"
+    },
+    "templatePicker": {
+      "meetingType": "Loại cuộc họp",
+      "translateElsewhere": "Dịch một cuộc gọi ở nơi khác"
+    }
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "tabs": {
+    "active": "進行中",
+    "history": "履歴",
+    "all": "すべて"
+  },
+  "search": {
+    "placeholder": "ミーティングを検索...",
+    "ariaLabel": "ミーティングを検索"
+  },
+  "filterMeetingsAria": "ミーティングを絞り込み",
+  "toolbar": {
+    "filter": "絞り込み",
+    "displayOptions": "表示オプション",
+    "newMeeting": "新しいミーティング",
+    "joinViaCode": "コードで参加"
+  },
+  "dayStrip": {
+    "clearDay": "日付をクリア"
+  },
+  "group": {
+    "heading": "{tab}のミーティング",
+    "showEvery": "{tab}のミーティングをすべて表示"
+  },
+  "empty": {
+    "noneOnDay": "{date}に{tab}のミーティングはありません",
+    "noneFound": "{tab}のミーティングが見つかりません",
+    "clearDayHint": "日付フィルターを解除すると、このステータスのミーティングをすべて表示できます。",
+    "getStartedHint": "ミーティングを作成するか、コードで参加して始めましょう。"
+  },
+  "row": {
+    "copyInviteLink": "招待リンクをコピー",
+    "inviteLinkCopied": "招待リンクをコピーしました",
+    "invited": "招待済み",
+    "occurrenceCount": "この予定には{count}件のミーティングがあります",
+    "occurrenceCountShort": "{count, plural, other {#件のミーティング}}",
+    "occupancyTitle": "定員{capacity}名中{seats}名が入室中",
+    "occupancySr": "参加者数（定員{capacity}名中）",
+    "noDate": "日付未設定"
+  },
+  "repeatBadge": {
+    "label": "繰り返し",
+    "description": "繰り返しの予定の一部です"
+  },
+  "status": {
+    "inProgress": "進行中",
+    "waiting": "待機中",
+    "scheduled": "予定あり",
+    "ended": "終了",
+    "cancelled": "キャンセル済み",
+    "failed": "失敗",
+    "expired": "期限切れ",
+    "paused": "一時停止"
+  },
+  "joinDialog": {
+    "title": "翻訳ルームに参加",
+    "description": "ホストから共有されたミーティングコードを入力してルームに参加します。",
+    "codeLabel": "ミーティングコード",
+    "codePlaceholder": "例: ROOM-abc-123",
+    "join": "参加"
+  },
+  "create": {
+    "editTitle": "ミーティングを編集",
+    "createTitle": "新しいミーティングを作成",
+    "srDescription": "新しい翻訳ルームを設定して作成します",
+    "collapse": "折りたたむ",
+    "expand": "展開する",
+    "workspaceFallback": "ワークスペース",
+    "bridgeNotice": {
+      "line1": "通話は<meet>Google Meet</meet>上で行われます。WarpTalkはその横で動作し、このルームには2席（あなたと、相手側全員を代表する1席）が用意されます。<src>ソース言語</src>はあなたが話す言語、<tgt>ターゲット言語</tgt>は通話が聞き取る言語です。",
+      "line2": "2つの仮想オーディオデバイスをインストールし、Meetをそれらに向けて設定する必要があります。セットアップの確認はルームを開いたときに実行されます。"
+    },
+    "titlePlaceholder": "ミーティングのタイトル",
+    "descriptionPlaceholder": "説明を追加...",
+    "dailyPill": "毎日 {time}",
+    "footer": {
+      "starting": "開始しています...",
+      "saving": "保存しています...",
+      "saveChanges": "変更を保存",
+      "startMeeting": "ミーティングを開始",
+      "createRoom": "ルームを作成"
+    },
+    "success": {
+      "title": "ミーティングを作成しました",
+      "instant": "「{title}」を作成しましたが、まだ開始していません。リンクを共有するか、ミーティングページから開始してください。",
+      "scheduled": "「{title}」を予約しました。今すぐリンクを共有できます。ミーティング開始時刻になると開きます。",
+      "roomCode": "ルームコード",
+      "copyInviteLink": "招待リンクをコピー",
+      "configure": "設定",
+      "viewInCalendar": "カレンダーで見る"
+    },
+    "errors": {
+      "requiredFields": "必須項目をすべて入力してください。",
+      "selectWorkspace": "ルームを作成する前にワークスペースを選択してください。",
+      "updateFailed": "ルームの更新に失敗しました。",
+      "createFailed": "ルームの作成に失敗しました。",
+      "startFailed": "ルームは作成されましたが、開始できませんでした。"
+    },
+    "toasts": {
+      "roomUpdated": "ルームを更新しました。",
+      "roomCreated": "ルームを作成しました。招待を送信しました！",
+      "inviteLinkCopied": "招待リンクをコピーしました。",
+      "recurringCreated": "{sentence}（{time}） — {count, plural, other {#件のミーティング}}。"
+    },
+    "invite": {
+      "inviteByEmail": "メールで招待",
+      "emailPlaceholder": "name@company.com...",
+      "invalidEmail": "完全なメールアドレスを入力してください。",
+      "alreadyInvited": "このメールアドレスはすでに招待されています。",
+      "memberNoValidEmail": "このワークスペースメンバーには有効なメールアドレスがありません。",
+      "suggestedMembers": "ワークスペースメンバーの候補",
+      "peopleCount": "{count}人",
+      "people": "参加者"
+    },
+    "language": {
+      "heading": "ミーティング言語",
+      "blocked": "ブロック中",
+      "blockedReason": "{language}はこのワークスペースの言語ポリシーで許可されていません。",
+      "blockedFooter": "ブロックされている言語は、このワークスペースの言語ポリシーで許可されていません。ワークスペース管理者がワークスペース設定で変更できます。"
+    },
+    "options": {
+      "dateAndTime": "日時",
+      "repeat": "繰り返し",
+      "timeEachDay": "毎日の時刻",
+      "turnOnDaily": "毎日の繰り返しをオンにする",
+      "turnOffDaily": "毎日の繰り返しをオフにする",
+      "cadence": {
+        "daily": "毎日",
+        "weekly": "毎週",
+        "monthly": "毎月"
+      },
+      "dayOfMonth": "毎月の日",
+      "dayOfMonthAria": "毎月の日",
+      "monthSkipped": "{day}日がない月はスキップされます。",
+      "repeatUntil": "繰り返しの終了日",
+      "requireApproval": "参加に承認を必須にする",
+      "turnOnApproval": "参加の承認をオンにする",
+      "turnOffApproval": "参加の承認をオフにする",
+      "anyoneCanStartTranslation": "誰でも翻訳を開始できる",
+      "onlyHostCanStart": "ホストのみが翻訳を開始できます",
+      "letAnyoneStart": "ルーム内の誰でも翻訳を開始できるようにする",
+      "saveTranscript": "ミーティングの文字起こしを保存する",
+      "saveTranscriptHint": "字幕と翻訳は引き続き機能します。このミーティングには文字起こし、要約、議事録が残りません。",
+      "keepTranscript": "このミーティングの記録を残す",
+      "dontKeepTranscript": "このミーティングの記録を残さない"
+    },
+    "startTime": {
+      "label": "開始時刻",
+      "remove": "予定を削除"
+    },
+    "dateField": {
+      "pickDate": "日付を選択"
+    },
+    "templatePicker": {
+      "meetingType": "ミーティングの種類",
+      "translateElsewhere": "外部の通話を翻訳する"
+    }
+  }
+}

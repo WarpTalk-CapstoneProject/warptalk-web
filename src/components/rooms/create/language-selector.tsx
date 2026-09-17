@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { CheckCircle, Plus } from "@phosphor-icons/react/dist/ssr";
@@ -41,6 +42,7 @@ export function LanguageSelector({
   /** The workspace's `allowedTargetLanguages`, as bare ISO-639-1 codes. Empty ⇒ unrestricted. */
   allowedTargetLanguages?: string[] | null;
 }) {
+  const t = useTranslations("rooms.create.language");
   // The picker offers locale tags ("vi-VN"); the server stores bare codes, because
   // LanguageHelper.NormalizeLanguageCode splits on the dash before saving. So a room that
   // already had Vietnamese came back as "vi", `["en","vi"].includes("vi-VN")` was false, the
@@ -106,14 +108,14 @@ export function LanguageSelector({
         <PopoverContent align="start" className="w-[210px] rounded-xl bg-surface-1 border-border/50 p-1.5 shadow-xl z-[100]">
           <Command className="bg-transparent">
             <CommandList>
-              <CommandGroup heading="Meeting languages" className="text-[11px] text-ink-muted">
+              <CommandGroup heading={t("heading")} className="text-[11px] text-ink-muted">
                 {options.map((language) => {
                   const isSelected = isPicked(language.code);
                   // A forbidden language that is somehow already picked (an older room, or a
                   // policy tightened after the fact) stays clickable so it can be removed —
                   // disabling it there would trap the host with a set the server refuses.
                   const isDisabled = !language.isAllowed && !isSelected;
-                  const blockedReason = `${language.label} is not allowed by this workspace's language policy.`;
+                  const blockedReason = t("blockedReason", { language: language.label });
                   return (
                     <CommandItem
                       key={language.code}
@@ -134,7 +136,7 @@ export function LanguageSelector({
                         {isSelected && <CheckCircle weight="fill" color="#3b82f6" className="h-3.5 w-3.5" />}
                         {!language.isAllowed && !isSelected && (
                           <span className="text-[10px] uppercase tracking-wide text-ink-muted">
-                            Blocked
+                            {t("blocked")}
                           </span>
                         )}
                       </div>
@@ -145,8 +147,7 @@ export function LanguageSelector({
               {/* The reason, said once, rather than an unexplained gap in the list. */}
               {hasBlockedLanguage && (
                 <p className="px-2 pt-1 pb-0.5 text-[10px] leading-snug text-ink-muted">
-                  Blocked languages are not permitted by this workspace&apos;s language policy.
-                  A workspace admin can change it in workspace settings.
+                  {t("blockedFooter")}
                 </p>
               )}
             </CommandList>

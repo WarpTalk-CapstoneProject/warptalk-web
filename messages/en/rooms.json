@@ -1,0 +1,159 @@
+{
+  "tabs": {
+    "active": "Active",
+    "history": "History",
+    "all": "All"
+  },
+  "search": {
+    "placeholder": "Search meetings...",
+    "ariaLabel": "Search meetings"
+  },
+  "filterMeetingsAria": "Filter meetings",
+  "toolbar": {
+    "filter": "Filter",
+    "displayOptions": "Display Options",
+    "newMeeting": "New Meeting",
+    "joinViaCode": "Join via code"
+  },
+  "dayStrip": {
+    "clearDay": "Clear day"
+  },
+  "group": {
+    "heading": "{tab} Meetings",
+    "showEvery": "Show every {tab} meeting"
+  },
+  "empty": {
+    "noneOnDay": "No {tab} meetings on {date}",
+    "noneFound": "No {tab} meetings found",
+    "clearDayHint": "Clear the day filter to see every meeting in this status.",
+    "getStartedHint": "Create a meeting or join one with a code to get started."
+  },
+  "row": {
+    "copyInviteLink": "Copy invite link",
+    "inviteLinkCopied": "Invite link copied",
+    "invited": "Invited",
+    "occurrenceCount": "{count} meetings in this schedule",
+    "occurrenceCountShort": "{count, plural, one {# meeting} other {# meetings}}",
+    "occupancyTitle": "{seats} in the room of {capacity} seats",
+    "occupancySr": "participants in the room, out of {capacity} seats",
+    "noDate": "No date"
+  },
+  "repeatBadge": {
+    "label": "Repeats",
+    "description": "Part of a repeating schedule"
+  },
+  "status": {
+    "inProgress": "In progress",
+    "waiting": "Waiting",
+    "scheduled": "Scheduled",
+    "ended": "Ended",
+    "cancelled": "Cancelled",
+    "failed": "Failed",
+    "expired": "Expired",
+    "paused": "Paused"
+  },
+  "joinDialog": {
+    "title": "Join Translation Room",
+    "description": "Enter the meeting code provided by your host to join the room.",
+    "codeLabel": "Meeting code",
+    "codePlaceholder": "e.g. ROOM-abc-123",
+    "join": "Join"
+  },
+  "create": {
+    "editTitle": "Edit meeting",
+    "createTitle": "Create new meeting",
+    "srDescription": "Configure and create a new translation room",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "workspaceFallback": "Workspace",
+    "bridgeNotice": {
+      "line1": "Your call runs on <meet>Google Meet</meet>. WarpTalk sits beside it: this room gets two seats — you, and one stand-in for everyone on the other side. <src>Source</src> is the language you speak; <tgt>target</tgt> is what the call hears.",
+      "line2": "Needs the two virtual audio devices installed, and Meet pointed at them. The setup check runs when you open the room."
+    },
+    "titlePlaceholder": "Meeting title",
+    "descriptionPlaceholder": "Add description...",
+    "dailyPill": "Daily {time}",
+    "footer": {
+      "starting": "Starting...",
+      "saving": "Saving...",
+      "saveChanges": "Save Changes",
+      "startMeeting": "Start meeting",
+      "createRoom": "Create Room"
+    },
+    "success": {
+      "title": "Meeting Created Successfully",
+      "instant": "“{title}” was created but is not open yet. Share the link, or start it from the meeting page.",
+      "scheduled": "“{title}” is booked. Share the link now; it opens when the meeting starts.",
+      "roomCode": "Room Code",
+      "copyInviteLink": "Copy Invite Link",
+      "configure": "Configure",
+      "viewInCalendar": "View in calendar"
+    },
+    "errors": {
+      "requiredFields": "Please complete all required fields.",
+      "selectWorkspace": "Please select a workspace before creating a room.",
+      "updateFailed": "Failed to update room.",
+      "createFailed": "Failed to create room.",
+      "startFailed": "Room created, but it could not be started."
+    },
+    "toasts": {
+      "roomUpdated": "Room updated successfully.",
+      "roomCreated": "Room created successfully. Invites sent!",
+      "inviteLinkCopied": "Invite link copied.",
+      "recurringCreated": "{sentence} at {time} — {count, plural, one {# meeting} other {# meetings}}."
+    },
+    "invite": {
+      "inviteByEmail": "Invite by Email",
+      "emailPlaceholder": "name@company.com...",
+      "invalidEmail": "Enter a complete email address.",
+      "alreadyInvited": "This email is already invited.",
+      "memberNoValidEmail": "This workspace member does not have a valid email.",
+      "suggestedMembers": "Suggested Workspace Members",
+      "peopleCount": "{count} people",
+      "people": "People"
+    },
+    "language": {
+      "heading": "Meeting languages",
+      "blocked": "Blocked",
+      "blockedReason": "{language} is not allowed by this workspace's language policy.",
+      "blockedFooter": "Blocked languages are not permitted by this workspace's language policy. A workspace admin can change it in workspace settings."
+    },
+    "options": {
+      "dateAndTime": "Date & Time",
+      "repeat": "Repeat",
+      "timeEachDay": "Time each day",
+      "turnOnDaily": "Turn on daily repeat",
+      "turnOffDaily": "Turn off daily repeat",
+      "cadence": {
+        "daily": "daily",
+        "weekly": "weekly",
+        "monthly": "monthly"
+      },
+      "dayOfMonth": "Day of month",
+      "dayOfMonthAria": "Day of the month",
+      "monthSkipped": "Months without day {day} are skipped.",
+      "repeatUntil": "Repeat until",
+      "requireApproval": "Require approval",
+      "turnOnApproval": "Turn on approval to join",
+      "turnOffApproval": "Turn off approval to join",
+      "anyoneCanStartTranslation": "Anyone can start translation",
+      "onlyHostCanStart": "Only the host may start translation",
+      "letAnyoneStart": "Let anyone in the room start translation",
+      "saveTranscript": "Save the meeting transcript",
+      "saveTranscriptHint": "Subtitles and translation still work. This meeting will have no transcript, summary or minutes afterwards.",
+      "keepTranscript": "Keep a transcript of this meeting",
+      "dontKeepTranscript": "Do not keep a record of this meeting"
+    },
+    "startTime": {
+      "label": "Start time",
+      "remove": "Remove schedule"
+    },
+    "dateField": {
+      "pickDate": "Pick a date"
+    },
+    "templatePicker": {
+      "meetingType": "Meeting Type",
+      "translateElsewhere": "Translate a call elsewhere"
+    }
+  }
+}
