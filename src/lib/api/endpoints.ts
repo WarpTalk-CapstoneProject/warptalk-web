@@ -521,6 +521,18 @@ export const API = {
     counts: "/admin/meetings/counts",
   },
   /**
+   * The Insights page (`/admin`). One period endpoint per owning service plus billing's "right now"
+   * snapshot; each rides its service's existing admin gateway route. Built alongside the page, so
+   * any of them may 404 on an older backend — the page shows that source as not available yet.
+   */
+  adminInsights: {
+    billing: "/admin/billing/insights",
+    billingSnapshot: "/admin/billing/insights/snapshot",
+    users: "/admin/users/insights",
+    workspaces: "/admin/workspaces/insights",
+    meetings: "/admin/meetings/insights",
+  },
+  /**
    * The platform's own vitals, read back out of the metrics store. Query-only: nothing behind
    * this path can silence an alert, restart a container or write a sample.
    */

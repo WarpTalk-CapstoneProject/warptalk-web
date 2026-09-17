@@ -62,9 +62,10 @@ checks.push([
 ]);
 checks.push([
   // NavLink treats a non-exact item as active for anything beneath its href, and every admin
-  // page is beneath /admin — so Overview would stay lit on every other admin screen.
-  "the Overview row matches /admin exactly",
-  /label: "Overview", href: "\/admin", exact: true/.test(sidebar),
+  // page is beneath /admin — so Insights would stay lit on every other admin screen. The row was
+  // "Overview" until the landing page became Insights (2026-09-17); the route never moved.
+  "the Insights row matches /admin exactly",
+  /label: "Insights", href: "\/admin", exact: true/.test(sidebar),
 ]);
 checks.push([
   "the admin sidebar offers a way back to the app",
