@@ -10,7 +10,7 @@
  * had ever shown it, so the average was one division away the whole time.
  */
 
-import { usageTypeDetailLabel } from "@/lib/billing/usage-labels";
+import { usageTypeLabel } from "@/lib/billing/usage-labels";
 import type { ServiceUsageRow } from "@/lib/billing/cycle-activity";
 
 /** Credits per use is a small number for chat and a large one for a meeting; both need to read. */
@@ -54,8 +54,8 @@ export function ServiceUsageTable({ rows }: { rows: ServiceUsageRow[] }) {
           {rows.map((row) => (
             <tr key={row.usageType} className="border-b border-hairline/60 last:border-b-0">
               <td className="max-w-[240px] px-4 py-3 text-ink">
-                <span className="block truncate" title={usageTypeDetailLabel(row.usageType)}>
-                  {usageTypeDetailLabel(row.usageType)}
+                <span className="block truncate" title={usageTypeLabel(row.usageType)}>
+                  {usageTypeLabel(row.usageType)}
                 </span>
               </td>
               <td className="px-4 py-3 text-right tabular-nums text-ink-muted">
