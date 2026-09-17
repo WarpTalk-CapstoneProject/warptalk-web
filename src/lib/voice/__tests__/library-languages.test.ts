@@ -9,7 +9,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveLibraryLanguage, voiceLibraryLanguages } from "../library-languages.ts";
+import {
+  resolveLibraryLanguage,
+  resolveProfileLanguage,
+  voiceLibraryLanguages,
+  voiceProfileLanguages,
+} from "../library-languages.ts";
 
 const codes = (list: readonly { code: string }[]) => list.map((language) => language.code);
 
@@ -51,4 +56,23 @@ test("the Vietnamese default snaps away when the workspace does not allow it", (
 
 test("no permitted language resolves to null, which the page must not fetch", () => {
   assert.equal(resolveLibraryLanguage("vi", voiceLibraryLanguages(["zh"])), null);
+});
+
+test("the Create profile dialog is narrowed by the same policy", () => {
+  assert.deepEqual(codes(voiceProfileLanguages(["vi", "en"])), ["vi", "en"]);
+  assert.deepEqual(codes(voiceProfileLanguages([])), ["vi", "en", "ja"]);
+});
+
+test("a policy naming no recordable language still leaves recording possible", () => {
+  // A clone dubs into any target, so recording must not become impossible.
+  assert.deepEqual(codes(voiceProfileLanguages(["ko"])), ["vi", "en", "ja"]);
+});
+
+test("the dialog's default snaps to an option it actually offers", () => {
+  const options = voiceProfileLanguages(["vi", "en"]);
+  assert.equal(resolveProfileLanguage("en-US", options), "en-US");
+  assert.equal(resolveProfileLanguage("en", options), "en-US");
+  // Korean is browsable in the library but not a profile language.
+  assert.equal(resolveProfileLanguage("ko-KR", voiceProfileLanguages([])), "vi-VN");
+  assert.equal(resolveProfileLanguage("ja-JP", options), "vi-VN");
 });

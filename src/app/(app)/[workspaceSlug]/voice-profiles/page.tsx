@@ -24,7 +24,11 @@ import {
 import { useVoiceProfiles } from "@/hooks/use-voice-profiles";
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import { resolveLibraryLanguage, voiceLibraryLanguages } from "@/lib/voice/library-languages";
+import {
+  resolveLibraryLanguage,
+  voiceLibraryLanguages,
+  voiceProfileLanguages,
+} from "@/lib/voice/library-languages";
 import { getLanguageLocale } from "@/lib/language/languages";
 import { ownVoiceProfiles } from "@/lib/voice/profile-status";
 
@@ -75,6 +79,13 @@ export default function VoiceProfilesPage() {
   const policyReady = settingsQuery.isFetched;
   const libraryLanguages = useMemo(
     () => voiceLibraryLanguages(settingsQuery.data?.allowedTargetLanguages),
+    [settingsQuery.data?.allowedTargetLanguages],
+  );
+  // The Create dialog reads the same policy. It used to offer every profile language, so a
+  // workspace that allows only Vietnamese and English offered Japanese there beside a library
+  // picker that did not.
+  const profileLanguages = useMemo(
+    () => voiceProfileLanguages(settingsQuery.data?.allowedTargetLanguages),
     [settingsQuery.data?.allowedTargetLanguages],
   );
   // The default is Vietnamese, which a workspace may not allow. Snapped to a permitted language
@@ -191,6 +202,7 @@ export default function VoiceProfilesPage() {
         open={isCreateOpen}
         onOpenChange={setIsCreateOpen}
         defaultLanguage={getLanguageLocale(language) ?? "vi-VN"}
+        languages={profileLanguages}
       />
     </WorkspacePage>
   );
