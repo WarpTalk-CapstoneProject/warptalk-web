@@ -29,12 +29,16 @@ import {
   useAdminSubscriptionSummary,
   useCancelAdminSubscription,
   useChangeAdminSubscriptionPlan,
-  useResumeAdminSubscription,
+  useReactivateAdminSubscription,
 } from "@/hooks/use-admin-subscriptions";
 import {
   formatMonthlyRecurring,
   formatSubscriptionValue,
 } from "@/lib/billing/admin-money";
+import {
+  adminSubscriptionRowAction,
+  isEndedSubscription,
+} from "@/lib/billing/admin-subscription-actions";
 import { cn } from "@/lib/utils";
 import type {
   AdminSubscriptionSort,
@@ -137,7 +141,7 @@ function SubscriptionsDirectory() {
   const directoryQuery = useAdminSubscriptionDirectory(query);
   const summaryQuery = useAdminSubscriptionSummary();
   const cancelSubscription = useCancelAdminSubscription();
-  const resumeSubscription = useResumeAdminSubscription();
+  const reactivateSubscription = useReactivateAdminSubscription();
   const changePlan = useChangeAdminSubscriptionPlan();
 
   // The row and the verb travel together: the dialog's wording, its confirm label and the endpoint
@@ -331,18 +335,16 @@ function SubscriptionsDirectory() {
         }}
         onSubmit={(reason) => {
           if (!pending) return Promise.resolve();
-          const request = { reason };
           return pending.action === "cancel"
             ? cancelSubscription.mutateAsync({
                 workspaceId: pending.subscription.workspaceId,
-                request,
+                request: { reason: reason ?? "" },
               })
-            : resumeSubscription.mutateAsync({
+            : reactivateSubscription.mutateAsync({
                 workspaceId: pending.subscription.workspaceId,
-                request,
               });
         }}
-        isSaving={cancelSubscription.isPending || resumeSubscription.isPending}
+        isSaving={cancelSubscription.isPending || reactivateSubscription.isPending}
       />
 
       {totalPages > 1 ? (
@@ -388,7 +390,10 @@ function SubscriptionRow({
 }) {
   const isTrial =
     subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > new Date();
-  const isCancelled = subscription.cancelledAt != null;
+  // A paid cancellation leaves cancelledAt null (the row stays live until the period ends), so the
+  // status is what says "cancelled" for the value column; cancelledAt alone only marks ended rows.
+  const isCancelled = subscription.status === "cancelled" || subscription.cancelledAt != null;
+  const lifecycleAction = adminSubscriptionRowAction(subscription);
   // Suspended service on a live subscription is the state the status column cannot show: the row
   // still says "active", because it is.
   const isPastDue =
@@ -449,28 +454,29 @@ function SubscriptionRow({
         ) : null}
       </div>
 
-      {/* One action per row, chosen by where the subscription actually is. A cancelled row offers
-          Resume and an active one offers Cancel; an expired one offers neither, because the
-          endpoint would refuse — it looks for an ACTIVE subscription and answers 404 otherwise. */}
+      {/* One lifecycle action per row, chosen by what the endpoint would accept (see
+          admin-subscription-actions.ts). A renewing row offers Cancel; a scheduled cancellation
+          still inside its paid period offers Reactivate (`/reactivate`, never `/resume`, which
+          lifts a service suspension); an ended row offers neither. */}
       <div className="flex w-[220px] shrink-0 justify-end gap-1.5 md:ml-3">
         {/* Change plan only where the endpoint would act: it looks for the ACTIVE subscription. */}
-        {!isCancelled && subscription.status !== "expired" ? (
+        {!isEndedSubscription(subscription) ? (
           <Button variant="outline" size="sm" onClick={() => onChangePlan(subscription)}>
             <ArrowsLeftRight size={13} />
             Change plan
           </Button>
         ) : null}
-        {isCancelled ? (
-          <Button variant="outline" size="sm" onClick={() => onAction(subscription, "resume")}>
+        {lifecycleAction === "reactivate" ? (
+          <Button variant="outline" size="sm" onClick={() => onAction(subscription, "reactivate")}>
             <ArrowCounterClockwise size={13} />
-            Resume
+            Reactivate
           </Button>
-        ) : subscription.status === "expired" ? null : (
+        ) : lifecycleAction === "cancel" ? (
           <Button variant="outline" size="sm" onClick={() => onAction(subscription, "cancel")}>
             <Prohibit size={13} />
             Cancel
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
   );

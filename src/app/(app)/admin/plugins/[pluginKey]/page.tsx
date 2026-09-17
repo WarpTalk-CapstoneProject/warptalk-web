@@ -43,6 +43,7 @@ import {
 import {
   catalogOwnsOAuthClient,
   catalogRowCannotConnect,
+  describePluginToolOutcome,
   formatToolManifest,
   MISSING_CLIENT_ID_EXPLANATION,
   OAUTH_CLIENT_SOURCE_LABELS,
@@ -52,6 +53,7 @@ import {
   PLUGIN_KIND_LABELS,
   supportsRediscovery,
 } from "@/lib/admin/plugin-catalog";
+import type { PluginToolOutcomeTone } from "@/lib/admin/plugin-catalog";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type {
@@ -409,7 +411,7 @@ export default function AdminPluginDetailPage() {
             setAuditOutcome(event.target.value);
             setAuditPage(1);
           }}
-          placeholder="Filter by outcome, e.g. ok or missing_scope"
+          placeholder="Filter by outcome, e.g. success or missing_scope"
           aria-label="Filter recorded tool calls by outcome"
           className="max-w-xs"
         />
@@ -1145,8 +1147,15 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
 
 // ── Audit row ────────────────────────────────────────────────────────────────
 
+const OUTCOME_TONE_CLASSES: Record<PluginToolOutcomeTone, string> = {
+  success: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+  attention: "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  blocked: "border-border bg-surface-2 text-ink-muted",
+  failed: "border-destructive/25 bg-destructive/10 text-destructive",
+};
+
 function AuditRow({ entry }: { entry: AdminPluginToolAuditEntryDto }) {
-  const ok = entry.resultStatus === "ok";
+  const outcome = describePluginToolOutcome(entry.resultStatus);
   return (
     <li className="border-b border-hairline/60 px-4 py-2.5 text-[12px] last:border-b-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -1154,13 +1163,14 @@ function AuditRow({ entry }: { entry: AdminPluginToolAuditEntryDto }) {
         <span
           className={cn(
             "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            ok
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : "border-destructive/25 bg-destructive/10 text-destructive",
+            OUTCOME_TONE_CLASSES[outcome.tone],
           )}
         >
-          {entry.resultStatus}
+          {outcome.label}
         </span>
+        {outcome.code ? (
+          <span className="font-mono text-[11px] text-ink-muted">{outcome.code}</span>
+        ) : null}
         <span className="text-ink-muted">{formatDateTime(entry.createdAt)}</span>
         <span className="font-mono text-[11px] text-ink-subtle">{entry.userId}</span>
       </div>

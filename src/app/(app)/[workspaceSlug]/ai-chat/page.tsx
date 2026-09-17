@@ -1,11 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
   useAssistantConversations,
   useCreateAssistantConversation,
+  usePluginConnectUrl,
   useSendAssistantMessage,
 } from "@/hooks/use-assistant";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,18 @@ import {
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import {
+  PluginConnectionActionCard,
+  parsePluginConnectionAction,
+  type PluginConnectionAction,
+} from "@/components/layout/plugin-connection-action-card";
+import {
+  PluginOperatorSetupCard,
+  parsePluginOperatorSetupAction,
+  type PluginOperatorSetupAction,
+} from "@/components/layout/plugin-operator-setup-card";
+import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
 import type { AssistantConversationDto } from "@/types/assistant";
@@ -28,6 +42,23 @@ export default function AiChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
+  // One slot per card, as in the WarpBot widget (WT-688). This page used to keep only the
+  // questions, so a Connect prompt or an operator-setup notice arrived and vanished without trace.
+  const [pendingPluginConnection, setPendingPluginConnection] =
+    useState<PluginConnectionAction | null>(null);
+  const [pendingPluginSetup, setPendingPluginSetup] =
+    useState<PluginOperatorSetupAction | null>(null);
+  const connectPlugin = usePluginConnectUrl();
+
+  // The same rule the widget and the meeting panel follow: a card lasts until the NEXT turn starts.
+  // Cleared on send and on changing conversation, because a Connect card left over from an earlier
+  // turn or another conversation would open an OAuth flow nobody asked for. Never when its own
+  // turn completes or fails: the card is raised mid-turn and that answer is the one explaining it,
+  // so clearing there erases it before anyone can press it.
+  const clearPluginCards = useCallback(() => {
+    setPendingPluginConnection(null);
+    setPendingPluginSetup(null);
+  }, []);
 
   const conversations = conversationsQuery.data ?? [];
   const selectedId = activeId ?? conversations[0]?.id ?? null;
@@ -55,11 +86,23 @@ export default function AiChatPage() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== selectedId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
+        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
+        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
+        // Setup wins, exactly as in the widget: "press Connect" and "no button will help" cannot
+        // both be true of one failure, and setup is the one saying the ladder is exhausted.
+        if (pluginSetup) {
+          setPendingPluginSetup(pluginSetup);
+          setPendingPluginConnection(null);
+        } else if (pluginConnection) {
+          setPendingPluginConnection(pluginConnection);
+          setPendingPluginSetup(null);
+        }
       },
     );
     const refetchBoth = (payload?: { conversationId?: string }) => {
       if (payload?.conversationId && payload.conversationId !== selectedId) return;
+      // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
       void refetchConversationRef.current();
       void refetchConversationsRef.current();
     };
@@ -78,11 +121,44 @@ export default function AiChatPage() {
     };
   }, [selectedId]);
 
+  function selectConversation(id: string) {
+    if (id !== selectedId) clearPluginCards();
+    setActiveId(id);
+  }
+
   async function handleCreateConversation() {
     if (!workspaceId || createConversation.isPending) return;
     const conversation = await createConversation.mutateAsync(workspaceId);
-    setActiveId(conversation.id);
+    selectConversation(conversation.id);
     await conversationsQuery.refetch();
+  }
+
+  // The widget's connect flow, unchanged: scoped to the workspace so its plugin policy applies,
+  // tagged with the client, and every outcome said out loud — including the one where the server
+  // connected the plugin itself and there is nothing to open.
+  async function handlePluginConnectionAction(pluginKey: string) {
+    try {
+      const result = await connectPlugin.mutateAsync({
+        pluginKey,
+        client: isDesktopApp() ? "desktop" : "web",
+        workspaceId: workspaceId ?? undefined,
+      });
+      const consentUrl = result.url;
+      if (result.connected || !consentUrl) {
+        toast.success("Plugin connected.");
+      } else if (openProviderConsent(consentUrl)) {
+        toast.message("Finish connecting this plugin in your browser.");
+      } else {
+        toast.error("Your browser blocked the consent window.", {
+          action: {
+            label: "Open it",
+            onClick: () => openProviderConsent(consentUrl),
+          },
+        });
+      }
+    } catch {
+      toast.error("Could not open the plugin connection flow.");
+    }
   }
 
   async function sendContent(content: string) {
@@ -98,6 +174,7 @@ export default function AiChatPage() {
 
     setDraft("");
     setPendingQuestions(null);
+    clearPluginCards();
     await sendMessage.mutateAsync({ conversationId, content });
     await conversationQuery.refetch();
     await conversationsQuery.refetch();
@@ -139,7 +216,7 @@ export default function AiChatPage() {
                   key={conversation.id}
                   conversation={conversation}
                   active={conversation.id === selectedId}
-                  onClick={() => setActiveId(conversation.id)}
+                  onClick={() => selectConversation(conversation.id)}
                 />
               ))}
             </div>
@@ -187,6 +264,24 @@ export default function AiChatPage() {
                   questions={pendingQuestions}
                   disabled={sendMessage.isPending}
                   onSubmit={(answer) => void sendContent(answer)}
+                />
+              </div>
+            ) : null}
+            {pendingPluginConnection ? (
+              <div className="max-w-[85%]">
+                <PluginConnectionActionCard
+                  action={pendingPluginConnection}
+                  disabled={connectPlugin.isPending}
+                  onDismiss={() => setPendingPluginConnection(null)}
+                  onConnect={handlePluginConnectionAction}
+                />
+              </div>
+            ) : null}
+            {pendingPluginSetup ? (
+              <div className="max-w-[85%]">
+                <PluginOperatorSetupCard
+                  action={pendingPluginSetup}
+                  onDismiss={() => setPendingPluginSetup(null)}
                 />
               </div>
             ) : null}

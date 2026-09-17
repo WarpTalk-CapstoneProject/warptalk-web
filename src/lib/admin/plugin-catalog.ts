@@ -552,3 +552,57 @@ export function toCreatePluginRequest(draft: NewPluginDraft): CreateAdminMcpPlug
 
   return request;
 }
+
+// ── Tool-call outcomes ───────────────────────────────────────────────────────
+//
+// `plugin_tool_audits.result_status` is "success" for a call that went through, and otherwise the
+// error code the call stopped on: `McpToolOrchestrator` writes
+// `result.IsSuccess ? "success" : result.ErrorCode ?? "failed"`. It has never been "ok" — that word
+// only lived in the admin endpoint's doc comments, and a row that compared against it painted every
+// successful call as a failure.
+//
+// Grouped the way the workspace Plugin activity page groups them (WT-646,
+// `describePluginActivityOutcome` in src/lib/assistant/plugin-activity.ts, still on an open PR when
+// this was written), so the two screens agree on what a code means. The admin row keeps the raw code
+// beside the label: the outcome filter matches `result_status` exactly, so the code is what an
+// operator types back in.
+
+export const PLUGIN_TOOL_SUCCESS_STATUS = "success";
+
+export type PluginToolOutcomeTone = "success" | "blocked" | "attention" | "failed";
+
+export interface PluginToolOutcome {
+  label: string;
+  tone: PluginToolOutcomeTone;
+  /** The status as recorded, or null for a plain success. */
+  code: string | null;
+}
+
+/** Codes from `PluginConstants.ErrorCodes`, grouped by what someone does about them. */
+const BLOCKED_TOOL_CODES = new Set(["permission_denied", "access_denied"]);
+const NEEDS_SETUP_TOOL_CODES = new Set([
+  "plugin_not_installed",
+  "connection_required",
+  "missing_scope",
+  "provider_account_mismatch",
+]);
+const PROVIDER_TOOL_CODES = new Set([
+  "provider_rate_limited",
+  "provider_unavailable",
+  "provider_configuration",
+]);
+
+export function describePluginToolOutcome(
+  resultStatus: string | null | undefined,
+): PluginToolOutcome {
+  const code = (resultStatus ?? "").trim().toLowerCase();
+  if (code === PLUGIN_TOOL_SUCCESS_STATUS) return { label: "Succeeded", tone: "success", code: null };
+  if (BLOCKED_TOOL_CODES.has(code)) return { label: "Blocked", tone: "blocked", code };
+  // Not a failure: every write tool records this once, before the user confirms and it runs.
+  if (code === "confirmation_required") {
+    return { label: "Awaiting confirmation", tone: "attention", code };
+  }
+  if (NEEDS_SETUP_TOOL_CODES.has(code)) return { label: "Needs setup", tone: "attention", code };
+  if (PROVIDER_TOOL_CODES.has(code)) return { label: "Provider error", tone: "failed", code };
+  return { label: "Failed", tone: "failed", code: code || "failed" };
+}
