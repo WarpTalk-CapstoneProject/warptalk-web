@@ -588,7 +588,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
               if (segments.length >= 1) {
                 const firstSeg = segments[0];
-                if (firstSeg === "voice-profiles") {
+                if (firstSeg === "admin") {
+                  const ADMIN_LABEL_KEYS: Record<string, string> = {
+                    workspaces: "workspaces",
+                    users: "accounts",
+                    subscriptions: "subscriptions",
+                    plans: "plansAndPricing",
+                    billing: "billingLedger",
+                    "sales-leads": "salesLeads",
+                    meetings: "meetings",
+                    health: "systemHealth",
+                    outbox: "eventOutbox",
+                    feedback: "feedback",
+                    audit: "auditLog",
+                    announcements: "announcements",
+                    "email-templates": "emailTemplates",
+                    settings: "platformSettings",
+                    plugins: "plugins",
+                    "global-glossary": "globalGlossary",
+                  };
+                  const adminSeg = segments[1];
+                  const key = adminSeg ? ADMIN_LABEL_KEYS[adminSeg] : undefined;
+                  parts.push({
+                    label: key ? t(`sidebar.adminNav.items.${key}`) : t("sidebar.adminNav.items.overview"),
+                  });
+                } else if (firstSeg === "voice-profiles") {
                   parts.push({ label: t("sidebar.nav.voiceProfiles") });
                 } else if (firstSeg === "join") {
                   parts.push({ label: t("sidebar.joinDialog.title") });
