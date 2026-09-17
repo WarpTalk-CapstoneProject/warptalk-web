@@ -3,16 +3,23 @@ import assert from "node:assert/strict";
 
 import {
   assembleNeedsAttention,
+  churnSub,
   computeDelta,
   deltaText,
   deltaTone,
   formatInsightValue,
   insightsCsv,
   insightsCsvRows,
+  joinNotes,
+  mrrSub,
   NOT_AVAILABLE_NOTE,
+  outstandingSub,
   PERIOD_CARDS,
   periodCardView,
+  revenueTodaySub,
+  UNKNOWN_WORKSPACE,
   valueTone,
+  workspaceLabel,
   type AttentionInputs,
 } from "../insights-metrics.ts";
 import type {
@@ -40,7 +47,9 @@ function billing(metrics: InsightsMetric[]): BillingInsightsDto {
     generatedAt: range.to,
     metrics,
     revenueByDay: [],
+    revenueByDayNote: null,
     revenueByMonth: [],
+    revenueByMonthNote: null,
     creditsByService: [],
     topWorkspaces: [],
   };
@@ -180,7 +189,9 @@ function snapshot(overrides: Partial<BillingSnapshotDto> = {}): BillingSnapshotD
   return {
     generatedAt: range.to,
     revenueToday: 0,
+    revenueTodayNote: null,
     revenueYesterday: 0,
+    revenueYesterdayNote: null,
     mrr: 0,
     mrrNote: null,
     activeSubscriptions: 0,
@@ -192,7 +203,7 @@ function snapshot(overrides: Partial<BillingSnapshotDto> = {}): BillingSnapshotD
     suspended: 0,
     activeWorkspaces: 0,
     platformCreditBalance: 0,
-    outstandingInvoices: { count: 0, amount: 0, pastDueCount: 0, oldestPastDueDays: null, oldestPastDueWorkspace: null },
+    outstandingInvoices: { count: 0, amount: 0, amountNote: null, pastDueCount: 0, oldestPastDueDays: null, oldestPastDueWorkspace: null },
     openSalesLeads: 0,
     subscriptionsByPlan: [],
     recentPayments: [],
@@ -206,7 +217,7 @@ test("needs attention is assembled from every live source, most severe first", (
   const result = assembleNeedsAttention({
     snapshot: snapshot({
       pastDue: 3,
-      outstandingInvoices: { count: 5, amount: 7_880_000, pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: "Acme Translation Co" },
+      outstandingInvoices: { count: 5, amount: 7_880_000, amountNote: null, pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: "Acme Translation Co" },
       highUsageAlerts: [{ workspaceId: "w1", workspaceName: "Hanoi Law Firm", credits24h: 312_400 }],
     }),
     suspendedWorkspaces: 1,
@@ -298,4 +309,68 @@ test("health: services down and firing alerts are listed; pending alerts and a b
   const blind = assembleNeedsAttention({ health: { monitoringAvailable: false, targets: [], alerts: [] }, links });
   assert.ok(blind.unavailable.includes("system health"));
   assert.equal(blind.items.length, 0, "monitoring being unreadable is not an outage");
+});
+
+// ── nulls the server really sends (backend #421) ─────────────────────────────
+
+test("a workspace the server could not name is 'Unknown workspace', never a raw id or blank", () => {
+  assert.equal(workspaceLabel(null), UNKNOWN_WORKSPACE);
+  assert.equal(workspaceLabel("   "), UNKNOWN_WORKSPACE);
+  assert.equal(workspaceLabel("Hanoi Law Firm"), "Hanoi Law Firm");
+});
+
+test("an unnamed workspace still links by its id", () => {
+  const result = assembleNeedsAttention({
+    snapshot: snapshot({ highUsageAlerts: [{ workspaceId: "w9", workspaceName: null, credits24h: 60_000 }] }),
+    links,
+  });
+  const usage = result.items.find((item) => item.key === "usage-w9");
+  assert.equal(usage?.title, "High usage: Unknown workspace");
+  assert.equal(usage?.href, "/admin/workspaces/w9");
+});
+
+test("a null revenue today renders a dash with the server's note, not 0", () => {
+  const today = snapshot({ revenueToday: null, revenueTodayNote: "excludes 2 EUR rows", revenueYesterday: 4_480_000 });
+  assert.equal(formatInsightValue(today.revenueToday, "money"), "—");
+  const sub = revenueTodaySub(today);
+  assert.match(sub, /^excludes 2 EUR rows · yesterday /);
+  assert.doesNotMatch(sub, /yesterday 0/);
+
+  const yesterdayUnknown = revenueTodaySub(snapshot({ revenueYesterday: null, revenueYesterdayNote: "excludes 1 EUR rows" }));
+  assert.equal(yesterdayUnknown, "yesterday — · yesterday excludes 1 EUR rows");
+});
+
+test("a null MRR says why; with no note it still does not read as a number", () => {
+  assert.equal(formatInsightValue(null, "money"), "—");
+  assert.equal(mrrSub({ mrr: null, mrrNote: "excludes 3 EUR rows" }), "excludes 3 EUR rows");
+  assert.equal(mrrSub({ mrr: null, mrrNote: null }), "Cannot be totalled in VND");
+  assert.equal(mrrSub({ mrr: 1, mrrNote: null }), "Monthly recurring revenue");
+});
+
+test("a null churn rate explains itself", () => {
+  assert.equal(
+    churnSub({ cancelled: 0, atMonthStart: 0, rate: null }),
+    "0 cancelled / 0 at month start · no rate without paying subscriptions at month start",
+  );
+  assert.equal(churnSub({ cancelled: 3, atMonthStart: 168, rate: 1.79 }), "3 cancelled / 168 at month start");
+});
+
+test("a null outstanding amount is a dash plus its note, in the card and in Needs attention", () => {
+  const invoices = { count: 2, amount: null, amountNote: "excludes 2 EUR rows", pastDueCount: 0, oldestPastDueDays: null, oldestPastDueWorkspace: null };
+  assert.equal(outstandingSub(invoices), "2 invoices · 0 past due · excludes 2 EUR rows");
+
+  const open = assembleNeedsAttention({ snapshot: snapshot({ outstandingInvoices: invoices }), links });
+  assert.equal(open.items[0].detail, "Amount not totalled (excludes 2 EUR rows), none past due");
+  assert.doesNotMatch(open.items[0].detail, /0 ₫|₫0|\b0 VND/);
+
+  const pastDue = assembleNeedsAttention({
+    snapshot: snapshot({ outstandingInvoices: { ...invoices, pastDueCount: 1, oldestPastDueDays: 4, oldestPastDueWorkspace: null } }),
+    links,
+  });
+  assert.equal(pastDue.items[0].detail, "Oldest: Unknown workspace · 4 days");
+});
+
+test("notes join only what says something", () => {
+  assert.equal(joinNotes("a", null, "  ", undefined, "b"), "a · b");
+  assert.equal(joinNotes(null, ""), null);
 });

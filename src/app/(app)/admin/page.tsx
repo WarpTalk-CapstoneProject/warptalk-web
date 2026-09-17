@@ -45,6 +45,7 @@ import { useAdminPlatformHealth } from "@/hooks/use-admin-platform-health";
 import { useAdminSalesLeads } from "@/hooks/use-admin-sales-leads";
 import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
 import {
+  browserTimeZone,
   insightsQueryOf,
   insightsSearch,
   resolveInsightsPeriod,
@@ -103,10 +104,13 @@ function InsightsRoute() {
       ),
     [periodParam, monthParam, fromParam, toParam, now],
   );
-  const query = useMemo(() => insightsQueryOf(period), [period]);
+  // The presets above are built on the browser's calendar; the server is told which one, so its
+  // days, "today" and previousMonth begin where the admin's do (Asia/Ho_Chi_Minh for the team).
+  const [timeZone] = useState(browserTimeZone);
+  const query = useMemo(() => insightsQueryOf(period, timeZone), [period, timeZone]);
 
   const billing = useAdminBillingInsights(query);
-  const snapshot = useAdminBillingSnapshot();
+  const snapshot = useAdminBillingSnapshot(timeZone);
   const users = useAdminUsersInsights(query);
   const workspaces = useAdminWorkspacesInsights(query);
   const meetings = useAdminMeetingsInsights(query);
@@ -155,7 +159,6 @@ function InsightsRoute() {
   return (
     <InsightsDashboard
       period={period}
-      now={now}
       onChoosePeriod={onChoosePeriod}
       updatedAt={updatedAt}
       billing={stateOf(billing)}

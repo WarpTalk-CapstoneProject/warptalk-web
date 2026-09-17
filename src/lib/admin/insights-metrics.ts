@@ -29,6 +29,19 @@ import { toCsv } from "../billing/usage-overview.ts";
 
 export const NOT_AVAILABLE_NOTE = "Not available yet";
 
+/** What a row says when workspace-service could not name the workspace. The link still uses the id. */
+export const UNKNOWN_WORKSPACE = "Unknown workspace";
+
+export function workspaceLabel(name: string | null | undefined): string {
+  return name?.trim() || UNKNOWN_WORKSPACE;
+}
+
+/** Joins the parts that say something, " · " between them; null when none does. */
+export function joinNotes(...parts: (string | null | undefined)[]): string | null {
+  const said = parts.map((part) => part?.trim()).filter((part): part is string => Boolean(part));
+  return said.length ? said.join(" · ") : null;
+}
+
 const NUMBER_LOCALE = "en-US";
 const integer = new Intl.NumberFormat(NUMBER_LOCALE, { maximumFractionDigits: 0 });
 const oneDecimal = new Intl.NumberFormat(NUMBER_LOCALE, { maximumFractionDigits: 1 });
@@ -146,6 +159,49 @@ export function valueTone(id: string, value: number | null | undefined): ValueTo
     default:
       return "neutral";
   }
+}
+
+// ── snapshot cards ───────────────────────────────────────────────────────────
+//
+// Each of these figures can be null on the wire (a currency with no FX rate, nothing active at
+// month start). The value then renders "—" through formatInsightValue, and the sub-line below it
+// carries the server's note, so a dash is never left unexplained and never reads as 0.
+
+/** "yesterday 4,480,000 ₫" plus whatever today's and yesterday's notes say. */
+export function revenueTodaySub(
+  snapshot: Pick<BillingSnapshotDto, "revenueToday" | "revenueTodayNote" | "revenueYesterday" | "revenueYesterdayNote">,
+): string {
+  return joinNotes(
+    snapshot.revenueToday === null && !snapshot.revenueTodayNote ? "today cannot be totalled" : snapshot.revenueTodayNote,
+    `yesterday ${formatInsightValue(snapshot.revenueYesterday, "money")}`,
+    snapshot.revenueYesterdayNote ? `yesterday ${snapshot.revenueYesterdayNote}` : null,
+  ) as string;
+}
+
+export function mrrSub(snapshot: Pick<BillingSnapshotDto, "mrr" | "mrrNote">): string {
+  return snapshot.mrrNote?.trim() || (snapshot.mrr === null ? "Cannot be totalled in VND" : "Monthly recurring revenue");
+}
+
+export function churnSub(churn: BillingSnapshotDto["churnRateMonth"]): string {
+  return joinNotes(
+    `${formatCount(churn.cancelled)} cancelled / ${formatCount(churn.atMonthStart)} at month start`,
+    churn.rate === null ? "no rate without paying subscriptions at month start" : null,
+  ) as string;
+}
+
+export function outstandingSub(invoices: BillingSnapshotDto["outstandingInvoices"]): string {
+  return joinNotes(
+    `${formatCount(invoices.count)} ${invoices.count === 1 ? "invoice" : "invoices"}`,
+    `${formatCount(invoices.pastDueCount)} past due`,
+    invoices.amountNote ?? (invoices.amount === null ? "amount cannot be totalled in VND" : null),
+  ) as string;
+}
+
+/** "N,NNN ₫ outstanding", or what is known when the amount could not be totalled. */
+function outstandingAmountText(invoices: BillingSnapshotDto["outstandingInvoices"]): string {
+  return invoices.amount === null
+    ? `Amount not totalled${invoices.amountNote ? ` (${invoices.amountNote})` : ""}`
+    : `${formatInsightValue(invoices.amount, "money")} outstanding`;
 }
 
 // ── period cards ─────────────────────────────────────────────────────────────
@@ -330,7 +386,7 @@ export interface AttentionInputs {
    * The existing 24h usage alerts, used when the snapshot's `highUsageAlerts` is unavailable.
    * Undefined = unknown.
    */
-  usageAlerts?: { workspaceId: string; workspaceName: string; consumedCreditsIn24h: number; reason?: string }[];
+  usageAlerts?: { workspaceId: string; workspaceName: string | null; consumedCreditsIn24h: number; reason?: string }[];
   /** Sales leads in status "new". Undefined = unknown. */
   newSalesLeads?: number;
   /** The System Health read. Undefined = unknown. */
@@ -398,14 +454,14 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
   if (snapshot) {
     const invoices = snapshot.outstandingInvoices;
     if (invoices && invoices.pastDueCount > 0) {
-      const oldest = [
-        invoices.oldestPastDueWorkspace,
-        invoices.oldestPastDueDays != null ? plural(invoices.oldestPastDueDays, "day", "days") : null,
-      ].filter(Boolean);
+      // A past-due invoice always belongs to a workspace; a null name means it could not be looked up.
+      const oldest = invoices.oldestPastDueDays != null
+        ? [workspaceLabel(invoices.oldestPastDueWorkspace), plural(invoices.oldestPastDueDays, "day", "days")]
+        : [];
       items.push({
         key: "invoices-past-due",
         title: `${plural(invoices.pastDueCount, "invoice", "invoices")} past due`,
-        detail: oldest.length ? `Oldest: ${oldest.join(" · ")}` : `${formatInsightValue(invoices.amount, "money")} outstanding`,
+        detail: oldest.length ? `Oldest: ${oldest.join(" · ")}` : outstandingAmountText(invoices),
         tag: "Past due",
         tone: "danger",
         href: null,
@@ -414,7 +470,7 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
       items.push({
         key: "invoices-open",
         title: `${plural(invoices.count, "invoice", "invoices")} awaiting payment`,
-        detail: `${formatInsightValue(invoices.amount, "money")} outstanding, none past due`,
+        detail: `${outstandingAmountText(invoices)}, none past due`,
         tag: "Invoices",
         tone: "warning",
         href: null,
@@ -493,7 +549,7 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
     for (const alert of highUsage) {
       items.push({
         key: `usage-${alert.workspaceId}`,
-        title: `High usage: ${alert.workspaceName || alert.workspaceId.slice(0, 8)}`,
+        title: `High usage: ${workspaceLabel(alert.workspaceName)}`,
         detail: [`${formatCount(alert.credits)} credits in 24h`, alert.reason].filter(Boolean).join(" · "),
         tag: "Usage",
         tone: "warning",

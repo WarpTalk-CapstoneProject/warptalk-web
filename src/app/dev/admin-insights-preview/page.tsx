@@ -7,7 +7,8 @@
  * sources, none of which a laptop can reach. This renders the page's view (`InsightsDashboard`) —
  * not its queries — so the layout can be looked at in both themes and in the three states that
  * matter: every source answering, a backend that predates the insights endpoints (the state the
- * page ships into), and a first load.
+ * page ships into), and a first load — plus the server's honest gaps: figures that are null with a
+ * note (a currency with no FX rate) and workspaces whose name could not be looked up.
  *
  * Fixtures only; /dev is 404 in production (`src/app/dev/layout.tsx` and the proxy).
  */
@@ -22,7 +23,7 @@ import {
   type SourceState,
 } from "@/components/admin/insights/insights-dashboard";
 import {
-  axisDays,
+  dayKey,
   resolveInsightsPeriod,
   type InsightsPeriodParams,
 } from "@/lib/admin/insights-period";
@@ -37,7 +38,16 @@ import type {
 
 const NOW = new Date(2026, 8, 17, 15, 30);
 
-type Scenario = "full" | "partial" | "loading";
+type Scenario = "full" | "gaps" | "partial" | "loading";
+
+/** The day keys the server would return for the period: every local day [from, to) touches. */
+function serverDays(from: Date, to: Date): { key: string }[] {
+  const days: { key: string }[] = [];
+  for (let day = new Date(from.getFullYear(), from.getMonth(), from.getDate()); day < to; day = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)) {
+    days.push({ key: dayKey(day) });
+  }
+  return days;
+}
 
 function rng(seed: number) {
   let value = seed;
@@ -53,16 +63,20 @@ const metric = (
   note: string | null = null,
 ): InsightsMetric => ({ id, value, previous, unit, higherIsBetter, note });
 
-function fixtures(params: InsightsPeriodParams) {
+function fixtures(params: InsightsPeriodParams, gaps: boolean) {
   const period = resolveInsightsPeriod(params, NOW);
-  const days = axisDays(period, NOW).filter((day) => !day.future);
+  const days = serverDays(period.from, period.to);
   const random = rng(days.length * 31 + 7);
   const range = { from: period.from.toISOString(), to: period.to.toISOString() };
   const previousRange = { from: period.previousFrom.toISOString(), to: period.previousTo.toISOString() };
   const scale = Math.max(1, days.length);
 
-  const revenueByDay = days.map((day) => ({ date: day.key, revenue: Math.round(random() * 4.5) * 490_000 }));
-  const revenue = revenueByDay.reduce((sum, row) => sum + row.revenue, 0);
+  const revenueByDay: BillingInsightsDto["revenueByDay"] = days.map((day, index) => ({
+    date: day.key,
+    // Gaps: one day whose only payment was in a currency with no FX rate.
+    revenue: gaps && index === 3 ? null : Math.round(random() * 4.5) * 490_000,
+  }));
+  const revenue = revenueByDay.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
   const aiCost = Math.round(revenue * 0.37);
 
   const billing: BillingInsightsDto = {
@@ -82,6 +96,8 @@ function fixtures(params: InsightsPeriodParams) {
       metric("revenuePerPayment", Math.round(revenue / (2 * scale + 7)), null, "money"),
     ],
     revenueByDay,
+    revenueByDayNote: gaps ? "excludes 1 EUR rows" : null,
+    revenueByMonthNote: gaps ? "excludes 1 EUR rows" : null,
     revenueByMonth: [
       { month: "2026-04", revenue: 24_000_000 },
       { month: "2026-05", revenue: 23_100_000 },
@@ -100,7 +116,7 @@ function fixtures(params: InsightsPeriodParams) {
     topWorkspaces: [
       { workspaceId: "11111111-1111-4111-8111-111111111111", workspaceName: "Hanoi Law Firm", credits: 2_410_000 },
       { workspaceId: "22222222-2222-4222-8222-222222222222", workspaceName: "WarpTalk Demo", credits: 1_980_000 },
-      { workspaceId: "33333333-3333-4333-8333-333333333333", workspaceName: "Can Tho University", credits: 1_120_000 },
+      { workspaceId: "33333333-3333-4333-8333-333333333333", workspaceName: gaps ? null : "Can Tho University", credits: 1_120_000 },
       { workspaceId: "44444444-4444-4444-8444-444444444444", workspaceName: "Saigon Clinic", credits: 740_000 },
       { workspaceId: "55555555-5555-4555-8555-555555555555", workspaceName: "Mekong Logistics", credits: 512_000 },
     ],
@@ -108,10 +124,14 @@ function fixtures(params: InsightsPeriodParams) {
 
   const snapshot: BillingSnapshotDto = {
     generatedAt: NOW.toISOString(),
-    revenueToday: 2_390_000,
+    revenueToday: gaps ? null : 2_390_000,
+    revenueTodayNote: gaps ? "excludes 2 EUR rows" : null,
     revenueYesterday: 4_480_000,
-    mrr: 21_634_333,
-    mrrNote: "Includes 180 USD from USD plans at the platform rate",
+    revenueYesterdayNote: null,
+    mrr: gaps ? null : 21_634_333,
+    mrrNote: gaps
+      ? "excludes 165 EUR rows"
+      : "includes 180.00 USD converted at 26,300 VND/USD (billing_pricing_config.fx_rate_usd_vnd)",
     activeSubscriptions: 165,
     activeByCycle: { monthly: 95, yearly: 70, other: 0 },
     churnRateMonth: { cancelled: 3, atMonthStart: 168, rate: 1.79 },
@@ -121,7 +141,9 @@ function fixtures(params: InsightsPeriodParams) {
     suspended: 1,
     activeWorkspaces: 182,
     platformCreditBalance: 94_310_220,
-    outstandingInvoices: { count: 5, amount: 7_880_000, pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: "Acme Translation Co" },
+    outstandingInvoices: gaps
+      ? { count: 5, amount: null, amountNote: "excludes 5 EUR rows", pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: null }
+      : { count: 5, amount: 7_880_000, amountNote: null, pastDueCount: 3, oldestPastDueDays: 12, oldestPastDueWorkspace: "Acme Translation Co" },
     openSalesLeads: 4,
     subscriptionsByPlan: [
       { planSlug: "starter", planName: "Starter", active: 38, trial: 9, pastDue: 0 },
@@ -132,12 +154,13 @@ function fixtures(params: InsightsPeriodParams) {
     recentPayments: [
       { workspaceId: "22222222-2222-4222-8222-222222222222", workspaceName: "WarpTalk Demo", amount: 1_900_000, currency: "VND", status: "paid", method: "Stripe card", at: new Date(2026, 8, 17, 9, 12).toISOString() },
       { workspaceId: "11111111-1111-4111-8111-111111111111", workspaceName: "Hanoi Law Firm", amount: 4_500_000, currency: "VND", status: "paid", method: "Bank transfer", at: new Date(2026, 8, 16, 18, 40).toISOString() },
-      { workspaceId: "44444444-4444-4444-8444-444444444444", workspaceName: "Saigon Clinic", amount: 990_000, currency: "VND", status: "failed", method: "Stripe card", at: new Date(2026, 8, 16, 11, 3).toISOString() },
+      { workspaceId: "44444444-4444-4444-8444-444444444444", workspaceName: gaps ? null : "Saigon Clinic", amount: 990_000, currency: "VND", status: "failed", method: "Stripe card", at: new Date(2026, 8, 16, 11, 3).toISOString() },
       { workspaceId: "66666666-6666-4666-8666-666666666666", workspaceName: "Danang Startup Hub", amount: 490_000, currency: "VND", status: "paid", method: "Stripe card", at: new Date(2026, 8, 15, 8, 27).toISOString() },
     ],
+    // Soonest first, as the server orders them.
     endingSoon: [
       { workspaceId: "55555555-5555-4555-8555-555555555555", workspaceName: "Mekong Logistics", planName: "Business", endsAt: new Date(2026, 8, 21).toISOString(), cancelAtPeriodEnd: true },
-      { workspaceId: "77777777-7777-4777-8777-777777777777", workspaceName: "Hue Heritage Tours", planName: "Team", endsAt: new Date(2026, 8, 24).toISOString(), cancelAtPeriodEnd: false },
+      { workspaceId: "77777777-7777-4777-8777-777777777777", workspaceName: gaps ? null : "Hue Heritage Tours", planName: "Team", endsAt: new Date(2026, 8, 24).toISOString(), cancelAtPeriodEnd: false },
     ],
     highUsageAlerts: [
       { workspaceId: "11111111-1111-4111-8111-111111111111", workspaceName: "Hanoi Law Firm", credits24h: 312_400 },
@@ -189,18 +212,18 @@ export default function AdminInsightsPreviewPage() {
   const [scenario, setScenario] = useState<Scenario>("full");
   const [params, setParams] = useState<InsightsPeriodParams>({ period: "month" });
 
-  const data = useMemo(() => fixtures(params), [params]);
+  const data = useMemo(() => fixtures(params, scenario === "gaps"), [params, scenario]);
+  const answering = scenario === "full" || scenario === "gaps";
 
   const props: InsightsDashboardProps = {
     period: data.period,
-    now: NOW,
     onChoosePeriod: (choice: PeriodChoice) => setParams(choice),
     updatedAt: scenario === "loading" ? 0 : NOW.getTime(),
-    billing: scenario === "full" ? ready(data.billing) : scenario === "loading" ? LOADING : UNAVAILABLE,
-    snapshot: scenario === "full" ? ready(data.snapshot) : scenario === "loading" ? LOADING : UNAVAILABLE,
-    users: scenario === "full" ? ready(data.users) : scenario === "loading" ? LOADING : UNAVAILABLE,
-    workspaces: scenario === "full" ? ready(data.workspaces) : scenario === "loading" ? LOADING : UNAVAILABLE,
-    meetings: scenario === "full" ? ready(data.meetings) : scenario === "loading" ? LOADING : UNAVAILABLE,
+    billing: answering ? ready(data.billing) : scenario === "loading" ? LOADING : UNAVAILABLE,
+    snapshot: answering ? ready(data.snapshot) : scenario === "loading" ? LOADING : UNAVAILABLE,
+    users: answering ? ready(data.users) : scenario === "loading" ? LOADING : UNAVAILABLE,
+    workspaces: answering ? ready(data.workspaces) : scenario === "loading" ? LOADING : UNAVAILABLE,
+    meetings: answering ? ready(data.meetings) : scenario === "loading" ? LOADING : UNAVAILABLE,
     // The four sources that exist on every backend today.
     meetingCounts: scenario === "loading" ? LOADING : ready({ liveNow: 7, startedToday: 38 }),
     deadLetters:
@@ -239,14 +262,20 @@ export default function AdminInsightsPreviewPage() {
       <div className="min-h-screen bg-canvas text-ink">
         <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-5 py-2 text-[12px] text-ink-muted">
           <span className="font-medium text-ink">Admin Insights preview</span>
-          {(["full", "partial", "loading"] as const).map((value) => (
+          {(["full", "gaps", "partial", "loading"] as const).map((value) => (
             <button
               key={value}
               type="button"
               onClick={() => setScenario(value)}
               className={`rounded-md border border-hairline px-2 py-1 ${scenario === value ? "bg-surface-3 text-ink" : "bg-surface-1"}`}
             >
-              {value === "full" ? "All sources" : value === "partial" ? "Insights endpoints missing" : "First load"}
+              {value === "full"
+                ? "All sources"
+                : value === "gaps"
+                  ? "Null figures and unknown names"
+                  : value === "partial"
+                    ? "Insights endpoints missing"
+                    : "First load"}
             </button>
           ))}
           <button type="button" onClick={() => setDark((value) => !value)} className="ml-auto rounded-md border border-hairline bg-surface-1 px-2 py-1">

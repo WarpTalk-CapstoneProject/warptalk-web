@@ -13,7 +13,16 @@
  *   same range maths the server does (contract: previous / previousMonth), not from the preset name.
  *
  * Everything is in the browser's local time: "today" is the admin's today. The range crosses the
- * wire as ISO-8601 UTC.
+ * wire as ISO-8601 UTC instants, TOGETHER WITH the browser's IANA time zone (`tz`), so the server
+ * cuts its days, "today" and `previousMonth` on the same calendar these presets were built on. A
+ * Vietnam month starts at 17:00Z the day before; without `tz` the server bucketed by UTC and every
+ * daily figure was off by up to seven hours.
+ *
+ * DAYS ARE THE SERVER'S
+ *   A per-day chart plots the server's own `date` keys (local days of `tz`) and labels them from the
+ *   string. It never turns an instant back into a day in the browser: that would be a second
+ *   bucketing, and the two only agree while the browser and `tz` do. The period only contributes
+ *   `axisEndDay`, the blank days still to come.
  */
 
 import type { InsightsCompare, InsightsQuery } from "../../types/admin-insights.ts";
@@ -56,10 +65,11 @@ export interface ResolvedInsightsPeriod {
   customFrom: string;
   customTo: string;
   /**
-   * Exclusive end of a per-day chart's axis. For a month it is the first of the next month, so the
-   * days still to come are on the axis and drawn blank; for every other preset it is `to`.
+   * Exclusive end of a per-day chart's axis, YYYY-MM-DD, when it runs past the server's last day:
+   * for a month it is the first of the next month, for a custom range the day after its last day,
+   * so the days still to come are on the axis and drawn blank. Null for the to-now presets.
    */
-  axisEnd: Date;
+  axisEndDay: string | null;
   /** Set when the URL asked for something unusable and a default was shown instead. */
   notice: string | null;
 }
@@ -167,7 +177,7 @@ export function resolveInsightsPeriod(
   let compare: InsightsCompare = "previous";
   let label: string;
   let caption: string;
-  let axisEnd: Date;
+  let axisEndDay: string | null = null;
 
   // Custom is resolved first so an unusable range can fall back to the default month.
   let customFrom = parseDay(params.from);
@@ -196,7 +206,6 @@ export function resolveInsightsPeriod(
       label = "Today";
       const previous = previousOf(from, to, compare);
       caption = `Today · vs yesterday ${clock(previous.from)}–24:00`;
-      axisEnd = to;
       break;
     }
     case "7d": {
@@ -204,7 +213,6 @@ export function resolveInsightsPeriod(
       to = now;
       label = "Last 7 days";
       caption = "Last 7 days · vs the 7 days before";
-      axisEnd = to;
       break;
     }
     case "6m": {
@@ -214,7 +222,6 @@ export function resolveInsightsPeriod(
         ? `${shortMonth(from)} – ${monthLabel(now)}`
         : `${monthLabel(from)} – ${monthLabel(now)}`;
       caption = `${label} · vs the 6 months before`;
-      axisEnd = to;
       break;
     }
     case "custom": {
@@ -229,7 +236,7 @@ export function resolveInsightsPeriod(
         ? `${dayLabel(start)} – ${dayLabel(endInclusive)}, ${endInclusive.getFullYear()}`
         : `${dayLabel(start)}, ${start.getFullYear()} – ${dayLabel(endInclusive)}, ${endInclusive.getFullYear()}`;
       caption = `${label} · vs the ${days === 1 ? "day" : `${days} days`} before`;
-      axisEnd = endExclusive;
+      axisEndDay = dayKey(endExclusive);
       break;
     }
     case "month":
@@ -243,7 +250,7 @@ export function resolveInsightsPeriod(
       caption = isCurrent
         ? `${label} · vs the same days last month`
         : `${label} · vs the previous month`;
-      axisEnd = monthEnd;
+      axisEndDay = dayKey(monthEnd);
       break;
     }
   }
@@ -271,17 +278,30 @@ export function resolveInsightsPeriod(
     nextMonth: next.getTime() > currentMonth.getTime() ? null : monthKey(next),
     customFrom: dayKey(customFrom as Date),
     customTo: dayKey(customTo as Date),
-    axisEnd,
+    axisEndDay,
     notice,
   };
 }
 
-/** What the insights endpoints are called with. */
-export function insightsQueryOf(resolved: ResolvedInsightsPeriod): InsightsQuery {
+/** The server's own default, used only when the browser will not name its zone. */
+export const DEFAULT_INSIGHTS_TIME_ZONE = "Asia/Ho_Chi_Minh";
+
+/** The browser's IANA time zone — the calendar every preset above was built on. */
+export function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_INSIGHTS_TIME_ZONE;
+  } catch {
+    return DEFAULT_INSIGHTS_TIME_ZONE;
+  }
+}
+
+/** What the insights endpoints are called with. `timeZone` must be the zone the period was built in. */
+export function insightsQueryOf(resolved: ResolvedInsightsPeriod, timeZone: string): InsightsQuery {
   return {
     from: resolved.from.toISOString(),
     to: resolved.to.toISOString(),
     compare: resolved.compare,
+    tz: timeZone,
   };
 }
 
@@ -301,22 +321,66 @@ export function insightsSearch(choice: {
   return params.toString();
 }
 
+// ── the server's calendar keys ───────────────────────────────────────────────
+
+const DAY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MONTH_KEY = /^(\d{4})-(\d{2})$/;
+
+/** YYYY-MM-DD plus `days`, as calendar arithmetic on the key itself — no time zone involved. */
+export function addDaysToKey(key: string, days: number): string {
+  const match = DAY_KEY.exec(key);
+  if (!match) return key;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+  return date.toISOString().slice(0, 10);
+}
+
+/** "Sep 17" for a server day key, whatever zone the browser is in. */
+export function dayKeyLabel(key: string): string {
+  const match = DAY_KEY.exec(key);
+  if (!match) return key;
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", day: "numeric", timeZone: "UTC" }).format(
+    new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))),
+  );
+}
+
+/** "Sep" for a server month key. */
+export function monthKeyLabel(key: string): string {
+  const match = MONTH_KEY.exec(key);
+  if (!match) return key;
+  return new Intl.DateTimeFormat(LOCALE, { month: "short", timeZone: "UTC" }).format(
+    new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)),
+  );
+}
+
+export interface SeriesAxisDay<T> {
+  /** The server's YYYY-MM-DD. */
+  key: string;
+  label: string;
+  /** The server's row for the day; null for a day still to come. */
+  row: T | null;
+  future: boolean;
+}
+
 /**
- * Every local day on a per-day chart's axis, in order, as YYYY-MM-DD. Days after `now` are marked
- * so the chart leaves them blank instead of drawing a zero nobody has earned yet.
+ * A per-day chart's x-axis: the server's rows in the server's order, labelled from their own keys,
+ * then — when `axisEndDay` runs past the last one — the days still to come, marked so the chart
+ * leaves them blank instead of drawing a zero nobody has earned yet.
  */
-export function axisDays(
-  resolved: Pick<ResolvedInsightsPeriod, "from" | "axisEnd">,
-  now: Date,
-): { key: string; date: Date; future: boolean }[] {
-  const days: { key: string; date: Date; future: boolean }[] = [];
-  const today = startOfDay(now).getTime();
+export function seriesAxis<T extends { date: string }>(
+  rows: readonly T[] | null | undefined,
+  axisEndDay: string | null,
+): SeriesAxisDay<T>[] {
+  const days: SeriesAxisDay<T>[] = (rows ?? [])
+    .filter((row) => DAY_KEY.test(row.date))
+    .map((row) => ({ key: row.date, label: dayKeyLabel(row.date), row, future: false }));
+  if (days.length === 0 || !axisEndDay || !DAY_KEY.test(axisEndDay)) return days;
+
   for (
-    let day = startOfDay(resolved.from);
-    day.getTime() < resolved.axisEnd.getTime() && days.length <= MAX_RANGE_DAYS;
-    day = addDays(day, 1)
+    let key = addDaysToKey(days[days.length - 1].key, 1);
+    key < axisEndDay && days.length <= MAX_RANGE_DAYS;
+    key = addDaysToKey(key, 1)
   ) {
-    days.push({ key: dayKey(day), date: day, future: day.getTime() > today });
+    days.push({ key, label: dayKeyLabel(key), row: null, future: true });
   }
   return days;
 }

@@ -8,7 +8,7 @@ import type { InsightsQuery } from "@/types/admin-insights";
 export const ADMIN_INSIGHTS_KEYS = {
   all: ["admin", "insights"] as const,
   billing: (query: InsightsQuery) => ["admin", "insights", "billing", query] as const,
-  billingSnapshot: ["admin", "insights", "billing-snapshot"] as const,
+  billingSnapshot: (tz: string) => ["admin", "insights", "billing-snapshot", tz] as const,
   users: (query: InsightsQuery) => ["admin", "insights", "users", query] as const,
   workspaces: (query: InsightsQuery) => ["admin", "insights", "workspaces", query] as const,
   meetings: (query: InsightsQuery) => ["admin", "insights", "meetings", query] as const,
@@ -41,10 +41,11 @@ export function useAdminBillingInsights(query: InsightsQuery) {
   });
 }
 
-export function useAdminBillingSnapshot() {
+/** `tz`: the IANA zone whose today, yesterday and month the snapshot reports. */
+export function useAdminBillingSnapshot(tz: string) {
   return useQuery({
-    queryKey: ADMIN_INSIGHTS_KEYS.billingSnapshot,
-    queryFn: () => adminInsightsService.getBillingSnapshot(),
+    queryKey: ADMIN_INSIGHTS_KEYS.billingSnapshot(tz),
+    queryFn: () => adminInsightsService.getBillingSnapshot(tz),
     refetchInterval: ADMIN_INSIGHTS_REFRESH_MS,
     placeholderData: (previous) => previous,
   });

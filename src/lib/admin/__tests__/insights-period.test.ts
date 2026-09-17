@@ -2,8 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  axisDays,
+  addDaysToKey,
+  browserTimeZone,
+  dayKeyLabel,
   insightsQueryOf,
+  monthKeyLabel,
+  seriesAxis,
   insightsSearch,
   resolveInsightsPeriod,
   shiftBackOneMonth,
@@ -23,7 +27,7 @@ test("no params means this month, compared with the same days last month", () =>
   assert.deepEqual(r.previousTo, d(2026, 8, 17, 15, 30));
   assert.equal(r.label, "Sep 2026");
   assert.equal(r.caption, "Sep 2026 · vs the same days last month");
-  assert.deepEqual(r.axisEnd, d(2026, 10, 1), "the axis runs to month end so future days show blank");
+  assert.equal(r.axisEndDay, "2026-10-01", "the axis runs to month end so future days show blank");
   assert.equal(r.notice, null);
 });
 
@@ -109,7 +113,7 @@ test("custom dates are inclusive, and compared with the same number of days befo
 test("a custom range that ends today is clipped to now", () => {
   const r = resolveInsightsPeriod({ period: "custom", from: "2026-09-10", to: "2026-09-17" }, NOW);
   assert.deepEqual(r.to, NOW);
-  assert.deepEqual(r.axisEnd, d(2026, 9, 18));
+  assert.equal(r.axisEndDay, "2026-09-18");
 });
 
 test("an unusable custom range shows this month and says why", () => {
@@ -137,13 +141,29 @@ test("previousMonth clamps the day of month rather than rolling over", () => {
   assert.deepEqual(shiftBackOneMonth(d(2026, 1, 15)), d(2025, 12, 15));
 });
 
-test("the query sends ISO instants and the compare mode", () => {
+test("the query sends ISO instants, the compare mode and the time zone they were built in", () => {
   const r = resolveInsightsPeriod({ period: "month", month: "2026-07" }, NOW);
-  const q = insightsQueryOf(r);
+  const q = insightsQueryOf(r, "Asia/Ho_Chi_Minh");
   assert.equal(q.from, d(2026, 7, 1).toISOString());
   assert.equal(q.to, d(2026, 8, 1).toISOString());
   assert.equal(q.compare, "previousMonth");
+  assert.equal(q.tz, "Asia/Ho_Chi_Minh");
 });
+
+test("the time zone sent is the browser's own", () => {
+  assert.equal(browserTimeZone(), Intl.DateTimeFormat().resolvedOptions().timeZone);
+  assert.ok(insightsQueryOf(resolveInsightsPeriod({}, NOW), browserTimeZone()).tz.length > 0);
+});
+
+test(
+  "a period's range instants are the admin's local midnights (Vietnam: 17:00Z the day before)",
+  // Only meaningful in Vietnam; `TZ=Asia/Ho_Chi_Minh npm run test:admin-insights` runs it anywhere.
+  { skip: browserTimeZone() !== "Asia/Ho_Chi_Minh" && "runs in Asia/Ho_Chi_Minh only" },
+  () => {
+    const q = insightsQueryOf(resolveInsightsPeriod({ period: "month", month: "2026-09" }, NOW), browserTimeZone());
+    assert.equal(q.from, "2026-08-31T17:00:00.000Z");
+  },
+);
 
 test("the URL only carries the params a preset reads", () => {
   assert.equal(insightsSearch({ period: "today", month: "2026-07", from: "x" }), "period=today");
@@ -154,13 +174,45 @@ test("the URL only carries the params a preset reads", () => {
   );
 });
 
-test("the day axis covers the whole month and marks days still to come", () => {
+// ── the server's day keys ────────────────────────────────────────────────────
+
+const serverDays = (first: string, count: number) =>
+  Array.from({ length: count }, (_, index) => ({ date: addDaysToKey(first, index), revenue: index }));
+
+test("the day axis is the server's days, then the month's days still to come", () => {
   const r = resolveInsightsPeriod({ period: "month" }, NOW);
-  const days = axisDays(r, NOW);
+  const days = seriesAxis(serverDays("2026-09-01", 17), r.axisEndDay);
   assert.equal(days.length, 30);
   assert.equal(days[0].key, "2026-09-01");
   assert.equal(days[16].key, "2026-09-17");
   assert.equal(days[16].future, false, "today is not the future");
+  assert.equal(days[16].row?.revenue, 16);
   assert.equal(days[17].future, true);
+  assert.equal(days[17].row, null);
   assert.equal(days.filter((day) => day.future).length, 13);
+});
+
+test("the axis never re-buckets: it keeps exactly the keys the server sent", () => {
+  // A server in Asia/Ho_Chi_Minh sends 1 Sep first for [31 Aug 17:00Z, …); whatever the browser's
+  // zone, that is the first bar and its label.
+  const days = seriesAxis([{ date: "2026-09-01" }, { date: "2026-09-02" }], null);
+  assert.deepEqual(days.map((day) => [day.key, day.label, day.future]), [
+    ["2026-09-01", "Sep 1", false],
+    ["2026-09-02", "Sep 2", false],
+  ]);
+});
+
+test("a to-now preset adds no future days, and nothing is invented without server rows", () => {
+  assert.equal(seriesAxis(serverDays("2026-09-11", 7), null).length, 7);
+  assert.deepEqual(seriesAxis([], "2026-10-01"), []);
+  assert.deepEqual(seriesAxis(undefined, "2026-10-01"), []);
+});
+
+test("day and month keys are labelled from the string, whatever the browser's zone", () => {
+  assert.equal(dayKeyLabel("2026-09-01"), "Sep 1");
+  assert.equal(dayKeyLabel("2026-12-31"), "Dec 31");
+  assert.equal(monthKeyLabel("2026-04"), "Apr");
+  assert.equal(addDaysToKey("2026-02-28", 1), "2026-03-01");
+  assert.equal(addDaysToKey("2028-02-28", 1), "2028-02-29");
+  assert.equal(addDaysToKey("2026-12-31", 1), "2027-01-01");
 });

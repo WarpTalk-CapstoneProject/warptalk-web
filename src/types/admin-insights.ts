@@ -3,16 +3,26 @@
  *
  * Mirrors the shared API contract agreed on 2026-09-17 for five endpoints, all system-admin only:
  *
- *   GET /admin/billing/insights?from&to&compare
- *   GET /admin/billing/insights/snapshot
- *   GET /admin/users/insights?from&to&compare
- *   GET /admin/workspaces/insights?from&to&compare
- *   GET /admin/meetings/insights?from&to&compare
+ *   GET /admin/billing/insights?from&to&compare&tz
+ *   GET /admin/billing/insights/snapshot?tz
+ *   GET /admin/users/insights?from&to&compare&tz
+ *   GET /admin/workspaces/insights?from&to&compare&tz
+ *   GET /admin/meetings/insights?from&to&compare&tz
  *
- * Dates are ISO-8601 UTC. `from` is inclusive, `to` exclusive. Money is VND.
+ * Checked field by field against the C# response records of backend #420/#421 (camelCase, nulls
+ * written as null), not against the first draft of the contract.
+ *
+ * Instants are ISO-8601 UTC. `from` is inclusive, `to` exclusive. Money is VND.
+ *
+ * TIME ZONE
+ *   `tz` is an IANA id (the browser's own; the server defaults to Asia/Ho_Chi_Minh and 400s an
+ *   unknown one). It never moves `from`/`to`; it decides where the server's days and months begin.
+ *   Every per-day `date` (YYYY-MM-DD) and per-month `month` (YYYY-MM) is a LOCAL calendar key of that
+ *   zone, so the page labels them as they are and never re-buckets instants itself.
  *
  * A metric's `value` or `previous` may be null when the server cannot compute it honestly; `note`
- * then says why. The page renders null as "—", never as 0.
+ * then says why. The page renders null as "—", never as 0. The same holds for every other nullable
+ * figure below, each of which carries its own note field.
  */
 
 export type InsightsCompare = "previous" | "previousMonth";
@@ -37,6 +47,8 @@ export interface InsightsQuery {
   from: string;
   to: string;
   compare: InsightsCompare;
+  /** IANA time zone the server buckets days and months in. */
+  tz: string;
 }
 
 interface PeriodEnvelope {
@@ -61,26 +73,39 @@ export type BillingInsightsMetricId =
 
 export interface BillingInsightsDto extends PeriodEnvelope {
   generatedAt: string;
-  /** Every day in range, zero-filled. `date` is YYYY-MM-DD. */
-  revenueByDay: { date: string; revenue: number }[];
-  /** The 6 calendar months ending with the month of `to`. `month` is YYYY-MM. */
-  revenueByMonth: { month: string; revenue: number }[];
+  /**
+   * Every local day of `tz` the range touches, zero-filled. `date` is YYYY-MM-DD. `revenue` is null
+   * for a day whose every payment was in a currency with no FX rate — see `revenueByDayNote`.
+   */
+  revenueByDay: { date: string; revenue: number | null }[];
+  /** What `revenueByDay` left out; null when nothing. */
+  revenueByDayNote: string | null;
+  /** The 6 local calendar months of `tz` ending with the month of `to`. `month` is YYYY-MM. */
+  revenueByMonth: { month: string; revenue: number | null }[];
+  /** What `revenueByMonth` left out; null when nothing. */
+  revenueByMonthNote: string | null;
   creditsByService: { usageType: string; credits: number }[];
-  /** Top 5 by credits consumed in range. */
-  topWorkspaces: { workspaceId: string; workspaceName: string; credits: number }[];
+  /** Top 5 by credits consumed in range. `workspaceName` is null when workspace-service could not resolve it. */
+  topWorkspaces: { workspaceId: string; workspaceName: string | null; credits: number }[];
 }
 
 // ── 2 · Billing, snapshot ("right now") ──────────────────────────────────────
 
 export interface BillingSnapshotDto {
   generatedAt: string;
-  revenueToday: number;
-  revenueYesterday: number;
-  mrr: number;
+  /** The local day of `tz`, in VND. Null when every payment that day was in an unconvertible currency. */
+  revenueToday: number | null;
+  /** What `revenueToday` converted or left out; null when nothing. */
+  revenueTodayNote: string | null;
+  revenueYesterday: number | null;
+  revenueYesterdayNote: string | null;
+  /** Null when no active subscription's price could be converted to VND; `mrrNote` says why. */
+  mrr: number | null;
   mrrNote: string | null;
   activeSubscriptions: number;
   activeByCycle: { monthly: number; yearly: number; other: number };
-  churnRateMonth: { cancelled: number; atMonthStart: number; rate: number };
+  /** The local calendar month of `tz`. `rate` is a percentage, null when nothing was active at month start. */
+  churnRateMonth: { cancelled: number; atMonthStart: number; rate: number | null };
   trials: number;
   trialsEndingThisWeek: number;
   pastDue: number;
@@ -89,9 +114,12 @@ export interface BillingSnapshotDto {
   platformCreditBalance: number;
   outstandingInvoices: {
     count: number;
-    amount: number;
+    /** VND; null when no outstanding invoice's currency could be converted. */
+    amount: number | null;
+    amountNote: string | null;
     pastDueCount: number;
     oldestPastDueDays: number | null;
+    /** A workspace NAME; null when there is none past due or the name could not be resolved. */
     oldestPastDueWorkspace: string | null;
   };
   openSalesLeads: number;
@@ -102,30 +130,36 @@ export interface BillingSnapshotDto {
     trial: number;
     pastDue: number;
   }[];
-  /** Newest 8 across all workspaces. */
+  /** Newest 8 charges across all workspaces. `amount` is in the payment's own `currency`. */
   recentPayments: {
-    workspaceId: string;
-    workspaceName: string;
+    /** Null for a payment with no subscription. */
+    workspaceId: string | null;
+    workspaceName: string | null;
     amount: number;
     currency: string;
     status: string;
-    method: string | null;
+    method: string;
     at: string;
   }[];
-  /** Period end within 14 days. */
+  /**
+   * Paid (non-trial) subscriptions whose period ends within 14 days — the 8 SOONEST, soonest first.
+   * `cancelAtPeriodEnd` is true when auto-renew is off or the subscription is already cancelled,
+   * i.e. it will not renew.
+   */
   endingSoon: {
     workspaceId: string;
-    workspaceName: string;
+    workspaceName: string | null;
     planName: string;
     endsAt: string;
     cancelAtPeriodEnd: boolean;
   }[];
-  highUsageAlerts: { workspaceId: string; workspaceName: string; credits24h: number }[];
+  highUsageAlerts: { workspaceId: string; workspaceName: string | null; credits24h: number }[];
 }
 
 // ── 3 · Auth ─────────────────────────────────────────────────────────────────
 
 export interface UsersInsightsDto extends PeriodEnvelope {
+  /** Local days of `tz`, zero-filled. */
   newUsersByDay: { date: string; count: number }[];
 }
 
@@ -138,7 +172,9 @@ export interface WorkspacesInsightsDto extends PeriodEnvelope {
 // ── 5 · Translation-room ─────────────────────────────────────────────────────
 
 export interface MeetingsInsightsDto extends PeriodEnvelope {
+  /** Local days of `tz`, zero-filled; hours are split at local midnight. */
   meetingsByDay: { date: string; meetings: number; hours: number }[];
   liveNow: number;
+  /** Since the start of the local day of `tz`. */
   startedToday: number;
 }

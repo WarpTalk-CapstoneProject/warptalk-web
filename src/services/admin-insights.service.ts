@@ -23,8 +23,10 @@ export const adminInsightsService = {
     return data;
   },
 
-  getBillingSnapshot: async (): Promise<BillingSnapshotDto> => {
-    const { data } = await apiClient.get<BillingSnapshotDto>(API.adminInsights.billingSnapshot);
+  getBillingSnapshot: async (tz: string): Promise<BillingSnapshotDto> => {
+    const { data } = await apiClient.get<BillingSnapshotDto>(API.adminInsights.billingSnapshot, {
+      params: { tz },
+    });
     return data;
   },
 

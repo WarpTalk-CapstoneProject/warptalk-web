@@ -32,21 +32,28 @@ import {
 import { insightsHref, metricHref, workspaceHref } from "@/lib/admin/insights-links";
 import {
   assembleNeedsAttention,
+  churnSub,
   compactNumber,
   deltaText,
   formatCount,
   formatInsightValue,
   insightsCsv,
+  joinNotes,
+  mrrSub,
   NOT_AVAILABLE_NOTE,
+  outstandingSub,
   PERIOD_CARDS,
   periodCardView,
+  revenueTodaySub,
   valueTone,
+  workspaceLabel,
   type AttentionItem,
   type DeltaTone,
   type ValueTone,
 } from "@/lib/admin/insights-metrics";
 import {
-  axisDays,
+  monthKeyLabel,
+  seriesAxis,
   type InsightsPeriod,
   type ResolvedInsightsPeriod,
 } from "@/lib/admin/insights-period";
@@ -81,7 +88,6 @@ export interface PeriodChoice {
 
 export interface InsightsDashboardProps {
   period: ResolvedInsightsPeriod;
-  now: Date;
   onChoosePeriod: (choice: PeriodChoice) => void;
   /** Epoch ms of the newest successful read across every source; 0 before the first. */
   updatedAt: number;
@@ -422,10 +428,6 @@ function SourceBody<T>({
   return <div className={cn(state.refreshing && "opacity-60")}>{children(state.data)}</div>;
 }
 
-const monthShort = (key: string) => {
-  const [year, month] = key.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(year, month - 1, 1));
-};
 const dayShort = (date: Date) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date);
 const dateTime = (iso: string) =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
@@ -515,7 +517,7 @@ function ListState<T>({ state, children }: { state: SourceState<T>; children: (d
 // ── the page ─────────────────────────────────────────────────────────────────
 
 export function InsightsDashboard(props: InsightsDashboardProps) {
-  const { period, now } = props;
+  const { period } = props;
   const billing = dataOf(props.billing);
   const snapshot = dataOf(props.snapshot);
   const meetingCounts = dataOf(props.meetingCounts);
@@ -523,8 +525,6 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   const deadLetters = dataOf(props.deadLetters);
   const deadLettersCapped = deadLetters !== undefined && deadLetters.length >= props.deadLettersLimit;
   const health = dataOf(props.health);
-
-  const days = useMemo(() => axisDays(period, now), [period, now]);
 
   const attention = useMemo(
     () =>
@@ -581,7 +581,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       state: props.snapshot,
       value: snapshot?.revenueToday,
       display: formatInsightValue(snapshot?.revenueToday, "money"),
-      sub: snapshot ? `yesterday ${formatInsightValue(snapshot.revenueYesterday, "money")}` : null,
+      sub: snapshot ? revenueTodaySub(snapshot) : null,
     },
     {
       id: "mrr",
@@ -589,7 +589,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       state: props.snapshot,
       value: snapshot?.mrr,
       display: formatInsightValue(snapshot?.mrr, "money"),
-      sub: snapshot ? (snapshot.mrrNote ?? "Monthly recurring revenue") : null,
+      sub: snapshot ? mrrSub(snapshot) : null,
     },
     {
       id: "activeSubscriptions",
@@ -611,9 +611,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       state: props.snapshot,
       value: snapshot?.churnRateMonth.rate,
       display: formatInsightValue(snapshot?.churnRateMonth.rate, "percent"),
-      sub: snapshot
-        ? `${formatCount(snapshot.churnRateMonth.cancelled)} cancelled / ${formatCount(snapshot.churnRateMonth.atMonthStart)} at month start`
-        : null,
+      sub: snapshot ? churnSub(snapshot.churnRateMonth) : null,
     },
   ];
 
@@ -633,9 +631,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       state: props.snapshot,
       value: snapshot?.outstandingInvoices.count,
       display: formatInsightValue(snapshot?.outstandingInvoices.amount, "money"),
-      sub: snapshot
-        ? `${formatCount(snapshot.outstandingInvoices.count)} ${snapshot.outstandingInvoices.count === 1 ? "invoice" : "invoices"} · ${formatCount(snapshot.outstandingInvoices.pastDueCount)} past due`
-        : null,
+      sub: snapshot ? outstandingSub(snapshot.outstandingInvoices) : null,
     },
     {
       id: "openSalesLeads",
@@ -688,7 +684,6 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   ];
 
   const isMonth = period.period === "month";
-  const manyDays = days.length > 16;
 
   return (
     <div className="flex flex-col gap-3.5 text-ink">
@@ -722,7 +717,11 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </details>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <Panel title="Revenue, 6 months" subtitle="Successful payments, by month" link={{ href: insightsHref("subscriptions"), label: "Subscriptions" }}>
+        <Panel
+          title="Revenue, 6 months"
+          subtitle={joinNotes("Successful payments, by month", billing?.revenueByMonthNote) ?? undefined}
+          link={{ href: insightsHref("subscriptions"), label: "Subscriptions" }}
+        >
           <div className="px-4 py-3.5">
             <SourceBody
               state={props.billing}
@@ -736,9 +735,9 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                   color="var(--success)"
                   data={data.revenueByMonth.map((row) => ({
                     key: row.month,
-                    label: monthShort(row.month),
+                    label: monthKeyLabel(row.month),
                     value: row.revenue,
-                    title: `${monthShort(row.month)}: ${formatMoney(row.revenue, "VND")}`,
+                    title: `${monthKeyLabel(row.month)}: ${row.revenue === null ? "no figure" : formatMoney(row.revenue, "VND")}`,
                   }))}
                 />
               )}
@@ -747,25 +746,31 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         </Panel>
         <Panel
           title="Revenue per day"
-          subtitle={isMonth ? `${period.label} — days still to come are left blank, not drawn as 0` : period.label}
+          subtitle={joinNotes(
+            isMonth ? `${period.label} — days still to come are left blank, not drawn as 0` : period.label,
+            billing?.revenueByDayNote,
+          ) ?? undefined}
           link={{ href: insightsHref("billingLedger"), label: "Ledger" }}
         >
           <div className="px-4 py-3.5">
-            <SourceBody state={props.billing} height={220} empty="No days in this period." isEmpty={() => days.length === 0}>
-              {(data) => {
-                const byDay = new Map((data.revenueByDay ?? []).map((row) => [row.date, row.revenue]));
-                return (
-                  <DailyLine
-                    ariaLabel="Revenue per day"
-                    formatValue={(value) => formatMoney(value, "VND")}
-                    points={days.map((day) => ({
-                      key: day.key,
-                      label: dayShort(day.date),
-                      value: day.future ? null : (byDay.get(day.key) ?? null),
-                    }))}
-                  />
-                );
-              }}
+            <SourceBody
+              state={props.billing}
+              height={220}
+              empty="No days in this period."
+              isEmpty={(data) => (data.revenueByDay ?? []).length === 0}
+            >
+              {(data) => (
+                // The server's own local days (of the tz the page sent), labelled from their keys.
+                <DailyLine
+                  ariaLabel="Revenue per day"
+                  formatValue={(value) => formatMoney(value, "VND")}
+                  points={seriesAxis(data.revenueByDay, period.axisEndDay).map((day) => ({
+                    key: day.key,
+                    label: day.label,
+                    value: day.row?.revenue ?? null,
+                  }))}
+                />
+              )}
             </SourceBody>
           </div>
         </Panel>
@@ -822,28 +827,28 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         </Panel>
         <Panel title="Meetings per day" subtitle="Meetings held · hours translated" link={{ href: insightsHref("meetings"), label: "Meetings" }}>
           <div className="px-4 py-3.5">
-            <SourceBody state={props.meetings} height={170} empty="No days in this period." isEmpty={() => days.length === 0}>
+            <SourceBody
+              state={props.meetings}
+              height={170}
+              empty="No days in this period."
+              isEmpty={(data) => (data.meetingsByDay ?? []).length === 0}
+            >
               {(data) => {
-                const byDay = new Map((data.meetingsByDay ?? []).map((row) => [row.date, row]));
+                const days = seriesAxis(data.meetingsByDay, period.axisEndDay);
                 return (
                   <ValueBars
                     ariaLabel="Meetings per day"
                     color="var(--primary)"
                     height={170}
-                    showValues={!manyDays}
-                    data={days.map((day) => {
-                      const row = byDay.get(day.key);
-                      return {
-                        key: day.key,
-                        label: dayShort(day.date),
-                        value: day.future ? null : (row?.meetings ?? null),
-                        title: day.future
-                          ? `${dayShort(day.date)}: still to come`
-                          : row
-                            ? `${dayShort(day.date)}: ${formatCount(row.meetings)} meetings · ${formatInsightValue(row.hours, "hours")}`
-                            : `${dayShort(day.date)}: no figure`,
-                      };
-                    })}
+                    showValues={days.length <= 16}
+                    data={days.map((day) => ({
+                      key: day.key,
+                      label: day.label,
+                      value: day.row?.meetings ?? null,
+                      title: day.row
+                        ? `${day.label}: ${formatCount(day.row.meetings)} meetings · ${formatInsightValue(day.row.hours, "hours")}`
+                        : `${day.label}: still to come`,
+                    }))}
                   />
                 );
               }}
@@ -891,7 +896,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                     <Row key={row.workspaceId} href={workspaceHref(row.workspaceId)}>
                       <div className="min-w-0">
                         <b className="block truncate text-[13px] font-medium text-ink">
-                          {index + 1}. {row.workspaceName || row.workspaceId.slice(0, 8)}
+                          {index + 1}. {workspaceLabel(row.workspaceName)}
                         </b>
                         <span className="mt-1.5 block h-[3px] rounded-full bg-surface-3">
                           <span className="block h-[3px] rounded-full bg-primary" style={{ width: `${Math.max(2, (row.credits / max) * 100)}%` }} />
@@ -919,7 +924,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                     return (
                       <Row key={`${payment.workspaceId}-${payment.at}-${index}`} href={workspaceHref(payment.workspaceId)}>
                         <RowText
-                          title={payment.workspaceName || payment.workspaceId.slice(0, 8)}
+                          title={payment.workspaceId ? workspaceLabel(payment.workspaceName) : "No workspace"}
                           detail={[dateTime(payment.at), payment.method].filter(Boolean).join(" · ")}
                         />
                         <div className="text-right text-[13px] tabular-nums text-ink">
@@ -937,18 +942,22 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           </ListState>
         </Panel>
 
-        <Panel title="Subscriptions ending soon" subtitle="Within 14 days" link={{ href: insightsHref("subscriptionsEndingSoon"), label: "Subscriptions" }}>
+        <Panel
+          title="Subscriptions ending soon"
+          subtitle="Soonest first · up to 8 paid subscriptions whose period ends within 14 days · trials not included"
+          link={{ href: insightsHref("subscriptionsEndingSoon"), label: "Subscriptions" }}
+        >
           <ListState state={props.snapshot}>
             {(data) =>
               (data.endingSoon ?? []).length === 0 ? (
-                <ListEmpty>No subscription ends in the next 14 days.</ListEmpty>
+                <ListEmpty>No paid subscription reaches the end of its period in the next 14 days.</ListEmpty>
               ) : (
                 <Rows>
                   {data.endingSoon.map((row) => (
                     <Row key={`${row.workspaceId}-${row.endsAt}`} href={workspaceHref(row.workspaceId)}>
                       <RowText
-                        title={row.workspaceName || row.workspaceId.slice(0, 8)}
-                        detail={`${row.planName} · ${row.cancelAtPeriodEnd ? "cancels at period end" : "renews"}`}
+                        title={workspaceLabel(row.workspaceName)}
+                        detail={`${row.planName} · ${row.cancelAtPeriodEnd ? "will not renew" : "renews"}`}
                       />
                       <div className={cn("text-right text-[13px] tabular-nums", row.cancelAtPeriodEnd ? "text-warning" : "text-ink")}>
                         {dayShort(new Date(row.endsAt))}
