@@ -1,0 +1,33 @@
+{
+  "header": {
+    "title": "Notifications",
+    "subtitle": "Choose which channels WarpTalk may use to reach you. These apply across every workspace."
+  },
+  "error": {
+    "title": "Couldn't load notification settings",
+    "hint": "Nothing is shown rather than defaults that may not be yours. Retry, and if it keeps failing check that the notification service is reachable.",
+    "retry": "Retry",
+    "retrying": "Retrying…"
+  },
+  "toasts": {
+    "saveFailed": "Failed to save notification settings."
+  },
+  "channels": {
+    "sectionTitle": "Channels",
+    "notAppliedYet": "Not applied yet",
+    "notAppliedSuffix": "Your choice is saved, but delivery does not read it yet.",
+    "ariaLabel": "{title} notifications",
+    "email": {
+      "title": "Email",
+      "hint": "Send notifications to your account email address."
+    },
+    "push": {
+      "title": "Push",
+      "hint": "Browser and desktop push notifications."
+    },
+    "inApp": {
+      "title": "In-app",
+      "hint": "The notification bell and pop-up alerts inside WarpTalk."
+    }
+  }
+}

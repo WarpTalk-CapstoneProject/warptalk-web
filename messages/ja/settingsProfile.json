@@ -1,0 +1,49 @@
+{
+  "header": {
+    "title": "プロフィール"
+  },
+  "toasts": {
+    "avatarUpdated": "プロフィール画像を更新しました。",
+    "avatarUpdateFailed": "プロフィール画像を更新できませんでした。",
+    "loadFailed": "ユーザープロフィールの読み込みに失敗しました",
+    "fullNameRequired": "氏名は必須です",
+    "saveFailed": "プロフィールの更新に失敗しました"
+  },
+  "avatar": {
+    "label": "プロフィール画像",
+    "uploading": "アップロード中…",
+    "change": "変更",
+    "upload": "アップロード"
+  },
+  "fields": {
+    "email": {
+      "label": "メールアドレス",
+      "cannotChange": "メールアドレスは変更できません"
+    },
+    "fullName": {
+      "label": "氏名",
+      "placeholder": "氏名を入力"
+    },
+    "phone": {
+      "label": "電話番号",
+      "placeholder": "例: +84 987654321"
+    },
+    "preferredLanguage": {
+      "label": "優先言語",
+      "placeholder": "言語を選択"
+    },
+    "timezone": {
+      "label": "タイムゾーン",
+      "placeholder": "タイムゾーンを選択"
+    }
+  },
+  "workspaceAccess": {
+    "sectionTitle": "ワークスペースアクセス",
+    "workspace": "ワークスペース",
+    "workspaceFallback": "現在のワークスペース",
+    "role": "ワークスペースでの役割",
+    "roleFallback": "メンバー",
+    "membershipType": "メンバーシップの種類",
+    "membershipTypeFallback": "内部"
+  }
+}

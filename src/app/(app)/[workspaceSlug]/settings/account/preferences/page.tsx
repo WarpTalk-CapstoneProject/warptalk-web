@@ -7,6 +7,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
 
 import { useTheme } from "next-themes";
 
@@ -43,6 +44,7 @@ const languages = languagesInScope("meeting").map((language) => ({
 }));
 
 export default function PersonalPreferencesPage() {
+  const t = useTranslations("settingsPreferences");
   const queryClient = useQueryClient();
   const { setTheme } = useTheme();
   const initializedRef = useRef(false);
@@ -86,7 +88,7 @@ export default function PersonalPreferencesPage() {
   );
   const autoSave = useAutoSaveQueue<Partial<UpdateUserSettingsRequest>>({
     save: savePreference,
-    onError: () => toast.error("Failed to update preferences"),
+    onError: () => toast.error(t("toasts.saveFailed")),
   });
 
   useEffect(() => {
@@ -125,14 +127,14 @@ export default function PersonalPreferencesPage() {
     return (
       <div className="flex h-[80vh] items-center justify-center text-center text-ink">
         <div className="max-w-md border border-hairline bg-surface-1 p-6 rounded-lg shadow-sm flex flex-col items-center gap-3">
-          <p className="text-sm font-semibold text-destructive">Failed to load personal settings.</p>
-          <p className="text-xs text-ink-muted">Please make sure the backend services are running.</p>
+          <p className="text-sm font-semibold text-destructive">{t("error.message")}</p>
+          <p className="text-xs text-ink-muted">{t("error.hint")}</p>
           <button
             type="button"
             onClick={() => refetch()}
             className="mt-2 px-4 py-1.5 text-xs font-medium text-white bg-primary hover:bg-primary/90 rounded-md transition-colors cursor-pointer"
           >
-            Retry
+            {t("error.retry")}
           </button>
         </div>
       </div>
@@ -162,8 +164,8 @@ export default function PersonalPreferencesPage() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
-          <p className="text-xs text-ink-muted">Configure your personal language preferences, client audio setup, and layout settings.</p>
+          <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
+          <p className="text-xs text-ink-muted">{t("header.subtitle")}</p>
         </div>
         <AutoSaveStatusBadge
           status={autoSave.status}
@@ -177,15 +179,15 @@ export default function PersonalPreferencesPage() {
         {/* Section 1: Translation & Languages */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Translation & Languages
+            {t("sections.translationLanguages")}
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
             {/* Speak Lang */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Default Speak Language</span>
-                <span className="text-[11px] text-ink-muted">The default language you will speak during translated sessions.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.speakLanguage.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.speakLanguage.hint")}</span>
               </div>
               <Select
                 value={watchAll.defaultSpeakLanguage}
@@ -194,7 +196,7 @@ export default function PersonalPreferencesPage() {
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue>
                     {(value) =>
-                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                      value ? <LanguageLabel value={String(value)} /> : t("fields.speakLanguage.placeholder")
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -211,8 +213,8 @@ export default function PersonalPreferencesPage() {
             {/* Listen Lang */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Default Listen Language</span>
-                <span className="text-[11px] text-ink-muted">The language you wish to hear or see translated transcripts in.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.listenLanguage.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.listenLanguage.hint")}</span>
               </div>
               <Select
                 value={watchAll.defaultListenLanguage}
@@ -221,7 +223,7 @@ export default function PersonalPreferencesPage() {
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
                   <SelectValue>
                     {(value) =>
-                      value ? <LanguageLabel value={String(value)} /> : "Select language..."
+                      value ? <LanguageLabel value={String(value)} /> : t("fields.listenLanguage.placeholder")
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -241,15 +243,15 @@ export default function PersonalPreferencesPage() {
         {/* Section 2: Audio Preferences */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Audio & Suppression
+            {t("sections.audioSuppression")}
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
             {/* Voice Clone */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Enable Voice Cloning</span>
-                <span className="text-[11px] text-ink-muted">Synthesize translations using your approved voice profiles.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.voiceClone.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.voiceClone.hint")}</span>
               </div>
               <Switch
                 checked={watchAll.voiceCloneEnabled}
@@ -261,8 +263,8 @@ export default function PersonalPreferencesPage() {
             {/* Noise Suppression */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Microphone Noise Suppression</span>
-                <span className="text-[11px] text-ink-muted">Filter background static noise during translation calls.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.noiseSuppression.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.noiseSuppression.hint")}</span>
               </div>
               <Switch
                 checked={watchAll.micNoiseSuppression}
@@ -283,31 +285,31 @@ export default function PersonalPreferencesPage() {
           setting there is a server-persisted account preference, whereas this describes drivers
           installed on THIS machine and belongs to no account at all.
         */}
-        <AudioBridgePanel label="This device" />
+        <AudioBridgePanel label={t("audioBridge.label")} />
 
         {/* Section 3: Meeting Defaults */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Meeting Presets
+            {t("sections.meetingPresets")}
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
             {/* Room Type */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Default Room Connection Type</span>
-                <span className="text-[11px] text-ink-muted">Preferred streaming protocol for your rooms.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.roomType.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.roomType.hint")}</span>
               </div>
               <Select
                 value={watchAll.defaultTranslationRoomType}
                 onValueChange={(val) => queuePreference("defaultTranslationRoomType", val || "")}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select type..." />
+                  <SelectValue placeholder={t("fields.roomType.placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="instant" className="text-xs cursor-pointer">Instant Room</SelectItem>
-                  <SelectItem value="scheduled" className="text-xs cursor-pointer">Scheduled Room</SelectItem>
+                  <SelectItem value="instant" className="text-xs cursor-pointer">{t("fields.roomType.instant")}</SelectItem>
+                  <SelectItem value="scheduled" className="text-xs cursor-pointer">{t("fields.roomType.scheduled")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -315,8 +317,8 @@ export default function PersonalPreferencesPage() {
             {/* Auto Record */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Auto Record Translation Rooms</span>
-                <span className="text-[11px] text-ink-muted">Automatically record and save audio stream inputs when starting a meeting.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.autoRecord.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.autoRecord.hint")}</span>
               </div>
               <Switch
                 checked={watchAll.autoRecordTranslationRooms}
@@ -328,8 +330,8 @@ export default function PersonalPreferencesPage() {
             {/* Auto Summary */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Auto Generate AI Summaries</span>
-                <span className="text-[11px] text-ink-muted">Trigger AI summaries and transcripts immediately when meetings conclude.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.autoSummary.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.autoSummary.hint")}</span>
               </div>
               <Switch
                 checked={watchAll.autoGenerateSummary}
@@ -341,8 +343,8 @@ export default function PersonalPreferencesPage() {
             {/* Max Participants */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Default Max Participants</span>
-                <span className="text-[11px] text-ink-muted">Set the default capacity limit for rooms created by you.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.maxParticipants.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.maxParticipants.hint")}</span>
               </div>
               <Input
                 type="number"
@@ -371,15 +373,15 @@ export default function PersonalPreferencesPage() {
         {/* Section 4: Appearance & Theme */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Appearance & Theme
+            {t("sections.appearanceTheme")}
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             
             {/* Theme */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Interface Theme</span>
-                <span className="text-[11px] text-ink-muted">Select your personal default display style.</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.theme.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("fields.theme.hint")}</span>
               </div>
               <Select
                 value={watchAll.theme}
@@ -391,12 +393,12 @@ export default function PersonalPreferencesPage() {
                 }}
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[180px] cursor-pointer">
-                  <SelectValue placeholder="Select theme..." />
+                  <SelectValue placeholder={t("fields.theme.placeholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="light" className="text-xs cursor-pointer">Light Mode</SelectItem>
-                  <SelectItem value="dark" className="text-xs cursor-pointer">Dark Mode</SelectItem>
-                  <SelectItem value="system" className="text-xs cursor-pointer">System Default</SelectItem>
+                  <SelectItem value="light" className="text-xs cursor-pointer">{t("fields.theme.light")}</SelectItem>
+                  <SelectItem value="dark" className="text-xs cursor-pointer">{t("fields.theme.dark")}</SelectItem>
+                  <SelectItem value="system" className="text-xs cursor-pointer">{t("fields.theme.system")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
