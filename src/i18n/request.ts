@@ -23,6 +23,7 @@ const NAMESPACES = [
   "settingsWorkspace",
   "settingsSecurity",
   "settingsMemberRoles",
+  "settingsFeatures",
 ] as const;
 
 async function loadMessages(locale: string) {

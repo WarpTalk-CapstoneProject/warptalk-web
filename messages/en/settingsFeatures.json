@@ -1,0 +1,77 @@
+{
+  "heading": "Features",
+  "subheading": "What this workspace includes, and whether each limit comes from its plan, a contract, the platform default or a limit set by the workspace.",
+  "upgradeInBilling": "Upgrade in Billing",
+  "notMember": {
+    "title": "You are not a member of this workspace",
+    "body": "Only members of this workspace can see what it includes."
+  },
+  "loadError": {
+    "title": "Features could not be loaded",
+    "body": "Something went wrong while loading this workspace's features. Try again in a moment."
+  },
+  "notAvailable": {
+    "title": "Features are not available yet",
+    "body": "This workspace's plan has not been applied yet. This usually takes a few seconds after a plan starts; check back shortly."
+  },
+  "noActivePlan": "This workspace has no active plan, so platform defaults apply and new meetings cannot start.",
+  "choosePlan": "Choose a plan",
+  "groups": {
+    "Meetings": "Meetings",
+    "AI and voice": "AI and voice",
+    "Other": "Other"
+  },
+  "ceilingAllows": "{source} allows",
+  "loweredByOwner": "Lowered by the workspace owner",
+  "lastUpdated": "Last updated {date}",
+  "entitlements": {
+    "value": {
+      "included": "Included",
+      "notIncluded": "Not included",
+      "unlimited": "Unlimited"
+    },
+    "source": {
+      "unknown": { "label": "Unknown", "detail": "The source of this value was not reported." },
+      "plan": { "label": "Plan", "detail": "Set by the {name} plan." },
+      "platformDefault": {
+        "label": "Platform default",
+        "detail": "No active plan or contract sets this, so the platform default applies."
+      },
+      "contract": { "label": "Contract", "detail": "Set by this workspace's negotiated contract." },
+      "workspaceOverride": {
+        "label": "Workspace limit",
+        "detail": "A workspace owner lowered this below what the plan allows."
+      },
+      "unknownNamed": { "detail": "Reported source: {source}." }
+    },
+    "catalog": {
+      "max_active_rooms": {
+        "label": "Active meetings",
+        "description": "Meetings that can run at the same time.",
+        "unit": "{count, plural, one {# meeting} other {# meetings}}"
+      },
+      "max_participants": {
+        "label": "Participants per meeting",
+        "description": "People who can join a single meeting.",
+        "unit": "{count, plural, one {# participant} other {# participants}}"
+      },
+      "max_languages": {
+        "label": "Target languages per meeting",
+        "description": "Languages a meeting can translate into at once.",
+        "unit": "{count, plural, one {# language} other {# languages}}"
+      },
+      "voice_clone": {
+        "label": "Voice cloning",
+        "description": "Dub translated speech in each speaker's own voice."
+      },
+      "ai_assistant": {
+        "label": "AI assistant",
+        "description": "WarpBot answers, summaries and suggestions in meetings."
+      },
+      "glossary": {
+        "label": "Custom glossary",
+        "description": "Workspace terms that translation keeps consistent."
+      }
+    }
+  }
+}
