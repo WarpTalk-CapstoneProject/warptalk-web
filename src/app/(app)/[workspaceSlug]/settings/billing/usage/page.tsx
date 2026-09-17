@@ -50,6 +50,7 @@
  */
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -88,6 +89,7 @@ const NO_MEMBERS: never[] = [];
 const NO_ROOMS: MeetingWindowLike[] = [];
 
 export default function WorkspaceUsagePage() {
+  const t = useTranslations("settingsBillingUsage");
   const params = useParams();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const storeSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
@@ -185,7 +187,7 @@ export default function WorkspaceUsagePage() {
   if (roleLoaded && !canView) {
     return (
       <div className="px-4 py-4 text-[13px] text-ink-muted">
-        Only workspace Owners and Administrators can view usage.
+        {t("accessDenied")}
       </div>
     );
   }

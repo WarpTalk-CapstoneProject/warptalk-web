@@ -37,6 +37,13 @@ const settingsBillingPage = "src/app/(app)/[workspaceSlug]/settings/billing/page
 const legacyBillingRoute = "src/app/(app)/[workspaceSlug]/billing";
 const legacyPaymentsRoute = "src/app/(app)/[workspaceSlug]/settings/billing/payments";
 const invoicesPage = read("src/app/(app)/[workspaceSlug]/settings/billing/invoices/page.tsx");
+// The page's copy went through next-intl (messages/en/settingsBillingInvoices.json) so the
+// screen reads in the reader's language. The contract below now checks the TRANSLATION KEY is
+// wired up in the source plus the English catalog still carries the sentence, rather than the
+// literal English string — otherwise this check would fail the moment the page is translated.
+const invoicesEnCatalog = JSON.parse(
+  read("messages/en/settingsBillingInvoices.json"),
+);
 
 /**
  * The `workspaceNav` array is the main sidebar's second group. Slicing to it rather than searching
@@ -136,7 +143,8 @@ const checks = [
     "Invoices shows the payment attempts that did not go through",
     invoicesPage.includes("useWorkspacePaymentHistory") &&
       invoicesPage.includes("isUnsuccessfulPayment") &&
-      invoicesPage.includes("Payment attempts that did not go through"),
+      invoicesPage.includes('t("paymentAttempts.title")') &&
+      invoicesEnCatalog.paymentAttempts?.title === "Payment attempts that did not go through",
   ],
   [
     `no source file links to the Payments address (${stalePaymentLinks.join(", ") || "none"})`,

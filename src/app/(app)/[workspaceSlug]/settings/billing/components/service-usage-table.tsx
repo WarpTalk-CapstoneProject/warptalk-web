@@ -10,6 +10,8 @@
  * had ever shown it, so the average was one division away the whole time.
  */
 
+import { useTranslations } from "next-intl";
+
 import { usageTypeLabel } from "@/lib/billing/usage-labels";
 import type { ServiceUsageRow } from "@/lib/billing/cycle-activity";
 
@@ -21,10 +23,11 @@ function formatPerUse(value: number): string {
 }
 
 export function ServiceUsageTable({ rows }: { rows: ServiceUsageRow[] }) {
+  const t = useTranslations("settingsBillingUsage");
   if (rows.length === 0) {
     return (
       <p className="py-6 text-center text-[12px] text-ink-muted">
-        No AI usage recorded in this window.
+        {t("serviceUsageTable.empty")}
       </p>
     );
   }
@@ -43,11 +46,11 @@ export function ServiceUsageTable({ rows }: { rows: ServiceUsageRow[] }) {
       <table className="w-full min-w-[520px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-hairline text-[11px] font-medium text-ink-muted">
-            <th className="px-4 py-2.5 text-left font-medium">Service</th>
-            <th className="px-4 py-2.5 text-right font-medium">Uses</th>
-            <th className="px-4 py-2.5 text-right font-medium">Credits / use</th>
-            <th className="px-4 py-2.5 text-right font-medium">Credits</th>
-            <th className="w-[26%] px-4 py-2.5 text-left font-medium">Share</th>
+            <th className="px-4 py-2.5 text-left font-medium">{t("serviceUsageTable.headers.service")}</th>
+            <th className="px-4 py-2.5 text-right font-medium">{t("serviceUsageTable.headers.uses")}</th>
+            <th className="px-4 py-2.5 text-right font-medium">{t("serviceUsageTable.headers.creditsPerUse")}</th>
+            <th className="px-4 py-2.5 text-right font-medium">{t("serviceUsageTable.headers.credits")}</th>
+            <th className="w-[26%] px-4 py-2.5 text-left font-medium">{t("serviceUsageTable.headers.share")}</th>
           </tr>
         </thead>
         <tbody>

@@ -17,6 +17,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { Switch } from "@/components/ui/switch";
@@ -26,6 +27,7 @@ import { billingService } from "@/services/billing.service";
 import { Panel } from "./metric-grid";
 
 export function OveragePanel({ workspaceId }: { workspaceId: string }) {
+  const t = useTranslations("settingsBillingUsage");
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -41,14 +43,14 @@ export function OveragePanel({ workspaceId }: { workspaceId: string }) {
       queryClient.setQueryData(["billing", "overage", workspaceId], next);
       toast.success(
         next.enabled
-          ? "Meetings will keep running past zero credits."
-          : "Meetings will stop when credits reach zero.",
+          ? t("overagePanel.toasts.enabled")
+          : t("overagePanel.toasts.disabled"),
       );
     },
     // The server's own sentence. It refuses to enable this on a plan with no allowance, and
     // "Could not update" would leave the owner retrying a switch that can never move.
     onError: (error) =>
-      toast.error(getErrorMessage(error, "Could not change the overage setting.")),
+      toast.error(getErrorMessage(error, t("overagePanel.toasts.failed"))),
   });
 
   if (isLoading || !data) return null;
@@ -57,10 +59,9 @@ export function OveragePanel({ workspaceId }: { workspaceId: string }) {
   // exist — the honest answer is to say who can change that.
   if (data.planCapCredits <= 0) {
     return (
-      <Panel title="Running out of credits" description="What happens at zero">
+      <Panel title={t("overagePanel.noAllowance.title")} description={t("overagePanel.noAllowance.description")}>
         <p className="text-[13px] text-ink-muted">
-          Meetings stop translating when this workspace reaches zero credits. This plan has no
-          overage allowance — contact WarpTalk to add one.
+          {t("overagePanel.noAllowance.body")}
         </p>
       </Panel>
     );
@@ -71,31 +72,25 @@ export function OveragePanel({ workspaceId }: { workspaceId: string }) {
 
   return (
     <Panel
-      title="Keep meetings running past zero"
-      description="Instead of cutting translation off mid-sentence"
+      title={t("overagePanel.control.title")}
+      description={t("overagePanel.control.description")}
       actions={
         <Switch
           checked={data.enabled}
           disabled={mutation.isPending}
           onCheckedChange={(next) => mutation.mutate(next)}
-          aria-label="Keep meetings running past zero credits"
+          aria-label={t("overagePanel.control.switchAria")}
         />
       }
     >
       <p className="text-[13px] text-ink-muted">
-        {data.enabled ? (
-          <>
-            A meeting that runs out keeps translating on credit, up to{" "}
-            <span className="font-medium text-ink">{cap.toLocaleString()}</span> credits this
-            cycle. Past that it stops and the workspace is suspended until you top up.
-          </>
-        ) : (
-          <>
-            Translation stops the moment credits reach zero, mid-meeting. Your plan allows up to{" "}
-            <span className="font-medium text-ink">{data.planCapCredits.toLocaleString()}</span>{" "}
-            credits of overage if you turn this on.
-          </>
-        )}
+        {data.enabled
+          ? t.rich("overagePanel.control.enabledBody", {
+              cap: () => <span className="font-medium text-ink">{cap.toLocaleString()}</span>,
+            })
+          : t.rich("overagePanel.control.disabledBody", {
+              cap: () => <span className="font-medium text-ink">{data.planCapCredits.toLocaleString()}</span>,
+            })}
       </p>
 
       {/* Only once it has actually been used. A "0 of 50,000" bar on a workspace that has never
@@ -109,7 +104,7 @@ export function OveragePanel({ workspaceId }: { workspaceId: string }) {
             />
           </div>
           <p className="mt-1.5 text-[12px] text-ink-subtle">
-            {used.toLocaleString()} of {cap.toLocaleString()} overage credits used this cycle
+            {t("overagePanel.control.usedOfCap", { used: used.toLocaleString(), cap: cap.toLocaleString() })}
           </p>
         </div>
       ) : null}

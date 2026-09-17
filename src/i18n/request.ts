@@ -36,6 +36,9 @@ const NAMESPACES = [
   "members",
   "pluginsPage",
   "schedules",
+  "settingsBilling",
+  "settingsBillingUsage",
+  "settingsBillingInvoices",
 ] as const;
 
 async function loadMessages(locale: string) {
