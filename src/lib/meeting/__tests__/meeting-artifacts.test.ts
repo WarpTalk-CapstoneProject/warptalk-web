@@ -8,7 +8,7 @@ import {
   canDownloadArtifact,
   countPlayableRecordings,
   findPlayableRecording,
-  hasPendingRecording,
+  unplayableRecordingState,
   ARTIFACT_OUTPUT_WINDOW_MS,
   pendingOutputs,
 } from "../meeting-artifacts.ts";
@@ -231,10 +231,43 @@ test("a recording still being written is told apart from no recording at all", (
   // findPlayableRecording collapses both into null on purpose — neither can be played. They are
   // not the same thing to say to a reader: one resolves itself in a minute, the other never
   // happened, and only the first deserves anything on screen.
-  assert.equal(hasPendingRecording([artifact({ type: "recording", status: "processing" })]), true);
-  assert.equal(hasPendingRecording([artifact({ type: "recording", status: "failed" })]), true);
-  assert.equal(hasPendingRecording([artifact({ type: "recording", status: "ready" })]), false);
-  assert.equal(hasPendingRecording([artifact({ type: "transcript_export", status: "processing" })]), false);
-  assert.equal(hasPendingRecording([]), false);
-  assert.equal(hasPendingRecording(undefined), false);
+  assert.equal(unplayableRecordingState([artifact({ type: "recording", status: "processing" })]), "processing");
+  assert.equal(unplayableRecordingState([artifact({ type: "recording", status: "ready" })]), null);
+  assert.equal(unplayableRecordingState([artifact({ type: "transcript_export", status: "processing" })]), null);
+  assert.equal(unplayableRecordingState([]), null);
+  assert.equal(unplayableRecordingState(undefined), null);
+});
+
+test("rec-loss: a failed recording is not reported as processing", () => {
+  // The bug: every non-ready status read as "processing", so a recording LiveKit never produced got
+  // a spinner promising the video would appear. It never would.
+  assert.equal(unplayableRecordingState([artifact({ type: "recording", status: "failed" })]), "failed");
+  assert.equal(unplayableRecordingState([artifact({ type: "recording", status: "missing" })]), "failed");
+});
+
+test("rec-loss: expired and deleted recordings are neither failed nor processing", () => {
+  // The recording worked; retention or a person removed it. Calling that a failure sends a host
+  // hunting for a fault that is the policy working.
+  assert.equal(unplayableRecordingState([artifact({ type: "recording", status: "expired" })]), null);
+  assert.equal(unplayableRecordingState([artifact({ type: "recording", status: "deleted" })]), null);
+});
+
+test("rec-loss: a run still processing outranks one that failed", () => {
+  // Stop-and-restart: the first run failed, the second is still being written. "Wait" is the answer
+  // that is about to change, so it is the one said first.
+  assert.equal(
+    unplayableRecordingState([
+      artifact({ id: "r1", type: "recording", status: "failed" }),
+      artifact({ id: "r2", type: "recording", status: "processing" }),
+    ]),
+    "processing",
+  );
+  // And a failed run beside a playable one is still reported — part of the meeting was lost.
+  assert.equal(
+    unplayableRecordingState([
+      artifact({ id: "r1", type: "recording", status: "ready" }),
+      artifact({ id: "r2", type: "recording", status: "failed" }),
+    ]),
+    "failed",
+  );
 });
