@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCreateVoiceProfile } from "@/hooks/use-voice-profiles";
+import { claimPlayback, type PlaybackClaim } from "@/lib/audio/exclusive-playback";
 import { getErrorMessage } from "@/lib/api/errors";
 import { languagesInScope, type SupportedLanguage } from "@/lib/language/languages";
 import { resolveProfileLanguage } from "@/lib/voice/library-languages";
@@ -132,6 +133,7 @@ export function CreateVoiceProfileDialog({
   const recordingChunksRef = useRef<Blob[]>([]);
   const sampleAudioRef = useRef<HTMLAudioElement | null>(null);
   const sampleUrlRef = useRef<string | null>(null);
+  const sampleClaimRef = useRef<PlaybackClaim | null>(null);
 
   const outstandingConsent = CONSENT_ITEMS.filter((item) => !consent[item.key]).length;
   const canSave =
@@ -145,6 +147,7 @@ export function CreateVoiceProfileDialog({
     () => () => {
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
       sampleAudioRef.current?.pause();
+      sampleClaimRef.current?.release();
       // An object URL is a live handle into the document, not a value. One is created per clip
       // and every re-record makes another, so leaving them behind pins every take in memory for
       // the life of the page.
@@ -156,6 +159,7 @@ export function CreateVoiceProfileDialog({
   /** Point playback at a new clip, or at nothing, releasing whatever it held before. */
   function holdForPlayback(file: File | null) {
     sampleAudioRef.current?.pause();
+    sampleClaimRef.current?.release();
     sampleAudioRef.current = null;
     setIsPlayingSample(false);
     if (sampleUrlRef.current) {
@@ -171,23 +175,42 @@ export function CreateVoiceProfileDialog({
     if (!sampleUrl) return;
     if (isPlayingSample) {
       sampleAudioRef.current?.pause();
+      sampleClaimRef.current?.release();
       setIsPlayingSample(false);
       return;
     }
 
+    // The page's one playback slot: a library preview still playing behind this dialog stops, and
+    // pressing play on anything else stops this take. See lib/audio/exclusive-playback.
+    sampleAudioRef.current?.pause();
+    const claim = claimPlayback(() => {
+      sampleAudioRef.current?.pause();
+      setIsPlayingSample(false);
+    });
+    sampleClaimRef.current = claim;
+
     // A fresh element each press rather than a resumed one: the take is a few seconds long, and
     // starting from wherever a previous stop landed is not what "play it back" means here.
     const audio = new Audio(sampleUrl);
-    audio.onended = () => setIsPlayingSample(false);
+    audio.onended = () => {
+      claim.release();
+      setIsPlayingSample(false);
+    };
     audio.onerror = () => {
+      claim.release();
       setIsPlayingSample(false);
       toast.error("That recording could not be played back in this browser.");
     };
     sampleAudioRef.current = audio;
     void audio
       .play()
-      .then(() => setIsPlayingSample(true))
+      .then(() => {
+        if (claim.isCurrent()) setIsPlayingSample(true);
+        else audio.pause();
+      })
       .catch(() => {
+        if (!claim.isCurrent()) return;
+        claim.release();
         setIsPlayingSample(false);
         toast.error("That recording could not be played back in this browser.");
       });
