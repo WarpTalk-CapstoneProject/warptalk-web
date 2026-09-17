@@ -25,7 +25,29 @@ interface TranslationRoomStoreState {
   // Current live translationRoom state
   translationRoomState: TranslationRoomStateDto | null;
   participants: ParticipantInfoDto[];
+  /**
+   * Two lanes fed by the same broadcasts, and they are kept apart on purpose. WT-605.
+   *
+   * `captionSegments` is what the live subtitle overlay reads: every segment the room hears,
+   * whether or not the transcript is being written down. Pause Transcript stops the RECORD, never
+   * the captions — the paused banner says so to the whole room.
+   *
+   * `transcriptSegments` is what the transcript panel reads: only what arrived while the
+   * transcript was running. A segment that arrives while `transcriptPaused` is true goes to the
+   * caption lane alone. This used to be one list, filtered at render by the panel — so any gate
+   * placed in front of the list (the gateway once dropped STT while paused) silently froze the
+   * captions too.
+   */
+  captionSegments: TranscriptSegmentDto[];
   transcriptSegments: TranscriptSegmentDto[];
+  /**
+   * Whether the host has the transcript paused, as this client knows it. Set by the session from
+   * the same resolveTranscriptPause answer the banner shows. Decides only which lane a NEW segment
+   * joins; nothing already in either list is moved.
+   */
+  transcriptPaused: boolean;
+  /** Segments kept out of the transcript lane since the current pause began. 0 while running. */
+  withheldWhilePaused: number;
   // AI suggestions keyed by the segment id they were anchored to. A record rather than a
   // list because at most one suggestion exists per segment and dismissing must be O(1);
   // note the key is a BACKEND segment id, which may have been merged into a bubble with a
@@ -97,7 +119,22 @@ interface TranslationRoomStoreState {
    * one arrives. Anyone who reloads or joins late sees the persisted message and never this.
    */
   assistantDraft: string;
+  /**
+   * The three cards WarpBot can raise mid-turn, one slot each (WT-688).
+   *
+   * All three arrive on the same ChatAssistantQuestion event, and they used to share ONE slot that
+   * every event overwrote. The worker sends one card per event, so an operator-setup event landing
+   * after a question replaced the question's payload with one the question card cannot read: the
+   * half-answered card vanished, and — the panel having no setup card — nothing took its place.
+   * Separate slots let an event replace only the kind of card it actually carries.
+   *
+   * Raw JSON rather than parsed actions, like the questions before them: this store is imported by
+   * node-run tests that cannot resolve the card modules, and it has no business knowing what a
+   * card means. The session routes each payload; the panel parses what it renders.
+   */
   assistantQuestionsJson: string | null;
+  assistantPluginConnectionJson: string | null;
+  assistantPluginSetupJson: string | null;
   /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
@@ -124,6 +161,7 @@ interface TranslationRoomStoreState {
   updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
+  setTranscriptPaused: (paused: boolean) => void;
   addSuggestion: (suggestion: AiSuggestionDto, preferredLanguage?: string) => void;
   dismissSuggestion: (segmentId: string) => void;
   setChatMessages: (messages: ChatMessageDto[]) => void;
@@ -147,6 +185,19 @@ interface TranslationRoomStoreState {
   beginAssistantTurn: () => void;
   /** WarpBot showed a sign of life; optionally names the tool it just reached for. */
   noteAssistantActivity: (toolName?: string | null, toolDetail?: string | null) => void;
+  /**
+   * A new WarpBot turn has started in the room — possibly one somebody ELSE asked — so the previous
+   * turn's cards go.
+   *
+   * Cards outlive their own turn's answer (see sealAssistantTrail), so something has to end them
+   * on every participant's screen, and beginAssistantTurn only runs on the asker's. The session
+   * calls this on ChatAssistantResponsePending, which the meeting service broadcasts exactly once
+   * per request, on the worker's first chunk or tool call. A card can only be raised inside a tool
+   * call, after that tool call's started event, so the signal always lands BEFORE its own turn's
+   * card and never erases it. Not a store-side guess from the state machine: idle -> thinking can
+   * recur mid-turn on a client that did not ask.
+   */
+  clearAssistantCards: () => void;
   /**
    * A tool WarpBot reached for has FINISHED, and what it was aimed at.
    *
@@ -176,6 +227,8 @@ interface TranslationRoomStoreState {
    */
   appendAssistantDraft: (delta?: string | null) => void;
   setAssistantQuestionsJson: (questionsJson: string | null) => void;
+  setAssistantPluginConnectionJson: (pluginConnectionJson: string | null) => void;
+  setAssistantPluginSetupJson: (pluginSetupJson: string | null) => void;
   sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
@@ -186,7 +239,10 @@ interface TranslationRoomStoreState {
 const initialState = {
   translationRoomState: null,
   participants: [],
+  captionSegments: [],
   transcriptSegments: [],
+  transcriptPaused: false,
+  withheldWhilePaused: 0,
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
@@ -197,6 +253,8 @@ const initialState = {
   assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
   assistantDraft: "",
   assistantQuestionsJson: null as string | null,
+  assistantPluginConnectionJson: null as string | null,
+  assistantPluginSetupJson: null as string | null,
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -254,28 +312,23 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
     })),
 
   addTranscriptSegment: (segment) =>
-    set((s) => ({
-      transcriptSegments: s.transcriptSegments.some((existing) => existing.segmentId === segment.segmentId)
-        ? s.transcriptSegments.map((existing) =>
-            existing.segmentId === segment.segmentId
-              ? {
-                  ...segment,
-                  // Translations already filed against this bubble survive a later STT revision
-                  // of the same segment. TranscriptSegmentReceived always carries them as null
-                  // (AiResultConsumerService builds it that way), so spreading `segment` over an
-                  // existing entry would erase every translation the panel is rendering.
-                  translations: existing.translations ?? segment.translations,
-                  translatedText: existing.translatedText || segment.translatedText,
-                  targetLanguage: existing.targetLanguage || segment.targetLanguage,
-                  // Keep the FIRST arrival. A revision of the same segment (the translation
-                  // landing, a corrected transcription) must not shuffle the line's clock
-                  // forward to whenever the correction happened.
-                  receivedAt: existing.receivedAt ?? segment.receivedAt ?? Date.now(),
-                }
-              : existing,
-          )
-        : [...s.transcriptSegments, { ...segment, receivedAt: segment.receivedAt ?? Date.now() }],
-    })),
+    set((s) => {
+      const captionSegments = mergeTranscriptSegment(s.captionSegments, segment);
+      // A revision of a line the transcript already holds keeps updating it, paused or not: the
+      // line was said while recording, and only its wording is changing.
+      const alreadyRecorded = s.transcriptSegments.some((existing) => existing.segmentId === segment.segmentId);
+      if (s.transcriptPaused && !alreadyRecorded) {
+        const alreadyCaptioned = s.captionSegments.some((existing) => existing.segmentId === segment.segmentId);
+        return {
+          captionSegments,
+          withheldWhilePaused: s.withheldWhilePaused + (alreadyCaptioned ? 0 : 1),
+        };
+      }
+      return {
+        captionSegments,
+        transcriptSegments: mergeTranscriptSegment(s.transcriptSegments, segment),
+      };
+    }),
 
   /**
    * Files a translation under ITS OWN language rather than overwriting the bubble's.
@@ -306,65 +359,24 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
    */
   addOrMergeTranslationText: (translation) =>
     set((s) => {
-      // translation.segmentId is its OWN id ("{sourceSegmentId}-{targetLang}-c{idx}"), never
-      // equal to the transcript bubble's segmentId — sourceSegmentId is the actual join key
-      // back to the TranscriptSegmentReceived bubble it translates. Falling back to
-      // translation.segmentId only covers old/unmigrated messages that never carried it.
-      const joinKey = translation.sourceSegmentId || translation.segmentId;
-      const chunkIndex = translation.chunkIndex ?? 0;
       // Normalized so "en-US" from a picker and "en" from the worker are one key. Unnormalized
       // they are two, and the panel — which looks the reader's language up by key — would miss.
-      const language = normalizeLanguageCode(translation.targetLang);
-      if (!language) return {};
-
-      const existingIndex = s.transcriptSegments.findIndex((segment) => segment.segmentId === joinKey);
-
-      if (existingIndex === -1) {
-        return {
-          transcriptSegments: [
-            ...s.transcriptSegments,
-            {
-              segmentId: joinKey,
-              speakerId: translation.speakerId,
-              speakerName: "Speaker",
-              originalText: translation.originalText,
-              originalLanguage: translation.sourceLang,
-              translations: { [language]: translation.translatedText },
-              confidence: 1,
-              startTimeMs: translation.startTimeMs ?? 0,
-              endTimeMs: translation.endTimeMs ?? 0,
-            },
-          ],
-        };
-      }
-
-      const segment = s.transcriptSegments[existingIndex];
-      const existingTranslations = segment.translations ?? {};
-      // One STT segment can be split into multiple translated sentences (chunk_index > 0 for
-      // the 2nd+ sentence) — those must be APPENDED, not overwrite the first sentence's
-      // translation. chunk_index 0 always replaces (it's either the only sentence, or a fresh
-      // segment's first one). Now scoped to the language being written: sentence 2 of the
-      // Vietnamese translation must never be appended to the English one, which is what a
-      // single shared slot made possible whenever two languages interleaved.
-      const previous = existingTranslations[language];
-      const text =
-        chunkIndex > 0 && previous
-          ? `${previous} ${translation.translatedText}`.trim()
-          : translation.translatedText;
-
-      const updated = {
-        ...segment,
-        originalText: segment.originalText || translation.originalText,
-        originalLanguage: segment.originalLanguage || translation.sourceLang,
-        translations: { ...existingTranslations, [language]: text },
-        startTimeMs: segment.startTimeMs || translation.startTimeMs || 0,
-        endTimeMs: translation.endTimeMs || segment.endTimeMs,
+      if (!normalizeLanguageCode(translation.targetLang)) return {};
+      return {
+        captionSegments: mergeTranslationText(s.captionSegments, translation, true),
+        // Joins a line the transcript already holds. It may only START a new line while
+        // recording: a translation of something said during a pause has no line to join, and
+        // creating one would put paused speech in the panel through the back door.
+        transcriptSegments: mergeTranslationText(s.transcriptSegments, translation, !s.transcriptPaused),
       };
-
-      const transcriptSegments = s.transcriptSegments.slice();
-      transcriptSegments[existingIndex] = updated;
-      return { transcriptSegments };
     }),
+
+  setTranscriptPaused: (paused) =>
+    set((s) =>
+      s.transcriptPaused === paused
+        ? {}
+        : { transcriptPaused: paused, withheldWhilePaused: 0 },
+    ),
 
   /**
    * AI suggestions are fanned out to the WHOLE room, one per language the room is translating
@@ -444,7 +456,12 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       // A turn that died without an answer leaves its half-written draft behind; the next
       // question must not open under somebody else's unfinished sentence.
       assistantDraft: "",
+      // Every card belongs to the turn that raised it, and lives until the next one starts —
+      // here. A Connect card left over from the last question would open an OAuth flow this one
+      // never asked for.
       assistantQuestionsJson: null,
+      assistantPluginConnectionJson: null,
+      assistantPluginSetupJson: null,
       assistantActivityAt: Date.now(),
     })),
 
@@ -483,8 +500,20 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
               },
             ]
           : carried,
+        // No card clearing here, although idle -> thinking looks like a turn starting. On a client
+        // that did not ask, the panel's answer baseline is stale, so the state can drop back to
+        // idle mid-turn and a later tool call of the SAME turn re-enters this branch — which would
+        // erase the card that turn just raised. See clearAssistantCards for the signal that fires
+        // exactly once per turn.
         assistantActivityAt: Date.now(),
       };
+    }),
+
+  clearAssistantCards: () =>
+    set({
+      assistantQuestionsJson: null,
+      assistantPluginConnectionJson: null,
+      assistantPluginSetupJson: null,
     }),
 
   noteAssistantToolFinished: (toolName = null, toolDetail = null) =>
@@ -594,6 +623,20 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       assistantActivityAt: Date.now(),
     }),
 
+  // Both stamp activity like the questions setter: a card arriving is the worker showing a sign of
+  // life mid-turn, and a connect-only event must not leave the slow-turn deadline running.
+  setAssistantPluginConnectionJson: (assistantPluginConnectionJson) =>
+    set({
+      assistantPluginConnectionJson,
+      assistantActivityAt: Date.now(),
+    }),
+
+  setAssistantPluginSetupJson: (assistantPluginSetupJson) =>
+    set({
+      assistantPluginSetupJson,
+      assistantActivityAt: Date.now(),
+    }),
+
   sealAssistantTrail: (messageId) =>
     set((state) => {
       // Nothing to attach, or this answer already has its trail. Either way, leave it alone:
@@ -630,7 +673,12 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         // final answer, so a client that kept its own accumulation would keep a sentence the
         // server never saved.
         assistantDraft: "",
-        assistantQuestionsJson: null,
+        // The cards are NOT cleared here, and must not be. A card is raised mid-turn — when the
+        // plugin tool returns — and the answer that lands next is the one explaining it ("connect
+        // Google Calendar", "confirm this write"). Clearing on that answer erased the card moments
+        // after it appeared, before anyone could press it: in a meeting that made a plugin write
+        // effectively impossible to approve. A card lives until the NEXT turn starts: the asker's
+        // beginAssistantTurn, and clearAssistantCards for everyone else in the room (WT-688).
       };
     }),
 
@@ -664,6 +712,119 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
 
   reset: () => set(initialState),
 }));
+
+function mergeTranscriptSegment(
+  current: TranscriptSegmentDto[],
+  segment: TranscriptSegmentDto,
+): TranscriptSegmentDto[] {
+  return current.some((existing) => existing.segmentId === segment.segmentId)
+    ? current.map((existing) =>
+        existing.segmentId === segment.segmentId
+          ? {
+              ...segment,
+              // Translations already filed against this bubble survive a later STT revision
+              // of the same segment. TranscriptSegmentReceived always carries them as null
+              // (AiResultConsumerService builds it that way), so spreading `segment` over an
+              // existing entry would erase every translation the panel is rendering.
+              translations: existing.translations ?? segment.translations,
+              translatedText: existing.translatedText || segment.translatedText,
+              targetLanguage: existing.targetLanguage || segment.targetLanguage,
+              // Keep the FIRST arrival. A revision of the same segment (the translation
+              // landing, a corrected transcription) must not shuffle the line's clock
+              // forward to whenever the correction happened.
+              receivedAt: existing.receivedAt ?? segment.receivedAt ?? Date.now(),
+            }
+          : existing,
+      )
+    : [...current, { ...segment, receivedAt: segment.receivedAt ?? Date.now() }];
+}
+
+/**
+ * Files a translation under ITS OWN language rather than overwriting the bubble's.
+ *
+ * WT-371 Bug 4. This used to keep exactly one translation per bubble — `translatedText` plus
+ * `targetLanguage`, replaced by whichever payload landed last — and the SignalR handler
+ * protected that single slot by dropping every translation whose language was not the
+ * viewer's. Two things fall out of that, and the report is both:
+ *
+ *   • The viewer's listen language is RESOLVED, not known. It comes from the picker, then
+ *     session storage, then their participant row (see participant-language-preference), and
+ *     the participant row arrives over the network. In the window before it does, the room
+ *     default stands in — so on a cold direct navigation to an [en, vi] room the filter
+ *     briefly admitted the wrong language, those bubbles kept it forever, and the panel ended
+ *     up showing "English → Vietnamese" on one line and "Vietnamese → English" on the next.
+ *   • Changing the listen language mid-meeting only affected new lines. Everything already on
+ *     screen stayed in the old language, which is the same mixture arrived at from the other
+ *     direction.
+ *
+ * Keyed by normalized language, the bubble no longer has a language of its own — the READER
+ * does, and the panel picks the matching entry at render time. A late-resolving or changed
+ * listen language re-renders the whole transcript into that language instead of leaving a
+ * permanent seam. The handler no longer has to filter to protect a slot, which is what made
+ * the race reachable in the first place.
+ *
+ * `createIfMissing` false leaves a translation with no line to join on the floor — see the
+ * transcript lane in addOrMergeTranslationText.
+ */
+function mergeTranslationText(
+  current: TranscriptSegmentDto[],
+  translation: TranslationTextDto,
+  createIfMissing: boolean,
+): TranscriptSegmentDto[] {
+  // translation.segmentId is its OWN id ("{sourceSegmentId}-{targetLang}-c{idx}"), never
+  // equal to the transcript bubble's segmentId — sourceSegmentId is the actual join key
+  // back to the TranscriptSegmentReceived bubble it translates. Falling back to
+  // translation.segmentId only covers old/unmigrated messages that never carried it.
+  const joinKey = translation.sourceSegmentId || translation.segmentId;
+  const chunkIndex = translation.chunkIndex ?? 0;
+  const language = normalizeLanguageCode(translation.targetLang);
+  if (!language) return current;
+
+  const existingIndex = current.findIndex((segment) => segment.segmentId === joinKey);
+
+  if (existingIndex === -1) {
+    if (!createIfMissing) return current;
+    return [
+      ...current,
+      {
+        segmentId: joinKey,
+        speakerId: translation.speakerId,
+        speakerName: "Speaker",
+        originalText: translation.originalText,
+        originalLanguage: translation.sourceLang,
+        translations: { [language]: translation.translatedText },
+        confidence: 1,
+        startTimeMs: translation.startTimeMs ?? 0,
+        endTimeMs: translation.endTimeMs ?? 0,
+      },
+    ];
+  }
+
+  const segment = current[existingIndex];
+  const existingTranslations = segment.translations ?? {};
+  // One STT segment can be split into multiple translated sentences (chunk_index > 0 for
+  // the 2nd+ sentence) — those must be APPENDED, not overwrite the first sentence's
+  // translation. chunk_index 0 always replaces (it's either the only sentence, or a fresh
+  // segment's first one). Now scoped to the language being written: sentence 2 of the
+  // Vietnamese translation must never be appended to the English one, which is what a
+  // single shared slot made possible whenever two languages interleaved.
+  const previous = existingTranslations[language];
+  const text =
+    chunkIndex > 0 && previous
+      ? `${previous} ${translation.translatedText}`.trim()
+      : translation.translatedText;
+
+  const next = current.slice();
+  next[existingIndex] = {
+    ...segment,
+    originalText: segment.originalText || translation.originalText,
+    originalLanguage: segment.originalLanguage || translation.sourceLang,
+    translations: { ...existingTranslations, [language]: text },
+    startTimeMs: segment.startTimeMs || translation.startTimeMs || 0,
+    endTimeMs: translation.endTimeMs || segment.endTimeMs,
+  };
+  return next;
+}
 
 function mergeChatMessages(current: ChatMessageDto[], incoming: ChatMessageDto[]) {
   const messagesById = new Map(current.map((message) => [message.id, message]));

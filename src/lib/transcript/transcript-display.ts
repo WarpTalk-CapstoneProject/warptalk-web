@@ -775,7 +775,7 @@ export function withLivePauseGap(
  * the ones belonging to THAT block — see distributePauseGapsAcrossBlocks, without which the
  * trailing pass below redraws every late gap once per session.
  */
-export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
+export function splitSegmentsAroundPauseGaps<T extends PausePlacementPoint>(
   segments: readonly T[],
   gaps: readonly TranscriptPauseGap[],
 ): Array<TranscriptPauseBlock<T>> {
@@ -796,11 +796,7 @@ export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
 
   let gapIndex = 0;
   for (const segment of segments) {
-    while (
-      gapIndex < gaps.length
-      && gaps[gapIndex].endMs !== null
-      && segment.startTimeMs >= gaps[gapIndex].endMs!
-    ) {
+    while (gapIndex < gaps.length && isAfterPauseEnded(segment, gaps[gapIndex])) {
       openGap(gaps[gapIndex]);
       gapIndex += 1;
     }
@@ -837,30 +833,54 @@ export function splitSegmentsAroundPauseGaps<T extends { startTimeMs: number }>(
  * divider lands. A gap nothing follows (still open, or nobody spoke again) goes to the last
  * block, where the trailing pass will draw it.
  *
- * Takes start TIMES rather than the blocks themselves, which is a concession to the React
+ * Takes the segments' TIMES rather than the blocks themselves, which is a concession to the React
  * Compiler rather than a taste: handing it the segment arrays makes it treat every block as
  * possibly mutated here, and it then gives up memoizing the whole saved-transcript panel. Times
- * are all this decision has ever needed.
+ * are all this decision has ever needed — both of them, see isAfterPauseEnded.
  */
 export function distributePauseGapsAcrossBlocks(
-  /** One entry per translation-session block, in order — the start times of its segments. */
-  blockStartTimes: readonly (readonly number[])[],
+  /** One entry per translation-session block, in order — the times of its segments. */
+  blockTimes: readonly (readonly PausePlacementPoint[])[],
   gaps: readonly TranscriptPauseGap[],
 ): TranscriptPauseGap[][] {
-  const perBlock: TranscriptPauseGap[][] = blockStartTimes.map(() => []);
-  if (!blockStartTimes.length) return perBlock;
+  const perBlock: TranscriptPauseGap[][] = blockTimes.map(() => []);
+  if (!blockTimes.length) return perBlock;
 
   for (const gap of gaps) {
-    let target = blockStartTimes.length - 1;
-    if (gap.endMs !== null) {
-      const endMs = gap.endMs;
-      const found = blockStartTimes.findIndex((times) => times.some((time) => time >= endMs));
-      if (found !== -1) target = found;
-    }
+    let target = blockTimes.length - 1;
+    const found = blockTimes.findIndex((times) => times.some((time) => isAfterPauseEnded(time, gap)));
+    if (found !== -1) target = found;
     perBlock[target].push(gap);
   }
 
   return perBlock;
+}
+
+/** The two times a line carries that can place it against a pause window. */
+export type PausePlacementPoint = { startTimeMs: number; receivedAt?: number | null };
+
+/**
+ * Whether a line was spoken after this pause was lifted — the boundary a divider is drawn on.
+ *
+ * WALL CLOCK FIRST, BECAUSE `startTimeMs` IS NOT MEETING TIME (the divider pinned to the bottom)
+ *   A gap's `endMs` is measured from `baseTime`, the room's start. A live line's `startTimeMs` is
+ *   an offset into the audio ingress track, which starts when the first mic is published — later
+ *   than the room — and resets to zero on reconnect. So on the live panel every line spoken after
+ *   Resume compared as EARLIER than the resume, none of them opened the gap's block, and the
+ *   trailing pass drew "Transcript paused at 15:25 and resumed at 15:27" underneath lines stamped
+ *   15:28, as if the pause were still the last thing that happened.
+ *
+ *   `receivedAt` is stamped on arrival in wall clock and the window's `endedAt` is wall clock, so
+ *   the two compare honestly. Lines from the saved transcript carry no `receivedAt` and fall back
+ *   to the offset, which is what the saved panel has always used.
+ */
+function isAfterPauseEnded(segment: PausePlacementPoint, gap: TranscriptPauseGap): boolean {
+  if (gap.endMs === null) return false;
+  if (typeof segment.receivedAt === "number" && gap.window.endedAt) {
+    const resumedAt = Date.parse(gap.window.endedAt);
+    if (Number.isFinite(resumedAt)) return segment.receivedAt >= resumedAt;
+  }
+  return segment.startTimeMs >= gap.endMs;
 }
 
 /** A pause this short prints the same clock time at both ends, so it prints its length instead. */
@@ -1003,6 +1023,17 @@ export function formatTranscriptPauseGapRun(
  *   read as a second, independent tell for the same reason: it is stamped on arrival in wall
  *   clock, so it survives the ingress reset that `startTimeMs` does not.
  *
+ * …AND A CLOSED ONE, BUT ONLY BY WALL CLOCK
+ *   Filtering open windows alone meant Resume undid the pause on screen: the window closed, the
+ *   filter found nothing open, and every line it had been withholding — still in the store —
+ *   reappeared above the divider. The panel then showed exactly what the record does not hold.
+ *   A line with a `receivedAt` inside [startedAt, endedAt) is dropped for good. The reset problem
+ *   above is about `startTimeMs`, and it is never consulted for a closed window; a line with no
+ *   `receivedAt` (loaded from the saved transcript, so it WAS recorded) is always kept.
+ *
+ *   Those lines are not counted in `hiddenCount`: the placeholder says "new lines are not being
+ *   recorded", which stops being true the moment the host resumes. The divider explains the hole.
+ *
  * THE GAPS HANDED IN MUST HAVE PASSED THROUGH withLivePauseGap
  *   This filter is only ever as current as the list it is given, and the window list lags the
  *   broadcast by one round trip (see withLivePauseGap). Fed from `resolveTranscriptPauseGaps`
@@ -1023,8 +1054,9 @@ export function withoutSegmentsInOpenPauseGaps<
   segments: readonly T[],
   gaps: readonly TranscriptPauseGap[],
 ): { segments: T[]; hiddenCount: number } {
+  if (!gaps.length) return { segments: [...segments], hiddenCount: 0 };
   const open = gaps.filter((gap) => gap.endMs === null);
-  if (!open.length) return { segments: [...segments], hiddenCount: 0 };
+  const closed = gaps.filter((gap) => gap.endMs !== null);
 
   const kept: T[] = [];
   let hiddenCount = 0;
@@ -1034,10 +1066,25 @@ export function withoutSegmentsInOpenPauseGaps<
       hiddenCount += 1;
       continue;
     }
+    if (closed.some((gap) => arrivedInsideClosedPauseGap(segment, gap))) continue;
     kept.push(segment);
   }
 
   return { segments: kept, hiddenCount };
+}
+
+function arrivedInsideClosedPauseGap(
+  segment: { receivedAt?: number | null },
+  gap: TranscriptPauseGap,
+): boolean {
+  const receivedAt = segment.receivedAt;
+  if (typeof receivedAt !== "number" || !gap.window.endedAt) return false;
+  const pausedAt = Date.parse(gap.window.startedAt);
+  const resumedAt = Date.parse(gap.window.endedAt);
+  return Number.isFinite(pausedAt)
+    && Number.isFinite(resumedAt)
+    && receivedAt >= pausedAt
+    && receivedAt < resumedAt;
 }
 
 function fallsInsideOpenPauseGap(

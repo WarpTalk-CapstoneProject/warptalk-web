@@ -11,5 +11,12 @@
   "messageFailed": "Xử lý tin nhắn thất bại.",
   "inputPlaceholder": "Hỏi WarpTalk AI về không gian làm việc này…",
   "sending": "Đang gửi…",
-  "send": "Gửi"
+  "send": "Gửi",
+  "toasts": {
+    "pluginConnected": "Đã kết nối plugin.",
+    "pluginConnectOpenBrowser": "Hoàn tất kết nối plugin này trong trình duyệt của bạn.",
+    "pluginConnectBlocked": "Trình duyệt của bạn đã chặn cửa sổ xác nhận.",
+    "pluginConnectBlockedAction": "Mở cửa sổ",
+    "pluginConnectFailed": "Không thể mở luồng kết nối plugin."
+  }
 }

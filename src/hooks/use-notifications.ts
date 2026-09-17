@@ -25,8 +25,10 @@ export function useUpdateNotificationPreferences() {
       const { data: pref } = await notificationService.updatePreferences(data);
       return pref;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PREFS_KEY });
+    // The PUT answers with the whole row, so write it straight into the cache rather than
+    // refetching what we were just handed.
+    onSuccess: (pref) => {
+      queryClient.setQueryData(PREFS_KEY, pref);
     },
   });
 }

@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   catalogOwnsOAuthClient,
   catalogRowCannotConnect,
+  describePluginToolOutcome,
   EMPTY_NEW_PLUGIN_DRAFT,
   formatToolManifest,
   isReservedPluginKey,
@@ -354,5 +355,54 @@ describe("WT-646 — the create request the draft becomes", () => {
     const request = toCreatePluginRequest(draft({ clientId: "abc" }));
     assert.equal(request.oAuth?.clientSecret, undefined);
     assert.ok(!JSON.stringify(request).includes("clientSecret"));
+  });
+});
+
+describe("tool-call outcomes — the recorder writes \"success\", not \"ok\"", () => {
+  test("a successful call reads as a success, with no code beside it", () => {
+    assert.deepEqual(describePluginToolOutcome("success"), {
+      label: "Succeeded",
+      tone: "success",
+      code: null,
+    });
+  });
+
+  test("\"ok\" is not a success: nothing has ever written it", () => {
+    assert.equal(describePluginToolOutcome("ok").tone, "failed");
+  });
+
+  test("a write awaiting confirmation is not a failure", () => {
+    assert.deepEqual(describePluginToolOutcome("confirmation_required"), {
+      label: "Awaiting confirmation",
+      tone: "attention",
+      code: "confirmation_required",
+    });
+  });
+
+  test("a refusal by policy is blocked, and a missing connection needs setup", () => {
+    assert.equal(describePluginToolOutcome("permission_denied").tone, "blocked");
+    assert.equal(describePluginToolOutcome("access_denied").tone, "blocked");
+    for (const code of [
+      "plugin_not_installed",
+      "connection_required",
+      "missing_scope",
+      "provider_account_mismatch",
+    ]) {
+      assert.deepEqual(describePluginToolOutcome(code), { label: "Needs setup", tone: "attention", code });
+    }
+  });
+
+  test("provider codes and unknown codes are failures that keep their code", () => {
+    assert.deepEqual(describePluginToolOutcome("provider_unavailable"), {
+      label: "Provider error",
+      tone: "failed",
+      code: "provider_unavailable",
+    });
+    assert.deepEqual(describePluginToolOutcome("unknown_tool"), {
+      label: "Failed",
+      tone: "failed",
+      code: "unknown_tool",
+    });
+    assert.equal(describePluginToolOutcome("").code, "failed");
   });
 });

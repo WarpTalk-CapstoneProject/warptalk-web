@@ -11,5 +11,12 @@
   "messageFailed": "メッセージの処理に失敗しました。",
   "inputPlaceholder": "このワークスペースについてWarpTalk AIに質問…",
   "sending": "送信中…",
-  "send": "送信"
+  "send": "送信",
+  "toasts": {
+    "pluginConnected": "プラグインを接続しました。",
+    "pluginConnectOpenBrowser": "ブラウザでこのプラグインの接続を完了してください。",
+    "pluginConnectBlocked": "ブラウザが同意ウィンドウをブロックしました。",
+    "pluginConnectBlockedAction": "開く",
+    "pluginConnectFailed": "プラグインの接続フローを開けませんでした。"
+  }
 }

@@ -377,14 +377,40 @@ assert.match(
   "The placeholder must say that new lines are not being RECORDED — that is the sentence the ruling turns on, and softening it to 'not shown' or 'paused' loses the reason the lines are missing.",
 );
 
-// The other half of the rule, and the one a later tidy-up is most likely to "fix". The caption
-// lane reads the SAME transcriptSegments store as the panel, and the product decision of
-// 2026-09-09 is that captions keep running through a pause — which is also the sentence the
-// paused banner prints two inches away. Filtering here would make that banner a lie.
+// The other half of the rule, and the one a later tidy-up is most likely to "fix". Captions keep
+// running through a pause — the paused banner says so to the room. They used to read the SAME
+// list as the panel, so any gate in front of that list froze them: the gateway dropped STT while
+// paused and captions stopped for every room that had not started translation. Two lanes now.
 assert.match(
   withoutComments(overlay),
+  /state\.captionSegments/,
+  "The caption lane must read captionSegments, the list a transcript pause never withholds from.",
+);
+assert.doesNotMatch(
+  withoutComments(overlay),
   /state\.transcriptSegments/,
-  "The caption lane must keep reading the transcript store directly. Captions run through a pause; that is the promise the paused notice makes to the room.",
+  "The caption lane must not read the transcript lane — that list stops growing while the transcript is paused.",
+);
+const store = read("src/stores/translationRoom-store.ts");
+assert.match(
+  store,
+  /const captionSegments = mergeTranscriptSegment\(s\.captionSegments, segment\)/,
+  "addTranscriptSegment must always file the segment in the caption lane, paused or not.",
+);
+assert.match(
+  store,
+  /s\.transcriptPaused && !alreadyRecorded/,
+  "addTranscriptSegment must keep a NEW segment out of the transcript lane while the transcript is paused.",
+);
+assert.match(
+  store,
+  /mergeTranslationText\(s\.transcriptSegments, translation, !s\.transcriptPaused\)/,
+  "A translation may only start a new transcript line while recording — otherwise paused speech reaches the panel through its translation.",
+);
+assert.match(
+  withoutComments(session),
+  /useTranslationRoomStore\.getState\(\)\.setTranscriptPaused\(paused\)/,
+  "The TranscriptPaused/Resumed handler must switch the lanes synchronously, before any later segment is filed.",
 );
 assert.doesNotMatch(
   withoutComments(overlay),
@@ -574,8 +600,8 @@ assert.match(
 );
 assert.match(
   withoutComments(panel),
-  /recorded\.hiddenCount > 0 \|\| pauseFilterInert \?/,
-  "The live panel must say something where the dropped lines would have been — and must say it in the inert case too, where it is the only mark of a hole no divider can yet be drawn for. An absence with no explanation is indistinguishable from a transcript that has failed.",
+  /recorded\.hiddenCount > 0 \|\| withheldWhilePaused > 0 \|\| pauseFilterInert \?/,
+  "The live panel must say something where the dropped lines would have been — and must say it in the inert case too, where it is the only mark of a hole no divider can yet be drawn for. An absence with no explanation is indistinguishable from a transcript that has failed. withheldWhilePaused counts what the store kept out of this lane, which is now where most paused lines stop.",
 );
 
 console.log(

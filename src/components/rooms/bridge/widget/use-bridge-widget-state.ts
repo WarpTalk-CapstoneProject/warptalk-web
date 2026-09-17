@@ -39,7 +39,7 @@
  *   them without joining — a join-free hub method, or the main window's `bridge:session-state`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HubConnection } from "@microsoft/signalr";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -120,6 +120,13 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   const [transcriptPauseEvent, setTranscriptPauseEvent] = useState<{ paused: boolean } | null>(
     null,
   );
+  /**
+   * Read by the segment handler, which is registered once. WT-605: the gateway broadcasts every
+   * segment, paused or not, because captions run through a pause. This pane is a TRANSCRIPT, so a
+   * segment that arrives while paused is not added — the same lane rule the in-meeting store
+   * applies (see captionSegments in translationRoom-store).
+   */
+  const transcriptPausedRef = useRef(false);
 
   useEffect(() => {
     if (!roomId || !signedIn) return;
@@ -133,6 +140,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       setLiveSegments((previous) => {
         // Segments are revised in place as recognition firms up, so replace rather than append.
         const index = previous.findIndex((existing) => existing.segmentId === segment.segmentId);
+        if (index === -1 && transcriptPausedRef.current) return previous;
         if (index === -1) return [...previous, segment];
         const next = [...previous];
         next[index] = segment;
@@ -144,6 +152,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     // a window that ever does receive broadcasts should not be paused by somebody else's meeting.
     const applyTranscriptPause = (paused: boolean, pausedRoomId?: string) => {
       if (pausedRoomId && pausedRoomId !== roomId) return;
+      transcriptPausedRef.current = paused;
       setTranscriptPauseEvent({ paused });
       // The broadcast decides the state; the refetch only fills in when the pause began.
       void queryClient.invalidateQueries({ queryKey: transcriptPauseWindowsKey(roomId) });
@@ -194,6 +203,9 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     windows: pauseWindowsQuery.data,
     event: transcriptPauseEvent,
   });
+  useEffect(() => {
+    transcriptPausedRef.current = transcriptPause.paused;
+  }, [transcriptPause.paused]);
 
   // ── transcript ───────────────────────────────────────────────────────────
 
