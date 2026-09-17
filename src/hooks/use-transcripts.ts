@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
+import { apiErrorCode } from "@/lib/api/errors";
 import { sortCorrectionsNewestFirst } from "@/lib/transcript/correction-history";
 import { transcriptService } from "@/services/transcript.service";
 import type {
@@ -194,8 +195,18 @@ export function useTranscriptLanguageBackfill(transcriptId?: string, targetLangu
       start.mutate({ language });
     },
     failedToStart: start.isError,
+    /**
+     * The transcript has used its translation budget for the day (TranscriptService's
+     * TRANSLATION_BUDGET_EXHAUSTED). Read from the body's code, never from the 429 status alone:
+     * the gateway's per-user request limiter answers 429 too, clears in seconds and deserves a
+     * retry, while this clears when the day's window does and a retry button would do nothing.
+     */
+    budgetExhausted: start.isError && apiErrorCode(start.error) === TRANSLATION_BUDGET_EXHAUSTED,
   };
 }
+
+/** Mirrors TranscriptTranslationBackfillService.BudgetExhaustedCode in warptalk-backend. */
+export const TRANSLATION_BUDGET_EXHAUSTED = "TRANSLATION_BUDGET_EXHAUSTED";
 
 /**
  * Refetches a transcript's translations after one of its lines is corrected.

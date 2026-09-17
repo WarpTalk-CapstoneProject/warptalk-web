@@ -224,6 +224,26 @@ assert.ok(
     + " failed. What was removed is its arithmetic, not its authority.",
 );
 
+// 9. A backfill refused for the day is not a failure to retry.
+const hook = read("src/hooks/use-transcripts.ts");
+assert.match(
+  hook,
+  /budgetExhausted:[^\n]*apiErrorCode\(start\.error\) === TRANSLATION_BUDGET_EXHAUSTED/,
+  "The budget refusal must be recognised by the body's code. The gateway's request limiter also"
+    + " answers 429, and that one clears in seconds and deserves its Try again.",
+);
+const exhaustedAt = panel.indexOf("if (budgetExhausted && missing > 0)");
+const failedAt = panel.indexOf("if ((failed || failedToStart) && missing > 0)");
+assert.ok(
+  exhaustedAt > 0 && failedAt > exhaustedAt,
+  "The budget message must be decided before the generic failure line, or the reader is told"
+    + " the lines 'could not be translated' and offered a button that is refused again.",
+);
+assert.ok(
+  !/onClick/.test(panel.slice(exhaustedAt, failedAt)),
+  "The budget message must not offer a retry: the window resets in hours, not seconds.",
+);
+
 // The count is only honest if it can reach zero. A row with no text is one the backend's coverage
 // refuses to count or to translate (IsTranslatableSegment), so keeping it here — as a row of its
 // own, or as an id in a merged utterance's mergedSegmentIds — is a shortfall no backfill can ever
