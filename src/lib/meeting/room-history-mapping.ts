@@ -213,6 +213,8 @@ export function shouldPollRoomHistory(
       decisions?: unknown[];
       actionItems?: unknown[];
       insufficientData?: boolean;
+      /** Which summary template produced this row. Absent on the backend's FALLBACK shape. */
+      templateKey?: string;
     } | null;
   }>,
   options: { nowMs?: number; windowMs?: number } = {},
@@ -248,7 +250,16 @@ export function shouldPollRoomHistory(
     //
     // Still bounded by the same window above: this cannot poll forever, it only keeps asking
     // for as long as a summary is plausibly still on its way.
-    return summaryIsEmpty(room.summary);
+    if (summaryIsEmpty(room.summary)) return true;
+
+    // A SUMMARY WITH NO TEMPLATE IS THE FALLBACK, NOT THE FINISHED ONE (WT-701).
+    //
+    // When the templated summary is not ready in time, the backend first stores a fallback —
+    // raw markdown in `summary`, no `templateKey`, no `summaryLanguage` — and upgrades that same
+    // row to the templated shape minutes later. Stopping at "some non-empty summary exists"
+    // froze the rail on the unformatted fallback until a manual reload. Bounded by the same
+    // window above, so this cannot poll forever either.
+    return !room.summary?.templateKey?.trim();
   });
 }
 

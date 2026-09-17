@@ -81,6 +81,12 @@ import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context"
 import { useEndedRoomRecord } from "@/hooks/use-room-history";
 import { findSegmentAtMs } from "@/lib/meeting/meeting-summary";
 import {
+  isRetryableRenderingError,
+  normalizeRenderingLanguage,
+  normalizeRenderingTemplate,
+  renderingAnswerMatches,
+} from "@/lib/meeting/summary-rendering-poll";
+import {
   ArtifactsPanel,
   MeetingRecordTabButton,
   type SeekRequest,
@@ -233,7 +239,11 @@ export default function RoomInformationPage() {
   const [askingToJoin, setAskingToJoin] = useState(false);
 
   const roomQuery = useTranslationRoom(roomId);
-  const participantsQuery = useTranslationRoomParticipants(roomId);
+  // WT-701: a finished meeting's roster no longer changes. Fetch it once instead of every 3s —
+  // the recap page used to spend ~20 requests a minute of the per-user rate limit on it.
+  const participantsQuery = useTranslationRoomParticipants(roomId, {
+    poll: !isFinishedStatus(roomQuery.data?.status),
+  });
   const invitationsQuery = useTranslationRoomInvitations(roomId);
   const endRoomMutation = useEndTranslationRoom();
   const startRoomMutation = useStartTranslationRoom();
@@ -1471,8 +1481,17 @@ function MeetingRecordSection({
   const [rendering, setRendering] = useState<SummaryRenderingView | null>(null);
   const renderingPollRef = useRef<number | null>(null);
 
+  /**
+   * WT-701: which selection owns the rendering state. Bumped by every new selection and on
+   * unmount, so a read that resolves for an older attempt can neither write over the newer one
+   * nor clear the newer attempt's poll — which used to leave the selects locked on "generating"
+   * with no timer left running to ever unlock them.
+   */
+  const renderingAttemptRef = useRef(0);
+
   useEffect(
     () => () => {
+      renderingAttemptRef.current += 1;
       if (renderingPollRef.current !== null) window.clearInterval(renderingPollRef.current);
     },
     [],
@@ -1487,6 +1506,20 @@ function MeetingRecordSection({
         renderingPollRef.current = null;
       }
 
+      const attempt = ++renderingAttemptRef.current;
+      // Set once this attempt has reached an ending (ready, failed, refused, deadline). A read
+      // still in flight at that moment must not reopen it.
+      let settled = false;
+      let inFlight = false;
+      const isCurrent = () => !settled && renderingAttemptRef.current === attempt;
+      const settle = () => {
+        settled = true;
+        if (renderingAttemptRef.current === attempt && renderingPollRef.current !== null) {
+          window.clearInterval(renderingPollRef.current);
+          renderingPollRef.current = null;
+        }
+      };
+
       // Shown immediately, before the request resolves. The picker reads its value from this,
       // so leaving it until the response lands would snap the dropdown back to the published
       // pair for a moment — which is exactly what made the old one look like it did nothing.
@@ -1500,7 +1533,9 @@ function MeetingRecordSection({
 
       const stopAt = Date.now() + 90_000;
 
-      const read = async () => {
+      /** True once this attempt needs no further reads — ended, or no longer the current one. */
+      const read = async (): Promise<boolean> => {
+        inFlight = true;
         try {
           // Destructured, matching every other read through this service.
           const { data: answer } = await translationRoomService.getSummaryRendering(
@@ -1510,29 +1545,17 @@ function MeetingRecordSection({
           );
 
           // A reader who changed their mind while this was in flight must not have the old
-          // answer land on top of the new one.
-          let superseded = false;
-          setRendering((current: SummaryRenderingView | null) => {
-            if (
-              current
-              && (current.templateKey !== answer.templateKey
-                || current.language !== answer.language)
-            ) {
-              superseded = true;
-              return current;
-            }
-            return {
-              templateKey: answer.templateKey,
-              language: answer.language,
-              isCanonical: answer.isCanonical,
-              status: answer.status,
-              // `?? null` because the parser answers undefined for content it cannot read, and
-              // "nothing to show" has to be one value here — the rail decides what to render on
-              // `content` being falsy, and undefined would make that decision twice.
-              content: answer.content ? (parseMeetingSummaryContent(answer.content) ?? null) : null,
-            };
-          });
-          if (superseded) return true;
+          // answer land on top of the new one. Decided by attempt, not by comparing pairs: the
+          // newer selection owns the state and its own poll.
+          if (!isCurrent()) return true;
+
+          // WT-701 — an answer for a different pair while this selection is still the one on
+          // screen. The server echoes its NORMALISED pair (lower-case template, bare language
+          // code), and comparing raw strings read every such echo as stale, which stopped the
+          // poll and left the selects locked on "generating" with nothing left to unlock them.
+          // A reply that is genuinely for another pair is ignored and the poll carries on; the
+          // deadline still ends it.
+          if (!renderingAnswerMatches({ templateKey, language }, answer)) return false;
 
           // WT-669 — a rendering that is not coming says so, and says why.
           //
@@ -1541,13 +1564,39 @@ function MeetingRecordSection({
           // produced a sentence that named nothing. The reason had been written by the worker
           // the whole time.
           if (answer.status === "failed") {
+            settle();
             setRendering(null);
             toast.error(answer.error || "That version could not be written.");
             return true;
           }
 
-          return answer.status === "ready";
+          setRendering({
+            // The picker's option values are the normalised spellings, so store those.
+            templateKey: normalizeRenderingTemplate(answer.templateKey) || templateKey,
+            language:
+              normalizeRenderingLanguage(answer.language) || normalizeRenderingLanguage(language),
+            isCanonical: answer.isCanonical,
+            status: answer.status,
+            // `?? null` because the parser answers undefined for content it cannot read, and
+            // "nothing to show" has to be one value here — the rail decides what to render on
+            // `content` being falsy, and undefined would make that decision twice.
+            content: answer.content ? (parseMeetingSummaryContent(answer.content) ?? null) : null,
+          });
+
+          if (answer.status === "ready") {
+            settle();
+            return true;
+          }
+          return false;
         } catch (error) {
+          if (!isCurrent()) return true;
+
+          // WT-701 — a blip is not a refusal. No response (network, CORS, timeout), a gateway
+          // 5xx or a 429 used to reset the picker on the first failure with a generic apology;
+          // the rendering was usually being written fine. Keep asking until the deadline.
+          if (isRetryableRenderingError(error)) return false;
+
+          settle();
           setRendering(null);
           // The server's own sentence, the way the rewrite path already does it. The endpoint
           // refuses with things a reader can act on — "This meeting has no summary yet, so there
@@ -1558,31 +1607,30 @@ function MeetingRecordSection({
               || "Could not read this meeting in that language.",
           );
           return true;
+        } finally {
+          inFlight = false;
         }
       };
 
       void (async () => {
         if (await read()) return;
+        // Unmounted, or replaced by a newer selection while the first read was out.
+        if (!isCurrent()) return;
 
         // Still being written. Polled here rather than in the rail because only this component
         // knows whether a read is still in flight, and a deadline is what separates "waiting"
         // from "never coming".
         renderingPollRef.current = window.setInterval(() => {
+          if (!isCurrent()) return;
           if (Date.now() > stopAt) {
-            if (renderingPollRef.current !== null) {
-              window.clearInterval(renderingPollRef.current);
-              renderingPollRef.current = null;
-            }
+            settle();
             setRendering(null);
             toast.error("That version has not arrived. Try again.");
             return;
           }
-          void read().then((done) => {
-            if (done && renderingPollRef.current !== null) {
-              window.clearInterval(renderingPollRef.current);
-              renderingPollRef.current = null;
-            }
-          });
+          // One read at a time: a slow reply must not stack a second request behind it.
+          if (inFlight) return;
+          void read();
         }, 4000);
       })();
     },
