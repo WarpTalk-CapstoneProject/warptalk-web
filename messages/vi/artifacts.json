@@ -1,0 +1,53 @@
+{
+  "filterByKindAria": "Lọc hồ sơ theo loại",
+  "filters": {
+    "all": "Tất cả hồ sơ",
+    "transcript": "Bản ghi",
+    "summary": "Tóm tắt AI",
+    "minutes": "Biên bản"
+  },
+  "meetingsCount": "{count, plural, other {# cuộc họp}}",
+  "mineOnly": {
+    "on": "Đang hiển thị cuộc họp bạn chủ trì",
+    "off": "Chỉ cuộc họp bạn chủ trì"
+  },
+  "search": {
+    "placeholder": "Tìm hồ sơ, cuộc họp hoặc nội dung đã nói"
+  },
+  "loading": "Đang tải hồ sơ cuộc họp",
+  "error": {
+    "title": "Không thể tải hồ sơ",
+    "description": "Kiểm tra dịch vụ phòng dịch và thử lại.",
+    "retry": "Thử lại"
+  },
+  "empty": {
+    "noResultsTitle": "Không có hồ sơ khớp với tìm kiếm này",
+    "noResultsDescription": "Thử từ khóa khác hoặc mở rộng bộ lọc sang tất cả hồ sơ.",
+    "emptyTitle": "Chưa có hồ sơ cuộc họp nào",
+    "emptyDescription": "Bản ghi và tóm tắt AI được tạo khi cuộc họp kết thúc. Biên bản được soạn từ chính trang của cuộc họp.",
+    "footerNote": "Mọi thứ WarpTalk ghi lại sẽ xuất hiện ở đây."
+  },
+  "failedSource": {
+    "minutes": "Không thể tải biên bản, nên danh sách này có thể thiếu một số hồ sơ.",
+    "records": "Không thể tải hồ sơ cuộc họp, nên danh sách này có thể thiếu bản ghi và tóm tắt."
+  },
+  "kindLabels": {
+    "transcript": "Bản ghi",
+    "summary": "Tóm tắt AI",
+    "minutes": "Biên bản"
+  },
+  "absence": {
+    "withheld": "Nội dung này chưa được chia sẻ với bạn. Chủ trì cuộc họp kiểm soát ai có thể đọc nó.",
+    "generatingSummary": "Trợ lý vẫn đang viết bản tóm tắt này.",
+    "generatingOther": "Nội dung này vẫn đang được tạo.",
+    "emptyMinutes": "Đã soạn nhưng chưa được viết.",
+    "emptyOther": "Không ai phát biểu, nên không có gì để ghi lại.",
+    "unavailable": "Tệp gốc của nội dung này không còn khả dụng."
+  },
+  "relativeTime": {
+    "justNow": "vừa xong",
+    "minutesAgo": "{count} phút trước",
+    "hoursAgo": "{count} giờ trước",
+    "daysAgo": "{count} ngày trước"
+  }
+}

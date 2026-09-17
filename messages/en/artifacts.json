@@ -1,0 +1,53 @@
+{
+  "filterByKindAria": "Filter records by kind",
+  "filters": {
+    "all": "All records",
+    "transcript": "Transcripts",
+    "summary": "AI summaries",
+    "minutes": "Minutes"
+  },
+  "meetingsCount": "{count, plural, one {# meeting} other {# meetings}}",
+  "mineOnly": {
+    "on": "Showing meetings you hosted",
+    "off": "Only meetings you hosted"
+  },
+  "search": {
+    "placeholder": "Search records, meetings, or what was said"
+  },
+  "loading": "Loading meeting records",
+  "error": {
+    "title": "Records could not be loaded",
+    "description": "Check the translation-room service and try again.",
+    "retry": "Retry"
+  },
+  "empty": {
+    "noResultsTitle": "No records match this search",
+    "noResultsDescription": "Try a different word, or widen the filter to all records.",
+    "emptyTitle": "No meeting records yet",
+    "emptyDescription": "A transcript and an AI summary are written when a meeting ends. Minutes are drawn up from the meeting's own page.",
+    "footerNote": "Everything WarpTalk writes down will appear here."
+  },
+  "failedSource": {
+    "minutes": "Minutes could not be loaded, so this list may be missing some records.",
+    "records": "Meeting records could not be loaded, so this list may be missing transcripts and summaries."
+  },
+  "kindLabels": {
+    "transcript": "Transcript",
+    "summary": "AI summary",
+    "minutes": "Minutes"
+  },
+  "absence": {
+    "withheld": "This output has not been shared with you yet. The meeting host controls who can read it.",
+    "generatingSummary": "The assistant is still writing this summary.",
+    "generatingOther": "This is still being produced.",
+    "emptyMinutes": "Drawn up but not written yet.",
+    "emptyOther": "Nobody spoke, so there was nothing to write down.",
+    "unavailable": "The file behind this is no longer available."
+  },
+  "relativeTime": {
+    "justNow": "just now",
+    "minutesAgo": "{count}m ago",
+    "hoursAgo": "{count}h ago",
+    "daysAgo": "{count}d ago"
+  }
+}

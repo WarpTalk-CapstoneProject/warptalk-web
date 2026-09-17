@@ -28,6 +28,7 @@ const NAMESPACES = [
   "settingsAuditLog",
   "settingsSessions",
   "rooms",
+  "artifacts",
 ] as const;
 
 async function loadMessages(locale: string) {
