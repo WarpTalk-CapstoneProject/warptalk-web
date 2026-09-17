@@ -141,6 +141,18 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(destination);
   }
 
+  /**
+   * Payments was merged into Invoices on 2026-09-17 — the two pages showed the same numbers — so
+   * its address forwards here for the same reason as the one above: a bookmark or an old link must
+   * land on the page that now answers "did that charge go through?", not on a 404.
+   */
+  const movedPayments = /^\/([^/]+)\/settings\/billing\/payments\/?$/.exec(pathname);
+  if (movedPayments) {
+    const destination = new URL(`/${movedPayments[1]}/settings/billing/invoices`, request.url);
+    destination.search = request.nextUrl.search;
+    return NextResponse.redirect(destination);
+  }
+
   // A dead cookie must not survive the response that noticed it was dead, or the next page
   // load starts from the same misleading state. Applied to whatever response we return
   // below.
