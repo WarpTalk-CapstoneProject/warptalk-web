@@ -12,5 +12,13 @@
     "billing": "請求",
     "dashboard": "ダッシュボード",
     "settings": "設定"
+  },
+  "meetingDayPanel": {
+    "ariaLabel": "日別のミーティング",
+    "emptyTitleToday": "本日予定されているミーティングはありません",
+    "emptyTitleOtherDay": "この日に予定されているミーティングはありません",
+    "emptySubtitleCanCreate": "ミーティングを予定するか、静かな時間をお過ごしください。",
+    "emptySubtitleCannotCreate": "招待されるとここにミーティングが表示されます。",
+    "newMeeting": "新しいミーティング"
   }
 }

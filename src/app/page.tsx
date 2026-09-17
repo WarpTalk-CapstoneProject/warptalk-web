@@ -965,8 +965,8 @@ function PricingSection() {
 
       <div className="c3-watermark-container">
         <div className="c3-watermark-main">
-          <span className="c3-watermark-line-1">Translation</span>
-          <span className="c3-watermark-line-2">Native</span>
+          <span className="c3-watermark-line-1">{t("pricing.watermarkLine1")}</span>
+          <span className="c3-watermark-line-2">{t("pricing.watermarkLine2")}</span>
         </div>
       </div>
 

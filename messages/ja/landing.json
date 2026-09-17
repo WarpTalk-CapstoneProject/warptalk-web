@@ -37,6 +37,8 @@
   "systemSignalsTitle": "5つのコアシグナル",
   "systemSignalsBody": "5つのコアシグナルが、どの言語の会話も支えています。",
   "pricing": {
+    "watermarkLine1": "翻訳",
+    "watermarkLine2": "ネイティブ",
     "loading": "プランを読み込んでいます...",
     "free": "無料",
     "perMonth": "/月",

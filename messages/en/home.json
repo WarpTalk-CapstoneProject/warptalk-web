@@ -12,5 +12,13 @@
     "billing": "Billing",
     "dashboard": "Dashboard",
     "settings": "Settings"
+  },
+  "meetingDayPanel": {
+    "ariaLabel": "Meetings by day",
+    "emptyTitleToday": "No meetings scheduled for today",
+    "emptyTitleOtherDay": "No meetings scheduled for this day",
+    "emptySubtitleCanCreate": "Schedule one, or enjoy the quiet.",
+    "emptySubtitleCannotCreate": "You'll see meetings here once someone invites you.",
+    "newMeeting": "New meeting"
   }
 }

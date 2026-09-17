@@ -25,5 +25,9 @@
     },
     "switchWorkspaceSuccess": "Switched to workspace \"{name}\"",
     "switchWorkspaceError": "Failed to switch workspace"
+  },
+  "meetingDayStrip": {
+    "previousWeek": "Previous week",
+    "nextWeek": "Next week"
   }
 }

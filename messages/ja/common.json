@@ -25,5 +25,9 @@
     },
     "switchWorkspaceSuccess": "ワークスペース「{name}」に切り替えました",
     "switchWorkspaceError": "ワークスペースの切り替えに失敗しました"
+  },
+  "meetingDayStrip": {
+    "previousWeek": "前の週",
+    "nextWeek": "次の週"
   }
 }

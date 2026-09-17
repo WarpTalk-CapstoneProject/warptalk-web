@@ -25,5 +25,9 @@
     },
     "switchWorkspaceSuccess": "Đã chuyển sang không gian làm việc \"{name}\"",
     "switchWorkspaceError": "Không thể chuyển không gian làm việc"
+  },
+  "meetingDayStrip": {
+    "previousWeek": "Tuần trước",
+    "nextWeek": "Tuần sau"
   }
 }

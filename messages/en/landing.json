@@ -37,6 +37,8 @@
   "systemSignalsTitle": "System Signals",
   "systemSignalsBody": "Five core signals power every conversation across any language.",
   "pricing": {
+    "watermarkLine1": "Translation",
+    "watermarkLine2": "Native",
     "loading": "Loading plans...",
     "free": "Free",
     "perMonth": "/mo",

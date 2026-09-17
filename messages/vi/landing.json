@@ -37,6 +37,8 @@
   "systemSignalsTitle": "Tín hiệu cốt lõi",
   "systemSignalsBody": "Năm tín hiệu cốt lõi vận hành mọi cuộc trò chuyện, bất kể ngôn ngữ nào.",
   "pricing": {
+    "watermarkLine1": "Dịch thuật",
+    "watermarkLine2": "Tự nhiên",
     "loading": "Đang tải các gói...",
     "free": "Miễn phí",
     "perMonth": "/tháng",
