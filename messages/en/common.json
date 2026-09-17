@@ -5,6 +5,18 @@
     "vi": "Tiếng Việt",
     "ja": "日本語"
   },
+  "topbar": {
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar",
+    "loading": "Loading...",
+    "account": "Account",
+    "payment": "Payment",
+    "plans": "Plans",
+    "addTab": "Add {title} tab",
+    "showMeAround": "Show me around",
+    "searchAria": "Search, or enter a room code",
+    "searchPlaceholder": "Search, or paste a room code"
+  },
   "sidebar": {
     "nav": {
       "home": "Home",
@@ -92,6 +104,25 @@
       "memberRoles": "Member roles",
       "security": "Security",
       "auditLog": "Audit log"
+    }
+  },
+  "workspaceTabs": {
+    "items": {
+      "home": { "title": "Home", "description": "Workspace start page" },
+      "meetings": { "title": "Meetings", "description": "Live and scheduled rooms" },
+      "voiceProfiles": { "title": "Voice Profiles", "description": "Voice and clone settings" },
+      "members": { "title": "Members", "description": "People and roles" },
+      "documents": { "title": "Documents", "description": "Knowledge and reference files" },
+      "billing": { "title": "Billing", "description": "Plan and invoices" },
+      "settings": { "title": "Settings", "description": "Workspace configuration" }
+    },
+    "actions": {
+      "closeTab": "Close {title}",
+      "hideTabActions": "Hide tab actions",
+      "showTabActions": "Show tab actions",
+      "closeActiveTab": "Close active tab",
+      "createNewView": "Create new view",
+      "open": "Open"
     }
   },
   "meetingDayStrip": {

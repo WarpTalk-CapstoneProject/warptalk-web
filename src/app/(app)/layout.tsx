@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
@@ -163,6 +164,7 @@ function AnimatedWidthPanel({
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("common");
   const pathname = usePathname();
   const router = useRouter();
   const {
@@ -217,9 +219,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const roomQuery = useTranslationRoom(roomId ?? "");
   const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
   const workspaceTabScope = activeWorkspaceSlug || "global";
+  const workspaceTabsT = useTranslations("common.workspaceTabs");
   const workspaceTabOptions = useMemo(
-    () => buildTabOptions(activeWorkspaceSlug || "workspace"),
-    [activeWorkspaceSlug]
+    () => buildTabOptions(activeWorkspaceSlug || "workspace", workspaceTabsT),
+    [activeWorkspaceSlug, workspaceTabsT]
   );
   const currentWorkspaceTab = useMemo(
     () => resolveCurrentTab(pathname, workspaceTabOptions),
@@ -574,8 +577,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button
               onClick={toggleLeftSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
-              title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-              aria-label={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+              title={leftSidebarOpen ? t("topbar.collapseSidebar") : t("topbar.expandSidebar")}
+              aria-label={leftSidebarOpen ? t("topbar.collapseSidebar") : t("topbar.expandSidebar")}
             >
               <SidebarSimple size={13} weight="bold" />
             </button>
@@ -586,66 +589,66 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               if (segments.length >= 1) {
                 const firstSeg = segments[0];
                 if (firstSeg === "voice-profiles") {
-                  parts.push({ label: "Voice Profiles" });
+                  parts.push({ label: t("sidebar.nav.voiceProfiles") });
                 } else if (firstSeg === "join") {
-                  parts.push({ label: "Join Translation Room" });
+                  parts.push({ label: t("sidebar.joinDialog.title") });
                 } else if (firstSeg === "room") {
-                  parts.push({ label: "Meetings", href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
+                  parts.push({ label: t("sidebar.nav.meetings"), href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
                   const rId = segments[1];
                   if (rId) {
-                    parts.push({ label: roomTitle || "Loading..." });
+                    parts.push({ label: roomTitle || t("topbar.loading") });
                   }
                 } else if (segments.length >= 2) {
                   const slug = firstSeg;
                   const feature = segments[1];
 
                   if (feature === "rooms") {
-                    parts.push({ label: "Meetings", href: `/${slug}/rooms` });
+                    parts.push({ label: t("sidebar.nav.meetings"), href: `/${slug}/rooms` });
                     const sub = segments[2];
                     if (sub) {
-                      parts.push({ label: roomTitle || "Loading..." });
+                      parts.push({ label: roomTitle || t("topbar.loading") });
                     }
                   } else if (feature === "artifacts") {
-                    parts.push({ label: "Artifacts" });
+                    parts.push({ label: t("sidebar.nav.artifacts") });
                   } else if (feature === "dashboard") {
-                    parts.push({ label: "Dashboard" });
+                    parts.push({ label: t("sidebar.nav.dashboard") });
                   } else if (feature === "home") {
-                    parts.push({ label: "Home" });
+                    parts.push({ label: t("sidebar.nav.home") });
                   } else if (feature === "members") {
-                    parts.push({ label: "Members" });
+                    parts.push({ label: t("sidebar.nav.members") });
                   } else if (feature === "documents") {
-                    parts.push({ label: "Documents" });
+                    parts.push({ label: t("sidebar.nav.documents") });
                   } else if (feature === "settings") {
                     const sub = segments[2];
                     if (sub === "account") {
-                      parts.push({ label: "Settings", href: `/${slug}/settings` });
+                      parts.push({ label: t("sidebar.settingsNav.settingsLabel"), href: `/${slug}/settings` });
                       const leaf = segments[3];
                       if (leaf === "profile") {
-                        parts.push({ label: "Profile" });
+                        parts.push({ label: t("sidebar.settingsNav.profile") });
                       } else if (leaf === "preferences") {
-                        parts.push({ label: "Preferences" });
+                        parts.push({ label: t("sidebar.settingsNav.preferences") });
                       } else {
-                        parts.push({ label: leaf || "Account" });
+                        parts.push({ label: leaf || t("topbar.account") });
                       }
                     } else {
-                      parts.push({ label: "Settings" });
+                      parts.push({ label: t("sidebar.settingsNav.settingsLabel") });
                     }
                   } else if (feature === "billing") {
-                    parts.push({ label: "Billing" });
+                    parts.push({ label: t("sidebar.settingsNav.billing") });
                   } else if (feature === "payment") {
-                    parts.push({ label: "Payment" });
+                    parts.push({ label: t("topbar.payment") });
                     const sub = segments[2];
                     if (sub) {
-                      parts.push({ label: sub === "plans" ? "Plans" : sub });
+                      parts.push({ label: sub === "plans" ? t("topbar.plans") : sub });
                     }
                   } else {
                     parts.push({ label: feature });
                   }
                 } else {
-                  parts.push({ label: "Workspace" });
+                  parts.push({ label: t("sidebar.workspaceFallback") });
                 }
               } else {
-                parts.push({ label: "Workspace" });
+                parts.push({ label: t("sidebar.workspaceFallback") });
               }
 
               return parts.map((part, index) => {
@@ -670,8 +673,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={handleAddCurrentWorkspaceTab}
                 className="ml-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border border-transparent text-ink-muted transition-colors hover:border-border hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                title={`Add ${currentWorkspaceTab.title} tab`}
-                aria-label={`Add ${currentWorkspaceTab.title} tab`}
+                title={t("topbar.addTab", { title: currentWorkspaceTab.title })}
+                aria-label={t("topbar.addTab", { title: currentWorkspaceTab.title })}
               >
                 <Plus size={11} weight="bold" />
               </button>
@@ -700,8 +703,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               type="button"
               data-tour="help-button"
               onClick={openTour}
-              title="Show me around"
-              aria-label="Show me around"
+              title={t("topbar.showMeAround")}
+              aria-label={t("topbar.showMeAround")}
               className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
             >
               <Question size={12} weight="bold" />

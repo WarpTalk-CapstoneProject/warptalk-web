@@ -5,6 +5,18 @@
     "vi": "Tiếng Việt",
     "ja": "日本語"
   },
+  "topbar": {
+    "collapseSidebar": "Thu gọn thanh bên",
+    "expandSidebar": "Mở rộng thanh bên",
+    "loading": "Đang tải...",
+    "account": "Tài khoản",
+    "payment": "Thanh toán",
+    "plans": "Gói",
+    "addTab": "Thêm tab {title}",
+    "showMeAround": "Hướng dẫn nhanh",
+    "searchAria": "Tìm kiếm, hoặc nhập mã phòng",
+    "searchPlaceholder": "Tìm kiếm, hoặc dán mã phòng"
+  },
   "sidebar": {
     "nav": {
       "home": "Trang chủ",
@@ -92,6 +104,25 @@
       "memberRoles": "Vai trò thành viên",
       "security": "Bảo mật",
       "auditLog": "Nhật ký kiểm tra"
+    }
+  },
+  "workspaceTabs": {
+    "items": {
+      "home": { "title": "Trang chủ", "description": "Trang khởi đầu của không gian làm việc" },
+      "meetings": { "title": "Cuộc họp", "description": "Phòng đang diễn ra và đã lên lịch" },
+      "voiceProfiles": { "title": "Hồ sơ giọng nói", "description": "Cài đặt giọng nói và bản sao giọng" },
+      "members": { "title": "Thành viên", "description": "Người dùng và vai trò" },
+      "documents": { "title": "Tài liệu", "description": "Kiến thức và tệp tham khảo" },
+      "billing": { "title": "Thanh toán", "description": "Gói và hóa đơn" },
+      "settings": { "title": "Cài đặt", "description": "Cấu hình không gian làm việc" }
+    },
+    "actions": {
+      "closeTab": "Đóng {title}",
+      "hideTabActions": "Ẩn thao tác tab",
+      "showTabActions": "Hiện thao tác tab",
+      "closeActiveTab": "Đóng tab đang mở",
+      "createNewView": "Tạo chế độ xem mới",
+      "open": "Đang mở"
     }
   },
   "meetingDayStrip": {
