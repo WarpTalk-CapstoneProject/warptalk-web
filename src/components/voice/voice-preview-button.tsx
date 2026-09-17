@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { Pause, Play, SpinnerGap } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useAudioPlayback } from "@/hooks/use-audio-playback";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { PREVIEW_FALLBACK_MESSAGE, previewErrorMessageFor } from "@/lib/voice/preview-error";
 import { VoiceProfileService } from "@/services/voice-profile.service";
@@ -42,53 +43,18 @@ export function VoicePreviewButton({
    */
   variant?: "icon" | "inline";
 }) {
-  const [state, setState] = useState<"idle" | "loading" | "playing">("idle");
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
-
-  // An object URL is a live handle into the document, not a value — leaving one behind on every
-  // preview leaks the whole blob for the life of the page. Revoked on unmount and before each
-  // replacement below.
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-    };
-  }, []);
+  const fetchAudio = useCallback(
+    () => VoiceProfileService.preview({ voiceId, language }),
+    [voiceId, language],
+  );
+  const onPlaybackError = useCallback(() => toast.error("The preview could not be played."), []);
+  // The shared hook, not a private Audio element: this button used to own one that nothing else
+  // could stop, so previewing down the library stacked every voice on top of the last.
+  const { state, toggle } = useAudioPlayback(fetchAudio, onPlaybackError);
 
   async function play() {
-    if (state === "playing") {
-      audioRef.current?.pause();
-      setState("idle");
-      return;
-    }
-
-    setState("loading");
-    try {
-      const blob = await VoiceProfileService.preview({ voiceId, language });
-
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-      }
-      const url = URL.createObjectURL(blob);
-      objectUrlRef.current = url;
-
-      const audio = new Audio(url);
-      audioRef.current = audio;
-      audio.onended = () => setState("idle");
-      audio.onerror = () => {
-        setState("idle");
-        toast.error("The preview could not be played.");
-      };
-      await audio.play();
-      setState("playing");
-    } catch (error) {
-      setState("idle");
-      toast.error(await previewErrorMessage(error));
-    }
+    const error = await toggle();
+    if (error) toast.error(await previewErrorMessage(error));
   }
 
   const busy = state === "loading";

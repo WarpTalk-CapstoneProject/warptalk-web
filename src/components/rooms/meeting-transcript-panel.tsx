@@ -1335,6 +1335,7 @@ export function MeetingTranscriptArtifact({
         canBackfill={Boolean(transcriptId)}
         isStarting={backfill.isStarting}
         failedToStart={backfill.failedToStart}
+        budgetExhausted={backfill.budgetExhausted}
         onRetry={() => backfill.request(displayLanguage)}
       />
 
@@ -1628,6 +1629,7 @@ function TranscriptLanguageStatus({
   canBackfill,
   isStarting,
   failedToStart,
+  budgetExhausted,
   onRetry,
 }: {
   language: string;
@@ -1639,6 +1641,8 @@ function TranscriptLanguageStatus({
   /** The request to start one was refused or never arrived — a different failure from a run
    *  that started and then broke, and the reader can only act on it by asking again. */
   failedToStart: boolean;
+  /** Refused for the day, not failed: asking again cannot help, so no button is offered. */
+  budgetExhausted: boolean;
   onRetry: () => void;
 }) {
   if (language === AS_SPOKEN) return null;
@@ -1675,6 +1679,16 @@ function TranscriptLanguageStatus({
           />
         </div>
       </div>
+    );
+  }
+
+  if (budgetExhausted && missing > 0) {
+    return (
+      <p className="mb-2 text-[12px] leading-relaxed text-muted-foreground">
+        This transcript has reached its translation limit for today. {missing}{" "}
+        {missing === 1 ? "entry stays" : "entries stay"} as spoken, with the original words one
+        click away.
+      </p>
     );
   }
 
