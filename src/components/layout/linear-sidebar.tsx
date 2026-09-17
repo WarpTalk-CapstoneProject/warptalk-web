@@ -41,7 +41,6 @@ import {
   CreditCard,
   ChartLine,
   Receipt,
-  Money,
   BookOpen,
   FileText,
   GearSix,
@@ -672,11 +671,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
       });
       settingsItems.push({
-        icon: Money,
-        label: "Payments",
-        href: `/${activeWorkspaceSlug}/settings/billing/payments`,
-      });
-      settingsItems.push({
         icon: ListChecks,
         label: "Features",
         href: `/${activeWorkspaceSlug}/settings/features`,
@@ -918,17 +912,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
                       Invoices
-                    </span>
-                  </Link>
-                </div>
-                <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings/billing/payments` ? "bg-surface-2" : "hover:bg-surface-2"
-                )}>
-                  <Link href={`/${activeWorkspaceSlug}/settings/billing/payments`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                    <Money size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Payments
                     </span>
                   </Link>
                 </div>

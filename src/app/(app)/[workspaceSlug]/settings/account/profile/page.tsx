@@ -195,7 +195,7 @@ export default function SettingsPage() {
 
   if (!mounted || !isAuthenticated || loading) {
     return (
-      <div className="flex h-96 w-full items-center justify-center bg-canvas">
+      <div className="flex h-96 w-full items-center justify-center">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
       </div>
     );

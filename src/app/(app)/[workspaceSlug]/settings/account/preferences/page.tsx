@@ -115,7 +115,7 @@ export default function PersonalPreferencesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-[80vh] items-center justify-center bg-canvas">
+      <div className="flex h-[80vh] items-center justify-center">
         <Spinner className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -123,7 +123,7 @@ export default function PersonalPreferencesPage() {
 
   if (error) {
     return (
-      <div className="flex h-[80vh] items-center justify-center text-center bg-canvas text-ink">
+      <div className="flex h-[80vh] items-center justify-center text-center text-ink">
         <div className="max-w-md border border-hairline bg-surface-1 p-6 rounded-lg shadow-sm flex flex-col items-center gap-3">
           <p className="text-sm font-semibold text-destructive">Failed to load personal settings.</p>
           <p className="text-xs text-ink-muted">Please make sure the backend services are running.</p>
