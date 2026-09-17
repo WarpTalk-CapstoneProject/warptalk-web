@@ -82,16 +82,13 @@
   "usageBreakdown": { "empty": "Nothing has been used in this window." },
   "usageLabels": {
     "translation": "Live translation",
-    "speechToText": "Speech to text",
-    "textToSpeech": "Voice synthesis",
-    "voiceCloning": "Voice cloning",
+    "dubbing": "Voice dubbing",
+    "cloneDubbing": "Cloned-voice dubbing",
+    "transcription": "Transcription",
+    "assistant": "AI assistant",
     "summary": "Meeting summary",
-    "chat": "Assistant chat",
+    "voiceCloning": "Voice cloning",
     "documentTranslation": "Document translation",
-    "detailTranslation": "Real-time Translation (Speech-to-Text / STT)",
-    "detailSummary": "AI Meeting Insights (Summarization)",
-    "detailChat": "AI Workspace Co-pilot Chat",
-    "detailTextToSpeech": "AI Voice Synthesis (Text-to-Speech / TTS)",
-    "detailVoiceCloning": "Custom AI Voice Cloning (Voice Cloning)"
+    "otherUsage": "Other usage"
   }
 }

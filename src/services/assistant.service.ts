@@ -8,8 +8,14 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
+  CreatePrivatePluginRequest,
   PluginConnectResultDto,
+  PluginToolPolicy,
   SendAssistantMessageResponse,
+  UpdatePrivatePluginRequest,
+  WorkspacePluginItemDto,
+  WorkspacePluginRequestDto,
+  WorkspacePluginsOverviewDto,
   WorkspacePluginToolAuditDto,
   WorkspacePluginToolAuditQuery,
 } from "@/types/assistant";
@@ -43,7 +49,12 @@ export const assistantService = {
      *
      * `size` is dropped on the way out: it is only there for the chip's label.
      */
-    attachments?: ChatAttachment[]
+    attachments?: ChatAttachment[],
+    /**
+     * WT-687 — plugins switched off for this conversation. WarpBot is not offered their tools this
+     * turn. Omitted when every plugin is on, which is what an older client sends.
+     */
+    disabledPluginKeys?: string[]
   ) {
     return apiClient.post<SendAssistantMessageResponse>(API.assistant.sendMessage(conversationId), {
       content,
@@ -52,6 +63,7 @@ export const assistantService = {
       attachments: attachments?.length
         ? attachments.map(({ dataUrl, name, mimeType }) => ({ dataUrl, name, mimeType }))
         : undefined,
+      disabledPluginKeys: disabledPluginKeys?.length ? disabledPluginKeys : undefined,
     });
   },
 
@@ -108,6 +120,63 @@ export const assistantService = {
 
   disablePlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
+  },
+
+  /**
+   * WT-687 — what WarpBot may do with each named tool, for this user. Tools left out keep their
+   * choice. Answers with the catalog row, whose tools carry the resolved `policy`.
+   */
+  // ---- workspace plugin marketplace (2026-09-17) ------------------------------------------------
+
+  getWorkspacePlugins(workspaceId: string) {
+    return apiClient.get<WorkspacePluginsOverviewDto>(API.assistant.workspacePlugins.base(workspaceId));
+  },
+
+  addWorkspacePlugin(workspaceId: string, pluginKey: string) {
+    return apiClient.post<WorkspacePluginItemDto>(API.assistant.workspacePlugins.marketplace(workspaceId, pluginKey));
+  },
+
+  /** Removes a marketplace plugin from the workspace; a private plugin is retired. */
+  removeWorkspacePlugin(workspaceId: string, pluginKey: string) {
+    return apiClient.delete<void>(API.assistant.workspacePlugins.plugin(workspaceId, pluginKey));
+  },
+
+  createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {
+    return apiClient.post<WorkspacePluginItemDto>(API.assistant.workspacePlugins.private(workspaceId), request);
+  },
+
+  updatePrivatePlugin(workspaceId: string, pluginKey: string, request: UpdatePrivatePluginRequest) {
+    return apiClient.patch<WorkspacePluginItemDto>(
+      API.assistant.workspacePlugins.privatePlugin(workspaceId, pluginKey),
+      request,
+    );
+  },
+
+  listPendingPluginRequests(workspaceId: string) {
+    return apiClient.get<WorkspacePluginRequestDto[]>(API.assistant.workspacePlugins.requests(workspaceId));
+  },
+
+  requestPlugin(workspaceId: string, pluginKey: string, reason?: string) {
+    return apiClient.post<WorkspacePluginRequestDto>(API.assistant.workspacePlugins.requests(workspaceId), {
+      pluginKey,
+      reason: reason?.trim() ? reason.trim() : undefined,
+    });
+  },
+
+  approvePluginRequest(workspaceId: string, requestId: string) {
+    return apiClient.post<WorkspacePluginRequestDto>(
+      API.assistant.workspacePlugins.approveRequest(workspaceId, requestId),
+    );
+  },
+
+  declinePluginRequest(workspaceId: string, requestId: string) {
+    return apiClient.post<WorkspacePluginRequestDto>(
+      API.assistant.workspacePlugins.declineRequest(workspaceId, requestId),
+    );
+  },
+
+  updatePluginToolPolicy(pluginKey: string, tools: Record<string, PluginToolPolicy>) {
+    return apiClient.put<AssistantPluginCatalogItemDto>(API.assistant.pluginToolPolicy(pluginKey), { tools });
   },
 
   /**

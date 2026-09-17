@@ -231,8 +231,19 @@ assert.match(
   "a create hook must exist, and must not be a useCatalogWrite: the create endpoint answers with the user-facing catalog item, so there is no detail row to seed the cache with",
 );
 assert.ok(
-  /Add MCP app/.test(listPage) && /NewPluginDialog/.test(listPage),
-  "the listing must offer the create action — an admin screen that can edit, re-credential and retire a row it cannot create sends the operator back to psql for the one step that started it all",
+  /Create plugin/.test(listPage) && /With MCP/.test(listPage) && /NewPluginDialog/.test(listPage),
+  "the listing must offer the create action — Create plugin → With MCP, opening NewPluginDialog. An admin screen that can edit, re-credential and retire a row it cannot create sends the operator back to psql for the one step that started it all",
+);
+// Owner decision 2026-09-17: plugins are MCP only. There is no skills-only plugin kind, so no
+// surface may offer to create one.
+assert.ok(
+  !/Skills only/i.test(listPage),
+  "the create menu must not offer 'Skills only' — the marketplace is MCP plugins only",
+);
+// The marketplace's one new fact per row: how many workspaces have added it.
+assert.ok(
+  /formatWorkspaceCount\(row\.workspaceCount\)/.test(listPage),
+  "each catalog row must show how many workspaces have added it",
 );
 assert.match(
   helpers,

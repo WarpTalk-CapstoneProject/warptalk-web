@@ -10,8 +10,12 @@ const personalRoute = readFileSync(
   join(root, "src/app/(app)/settings/plugins/page.tsx"),
   "utf8",
 );
-const legacyWorkspaceRoute = readFileSync(
+const workspaceRoute = readFileSync(
   join(root, "src/app/(app)/[workspaceSlug]/settings/plugins/page.tsx"),
+  "utf8",
+);
+const workspacePage = readFileSync(
+  join(root, "src/components/assistant/plugins/workspace-plugins-page.tsx"),
   "utf8",
 );
 
@@ -313,8 +317,56 @@ if (!personalRoute.includes("@/components/assistant/plugins/plugins-page")) {
   throw new Error("Personal /settings/plugins route must render the plugins page component.");
 }
 
-if (!legacyWorkspaceRoute.includes('redirect("/settings/plugins")')) {
-  throw new Error("Workspace-shaped plugins route must redirect to the personal plugins route.");
+// ---------------------------------------------------------------------------------------------
+// THE PLUGIN MARKETPLACE (owner decision, 2026-09-17)
+//
+// The [workspaceSlug] route used to redirect here, when the catalog was purely personal. A workspace
+// now has its own plugin list, chosen by its Owner, and that route is where it lives. The personal
+// page stays at /settings/plugins and gains one action: asking the Owner for a plugin the workspace
+// has not added.
+// ---------------------------------------------------------------------------------------------
+if (workspaceRoute.includes("redirect(")) {
+  throw new Error(
+    "/[workspaceSlug]/settings/plugins must render the workspace's plugin list, not redirect to the personal page.",
+  );
+}
+if (!workspaceRoute.includes("@/components/assistant/plugins/workspace-plugins-page")) {
+  throw new Error("The workspace plugins route must render WorkspacePluginsPage.");
+}
+for (const token of [
+  "Add plugin",
+  "From marketplace",
+  "With MCP",
+  "Requests",
+  "In this workspace",
+  "Marketplace",
+  "Add a plugin to this workspace",
+  "Remove from workspace",
+]) {
+  if (!workspacePage.includes(token)) {
+    throw new Error(`The workspace plugins page must offer '${token}', as the approved mock does.`);
+  }
+}
+if (/Skills only/i.test(workspacePage) || /Skills only/i.test(page)) {
+  throw new Error("Plugins are MCP only (owner decision 2026-09-17): no page may offer a skills-only option.");
+}
+
+// The member's half. The action is decided in plugin-availability.ts, where it has node tests; the
+// page must go through it rather than branch on the availability string itself.
+if (!page.includes("memberPluginAction(plugin, workspaceName)")) {
+  throw new Error("The plugins page must decide Request/Requested/Connect through memberPluginAction.");
+}
+for (const token of ["Request", "Requested", "Send request", "RequestPluginDialog", "useRequestPlugin"]) {
+  if (!page.includes(token)) {
+    throw new Error(`The plugins page must offer the request flow ('${token}').`);
+  }
+}
+// A server that sends the new availability replaces the old block notice on the row; a server that
+// does not still gets the notice. Either way the dialog keeps Disconnect and Remove (see above).
+if (!page.includes("workspaceBlock && !hasAvailability ?")) {
+  throw new Error(
+    "The row-level block notice must give way to the availability caption when the server sends one, and survive when it does not.",
+  );
 }
 
 console.log("Plugin marketplace contract passed.");

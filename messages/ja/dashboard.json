@@ -82,16 +82,13 @@
   "usageBreakdown": { "empty": "この期間は何も使用されていません。" },
   "usageLabels": {
     "translation": "リアルタイム翻訳",
-    "speechToText": "音声認識",
-    "textToSpeech": "音声合成",
-    "voiceCloning": "音声クローン",
+    "dubbing": "音声吹き替え",
+    "cloneDubbing": "クローン音声の吹き替え",
+    "transcription": "文字起こし",
+    "assistant": "AIアシスタント",
     "summary": "ミーティング要約",
-    "chat": "アシスタントチャット",
+    "voiceCloning": "音声クローン",
     "documentTranslation": "ドキュメント翻訳",
-    "detailTranslation": "リアルタイム翻訳(音声認識/STT)",
-    "detailSummary": "AIミーティングインサイト(要約)",
-    "detailChat": "AIワークスペースアシスタントチャット",
-    "detailTextToSpeech": "AI音声合成(テキスト読み上げ/TTS)",
-    "detailVoiceCloning": "カスタムAI音声クローン"
+    "otherUsage": "その他の利用"
   }
 }

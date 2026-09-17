@@ -27,15 +27,11 @@ import {
 } from "@/components/ui/select";
 import { useCreateVoiceProfile } from "@/hooks/use-voice-profiles";
 import { getErrorMessage } from "@/lib/api/errors";
-import { languagesInScope } from "@/lib/language/languages";
+import { languagesInScope, type SupportedLanguage } from "@/lib/language/languages";
+import { resolveProfileLanguage } from "@/lib/voice/library-languages";
 import { analyzeVoiceSample } from "@/lib/voice/voice-sample-quality";
 
-// Values are the locale tags the backend stores and must not change; the label is what a
-// person reads, and a raw tag in parentheses is not that.
-const LANGUAGE_OPTIONS = languagesInScope("voiceProfile").map((language) => ({
-  value: language.locale,
-  label: languageLabelText(language.locale),
-}));
+const ALL_PROFILE_LANGUAGES = languagesInScope("voiceProfile");
 
 const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
 
@@ -100,16 +96,31 @@ export function CreateVoiceProfileDialog({
   open,
   onOpenChange,
   defaultLanguage = "vi-VN",
+  languages = ALL_PROFILE_LANGUAGES,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultLanguage?: string;
+  /**
+   * The languages a sample may be recorded in — narrowed by the workspace's policy, see
+   * voice/library-languages.ts `voiceProfileLanguages`.
+   */
+  languages?: readonly SupportedLanguage[];
 }) {
   const t = useTranslations("voiceProfiles.createDialog");
   const createProfile = useCreateVoiceProfile();
 
   const [displayName, setDisplayName] = useState("");
-  const [language, setLanguage] = useState(defaultLanguage);
+  const [chosenLanguage, setLanguage] = useState(defaultLanguage);
+  // Snapped at render, not in the setter: the policy and the page's language can both change
+  // while this dialog stays mounted, and a stale choice must never be what gets submitted.
+  const language = resolveProfileLanguage(chosenLanguage, languages);
+  // Values are the locale tags the backend stores and must not change; the label is what a
+  // person reads, and a raw tag in parentheses is not that.
+  const languageOptions = languages.map((option) => ({
+    value: option.locale,
+    label: languageLabelText(option.locale),
+  }));
   const [sampleFile, setSampleFile] = useState<File | null>(null);
   const [sampleAssessment, setSampleAssessment] = useState<string | null>(null);
   const [sampleAccepted, setSampleAccepted] = useState(false);
@@ -369,7 +380,7 @@ export function CreateVoiceProfileDialog({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {LANGUAGE_OPTIONS.map((option) => (
+                {languageOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>

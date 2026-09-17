@@ -82,16 +82,13 @@
   "usageBreakdown": { "empty": "Chưa có gì được dùng trong khoảng thời gian này." },
   "usageLabels": {
     "translation": "Dịch trực tiếp",
-    "speechToText": "Chuyển giọng nói thành văn bản",
-    "textToSpeech": "Tổng hợp giọng nói",
-    "voiceCloning": "Nhân bản giọng nói",
+    "dubbing": "Lồng tiếng",
+    "cloneDubbing": "Lồng tiếng bằng giọng nhân bản",
+    "transcription": "Phiên âm",
+    "assistant": "Trợ lý AI",
     "summary": "Tóm tắt cuộc họp",
-    "chat": "Trò chuyện trợ lý",
+    "voiceCloning": "Nhân bản giọng nói",
     "documentTranslation": "Dịch tài liệu",
-    "detailTranslation": "Dịch thời gian thực (Giọng nói sang văn bản / STT)",
-    "detailSummary": "Thông tin cuộc họp bằng AI (Tóm tắt)",
-    "detailChat": "Trợ lý trò chuyện AI cho không gian làm việc",
-    "detailTextToSpeech": "Tổng hợp giọng nói AI (Văn bản sang giọng nói / TTS)",
-    "detailVoiceCloning": "Nhân bản giọng nói AI tùy chỉnh"
+    "otherUsage": "Sử dụng khác"
   }
 }

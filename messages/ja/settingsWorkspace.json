@@ -82,6 +82,11 @@
     "allowPersonalPlugins": {
       "label": "個人プラグインを許可",
       "description": "このワークスペースのWarpBotの会話でメンバーが接続済みのプラグインを使用することを許可します。"
+    },
+    "plugins": {
+      "label": "プラグイン",
+      "description": "このワークスペースのメンバーがWarpBotで接続できるプラグインを選択します。",
+      "managePlugins": "プラグインを管理"
     }
   },
   "aiTranslation": {

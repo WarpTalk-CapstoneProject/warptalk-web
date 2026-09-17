@@ -13,6 +13,11 @@
  * The layout language is lines: a section is a bordered box, and everything inside it is
  * separated by `divide-y divide-hairline` rather than by gaps between floating tiles. That is
  * what makes a column of facts read as one statement instead of six competing objects.
+ *
+ * The Billing overview takes the same rule one step further and drops the box: the page itself is
+ * the surface, and its cells (`GridRow`, `StatCell`, `BannerRow`, the plan ladder) are ruled by
+ * 1px hairlines that run edge to edge. A cell never carries a radius or a ground of its own — it
+ * sits on the shell's panel, which is what `check-page-ground` enforces.
  */
 
 import type { ReactNode } from "react";
@@ -94,58 +99,77 @@ export function RowGroup({ children }: { children: ReactNode }) {
 }
 
 /**
- * A headline number with its unit and an explanatory line under it — the two boxes at the top of
- * the Cartesia subscription screen.
+ * One full-width cell of the ruled page grid. The rule is on the bottom only: the row above draws
+ * the line this one sits under, so stacked rows never double a hairline.
  */
-export function StatCard({
+export function GridRow({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("min-w-0 border-b border-hairline px-4 py-5 sm:px-6", className)}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A headline number with its unit and an explanatory line under it — the two cells at the top of
+ * the Cartesia subscription screen. A cell of the ruled grid, not a card: the caller places it in a
+ * two-column row and draws the rule between the pair.
+ */
+export function StatCell({
   label,
   value,
   lines,
   tone = "default",
+  className,
 }: {
   label: string;
   value: ReactNode;
   /** Short factual lines under the number. Pricing, not prose. */
   lines?: ReactNode[];
   tone?: "default" | "warn";
+  className?: string;
 }) {
   return (
-    <Section className="flex flex-col">
-      <div className="px-4 py-3.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] text-ink-muted">{label}</span>
-          <span
-            aria-hidden
-            className={cn(
-              "size-[7px] rounded-[1px]",
-              tone === "warn" ? "bg-amber-500" : "bg-emerald-500",
-            )}
-          />
-        </div>
-        <p className="mt-2 text-[28px] font-semibold leading-none tabular-nums text-ink">
-          {value}
-        </p>
-        {lines?.length ? (
-          <div className="mt-3 space-y-1">
-            {lines.map((line, index) => (
-              <p key={index} className="text-[12px] leading-relaxed text-ink-muted">
-                {line}
-              </p>
-            ))}
-          </div>
-        ) : null}
+    <GridRow className={className}>
+      <div className="flex items-center gap-2">
+        <span className="text-[13px] text-ink-muted">{label}</span>
+        <span
+          aria-hidden
+          className={cn(
+            "size-[7px] rounded-[1px]",
+            tone === "warn" ? "bg-amber-500" : "bg-emerald-500",
+          )}
+        />
       </div>
-    </Section>
+      <p className="mt-2 text-[28px] font-semibold leading-none tabular-nums text-ink">
+        {value}
+      </p>
+      {lines?.length ? (
+        <div className="mt-3 space-y-1">
+          {lines.map((line, index) => (
+            <p key={index} className="text-[12px] leading-relaxed text-ink-muted">
+              {line}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </GridRow>
   );
 }
 
 /**
- * A banner across the top of the subscription page — the "Allow overages" strip.
+ * The full-width row across the top of the subscription page — the "Allow overages" strip.
  *
  * Not a toast and not a card: it states a standing condition and offers the one control that
  * changes it, so it has to sit above the numbers it affects rather than beside them.
  */
-export function Banner({
+export function BannerRow({
   title,
   badge,
   description,
@@ -157,18 +181,16 @@ export function Banner({
   action?: ReactNode;
 }) {
   return (
-    <Section>
-      <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
-            {badge}
-          </div>
-          <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">{description}</p>
+    <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
+          {badge}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">{description}</p>
       </div>
-    </Section>
+      {action ? <div className="shrink-0">{action}</div> : null}
+    </GridRow>
   );
 }
 

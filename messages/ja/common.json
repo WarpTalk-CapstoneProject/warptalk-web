@@ -34,6 +34,7 @@
     "credits": "ワークスペースのクレジット",
     "creditsLoadFailed": "ワークスペースのクレジットを読み込めませんでした。",
     "lowBalance": "残高が少なくなっています — なくなるとミーティングの翻訳が止まります。",
+    "askOwnerToTopUp": "ワークスペースのオーナーにチャージを依頼してください。",
     "memberFallback": "メンバー",
     "internalFallback": "内部",
     "profileSettings": "プロフィール設定",

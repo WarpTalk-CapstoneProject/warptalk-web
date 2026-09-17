@@ -13,7 +13,6 @@ import {
   ArrowSquareOut,
   ClockCounterClockwise,
   ArrowsOutSimple,
-  CheckCircle,
   CornersIn,
   Plus,
   PaperPlaneTilt,
@@ -104,6 +103,12 @@ import { MessageMentionChips } from "@/components/assistant/message-mention-chip
 import { mentionCompletion } from "@/lib/assistant/mention-completion";
 import { parseMessageMentions } from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import {
+  readDisabledPluginKeys,
+  togglePluginKey,
+  writeDisabledPluginKeys,
+  type KeyValueStore,
+} from "@/lib/assistant/tool-policy";
 import { cn } from "@/lib/utils";
 import {
   ATTACHMENT_ACCEPT,
@@ -339,6 +344,15 @@ function getPageContextKey(context: AssistantPageContextDto | null) {
  */
 const COMPOSER_MAX_HEIGHT_PX = 132;
 
+/** localStorage when the browser allows it; private modes and blocked storage read as nothing saved. */
+function browserStore(): KeyValueStore | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function GlobalChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -516,6 +530,25 @@ export function GlobalChatbot() {
     });
   }, [pendingPrompt, consumePendingPrompt]);
   const [conversationId, setConversationId] = useState<string | null>(null);
+  // WT-687: plugins switched off for this conversation. Every connected plugin starts on, as in
+  // Claude; a switch is remembered per conversation on this device and sent with each message.
+  const [disabledPluginKeys, setDisabledPluginKeys] = useState<string[]>([]);
+  // A conversation opened from history brings back its own switches; a new chat starts with every
+  // plugin on. Adjusted while rendering rather than in an effect, so the menu never paints one frame
+  // of the previous conversation's switches. Keyed on the id only, so switches flipped before the
+  // first message are not wiped when that message creates the conversation.
+  const [pluginSwitchesConversationId, setPluginSwitchesConversationId] = useState<string | null>(null);
+  if (pluginSwitchesConversationId !== conversationId) {
+    setPluginSwitchesConversationId(conversationId);
+    setDisabledPluginKeys(conversationId ? readDisabledPluginKeys(browserStore(), conversationId) : []);
+  }
+  const togglePluginForConversation = (pluginKey: string) => {
+    setDisabledPluginKeys((current) => {
+      const next = togglePluginKey(current, pluginKey);
+      if (conversationId) writeDisabledPluginKeys(browserStore(), conversationId, next);
+      return next;
+    });
+  };
   const [conversationTitle, setConversationTitle] = useState("New chat");
 
   const createConversation = useCreateAssistantConversation();
@@ -1456,6 +1489,9 @@ export function GlobalChatbot() {
         const conversation =
           await createConversation.mutateAsync(sendWorkspaceId);
         convId = conversation.id;
+        // Saved before the id lands in state, so the effect that reloads switches on an id change
+        // reads back the ones the user set in this still-unsaved chat instead of clearing them.
+        writeDisabledPluginKeys(browserStore(), convId, disabledPluginKeys);
         setConversationId(convId);
       } catch {
         setMessages((prev) => [
@@ -1507,6 +1543,7 @@ export function GlobalChatbot() {
         pageContext: effectivePageContext,
         mentions,
         attachments: sentAttachments,
+        disabledPluginKeys,
       });
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
     } catch {
@@ -2155,7 +2192,7 @@ export function GlobalChatbot() {
                           <section className="border-t border-border pt-2">
                             <div className="flex items-center justify-between px-2.5 pb-1.5">
                               <span className="text-[11px] font-medium text-ink-subtle">
-                                Plugins
+                                Plugins in this chat
                               </span>
                               <a
                                 href={
@@ -2184,26 +2221,46 @@ export function GlobalChatbot() {
                                           {plugin.label}
                                         </div>
                                         <div className="truncate text-[11px] text-ink-subtle">
-                                          {connected
-                                            ? plugin.connectedAccountEmail ?? "Connected"
-                                            : "Connect to use in WarpBot"}
+                                          {!connected
+                                            ? "Connect to use in WarpBot"
+                                            : disabledPluginKeys.includes(plugin.key)
+                                              ? "Off in this chat"
+                                              : plugin.connectedAccountEmail ?? "Connected"}
                                         </div>
                                       </div>
-                                      <button
-                                        type="button"
-                                        disabled={installPlugin.isPending || connectPlugin.isPending}
-                                        onClick={() => void handlePluginAction(plugin)}
-                                        className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
-                                      >
-                                        {connected ? (
-                                          <>
-                                            <CheckCircle size={12} weight="fill" />
-                                            Ready
-                                          </>
-                                        ) : (
-                                          "Connect"
-                                        )}
-                                      </button>
+                                      {connected ? (
+                                        // WT-687: on or off for this conversation, as in Claude's
+                                        // connector menu. Off means WarpBot is not offered this
+                                        // plugin's tools on the next message.
+                                        <button
+                                          type="button"
+                                          role="switch"
+                                          aria-checked={!disabledPluginKeys.includes(plugin.key)}
+                                          aria-label={`Use ${plugin.label} in this chat`}
+                                          onClick={() => togglePluginForConversation(plugin.key)}
+                                          className={cn(
+                                            "relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+                                            disabledPluginKeys.includes(plugin.key) ? "bg-surface-3" : "bg-primary",
+                                          )}
+                                        >
+                                          <span
+                                            aria-hidden
+                                            className={cn(
+                                              "absolute top-[2px] size-[14px] rounded-full bg-white shadow-sm transition-[left] motion-reduce:transition-none",
+                                              disabledPluginKeys.includes(plugin.key) ? "left-[2px]" : "left-[14px]",
+                                            )}
+                                          />
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          disabled={installPlugin.isPending || connectPlugin.isPending}
+                                          onClick={() => void handlePluginAction(plugin)}
+                                          className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                                        >
+                                          Connect
+                                        </button>
+                                      )}
                                     </li>
                                   );
                                 })}

@@ -19,6 +19,17 @@
  *   means. Then the two balances. Then the current plan with one control — Manage subscription —
  *   that owns every state change short of a purchase. Then the ladder.
  *
+ * THE FRAME: ONE RULED SURFACE, NOT A STACK OF CARDS
+ *   Those four blocks used to be separate rounded boxes with gaps between them, and the ladder a
+ *   fifth box of its own. They are now cells of a single grid on the shell's panel, split by 1px
+ *   hairlines that run edge to edge (the platform.openai.com/usage look): each row rules its bottom
+ *   edge, the two balances rule the line between them, and the ladder's columns continue the same
+ *   rules. The page paints no ground of its own — see scripts/check-page-ground.mjs.
+ *
+ *   Only the framing changed. A "flat overview + link tiles" rewrite that moved the ladder off
+ *   this page was rejected; the owner's call, 2026-09-17: "giữ nguyên content cũ của billing nhưng
+ *   làm dạng grid line" — keep the old content, lay it out as grid lines.
+ *
  * NO SHADOWS anywhere on this surface. See ./components/billing-primitives.
  */
 
@@ -54,11 +65,11 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { PlanDto } from "@/types/billing";
 
 import {
-  Banner,
+  BannerRow,
   BillingButton,
+  GridRow,
   Pill,
-  Section,
-  StatCard,
+  StatCell,
 } from "./components/billing-primitives";
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
@@ -232,7 +243,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   if (!role) {
     return (
-      <div className="flex h-[60vh] w-full items-center justify-center bg-surface-1">
+      <div className="flex h-[60vh] w-full items-center justify-center">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
       </div>
     );
@@ -262,7 +273,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   // mind rather than as an answer.
   if (isCoreLoading) {
     return (
-      <div className="flex h-[60vh] w-full items-center justify-center bg-surface-1">
+      <div className="flex h-[60vh] w-full items-center justify-center">
         <Spinner className="h-6 w-6 animate-spin text-ink-muted" />
       </div>
     );
@@ -284,8 +295,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   const overagesOn = overage?.enabled === true;
 
   return (
-    <div className="flex flex-col gap-4 bg-surface-1 px-4 py-4 text-ink">
-      <Banner
+    <div className="flex min-w-0 flex-col text-ink">
+      <BannerRow
         title="Allow overages"
         badge={<Pill tone="accent">Recommended</Pill>}
         description={
@@ -304,9 +315,12 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <StatCard
+      {/* Stacked on a phone, where the first cell's bottom rule is the line between them; side by
+          side from sm, where that rule becomes the vertical one. */}
+      <div className="grid sm:grid-cols-2">
+        <StatCell
           label="Credits Remaining"
+          className="sm:border-r"
           value={formatAmount(currentCredits)}
           tone={totalCredits > 0 && remainingRatioPercent <= 15 ? "warn" : "default"}
           lines={[
@@ -317,7 +331,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             `Cycle ends ${renewsDate}.`,
           ]}
         />
-        <StatCard
+        <StatCell
           label="Current Plan"
           value={subscription?.planName ?? "No active plan"}
           tone={subscription?.cancelAtPeriodEnd ? "warn" : "default"}
@@ -335,36 +349,34 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         />
       </div>
 
-      <Section>
-        <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[12px] text-ink-muted">Current plan</p>
-            <p className="mt-1 truncate text-[20px] font-semibold leading-tight text-ink">
-              {subscription?.planName ?? "No active plan"}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <span className="hidden text-[12px] text-ink-muted sm:inline">
-              {subscription?.cancelAtPeriodEnd ? "Ends" : "Renews"} on {renewsDate}
-            </span>
-            <BillingButton
-              tone="outline"
-              className="w-auto px-3"
-              onClick={() => setIsTopUpOpen(true)}
-            >
-              <Wallet className="h-3.5 w-3.5" />
-              Buy credits
-            </BillingButton>
-            <BillingButton
-              tone="outline"
-              className="w-auto px-3"
-              onClick={() => setIsManageOpen(true)}
-            >
-              Manage subscription
-            </BillingButton>
-          </div>
+      <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[12px] text-ink-muted">Current plan</p>
+          <p className="mt-1 truncate text-[20px] font-semibold leading-tight text-ink">
+            {subscription?.planName ?? "No active plan"}
+          </p>
         </div>
-      </Section>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="hidden text-[12px] text-ink-muted sm:inline">
+            {subscription?.cancelAtPeriodEnd ? "Ends" : "Renews"} on {renewsDate}
+          </span>
+          <BillingButton
+            tone="outline"
+            className="w-auto px-3"
+            onClick={() => setIsTopUpOpen(true)}
+          >
+            <Wallet className="h-3.5 w-3.5" />
+            Buy credits
+          </BillingButton>
+          <BillingButton
+            tone="outline"
+            className="w-auto px-3"
+            onClick={() => setIsManageOpen(true)}
+          >
+            Manage subscription
+          </BillingButton>
+        </div>
+      </GridRow>
 
       {activePlans.length > 0 ? (
         <PlanGrid

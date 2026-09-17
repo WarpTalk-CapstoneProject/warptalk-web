@@ -1,32 +1,75 @@
 /**
- * What a usage type is called on screen.
+ * What a billed service is called on screen, and which service a raw billing name belongs to.
  *
- * The server sends `voice_translation`, `text_to_speech`, `ai_assistant` — names for a rate card,
- * not for a reader. Two names are needed because two surfaces ask different questions:
+ * TWO VOCABULARIES, ONE SERVICE
+ *   The server names the same work in two places, and the Usage page reads both:
  *
- *   usageTypeLabel        "Live translation"                       — a dense list or a chart axis,
- *                                                                    where the row already sits
- *                                                                    next to its number
- *   usageTypeDetailLabel  "Real-time Translation (Speech-to-Text)" — the billing page, where the
- *                                                                    line has to stand alone on an
- *                                                                    invoice-like breakdown
+ *   - `credit_transactions.charge_type`, which reaches the web only inside the description the
+ *     settlement function writes: `'Aggregated ' || p_charge_type`
+ *     (warptalk-backend billing/database/migrations/017-add-just-entered-overage-to-settlement.sql).
+ *   - `usage_records.usage_type`, which is what `/usages/workspace/{id}/breakdown` groups by
+ *     (`FeatureAdoptionDto.usageType`).
  *
- * Both are here rather than copied into each page: the same server constant was already spelled
- * out in three separate files, so a new usage type meant three edits and typically got one.
+ *   On the live settlement path they are the SAME string: the AI billing worker passes one value as
+ *   both arguments (warptalk-ai billing_worker/worker.py) — `TRANSLATION`, `AUDIO_DUBBING_STANDARD`,
+ *   `AUDIO_DUBBING_VOICE_CLONE`, and before 10 Aug 2026 also `STT` and `AI_ASSISTANT`. The rate card
+ *   additionally prices `AI_SUMMARY` and `VOICE_CLONE_ENROLLMENT`. The older C# paths wrote the
+ *   lower-case `UsageConstants.UsageTypes` names (`voice_translation`, `text_to_speech`, …), and
+ *   rows written by them are still in the history. Every one of those spellings is folded to one
+ *   service key here, so a chart built from transaction descriptions and a card built from the
+ *   breakdown land on the same row.
+ *
+ * NOTHING IS DROPPED
+ *   A name this table does not know still becomes a service — keyed by its raw name, labelled with
+ *   it, flagged `known: false`. A new charge type then shows up on the page as itself on the day it
+ *   is first billed, rather than vanishing from a total that no longer adds up.
+ *
+ * SHORT LABELS ONLY
+ *   The long "Real-time Translation (Speech-to-Text / STT)" forms were the Usage page's complaint:
+ *   they truncated in every row they were put in. A service label here fits a card title and a
+ *   chart legend.
  */
 
-/** Server values, from `UsageConstants.UsageTypes`. */
-const SHORT_LABELS: Record<string, string> = {
+export interface UsageService {
+  /** Stable grouping key. Known services use a fixed key; unknown ones `raw:<lower-cased name>`. */
+  key: string;
+  label: string;
+  /** False when the raw name matched nothing below and the label is the raw name itself. */
+  known: boolean;
+}
+
+const SERVICES = {
   translation: "Live translation",
-  voice_translation: "Live translation",
-  speech_to_text: "Speech to text",
-  text_to_speech: "Voice synthesis",
-  voice_cloning: "Voice cloning",
+  dubbing: "Voice dubbing",
+  clone_dubbing: "Cloned-voice dubbing",
+  transcription: "Transcription",
+  assistant: "AI assistant",
   summary: "Meeting summary",
-  meeting_summary: "Meeting summary",
-  chat: "Assistant chat",
-  ai_assistant: "Assistant chat",
+  voice_cloning: "Voice cloning",
   document_translation: "Document translation",
+} as const;
+
+type KnownServiceKey = keyof typeof SERVICES;
+
+/** Every server spelling, lower-cased, to the service it bills. */
+const ALIASES: Record<string, KnownServiceKey> = {
+  // charge_type == usage_type on the live path (warptalk-ai billing worker, rate card seeds)
+  translation: "translation",
+  audio_dubbing_standard: "dubbing",
+  audio_dubbing_voice_clone: "clone_dubbing",
+  stt: "transcription",
+  ai_assistant: "assistant",
+  ai_summary: "summary",
+  voice_clone_enrollment: "voice_cloning",
+  // UsageConstants.UsageTypes, written by the older C# usage paths
+  voice_translation: "translation",
+  text_to_speech: "dubbing",
+  speech_to_text: "transcription",
+  chat: "assistant",
+  summary: "summary",
+  meeting_summary: "summary",
+  voice_cloning: "voice_cloning",
+  document_translation: "document_translation",
 };
 
 /**
@@ -36,36 +79,42 @@ const SHORT_LABELS: Record<string, string> = {
  */
 type UsageLabelTranslator = (key: string) => string;
 
-const SHORT_LABEL_KEYS: Record<string, string> = {
+/** Translation key for each canonical service, under the `usageLabels` namespace. */
+const SERVICE_LABEL_KEYS: Record<KnownServiceKey, string> = {
   translation: "usageLabels.translation",
-  voice_translation: "usageLabels.translation",
-  speech_to_text: "usageLabels.speechToText",
-  text_to_speech: "usageLabels.textToSpeech",
-  voice_cloning: "usageLabels.voiceCloning",
+  dubbing: "usageLabels.dubbing",
+  clone_dubbing: "usageLabels.cloneDubbing",
+  transcription: "usageLabels.transcription",
+  assistant: "usageLabels.assistant",
   summary: "usageLabels.summary",
-  meeting_summary: "usageLabels.summary",
-  chat: "usageLabels.chat",
-  ai_assistant: "usageLabels.chat",
+  voice_cloning: "usageLabels.voiceCloning",
   document_translation: "usageLabels.documentTranslation",
 };
 
-/** Short enough for a table row or a legend. Falls back to the raw name, de-underscored. */
-export function usageTypeLabel(usageType: string, t?: UsageLabelTranslator): string {
-  const key = SHORT_LABEL_KEYS[usageType.toLowerCase()];
-  if (t && key) return t(key);
-  return SHORT_LABELS[usageType.toLowerCase()] ?? usageType.replace(/_/g, " ");
+/** The service a raw charge type or usage type bills. Never returns nothing. */
+export function usageServiceOf(raw: string | null | undefined, t?: UsageLabelTranslator): UsageService {
+  const name = (raw ?? "").trim();
+  const known = ALIASES[name.toLowerCase()];
+  if (known) {
+    const label = t ? t(SERVICE_LABEL_KEYS[known]) : SERVICES[known];
+    return { key: known, label, known: true };
+  }
+  if (!name) return { key: "raw:", label: t ? t("usageLabels.otherUsage") : "Other usage", known: false };
+  return { key: `raw:${name.toLowerCase()}`, label: name.replace(/_/g, " "), known: false };
 }
 
-/** The long form, for a breakdown that is read like a bill. */
-export function usageTypeDetailLabel(usageType: string, t?: UsageLabelTranslator): string {
-  if (usageType === "translation" || usageType === "voice_translation")
-    return t ? t("usageLabels.detailTranslation") : "Real-time Translation (Speech-to-Text / STT)";
-  if (usageType === "summary" || usageType === "meeting_summary")
-    return t ? t("usageLabels.detailSummary") : "AI Meeting Insights (Summarization)";
-  if (usageType === "chat") return t ? t("usageLabels.detailChat") : "AI Workspace Co-pilot Chat";
-  if (usageType === "text_to_speech")
-    return t ? t("usageLabels.detailTextToSpeech") : "AI Voice Synthesis (Text-to-Speech / TTS)";
-  if (usageType === "voice_cloning")
-    return t ? t("usageLabels.detailVoiceCloning") : "Custom AI Voice Cloning (Voice Cloning)";
-  return usageType.replace(/_/g, " ");
+/** Short enough for a table row or a legend. Falls back to the raw name, de-underscored. */
+export function usageTypeLabel(usageType: string, t?: UsageLabelTranslator): string {
+  return usageServiceOf(usageType, t).label;
+}
+
+const AGGREGATED = /^Aggregated\s+(\S.*)$/;
+
+/**
+ * The charge type a settlement transaction was written with, read back out of its description.
+ * Null for anything the settlement function did not write (top-ups, adjustments, legacy rows).
+ */
+export function chargeTypeFromDescription(description: string | null | undefined): string | null {
+  const match = AGGREGATED.exec((description ?? "").trim());
+  return match ? match[1].trim() : null;
 }

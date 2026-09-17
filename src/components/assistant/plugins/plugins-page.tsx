@@ -25,13 +25,17 @@ import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   useAssistantPlugins,
   useDisableAssistantPlugin,
+  useUpdatePluginToolPolicy,
   useDisconnectAssistantPlugin,
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
+import { useRequestPlugin } from "@/hooks/use-workspace-plugins";
+import { memberPluginAction, PLUGIN_REQUEST_REASON_MAX } from "@/lib/assistant/plugin-availability";
 import {
   formatPluginLabelList,
   pluginWorkspaceBlock,
@@ -40,12 +44,21 @@ import {
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
+import {
+  TOOL_POLICIES,
+  TOOL_POLICY_LABEL,
+  groupToolsByEffect,
+  summarizeToolPolicies,
+  toolPolicyOf,
+  trustsAWriteTool,
+} from "@/lib/assistant/tool-policy";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
   AssistantPluginCatalogItemDto,
   AssistantPluginConnectionStatus,
+  PluginToolPolicy,
 } from "@/types/assistant";
 
 /**
@@ -60,8 +73,9 @@ import type {
 const CATALOG_TWO_COLUMN_MINIMUM = 4;
 
 function pluginActionLabel(plugin: AssistantPluginCatalogItemDto) {
-  if (plugin.installationStatus === "disabled") return "Enable";
-  if (plugin.installationStatus !== "installed") return "Install";
+  // WT-687: one action, as in Claude's connector directory. Installing is a step on the way to
+  // connecting, not a separate decision the user has to make first — see handlePrimaryAction.
+  if (plugin.installationStatus !== "installed") return "Connect";
   // An installed row the workspace refuses cannot be connected or reconnected, so offering either
   // word would be an instruction that leads to a refusal. "Manage" is the honest one: the dialog
   // it opens still lets the plugin be disconnected and removed.
@@ -258,6 +272,125 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   );
 }
 
+const TOOL_POLICY_TONE: Record<PluginToolPolicy, string> = {
+  allow: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  approval: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  blocked: "bg-red-500/10 text-red-700 dark:text-red-400",
+};
+
+/** Allow / Ask / Block for one tool, or for a whole group when `value` is null (mixed). */
+function ToolPolicyControl({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: PluginToolPolicy | null;
+  disabled: boolean;
+  onChange: (policy: PluginToolPolicy) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border"
+    >
+      {TOOL_POLICIES.map((policy) => {
+        const selected = value === policy;
+        return (
+          <button
+            key={policy}
+            type="button"
+            aria-pressed={selected}
+            disabled={disabled}
+            onClick={() => onChange(policy)}
+            className={cn(
+              "px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-60",
+              "border-l border-border first:border-l-0",
+              selected ? TOOL_POLICY_TONE[policy] : "bg-popover text-ink-muted hover:bg-surface-1 hover:text-ink",
+            )}
+          >
+            {TOOL_POLICY_LABEL[policy]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * What WarpBot may do with each of this plugin's tools, for this user. WT-687.
+ *
+ * Claude's connector settings are the model: every tool is Allow, Ask or Block, grouped read-only
+ * then write, with one control per group. A tool nobody has touched shows the server's default —
+ * reads allowed, writes ask — so opening this changes nothing until the user does.
+ */
+function ToolPolicyEditor({
+  plugin,
+  isSaving,
+  onChange,
+}: {
+  plugin: AssistantPluginCatalogItemDto;
+  isSaving: boolean;
+  onChange: (tools: Record<string, PluginToolPolicy>) => void;
+}) {
+  const groups = useMemo(() => groupToolsByEffect(plugin.tools), [plugin.tools]);
+
+  return (
+    <div className="mt-6 flex flex-col gap-4" data-testid="tool-policy-editor">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          What WarpBot may do
+        </h3>
+        <span className="text-[11px] tabular-nums text-ink-subtle">{summarizeToolPolicies(plugin.tools)}</span>
+      </div>
+
+      {groups.map((group) => (
+        <section key={group.effect} className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">{group.title}</h4>
+            <ToolPolicyControl
+              label={`All ${group.title.toLowerCase()}`}
+              value={group.policy}
+              disabled={isSaving}
+              onChange={(policy) =>
+                onChange(Object.fromEntries(group.tools.map((tool) => [tool.name, policy])))
+              }
+            />
+          </div>
+          <ul className="flex flex-col">
+            {group.tools.map((tool) => (
+              <li key={tool.name} className="flex items-center justify-between gap-3 py-1.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm text-ink">{tool.label || tool.name}</div>
+                  <div className="truncate font-mono text-[11px] text-ink-subtle">{tool.name}</div>
+                </div>
+                <ToolPolicyControl
+                  label={tool.label || tool.name}
+                  value={toolPolicyOf(tool)}
+                  disabled={isSaving}
+                  onChange={(policy) => onChange({ [tool.name]: policy })}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {trustsAWriteTool(plugin.tools) ? (
+        <p
+          data-testid="tool-policy-write-warning"
+          className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-300"
+        >
+          <Warning size={14} weight="fill" className="mt-0.5 shrink-0" />
+          <span>WarpBot can change data in {plugin.label} without asking for the write tools you allowed.</span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
@@ -266,10 +399,12 @@ function ConnectPluginDialog({
   isConnecting,
   isDisconnecting,
   isRemoving,
+  isSavingToolPolicy,
   onClose,
   onContinue,
   onDisconnect,
   onRemove,
+  onToolPolicyChange,
 }: {
   /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
   plugin: AssistantPluginCatalogItemDto;
@@ -295,10 +430,12 @@ function ConnectPluginDialog({
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
+  isSavingToolPolicy: boolean;
   onClose: () => void;
   onContinue: () => void;
   onDisconnect: () => void;
   onRemove: () => void;
+  onToolPolicyChange: (tools: Record<string, PluginToolPolicy>) => void;
 }) {
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
   const isConnected = plugin.connectionStatus === "connected";
@@ -311,7 +448,7 @@ function ConnectPluginDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
-      <section className="relative w-full max-w-[560px] rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl">
+      <section className="relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl">
         <Button
           type="button"
           size="icon-sm"
@@ -350,7 +487,13 @@ function ConnectPluginDialog({
           </div>
         </div>
 
-        <PermissionList plugin={plugin} />
+        {/* Once installed, each tool's permission is the user's to set (WT-687) — the server only
+            accepts a choice for an installation. Before that, the list says what connecting grants. */}
+        {isInstalled && plugin.tools.length > 0 ? (
+          <ToolPolicyEditor plugin={plugin} isSaving={isSavingToolPolicy} onChange={onToolPolicyChange} />
+        ) : (
+          <PermissionList plugin={plugin} />
+        )}
 
         <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
@@ -361,10 +504,11 @@ function ConnectPluginDialog({
             <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
             {/* One text node for the flex row: bare text beside a <span> becomes three flex items,
                 which laid "Tokens stay encrypted. Every", "write" and "action asks you first." out
-                as three columns. */}
+                as three columns. "Every write action asks" stopped being unconditional in WT-687,
+                so the sentence names the exception. */}
             <span>
-              Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks
-              you first.
+              Tokens stay encrypted. <span className="font-medium text-ink">Write</span> actions ask you
+              first unless you allow them.
             </span>
           </p>
           {sharedConnectionPlugins.length ? (
@@ -496,6 +640,101 @@ function ConnectPluginDialog({
 }
 
 /**
+ * Asking the workspace Owner for a plugin the workspace has not added (plugin marketplace,
+ * 2026-09-17). The same shape as ConnectPluginDialog on purpose — WarpTalk on one side, the plugin
+ * on the other — because it is the same moment for the member: they want this plugin.
+ */
+function RequestPluginDialog({
+  plugin,
+  workspaceName,
+  isSending,
+  onClose,
+  onSend,
+}: {
+  plugin: AssistantPluginCatalogItemDto;
+  workspaceName: string | null;
+  isSending: boolean;
+  onClose: () => void;
+  onSend: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Ask for ${plugin.label}`}
+        data-testid="plugin-request-dialog"
+        className="relative max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl"
+      >
+        <Button
+          type="button"
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Close request dialog"
+          onClick={onClose}
+          className="absolute right-4 top-4"
+        >
+          <X size={16} />
+        </Button>
+
+        <div className="flex flex-col items-center gap-5 text-center">
+          <div className="flex items-center gap-4">
+            <div className="grid size-14 place-items-center rounded-xl border border-border bg-surface-1">
+              <WarpTalkBrand compact className="h-6 w-[27px]" />
+            </div>
+            <span aria-hidden className="flex w-12 items-center gap-1.5 text-ink-subtle">
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+              <ShieldCheck size={15} />
+              <span className="h-px flex-1 border-t border-dashed border-border" />
+            </span>
+            <PluginGlyph plugin={plugin} size="lg" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold leading-snug tracking-tight">Ask for {plugin.label}</h2>
+            <p className="mx-auto mt-1.5 max-w-[400px] text-sm text-ink-muted">
+              Only a workspace owner can add plugins to {workspaceName?.trim() || "this workspace"}.
+              They&apos;ll get a notification, and you&apos;ll hear back either way.
+            </p>
+          </div>
+        </div>
+
+        <form
+          className="mt-5 flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSend(reason);
+          }}
+        >
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            <span>
+              Why do you need it? <span className="font-normal text-ink-muted">Optional</span>
+            </span>
+            <Textarea
+              value={reason}
+              maxLength={PLUGIN_REQUEST_REASON_MAX}
+              onChange={(event) => setReason(event.target.value)}
+              placeholder={`e.g. Use ${plugin.label} with meeting action items`}
+              className="min-h-20 bg-surface-1 text-sm"
+            />
+          </label>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSending}>
+              {isSending ? <Spinner className="animate-spin" size={14} /> : null}
+              Send request
+            </Button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+/**
  * How long after opening consent a focus event is still assumed to be the browser's, not the user's.
  *
  * A tab that opens behind the current one hands focus straight back, and a focus event in that same
@@ -544,12 +783,17 @@ export default function PluginsPage() {
   // workspace-shaped (the [workspaceSlug] route redirects here), and the store is where the rest of
   // the shell reads the active workspace on routes like this one.
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
 
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();
   const connectUrl = usePluginConnectUrl();
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
+  const updateToolPolicy = useUpdatePluginToolPolicy();
+  const requestPlugin = useRequestPlugin(workspaceId);
+  // The row whose Request dialog is open, by key for the same reason as selectedPluginKey below.
+  const [requestPluginKey, setRequestPluginKey] = useState<string | null>(null);
 
   const [query, setQuery] = useState("");
   // The KEY, not the row. Holding the object froze the dialog at the moment it opened: it kept
@@ -598,6 +842,11 @@ export default function PluginsPage() {
     [plugins, selectedPluginKey],
   );
 
+  const requestPluginRow = useMemo(
+    () => plugins.find((plugin) => plugin.key === requestPluginKey) ?? null,
+    [plugins, requestPluginKey],
+  );
+
   const consentPluginKey = consent?.pluginKey ?? null;
   const consentPlugin = useMemo(
     () => plugins.find((plugin) => plugin.key === consentPluginKey) ?? null,
@@ -643,13 +892,15 @@ export default function PluginsPage() {
     if (plugin.installationStatus !== "installed") {
       try {
         await installPlugin.mutateAsync({ pluginKey: plugin.key, workspaceId });
-        toast.success(`${plugin.label} installed`);
       } catch {
         // Without this the button simply does nothing on a 500: the label never changes, no
         // toast appears, and the only trace is an unhandled rejection in the console.
-        toast.error(`Could not install ${plugin.label}.`);
+        toast.error(`Could not connect ${plugin.label}.`);
+        return;
       }
-      return;
+      // WT-687: straight on to the connect dialog rather than stopping at "installed". Consent is
+      // not opened from here: the install awaited, and Safari and Firefox drop the click's
+      // pop-up permission across an await. The dialog's Continue is a fresh click that keeps it.
     }
 
     setSelectedPluginKey(plugin.key);
@@ -801,6 +1052,29 @@ export default function PluginsPage() {
     };
   }, [consent, settleConsent]);
 
+  async function sendPluginRequest(plugin: AssistantPluginCatalogItemDto, reason: string) {
+    if (!workspaceId) return;
+    try {
+      await requestPlugin.mutateAsync({ pluginKey: plugin.key, reason });
+      setRequestPluginKey(null);
+      toast.success("Request sent to your workspace owner");
+    } catch {
+      toast.error(`Could not ask for ${plugin.label}.`);
+    }
+  }
+
+  /** WT-687 — one tool or a whole group; the catalog refetch brings the resolved choices back. */
+  async function saveToolPolicy(
+    plugin: AssistantPluginCatalogItemDto,
+    tools: Record<string, PluginToolPolicy>,
+  ) {
+    try {
+      await updateToolPolicy.mutateAsync({ pluginKey: plugin.key, tools });
+    } catch {
+      toast.error(`Could not save what WarpBot may do in ${plugin.label}.`);
+    }
+  }
+
   async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
       await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
@@ -895,7 +1169,7 @@ export default function PluginsPage() {
       </section>
 
       <section className="flex flex-col gap-3">
-        <div className="border-b border-border pb-3">
+        <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
           {/* Was "Featured", above the entire catalog, when nothing selected the rows under it.
               `isFeatured` reaches this page now and drives the ordering, so featured rows really
               do come first — but they are still every row in one list, and heading the whole list
@@ -903,6 +1177,9 @@ export default function PluginsPage() {
               layout change (it has its own empty, filtered and two-column cases) and belongs with
               whoever designs it, not smuggled in behind a sort. */}
           <h2 className="text-sm font-semibold text-ink">All plugins</h2>
+          {workspaceId && workspaceName ? (
+            <span className="truncate text-xs text-ink-muted">{workspaceName} decides which ones you can connect</span>
+          ) : null}
         </div>
 
         {isLoading ? (
@@ -954,6 +1231,10 @@ export default function PluginsPage() {
               // is adding the plugin, so that is the only button that goes dead.
               const isInstalled = plugin.installationStatus === "installed";
               const isBlockedFromAdding = workspaceBlock !== null && !isInstalled;
+              // The marketplace's verdict, when the server sends one: a plugin the workspace has not
+              // added becomes a Request, and the old block notice is not rendered beside it.
+              const action = memberPluginAction(plugin, workspaceName);
+              const hasAvailability = plugin.workspaceAvailability != null;
 
               return (
                 <div
@@ -968,29 +1249,66 @@ export default function PluginsPage() {
                     <PluginGlyph plugin={plugin} />
                     <button
                       type="button"
-                      onClick={() => setSelectedPluginKey(plugin.key)}
+                      onClick={() =>
+                        action.kind === "connect" ? setSelectedPluginKey(plugin.key) : undefined
+                      }
                       className="min-w-0 text-left"
                     >
                       <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
-                      <div className="truncate text-xs text-ink-muted">{plugin.description}</div>
+                      <div className="truncate text-xs text-ink-muted">{action.subtitle ?? plugin.description}</div>
                     </button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
-                      onClick={() => void handlePrimaryAction(plugin)}
-                    >
-                      {pluginActionLabel(plugin)}
-                    </Button>
+                    {action.kind === "request" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!workspaceId || requestPlugin.isPending}
+                        onClick={() => setRequestPluginKey(plugin.key)}
+                      >
+                        Request
+                      </Button>
+                    ) : action.kind === "requested" ? (
+                      <Button type="button" size="sm" variant="outline" disabled>
+                        Requested
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
+                        onClick={() => void handlePrimaryAction(plugin)}
+                      >
+                        {pluginActionLabel(plugin)}
+                      </Button>
+                    )}
+                    {action.caption ? (
+                      <span
+                        data-testid="plugin-availability-caption"
+                        className="col-start-2 col-end-4 -mt-1.5 text-[11.5px] text-ink-subtle"
+                      >
+                        {action.caption}
+                      </span>
+                    ) : null}
                   </div>
-                  {workspaceBlock ? <WorkspaceBlockNotice block={workspaceBlock} /> : null}
+                  {/* A server older than the marketplace sends no availability, only the sentence. */}
+                  {workspaceBlock && !hasAvailability ? <WorkspaceBlockNotice block={workspaceBlock} /> : null}
                 </div>
               );
             })}
           </div>
         )}
       </section>
+
+      {requestPluginRow ? (
+        <RequestPluginDialog
+          plugin={requestPluginRow}
+          workspaceName={workspaceName}
+          isSending={requestPlugin.isPending}
+          onClose={() => setRequestPluginKey(null)}
+          onSend={(reason) => void sendPluginRequest(requestPluginRow, reason)}
+        />
+      ) : null}
 
       {selectedPlugin ? (
         <ConnectPluginDialog
@@ -1001,10 +1319,12 @@ export default function PluginsPage() {
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
+          isSavingToolPolicy={updateToolPolicy.isPending}
           onClose={() => setSelectedPluginKey(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
+          onToolPolicyChange={(tools) => void saveToolPolicy(selectedPlugin, tools)}
         />
       ) : null}
     </div>

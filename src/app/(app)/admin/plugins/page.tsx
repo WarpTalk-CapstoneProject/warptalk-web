@@ -8,6 +8,7 @@ import {
   ArrowsClockwise,
   CaretRight,
   MagnifyingGlass,
+  Plugs,
   Plus,
   PlugsConnected,
   Warning,
@@ -29,6 +30,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +47,7 @@ import {
   OAUTH_CLIENT_SOURCE_LABELS,
   PLUGIN_KIND_LABELS,
   RESERVED_PLUGIN_KEYS,
+  formatWorkspaceCount,
   toCreatePluginRequest,
   validateNewPlugin,
   type NewPluginDraft,
@@ -114,7 +122,7 @@ export default function AdminPluginsPage() {
         eyebrow="Configuration"
         eyebrowIcon={<PlugsConnected size={14} weight="fill" />}
         title="Plugin catalog"
-        description="Every row WarpBot offers, retired ones included. This is the whole life of a catalog row — add one, edit it, re-credential it, replace its tools, retire it — which until now meant SQL against a running database."
+        description="The marketplace, retired rows included. Workspace owners add these to their workspace; members connect with their own accounts. Private plugins a workspace creates for itself are not listed here."
         actions={
           <>
             <Button
@@ -132,10 +140,20 @@ export default function AdminPluginsPage() {
             {/* The action the whole "the catalog is data, not code" claim rests on. Without it the
                 screen could edit, re-credential and retire a row it had no way to create, and
                 adding an MCP app went back to being SQL against a running database. */}
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus size={14} />
-              Add MCP app
-            </Button>
+            {/* A menu with one item on purpose (owner, 2026-09-17): plugins are MCP only — there is
+                no skill-only kind — and the menu is where a second way to create one would go. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button size="sm" />}>
+                <Plus size={14} />
+                Create plugin
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px]">
+                <DropdownMenuItem onClick={() => setCreateOpen(true)} className="cursor-pointer gap-2">
+                  <Plugs size={14} />
+                  With MCP
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </>
         }
       />
@@ -244,6 +262,7 @@ export default function AdminPluginsPage() {
               <span className="w-[110px]">Provider</span>
               <span className="w-[90px]">State</span>
               <span className="w-[140px]">OAuth client</span>
+              <span className="w-[90px] text-right">Workspaces</span>
               <span className="w-[80px] text-right">Installs</span>
               <span className="w-[70px] text-right">Tools</span>
               <span className="w-[24px]" />
@@ -662,6 +681,14 @@ function CatalogRow({ row }: { row: AdminPluginCatalogListItemDto }) {
               {OAUTH_CLIENT_SOURCE_LABELS[row.oAuthClientSource] ?? row.oAuthClientSource}
             </span>
           )}
+        </span>
+        {/* Workspaces that have added the plugin to their list. A workspace still on the
+            pre-marketplace "every plugin" default has no list yet and is not counted. */}
+        <span
+          className="w-[90px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right"
+          title="Workspaces that have added this plugin"
+        >
+          {formatWorkspaceCount(row.workspaceCount)}
         </span>
         <span className="w-[80px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">
           {numberFormatter.format(row.installationCount)}

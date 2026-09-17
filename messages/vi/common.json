@@ -34,6 +34,7 @@
     "credits": "Tín dụng không gian làm việc",
     "creditsLoadFailed": "Không thể tải tín dụng không gian làm việc.",
     "lowBalance": "Sắp hết tín dụng — cuộc họp sẽ ngừng dịch khi dùng hết.",
+    "askOwnerToTopUp": "Hãy nhờ chủ sở hữu không gian làm việc nạp thêm tín dụng.",
     "memberFallback": "Thành viên",
     "internalFallback": "Nội bộ",
     "profileSettings": "Cài đặt hồ sơ",

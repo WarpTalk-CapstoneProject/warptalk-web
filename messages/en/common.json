@@ -34,6 +34,7 @@
     "credits": "Workspace credits",
     "creditsLoadFailed": "Couldn't load workspace credits.",
     "lowBalance": "Low balance — meetings stop translating when this runs out.",
+    "askOwnerToTopUp": "Ask a workspace owner to top up.",
     "memberFallback": "Member",
     "internalFallback": "Internal",
     "profileSettings": "Profile settings",

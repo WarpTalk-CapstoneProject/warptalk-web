@@ -82,6 +82,11 @@
     "allowPersonalPlugins": {
       "label": "Cho phép plugin cá nhân",
       "description": "Cho phép thành viên dùng plugin đã kết nối của họ trong hội thoại WarpBot cho không gian làm việc này."
+    },
+    "plugins": {
+      "label": "Plugin",
+      "description": "Chọn plugin mà thành viên của không gian làm việc này có thể kết nối trong WarpBot.",
+      "managePlugins": "Quản lý plugin"
     }
   },
   "aiTranslation": {

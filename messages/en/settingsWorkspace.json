@@ -82,6 +82,11 @@
     "allowPersonalPlugins": {
       "label": "Allow personal plugins",
       "description": "Allow members to use their connected plugins in WarpBot conversations for this workspace."
+    },
+    "plugins": {
+      "label": "Plugins",
+      "description": "Choose which plugins members of this workspace can connect in WarpBot.",
+      "managePlugins": "Manage plugins"
     }
   },
   "aiTranslation": {
