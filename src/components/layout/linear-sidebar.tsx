@@ -102,6 +102,24 @@ interface NavItem {
   }>;
 }
 
+/**
+ * The one selected/hover treatment every sidebar row uses.
+ *
+ * The rail sits on `bg-canvas` (#f1f2f4), and the old selected fill was `bg-surface-2` (#f0f1f4) —
+ * one step apart, so the row the reader was on was effectively invisible (owner, 2026-09-17: "sidebar
+ * cần có selected như openai"). `surface-3` is the first level that reads against the canvas in
+ * both themes, and the icon and label go to full ink so the selection does not rest on the fill
+ * alone. Hover stays a lighter wash of the same colour, so hovered and selected never look alike.
+ *
+ * Fifteen settings rows used to spell the ternary out by hand, which is how they all drifted to
+ * the invisible value together. They call this instead.
+ */
+function navRowTone(active: boolean): string {
+  return active
+    ? "bg-surface-3 text-ink [&_svg]:text-ink [&_span]:text-ink"
+    : "hover:bg-surface-3/60";
+}
+
 function NavLink({
   item,
   pathname,
@@ -118,13 +136,13 @@ function NavLink({
     <div
       data-tour={item.tourId}
       className={cn(
-        "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
+        "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
         collapsed && "mx-auto size-9 justify-center rounded-full px-0",
         isActive
           ? collapsed
             ? "bg-surface-3 text-ink"
-            : "bg-surface-2"
-          : "hover:bg-surface-2",
+            : navRowTone(true)
+          : navRowTone(false),
       )}
     >
       <Link
@@ -770,8 +788,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
           <div className="flex flex-col gap-px">
             <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === `/${activeWorkspaceSlug}/settings/account/preferences` ? "bg-surface-2" : "hover:bg-surface-2"
+              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+              navRowTone(pathname === `/${activeWorkspaceSlug}/settings/account/preferences`)
             )}>
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/preferences` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Sliders size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -782,8 +800,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
 
             <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === `/${activeWorkspaceSlug}/settings/account/profile` ? "bg-surface-2" : "hover:bg-surface-2"
+              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+              navRowTone(pathname === `/${activeWorkspaceSlug}/settings/account/profile`)
             )}>
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -794,8 +812,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
 
             <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === `/${activeWorkspaceSlug}/settings/account/notifications` ? "bg-surface-2" : "hover:bg-surface-2"
+              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+              navRowTone(pathname === `/${activeWorkspaceSlug}/settings/account/notifications`)
             )}>
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/notifications` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Bell size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -806,8 +824,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
 
             <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === `/${activeWorkspaceSlug}/settings/account/connected-accounts` ? "bg-surface-2" : "hover:bg-surface-2"
+              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+              navRowTone(pathname === `/${activeWorkspaceSlug}/settings/account/connected-accounts`)
             )}>
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/connected-accounts` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <LinkSimple size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -818,8 +836,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
 
             <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === `/${activeWorkspaceSlug}/settings/account/sessions` ? "bg-surface-2" : "hover:bg-surface-2"
+              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+              navRowTone(pathname === `/${activeWorkspaceSlug}/settings/account/sessions`)
             )}>
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/sessions` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Devices size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -830,8 +848,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             </div>
 
             <div className={cn(
-              "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-              pathname === "/settings/plugins" ? "bg-surface-2" : "hover:bg-surface-2"
+              "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+              navRowTone(pathname === "/settings/plugins")
             )}>
               <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -848,8 +866,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Workspace</span>
                 </div>
                 <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings` ? "bg-surface-2" : "hover:bg-surface-2"
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings`)
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -861,8 +879,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 {/* Plugin activity sits under Workspace Settings: that page holds the one plugin switch,
                     and this is the record of what it let through and refused. Owner/Admin. */}
                 <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings/plugin-activity` ? "bg-surface-2" : "hover:bg-surface-2"
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/plugin-activity`)
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings/plugin-activity`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -880,11 +898,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     the plan grid sends a buyer, and losing the highlight there is the one moment
                     they most need the way back. */}
                 <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings/billing` ||
-                    pathname.startsWith(`/${activeWorkspaceSlug}/payment`)
-                    ? "bg-surface-2"
-                    : "hover:bg-surface-2"
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(
+                    pathname === `/${activeWorkspaceSlug}/settings/billing` ||
+                      pathname.startsWith(`/${activeWorkspaceSlug}/payment`),
+                  )
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings/billing`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -894,8 +912,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   </Link>
                 </div>
                 <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings/billing/usage` ? "bg-surface-2" : "hover:bg-surface-2"
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/billing/usage`)
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -905,8 +923,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   </Link>
                 </div>
                 <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings/billing/invoices` ? "bg-surface-2" : "hover:bg-surface-2"
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/billing/invoices`)
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings/billing/invoices`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -916,8 +934,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   </Link>
                 </div>
                 <div className={cn(
-                  "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                  pathname === `/${activeWorkspaceSlug}/settings/features` ? "bg-surface-2" : "hover:bg-surface-2"
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/features`)
                 )}>
                   <Link href={`/${activeWorkspaceSlug}/settings/features`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ListChecks size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -928,8 +946,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 </div>
                 {role?.toLowerCase() === "owner" && (
                   <div className={cn(
-                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/settings/member-roles` ? "bg-surface-2" : "hover:bg-surface-2"
+                    "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                    navRowTone(pathname === `/${activeWorkspaceSlug}/settings/member-roles`)
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/settings/member-roles`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -939,8 +957,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 )}
                 {isOwnerOrAdmin && (
                   <div className={cn(
-                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/settings/security` ? "bg-surface-2" : "hover:bg-surface-2"
+                    "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                    navRowTone(pathname === `/${activeWorkspaceSlug}/settings/security`)
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/settings/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <ShieldCheck size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
@@ -952,8 +970,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 )}
                 {isOwnerOrAdmin && (
                   <div className={cn(
-                    "group flex items-center h-[30px] px-2 rounded-[6px] text-[13px] transition-colors relative",
-                    pathname === `/${activeWorkspaceSlug}/settings/audit-log` ? "bg-surface-2" : "hover:bg-surface-2"
+                    "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                    navRowTone(pathname === `/${activeWorkspaceSlug}/settings/audit-log`)
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/settings/audit-log`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
