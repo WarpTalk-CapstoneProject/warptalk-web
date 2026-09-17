@@ -15,6 +15,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { MagnifyingGlass, PaperPlaneTilt, WarningCircle, X } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -39,18 +40,10 @@ import {
   typeRequiresDowntime,
   validateAnnouncementDraft,
   type AnnouncementDraft,
-  type AnnouncementType,
   type CreateAdminAnnouncementRequest,
 } from "@/lib/notifications/announcement-draft";
 import { cn } from "@/lib/utils";
 import type { AdminUserSummaryDto } from "@/types/admin-user";
-
-const TYPE_LABELS: Record<AnnouncementType, { label: string; hint: string }> = {
-  ANNOUNCEMENT: { label: "Announcement", hint: "General news from the platform." },
-  PROMOTION: { label: "Promotion", hint: "Carries an offer, a link and a discount code." },
-  MAINTENANCE: { label: "Maintenance", hint: "States a downtime window. Both ends required." },
-  SYSTEM: { label: "System", hint: "The platform speaking about itself. No links, no offers." },
-};
 
 export function AnnouncementComposer({
   open,
@@ -92,6 +85,7 @@ function ComposerForm({
   onSent: () => void;
   isSending: boolean;
 }) {
+  const t = useTranslations("adminAnnouncements.composer");
   const [draft, setDraft] = useState<AnnouncementDraft>(() => emptyAnnouncementDraft());
   const [recipients, setRecipients] = useState<AdminUserSummaryDto[]>([]);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -132,7 +126,7 @@ function ComposerForm({
       await onSend(buildCreateRequest(withRecipients));
       onSent();
     } catch (err) {
-      setError(getErrorMessage(err, "The announcement could not be sent."));
+      setError(getErrorMessage(err, t("sendFailed")));
       setIsConfirming(false);
     }
   };
@@ -153,15 +147,13 @@ function ComposerForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Compose an announcement</DialogTitle>
-        <DialogDescription>
-          Delivered to the people you name, once. There is no draft, no schedule and no recall.
-        </DialogDescription>
+        <DialogTitle>{t("title")}</DialogTitle>
+        <DialogDescription>{t("description")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-5">
         <div>
-          <Label className="text-[12px] text-ink-muted">Type</Label>
+          <Label className="text-[12px] text-ink-muted">{t("typeLabel")}</Label>
           <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
             {ANNOUNCEMENT_TYPES.map((type) => (
               <button
@@ -175,14 +167,14 @@ function ComposerForm({
                     : "border-hairline/60 hover:bg-surface-2",
                 )}
               >
-                <span className="block text-[13px] font-medium">{TYPE_LABELS[type].label}</span>
+                <span className="block text-[13px] font-medium">{t(`types.${type}.label`)}</span>
                 <span
                   className={cn(
                     "mt-0.5 block text-[11px]",
                     draft.type === type ? "text-surface-1/70" : "text-ink-subtle",
                   )}
                 >
-                  {TYPE_LABELS[type].hint}
+                  {t(`types.${type}.hint`)}
                 </span>
               </button>
             ))}
@@ -191,7 +183,7 @@ function ComposerForm({
 
         <div>
           <Label htmlFor="announcement-title" className="text-[12px] text-ink-muted">
-            Title
+            {t("titleLabel")}
           </Label>
           <Input
             id="announcement-title"
@@ -204,7 +196,7 @@ function ComposerForm({
 
         <div>
           <Label htmlFor="announcement-content" className="text-[12px] text-ink-muted">
-            Message
+            {t("messageLabel")}
           </Label>
           <Textarea
             id="announcement-content"
@@ -213,16 +205,14 @@ function ComposerForm({
             value={draft.content}
             onChange={(event) => set("content", event.target.value)}
           />
-          <p className="mt-1 text-[11px] text-ink-subtle">
-            Plain text. The notification service refuses anything that looks like an HTML tag.
-          </p>
+          <p className="mt-1 text-[11px] text-ink-subtle">{t("messageHint")}</p>
         </div>
 
         {typeAllowsPayloadFields(draft.type) ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label htmlFor="announcement-cta" className="text-[12px] text-ink-muted">
-                Call-to-action link <span className="text-ink-subtle">(optional)</span>
+                {t("ctaLabel")} <span className="text-ink-subtle">{t("optional")}</span>
               </Label>
               <Input
                 id="announcement-cta"
@@ -234,7 +224,7 @@ function ComposerForm({
             </div>
             <div>
               <Label htmlFor="announcement-image" className="text-[12px] text-ink-muted">
-                Image URL <span className="text-ink-subtle">(optional)</span>
+                {t("imageLabel")} <span className="text-ink-subtle">{t("optional")}</span>
               </Label>
               <Input
                 id="announcement-image"
@@ -246,7 +236,7 @@ function ComposerForm({
             </div>
             <div>
               <Label htmlFor="announcement-discount" className="text-[12px] text-ink-muted">
-                Discount code <span className="text-ink-subtle">(optional)</span>
+                {t("discountLabel")} <span className="text-ink-subtle">{t("optional")}</span>
               </Label>
               <Input
                 id="announcement-discount"
@@ -260,8 +250,7 @@ function ComposerForm({
           // Said, not merely hidden. A reader who used these on the last notice needs to know they
           // are gone on purpose rather than wonder where the fields went.
           <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 text-[12px] text-ink-muted">
-            A system notice carries no link, image or discount code. The service refuses them on
-            this type.
+            {t("noPayloadFields")}
           </p>
         )}
 
@@ -269,7 +258,7 @@ function ComposerForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="announcement-downtime-start" className="text-[12px] text-ink-muted">
-                Downtime starts
+                {t("downtimeStartLabel")}
               </Label>
               <Input
                 id="announcement-downtime-start"
@@ -281,7 +270,7 @@ function ComposerForm({
             </div>
             <div>
               <Label htmlFor="announcement-downtime-end" className="text-[12px] text-ink-muted">
-                Downtime ends
+                {t("downtimeEndLabel")}
               </Label>
               <Input
                 id="announcement-downtime-end"
@@ -291,9 +280,7 @@ function ComposerForm({
                 onChange={(event) => set("downtimeEnd", event.target.value)}
               />
             </div>
-            <p className="text-[11px] text-ink-subtle sm:col-span-2">
-              Entered in your own time zone and sent as an absolute instant.
-            </p>
+            <p className="text-[11px] text-ink-subtle sm:col-span-2">{t("downtimeHint")}</p>
           </div>
         ) : null}
 
@@ -321,10 +308,10 @@ function ComposerForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSending}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={handleReview} disabled={isSending}>
-          Review before sending
+          {t("review")}
         </Button>
       </DialogFooter>
     </>
@@ -340,6 +327,7 @@ function RecipientPicker({
   onToggle: (user: AdminUserSummaryDto) => void;
   onClear: () => void;
 }) {
+  const t = useTranslations("adminAnnouncements.composer.recipients");
   const [search, setSearch] = useState("");
 
   /**
@@ -361,12 +349,12 @@ function RecipientPicker({
     <div>
       <div className="flex items-baseline justify-between gap-3">
         <Label htmlFor="announcement-recipients" className="text-[12px] text-ink-muted">
-          Recipients
+          {t("label")}
         </Label>
         <span className="text-[11px] text-ink-subtle">
           {selected.length === 0
-            ? "Nobody selected"
-            : `${selected.length} selected`}
+            ? t("nobodySelected")
+            : t("selectedCount", { count: selected.length })}
         </span>
       </div>
 
@@ -378,7 +366,7 @@ function RecipientPicker({
         <Input
           id="announcement-recipients"
           className="pl-8"
-          placeholder="Search the platform directory by name or email"
+          placeholder={t("searchPlaceholder")}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -387,13 +375,11 @@ function RecipientPicker({
       {search.trim() ? (
         <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-hairline/60">
           {directory.isPending ? (
-            <p className="px-3 py-3 text-[12px] text-ink-muted">Searching…</p>
+            <p className="px-3 py-3 text-[12px] text-ink-muted">{t("searching")}</p>
           ) : directory.isError ? (
-            <p className="px-3 py-3 text-[12px] text-destructive">
-              The user directory could not be read.
-            </p>
+            <p className="px-3 py-3 text-[12px] text-destructive">{t("directoryError")}</p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-3 text-[12px] text-ink-muted">No account matches that.</p>
+            <p className="px-3 py-3 text-[12px] text-ink-muted">{t("noMatch")}</p>
           ) : (
             <ul>
               {results.map((user) => {
@@ -417,7 +403,7 @@ function RecipientPicker({
                           isSelected ? "text-ink" : "text-ink-subtle",
                         )}
                       >
-                        {isSelected ? "Selected" : "Add"}
+                        {isSelected ? t("selected") : t("add")}
                       </span>
                     </button>
                   </li>
@@ -438,7 +424,7 @@ function RecipientPicker({
               {user.email}
               <button
                 type="button"
-                aria-label={`Remove ${user.email}`}
+                aria-label={t("remove", { email: user.email })}
                 onClick={() => onToggle(user)}
                 className="grid size-4 place-items-center rounded-full text-ink-subtle hover:bg-surface-1 hover:text-ink"
               >
@@ -447,15 +433,12 @@ function RecipientPicker({
             </span>
           ))}
           <Button variant="ghost" size="sm" onClick={onClear} className="h-6 px-2 text-[11px]">
-            Clear
+            {t("clear")}
           </Button>
         </div>
       ) : null}
 
-      <p className="mt-1.5 text-[11px] text-ink-subtle">
-        A named list only. The service accepts no &ldquo;everyone&rdquo; audience until a segment
-        resolver exists.
-      </p>
+      <p className="mt-1.5 text-[11px] text-ink-subtle">{t("footerNote")}</p>
     </div>
   );
 }
@@ -475,6 +458,7 @@ function ConfirmStep({
   onBack: () => void;
   onSend: () => void;
 }) {
+  const t = useTranslations("adminAnnouncements.composer");
   // Named in full up to a point, then counted. Ten addresses can be read; two hundred cannot, and
   // a wall of them would be scrolled past rather than checked.
   const NAMED = 10;
@@ -484,17 +468,14 @@ function ConfirmStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Send this announcement?</DialogTitle>
-        <DialogDescription>
-          It reaches everyone below as soon as you confirm. It cannot be edited, recalled or
-          deleted afterwards.
-        </DialogDescription>
+        <DialogTitle>{t("confirm.title")}</DialogTitle>
+        <DialogDescription>{t("confirm.description")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-4">
         <div className="rounded-lg border border-hairline/60 p-3">
           <p className="text-[11px] uppercase tracking-wide text-ink-subtle">
-            {TYPE_LABELS[draft.type].label}
+            {t(`types.${draft.type}.label`)}
           </p>
           <p className="mt-1 text-[14px] font-medium text-ink">{draft.title}</p>
           <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-muted">{draft.content}</p>
@@ -502,11 +483,11 @@ function ConfirmStep({
 
         <div className="rounded-lg border border-hairline/60 p-3">
           <p className="text-[12px] font-medium text-ink">
-            {recipients.length} {recipients.length === 1 ? "recipient" : "recipients"}
+            {t("confirm.recipientCount", { count: recipients.length })}
           </p>
           <p className="mt-1.5 text-[12px] leading-5 text-ink-muted">
             {named.map((user) => user.email).join(", ")}
-            {remaining > 0 ? ` and ${remaining} more` : ""}
+            {remaining > 0 ? ` ${t("confirm.andMore", { count: remaining })}` : ""}
           </p>
         </div>
 
@@ -523,11 +504,11 @@ function ConfirmStep({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onBack} disabled={isSending}>
-          Back
+          {t("confirm.back")}
         </Button>
         <Button onClick={onSend} disabled={isSending}>
           <PaperPlaneTilt size={14} weight="fill" />
-          {isSending ? "Sending…" : `Send to ${recipients.length}`}
+          {isSending ? t("confirm.sending") : t("confirm.send", { count: recipients.length })}
         </Button>
       </DialogFooter>
     </>

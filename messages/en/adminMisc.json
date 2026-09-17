@@ -1,0 +1,246 @@
+{
+  "overview": {
+    "eyebrow": "Platform control center",
+    "title": "Overview",
+    "description": "Live health, credit movement, and adoption across every WarpTalk workspace.",
+    "liveData": "Live data",
+    "metricsError": "Platform metrics could not be loaded. Check the billing service and your admin session.",
+    "suspended": {
+      "banner": "{count, plural, one {# workspace is} other {# workspaces are}} suspended",
+      "description": "Nothing lifts a suspension on its own — each one stays closed until an admin reactivates it.",
+      "review": "Review →"
+    },
+    "metrics": {
+      "activeWorkspaces": {
+        "label": "Active workspaces",
+        "helper": "Workspaces currently active on the platform"
+      },
+      "creditsConsumed": {
+        "label": "Credits consumed",
+        "helper": "Consumption in the current month"
+      },
+      "platformBalance": {
+        "label": "Platform balance",
+        "helper": "Credits available across all workspaces"
+      },
+      "auditActivity": {
+        "label": "Audit activity",
+        "helper": "Ledger events recorded in the last 30 days"
+      }
+    },
+    "usage": {
+      "title": "Usage",
+      "subtitle": "Credits consumed and topped up, by month, {year}",
+      "consumedSuffix": "cr consumed",
+      "error": "The usage chart could not be loaded.",
+      "tooltip": "{month}: {consumed} consumed · {toppedUp} topped up",
+      "consumed": "Consumed",
+      "toppedUp": "Topped up"
+    },
+    "liveOperations": {
+      "title": "Live operations",
+      "subtitle": "Credit anomalies requiring review",
+      "error": "Operations feed is unavailable.",
+      "empty": "All systems look quiet — no unusual credit consumption detected.",
+      "openCount": "{count} open"
+    },
+    "topWorkspaces": {
+      "title": "Top workspaces",
+      "subtitle": "Highest credit consumption, last 30 days",
+      "error": "Top workspaces could not be loaded.",
+      "empty": "No billable usage in the last 30 days."
+    },
+    "featureAdoption": {
+      "title": "Feature adoption",
+      "subtitle": "Credit consumption by service, last 30 days",
+      "error": "The service breakdown could not be loaded.",
+      "empty": "Nothing billed in the last 30 days."
+    }
+  },
+  "salesLeads": {
+    "eyebrow": "Revenue",
+    "title": "Sales leads",
+    "description": "Every contact-sales request on the platform, newest first.",
+    "refresh": "Refresh",
+    "statusLabels": {
+      "new": "New",
+      "reviewing": "Reviewing",
+      "quoted": "Quoted",
+      "converted": "Converted",
+      "closed": "Closed"
+    },
+    "allTab": "All",
+    "leadStatusAria": "Lead status",
+    "loading": "Loading…",
+    "leadCount": "{count, plural, one {# lead} other {# leads}}",
+    "statusUpdated": "{company} marked {status}",
+    "statusUpdateFailed": "The lead status could not be updated.",
+    "searchPlaceholder": "Search name, email or company",
+    "searchAria": "Search leads",
+    "search": "Search",
+    "error": {
+      "title": "Sales leads could not be loaded.",
+      "description": "Check the billing service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No leads match this filter",
+      "description": "Pick a different status tab or clear the search."
+    },
+    "openWorkspace": "Open workspace",
+    "noWorkspaceYet": "No workspace yet",
+    "meetingsPerMonthNow": "{count} meetings / month now",
+    "expectedInSixMonths": "{count} in six months",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "statusAria": "Status for {company}",
+    "seats": "{count, plural, one {# seat} other {# seats}}",
+    "creditsPerMonth": "{count} credits / month",
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next"
+    }
+  },
+  "meetings": {
+    "eyebrow": "Operations",
+    "title": "Meetings",
+    "description": "Every translation room on the platform. Metadata only — no transcripts, no room controls.",
+    "refresh": "Refresh",
+    "liveCount": "{count} live",
+    "startedToday": "{count} started today",
+    "statusTabs": {
+      "all": "All",
+      "live": "Live now",
+      "scheduled": "Scheduled",
+      "ended": "Ended",
+      "cancelled": "Cancelled",
+      "failed": "Failed",
+      "expired": "Expired"
+    },
+    "meetingStatusAria": "Meeting status",
+    "loading": "Loading…",
+    "meetingCount": "{count, plural, one {# meeting} other {# meetings}}",
+    "sort": {
+      "label": "Sort",
+      "recentDesc": "Most recent",
+      "recentAsc": "Oldest",
+      "durationDesc": "Longest"
+    },
+    "error": {
+      "title": "Meetings could not be loaded.",
+      "description": "Check the translation-room service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No meetings match this filter",
+      "description": "Pick a different status tab."
+    },
+    "openWorkspace": "workspace",
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "footerNote": "There is no way to open or listen to a meeting from here, by design. This screen reports that a meeting happened; what was said in it belongs to the workspace that held it."
+  },
+  "feedback": {
+    "eyebrow": "Operations",
+    "title": "Feedback",
+    "description": "What participants said about the product after a meeting ended. Aggregated, and shown without who said it.",
+    "refresh": "Refresh",
+    "rangeTabs": {
+      "7": "7 days",
+      "30": "30 days",
+      "90": "90 days",
+      "365": "12 months"
+    },
+    "reportingWindowAria": "Reporting window",
+    "loading": "Loading…",
+    "responseCount": "{count, plural, one {# response} other {# responses}}",
+    "error": {
+      "title": "Feedback could not be loaded.",
+      "description": "Check the translation-room service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "stats": {
+      "responses": "Responses",
+      "meetingsRated": "Meetings rated",
+      "ofEnded": "of {count} ended",
+      "responseRate": "Response rate"
+    },
+    "dimensions": {
+      "title": "Ratings by dimension",
+      "empty": "No ratings were submitted in this window.",
+      "ratedCount": "{count} rated",
+      "thinSample": "· thin sample",
+      "ratingTooltip": "{rating}★ — {count, plural, one {# response} other {# responses}}"
+    },
+    "comments": {
+      "title": "Comments",
+      "error": "Comments could not be loaded.",
+      "empty": "Nobody left a written comment in this window."
+    },
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "footerNote": "Read-only, and anonymous by construction — the API does not send who wrote a comment. A rating an administrator could edit or delete would not be worth reading."
+  },
+  "audit": {
+    "eyebrow": "Operations",
+    "title": "Audit log",
+    "description": "Every administrative action across the platform, who performed it, and why.",
+    "refresh": "Refresh",
+    "resultTabs": {
+      "all": "All",
+      "succeeded": "Succeeded",
+      "failed": "Failed"
+    },
+    "actionResultAria": "Action result",
+    "loading": "Loading…",
+    "entryCount": "{count, plural, one {# entry} other {# entries}}",
+    "error": {
+      "title": "The audit log could not be loaded.",
+      "description": "Check the workspace service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No administrative actions match this filter",
+      "description": "Nothing has been recorded here yet, or the filter excludes it."
+    },
+    "noReasonRecorded": "— no reason recorded",
+    "failedBadge": "failed",
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next"
+    }
+  },
+  "emailTemplates": {
+    "eyebrow": "Operations",
+    "title": "Email templates",
+    "description": "Every email the platform sends, where its content lives, and what fills it in.",
+    "notEditableNotice": "These emails are composed in code by the service that sends them, so they are not editable here. Changing a subject or body is a code change in that service.",
+    "tabs": {
+      "all": "All",
+      "live": "Live",
+      "dormant": "Dormant"
+    },
+    "filterAria": "Filter emails by status",
+    "emailCount": "{count, plural, one {# email} other {# emails}}",
+    "statusLive": "Live",
+    "statusDormant": "Dormant",
+    "detail": {
+      "whyDormant": "Why dormant",
+      "subject": "Subject",
+      "sentWhen": "Sent when",
+      "sentBy": "Sent by",
+      "sentByValue": "{service} via {provider}",
+      "body": "Body",
+      "variables": "Variables",
+      "source": "Source"
+    }
+  }
+}

@@ -463,54 +463,54 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   if (isAdminPage && isSystemAdmin) {
     const adminSections: Array<{ section: string; items: NavItem[] }> = [
       {
-        section: "Platform",
+        section: t("adminNav.sections.platform"),
         items: [
           // Exact, or every /admin/* page lights this row up too: NavLink treats a non-exact item
           // as active for anything beneath its href, and every admin page is beneath /admin.
-          { icon: Gauge, label: "Overview", href: "/admin", exact: true },
-          { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
+          { icon: Gauge, label: t("adminNav.items.overview"), href: "/admin", exact: true },
+          { icon: Buildings, label: t("adminNav.items.workspaces"), href: "/admin/workspaces" },
           // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
           // "Users" is the same word the workspace sidebar uses for that workspace's members —
           // two very different populations under one label, in a console where the difference is
           // the whole point. The route keeps its path; only what a person reads changes.
-          { icon: Users, label: "Accounts", href: "/admin/users" },
+          { icon: Users, label: t("adminNav.items.accounts"), href: "/admin/users" },
         ],
       },
       {
-        section: "Revenue",
+        section: t("adminNav.sections.revenue"),
         items: [
-          { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
-          { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
-          { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
-          { icon: Handshake, label: "Sales leads", href: "/admin/sales-leads" },
+          { icon: Gauge, label: t("adminNav.items.subscriptions"), href: "/admin/subscriptions" },
+          { icon: FileText, label: t("adminNav.items.plansAndPricing"), href: "/admin/plans" },
+          { icon: CreditCard, label: t("adminNav.items.billingLedger"), href: "/admin/billing" },
+          { icon: Handshake, label: t("adminNav.items.salesLeads"), href: "/admin/sales-leads" },
         ],
       },
       {
-        section: "Operations",
+        section: t("adminNav.sections.operations"),
         items: [
-          { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
-          { icon: Heartbeat, label: "System health", href: "/admin/health" },
-          { icon: Tray, label: "Event outbox", href: "/admin/outbox" },
-          { icon: Star, label: "Feedback", href: "/admin/feedback" },
-          { icon: Archive, label: "Audit log", href: "/admin/audit" },
-          { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
-          { icon: EnvelopeSimple, label: "Email templates", href: "/admin/email-templates" },
+          { icon: SquaresFour, label: t("adminNav.items.meetings"), href: "/admin/meetings" },
+          { icon: Heartbeat, label: t("adminNav.items.systemHealth"), href: "/admin/health" },
+          { icon: Tray, label: t("adminNav.items.eventOutbox"), href: "/admin/outbox" },
+          { icon: Star, label: t("adminNav.items.feedback"), href: "/admin/feedback" },
+          { icon: Archive, label: t("adminNav.items.auditLog"), href: "/admin/audit" },
+          { icon: PaperPlaneTilt, label: t("adminNav.items.announcements"), href: "/admin/announcements" },
+          { icon: EnvelopeSimple, label: t("adminNav.items.emailTemplates"), href: "/admin/email-templates" },
         ],
       },
       {
-        section: "Configuration",
+        section: t("adminNav.sections.configuration"),
         items: [
           // One row, not two. "Platform config" was a second route for the same subject — the
           // read-only half — and an admin looking for what the platform is configured to do had to
           // guess which of the two words it lived under. Merged into the page below on 2026-09-16;
           // the read-only boundary is now a band inside it.
-          { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
+          { icon: GearSix, label: t("adminNav.items.platformSettings"), href: "/admin/settings" },
           // Beside Platform config because it is the same kind of thing: reference data the whole
           // platform runs on. Unlike that page it is writable, which is the point of WT-646 — the
           // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
           // a SQL job rather than a screen.
-          { icon: PlugsConnected, label: "Plugins", href: "/admin/plugins" },
-          { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
+          { icon: PlugsConnected, label: t("adminNav.items.plugins"), href: "/admin/plugins" },
+          { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
         ],
       },
     ];
@@ -537,8 +537,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {backHref && (
               <Link
                 href={backHref}
-                title="Back to app"
-                aria-label="Back to app"
+                title={t("adminNav.backToApp")}
+                aria-label={t("adminNav.backToApp")}
                 className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <CaretLeft size={16} weight="bold" />
@@ -565,8 +565,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <div className="grid shrink-0 place-items-center border-t border-border/30 py-3">
             <button
               onClick={() => logout()}
-              title="Log out"
-              aria-label="Log out"
+              title={t("adminNav.logOut")}
+              aria-label={t("adminNav.logOut")}
               className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <SignOut size={16} weight="duotone" />
@@ -585,13 +585,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <CaretLeft size={14} weight="bold" />
-              <span>Back to app</span>
+              <span>{t("adminNav.backToApp")}</span>
             </Link>
           ) : (
             // Same height and padding as the link so the header does not jump between an admin
             // who has a workspace and one who does not.
             <span className="-ml-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted/50">
-              Platform console
+              {t("adminNav.platformConsole")}
             </span>
           )}
         </div>
@@ -604,7 +604,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             <ShieldCheck size={13} weight="fill" />
           </span>
           <span className="truncate text-[13px] font-semibold tracking-tight text-ink">
-            WarpTalk Platform
+            {t("adminNav.platformName")}
           </span>
         </div>
 
@@ -637,14 +637,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <p className="truncate text-[12.5px] font-medium text-ink">
                 {user.fullName || user.email}
               </p>
-              <p className="truncate text-[11px] text-ink-subtle">Platform admin</p>
+              <p className="truncate text-[11px] text-ink-subtle">{t("adminNav.platformAdmin")}</p>
             </div>
             {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
                 and a control nobody can see shipped once already as "no way to sign out". */}
             <button
               onClick={() => logout()}
-              title="Log out"
-              aria-label="Log out"
+              title={t("adminNav.logOut")}
+              aria-label={t("adminNav.logOut")}
               className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <SignOut size={16} weight="duotone" />

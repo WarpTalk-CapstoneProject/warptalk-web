@@ -83,6 +83,38 @@
       "billing": "Billing",
       "globalGlossary": "Global Glossary"
     },
+    "adminNav": {
+      "backToApp": "Back to app",
+      "platformConsole": "Platform console",
+      "platformName": "WarpTalk Platform",
+      "logOut": "Log out",
+      "platformAdmin": "Platform admin",
+      "sections": {
+        "platform": "Platform",
+        "revenue": "Revenue",
+        "operations": "Operations",
+        "configuration": "Configuration"
+      },
+      "items": {
+        "overview": "Overview",
+        "workspaces": "Workspaces",
+        "accounts": "Accounts",
+        "subscriptions": "Subscriptions",
+        "plansAndPricing": "Plans & pricing",
+        "billingLedger": "Billing ledger",
+        "salesLeads": "Sales leads",
+        "meetings": "Meetings",
+        "systemHealth": "System health",
+        "eventOutbox": "Event outbox",
+        "feedback": "Feedback",
+        "auditLog": "Audit log",
+        "announcements": "Announcements",
+        "emailTemplates": "Email templates",
+        "platformSettings": "Platform settings",
+        "plugins": "Plugins",
+        "globalGlossary": "Global glossary"
+      }
+    },
     "settingsNav": {
       "backToApp": "Back to app",
       "personal": "Personal",
@@ -125,9 +157,132 @@
       "open": "Open"
     }
   },
+  "notifications": {
+    "ariaLabel": "Notifications",
+    "ariaLabelUnread": "Notifications, {count} unread"
+  },
+  "soundToggle": {
+    "titleMuted": "Notification sounds are off",
+    "titleUnmuted": "Notification sounds are on",
+    "ariaTurnOn": "Turn notification sounds on",
+    "ariaTurnOff": "Turn notification sounds off"
+  },
+  "themeToggle": {
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode"
+  },
+  "productTour": {
+    "ariaLabel": "Product tour",
+    "closeTour": "Close the tour",
+    "skipTour": "Skip the tour",
+    "previousStep": "Previous step",
+    "done": "Done",
+    "next": "Next"
+  },
+  "workspaceMembersPanel": {
+    "pickWorkspace": "Pick a workspace to see who is in it.",
+    "loading": "Loading members…",
+    "loadError": "Could not load the member list.",
+    "aroundNow": "{online} of {total} around now",
+    "memberCount": "{count, plural, one {# member} other {# members}}",
+    "memberFallback": "member"
+  },
+  "miniMeetingDock": {
+    "resizeAria": "Resize meeting window"
+  },
   "meetingDayStrip": {
     "previousWeek": "Previous week",
     "nextWeek": "Next week"
+  },
+  "chatbot": {
+    "askWarpBot": "Ask WarpBot",
+    "newChat": "New chat",
+    "chatHistory": "Chat history",
+    "activePageContext": "Active page context",
+    "removePageContext": "Remove page context",
+    "removeContext": "Remove {title}",
+    "removeContextAria": "Remove {title} from this message",
+    "hidePageContext": "Hide page context",
+    "showPageContext": "Show page context",
+    "attachFiles": "Attach images or documents",
+    "offInThisChat": "Off in this chat",
+    "sendMessage": "Send message",
+    "thinking": "Thinking...",
+    "stillWorking": "Still working — this one is taking a while.",
+    "noMatchingCommand": "No matching command — press Enter to send this as a message",
+    "noContextsFound": "No contexts found",
+    "askWithPageContext": "Ask with page context...",
+    "askPlaceholder": "Ask WarpBot...",
+    "tools": "Tools",
+    "pluginsInThisChat": "Plugins in this chat",
+    "manage": "Manage",
+    "connectToUse": "Connect to use in WarpBot",
+    "connected": "Connected",
+    "connect": "Connect",
+    "useInThisChat": "Use {label} in this chat",
+    "noToolsForPage": "No tools for this page. Open a meeting or a document.",
+    "installPluginsHint": "Install plugins from Personal Settings.",
+    "loadingConversations": "Loading conversations…",
+    "loadHistoryFailed": "Could not load chat history.",
+    "noPastConversations": "No past conversations yet",
+    "conversationStartFailed": "Couldn't start a conversation with WarpBot. Please try again.",
+    "messageSendFailed": "That message couldn't be sent. Please try again.",
+    "openConversationFailed": "Could not open that conversation.",
+    "fileReadFailed": "\"{name}\" could not be read.",
+    "pluginInstalled": "{label} installed",
+    "pluginConnected": "{label} connected",
+    "pluginConnectOpenBrowser": "Finish connecting {label} in your browser.",
+    "pluginConnectBlocked": "Your browser blocked the {label} consent window.",
+    "pluginConnectBlockedAction": "Open it",
+    "pluginAlreadyConnected": "{label} is connected.",
+    "pluginUpdateFailed": "Could not update {label}.",
+    "slashCommands": {
+      "summarize": {
+        "label": "Summarize this meeting",
+        "description": "Summarize this meeting based on its transcript",
+        "prompt": "Summarize this meeting based on its transcript."
+      },
+      "actionItems": {
+        "label": "Action items",
+        "description": "List action items and decisions from this meeting",
+        "prompt": "List the action items and key decisions from this meeting's transcript."
+      },
+      "roomInfo": {
+        "label": "Room info",
+        "description": "Get this room's status, languages, and host",
+        "prompt": "Tell me this room's status, languages, and host."
+      },
+      "summarizeDoc": {
+        "label": "Summarize this document",
+        "description": "Summarize the document you're viewing",
+        "prompt": "Summarize this document."
+      },
+      "extractTerms": {
+        "label": "Extract key terms",
+        "description": "Pull out key terms and terminology from this document",
+        "prompt": "Extract the key terms and terminology used in this document."
+      },
+      "recentMeetings": {
+        "label": "Recent meetings",
+        "description": "List your recent meetings",
+        "prompt": "List my recent meetings."
+      },
+      "searchDocs": {
+        "label": "Search documents",
+        "description": "Search the workspace's documents — keep typing your query",
+        "prompt": "Search the workspace's documents for: "
+      }
+    },
+    "pageContextLabels": {
+      "roomDetail": "Meeting",
+      "inMeeting": "Live meeting",
+      "documentDetail": "Document",
+      "documents": "Documents",
+      "history": "History",
+      "fallback": "Page"
+    }
   },
   "accountMenu": {
     "credits": "Workspace credits",

@@ -155,5 +155,95 @@
       "meetingType": "Meeting Type",
       "translateElsewhere": "Translate a call elsewhere"
     }
+  },
+  "startedBanner": {
+    "title": "A meeting has started",
+    "joinNow": "Join now",
+    "openFromNotifications": "Open it from your notifications.",
+    "dismissAria": "Dismiss"
+  },
+  "inviteBanner": {
+    "acceptedTitle": "Invitation accepted",
+    "invitedTitle": "You've been invited to a meeting",
+    "joinNow": "Join now",
+    "onTheList": "You're on the list",
+    "accept": "Accept",
+    "accepting": "Accepting…",
+    "view": "View",
+    "dismissAria": "Dismiss",
+    "acceptErrorTitle": "Could not accept the invitation",
+    "acceptErrorDescription": "Try again, or open the meeting from your notifications."
+  },
+  "setup": {
+    "srTitle": "Setup Room",
+    "participantFallback": "Participant",
+    "loadingRoom": "Loading room...",
+    "readyToJoin": "Ready to join?",
+    "roomCode": "Room Code: {code}",
+    "cameraOff": "Camera is off",
+    "languageRouting": "Language Routing",
+    "iSpeak": "I speak",
+    "iHear": "I hear",
+    "deviceSettings": "Device Settings",
+    "camera": "Camera",
+    "microphone": "Microphone",
+    "speaker": "Speaker",
+    "defaultCamera": "Default Camera",
+    "defaultMicrophone": "Default Microphone",
+    "defaultSpeaker": "Default Speaker",
+    "confirm": {
+      "joinMeeting": "Join Meeting",
+      "meetingUnavailable": "Meeting unavailable",
+      "starting": "Starting...",
+      "joining": "Joining...",
+      "enterWaitingRoom": "Enter Waiting Room",
+      "startMeeting": "Start Meeting"
+    },
+    "errors": {
+      "meetingUnavailable": "This meeting is no longer available to join.",
+      "noLanguageAvailable": "No language is available for this meeting. Ask the host to check its settings.",
+      "unableToJoin": "Unable to join the room.",
+      "couldNotJoin": "Could not join the room.",
+      "speakerSwitchFailed": "Browser could not switch speaker output.",
+      "previewUnsupported": "This browser does not support camera and microphone preview.",
+      "deviceAccessFailed": "Unable to access camera or microphone."
+    }
+  },
+  "searchDialog": {
+    "placeholder": "Search commands...",
+    "quickActions": {
+      "createRoom": {
+        "title": "Create room",
+        "description": "Start a live translation room"
+      },
+      "joinByCode": {
+        "title": "Join by code",
+        "description": "Enter an invite or meeting code"
+      },
+      "openMeetings": {
+        "title": "Open meetings",
+        "description": "Browse every meeting in this workspace"
+      },
+      "documents": {
+        "title": "Documents",
+        "description": "Search workspace references"
+      },
+      "members": {
+        "title": "Members",
+        "description": "Open the workspace directory"
+      }
+    },
+    "group": {
+      "joinMeeting": "Join a meeting",
+      "quickActions": "Quick actions",
+      "meetings": "Meetings",
+      "recentMeetings": "Recent meetings"
+    },
+    "joinCode": {
+      "title": "Join meeting {code}",
+      "description": "Go straight to the room with this code"
+    },
+    "searching": "Searching meetings...",
+    "empty": "No meetings found. Try a room title, code, or one of the quick actions above."
   }
 }

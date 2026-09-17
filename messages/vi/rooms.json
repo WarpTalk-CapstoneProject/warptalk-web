@@ -155,5 +155,95 @@
       "meetingType": "Loại cuộc họp",
       "translateElsewhere": "Dịch một cuộc gọi ở nơi khác"
     }
+  },
+  "startedBanner": {
+    "title": "Một cuộc họp đã bắt đầu",
+    "joinNow": "Tham gia ngay",
+    "openFromNotifications": "Mở từ thông báo của bạn.",
+    "dismissAria": "Đóng"
+  },
+  "inviteBanner": {
+    "acceptedTitle": "Đã chấp nhận lời mời",
+    "invitedTitle": "Bạn được mời tham gia một cuộc họp",
+    "joinNow": "Tham gia ngay",
+    "onTheList": "Bạn đã có trong danh sách",
+    "accept": "Chấp nhận",
+    "accepting": "Đang chấp nhận…",
+    "view": "Xem",
+    "dismissAria": "Đóng",
+    "acceptErrorTitle": "Không thể chấp nhận lời mời",
+    "acceptErrorDescription": "Hãy thử lại, hoặc mở cuộc họp từ thông báo của bạn."
+  },
+  "setup": {
+    "srTitle": "Thiết lập phòng",
+    "participantFallback": "Người tham gia",
+    "loadingRoom": "Đang tải phòng...",
+    "readyToJoin": "Sẵn sàng tham gia?",
+    "roomCode": "Mã phòng: {code}",
+    "cameraOff": "Camera đang tắt",
+    "languageRouting": "Định tuyến ngôn ngữ",
+    "iSpeak": "Tôi nói",
+    "iHear": "Tôi nghe",
+    "deviceSettings": "Cài đặt thiết bị",
+    "camera": "Camera",
+    "microphone": "Micrô",
+    "speaker": "Loa",
+    "defaultCamera": "Camera mặc định",
+    "defaultMicrophone": "Micrô mặc định",
+    "defaultSpeaker": "Loa mặc định",
+    "confirm": {
+      "joinMeeting": "Tham gia cuộc họp",
+      "meetingUnavailable": "Cuộc họp không khả dụng",
+      "starting": "Đang bắt đầu...",
+      "joining": "Đang tham gia...",
+      "enterWaitingRoom": "Vào phòng chờ",
+      "startMeeting": "Bắt đầu cuộc họp"
+    },
+    "errors": {
+      "meetingUnavailable": "Cuộc họp này không còn khả dụng để tham gia.",
+      "noLanguageAvailable": "Không có ngôn ngữ nào khả dụng cho cuộc họp này. Hãy nhờ người tổ chức kiểm tra lại cài đặt.",
+      "unableToJoin": "Không thể tham gia phòng.",
+      "couldNotJoin": "Không thể tham gia phòng.",
+      "speakerSwitchFailed": "Trình duyệt không thể chuyển thiết bị phát âm thanh.",
+      "previewUnsupported": "Trình duyệt này không hỗ trợ xem trước camera và micrô.",
+      "deviceAccessFailed": "Không thể truy cập camera hoặc micrô."
+    }
+  },
+  "searchDialog": {
+    "placeholder": "Tìm lệnh...",
+    "quickActions": {
+      "createRoom": {
+        "title": "Tạo phòng",
+        "description": "Bắt đầu một phòng dịch trực tiếp"
+      },
+      "joinByCode": {
+        "title": "Tham gia bằng mã",
+        "description": "Nhập mã mời hoặc mã cuộc họp"
+      },
+      "openMeetings": {
+        "title": "Xem các cuộc họp",
+        "description": "Duyệt mọi cuộc họp trong không gian làm việc này"
+      },
+      "documents": {
+        "title": "Tài liệu",
+        "description": "Tìm tài liệu tham khảo trong không gian làm việc"
+      },
+      "members": {
+        "title": "Thành viên",
+        "description": "Mở danh bạ không gian làm việc"
+      }
+    },
+    "group": {
+      "joinMeeting": "Tham gia cuộc họp",
+      "quickActions": "Thao tác nhanh",
+      "meetings": "Cuộc họp",
+      "recentMeetings": "Cuộc họp gần đây"
+    },
+    "joinCode": {
+      "title": "Tham gia cuộc họp {code}",
+      "description": "Vào thẳng phòng với mã này"
+    },
+    "searching": "Đang tìm cuộc họp...",
+    "empty": "Không tìm thấy cuộc họp nào. Hãy thử tên phòng, mã, hoặc một trong các thao tác nhanh ở trên."
   }
 }

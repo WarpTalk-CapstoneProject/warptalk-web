@@ -1,0 +1,332 @@
+{
+  "list": {
+    "eyebrow": "設定",
+    "title": "プラグインカタログ",
+    "description": "停止済みの行も含めたマーケットプレイス全体です。ワークスペースのオーナーがこれらを自分のワークスペースに追加し、メンバーは自分のアカウントで接続します。ワークスペースが自分専用に作成したプライベートプラグインはここには表示されません。",
+    "refresh": "更新",
+    "createPlugin": "プラグインを作成",
+    "withMcp": "MCPで作成",
+    "brokenHeading": "{count, plural, other {# 件}}がOAuth接続を完了できません。",
+    "brokenDetail": "{labels} — pre-registeredとして登録されていますがクライアントIDがないため、同意画面がclient_id空欄で構築され、プロバイダーに拒否されます。該当の行を開いてクライアントIDを設定してください。",
+    "filterAria": "行が有効かどうかでカタログを絞り込む",
+    "trailingCount": "{total}件中{visible}件",
+    "searchPlaceholder": "表示名、キー、またはプロバイダーで検索",
+    "searchAria": "プラグインカタログを検索",
+    "tabs": {
+      "all": "すべて",
+      "active": "有効",
+      "retired": "停止済み"
+    },
+    "error": {
+      "title": "プラグインカタログを読み込めませんでした。",
+      "body": "アシスタントサービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
+      "tryAgain": "再試行"
+    },
+    "emptyCatalog": "カタログは空です。WarpBotには現在、誰にも提供されているプラグインがありません。",
+    "noMatch": "このフィルターに一致する行はありません。",
+    "columns": {
+      "plugin": "プラグイン",
+      "kind": "種別",
+      "provider": "プロバイダー",
+      "state": "状態",
+      "oauthClient": "OAuthクライアント",
+      "workspaces": "ワークスペース",
+      "installs": "インストール数",
+      "tools": "ツール"
+    },
+    "state": {
+      "active": "有効",
+      "retired": "停止済み"
+    },
+    "kindLabels": {
+      "native": "native",
+      "mcp": "MCP"
+    },
+    "oauthSourceLabels": {
+      "unresolved": "未解決",
+      "preregistered": "pre-registered",
+      "cimd": "CIMD",
+      "dcr": "DCR"
+    },
+    "serverConfig": "サーバー設定",
+    "noClientIdBadge": "クライアントIDなし",
+    "missingClientIdExplanation": "この行はpre-registeredとして登録されていますがOAuthクライアントIDがないため、接続時にclient_idが空欄の同意URLが構築され、プロバイダーに拒否されます。下でクライアントIDを設定してください。",
+    "featuredBadge": "注目",
+    "workspaceCount": "{count, plural, =0 {ワークスペースなし} other {# ワークスペース}}",
+    "footerNote": "nativeの行はコンパイル済みコードによって提供され、OAuthクライアントはカタログではなくサービス設定から取得されるため、この画面では設定も保証もできません。",
+    "dialog": {
+      "title": "MCPアプリを追加",
+      "description": "この行は保存された瞬間にすべてのユーザーのプラグイン一覧に表示されます — デプロイも再起動も不要です。この行はキーをOAuthプロバイダー名とするMCP行として作成され、ツールはまだありません。ツールは初回接続時にサーバー自身のtools/listから取得されるか、この行のページから手動で記述できます。",
+      "pluginKey": {
+        "label": "プラグインキー",
+        "placeholder": "linear",
+        "hint": "小文字で、恒久的な値です。このURLとOAuthプロバイダー名になります。予約済み: {keys}。"
+      },
+      "label": {
+        "label": "表示名",
+        "placeholder": "Linear"
+      },
+      "description": {
+        "label": "説明",
+        "hint": "インストール前にユーザーがカタログで読む内容です。"
+      },
+      "mcpServerUrl": {
+        "label": "MCPサーバーURL",
+        "placeholder": "https://mcp.example.com/sse",
+        "hint": "絶対URLのhttps://が必要です。この行が扱うトークンはこの通信路を通るため、httpはlocalhostであっても拒否されます。"
+      },
+      "avatarUrl": {
+        "label": "アバターURL",
+        "hint": "任意項目です。http(s)のURL、またはサイト内相対パスを指定できます。"
+      },
+      "requiredScopes": {
+        "label": "必要なスコープ",
+        "hint": "任意項目で、1行に1つ指定します。ほとんどのMCPサーバーは接続時に自身のスコープを通知します。"
+      },
+      "oauth": {
+        "checkboxTitle": "このサーバーは手動登録のOAuthクライアントが必要",
+        "checkboxBody": "必要だと分かっている場合以外はオフのままにしてください。登録の仕組みは初回接続時に自動的に動作し、Client ID Metadata Documentsまたはdynamic registrationを自分で選択します。ここでクライアントIDを入力すると、この行はpreregisteredとしてマークされます。これはクライアントIDを必ず保持しなければならない状態です。",
+        "clientId": {
+          "label": "クライアントID"
+        },
+        "clientSecret": {
+          "label": "クライアントシークレット",
+          "hint": "任意項目です。パブリッククライアントの場合は空欄のままにしてください。一度入力すると表示されなくなります。どのエンドポイントも値を返さないため、以降はこの行のページからのみ置き換えまたは削除が可能です。"
+        },
+        "authorizationEndpoint": {
+          "label": "認可エンドポイント",
+          "hint": "任意項目です。空欄にするとディスカバリーが自動で検出します。"
+        },
+        "tokenEndpoint": {
+          "label": "トークンエンドポイント",
+          "hint": "任意項目です。"
+        },
+        "revokeEndpoint": {
+          "label": "失効エンドポイント",
+          "hint": "任意項目です。"
+        }
+      },
+      "catalogNotLoadedNote": "カタログがまだ読み込まれていないため、他の行で既に使われているキーをここで検出できません — サーバー側では引き続き拒否されます。",
+      "cancel": "キャンセル",
+      "add": "カタログに追加",
+      "adding": "追加中…",
+      "toast": {
+        "problemCount": "{count, plural, other {# 個}}の項目に修正が必要です。まだ送信されていません。",
+        "success": "{key} がカタログに追加されました。デプロイ不要で、すぐに全ユーザーに反映されます。",
+        "errorFallback": "プラグインをカタログに追加できませんでした。"
+      }
+    }
+  },
+  "detail": {
+    "backLink": "プラグインカタログ",
+    "state": {
+      "active": "有効",
+      "retired": "停止済み"
+    },
+    "kindLabels": {
+      "native": "native",
+      "mcp": "MCP"
+    },
+    "providerLabel": "プロバイダー {provider}",
+    "installsCount": "{count, plural, other {インストール # 件}}",
+    "connectionsCount": "{count, plural, other {接続 # 件}}",
+    "refresh": "更新",
+    "rediscover": "ディスカバリーを再実行",
+    "clearing": "クリア中…",
+    "retire": "停止",
+    "activate": "有効化",
+    "notFound": {
+      "title": "該当するプラグインがありません",
+      "body": "カタログにキー {key} を持つ項目はありません。完全に削除された可能性があります。"
+    },
+    "loadError": {
+      "title": "このプラグインを読み込めませんでした",
+      "fallback": "アシスタントサービスから応答がありませんでした。"
+    },
+    "tryAgain": "再試行",
+    "backToCatalog": "カタログに戻る",
+    "cannotConnectBanner": {
+      "title": "この行はOAuth接続を完了できません。",
+      "body": "この行はpre-registeredとして登録されていますがOAuthクライアントIDがないため、接続時にclient_idが空欄の同意URLが構築され、プロバイダーに拒否されます。下でクライアントIDを設定してください。"
+    },
+    "toast": {
+      "activated": "プラグインを有効化しました。",
+      "retired": "プラグインを停止しました。",
+      "activateFail": "プラグインを有効化できませんでした。",
+      "retireFail": "プラグインを停止できませんでした。",
+      "rediscoverSuccess": "ディスカバリー情報をクリアしました。次回接続時に登録の仕組みが再実行されます。",
+      "rediscoverFail": "このプラグインのディスカバリー情報をクリアできませんでした。"
+    },
+    "metadata": {
+      "heading": "カタログ情報",
+      "unsavedChanges": "未保存の変更 {count, plural, other {# 件}}",
+      "label": "表示名",
+      "category": {
+        "label": "カテゴリ",
+        "hint": "空欄にするとクリアされます。"
+      },
+      "description": "説明",
+      "avatarUrl": {
+        "label": "アバターURL",
+        "hint": "http(s)のURL、または / で始まるサイト内相対パスです。空欄にするとクリアされます。"
+      },
+      "sortOrder": {
+        "label": "並び順",
+        "hint": "カタログで表示される編集済みの順序です。同順位の場合は表示名で決まります。"
+      },
+      "mcpServerUrl": {
+        "label": "MCPサーバーURL",
+        "hint": "絶対URLのhttps://が必要です。MCP行では空欄にできません。"
+      },
+      "nativeNote": "nativeの行はコンパイル済みコードによって提供され、MCPサーバーURLを一切参照しないため、このフィールドはここには表示されません。送信してもサーバー側で拒否されます。",
+      "requiredScopes": {
+        "label": "必要なスコープ",
+        "hint": "1行に1つ指定します。重複はサーバー側で除外されます。"
+      },
+      "featuredLabel": "ユーザー向けカタログで注目表示にする",
+      "discard": "変更を破棄",
+      "save": "変更を保存",
+      "saving": "保存中…",
+      "toast": {
+        "updated": "プラグインを更新しました。",
+        "saveFail": "プラグインを保存できませんでした。"
+      }
+    },
+    "oauth": {
+      "heading": "OAuthクライアント",
+      "sourceLabels": {
+        "unresolved": "未解決",
+        "preregistered": "pre-registered",
+        "cimd": "CIMD",
+        "dcr": "DCR"
+      },
+      "sourceNotes": {
+        "unresolved": "ディスカバリーはまだ実行されていません。次回接続時に登録の仕組みが選択されます。",
+        "preregistered": "管理者がクライアントIDを入力しました。この行には必ずクライアントIDが必要です。",
+        "cimd": "クライアントは公開済みのメタデータドキュメントURLによって識別されます。",
+        "dcr": "認証情報はRFC 7591のdynamic registrationから取得されました。"
+      },
+      "clientIdSummary": "クライアントID",
+      "clientIdNotSet": "未設定",
+      "clientSecretSummary": "クライアントシークレット",
+      "clientSecretStored": "保存済み、最終更新 {date}",
+      "clientSecretNone": "未保存 — パブリッククライアントです",
+      "tokenEndpointAuthSummary": "トークンエンドポイントの認証方式",
+      "tokenEndpointAuthNotNegotiated": "未ネゴシエート",
+      "registrationEndpointLabel": "登録エンドポイント: {endpoint}。",
+      "native": {
+        "title": "このプラグインのOAuthクライアントはカタログには存在しません。",
+        "body": "nativeの行はコンパイル済みコードによって提供され、クライアントIDとシークレットはサービス設定から読み込まれます。サーバーはここへの書き込みを拒否するため、フォームを表示すると、空のclient_idの原因を探している人がここに値を入力し、保存されるのを見て、実際には何も変わっていないのに問題が解決したと誤解してしまいます。代わりにアシスタントサービスの実行環境で設定してください。"
+      },
+      "clientId": {
+        "label": "クライアントID",
+        "hint": "保存するとこの行はpre-registeredになります。クライアントIDは構造上公開情報であり、ブラウザがたどるすべての認可URLに含まれます。"
+      },
+      "clientSecretHeading": "クライアントシークレット",
+      "secretMode": {
+        "keepStored": "保存済みのシークレットを維持",
+        "leaveUnset": "未設定のまま — この行にシークレットはありません",
+        "replace": "置き換える",
+        "setOne": "シークレットを設定する",
+        "clearStored": "保存済みのシークレットを削除"
+      },
+      "secretPlaceholder": "新しいクライアントシークレット",
+      "secretAria": "新しいクライアントシークレット",
+      "secretHint": "シークレットは入力されるだけで、表示されて返ってくることはありません。この画面では保存済みの値を確認する方法がないため、「維持」が既定になっています。クライアントIDを変更しただけで、下の欄が空欄だからという理由でシークレットが消えてしまうことがあってはなりません。",
+      "authorizationEndpoint": {
+        "label": "認可エンドポイント",
+        "hint": "任意項目です。空欄にするとディスカバリーがキャッシュした値のままになります。"
+      },
+      "tokenEndpoint": {
+        "label": "トークンエンドポイント",
+        "hint": "任意項目です。"
+      },
+      "revokeEndpoint": {
+        "label": "失効エンドポイント",
+        "hint": "任意項目です。"
+      },
+      "dirtyCount": "保存済みの行と異なる項目が {count, plural, other {# 件}}あります。",
+      "discard": "変更を破棄",
+      "save": "OAuthクライアントを保存",
+      "saving": "保存中…",
+      "toast": {
+        "clientIdRequired": "クライアントIDが必要です。このエンドポイントではクリアすることはできません。",
+        "secretRequired": "新しいクライアントシークレットを入力するか、保存済みの値を維持または削除するかを選択してください。",
+        "savedCleared": "OAuthクライアントを保存し、保存済みのシークレットを削除しました。",
+        "savedReplaced": "OAuthクライアントとシークレットを保存しました。",
+        "savedKept": "OAuthクライアントを保存しました。保存済みのシークレットはそのまま維持されました。",
+        "saveFail": "OAuthクライアントを保存できませんでした。"
+      }
+    },
+    "tools": {
+      "heading": "ツールマニフェスト",
+      "lastRead": "サーバーからの最終読み込み {date}",
+      "neverConfirmed": "手動で記述 — tools/listによる確認は一度もありません",
+      "intro": "マニフェスト全体が1回の書き込みで置き換えられます。pluginKeyはルートから設定されるため、ここに含めないでください。保存するとtools_synced_atのマーカーがクリアされます。手動編集は成功したtools/listではないため、そのように見せるべきではないからです。",
+      "textareaAria": "ツールマニフェストのJSON",
+      "storedCount": "{count, plural, other {ツール # 件}}保存済み",
+      "editorDiffers": " — 編集内容は保存済みの内容と異なります",
+      "discard": "変更を破棄",
+      "validate": "検証",
+      "replace": "マニフェストを置き換え",
+      "replacing": "置き換え中…",
+      "toast": {
+        "valid": "マニフェストは有効です。",
+        "problems": "マニフェストに{count, plural, other {# 件}}の問題があります。まだ送信されていません。",
+        "replacedEmpty": "マニフェストを置き換えました。このプラグインは現在ツールを公開していません。",
+        "replacedCount": "マニフェストを置き換えました — {count, plural, other {ツール # 件}}。",
+        "invalidFallback": "サーバーがマニフェストを拒否しました。",
+        "replaceFail": "ツールマニフェストを置き換えできませんでした。"
+      }
+    },
+    "audits": {
+      "heading": "ツール呼び出し",
+      "recordedCount": "{count} 件記録済み",
+      "filterPlaceholder": "結果で絞り込み(例: success、missing_scope)",
+      "filterAria": "記録済みのツール呼び出しを結果で絞り込む",
+      "loading": "読み込み中…",
+      "error": {
+        "title": "ツール呼び出しの記録を読み込めませんでした。",
+        "tryAgain": "再試行"
+      },
+      "emptyFiltered": "この結果に一致する記録はありません。",
+      "emptyAll": "このプラグインでツールが呼び出されたことはまだありません。",
+      "pageLabel": "{total}ページ中{page}ページ目",
+      "previous": "前へ",
+      "next": "次へ",
+      "outcomeLabels": {
+        "success": "成功",
+        "blocked": "ブロック済み",
+        "attentionConfirmation": "確認待ち",
+        "attentionSetup": "設定が必要",
+        "providerError": "プロバイダーエラー",
+        "failed": "失敗"
+      }
+    },
+    "danger": {
+      "heading": "削除",
+      "title": "この行をカタログから完全に削除します。",
+      "referencedBody": "何かがこの行を参照しているため拒否されました — {installs, plural, other {インストール # 件}}、{connections, plural, other {接続 # 件}}がまだ存在します。代わりに停止してください。停止した行は、参照が残っていてもすべてのカタログから非表示になります。",
+      "notReferencedBody": "この行を参照しているものはないため、完全に削除できます。停止であれば引き続き元に戻せます。",
+      "deleteButton": "完全に削除",
+      "dialog": {
+        "title": "{label} を削除しますか?",
+        "description": "{key} は、ツールマニフェストと保存済みのOAuthクライアントとともにカタログから削除されます。記録済みのツール呼び出しは削除されません。この操作はこの画面からは元に戻せません。",
+        "cancel": "キャンセル",
+        "deleting": "削除中…",
+        "confirm": "完全に削除"
+      },
+      "toast": {
+        "deleted": "{key} を削除しました。",
+        "retiredInstead": "{key} は削除ではなく停止として扱われました。",
+        "inUseFail": "このプラグインはまだ参照されているため完全に削除できません。",
+        "deleteFail": "プラグインを削除できませんでした。"
+      }
+    },
+    "footer": {
+      "prefix": "編集内容には、変更を行ったアカウントが記録されます。",
+      "lastWrittenBy": "最終更新者: {editor}、{date}。",
+      "noRecordedEditor": "この行には記録された編集者がいません — マイグレーション、または有効な主体を持たないトークンによる最終更新です。作成日: {date}。"
+    }
+  }
+}

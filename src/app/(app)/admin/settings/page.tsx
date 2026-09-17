@@ -20,6 +20,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowsClockwise,
   GearSix,
@@ -91,16 +92,15 @@ function SettingRow({
 }
 
 function PanelError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  const t = useTranslations("adminPlansSettings.settings.panelError");
   return (
     <div className="flex items-start gap-3 px-4 py-8 text-sm">
       <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
       <div>
-        <p className="font-medium">{what} could not be loaded.</p>
-        <p className="mt-1 text-ink-muted">
-          Check the service and that your session still holds the platform admin role.
-        </p>
+        <p className="font-medium">{t("message", { what })}</p>
+        <p className="mt-1 text-ink-muted">{t("hint")}</p>
         <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
-          Try again
+          {t("tryAgain")}
         </Button>
       </div>
     </div>
@@ -108,6 +108,7 @@ function PanelError({ what, onRetry }: { what: string; onRetry: () => void }) {
 }
 
 function BillingPolicyPanel() {
+  const t = useTranslations("adminPlansSettings.settings.billingPolicy");
   const policyQuery = useAdminBillingPolicy();
   const updatePolicy = useUpdateAdminBillingPolicy();
 
@@ -122,28 +123,25 @@ function BillingPolicyPanel() {
     try {
       await updatePolicy.mutateAsync({ vatRate: parsed });
       setDraft(null);
-      toast.success("Billing policy saved.");
+      toast.success(t("saveSuccessToast"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "The billing policy could not be saved."));
+      toast.error(getErrorMessage(error, t("saveErrorToast")));
     }
   };
 
   return (
     <AdminPanel className="mt-3">
       {policyQuery.isError ? (
-        <PanelError what="The billing policy" onRetry={() => void policyQuery.refetch()} />
+        <PanelError what={t("errorWhat")} onRetry={() => void policyQuery.refetch()} />
       ) : (
-        <SettingRow
-          label="VAT rate"
-          hint="Applied to every invoice the platform raises. A fraction: 0.1 is 10%."
-        >
+        <SettingRow label={t("vatLabel")} hint={t("vatHint")}>
           <div className="flex items-center gap-2">
             <Input
               value={value}
               onChange={(event) => setDraft(event.target.value)}
               inputMode="decimal"
               disabled={policyQuery.isPending || updatePolicy.isPending}
-              aria-label="VAT rate"
+              aria-label={t("vatAriaLabel")}
               className="h-9 w-28 text-right tabular-nums"
             />
             <Button
@@ -151,7 +149,7 @@ function BillingPolicyPanel() {
               disabled={!isDirty || !isValid || updatePolicy.isPending}
               onClick={() => void save()}
             >
-              {updatePolicy.isPending ? "Saving…" : "Save"}
+              {updatePolicy.isPending ? t("saving") : t("save")}
             </Button>
           </div>
         </SettingRow>
@@ -161,6 +159,7 @@ function BillingPolicyPanel() {
 }
 
 function PricingEconomicsPanel() {
+  const t = useTranslations("adminPlansSettings.settings.pricingEconomics");
   const configQuery = useAdminPricingConfig();
   const updateConfig = useUpdateAdminPricingConfig();
   const [isEditing, setIsEditing] = useState(false);
@@ -170,10 +169,7 @@ function PricingEconomicsPanel() {
     <>
       <AdminPanel className="mt-3">
         {configQuery.isError ? (
-          <PanelError
-            what="The pricing configuration"
-            onRetry={() => void configQuery.refetch()}
-          />
+          <PanelError what={t("errorWhat")} onRetry={() => void configQuery.refetch()} />
         ) : configQuery.isPending || !config ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -182,36 +178,41 @@ function PricingEconomicsPanel() {
           </div>
         ) : (
           <>
-            <SettingRow label="FX rate (USD → VND)" hint="Reads a USD provider cost in VND terms.">
+            <SettingRow label={t("fxRateLabel")} hint={t("fxRateHint")}>
               <span className="text-[13px] tabular-nums text-ink">
                 {numberFormatter.format(config.fxRateUsdVnd)}
               </span>
             </SettingRow>
-            <SettingRow label="Credit value" hint="What one credit costs a customer, in VND.">
+            <SettingRow label={t("creditValueLabel")} hint={t("creditValueHint")}>
               <span className="text-[13px] tabular-nums text-ink">
                 {numberFormatter.format(config.creditValueVnd)} ₫
               </span>
             </SettingRow>
             <SettingRow
-              label="Minimum price per credit"
-              hint="The plan validator's price floor — a VND plan cannot sell credits below this."
+              label={t("minimumPricePerCreditLabel")}
+              hint={t("minimumPricePerCreditHint")}
             >
               <span className="text-[13px] tabular-nums text-ink">
                 {numberFormatter.format(config.minimumPricePerCreditVnd)} ₫
               </span>
             </SettingRow>
-            <SettingRow label="Minimum contract price" hint="Per cycle, before a plan is valid.">
+            <SettingRow label={t("minimumContractPriceLabel")} hint={t("minimumContractPriceHint")}>
               <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.minimumContractPriceVnd)} ₫ ·{" "}
-                {numberFormatter.format(config.minimumContractPriceUsd)} $
+                {t("minimumContractPriceValue", {
+                  vnd: numberFormatter.format(config.minimumContractPriceVnd),
+                  usd: numberFormatter.format(config.minimumContractPriceUsd),
+                })}
               </span>
             </SettingRow>
             <SettingRow
-              label="Default invoice terms"
-              hint="Days to pay, and the grace window after that, for plans that do not override them."
+              label={t("defaultInvoiceTermsLabel")}
+              hint={t("defaultInvoiceTermsHint")}
             >
               <span className="text-[13px] tabular-nums text-ink">
-                {config.defaultInvoiceTermsDays} days · {config.defaultInvoiceGraceHours} h grace
+                {t("defaultInvoiceTermsValue", {
+                  days: config.defaultInvoiceTermsDays,
+                  hours: config.defaultInvoiceGraceHours,
+                })}
               </span>
             </SettingRow>
           </>
@@ -230,7 +231,7 @@ function PricingEconomicsPanel() {
         <div className="mt-3">
           <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
             <PencilSimple size={14} />
-            Edit pricing economics
+            {t("editButton")}
           </Button>
         </div>
       ) : null}
@@ -239,6 +240,7 @@ function PricingEconomicsPanel() {
 }
 
 function LanguageCatalogPanel() {
+  const t = useTranslations("adminPlansSettings.settings.languageCatalog");
   const languagesQuery = useAdminLanguageCatalog();
   const comparison = useMemo(
     () => (languagesQuery.data ? compareLanguageCatalog(languagesQuery.data) : null),
@@ -256,14 +258,12 @@ function LanguageCatalogPanel() {
             <Warning size={16} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
               <p className="font-medium">
-                The meeting picker offers {comparison.offeredButNotSupported.length} language
-                {comparison.offeredButNotSupported.length === 1 ? "" : "s"} this catalog will
-                reject.
+                {t("driftTitle", { count: comparison.offeredButNotSupported.length })}
               </p>
               <p className="mt-1 text-ink-muted">
-                {comparison.offeredButNotSupported.map((entry) => entry.name).join(", ")} — anyone
-                choosing one gets &ldquo;Source language is not supported.&rdquo; Either seed the
-                row or drop it from the picker.
+                {t("driftBody", {
+                  names: comparison.offeredButNotSupported.map((entry) => entry.name).join(", "),
+                })}
               </p>
             </div>
           </div>
@@ -272,7 +272,7 @@ function LanguageCatalogPanel() {
 
       <AdminPanel className={comparison && comparison.offeredButNotSupported.length > 0 ? "" : "mt-3"}>
         {languagesQuery.isError ? (
-          <PanelError what="The language catalog" onRetry={() => void languagesQuery.refetch()} />
+          <PanelError what={t("errorWhat")} onRetry={() => void languagesQuery.refetch()} />
         ) : languagesQuery.isPending ? (
           <ul>
             {Array.from({ length: 6 }).map((_, index) => (
@@ -282,17 +282,15 @@ function LanguageCatalogPanel() {
             ))}
           </ul>
         ) : !comparison || comparison.rows.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            The catalog is empty — no room in any language can be created.
-          </p>
+          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">{t("empty")}</p>
         ) : (
           <>
             <div className="hidden border-b border-hairline/60 px-4 py-2 text-[11px] font-medium text-ink-muted md:flex">
-              <span className="w-[70px]">Code</span>
-              <span className="flex-1">Name</span>
-              <span className="w-[150px]">Native</span>
-              <span className="w-[90px]">Rooms</span>
-              <span className="w-[130px]">In this app</span>
+              <span className="w-[70px]">{t("columns.code")}</span>
+              <span className="flex-1">{t("columns.name")}</span>
+              <span className="w-[150px]">{t("columns.native")}</span>
+              <span className="w-[90px]">{t("columns.rooms")}</span>
+              <span className="w-[130px]">{t("columns.inThisApp")}</span>
             </div>
             <ul>
               {comparison.rows.map((row) => (
@@ -314,7 +312,7 @@ function LanguageCatalogPanel() {
                           : "border-border bg-surface-2 text-ink-muted",
                       )}
                     >
-                      {row.isActive ? "allowed" : "off"}
+                      {row.isActive ? t("badgeAllowed") : t("badgeOff")}
                     </span>
                   </span>
                   {/* Not shipped means every name this app renders for that language falls back
@@ -327,9 +325,9 @@ function LanguageCatalogPanel() {
                   >
                     {row.shippedInApp
                       ? row.offeredForMeetings
-                        ? "offered"
-                        : "known"
-                      : "renders as a code"}
+                        ? t("shippedOffered")
+                        : t("shippedKnown")
+                      : t("shippedAsCode")}
                   </span>
                 </li>
               ))}
@@ -339,15 +337,17 @@ function LanguageCatalogPanel() {
       </AdminPanel>
 
       <p className="mt-2 text-[12px] text-ink-muted">
-        This is <span className="font-mono">translation_room.supported_languages</span>, the table
-        room validation queries — not <span className="font-mono">platform.supported_languages</span>,
-        which the seed script still writes and nothing validates against since migration 036.
+        {t.rich("footnote", {
+          code1: (chunks) => <span className="font-mono">{chunks}</span>,
+          code2: (chunks) => <span className="font-mono">{chunks}</span>,
+        })}
       </p>
     </>
   );
 }
 
 function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }) {
+  const t = useTranslations("adminPlansSettings.settings.voiceConsent");
   const granted = summary.byStatus
     .filter((row) => row.status === "GRANTED")
     .reduce((total, row) => total + row.people, 0);
@@ -359,9 +359,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
     <div className="px-4 py-4">
       <div className="grid gap-3 sm:grid-cols-3">
         {summary.byStatus.length === 0 ? (
-          <p className="text-[12px] text-ink-muted sm:col-span-3">
-            Nobody has been asked for voice consent yet.
-          </p>
+          <p className="text-[12px] text-ink-muted sm:col-span-3">{t("nobodyAsked")}</p>
         ) : (
           summary.byStatus.map((row) => (
             <div key={`${row.consentType}-${row.status}`}>
@@ -372,7 +370,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
               <p className="mt-0.5 text-[11px] text-ink-subtle">
                 {/* People, not rows. The table is append-only, so counting rows would count
                     everyone who has ever agreed — including those who withdrew. */}
-                people, current decision
+                {t("peopleCurrentDecision")}
               </p>
             </div>
           ))
@@ -381,9 +379,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
 
       {granted > 0 ? (
         <div className="mt-5 border-t border-hairline/60 pt-4">
-          <p className="text-[11px] font-medium text-ink-muted">
-            Live grants by the wording agreed to
-          </p>
+          <p className="text-[11px] font-medium text-ink-muted">{t("liveGrantsHeading")}</p>
           <ul className="mt-2 space-y-1.5">
             {summary.currentGrantsByTextVersion.map((row) => {
               const current = row.textVersion === summary.currentTextVersion;
@@ -396,11 +392,11 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
                     <span className="truncate font-mono text-[12px]">{row.textVersion}</span>
                     {current ? (
                       <span className="shrink-0 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                        current
+                        {t("current")}
                       </span>
                     ) : (
                       <span className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                        superseded
+                        {t("superseded")}
                       </span>
                     )}
                   </span>
@@ -414,11 +410,9 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
           {outdated.length > 0 ? (
             <p className="mt-3 text-[12px] text-ink-muted">
               {/* The question the version column was added to answer. */}
-              {numberFormatter.format(outdated.reduce((total, row) => total + row.people, 0))} live
-              grant
-              {outdated.reduce((total, row) => total + row.people, 0) === 1 ? " was" : "s were"}{" "}
-              given under wording that has since been replaced. Consent stays valid for what it
-              said at the time — this is the count to re-ask if the change was material.
+              {t("outdatedNotice", {
+                count: outdated.reduce((total, row) => total + row.people, 0),
+              })}
             </p>
           ) : null}
         </div>
@@ -428,6 +422,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
 }
 
 export default function AdminSettingsPage() {
+  const t = useTranslations("adminPlansSettings.settings");
   const languagesQuery = useAdminLanguageCatalog();
   const consentQuery = useAdminVoiceConsentSummary();
 
@@ -436,10 +431,10 @@ export default function AdminSettingsPage() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Configuration"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<GearSix size={14} weight="fill" />}
-        title="Platform settings"
-        description="Everything the platform runs on, in the order you can act on it: the knobs you can turn, then the reference data you can only read."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -451,56 +446,47 @@ export default function AdminSettingsPage() {
             disabled={isRefreshing}
           >
             <ArrowsClockwise size={14} className={cn(isRefreshing && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
-      <Band
-        title="Knobs you can turn"
-        note="Saved from this page, applied platform-wide, recorded against your account."
-      />
+      <Band title={t("bandKnobs.title")} note={t("bandKnobs.note")} />
 
-      <h3 className="mt-4 text-sm font-semibold text-ink">Billing policy</h3>
+      <h3 className="mt-4 text-sm font-semibold text-ink">{t("billingPolicyHeading")}</h3>
       <BillingPolicyPanel />
 
-      <h3 className="mt-6 text-sm font-semibold text-ink">Pricing economics</h3>
-      <p className="mt-1 text-xs text-ink-muted">
-        The same configuration the plan validator and the rate-card margin reader consult — also
-        reachable from Plans &amp; pricing.
-      </p>
+      <h3 className="mt-6 text-sm font-semibold text-ink">{t("pricingEconomicsHeading")}</h3>
+      <p className="mt-1 text-xs text-ink-muted">{t("pricingEconomicsSubnote")}</p>
       <PricingEconomicsPanel />
 
-      <Band title="Reference data" note="Read-only here — these change by migration." />
+      <Band title={t("bandReference.title")} note={t("bandReference.note")} />
 
       <AdminPanel className="mt-3 border-border bg-surface-2/40">
         <p className="px-4 py-3 text-[12.5px] leading-relaxed text-ink-muted">
-          <span className="font-medium text-ink">Why there is nothing to click below.</span>{" "}
-          Neither service behind this data can record who changed it. A switch here would let
-          someone alter what every meeting validates against with no name against the change, so
-          these move by migration, where the change is reviewed and has an author.
+          {t.rich("explainer", { strong: (chunks) => <span className="font-medium text-ink">{chunks}</span> })}
         </p>
       </AdminPanel>
 
       <h3 className="mt-6 flex items-center gap-2 text-sm font-semibold text-ink">
         <Globe size={14} weight="duotone" />
-        Language catalog
+        {t("languageCatalogHeading")}
       </h3>
       <LanguageCatalogPanel />
 
       <h3 className="mt-6 flex items-center gap-2 text-sm font-semibold text-ink">
         <Microphone size={14} weight="duotone" />
-        Voice clone consent
+        {t("voiceConsentHeading")}
         {consentQuery.data ? (
           <span className="ml-1 text-[11px] font-normal text-ink-muted">
-            {numberFormatter.format(consentQuery.data.totalDecisions)} decisions recorded
+            {t("voiceConsentCount", { count: consentQuery.data.totalDecisions })}
           </span>
         ) : null}
       </h3>
 
       <AdminPanel className="mt-3">
         {consentQuery.isError ? (
-          <PanelError what="Voice consent" onRetry={() => void consentQuery.refetch()} />
+          <PanelError what={t("voiceConsent.errorWhat")} onRetry={() => void consentQuery.refetch()} />
         ) : consentQuery.isPending ? (
           <div className="px-4 py-6">
             <div className="h-16 animate-pulse rounded bg-surface-2" />
@@ -510,11 +496,7 @@ export default function AdminSettingsPage() {
         )}
       </AdminPanel>
 
-      <p className="mt-4 text-[12px] text-ink-muted">
-        Counts only, and that is a boundary rather than a shortcut. A cloned voice is biometric
-        data; a list of who agreed to it would be a register of biometric permissions, and nothing
-        on this screen acts on a person.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
     </AdminPage>
   );
 }

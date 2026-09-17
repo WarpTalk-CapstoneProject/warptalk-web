@@ -1,0 +1,246 @@
+{
+  "overview": {
+    "eyebrow": "Trung tâm điều khiển nền tảng",
+    "title": "Tổng quan",
+    "description": "Tình trạng hoạt động, biến động tín dụng và mức độ sử dụng theo thời gian thực trên toàn bộ workspace của WarpTalk.",
+    "liveData": "Dữ liệu trực tiếp",
+    "metricsError": "Không thể tải số liệu nền tảng. Hãy kiểm tra dịch vụ thanh toán và phiên đăng nhập quản trị của bạn.",
+    "suspended": {
+      "banner": "{count, plural, other {# workspace}} đang bị tạm ngưng",
+      "description": "Không có gì tự động gỡ lệnh tạm ngưng — mỗi workspace sẽ tiếp tục bị khóa cho đến khi quản trị viên kích hoạt lại.",
+      "review": "Xem xét →"
+    },
+    "metrics": {
+      "activeWorkspaces": {
+        "label": "Workspace đang hoạt động",
+        "helper": "Số workspace đang hoạt động trên nền tảng"
+      },
+      "creditsConsumed": {
+        "label": "Tín dụng đã dùng",
+        "helper": "Mức tiêu thụ trong tháng hiện tại"
+      },
+      "platformBalance": {
+        "label": "Số dư nền tảng",
+        "helper": "Tổng tín dụng khả dụng trên tất cả workspace"
+      },
+      "auditActivity": {
+        "label": "Hoạt động kiểm toán",
+        "helper": "Số sự kiện được ghi nhận trong 30 ngày qua"
+      }
+    },
+    "usage": {
+      "title": "Mức sử dụng",
+      "subtitle": "Tín dụng đã dùng và nạp thêm theo tháng, năm {year}",
+      "consumedSuffix": "cr đã dùng",
+      "error": "Không thể tải biểu đồ sử dụng.",
+      "tooltip": "{month}: {consumed} đã dùng · {toppedUp} đã nạp",
+      "consumed": "Đã dùng",
+      "toppedUp": "Đã nạp"
+    },
+    "liveOperations": {
+      "title": "Vận hành trực tiếp",
+      "subtitle": "Bất thường về tín dụng cần xem xét",
+      "error": "Không thể tải luồng vận hành.",
+      "empty": "Mọi thứ đang ổn định — không phát hiện mức tiêu thụ tín dụng bất thường.",
+      "openCount": "{count} đang mở"
+    },
+    "topWorkspaces": {
+      "title": "Workspace hàng đầu",
+      "subtitle": "Mức tiêu thụ tín dụng cao nhất, 30 ngày qua",
+      "error": "Không thể tải danh sách workspace hàng đầu.",
+      "empty": "Không có mức sử dụng tính phí nào trong 30 ngày qua."
+    },
+    "featureAdoption": {
+      "title": "Mức độ sử dụng tính năng",
+      "subtitle": "Tín dụng tiêu thụ theo dịch vụ, 30 ngày qua",
+      "error": "Không thể tải bảng phân tích dịch vụ.",
+      "empty": "Không có khoản tính phí nào trong 30 ngày qua."
+    }
+  },
+  "salesLeads": {
+    "eyebrow": "Doanh thu",
+    "title": "Khách hàng tiềm năng",
+    "description": "Mọi yêu cầu liên hệ bán hàng trên nền tảng, mới nhất trước.",
+    "refresh": "Làm mới",
+    "statusLabels": {
+      "new": "Mới",
+      "reviewing": "Đang xem xét",
+      "quoted": "Đã báo giá",
+      "converted": "Đã chuyển đổi",
+      "closed": "Đã đóng"
+    },
+    "allTab": "Tất cả",
+    "leadStatusAria": "Trạng thái khách hàng tiềm năng",
+    "loading": "Đang tải…",
+    "leadCount": "{count, plural, other {# khách hàng tiềm năng}}",
+    "statusUpdated": "Đã đánh dấu {company} là {status}",
+    "statusUpdateFailed": "Không thể cập nhật trạng thái khách hàng tiềm năng.",
+    "searchPlaceholder": "Tìm theo tên, email hoặc công ty",
+    "searchAria": "Tìm khách hàng tiềm năng",
+    "search": "Tìm kiếm",
+    "error": {
+      "title": "Không thể tải danh sách khách hàng tiềm năng.",
+      "description": "Hãy kiểm tra dịch vụ thanh toán và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "empty": {
+      "title": "Không có khách hàng tiềm năng nào khớp với bộ lọc này",
+      "description": "Hãy chọn tab trạng thái khác hoặc xóa nội dung tìm kiếm."
+    },
+    "openWorkspace": "Mở workspace",
+    "noWorkspaceYet": "Chưa có workspace",
+    "meetingsPerMonthNow": "{count} cuộc họp / tháng hiện tại",
+    "expectedInSixMonths": "{count} sau sáu tháng",
+    "showMore": "Xem thêm",
+    "showLess": "Thu gọn",
+    "statusAria": "Trạng thái của {company}",
+    "seats": "{count, plural, other {# chỗ}}",
+    "creditsPerMonth": "{count} tín dụng / tháng",
+    "pagination": {
+      "pageOf": "Trang {page} / {totalPages}",
+      "previous": "Trước",
+      "next": "Tiếp"
+    }
+  },
+  "meetings": {
+    "eyebrow": "Vận hành",
+    "title": "Cuộc họp",
+    "description": "Mọi phòng dịch trên nền tảng. Chỉ siêu dữ liệu — không có bản ghi âm, không điều khiển phòng.",
+    "refresh": "Làm mới",
+    "liveCount": "{count} đang diễn ra",
+    "startedToday": "{count} bắt đầu hôm nay",
+    "statusTabs": {
+      "all": "Tất cả",
+      "live": "Đang diễn ra",
+      "scheduled": "Đã lên lịch",
+      "ended": "Đã kết thúc",
+      "cancelled": "Đã hủy",
+      "failed": "Thất bại",
+      "expired": "Đã hết hạn"
+    },
+    "meetingStatusAria": "Trạng thái cuộc họp",
+    "loading": "Đang tải…",
+    "meetingCount": "{count, plural, other {# cuộc họp}}",
+    "sort": {
+      "label": "Sắp xếp",
+      "recentDesc": "Mới nhất",
+      "recentAsc": "Cũ nhất",
+      "durationDesc": "Dài nhất"
+    },
+    "error": {
+      "title": "Không thể tải danh sách cuộc họp.",
+      "description": "Hãy kiểm tra dịch vụ phòng dịch và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "empty": {
+      "title": "Không có cuộc họp nào khớp với bộ lọc này",
+      "description": "Hãy chọn tab trạng thái khác."
+    },
+    "openWorkspace": "workspace",
+    "pagination": {
+      "pageOf": "Trang {page} / {totalPages}",
+      "previous": "Trước",
+      "next": "Tiếp"
+    },
+    "footerNote": "Không có cách nào để mở hoặc nghe lại một cuộc họp từ đây — đây là chủ ý thiết kế. Màn hình này chỉ ghi nhận rằng cuộc họp đã diễn ra; nội dung trao đổi thuộc về workspace đã tổ chức nó."
+  },
+  "feedback": {
+    "eyebrow": "Vận hành",
+    "title": "Phản hồi",
+    "description": "Những gì người tham gia nói về sản phẩm sau khi cuộc họp kết thúc. Dữ liệu tổng hợp, không hiển thị người viết.",
+    "refresh": "Làm mới",
+    "rangeTabs": {
+      "7": "7 ngày",
+      "30": "30 ngày",
+      "90": "90 ngày",
+      "365": "12 tháng"
+    },
+    "reportingWindowAria": "Khoảng thời gian báo cáo",
+    "loading": "Đang tải…",
+    "responseCount": "{count, plural, other {# phản hồi}}",
+    "error": {
+      "title": "Không thể tải phản hồi.",
+      "description": "Hãy kiểm tra dịch vụ phòng dịch và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "stats": {
+      "responses": "Phản hồi",
+      "meetingsRated": "Cuộc họp được đánh giá",
+      "ofEnded": "trên {count} đã kết thúc",
+      "responseRate": "Tỷ lệ phản hồi"
+    },
+    "dimensions": {
+      "title": "Đánh giá theo tiêu chí",
+      "empty": "Không có đánh giá nào được gửi trong khoảng thời gian này.",
+      "ratedCount": "{count} đánh giá",
+      "thinSample": "· mẫu còn ít",
+      "ratingTooltip": "{rating}★ — {count, plural, other {# phản hồi}}"
+    },
+    "comments": {
+      "title": "Bình luận",
+      "error": "Không thể tải bình luận.",
+      "empty": "Chưa có ai để lại bình luận trong khoảng thời gian này."
+    },
+    "pagination": {
+      "pageOf": "Trang {page} / {totalPages}",
+      "previous": "Trước",
+      "next": "Tiếp"
+    },
+    "footerNote": "Chỉ xem, và ẩn danh theo thiết kế — API không gửi kèm ai là người viết bình luận. Một đánh giá mà quản trị viên có thể sửa hoặc xóa sẽ không còn đáng tin để đọc."
+  },
+  "audit": {
+    "eyebrow": "Vận hành",
+    "title": "Nhật ký kiểm toán",
+    "description": "Mọi thao tác quản trị trên nền tảng, ai đã thực hiện và vì sao.",
+    "refresh": "Làm mới",
+    "resultTabs": {
+      "all": "Tất cả",
+      "succeeded": "Thành công",
+      "failed": "Thất bại"
+    },
+    "actionResultAria": "Kết quả thao tác",
+    "loading": "Đang tải…",
+    "entryCount": "{count, plural, other {# mục}}",
+    "error": {
+      "title": "Không thể tải nhật ký kiểm toán.",
+      "description": "Hãy kiểm tra dịch vụ workspace và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "empty": {
+      "title": "Không có thao tác quản trị nào khớp với bộ lọc này",
+      "description": "Chưa có gì được ghi nhận ở đây, hoặc bộ lọc đang loại trừ nó."
+    },
+    "noReasonRecorded": "— không có lý do được ghi nhận",
+    "failedBadge": "thất bại",
+    "pagination": {
+      "pageOf": "Trang {page} / {totalPages}",
+      "previous": "Trước",
+      "next": "Tiếp"
+    }
+  },
+  "emailTemplates": {
+    "eyebrow": "Vận hành",
+    "title": "Mẫu email",
+    "description": "Mọi email nền tảng gửi đi, nội dung được lưu ở đâu và những gì điền vào đó.",
+    "notEditableNotice": "Các email này được soạn trong mã nguồn bởi dịch vụ gửi chúng, nên không thể chỉnh sửa tại đây. Muốn đổi tiêu đề hoặc nội dung cần thay đổi mã nguồn của dịch vụ đó.",
+    "tabs": {
+      "all": "Tất cả",
+      "live": "Đang dùng",
+      "dormant": "Ngừng dùng"
+    },
+    "filterAria": "Lọc email theo trạng thái",
+    "emailCount": "{count, plural, other {# email}}",
+    "statusLive": "Đang dùng",
+    "statusDormant": "Ngừng dùng",
+    "detail": {
+      "whyDormant": "Vì sao ngừng dùng",
+      "subject": "Tiêu đề",
+      "sentWhen": "Thời điểm gửi",
+      "sentBy": "Gửi bởi",
+      "sentByValue": "{service} qua {provider}",
+      "body": "Nội dung",
+      "variables": "Biến",
+      "source": "Nguồn"
+    }
+  }
+}

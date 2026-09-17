@@ -8,6 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowUp,
   ArrowSquareOut,
@@ -194,74 +195,84 @@ interface SlashCommand {
 // injects (see chat_worker.py::_format_page_context) — entity_id is in there, so the
 // prompt just has to unambiguously name the current entity and the model's own
 // tool-calling picks the right id. The frontend never calls tools directly.
-const SLASH_COMMANDS: SlashCommand[] = [
-  {
-    command: "/summarize",
-    label: "Summarize this meeting",
-    description: "Summarize this meeting based on its transcript",
-    pageTypes: ["room_detail", "in_meeting", "history"],
-    autoSend: true,
-    buildPrompt: () => "Summarize this meeting based on its transcript.",
-  },
-  {
-    command: "/action-items",
-    label: "Action items",
-    description: "List action items and decisions from this meeting",
-    pageTypes: ["room_detail", "in_meeting", "history"],
-    autoSend: true,
-    buildPrompt: () =>
-      "List the action items and key decisions from this meeting's transcript.",
-  },
-  {
-    command: "/room-info",
-    label: "Room info",
-    description: "Get this room's status, languages, and host",
-    pageTypes: ["room_detail", "in_meeting", "history"],
-    autoSend: true,
-    buildPrompt: () => "Tell me this room's status, languages, and host.",
-  },
-  {
-    command: "/summarize-doc",
-    label: "Summarize this document",
-    description: "Summarize the document you're viewing",
-    pageTypes: ["document_detail"],
-    autoSend: true,
-    buildPrompt: () => "Summarize this document.",
-  },
-  {
-    command: "/extract-terms",
-    label: "Extract key terms",
-    description: "Pull out key terms and terminology from this document",
-    pageTypes: ["document_detail"],
-    autoSend: true,
-    buildPrompt: () =>
-      "Extract the key terms and terminology used in this document.",
-  },
-  {
-    command: "/recent-meetings",
-    label: "Recent meetings",
-    description: "List your recent meetings",
-    pageTypes: ["history", "documents"],
-    autoSend: true,
-    buildPrompt: () => "List my recent meetings.",
-  },
-  {
-    command: "/search-docs",
-    label: "Search documents",
-    description: "Search the workspace's documents — keep typing your query",
-    pageTypes: ["documents"],
-    autoSend: false,
-    buildPrompt: () => "Search the workspace's documents for: ",
-  },
-];
+//
+// Built from `t` rather than a module-level constant so the labels, descriptions and the
+// prompt text actually sent as the user's message can be localized — this list is created
+// inside the component, where the translator is available.
+function buildSlashCommands(
+  t: ReturnType<typeof useTranslations>,
+): SlashCommand[] {
+  return [
+    {
+      command: "/summarize",
+      label: t("slashCommands.summarize.label"),
+      description: t("slashCommands.summarize.description"),
+      pageTypes: ["room_detail", "in_meeting", "history"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.summarize.prompt"),
+    },
+    {
+      command: "/action-items",
+      label: t("slashCommands.actionItems.label"),
+      description: t("slashCommands.actionItems.description"),
+      pageTypes: ["room_detail", "in_meeting", "history"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.actionItems.prompt"),
+    },
+    {
+      command: "/room-info",
+      label: t("slashCommands.roomInfo.label"),
+      description: t("slashCommands.roomInfo.description"),
+      pageTypes: ["room_detail", "in_meeting", "history"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.roomInfo.prompt"),
+    },
+    {
+      command: "/summarize-doc",
+      label: t("slashCommands.summarizeDoc.label"),
+      description: t("slashCommands.summarizeDoc.description"),
+      pageTypes: ["document_detail"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.summarizeDoc.prompt"),
+    },
+    {
+      command: "/extract-terms",
+      label: t("slashCommands.extractTerms.label"),
+      description: t("slashCommands.extractTerms.description"),
+      pageTypes: ["document_detail"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.extractTerms.prompt"),
+    },
+    {
+      command: "/recent-meetings",
+      label: t("slashCommands.recentMeetings.label"),
+      description: t("slashCommands.recentMeetings.description"),
+      pageTypes: ["history", "documents"],
+      autoSend: true,
+      buildPrompt: () => t("slashCommands.recentMeetings.prompt"),
+    },
+    {
+      command: "/search-docs",
+      label: t("slashCommands.searchDocs.label"),
+      description: t("slashCommands.searchDocs.description"),
+      pageTypes: ["documents"],
+      autoSend: false,
+      buildPrompt: () => t("slashCommands.searchDocs.prompt"),
+    },
+  ];
+}
 
-const PAGE_CONTEXT_LABELS: Record<string, string> = {
-  room_detail: "Meeting",
-  in_meeting: "Live meeting",
-  document_detail: "Document",
-  documents: "Documents",
-  history: "History",
-};
+function buildPageContextLabels(
+  t: ReturnType<typeof useTranslations>,
+): Record<string, string> {
+  return {
+    room_detail: t("pageContextLabels.roomDetail"),
+    in_meeting: t("pageContextLabels.inMeeting"),
+    document_detail: t("pageContextLabels.documentDetail"),
+    documents: t("pageContextLabels.documents"),
+    history: t("pageContextLabels.history"),
+  };
+}
 
 const PAGE_CONTEXT_ICONS: Record<string, ReactNode> = {
   room_detail: <VideoCamera size={15} weight="regular" />,
@@ -271,10 +282,14 @@ const PAGE_CONTEXT_ICONS: Record<string, ReactNode> = {
   history: <ClockCounterClockwise size={15} weight="regular" />,
 };
 
-function getAmbientContextDisplay(context: AssistantPageContextDto | null) {
+function getAmbientContextDisplay(
+  context: AssistantPageContextDto | null,
+  pageContextLabels: Record<string, string>,
+  fallbackPageLabel: string,
+) {
   if (!context) return null;
 
-  const pageLabel = PAGE_CONTEXT_LABELS[context.pageType] ?? "Page";
+  const pageLabel = pageContextLabels[context.pageType] ?? fallbackPageLabel;
   const rawTitle =
     context.snapshot?.title ||
     context.snapshot?.name ||
@@ -354,6 +369,11 @@ function browserStore(): KeyValueStore | null {
 }
 
 export function GlobalChatbot() {
+  const t = useTranslations("common.chatbot");
+  // Reused rather than duplicated: these plugin-connection toasts (see
+  // handlePluginConnectionAction) are worded identically to the ones the other, simpler
+  // AI chat panel already ships under aiChat.toasts.
+  const tPluginToasts = useTranslations("aiChat.toasts");
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -549,7 +569,7 @@ export function GlobalChatbot() {
       return next;
     });
   };
-  const [conversationTitle, setConversationTitle] = useState("New chat");
+  const [conversationTitle, setConversationTitle] = useState(t("newChat"));
 
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
@@ -597,7 +617,7 @@ export function GlobalChatbot() {
           pluginKey: plugin.key,
           workspaceId: activeWorkspaceId ?? undefined,
         });
-        toast.success(`${plugin.label} installed`);
+        toast.success(t("pluginInstalled", { label: plugin.label }));
         return;
       }
 
@@ -612,17 +632,17 @@ export function GlobalChatbot() {
         });
         // The provider's grant already covered it, so there is no consent page to finish.
         if (result.connected || !result.url) {
-          toast.success(`${plugin.label} connected`);
+          toast.success(t("pluginConnected", { label: plugin.label }));
           return;
         }
         const consentUrl = result.url;
         if (openProviderConsent(consentUrl)) {
-          toast.message(`Finish connecting ${plugin.label} in your browser.`);
+          toast.message(t("pluginConnectOpenBrowser", { label: plugin.label }));
         } else {
           // The toast action is a real click, so the open it makes is not blocked.
-          toast.error(`Your browser blocked the ${plugin.label} consent window.`, {
+          toast.error(t("pluginConnectBlocked", { label: plugin.label }), {
             action: {
-              label: "Open it",
+              label: t("pluginConnectBlockedAction"),
               onClick: () => openProviderConsent(consentUrl),
             },
           });
@@ -630,9 +650,9 @@ export function GlobalChatbot() {
         return;
       }
 
-      toast.message(`${plugin.label} is connected.`);
+      toast.message(t("pluginAlreadyConnected", { label: plugin.label }));
     } catch {
-      toast.error(`Could not update ${plugin.label}.`);
+      toast.error(t("pluginUpdateFailed", { label: plugin.label }));
     }
   };
 
@@ -645,20 +665,20 @@ export function GlobalChatbot() {
       });
       const consentUrl = result.url;
       if (result.connected || !consentUrl) {
-        toast.success("Plugin connected.");
+        toast.success(tPluginToasts("pluginConnected"));
       } else if (openProviderConsent(consentUrl)) {
-        toast.message("Finish connecting this plugin in your browser.");
+        toast.message(tPluginToasts("pluginConnectOpenBrowser"));
       } else {
-        toast.error("Your browser blocked the consent window.", {
+        toast.error(tPluginToasts("pluginConnectBlocked"), {
           action: {
-            label: "Open it",
+            label: tPluginToasts("pluginConnectBlockedAction"),
             onClick: () => openProviderConsent(consentUrl),
           },
         });
       }
       void refetchAssistantPlugins();
     } catch {
-      toast.error("Could not open the plugin connection flow.");
+      toast.error(tPluginToasts("pluginConnectFailed"));
     }
   };
 
@@ -700,7 +720,7 @@ export function GlobalChatbot() {
   const startNewConversation = () => {
     clearResponseTimeout();
     setConversationId(null);
-    setConversationTitle("New chat");
+    setConversationTitle(t("newChat"));
     setMessages([]);
     setInputValue("");
     setSelectedContexts([]);
@@ -733,7 +753,7 @@ export function GlobalChatbot() {
             mentions: parseMessageMentions(message.mentionsJson),
           })),
       );
-      setConversationTitle(detail.title?.trim() || "Chat history");
+      setConversationTitle(detail.title?.trim() || t("chatHistory"));
       setConversationId(detail.id);
       setIsAiTyping(false);
       updateSteps(() => []);
@@ -746,7 +766,7 @@ export function GlobalChatbot() {
       shouldAutoScrollRef.current = true;
       setIsOpen(true);
     } catch {
-      toast.error("Could not open that conversation.");
+      toast.error(t("openConversationFailed"));
     }
   };
 
@@ -837,14 +857,21 @@ export function GlobalChatbot() {
       : ambientPageContext;
   const isPageContextVisible = Boolean(effectivePageContext);
 
+  const slashCommands = useMemo(() => buildSlashCommands(t), [t]);
+  const pageContextLabels = useMemo(() => buildPageContextLabels(t), [t]);
   const availableSlashCommands = useMemo(() => {
     const pageType = effectivePageContext?.pageType ?? "";
     if (!pageType) return [];
-    return SLASH_COMMANDS.filter((cmd) => cmd.pageTypes.includes(pageType));
-  }, [effectivePageContext?.pageType]);
+    return slashCommands.filter((cmd) => cmd.pageTypes.includes(pageType));
+  }, [effectivePageContext?.pageType, slashCommands]);
   const ambientContextDisplay = useMemo(
-    () => getAmbientContextDisplay(effectivePageContext),
-    [effectivePageContext],
+    () =>
+      getAmbientContextDisplay(
+        effectivePageContext,
+        pageContextLabels,
+        t("pageContextLabels.fallback"),
+      ),
+    [effectivePageContext, pageContextLabels, t],
   );
   const contextComposerShellClassName = isPageContextVisible
     ? "rounded-[14px] bg-surface-2/55 p-[3px] shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]"
@@ -1414,7 +1441,7 @@ export function GlobalChatbot() {
         setAttachments((prev) => [...prev, attachment]);
         accepted += 1;
       } catch {
-        toast.error(`"${file.name}" could not be read.`);
+        toast.error(t("fileReadFailed", { name: file.name }));
       }
     }
   };
@@ -1506,7 +1533,7 @@ export function GlobalChatbot() {
           {
             id: `conv-failed-${Date.now()}`,
             role: "assistant",
-            content: "Couldn't start a conversation with WarpBot. Please try again.",
+            content: t("conversationStartFailed"),
             failed: true,
           },
         ]);
@@ -1554,7 +1581,7 @@ export function GlobalChatbot() {
         {
           id: `send-failed-${Date.now()}`,
           role: "assistant",
-          content: "That message couldn't be sent. Please try again.",
+          content: t("messageSendFailed"),
           failed: true,
         },
       ]);
@@ -1578,7 +1605,7 @@ export function GlobalChatbot() {
                 }}
                 className="flex items-center h-[26px] px-3 rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors text-ink text-[12px] font-medium mr-1 truncate max-w-[200px]"
               >
-                {messages.find((m) => m.role === "user")?.content || "New chat"}
+                {messages.find((m) => m.role === "user")?.content || t("newChat")}
               </motion.button>
             )}
           </AnimatePresence>
@@ -1599,7 +1626,7 @@ export function GlobalChatbot() {
             }}
           >
             <PopoverTrigger
-              aria-label="Ask WarpBot"
+              aria-label={t("askWarpBot")}
               data-tour="warpbot-launcher"
               className="flex items-center h-[26px] pl-[8px] pr-[10px] rounded-[6px] bg-surface-2 hover:bg-surface-3 transition-colors group text-ink"
             >
@@ -1614,7 +1641,7 @@ export function GlobalChatbot() {
                 />
               </span>
               <span className="text-[12px] leading-none whitespace-nowrap">
-                Ask WarpBot
+                {t("askWarpBot")}
               </span>
             </PopoverTrigger>
             <PopoverContent
@@ -1652,8 +1679,8 @@ export function GlobalChatbot() {
                     )}
                   </button>
                   <button
-                    aria-label="New chat"
-                    title="New chat"
+                    aria-label={t("newChat")}
+                    title={t("newChat")}
                     onClick={startNewConversation}
                     className="size-6 flex items-center justify-center rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors"
                   >
@@ -1737,7 +1764,7 @@ export function GlobalChatbot() {
                     same fact in a second place. */}
                 {isSlow && steps.length === 0 && (
                   <p className="py-1 pl-4 text-[12px] text-ink-subtle">
-                    Still working — this one is taking a while.
+                    {t("stillWorking")}
                   </p>
                 )}
 
@@ -1748,7 +1775,7 @@ export function GlobalChatbot() {
                   <div className="flex justify-start">
                     <div className="flex items-center gap-2 text-[13px] text-ink-subtle py-2 pl-4">
                       <LumidotSpinner />
-                      <span>Thinking...</span>
+                      <span>{t("thinking")}</span>
                     </div>
                   </div>
                 )}
@@ -1828,7 +1855,7 @@ export function GlobalChatbot() {
                     >
                       <div className="flex min-h-[30px] items-center rounded-[10px] px-2.5 py-1.5 text-[13px] font-medium text-ink">
                         <div
-                          aria-label="Active page context"
+                          aria-label={t("activePageContext")}
                           title={`${ambientContextDisplay.pageLabel}: ${ambientContextDisplay.title}`}
                           className="flex min-w-0 flex-1 items-center gap-1.5"
                         >
@@ -1848,8 +1875,8 @@ export function GlobalChatbot() {
                           )}
                         </div>
                         <button
-                          aria-label="Remove page context"
-                          title="Remove page context"
+                          aria-label={t("removePageContext")}
+                          title={t("removePageContext")}
                           onClick={() =>
                             setDisabledPageContextKey(ambientPageContextKey)
                           }
@@ -1899,8 +1926,7 @@ export function GlobalChatbot() {
                           ))
                         ) : (
                           <div className="px-3 py-4 text-center text-[12px] text-ink-subtle">
-                            No matching command — press Enter to send this as a
-                            message
+                            {t("noMatchingCommand")}
                           </div>
                         )}
                       </motion.div>
@@ -1969,7 +1995,7 @@ export function GlobalChatbot() {
                           ))
                         ) : (
                           <div className="px-3 py-4 text-center text-[12px] text-ink-subtle">
-                            No contexts found
+                            {t("noContextsFound")}
                           </div>
                         )}
                       </motion.div>
@@ -2018,8 +2044,8 @@ export function GlobalChatbot() {
                         {ctx.title}
                         <button
                           type="button"
-                          aria-label={`Remove ${ctx.title} from this message`}
-                          title={`Remove ${ctx.title}`}
+                          aria-label={t("removeContextAria", { title: ctx.title })}
+                          title={t("removeContext", { title: ctx.title })}
                           onClick={() =>
                             setSelectedContexts((prev) =>
                               prev.filter((item) => item.id !== ctx.id),
@@ -2067,8 +2093,8 @@ export function GlobalChatbot() {
                           selectedContexts.length > 0
                             ? ""
                             : ambientContextDisplay
-                              ? "Ask with page context..."
-                              : "Ask WarpBot..."
+                              ? t("askWithPageContext")
+                              : t("askPlaceholder")
                         }
                         // WT-667: `resize-none` stays — the height is computed, not dragged. The
                         // scrollbar is the last resort at COMPOSER_MAX_HEIGHT_PX, not the normal
@@ -2120,7 +2146,7 @@ export function GlobalChatbot() {
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      title="Attach images or documents"
+                      title={t("attachFiles")}
                       className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium"
                     >
                       <Paperclip weight="regular" size={14} />
@@ -2131,7 +2157,7 @@ export function GlobalChatbot() {
                     >
                       <PopoverTrigger className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors text-[12px] font-medium">
                         <Cube weight="regular" size={14} />
-                        Tools
+                        {t("tools")}
                         <CaretDown
                           weight="bold"
                           size={10}
@@ -2153,7 +2179,7 @@ export function GlobalChatbot() {
                               and told nobody what to do with it. */}
                           <section>
                             <div className="px-2.5 pt-1 pb-1.5 text-[11px] font-medium text-ink-subtle">
-                              Tools
+                              {t("tools")}
                             </div>
                             {availableSlashCommands.length > 0 ? (
                               <ul className="flex flex-col">
@@ -2184,7 +2210,7 @@ export function GlobalChatbot() {
                               // Not "loading": availableSlashCommands is filtered by the page
                               // you are on, so an empty list is an answer, not a wait.
                               <div className="px-2.5 py-2 text-[12px] text-ink-subtle">
-                                No tools for this page. Open a meeting or a document.
+                                {t("noToolsForPage")}
                               </div>
                             )}
                           </section>
@@ -2192,7 +2218,7 @@ export function GlobalChatbot() {
                           <section className="border-t border-border pt-2">
                             <div className="flex items-center justify-between px-2.5 pb-1.5">
                               <span className="text-[11px] font-medium text-ink-subtle">
-                                Plugins in this chat
+                                {t("pluginsInThisChat")}
                               </span>
                               <a
                                 href={
@@ -2202,7 +2228,7 @@ export function GlobalChatbot() {
                                 }
                                 className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted hover:text-ink"
                               >
-                                Manage
+                                {t("manage")}
                                 <ArrowSquareOut size={11} />
                               </a>
                             </div>
@@ -2222,10 +2248,10 @@ export function GlobalChatbot() {
                                         </div>
                                         <div className="truncate text-[11px] text-ink-subtle">
                                           {!connected
-                                            ? "Connect to use in WarpBot"
+                                            ? t("connectToUse")
                                             : disabledPluginKeys.includes(plugin.key)
-                                              ? "Off in this chat"
-                                              : "Connected"}
+                                              ? t("offInThisChat")
+                                              : t("connected")}
                                         </div>
                                       </div>
                                       {connected ? (
@@ -2236,7 +2262,7 @@ export function GlobalChatbot() {
                                           type="button"
                                           role="switch"
                                           aria-checked={!disabledPluginKeys.includes(plugin.key)}
-                                          aria-label={`Use ${plugin.label} in this chat`}
+                                          aria-label={t("useInThisChat", { label: plugin.label })}
                                           onClick={() => togglePluginForConversation(plugin.key)}
                                           className={cn(
                                             "relative h-[18px] w-[30px] shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
@@ -2258,7 +2284,7 @@ export function GlobalChatbot() {
                                           onClick={() => void handlePluginAction(plugin)}
                                           className="inline-flex h-7 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
                                         >
-                                          Connect
+                                          {t("connect")}
                                         </button>
                                       )}
                                     </li>
@@ -2268,7 +2294,7 @@ export function GlobalChatbot() {
                             ) : (
                               <div className="flex items-center gap-2 px-2.5 py-2 text-[12px] text-ink-subtle">
                                 <PlugsConnected size={14} weight="duotone" />
-                                Install plugins from Personal Settings.
+                                {t("installPluginsHint")}
                               </div>
                             )}
                           </section>
@@ -2281,13 +2307,13 @@ export function GlobalChatbot() {
                       <button
                         aria-label={
                           isPageContextVisible
-                            ? "Hide page context"
-                            : "Show page context"
+                            ? t("hidePageContext")
+                            : t("showPageContext")
                         }
                         title={
                           isPageContextVisible
-                            ? "Hide page context"
-                            : "Show page context"
+                            ? t("hidePageContext")
+                            : t("showPageContext")
                         }
                         onClick={togglePageContextVisibility}
                         disabled={!ambientPageContextKey}
@@ -2305,7 +2331,7 @@ export function GlobalChatbot() {
                           the attachment path it needed now exists. */}
                       <button
                         type="button"
-                        aria-label="Send message"
+                        aria-label={t("sendMessage")}
                         onClick={() => void sendMessage()}
                         // WT-474: an attachment on its own is a question, so send is live for a
                         // turn carrying only files. Matching the same rule in sendMessage and in
@@ -2314,7 +2340,7 @@ export function GlobalChatbot() {
                         // WT-541 is the converse, and was the actual bug: a button the server
                         // CANNOT accept must not look alive. Both now read one rule.
                         disabled={!composerState.canSend}
-                        title={composerState.hint ?? "Send message"}
+                        title={composerState.hint ?? t("sendMessage")}
                         className="flex items-center justify-center size-[26px] rounded-full bg-ink text-surface-1 hover:bg-ink-muted disabled:opacity-50 disabled:bg-surface-2 disabled:text-ink-muted transition-colors ml-1"
                       >
                         <ArrowUp weight="bold" size={13} />
@@ -2332,8 +2358,8 @@ export function GlobalChatbot() {
               and reloads the selected one back into the widget. */}
           <Popover open={historyMenuOpen} onOpenChange={setHistoryMenuOpen}>
             <PopoverTrigger
-              aria-label="Chat history"
-              title="Chat history"
+              aria-label={t("chatHistory")}
+              title={t("chatHistory")}
               disabled={!activeWorkspaceId}
               className="flex items-center justify-center size-[26px] rounded-[6px] text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-50"
             >
@@ -2346,15 +2372,15 @@ export function GlobalChatbot() {
             >
               {conversationsQuery.isLoading || loadConversation.isPending ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                  Loading conversations…
+                  {t("loadingConversations")}
                 </div>
               ) : conversationsQuery.isError ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-red-500">
-                  Could not load chat history.
+                  {t("loadHistoryFailed")}
                 </div>
               ) : visibleConversations.length === 0 ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
-                  No past conversations yet
+                  {t("noPastConversations")}
                 </div>
               ) : (
                 <div className="flex flex-col">
@@ -2368,7 +2394,7 @@ export function GlobalChatbot() {
                       className="flex flex-col gap-0.5 px-2.5 py-1.5 text-left rounded-md hover:bg-surface-2 transition-colors"
                     >
                       <span className="truncate text-[12px] font-medium text-ink">
-                        {conversation.title?.trim() || "New chat"}
+                        {conversation.title?.trim() || t("newChat")}
                       </span>
                       <span className="text-[11px] text-ink-subtle">
                         {formatConversationTimestamp(

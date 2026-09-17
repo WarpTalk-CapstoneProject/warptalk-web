@@ -9,6 +9,7 @@ import {
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AvEffectsToggle } from "@/components/rooms/setup/av-effects-toggle";
@@ -46,6 +47,7 @@ type SinkVideoElement = HTMLVideoElement & {
 };
 
 export function SetupRoomModal() {
+  const t = useTranslations("rooms.setup");
   const router = useRouter();
   const roomId = useUIStore((state) => state.setupRoomId);
   const isOpen = useUIStore((state) => state.setupRoomModalOpen);
@@ -153,8 +155,8 @@ export function SetupRoomModal() {
     if (!videoRef.current?.setSinkId || !selectedSpeakerId) return;
     void videoRef.current
       .setSinkId(selectedSpeakerId)
-      .catch(() => setMediaError("Browser could not switch speaker output."));
-  }, [selectedSpeakerId, cameraEnabled, isOpen]);
+      .catch(() => setMediaError(t("errors.speakerSwitchFailed")));
+  }, [selectedSpeakerId, cameraEnabled, isOpen, t]);
 
   useEffect(() => {
     const mediaDevices = navigator.mediaDevices;
@@ -199,9 +201,7 @@ export function SetupRoomModal() {
 
   async function startMedia() {
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMediaError(
-        "This browser does not support camera and microphone preview.",
-      );
+      setMediaError(t("errors.previewUnsupported"));
       return null;
     }
 
@@ -252,9 +252,7 @@ export function SetupRoomModal() {
     } catch (error) {
       if (generation !== mediaGenerationRef.current) return null;
       setMediaError(
-        error instanceof Error
-          ? error.message
-          : "Unable to access camera or microphone.",
+        error instanceof Error ? error.message : t("errors.deviceAccessFailed"),
       );
       if (videoRef.current) videoRef.current.srcObject = null;
       return null;
@@ -341,11 +339,15 @@ export function SetupRoomModal() {
   async function handleConfirm() {
     if (!room || isJoining) return;
     if (!canJoinTranslationRoom(room.status)) {
-      toast.error("This meeting is no longer available to join.");
+      toast.error(t("errors.meetingUnavailable"));
       setIsOpen(false);
       return;
     }
-    const displayName = (user?.fullName || user?.email || "Participant").trim();
+    const displayName = (
+      user?.fullName ||
+      user?.email ||
+      t("participantFallback")
+    ).trim();
 
     // WT-494: whatever the dropdowns show is what goes on the wire. It was computed here instead,
     // by a chain that agreed with /join on its first step (the user's remembered languages —
@@ -353,7 +355,7 @@ export function SetupRoomModal() {
     // on screen either way. What goes on the wire here also lands in sessionStorage as this room's
     // saved preference, so a value the user never saw poisons every later in-meeting resolution.
     if (!speakLanguage || !listenLanguage) {
-      toast.error("No language is available for this meeting. Ask the host to check its settings.");
+      toast.error(t("errors.noLanguageAvailable"));
       return;
     }
 
@@ -373,7 +375,7 @@ export function SetupRoomModal() {
       });
 
       if (result.status !== "success" || !result.room) {
-        toast.error(result.message || "Unable to join the room.");
+        toast.error(result.message || t("errors.unableToJoin"));
         return;
       }
 
@@ -404,7 +406,7 @@ export function SetupRoomModal() {
       });
     } catch (error) {
       toast.error(
-        error instanceof Error ? error.message : "Could not join the room.",
+        error instanceof Error ? error.message : t("errors.couldNotJoin"),
       );
     } finally {
       setIsJoining(false);
@@ -419,7 +421,7 @@ export function SetupRoomModal() {
         overlayClassName="!bg-black/40 !backdrop-blur-none"
         className="max-w-[calc(100vw-2rem)] sm:max-w-[900px] w-full p-6 border-border/60 bg-surface-1 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.3)] rounded-xl overflow-hidden flex flex-col gap-6"
       >
-        <DialogTitle className="sr-only">Setup Room</DialogTitle>
+        <DialogTitle className="sr-only">{t("srTitle")}</DialogTitle>
 
         <button
           onClick={() => setIsOpen(false)}
@@ -434,14 +436,14 @@ export function SetupRoomModal() {
             {isLoadingRoom ? (
               <>
                 <LumidotSpinner />{" "}
-                <span>Loading room...</span>
+                <span className="truncate">{t("loadingRoom")}</span>
               </>
             ) : (
-              room?.title || "Ready to join?"
+              <span className="truncate">{room?.title || t("readyToJoin")}</span>
             )}
           </h2>
-          <p className="text-[13px] text-ink-muted tracking-[-0.05px]">
-            Room Code: {room?.translationRoomCode || roomId}
+          <p className="text-[13px] text-ink-muted tracking-[-0.05px] truncate">
+            {t("roomCode", { code: room?.translationRoomCode || roomId })}
           </p>
         </div>
 
@@ -461,7 +463,7 @@ export function SetupRoomModal() {
               <div className="absolute inset-0 flex items-center justify-center bg-surface-1">
                 <div className="flex flex-col items-center gap-3 text-ink-muted">
                   <VideoCameraSlash className="w-12 h-12" weight="light" />
-                  <span className="text-[14px] font-medium">Camera is off</span>
+                  <span className="text-[14px] font-medium">{t("cameraOff")}</span>
                 </div>
               </div>
             )}
@@ -529,7 +531,7 @@ export function SetupRoomModal() {
               {preJoin.options.length > 0 && (
                 <div>
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                    Language Routing
+                    {t("languageRouting")}
                   </h3>
                   <div className="flex items-center gap-1 p-1 w-fit rounded-full border border-border/60 bg-transparent select-none text-[13px]">
                     <Select
@@ -544,7 +546,7 @@ export function SetupRoomModal() {
                         <span className="leading-none text-[14px]">
                           {getLanguageCode(speakLanguage)}
                         </span>
-                        <span className="font-medium text-ink">I speak</span>
+                        <span className="font-medium text-ink">{t("iSpeak")}</span>
                       </SelectTrigger>
                       <SelectContent>
                         {preJoin.options.map((language) => (
@@ -569,7 +571,7 @@ export function SetupRoomModal() {
                         <span className="leading-none text-[14px]">
                           {getLanguageCode(listenLanguage)}
                         </span>
-                        <span className="font-medium text-ink">I hear</span>
+                        <span className="font-medium text-ink">{t("iHear")}</span>
                       </SelectTrigger>
                       <SelectContent>
                         {preJoin.options.map((language) => (
@@ -585,32 +587,32 @@ export function SetupRoomModal() {
 
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Device Settings
+                  {t("deviceSettings")}
                 </h3>
                 <div className="space-y-3">
                   <DeviceSelect
-                    label="Camera"
+                    label={t("camera")}
                     icon={<VideoCamera className="w-4 h-4 text-ink-muted" />}
                     value={selectedCameraId}
                     onChange={setSelectedCameraId}
                     devices={cameraDevices}
-                    fallback="Default Camera"
+                    fallback={t("defaultCamera")}
                   />
                   <DeviceSelect
-                    label="Microphone"
+                    label={t("microphone")}
                     icon={<Microphone className="w-4 h-4 text-ink-muted" />}
                     value={selectedMicrophoneId}
                     onChange={setSelectedMicrophoneId}
                     devices={microphoneDevices}
-                    fallback="Default Microphone"
+                    fallback={t("defaultMicrophone")}
                   />
                   <DeviceSelect
-                    label="Speaker"
+                    label={t("speaker")}
                     icon={<SpeakerHigh className="w-4 h-4 text-ink-muted" />}
                     value={selectedSpeakerId}
                     onChange={setSelectedSpeakerId}
                     devices={speakerDevices}
-                    fallback="Default Speaker"
+                    fallback={t("defaultSpeaker")}
                   />
                 </div>
               </div>
@@ -629,21 +631,21 @@ export function SetupRoomModal() {
                 className="flex items-center justify-center w-full bg-foreground text-white text-[13px] font-medium h-[36px] px-4 rounded-[6px] hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {!room
-                  ? "Join Meeting"
+                  ? t("confirm.joinMeeting")
                   : !canJoinTranslationRoom(room.status)
-                  ? "Meeting unavailable"
+                  ? t("confirm.meetingUnavailable")
                   : isJoining
                   ? isHost
-                    ? "Starting..."
-                    : "Joining..."
+                    ? t("confirm.starting")
+                    : t("confirm.joining")
                   : shouldEnterWaitingRoom(room.status, {
                       isHost,
                       requiresApproval: room.settings?.requiresApproval,
                     })
-                  ? "Enter Waiting Room"
+                  ? t("confirm.enterWaitingRoom")
                   : isHost && (room.status === "scheduled" || room.status === "waiting")
-                  ? "Start Meeting"
-                  : "Join Meeting"}
+                  ? t("confirm.startMeeting")
+                  : t("confirm.joinMeeting")}
               </button>
             </div>
           </div>

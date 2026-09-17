@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowsClockwise, ClockCounterClockwise, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,21 +19,16 @@ import type { AdminAuditLogEntryDto } from "@/types/admin-audit";
 
 const PAGE_SIZE = 25;
 
-const RESULT_TABS = [
-  { value: "all", label: "All" },
-  { value: "succeeded", label: "Succeeded" },
-  { value: "failed", label: "Failed" },
-] as const;
+const RESULT_VALUES = ["all", "succeeded", "failed"] as const;
 
-type ResultFilter = (typeof RESULT_TABS)[number]["value"];
-
-const numberFormatter = new Intl.NumberFormat("en-US");
+type ResultFilter = (typeof RESULT_VALUES)[number];
 
 function isResultFilter(value: string | null): value is ResultFilter {
-  return RESULT_TABS.some((tab) => tab.value === value);
+  return (RESULT_VALUES as readonly string[]).includes(value ?? "");
 }
 
 function AuditLog() {
+  const t = useTranslations("adminMisc.audit");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -67,13 +63,22 @@ function AuditLog() {
   const total = auditQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const resultTabs = useMemo(
+    () => [
+      { value: "all" as const, label: t("resultTabs.all") },
+      { value: "succeeded" as const, label: t("resultTabs.succeeded") },
+      { value: "failed" as const, label: t("resultTabs.failed") },
+    ],
+    [t],
+  );
+
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<ClockCounterClockwise size={14} weight="fill" />}
-        title="Audit log"
-        description="Every administrative action across the platform, who performed it, and why."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -82,23 +87,19 @@ function AuditLog() {
             disabled={auditQuery.isFetching}
           >
             <ArrowsClockwise size={14} className={cn(auditQuery.isFetching && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
       <AdminFilterTabs
-        tabs={RESULT_TABS}
+        tabs={resultTabs}
         value={result}
         onChange={(value) =>
           updateParams({ result: value === "all" ? undefined : value, page: undefined })
         }
-        label="Action result"
-        trailing={
-          auditQuery.isPending
-            ? "Loading…"
-            : `${numberFormatter.format(total)} entr${total === 1 ? "y" : "ies"}`
-        }
+        label={t("actionResultAria")}
+        trailing={auditQuery.isPending ? t("loading") : t("entryCount", { count: total })}
       />
 
       <AdminPanel className="mt-4">
@@ -106,18 +107,15 @@ function AuditLog() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">The audit log could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the workspace service and that your session still holds the platform admin
-                role.
-              </p>
+              <p className="font-medium">{t("error.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("error.description")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void auditQuery.refetch()}
               >
-                Try again
+                {t("error.retry")}
               </Button>
             </div>
           </div>
@@ -135,10 +133,8 @@ function AuditLog() {
               <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
                 <ClockCounterClockwise size={20} weight="duotone" />
               </span>
-              <p className="mt-3 text-sm font-medium">No administrative actions match this filter</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Nothing has been recorded here yet, or the filter excludes it.
-              </p>
+              <p className="mt-3 text-sm font-medium">{t("empty.title")}</p>
+              <p className="mt-1 text-xs text-ink-muted">{t("empty.description")}</p>
             </div>
           </div>
         ) : (
@@ -154,9 +150,7 @@ function AuditLog() {
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
+          <span>{t("pagination.pageOf", { page, totalPages })}</span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -164,7 +158,7 @@ function AuditLog() {
               disabled={page <= 1}
               onClick={() => updateParams({ page: String(page - 1) })}
             >
-              Previous
+              {t("pagination.previous")}
             </Button>
             <Button
               variant="outline"
@@ -172,7 +166,7 @@ function AuditLog() {
               disabled={page >= totalPages}
               onClick={() => updateParams({ page: String(page + 1) })}
             >
-              Next
+              {t("pagination.next")}
             </Button>
           </div>
         </div>
@@ -182,6 +176,7 @@ function AuditLog() {
 }
 
 function AuditRow({ entry }: { entry: AdminAuditLogEntryDto }) {
+  const t = useTranslations("adminMisc.audit");
   const failed = entry.result !== "succeeded";
 
   return (
@@ -206,7 +201,7 @@ function AuditRow({ entry }: { entry: AdminAuditLogEntryDto }) {
               The badge is what stops it reading as a successful change. */}
           {failed ? (
             <span className="ml-1.5 text-[10px] font-semibold uppercase text-destructive">
-              failed
+              {t("failedBadge")}
             </span>
           ) : null}
         </div>
@@ -220,7 +215,9 @@ function AuditRow({ entry }: { entry: AdminAuditLogEntryDto }) {
           {/* Reason is a first-class column, not a tooltip. Every mutating admin endpoint requires
               one at write time; an audit table that hides it is worth about as much as no audit
               table at all. */}
-          <p className="text-[13px] text-ink">{entry.reason || <span className="text-ink-subtle">— no reason recorded</span>}</p>
+          <p className="text-[13px] text-ink">
+            {entry.reason || <span className="text-ink-subtle">{t("noReasonRecorded")}</span>}
+          </p>
           <AuditStateSummary before={entry.beforeSummary} after={entry.afterSummary} />
         </div>
 

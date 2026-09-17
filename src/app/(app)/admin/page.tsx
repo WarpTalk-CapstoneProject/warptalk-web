@@ -10,6 +10,7 @@
 import { Pulse, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useMemo } from "react";
 
 import { AdminPage, AdminPageHeader } from "@/components/admin/admin-page-chrome";
@@ -79,6 +80,7 @@ function QuantityBar({ fraction }: { fraction: number }) {
 }
 
 function UsageSection() {
+  const t = useTranslations("adminMisc.overview");
   const year = new Date().getFullYear();
   const chartQuery = useQuery({
     queryKey: ["global-usage-chart", year, false],
@@ -91,18 +93,18 @@ function UsageSection() {
 
   return (
     <Section
-      title="Usage"
-      subtitle={`Credits consumed and topped up, by month, ${year}`}
+      title={t("usage.title")}
+      subtitle={t("usage.subtitle", { year })}
       trailing={
         <span className="text-[13px] font-medium tabular-nums text-ink">
-          {numberFormatter.format(totalConsumed)} cr consumed
+          {numberFormatter.format(totalConsumed)} {t("usage.consumedSuffix")}
         </span>
       }
     >
       {chartQuery.isPending ? (
         <div className="h-40 animate-pulse rounded bg-surface-2" />
       ) : chartQuery.isError ? (
-        <p className="text-sm text-destructive">The usage chart could not be loaded.</p>
+        <p className="text-sm text-destructive">{t("usage.error")}</p>
       ) : (
         <>
           <div className="flex h-40 items-end gap-2">
@@ -110,7 +112,11 @@ function UsageSection() {
               <div
                 key={month.month}
                 className="group flex h-full flex-1 flex-col justify-end"
-                title={`${month.monthName}: ${numberFormatter.format(month.consumedCredits)} consumed · ${numberFormatter.format(month.topUpCredits)} topped up`}
+                title={t("usage.tooltip", {
+                  month: month.monthName,
+                  consumed: numberFormatter.format(month.consumedCredits),
+                  toppedUp: numberFormatter.format(month.topUpCredits),
+                })}
               >
                 <div className="flex h-full items-end justify-center gap-[3px]">
                   <div
@@ -130,10 +136,10 @@ function UsageSection() {
           </div>
           <div className="mt-3 flex items-center gap-4 text-[11px] text-ink-muted">
             <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-sm bg-primary/75" /> Consumed
+              <span className="size-2 rounded-sm bg-primary/75" /> {t("usage.consumed")}
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="size-2 rounded-sm bg-ink/15" /> Topped up
+              <span className="size-2 rounded-sm bg-ink/15" /> {t("usage.toppedUp")}
             </span>
           </div>
         </>
@@ -143,6 +149,7 @@ function UsageSection() {
 }
 
 export default function AdminOverviewPage() {
+  const t = useTranslations("adminMisc.overview");
   const metricsQuery = useQuery({
     queryKey: ["global-billing-metrics"],
     queryFn: () => billingService.getGlobalMetrics(),
@@ -187,17 +194,17 @@ export default function AdminOverviewPage() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Platform control center"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Pulse size={14} weight="fill" />}
-        title="Overview"
-        description="Live health, credit movement, and adoption across every WarpTalk workspace."
+        title={t("title")}
+        description={t("description")}
         actions={
           <span className="flex items-center gap-2 text-[11px] text-ink-muted">
             <span className="relative flex size-2">
               <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
               <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
             </span>
-            Live data
+            {t("liveData")}
             {updatedAt > 0
               ? ` · ${new Date(updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
               : ""}
@@ -215,47 +222,46 @@ export default function AdminOverviewPage() {
           <WarningCircle size={18} weight="duotone" className="shrink-0 text-amber-600" />
           <span className="min-w-0 flex-1">
             <span className="font-medium text-ink">
-              {suspendedCount} workspace{suspendedCount === 1 ? " is" : "s are"} suspended
+              {t("suspended.banner", { count: suspendedCount })}
             </span>
-            <span className="ml-1.5 text-ink-muted">
-              Nothing lifts a suspension on its own — each one stays closed until an admin
-              reactivates it.
-            </span>
+            <span className="ml-1.5 text-ink-muted">{t("suspended.description")}</span>
           </span>
-          <span className="shrink-0 text-xs font-medium text-ink-muted">Review →</span>
+          <span className="shrink-0 text-xs font-medium text-ink-muted">
+            {t("suspended.review")}
+          </span>
         </Link>
       ) : null}
 
       {metricsQuery.isError ? (
         <div className="mt-5 flex items-center gap-3 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <WarningCircle size={18} weight="duotone" />
-          Platform metrics could not be loaded. Check the billing service and your admin session.
+          {t("metricsError")}
         </div>
       ) : null}
 
       {/* The metrics band: cells divided by hairlines, not boxed into cards. */}
       <div className="mt-6 grid grid-cols-2 divide-x divide-hairline border-y border-hairline xl:grid-cols-4">
         <Metric
-          label="Active workspaces"
+          label={t("metrics.activeWorkspaces.label")}
           value={metricsQuery.isLoading ? "—" : numberFormatter.format(metrics?.activeWorkspaces ?? 0)}
-          helper="Workspaces currently active on the platform"
+          helper={t("metrics.activeWorkspaces.helper")}
         />
         <Metric
-          label="Credits consumed"
+          label={t("metrics.creditsConsumed.label")}
           value={metricsQuery.isLoading ? "—" : numberFormatter.format(metrics?.monthlyUsage ?? 0)}
-          helper="Consumption in the current month"
+          helper={t("metrics.creditsConsumed.helper")}
         />
         <Metric
-          label="Platform balance"
+          label={t("metrics.platformBalance.label")}
           value={metricsQuery.isLoading ? "—" : numberFormatter.format(metrics?.totalBalance ?? 0)}
-          helper="Credits available across all workspaces"
+          helper={t("metrics.platformBalance.helper")}
         />
         <Metric
-          label="Audit activity"
+          label={t("metrics.auditActivity.label")}
           value={
             metricsQuery.isLoading ? "—" : numberFormatter.format(metrics?.auditEventsLast30Days ?? 0)
           }
-          helper="Ledger events recorded in the last 30 days"
+          helper={t("metrics.auditActivity.helper")}
         />
       </div>
 
@@ -263,8 +269,8 @@ export default function AdminOverviewPage() {
         <UsageSection />
 
         <Section
-          title="Live operations"
-          subtitle="Credit anomalies requiring review"
+          title={t("liveOperations.title")}
+          subtitle={t("liveOperations.subtitle")}
           trailing={
             <span
               className={cn(
@@ -272,18 +278,16 @@ export default function AdminOverviewPage() {
                 alerts.length > 0 ? "text-amber-600 dark:text-amber-400" : "text-ink-muted",
               )}
             >
-              {alerts.length} open
+              {t("liveOperations.openCount", { count: alerts.length })}
             </span>
           }
         >
           {alertsQuery.isLoading ? (
             <div className="h-16 animate-pulse rounded bg-surface-2" />
           ) : alertsQuery.isError ? (
-            <p className="text-sm text-destructive">Operations feed is unavailable.</p>
+            <p className="text-sm text-destructive">{t("liveOperations.error")}</p>
           ) : alerts.length === 0 ? (
-            <p className="text-sm text-ink-muted">
-              All systems look quiet — no unusual credit consumption detected.
-            </p>
+            <p className="text-sm text-ink-muted">{t("liveOperations.empty")}</p>
           ) : (
             <ul>
               {alerts.slice(0, 8).map((alert) => (
@@ -307,13 +311,13 @@ export default function AdminOverviewPage() {
           )}
         </Section>
 
-        <Section title="Top workspaces" subtitle="Highest credit consumption, last 30 days">
+        <Section title={t("topWorkspaces.title")} subtitle={t("topWorkspaces.subtitle")}>
           {topWorkspacesQuery.isPending ? (
             <div className="h-16 animate-pulse rounded bg-surface-2" />
           ) : topWorkspacesQuery.isError ? (
-            <p className="text-sm text-destructive">Top workspaces could not be loaded.</p>
+            <p className="text-sm text-destructive">{t("topWorkspaces.error")}</p>
           ) : topWorkspaces.length === 0 ? (
-            <p className="text-sm text-ink-muted">No billable usage in the last 30 days.</p>
+            <p className="text-sm text-ink-muted">{t("topWorkspaces.empty")}</p>
           ) : (
             <ol className="space-y-3">
               {topWorkspaces.map((workspace, index) => (
@@ -343,13 +347,13 @@ export default function AdminOverviewPage() {
           )}
         </Section>
 
-        <Section title="Feature adoption" subtitle="Credit consumption by service, last 30 days">
+        <Section title={t("featureAdoption.title")} subtitle={t("featureAdoption.subtitle")}>
           {breakdownQuery.isPending ? (
             <div className="h-16 animate-pulse rounded bg-surface-2" />
           ) : breakdownQuery.isError ? (
-            <p className="text-sm text-destructive">The service breakdown could not be loaded.</p>
+            <p className="text-sm text-destructive">{t("featureAdoption.error")}</p>
           ) : breakdown.length === 0 ? (
-            <p className="text-sm text-ink-muted">Nothing billed in the last 30 days.</p>
+            <p className="text-sm text-ink-muted">{t("featureAdoption.empty")}</p>
           ) : (
             <ol className="space-y-3">
               {breakdown.map((feature) => (

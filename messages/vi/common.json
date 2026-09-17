@@ -83,6 +83,38 @@
       "billing": "Thanh toán",
       "globalGlossary": "Thuật ngữ toàn cục"
     },
+    "adminNav": {
+      "backToApp": "Quay lại ứng dụng",
+      "platformConsole": "Bảng điều khiển nền tảng",
+      "platformName": "WarpTalk Platform",
+      "logOut": "Đăng xuất",
+      "platformAdmin": "Quản trị nền tảng",
+      "sections": {
+        "platform": "Nền tảng",
+        "revenue": "Doanh thu",
+        "operations": "Vận hành",
+        "configuration": "Cấu hình"
+      },
+      "items": {
+        "overview": "Tổng quan",
+        "workspaces": "Không gian làm việc",
+        "accounts": "Tài khoản",
+        "subscriptions": "Gói đăng ký",
+        "plansAndPricing": "Gói & giá",
+        "billingLedger": "Sổ cái thanh toán",
+        "salesLeads": "Khách hàng tiềm năng",
+        "meetings": "Cuộc họp",
+        "systemHealth": "Tình trạng hệ thống",
+        "eventOutbox": "Hàng đợi sự kiện",
+        "feedback": "Phản hồi",
+        "auditLog": "Nhật ký kiểm tra",
+        "announcements": "Thông báo",
+        "emailTemplates": "Mẫu email",
+        "platformSettings": "Cài đặt nền tảng",
+        "plugins": "Plugin",
+        "globalGlossary": "Thuật ngữ toàn cục"
+      }
+    },
     "settingsNav": {
       "backToApp": "Quay lại ứng dụng",
       "personal": "Cá nhân",
@@ -125,9 +157,132 @@
       "open": "Đang mở"
     }
   },
+  "notifications": {
+    "ariaLabel": "Thông báo",
+    "ariaLabelUnread": "Thông báo, {count} chưa đọc"
+  },
+  "soundToggle": {
+    "titleMuted": "Âm thanh thông báo đang tắt",
+    "titleUnmuted": "Âm thanh thông báo đang bật",
+    "ariaTurnOn": "Bật âm thanh thông báo",
+    "ariaTurnOff": "Tắt âm thanh thông báo"
+  },
+  "themeToggle": {
+    "switchToLight": "Chuyển sang chế độ sáng",
+    "switchToDark": "Chuyển sang chế độ tối",
+    "lightMode": "Chế độ sáng",
+    "darkMode": "Chế độ tối"
+  },
+  "productTour": {
+    "ariaLabel": "Hướng dẫn sử dụng",
+    "closeTour": "Đóng hướng dẫn",
+    "skipTour": "Bỏ qua hướng dẫn",
+    "previousStep": "Bước trước",
+    "done": "Xong",
+    "next": "Tiếp theo"
+  },
+  "workspaceMembersPanel": {
+    "pickWorkspace": "Chọn một không gian làm việc để xem ai đang ở đó.",
+    "loading": "Đang tải thành viên…",
+    "loadError": "Không thể tải danh sách thành viên.",
+    "aroundNow": "{online}/{total} đang hoạt động",
+    "memberCount": "{count, plural, other {# thành viên}}",
+    "memberFallback": "thành viên"
+  },
+  "miniMeetingDock": {
+    "resizeAria": "Thay đổi kích thước cửa sổ cuộc họp"
+  },
   "meetingDayStrip": {
     "previousWeek": "Tuần trước",
     "nextWeek": "Tuần sau"
+  },
+  "chatbot": {
+    "askWarpBot": "Hỏi WarpBot",
+    "newChat": "Cuộc trò chuyện mới",
+    "chatHistory": "Lịch sử trò chuyện",
+    "activePageContext": "Ngữ cảnh trang đang hoạt động",
+    "removePageContext": "Xóa ngữ cảnh trang",
+    "removeContext": "Xóa {title}",
+    "removeContextAria": "Xóa {title} khỏi tin nhắn này",
+    "hidePageContext": "Ẩn ngữ cảnh trang",
+    "showPageContext": "Hiện ngữ cảnh trang",
+    "attachFiles": "Đính kèm ảnh hoặc tài liệu",
+    "offInThisChat": "Đã tắt trong cuộc trò chuyện này",
+    "sendMessage": "Gửi tin nhắn",
+    "thinking": "Đang suy nghĩ...",
+    "stillWorking": "Vẫn đang xử lý — việc này mất chút thời gian.",
+    "noMatchingCommand": "Không có lệnh phù hợp — nhấn Enter để gửi nội dung này như tin nhắn",
+    "noContextsFound": "Không tìm thấy ngữ cảnh nào",
+    "askWithPageContext": "Hỏi kèm ngữ cảnh trang...",
+    "askPlaceholder": "Hỏi WarpBot...",
+    "tools": "Công cụ",
+    "pluginsInThisChat": "Plugin trong cuộc trò chuyện này",
+    "manage": "Quản lý",
+    "connectToUse": "Kết nối để dùng trong WarpBot",
+    "connected": "Đã kết nối",
+    "connect": "Kết nối",
+    "useInThisChat": "Dùng {label} trong cuộc trò chuyện này",
+    "noToolsForPage": "Không có công cụ nào cho trang này. Hãy mở một cuộc họp hoặc tài liệu.",
+    "installPluginsHint": "Cài đặt plugin từ Cài đặt cá nhân.",
+    "loadingConversations": "Đang tải cuộc trò chuyện…",
+    "loadHistoryFailed": "Không thể tải lịch sử trò chuyện.",
+    "noPastConversations": "Chưa có cuộc trò chuyện nào trước đây",
+    "conversationStartFailed": "Không thể bắt đầu cuộc trò chuyện với WarpBot. Vui lòng thử lại.",
+    "messageSendFailed": "Không thể gửi tin nhắn đó. Vui lòng thử lại.",
+    "openConversationFailed": "Không thể mở cuộc trò chuyện đó.",
+    "fileReadFailed": "Không thể đọc \"{name}\".",
+    "pluginInstalled": "Đã cài đặt {label}",
+    "pluginConnected": "Đã kết nối {label}",
+    "pluginConnectOpenBrowser": "Hoàn tất kết nối {label} trong trình duyệt của bạn.",
+    "pluginConnectBlocked": "Trình duyệt của bạn đã chặn cửa sổ xác nhận của {label}.",
+    "pluginConnectBlockedAction": "Mở cửa sổ",
+    "pluginAlreadyConnected": "{label} đã được kết nối.",
+    "pluginUpdateFailed": "Không thể cập nhật {label}.",
+    "slashCommands": {
+      "summarize": {
+        "label": "Tóm tắt cuộc họp này",
+        "description": "Tóm tắt cuộc họp này dựa trên bản ghi",
+        "prompt": "Hãy tóm tắt cuộc họp này dựa trên bản ghi của nó."
+      },
+      "actionItems": {
+        "label": "Việc cần làm",
+        "description": "Liệt kê việc cần làm và quyết định từ cuộc họp này",
+        "prompt": "Hãy liệt kê các việc cần làm và quyết định chính từ bản ghi cuộc họp này."
+      },
+      "roomInfo": {
+        "label": "Thông tin phòng",
+        "description": "Xem trạng thái, ngôn ngữ và người tổ chức của phòng này",
+        "prompt": "Cho tôi biết trạng thái, ngôn ngữ và người tổ chức của phòng này."
+      },
+      "summarizeDoc": {
+        "label": "Tóm tắt tài liệu này",
+        "description": "Tóm tắt tài liệu bạn đang xem",
+        "prompt": "Hãy tóm tắt tài liệu này."
+      },
+      "extractTerms": {
+        "label": "Trích xuất thuật ngữ chính",
+        "description": "Trích xuất các thuật ngữ chính từ tài liệu này",
+        "prompt": "Hãy trích xuất các thuật ngữ và từ vựng chính được dùng trong tài liệu này."
+      },
+      "recentMeetings": {
+        "label": "Cuộc họp gần đây",
+        "description": "Liệt kê các cuộc họp gần đây của bạn",
+        "prompt": "Hãy liệt kê các cuộc họp gần đây của tôi."
+      },
+      "searchDocs": {
+        "label": "Tìm tài liệu",
+        "description": "Tìm kiếm tài liệu của không gian làm việc — tiếp tục nhập truy vấn của bạn",
+        "prompt": "Tìm kiếm tài liệu của không gian làm việc cho: "
+      }
+    },
+    "pageContextLabels": {
+      "roomDetail": "Cuộc họp",
+      "inMeeting": "Cuộc họp trực tiếp",
+      "documentDetail": "Tài liệu",
+      "documents": "Tài liệu",
+      "history": "Lịch sử",
+      "fallback": "Trang"
+    }
   },
   "accountMenu": {
     "credits": "Tín dụng không gian làm việc",

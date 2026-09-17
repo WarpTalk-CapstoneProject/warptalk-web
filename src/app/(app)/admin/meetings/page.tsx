@@ -4,6 +4,7 @@ import { Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowsClockwise, VideoCamera, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -22,21 +23,17 @@ import type {
 
 const PAGE_SIZE = 20;
 
-const STATUS_TABS = [
-  { value: "all", label: "All" },
-  { value: "live", label: "Live now" },
-  { value: "SCHEDULED", label: "Scheduled" },
-  { value: "ENDED", label: "Ended" },
-  { value: "CANCELLED", label: "Cancelled" },
-  { value: "FAILED", label: "Failed" },
-  { value: "EXPIRED", label: "Expired" },
+const STATUS_VALUES = [
+  "all",
+  "live",
+  "SCHEDULED",
+  "ENDED",
+  "CANCELLED",
+  "FAILED",
+  "EXPIRED",
 ] as const;
 
-const SORT_OPTIONS = [
-  { value: "recent_desc", label: "Most recent" },
-  { value: "recent_asc", label: "Oldest" },
-  { value: "duration_desc", label: "Longest" },
-] as const;
+const SORT_VALUES = ["recent_desc", "recent_asc", "duration_desc"] as const;
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -44,11 +41,11 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 const LIVE_STATUSES = new Set(["IN_PROGRESS", "PAUSED"]);
 
 function isStatusFilter(value: string | null): value is AdminMeetingStatusFilter {
-  return STATUS_TABS.some((tab) => tab.value === value);
+  return (STATUS_VALUES as readonly string[]).includes(value ?? "");
 }
 
 function isSort(value: string | null): value is AdminMeetingSort {
-  return SORT_OPTIONS.some((option) => option.value === value);
+  return (SORT_VALUES as readonly string[]).includes(value ?? "");
 }
 
 /**
@@ -78,6 +75,7 @@ function formatWhen(meeting: AdminMeetingSummaryDto): string {
 }
 
 function MeetingsDirectory() {
+  const t = useTranslations("adminMisc.meetings");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -111,13 +109,35 @@ function MeetingsDirectory() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const counts = countsQuery.data;
 
+  const statusTabs = useMemo(
+    () => [
+      { value: "all" as const, label: t("statusTabs.all") },
+      { value: "live" as const, label: t("statusTabs.live") },
+      { value: "SCHEDULED" as const, label: t("statusTabs.scheduled") },
+      { value: "ENDED" as const, label: t("statusTabs.ended") },
+      { value: "CANCELLED" as const, label: t("statusTabs.cancelled") },
+      { value: "FAILED" as const, label: t("statusTabs.failed") },
+      { value: "EXPIRED" as const, label: t("statusTabs.expired") },
+    ],
+    [t],
+  );
+
+  const sortOptions = useMemo(
+    () => [
+      { value: "recent_desc" as const, label: t("sort.recentDesc") },
+      { value: "recent_asc" as const, label: t("sort.recentAsc") },
+      { value: "duration_desc" as const, label: t("sort.durationDesc") },
+    ],
+    [t],
+  );
+
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<VideoCamera size={14} weight="fill" />}
-        title="Meetings"
-        description="Every translation room on the platform. Metadata only — no transcripts, no room controls."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-3">
             {counts && counts.liveNow > 0 ? (
@@ -126,12 +146,12 @@ function MeetingsDirectory() {
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                   <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
                 </span>
-                {counts.liveNow} live
+                {t("liveCount", { count: counts.liveNow })}
               </span>
             ) : null}
             {counts ? (
               <span className="text-[12px] text-ink-muted">
-                {numberFormatter.format(counts.startedToday)} started today
+                {t("startedToday", { count: numberFormatter.format(counts.startedToday) })}
               </span>
             ) : null}
             <Button
@@ -147,35 +167,31 @@ function MeetingsDirectory() {
                 size={14}
                 className={cn(directoryQuery.isFetching && "animate-spin")}
               />
-              Refresh
+              {t("refresh")}
             </Button>
           </div>
         }
       />
 
       <AdminFilterTabs
-        tabs={STATUS_TABS}
+        tabs={statusTabs}
         value={status}
         onChange={(value) =>
           updateParams({ status: value === "all" ? undefined : value, page: undefined })
         }
-        label="Meeting status"
-        trailing={
-          directoryQuery.isPending
-            ? "Loading…"
-            : `${numberFormatter.format(total)} meeting${total === 1 ? "" : "s"}`
-        }
+        label={t("meetingStatusAria")}
+        trailing={directoryQuery.isPending ? t("loading") : t("meetingCount", { count: total })}
       />
 
       <div className="mt-4 flex justify-end">
         <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-          Sort
+          {t("sort.label")}
           <select
             value={sort}
             onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
             className="h-9 rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
           >
-            {SORT_OPTIONS.map((option) => (
+            {sortOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -189,18 +205,15 @@ function MeetingsDirectory() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">Meetings could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the translation-room service and that your session still holds the platform
-                admin role.
-              </p>
+              <p className="font-medium">{t("error.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("error.description")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void directoryQuery.refetch()}
               >
-                Try again
+                {t("error.retry")}
               </Button>
             </div>
           </div>
@@ -221,8 +234,8 @@ function MeetingsDirectory() {
               <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
                 <VideoCamera size={20} weight="duotone" />
               </span>
-              <p className="mt-3 text-sm font-medium">No meetings match this filter</p>
-              <p className="mt-1 text-xs text-ink-muted">Pick a different status tab.</p>
+              <p className="mt-3 text-sm font-medium">{t("empty.title")}</p>
+              <p className="mt-1 text-xs text-ink-muted">{t("empty.description")}</p>
             </div>
           </div>
         ) : (
@@ -238,9 +251,7 @@ function MeetingsDirectory() {
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
+          <span>{t("pagination.pageOf", { page, totalPages })}</span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -248,7 +259,7 @@ function MeetingsDirectory() {
               disabled={page <= 1}
               onClick={() => updateParams({ page: String(page - 1) })}
             >
-              Previous
+              {t("pagination.previous")}
             </Button>
             <Button
               variant="outline"
@@ -256,21 +267,19 @@ function MeetingsDirectory() {
               disabled={page >= totalPages}
               onClick={() => updateParams({ page: String(page + 1) })}
             >
-              Next
+              {t("pagination.next")}
             </Button>
           </div>
         </div>
       ) : null}
 
-      <p className="mt-4 text-[12px] text-ink-muted">
-        There is no way to open or listen to a meeting from here, by design. This screen reports
-        that a meeting happened; what was said in it belongs to the workspace that held it.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
     </AdminPage>
   );
 }
 
 function MeetingRow({ meeting }: { meeting: AdminMeetingSummaryDto }) {
+  const t = useTranslations("adminMisc.meetings");
   const isLive = LIVE_STATUSES.has(meeting.status);
 
   return (
@@ -328,7 +337,7 @@ function MeetingRow({ meeting }: { meeting: AdminMeetingSummaryDto }) {
           href={`/admin/workspaces/${meeting.workspaceId}`}
           className="text-[12px] text-ink-subtle transition-colors hover:text-ink"
         >
-          workspace
+          {t("openWorkspace")}
         </Link>
       </div>
     </div>

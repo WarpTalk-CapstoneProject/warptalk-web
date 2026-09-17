@@ -39,6 +39,17 @@ const NAMESPACES = [
   "settingsBilling",
   "settingsBillingUsage",
   "settingsBillingInvoices",
+  "adminChrome",
+  "adminMisc",
+  "adminOps",
+  "adminWorkspaces",
+  "adminUsers",
+  "adminSubscriptions",
+  "adminAnnouncements",
+  "adminPlansSettings",
+  "adminGlobalGlossary",
+  "adminPlugins",
+  "adminBillingLedger",
 ] as const;
 
 async function loadMessages(locale: string) {

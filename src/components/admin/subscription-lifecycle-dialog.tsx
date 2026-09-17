@@ -16,6 +16,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -34,34 +35,35 @@ import type { AdminSubscriptionSummaryDto } from "@/types/admin-subscription";
 
 export type SubscriptionLifecycleAction = "cancel" | "reactivate";
 
-const COPY: Record<
-  SubscriptionLifecycleAction,
-  {
-    title: string;
-    description: string;
-    confirm: string;
-    pending: string;
-    /** Only cancel stores a reason; the reactivate endpoint takes no body to put one in. */
-    requiresReason: boolean;
-  }
-> = {
-  cancel: {
-    title: "Cancel this subscription?",
-    description:
-      "The Stripe subscription is cancelled, entitlements are republished and the workspace owner is notified. A trial ends immediately; a paid subscription runs to the end of its period.",
-    confirm: "Cancel subscription",
-    pending: "Cancelling…",
-    requiresReason: true,
-  },
-  reactivate: {
-    title: "Reactivate this subscription?",
-    description:
-      "Undoes a cancellation that has not taken effect yet: renewal is switched back on for the period already paid for. Nothing is charged now. It does not lift a service suspension.",
-    confirm: "Reactivate subscription",
-    pending: "Reactivating…",
-    requiresReason: false,
-  },
+type LifecycleCopy = {
+  title: string;
+  description: string;
+  confirm: string;
+  pending: string;
+  /** Only cancel stores a reason; the reactivate endpoint takes no body to put one in. */
+  requiresReason: boolean;
 };
+
+function getCopy(
+  t: ReturnType<typeof useTranslations>,
+): Record<SubscriptionLifecycleAction, LifecycleCopy> {
+  return {
+    cancel: {
+      title: t("cancel.title"),
+      description: t("cancel.description"),
+      confirm: t("cancel.confirm"),
+      pending: t("cancel.pending"),
+      requiresReason: true,
+    },
+    reactivate: {
+      title: t("reactivate.title"),
+      description: t("reactivate.description"),
+      confirm: t("reactivate.confirm"),
+      pending: t("reactivate.pending"),
+      requiresReason: false,
+    },
+  };
+}
 
 export function SubscriptionLifecycleDialog({
   subscription,
@@ -111,14 +113,15 @@ function LifecycleForm({
   onDone: () => void;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminSubscriptions.lifecycleDialog");
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const copy = COPY[action];
+  const copy = getCopy(t)[action];
 
   const handleSubmit = async () => {
     const trimmed = reason.trim();
     if (copy.requiresReason && trimmed.length < 10) {
-      setError("Give a reason of at least ten characters. It is the only record of why.");
+      setError(t("reasonTooShort"));
       return;
     }
 
@@ -127,7 +130,7 @@ function LifecycleForm({
       await onSubmit(copy.requiresReason ? trimmed : null);
       onDone();
     } catch (err) {
-      setError(getErrorMessage(err, "The subscription could not be updated."));
+      setError(getErrorMessage(err, t("genericError")));
     }
   };
 
@@ -142,14 +145,14 @@ function LifecycleForm({
         <div className="rounded-lg border border-hairline/60 px-3 py-2 text-[12px]">
           <p className="font-medium text-ink">{subscription.planName}</p>
           <p className="mt-0.5 font-mono text-[11px] text-ink-subtle">
-            workspace {subscription.workspaceId}
+            {t("workspacePrefix")} {subscription.workspaceId}
           </p>
         </div>
 
         {copy.requiresReason ? (
         <div>
           <Label htmlFor="lifecycle-reason" className="text-[12px] text-ink-muted">
-            Reason
+            {t("reasonLabel")}
           </Label>
           <Textarea
             id="lifecycle-reason"
@@ -157,7 +160,7 @@ function LifecycleForm({
             rows={3}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Recorded on the subscription."
+            placeholder={t("reasonPlaceholder")}
           />
         </div>
         ) : null}
@@ -175,7 +178,7 @@ function LifecycleForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Back
+          {t("back")}
         </Button>
         <Button onClick={() => void handleSubmit()} disabled={isSaving}>
           {isSaving ? copy.pending : copy.confirm}

@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
@@ -48,31 +49,24 @@ import type {
 
 const PAGE_SIZE = 20;
 
-const STATUS_TABS = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "pending", label: "Pending" },
-  { value: "suspended", label: "Suspended" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "expired", label: "Expired" },
-] as const;
+const STATUS_VALUES = ["all", "active", "pending", "suspended", "cancelled", "expired"] as const;
 
-const SORT_OPTIONS = [
-  { value: "period_end_asc", label: "Renews soonest" },
-  { value: "period_end_desc", label: "Renews latest" },
-  { value: "credits_asc", label: "Fewest credits left" },
-  { value: "created_desc", label: "Newest" },
-  { value: "created_asc", label: "Oldest" },
+const SORT_VALUES = [
+  "period_end_asc",
+  "period_end_desc",
+  "credits_asc",
+  "created_desc",
+  "created_asc",
 ] as const;
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
 function isStatusFilter(value: string | null): value is AdminSubscriptionStatusFilter {
-  return STATUS_TABS.some((tab) => tab.value === value);
+  return STATUS_VALUES.some((status) => status === value);
 }
 
 function isSort(value: string | null): value is AdminSubscriptionSort {
-  return SORT_OPTIONS.some((option) => option.value === value);
+  return SORT_VALUES.some((option) => option === value);
 }
 
 function formatDate(value: string) {
@@ -113,8 +107,29 @@ function SummaryTile({
 }
 
 function SubscriptionsDirectory() {
+  const t = useTranslations("adminSubscriptions.page");
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  const STATUS_TABS = useMemo(
+    () =>
+      STATUS_VALUES.map((value) => ({
+        value,
+        label: t(`statusTabs.${value}`),
+      })),
+    [t],
+  );
+
+  const SORT_OPTIONS = useMemo(
+    () => [
+      { value: "period_end_asc" as const, label: t("sort.periodEndAsc") },
+      { value: "period_end_desc" as const, label: t("sort.periodEndDesc") },
+      { value: "credits_asc" as const, label: t("sort.creditsAsc") },
+      { value: "created_desc" as const, label: t("sort.createdDesc") },
+      { value: "created_asc" as const, label: t("sort.createdAsc") },
+    ],
+    [t],
+  );
 
   const statusParam = searchParams.get("status");
   const sortParam = searchParams.get("sort");
@@ -161,10 +176,10 @@ function SubscriptionsDirectory() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Revenue"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<CreditCard size={14} weight="fill" />}
-        title="Subscriptions"
-        description="Every plan on the platform, what it is worth per month, and what runs out next."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -179,7 +194,7 @@ function SubscriptionsDirectory() {
               size={14}
               className={cn(directoryQuery.isFetching && "animate-spin")}
             />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
@@ -187,7 +202,7 @@ function SubscriptionsDirectory() {
       {summaryQuery.isError ? (
         <div className="mt-5 flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <WarningCircle size={18} weight="duotone" />
-          Revenue totals could not be loaded. The directory below is unaffected.
+          {t("summaryError")}
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-surface-1 lg:grid-cols-4">
@@ -195,28 +210,32 @@ function SubscriptionsDirectory() {
               reports one amount per currency and refuses to add VND to USD. Rendering it as a
               single figure here would put back exactly the invention the API avoided. */}
           <SummaryTile
-            label="Monthly recurring"
+            label={t("summary.monthlyRecurring.label")}
             value={summary ? formatMonthlyRecurring(summary.monthlyRecurring) : "—"}
             helper={
               summary && summary.monthlyRecurring.length > 1
-                ? "Kept per currency — not converted"
-                : "Excludes trials and cancellations"
+                ? t("summary.monthlyRecurring.helperMultiCurrency")
+                : t("summary.monthlyRecurring.helperDefault")
             }
           />
           <SummaryTile
-            label="Active"
+            label={t("summary.active.label")}
             value={summary ? numberFormatter.format(summary.activeCount) : "—"}
-            helper={summary ? `${numberFormatter.format(summary.trialCount)} still in trial` : "—"}
+            helper={
+              summary
+                ? t("summary.active.helper", { count: numberFormatter.format(summary.trialCount) })
+                : "—"
+            }
           />
           <SummaryTile
-            label="Renewing in 14 days"
+            label={t("summary.endingWithin14Days.label")}
             value={summary ? numberFormatter.format(summary.endingWithin14Days) : "—"}
-            helper="Renewals and expiries alike"
+            helper={t("summary.endingWithin14Days.helper")}
           />
           <SummaryTile
-            label="Past due"
+            label={t("summary.pastDue.label")}
             value={summary ? numberFormatter.format(summary.pastDueCount) : "—"}
-            helper="Service suspended on an overdue invoice"
+            helper={t("summary.pastDue.helper")}
             tone={summary && summary.pastDueCount > 0 ? "warning" : "neutral"}
           />
         </div>
@@ -228,17 +247,15 @@ function SubscriptionsDirectory() {
         onChange={(value) =>
           updateParams({ status: value === "all" ? undefined : value, page: undefined })
         }
-        label="Subscription status"
+        label={t("statusTabs.label")}
         trailing={
-          directoryQuery.isPending
-            ? "Loading…"
-            : `${numberFormatter.format(total)} subscription${total === 1 ? "" : "s"}`
+          directoryQuery.isPending ? t("loading") : t("subscriptionCount", { count: total })
         }
       />
 
       <div className="mt-4 flex justify-end">
         <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-          Sort
+          {t("sort.label")}
           <select
             value={sort}
             onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
@@ -258,18 +275,15 @@ function SubscriptionsDirectory() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">Subscriptions could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the billing service and that your session still holds the platform admin
-                role.
-              </p>
+              <p className="font-medium">{t("errorState.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("errorState.description")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void directoryQuery.refetch()}
               >
-                Try again
+                {t("errorState.retry")}
               </Button>
             </div>
           </div>
@@ -293,8 +307,8 @@ function SubscriptionsDirectory() {
               <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
                 <CreditCard size={20} weight="duotone" />
               </span>
-              <p className="mt-3 text-sm font-medium">No subscriptions match this filter</p>
-              <p className="mt-1 text-xs text-ink-muted">Pick a different status tab.</p>
+              <p className="mt-3 text-sm font-medium">{t("emptyState.title")}</p>
+              <p className="mt-1 text-xs text-ink-muted">{t("emptyState.description")}</p>
             </div>
           </div>
         ) : (
@@ -349,9 +363,7 @@ function SubscriptionsDirectory() {
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
+          <span>{t("pagination.pageOf", { page, totalPages })}</span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -359,7 +371,7 @@ function SubscriptionsDirectory() {
               disabled={page <= 1}
               onClick={() => updateParams({ page: String(page - 1) })}
             >
-              Previous
+              {t("pagination.previous")}
             </Button>
             <Button
               variant="outline"
@@ -367,7 +379,7 @@ function SubscriptionsDirectory() {
               disabled={page >= totalPages}
               onClick={() => updateParams({ page: String(page + 1) })}
             >
-              Next
+              {t("pagination.next")}
             </Button>
           </div>
         </div>
@@ -388,6 +400,7 @@ function SubscriptionRow({
   ) => void;
   onChangePlan: (subscription: AdminSubscriptionSummaryDto) => void;
 }) {
+  const t = useTranslations("adminSubscriptions.page");
   const isTrial =
     subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > new Date();
   // A paid cancellation leaves cancelledAt null (the row stays live until the period ends), so the
@@ -427,11 +440,11 @@ function SubscriptionRow({
                 : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
           )}
         >
-          {subscription.status}
+          {t(`statusTabs.${subscription.status}`)}
         </span>
         {isPastDue ? (
           <span className="inline-flex items-center rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
-            past due
+            {t("row.pastDue")}
           </span>
         ) : null}
       </div>
@@ -440,7 +453,13 @@ function SubscriptionRow({
           cancellation is worth nothing ever again — printing 0 for both merges two facts that read
           differently. */}
       <div className="w-[150px] shrink-0 text-[13px] tabular-nums text-ink md:text-right">
-        {formatSubscriptionValue(subscription.monthlyValue, { isTrial, isCancelled })}
+        {subscription.monthlyValue
+          ? formatSubscriptionValue(subscription.monthlyValue, { isTrial, isCancelled })
+          : isTrial
+            ? t("row.value.trial")
+            : isCancelled
+              ? t("row.value.cancelled")
+              : formatSubscriptionValue(subscription.monthlyValue, { isTrial, isCancelled })}
       </div>
 
       <div className="w-[110px] shrink-0 text-[13px] tabular-nums text-ink-muted md:text-right">
@@ -450,7 +469,9 @@ function SubscriptionRow({
       <div className="w-[150px] shrink-0 text-[13px] text-ink-muted md:text-right">
         {formatDate(subscription.currentPeriodEnd)}
         {!subscription.autoRenew ? (
-          <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">no renew</span>
+          <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+            {t("row.noRenew")}
+          </span>
         ) : null}
       </div>
 
@@ -463,18 +484,18 @@ function SubscriptionRow({
         {!isEndedSubscription(subscription) ? (
           <Button variant="outline" size="sm" onClick={() => onChangePlan(subscription)}>
             <ArrowsLeftRight size={13} />
-            Change plan
+            {t("row.changePlan")}
           </Button>
         ) : null}
         {lifecycleAction === "reactivate" ? (
           <Button variant="outline" size="sm" onClick={() => onAction(subscription, "reactivate")}>
             <ArrowCounterClockwise size={13} />
-            Reactivate
+            {t("row.reactivate")}
           </Button>
         ) : lifecycleAction === "cancel" ? (
           <Button variant="outline" size="sm" onClick={() => onAction(subscription, "cancel")}>
             <Prohibit size={13} />
-            Cancel
+            {t("row.cancel")}
           </Button>
         ) : null}
       </div>

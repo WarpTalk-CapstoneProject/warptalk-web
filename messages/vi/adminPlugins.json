@@ -1,0 +1,332 @@
+{
+  "list": {
+    "eyebrow": "Cấu hình",
+    "title": "Danh mục plugin",
+    "description": "Toàn bộ chợ ứng dụng, kể cả các dòng đã ngừng hoạt động. Chủ workspace thêm plugin vào workspace của mình; thành viên kết nối bằng tài khoản riêng. Các plugin riêng tư mà một workspace tự tạo cho mình sẽ không xuất hiện ở đây.",
+    "refresh": "Làm mới",
+    "createPlugin": "Tạo plugin",
+    "withMcp": "Bằng MCP",
+    "brokenHeading": "{count, plural, other {# dòng}} không thể hoàn tất kết nối OAuth.",
+    "brokenDetail": "{labels} — được đánh dấu là pre-registered nhưng không có client id, nên màn hình xin cấp quyền được dựng với client_id rỗng và nhà cung cấp từ chối. Hãy mở dòng đó và đặt client id.",
+    "filterAria": "Lọc danh mục theo trạng thái hoạt động của từng dòng",
+    "trailingCount": "{visible} trên {total}",
+    "searchPlaceholder": "Tìm theo tên hiển thị, key hoặc nhà cung cấp",
+    "searchAria": "Tìm kiếm trong danh mục plugin",
+    "tabs": {
+      "all": "Tất cả",
+      "active": "Đang hoạt động",
+      "retired": "Đã ngừng"
+    },
+    "error": {
+      "title": "Không thể tải danh mục plugin.",
+      "body": "Kiểm tra dịch vụ assistant và đảm bảo phiên đăng nhập của bạn vẫn có vai trò platform admin.",
+      "tryAgain": "Thử lại"
+    },
+    "emptyCatalog": "Danh mục đang trống. Hiện không có gì được cung cấp trong WarpBot, cho bất kỳ ai.",
+    "noMatch": "Không có dòng nào khớp với bộ lọc này.",
+    "columns": {
+      "plugin": "Plugin",
+      "kind": "Loại",
+      "provider": "Nhà cung cấp",
+      "state": "Trạng thái",
+      "oauthClient": "OAuth client",
+      "workspaces": "Workspace",
+      "installs": "Lượt cài",
+      "tools": "Công cụ"
+    },
+    "state": {
+      "active": "đang hoạt động",
+      "retired": "đã ngừng"
+    },
+    "kindLabels": {
+      "native": "native",
+      "mcp": "MCP"
+    },
+    "oauthSourceLabels": {
+      "unresolved": "chưa xác định",
+      "preregistered": "pre-registered",
+      "cimd": "CIMD",
+      "dcr": "DCR"
+    },
+    "serverConfig": "cấu hình server",
+    "noClientIdBadge": "thiếu client id",
+    "missingClientIdExplanation": "Dòng này được đánh dấu pre-registered nhưng không có client id OAuth, nên khi thử kết nối, URL xin cấp quyền sẽ được dựng với client_id rỗng và nhà cung cấp sẽ từ chối. Hãy đặt client id bên dưới.",
+    "featuredBadge": "nổi bật",
+    "workspaceCount": "{count, plural, =0 {không workspace nào} other {# workspace}}",
+    "footerNote": "Một dòng native được phục vụ bởi mã đã biên dịch sẵn và lấy OAuth client từ cấu hình dịch vụ, không phải từ danh mục — nên màn hình này không thể đặt hay xác nhận client cho dòng đó.",
+    "dialog": {
+      "title": "Thêm một ứng dụng MCP",
+      "description": "Dòng này sẽ xuất hiện trong danh sách plugin của mọi người dùng ngay khi được lưu — không cần triển khai lại, không cần khởi động lại. Nó được tạo dưới dạng dòng MCP lấy chính key làm tên nhà cung cấp OAuth, chưa có công cụ nào: các công cụ sẽ đến từ tools/list của chính server ở lần kết nối đầu tiên, và có thể được viết tay từ trang của dòng này.",
+      "pluginKey": {
+        "label": "Plugin key",
+        "placeholder": "linear",
+        "hint": "Chữ thường, và cố định vĩnh viễn: đây là URL của dòng này và cũng là tên nhà cung cấp OAuth của nó. Các key dành riêng: {keys}."
+      },
+      "label": {
+        "label": "Tên hiển thị",
+        "placeholder": "Linear"
+      },
+      "description": {
+        "label": "Mô tả",
+        "hint": "Nội dung người dùng đọc trong danh mục trước khi cài đặt."
+      },
+      "mcpServerUrl": {
+        "label": "URL server MCP",
+        "placeholder": "https://mcp.example.com/sse",
+        "hint": "Phải là https:// tuyệt đối. Token của dòng này đi qua đường truyền này, nên http bị từ chối — kể cả trên localhost."
+      },
+      "avatarUrl": {
+        "label": "URL ảnh đại diện",
+        "hint": "Tùy chọn. Một URL http(s) hoặc đường dẫn tương đối trong site."
+      },
+      "requiredScopes": {
+        "label": "Scope bắt buộc",
+        "hint": "Tùy chọn, mỗi dòng một scope. Hầu hết server MCP tự công bố scope của mình khi kết nối."
+      },
+      "oauth": {
+        "checkboxTitle": "Server này cần OAuth client đăng ký thủ công",
+        "checkboxBody": "Chỉ bật nếu bạn chắc chắn cần. Quy trình đăng ký tự chạy ở lần kết nối đầu tiên và tự chọn Client ID Metadata Documents hoặc dynamic registration. Nếu bạn nhập client id ở đây, dòng này sẽ được đánh dấu preregistered — trạng thái luôn phải có client id.",
+        "clientId": {
+          "label": "Client id"
+        },
+        "clientSecret": {
+          "label": "Client secret",
+          "hint": "Tùy chọn — để trống nếu là public client. Giá trị chỉ được nhập vào chứ không hiển thị lại: không có endpoint nào trả về nó, và chỉ có thể thay thế hoặc xóa từ trang của dòng này sau đó."
+        },
+        "authorizationEndpoint": {
+          "label": "Authorization endpoint",
+          "hint": "Tùy chọn. Để trống để discovery tự tìm."
+        },
+        "tokenEndpoint": {
+          "label": "Token endpoint",
+          "hint": "Tùy chọn."
+        },
+        "revokeEndpoint": {
+          "label": "Revoke endpoint",
+          "hint": "Tùy chọn."
+        }
+      },
+      "catalogNotLoadedNote": "Danh mục chưa tải xong, nên một key đã bị dòng khác sử dụng sẽ không được phát hiện ở đây — server vẫn sẽ từ chối nó.",
+      "cancel": "Hủy",
+      "add": "Thêm vào danh mục",
+      "adding": "Đang thêm…",
+      "toast": {
+        "problemCount": "{count, plural, other {# trường}} vẫn cần sửa. Chưa gửi gì cả.",
+        "success": "{key} đã được thêm vào danh mục. Có hiệu lực ngay với mọi người dùng — không cần triển khai lại.",
+        "errorFallback": "Không thể thêm plugin vào danh mục."
+      }
+    }
+  },
+  "detail": {
+    "backLink": "Danh mục plugin",
+    "state": {
+      "active": "đang hoạt động",
+      "retired": "đã ngừng"
+    },
+    "kindLabels": {
+      "native": "native",
+      "mcp": "MCP"
+    },
+    "providerLabel": "nhà cung cấp {provider}",
+    "installsCount": "{count, plural, other {# lượt cài}}",
+    "connectionsCount": "{count, plural, other {# kết nối}}",
+    "refresh": "Làm mới",
+    "rediscover": "Chạy lại discovery",
+    "clearing": "Đang xóa…",
+    "retire": "Ngừng hoạt động",
+    "activate": "Kích hoạt",
+    "notFound": {
+      "title": "Không tìm thấy plugin",
+      "body": "Không có dòng nào trong danh mục mang key {key}. Có thể nó đã bị xóa vĩnh viễn."
+    },
+    "loadError": {
+      "title": "Không thể tải plugin này",
+      "fallback": "Dịch vụ assistant không phản hồi."
+    },
+    "tryAgain": "Thử lại",
+    "backToCatalog": "Quay lại danh mục",
+    "cannotConnectBanner": {
+      "title": "Dòng này không thể hoàn tất kết nối OAuth.",
+      "body": "Dòng này được đánh dấu pre-registered nhưng không có client id OAuth, nên khi thử kết nối, URL xin cấp quyền sẽ được dựng với client_id rỗng và nhà cung cấp sẽ từ chối. Hãy đặt client id bên dưới."
+    },
+    "toast": {
+      "activated": "Đã kích hoạt plugin.",
+      "retired": "Đã ngừng hoạt động plugin.",
+      "activateFail": "Không thể kích hoạt plugin.",
+      "retireFail": "Không thể ngừng hoạt động plugin.",
+      "rediscoverSuccess": "Đã xóa dữ liệu discovery. Quy trình đăng ký sẽ chạy lại ở lần kết nối tiếp theo.",
+      "rediscoverFail": "Không thể xóa dữ liệu discovery của plugin này."
+    },
+    "metadata": {
+      "heading": "Thông tin trong danh mục",
+      "unsavedChanges": "{count, plural, other {# thay đổi}} chưa lưu",
+      "label": "Tên hiển thị",
+      "category": {
+        "label": "Danh mục",
+        "hint": "Để trống để xóa giá trị."
+      },
+      "description": "Mô tả",
+      "avatarUrl": {
+        "label": "URL ảnh đại diện",
+        "hint": "Một URL http(s) hoặc đường dẫn tương đối bắt đầu bằng /. Để trống để xóa."
+      },
+      "sortOrder": {
+        "label": "Thứ tự sắp xếp",
+        "hint": "Thứ tự hiển thị được biên tập trong danh mục. Nếu bằng nhau sẽ xếp theo tên hiển thị."
+      },
+      "mcpServerUrl": {
+        "label": "URL server MCP",
+        "hint": "Một URL https:// tuyệt đối. Không thể để trống với dòng MCP."
+      },
+      "nativeNote": "Một dòng native được phục vụ bởi mã đã biên dịch sẵn, không bao giờ đọc URL server MCP — nên trường này không được hiển thị ở đây. Server cũng sẽ từ chối giá trị đó nếu gửi lên.",
+      "requiredScopes": {
+        "label": "Scope bắt buộc",
+        "hint": "Mỗi dòng một scope. Các giá trị trùng lặp sẽ bị server loại bỏ."
+      },
+      "featuredLabel": "Nổi bật trong danh mục hiển thị cho người dùng",
+      "discard": "Hủy thay đổi",
+      "save": "Lưu thay đổi",
+      "saving": "Đang lưu…",
+      "toast": {
+        "updated": "Đã cập nhật plugin.",
+        "saveFail": "Không thể lưu plugin."
+      }
+    },
+    "oauth": {
+      "heading": "OAuth client",
+      "sourceLabels": {
+        "unresolved": "chưa xác định",
+        "preregistered": "pre-registered",
+        "cimd": "CIMD",
+        "dcr": "DCR"
+      },
+      "sourceNotes": {
+        "unresolved": "Discovery chưa chạy. Quy trình đăng ký sẽ tự chọn ở lần kết nối đầu tiên.",
+        "preregistered": "Người vận hành đã nhập client id. Dòng này bắt buộc phải có client id.",
+        "cimd": "Client được xác định bằng URL tài liệu metadata đã công bố của chúng ta.",
+        "dcr": "Thông tin xác thực đến từ dynamic registration theo RFC 7591."
+      },
+      "clientIdSummary": "Client id",
+      "clientIdNotSet": "chưa đặt",
+      "clientSecretSummary": "Client secret",
+      "clientSecretStored": "đã lưu, dòng được ghi lần cuối {date}",
+      "clientSecretNone": "chưa lưu secret nào — đây là public client",
+      "tokenEndpointAuthSummary": "Xác thực token endpoint",
+      "tokenEndpointAuthNotNegotiated": "chưa được thương lượng",
+      "registrationEndpointLabel": "Registration endpoint: {endpoint}.",
+      "native": {
+        "title": "OAuth client của plugin này không nằm trong danh mục.",
+        "body": "Một dòng native được phục vụ bởi mã đã biên dịch sẵn, đọc client id và secret từ cấu hình dịch vụ. Server sẽ từ chối ghi các giá trị này ở đây, và nếu vẫn hiển thị biểu mẫu sẽ khiến người đang tìm cách khắc phục client_id rỗng nhập giá trị vào, thấy nó được lưu, và tin rằng vấn đề đã được xử lý dù thực tế không có gì thay đổi. Hãy đặt giá trị đó trong môi trường mà dịch vụ assistant đang chạy."
+      },
+      "clientId": {
+        "label": "Client id",
+        "hint": "Lưu lại sẽ đánh dấu dòng này là pre-registered. Client id vốn công khai theo bản chất — nó xuất hiện trong mọi URL xin cấp quyền mà trình duyệt đi theo."
+      },
+      "clientSecretHeading": "Client secret",
+      "secretMode": {
+        "keepStored": "Giữ nguyên secret đã lưu",
+        "leaveUnset": "Không đặt — dòng này không có secret",
+        "replace": "Thay thế",
+        "setOne": "Đặt một secret",
+        "clearStored": "Xóa secret đã lưu"
+      },
+      "secretPlaceholder": "Client secret mới",
+      "secretAria": "Client secret mới",
+      "secretHint": "Secret chỉ được nhập vào chứ không hiển thị lại. Không có gì trên màn hình này cho bạn thấy secret đã lưu, nên \"giữ nguyên\" là lựa chọn mặc định: việc đổi client id không được xóa mất secret chỉ vì ô bên dưới bị để trống.",
+      "authorizationEndpoint": {
+        "label": "Authorization endpoint",
+        "hint": "Tùy chọn. Để trống sẽ giữ nguyên giá trị discovery đã lưu."
+      },
+      "tokenEndpoint": {
+        "label": "Token endpoint",
+        "hint": "Tùy chọn."
+      },
+      "revokeEndpoint": {
+        "label": "Revoke endpoint",
+        "hint": "Tùy chọn."
+      },
+      "dirtyCount": "{count, plural, other {# trường}} khác với dòng đã lưu.",
+      "discard": "Hủy thay đổi",
+      "save": "Lưu OAuth client",
+      "saving": "Đang lưu…",
+      "toast": {
+        "clientIdRequired": "Cần có client id. Endpoint này không hỗ trợ xóa client id.",
+        "secretRequired": "Nhập client secret mới, hoặc chọn giữ nguyên hay xóa secret đã lưu.",
+        "savedCleared": "Đã lưu OAuth client và xóa secret đã lưu.",
+        "savedReplaced": "Đã lưu OAuth client và secret mới.",
+        "savedKept": "Đã lưu OAuth client. Secret đã lưu vẫn được giữ nguyên.",
+        "saveFail": "Không thể lưu OAuth client."
+      }
+    },
+    "tools": {
+      "heading": "Danh sách công cụ (manifest)",
+      "lastRead": "lần đọc gần nhất từ server {date}",
+      "neverConfirmed": "được viết tay — chưa từng được xác nhận bởi tools/list",
+      "intro": "Toàn bộ manifest được thay thế trong một lần ghi. pluginKey được lấy từ route và không được xuất hiện ở đây. Lưu lại sẽ xóa dấu tools_synced_at, vì một chỉnh sửa thủ công không phải là một lần tools/list thành công và không nên hiển thị như vậy.",
+      "textareaAria": "JSON manifest công cụ",
+      "storedCount": "{count, plural, other {# công cụ}} đã lưu",
+      "editorDiffers": " — nội dung đang chỉnh sửa khác với dữ liệu đã lưu",
+      "discard": "Hủy thay đổi",
+      "validate": "Kiểm tra",
+      "replace": "Thay thế manifest",
+      "replacing": "Đang thay thế…",
+      "toast": {
+        "valid": "Manifest hợp lệ.",
+        "problems": "Manifest có {count, plural, other {# lỗi}}. Chưa gửi gì cả.",
+        "replacedEmpty": "Đã thay thế manifest. Plugin này hiện không công bố công cụ nào.",
+        "replacedCount": "Đã thay thế manifest — {count, plural, other {# công cụ}}.",
+        "invalidFallback": "Server đã từ chối manifest này.",
+        "replaceFail": "Không thể thay thế manifest công cụ."
+      }
+    },
+    "audits": {
+      "heading": "Lượt gọi công cụ",
+      "recordedCount": "{count} lượt được ghi nhận",
+      "filterPlaceholder": "Lọc theo kết quả, ví dụ success hoặc missing_scope",
+      "filterAria": "Lọc các lượt gọi công cụ đã ghi nhận theo kết quả",
+      "loading": "Đang tải…",
+      "error": {
+        "title": "Không thể tải bản ghi lượt gọi công cụ.",
+        "tryAgain": "Thử lại"
+      },
+      "emptyFiltered": "Không có lượt gọi nào khớp với kết quả này.",
+      "emptyAll": "Chưa có công cụ nào được gọi trên plugin này.",
+      "pageLabel": "Trang {page} trên {total}",
+      "previous": "Trước",
+      "next": "Sau",
+      "outcomeLabels": {
+        "success": "Thành công",
+        "blocked": "Bị chặn",
+        "attentionConfirmation": "Chờ xác nhận",
+        "attentionSetup": "Cần thiết lập",
+        "providerError": "Lỗi nhà cung cấp",
+        "failed": "Thất bại"
+      }
+    },
+    "danger": {
+      "heading": "Xóa",
+      "title": "Xóa hoàn toàn dòng này khỏi danh mục.",
+      "referencedBody": "Bị từ chối vì vẫn còn liên kết đến dòng này — {installs, plural, other {# lượt cài}} và {connections, plural, other {# kết nối}} vẫn còn hiệu lực. Hãy ngừng hoạt động thay vì xóa: một dòng đã ngừng hoạt động sẽ bị ẩn khỏi mọi danh mục trong khi các liên kết đó vẫn được giữ nguyên.",
+      "notReferencedBody": "Không còn gì liên kết đến dòng này, nên có thể xóa hoàn toàn. Ngừng hoạt động vẫn là lựa chọn có thể hoàn tác.",
+      "deleteButton": "Xóa vĩnh viễn",
+      "dialog": {
+        "title": "Xóa {label}?",
+        "description": "{key} sẽ bị xóa khỏi danh mục cùng với manifest công cụ và mọi OAuth client đã lưu. Các lượt gọi công cụ đã ghi nhận sẽ không bị xóa. Không thể hoàn tác thao tác này từ màn hình này.",
+        "cancel": "Hủy",
+        "deleting": "Đang xóa…",
+        "confirm": "Xóa vĩnh viễn"
+      },
+      "toast": {
+        "deleted": "{key} đã bị xóa.",
+        "retiredInstead": "{key} đã được chuyển sang ngừng hoạt động thay vì bị xóa.",
+        "inUseFail": "Plugin này vẫn đang được sử dụng nên không thể xóa vĩnh viễn.",
+        "deleteFail": "Không thể xóa plugin."
+      }
+    },
+    "footer": {
+      "prefix": "Các chỉnh sửa được ghi lại cùng tài khoản đã thực hiện.",
+      "lastWrittenBy": "Ghi lần cuối bởi {editor} vào {date}.",
+      "noRecordedEditor": "Dòng này không có người chỉnh sửa được ghi nhận — lần ghi gần nhất là do một migration, hoặc một token không mang định danh sử dụng được. Tạo lúc {date}."
+    }
+  }
+}

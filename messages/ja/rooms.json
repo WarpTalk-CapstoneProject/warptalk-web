@@ -155,5 +155,95 @@
       "meetingType": "ミーティングの種類",
       "translateElsewhere": "外部の通話を翻訳する"
     }
+  },
+  "startedBanner": {
+    "title": "ミーティングが開始されました",
+    "joinNow": "今すぐ参加",
+    "openFromNotifications": "通知から開いてください。",
+    "dismissAria": "閉じる"
+  },
+  "inviteBanner": {
+    "acceptedTitle": "招待を承諾しました",
+    "invitedTitle": "ミーティングに招待されました",
+    "joinNow": "今すぐ参加",
+    "onTheList": "参加者リストに登録されました",
+    "accept": "承諾",
+    "accepting": "承諾中…",
+    "view": "表示",
+    "dismissAria": "閉じる",
+    "acceptErrorTitle": "招待を承諾できませんでした",
+    "acceptErrorDescription": "もう一度お試しいただくか、通知からミーティングを開いてください。"
+  },
+  "setup": {
+    "srTitle": "ルームの設定",
+    "participantFallback": "参加者",
+    "loadingRoom": "ルームを読み込んでいます...",
+    "readyToJoin": "参加する準備はできましたか？",
+    "roomCode": "ルームコード: {code}",
+    "cameraOff": "カメラはオフです",
+    "languageRouting": "言語のルーティング",
+    "iSpeak": "話す言語",
+    "iHear": "聞く言語",
+    "deviceSettings": "デバイス設定",
+    "camera": "カメラ",
+    "microphone": "マイク",
+    "speaker": "スピーカー",
+    "defaultCamera": "デフォルトのカメラ",
+    "defaultMicrophone": "デフォルトのマイク",
+    "defaultSpeaker": "デフォルトのスピーカー",
+    "confirm": {
+      "joinMeeting": "ミーティングに参加",
+      "meetingUnavailable": "ミーティングは利用できません",
+      "starting": "開始しています...",
+      "joining": "参加しています...",
+      "enterWaitingRoom": "待機室に入る",
+      "startMeeting": "ミーティングを開始"
+    },
+    "errors": {
+      "meetingUnavailable": "このミーティングはもう参加できません。",
+      "noLanguageAvailable": "このミーティングで利用できる言語がありません。ホストに設定の確認を依頼してください。",
+      "unableToJoin": "ルームに参加できませんでした。",
+      "couldNotJoin": "ルームに参加できませんでした。",
+      "speakerSwitchFailed": "ブラウザがスピーカー出力を切り替えられませんでした。",
+      "previewUnsupported": "このブラウザはカメラとマイクのプレビューに対応していません。",
+      "deviceAccessFailed": "カメラまたはマイクにアクセスできませんでした。"
+    }
+  },
+  "searchDialog": {
+    "placeholder": "コマンドを検索...",
+    "quickActions": {
+      "createRoom": {
+        "title": "ルームを作成",
+        "description": "ライブ翻訳ルームを開始します"
+      },
+      "joinByCode": {
+        "title": "コードで参加",
+        "description": "招待コードまたはミーティングコードを入力します"
+      },
+      "openMeetings": {
+        "title": "ミーティング一覧を開く",
+        "description": "このワークスペースのすべてのミーティングを表示します"
+      },
+      "documents": {
+        "title": "ドキュメント",
+        "description": "ワークスペースの資料を検索します"
+      },
+      "members": {
+        "title": "メンバー",
+        "description": "ワークスペースのメンバー一覧を開きます"
+      }
+    },
+    "group": {
+      "joinMeeting": "ミーティングに参加",
+      "quickActions": "クイックアクション",
+      "meetings": "ミーティング",
+      "recentMeetings": "最近のミーティング"
+    },
+    "joinCode": {
+      "title": "ミーティング{code}に参加",
+      "description": "このコードでルームに直接移動します"
+    },
+    "searching": "ミーティングを検索しています...",
+    "empty": "ミーティングが見つかりません。ルーム名やコードを入力するか、上のクイックアクションをお試しください。"
   }
 }
