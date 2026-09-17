@@ -49,3 +49,41 @@ export function resolveLibraryLanguage(
   const bare = current.split(/[-_]/)[0]?.toLowerCase() ?? current;
   return options.some((language) => language.code === bare) ? bare : options[0].code;
 }
+
+/**
+ * The languages a new voice profile may be recorded in, for one workspace.
+ *
+ * Narrowed by the same policy as the library, because the sample is meant to be the person
+ * speaking the way they speak in meetings, and a meeting here can only be held in an allowed
+ * language (the server rejects a room whose SOURCE language is outside it too). The dialog used
+ * to offer every profile language, so on a Vietnamese-and-English workspace the Create dialog
+ * offered Japanese beside a library picker that did not.
+ *
+ * Unlike the library, an empty result falls back to every profile language instead of nothing:
+ * a cloned voice is not bound to its sample's language — it dubs the person into any target — so
+ * a policy naming only languages that cannot be recorded in must not make recording impossible.
+ */
+export function voiceProfileLanguages(
+  allowedTargetLanguages?: string[] | null,
+): SupportedLanguage[] {
+  const all = languagesInScope("voiceProfile");
+  const permitted = all.filter((language) =>
+    isLanguageAllowedByPolicy(language.code, allowedTargetLanguages),
+  );
+  return permitted.length > 0 ? permitted : all;
+}
+
+/**
+ * The profile language to show: the given locale when it is on offer, otherwise the first option.
+ *
+ * The dialog defaults to the library's current language, which can be one the profile list does
+ * not carry (Korean is browsable but not recordable) or one the policy has since dropped. Left
+ * alone, the Select would display a value that is not among its own options.
+ */
+export function resolveProfileLanguage(
+  current: string,
+  options: readonly SupportedLanguage[],
+): string {
+  const bare = current.split(/[-_]/)[0]?.toLowerCase() ?? current;
+  return (options.find((language) => language.code === bare) ?? options[0])?.locale ?? current;
+}
