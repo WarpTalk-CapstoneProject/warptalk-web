@@ -25,6 +25,7 @@ const NAMESPACES = [
   "settingsMemberRoles",
   "settingsFeatures",
   "settingsPluginActivity",
+  "settingsAuditLog",
 ] as const;
 
 async function loadMessages(locale: string) {

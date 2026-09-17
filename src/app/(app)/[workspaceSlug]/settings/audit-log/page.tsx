@@ -20,6 +20,7 @@
 
 import { Suspense, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import {
   ArrowsClockwise,
   ClockCounterClockwise,
@@ -41,11 +42,11 @@ import { WorkspacePage, WorkspaceToolbar } from "@/components/workspace/page-chr
 import { useWorkspace } from "@/hooks/use-workspace";
 import { useWorkspaceAuditLog } from "@/hooks/use-workspace-audit";
 import {
-  AUDIT_ACTION_OPTIONS,
-  AUDIT_ENTITY_OPTIONS,
   auditActionLabel,
   auditEntityLabel,
   dateInputToRangeBound,
+  getAuditActionOptions,
+  getAuditEntityOptions,
   isDateRangeInverted,
 } from "@/lib/workspace/audit-log";
 import { cn } from "@/lib/utils";
@@ -53,7 +54,6 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceAuditLogEntryDto } from "@/types/workspace-audit";
 
 const PAGE_SIZE = 25;
-const numberFormatter = new Intl.NumberFormat("en-US");
 
 type ApiErrorLike = { response?: { status?: number } };
 
@@ -80,6 +80,8 @@ function CenteredNotice({
 }
 
 function AuditLog() {
+  const t = useTranslations("settingsAuditLog");
+  const locale = useLocale();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -120,6 +122,23 @@ function AuditLog() {
     [page, action, entityType, fromInput, toInput],
   );
 
+  // Wrapped: the audit log renders action/entity values the server may add before this catalog
+  // does, and next-intl throws on a missing key rather than returning undefined — the fallback
+  // to auditActionLabel/auditEntityLabel's own humanize() depends on getting undefined back.
+  const auditLogT = useMemo(
+    () => (key: string) => {
+      try {
+        return t(key);
+      } catch {
+        return undefined;
+      }
+    },
+    [t],
+  );
+  const actionOptions = useMemo(() => getAuditActionOptions(auditLogT), [auditLogT]);
+  const entityOptions = useMemo(() => getAuditEntityOptions(auditLogT), [auditLogT]);
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(locale), [locale]);
+
   const auditQuery = useWorkspaceAuditLog(
     activeWorkspaceId,
     query,
@@ -144,9 +163,9 @@ function AuditLog() {
             <span className="mx-auto grid size-12 place-items-center rounded-full bg-destructive/10 text-destructive">
               <Lock size={22} />
             </span>
-            <p className="mt-3 text-lg font-bold text-ink">Access denied</p>
+            <p className="mt-3 text-lg font-bold text-ink">{t("accessDenied.title")}</p>
             <p className="mt-1 text-xs text-ink-muted">
-              Only workspace Owners and Administrators can view the audit log.
+              {t("accessDenied.description")}
             </p>
           </div>
         </div>
@@ -163,11 +182,11 @@ function AuditLog() {
               value={action}
               onValueChange={(value) => updateParams({ action: value ?? undefined, page: undefined })}
             >
-              <SelectTrigger size="sm" className="w-[190px] shrink-0" aria-label="Action">
+              <SelectTrigger size="sm" className="w-[190px] shrink-0" aria-label={t("filters.actionLabel")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AUDIT_ACTION_OPTIONS.map((option) => (
+                {actionOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -178,11 +197,11 @@ function AuditLog() {
               value={entityType}
               onValueChange={(value) => updateParams({ entityType: value ?? undefined, page: undefined })}
             >
-              <SelectTrigger size="sm" className="w-[150px] shrink-0" aria-label="Target">
+              <SelectTrigger size="sm" className="w-[150px] shrink-0" aria-label={t("filters.targetLabel")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {AUDIT_ENTITY_OPTIONS.map((option) => (
+                {entityOptions.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
                   </SelectItem>
@@ -191,16 +210,16 @@ function AuditLog() {
             </Select>
             <Input
               type="date"
-              aria-label="From date"
+              aria-label={t("filters.fromDate")}
               value={fromInput}
               max={toInput || undefined}
               onChange={(event) => updateParams({ from: event.target.value, page: undefined })}
               className="h-8 w-[150px] shrink-0 text-[13px]"
             />
-            <span className="shrink-0 text-[12px] text-ink-subtle">to</span>
+            <span className="shrink-0 text-[12px] text-ink-subtle">{t("filters.to")}</span>
             <Input
               type="date"
-              aria-label="To date"
+              aria-label={t("filters.toDate")}
               value={toInput}
               min={fromInput || undefined}
               onChange={(event) => updateParams({ to: event.target.value, page: undefined })}
@@ -221,7 +240,7 @@ function AuditLog() {
                   })
                 }
               >
-                Clear
+                {t("filters.clear")}
               </Button>
             ) : null}
           </>
@@ -230,8 +249,8 @@ function AuditLog() {
           <>
             <span className="text-[12px] text-ink-muted">
               {auditQuery.isPending && auditQuery.fetchStatus !== "idle"
-                ? "Loading…"
-                : `${numberFormatter.format(total)} entr${total === 1 ? "y" : "ies"}`}
+                ? t("loading")
+                : t("entryCount", { count: total, formatted: numberFormatter.format(total) })}
             </span>
             <Button
               variant="outline"
@@ -240,7 +259,7 @@ function AuditLog() {
               disabled={auditQuery.isFetching || rangeInverted}
             >
               <ArrowsClockwise size={14} className={cn(auditQuery.isFetching && "animate-spin")} />
-              Refresh
+              {t("refresh")}
             </Button>
           </>
         }
@@ -253,24 +272,24 @@ function AuditLog() {
              
               className="grid grid-cols-[140px_130px_190px_120px_minmax(0,1fr)] gap-3 border-b border-hairline px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle"
             >
-              <span>Time</span>
-              <span>Actor</span>
-              <span>Action</span>
-              <span>Target</span>
-              <span>Details</span>
+              <span>{t("table.time")}</span>
+              <span>{t("table.actor")}</span>
+              <span>{t("table.action")}</span>
+              <span>{t("table.target")}</span>
+              <span>{t("table.details")}</span>
             </div>
 
             {rangeInverted ? (
               <CenteredNotice
                 icon={<WarningCircle size={20} weight="duotone" />}
-                title="The start date is after the end date"
+                title={t("invalidRange.title")}
               >
-                <p className="mt-1 text-xs text-ink-muted">Pick a start date on or before the end date.</p>
+                <p className="mt-1 text-xs text-ink-muted">{t("invalidRange.description")}</p>
               </CenteredNotice>
             ) : auditQuery.isError ? (
               <CenteredNotice
                 icon={<WarningCircle size={20} weight="duotone" className="text-destructive" />}
-                title="The audit log could not be loaded"
+                title={t("loadError")}
               >
                 <Button
                   variant="outline"
@@ -278,7 +297,7 @@ function AuditLog() {
                   className="mt-3"
                   onClick={() => void auditQuery.refetch()}
                 >
-                  Try again
+                  {t("tryAgain")}
                 </Button>
               </CenteredNotice>
             ) : auditQuery.isPending ? (
@@ -292,19 +311,19 @@ function AuditLog() {
             ) : items.length === 0 ? (
               <CenteredNotice
                 icon={<ClockCounterClockwise size={20} weight="duotone" />}
-                title={hasFilters ? "No entries match these filters" : "No audit entries yet"}
+                title={hasFilters ? t("empty.noMatchTitle") : t("empty.noEntriesTitle")}
               >
                 <p className="mt-1 text-xs text-ink-muted">
                   {hasFilters
-                    ? "Clear the filters to see every recorded entry."
-                    : "Actions WarpTalk staff take on this workspace — such as suspending it or adjusting its credits — will appear here."}
+                    ? t("empty.noMatchDescription")
+                    : t("empty.noEntriesDescription")}
                 </p>
               </CenteredNotice>
             ) : (
               <ul>
                 {items.map((entry) => (
                   <li key={entry.id}>
-                    <AuditRow entry={entry} />
+                    <AuditRow entry={entry} locale={locale} t={auditLogT} />
                   </li>
                 ))}
               </ul>
@@ -315,7 +334,7 @@ function AuditLog() {
         {totalPages > 1 && !rangeInverted ? (
           <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
             <span>
-              Page {page} of {totalPages}
+              {t("pageOf", { page, totalPages })}
             </span>
             <div className="flex items-center gap-2">
               <Button
@@ -324,7 +343,7 @@ function AuditLog() {
                 disabled={page <= 1}
                 onClick={() => updateParams({ page: String(page - 1) })}
               >
-                Previous
+                {t("previous")}
               </Button>
               <Button
                 variant="outline"
@@ -332,7 +351,7 @@ function AuditLog() {
                 disabled={page >= totalPages}
                 onClick={() => updateParams({ page: String(page + 1) })}
               >
-                Next
+                {t("next")}
               </Button>
             </div>
           </div>
@@ -342,24 +361,32 @@ function AuditLog() {
   );
 }
 
-function AuditRow({ entry }: { entry: WorkspaceAuditLogEntryDto }) {
+function AuditRow({
+  entry,
+  locale,
+  t,
+}: {
+  entry: WorkspaceAuditLogEntryDto;
+  locale: string;
+  t: (key: string) => string | undefined;
+}) {
   const hasSummary = Boolean(entry.beforeSummary || entry.afterSummary);
 
   return (
     <div
-     
+
       className="grid grid-cols-[140px_130px_190px_120px_minmax(0,1fr)] items-start gap-3 border-b border-hairline/60 px-4 py-3 text-[13px] last:border-b-0"
     >
       <span className="text-[12px] text-ink-muted" title={new Date(entry.performedAt).toISOString()}>
-        {formatAuditWhen(entry.performedAt)}
+        {formatAuditWhen(entry.performedAt, locale)}
       </span>
       <span className="truncate text-ink">{entry.actorDisplayName}</span>
       <span>
         <span className="inline-flex items-center rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
-          {auditActionLabel(entry.action)}
+          {auditActionLabel(entry.action, t)}
         </span>
       </span>
-      <span className="text-[12px] text-ink-muted">{auditEntityLabel(entry.entityType)}</span>
+      <span className="text-[12px] text-ink-muted">{auditEntityLabel(entry.entityType, t)}</span>
       <div className="min-w-0">
         {hasSummary ? (
           <AuditStateSummary before={entry.beforeSummary} after={entry.afterSummary} />
