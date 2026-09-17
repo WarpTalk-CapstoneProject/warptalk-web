@@ -395,7 +395,7 @@ function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
   sharedConnectionPlugins,
-  coveredByExistingGrant,
+  grantReusedFrom,
   isConnecting,
   isDisconnecting,
   isRemoving,
@@ -424,9 +424,10 @@ function ConnectPluginDialog({
   sharedConnectionPlugins: AssistantPluginCatalogItemDto[];
   /**
    * A connected sibling's grant already covers every scope this plugin needs, so Connect links it
-   * on the server without a trip to the provider. The dialog must not promise a sign-in page then.
+   * on the server without a trip to the provider. The dialog must not promise a sign-in page then,
+   * and it names this sibling so the reused account has a visible origin.
    */
-  coveredByExistingGrant: boolean;
+  grantReusedFrom: AssistantPluginCatalogItemDto | null;
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
@@ -445,6 +446,7 @@ function ConnectPluginDialog({
   const isInstalled = plugin.installationStatus === "installed";
   const isPendingBusy = isDisconnecting || isRemoving;
   const workspaceBlock = pluginWorkspaceBlock(plugin);
+  const coveredByExistingGrant = grantReusedFrom !== null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
@@ -480,8 +482,8 @@ function ConnectPluginDialog({
             <p className="mt-1.5 text-sm text-ink-muted">
               {isConnected
                 ? `WarpBot can use ${plugin.label} for you.`
-                : coveredByExistingGrant
-                  ? `Uses the ${plugin.connectedAccountEmail ?? "account"} you already signed in with. No sign-in needed.`
+                : grantReusedFrom
+                  ? `Uses the sign-in you already gave WarpTalk for ${grantReusedFrom.label}. No new sign-in.`
                   : "You will sign in and confirm this on the provider's own page."}
             </p>
           </div>
@@ -557,7 +559,9 @@ function ConnectPluginDialog({
         {isConnected ? (
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-emerald-600">
             <CheckCircle size={15} weight="fill" />
-            Connected as {plugin.connectedAccountEmail ?? "this account"}
+            {/* No provider email anywhere in the UI: on a machine already signed into Google it was
+                a developer's personal address, and it read as WarpTalk's own identity. */}
+            Connected to WarpTalk
           </div>
         ) : isPartiallyGranted ? (
           // Without this line the dialog is incoherent: it offers Disconnect, which only exists
@@ -566,7 +570,7 @@ function ConnectPluginDialog({
           // rather than starting from nothing.
           <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-amber-700 dark:text-amber-500">
             <Warning size={15} weight="fill" className="shrink-0" />
-            Signed in as {plugin.connectedAccountEmail ?? "this account"}, but a permission{" "}
+            Signed in, but a permission{" "}
             {plugin.label} needs was not approved. Continue to approve it.
           </div>
         ) : null}
@@ -863,13 +867,15 @@ export default function PluginsPage() {
   // Mirrors the server's shortcut in ConnectAsync: a connected sibling whose grant already carries
   // every scope this plugin needs means Connect links it without leaving WarpTalk. Read off the RAW
   // rows, because it is a question about the grant, not about whether the sibling is usable.
-  const coveredByExistingGrant = useMemo(() => {
-    if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return false;
-    return pluginsSharingConnection(selectedPlugin, plugins).some(
+  // The sibling itself, not a yes/no: the dialog has to say WHICH plugin's sign-in is reused, or an
+  // email the user never typed on this page reads as WarpTalk borrowing some other account.
+  const grantReusedFrom = useMemo(() => {
+    if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return null;
+    return pluginsSharingConnection(selectedPlugin, plugins).find(
       (sibling) =>
         sibling.connectionStatus === "connected"
         && scopesSatisfied(selectedPlugin.requiredScopes, sibling.grantedScopes),
-    );
+    ) ?? null;
   }, [selectedPlugin, plugins]);
 
   // Purely local: it narrows the catalog already fetched above. There is no marketplace search
@@ -1315,7 +1321,7 @@ export default function PluginsPage() {
           plugin={withEffectiveConnectionStatus(selectedPlugin)}
           providerConnectionStatus={selectedPlugin.connectionStatus}
           sharedConnectionPlugins={sharedConnectionPlugins}
-          coveredByExistingGrant={coveredByExistingGrant}
+          grantReusedFrom={grantReusedFrom}
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
