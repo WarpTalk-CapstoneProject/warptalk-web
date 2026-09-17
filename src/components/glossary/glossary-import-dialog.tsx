@@ -23,6 +23,7 @@
  * junk terms in the dictionary.
  */
 
+import { useTranslations } from "next-intl";
 import { FileArrowUp, Spinner, Warning } from "@phosphor-icons/react";
 import {
   buildSampleTemplateRows,
@@ -124,7 +125,10 @@ function findHeaderRow(matrix: string[][]): {
   return null;
 }
 
-function toRows(matrix: string[][]): { rows: ParsedGlossaryRow[]; error?: string } {
+function toRows(
+  matrix: string[][],
+  t: (key: string) => string,
+): { rows: ParsedGlossaryRow[]; error?: string } {
   const found = findHeaderRow(matrix);
   const columns = found?.columns ?? [];
 
@@ -136,8 +140,7 @@ function toRows(matrix: string[][]): { rows: ParsedGlossaryRow[]; error?: string
   if (termIndex === -1 || translationIndex === -1) {
     return {
       rows: [],
-      error:
-        "The first row must name the columns, and must include a Term column and a Translation column.",
+      error: t("missingColumns"),
     };
   }
 
@@ -276,6 +279,7 @@ export function GlossaryImportDialog({
   isImporting: boolean;
   onImport: (rows: ParsedGlossaryRow[]) => Promise<void>;
 }) {
+  const t = useTranslations("glossary.dialogs.import");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [rows, setRows] = useState<ParsedGlossaryRow[]>([]);
@@ -299,19 +303,19 @@ export function GlossaryImportDialog({
         : await parseWorkbook(file);
 
       if (matrix.length === 0) {
-        setError("That file has no rows.");
+        setError(t("noRows"));
         setFileName(file.name);
         return;
       }
 
-      const parsed = toRows(matrix);
+      const parsed = toRows(matrix, t);
       setFileName(file.name);
       if (parsed.error) {
         setError(parsed.error);
         return;
       }
       if (parsed.rows.length === 0) {
-        setError("The columns were found, but every row below them was empty.");
+        setError(t("columnsFoundButEmpty"));
         return;
       }
       setRows(parsed.rows);
@@ -322,9 +326,7 @@ export function GlossaryImportDialog({
       // at all were indistinguishable — to the user AND to anyone trying to reproduce it from a
       // bug report. The advice stays; the reason is added to it.
       const detail = cause instanceof Error ? cause.message : String(cause);
-      setError(
-        `That file could not be read (${detail}). Save it as .xlsx or .csv and try again, or start from the sample below.`,
-      );
+      setError(t("fileCouldNotBeRead", { detail }));
     } finally {
       setIsParsing(false);
     }
@@ -336,7 +338,9 @@ export function GlossaryImportDialog({
     reset();
   };
 
-  const expectedPair = describeExpectedPair(sourceLanguage, targetLanguage);
+  const expectedPair = describeExpectedPair(sourceLanguage, targetLanguage, (key, values) =>
+    t(key, values),
+  );
 
   return (
     <Dialog
@@ -349,13 +353,14 @@ export function GlossaryImportDialog({
       <DialogContent className="max-w-[560px] rounded-[14px] border-border bg-surface-1 shadow-none">
         <DialogHeader>
           <DialogTitle className="text-[16px] font-semibold text-ink">
-            Import terms
+            {t("title")}
           </DialogTitle>
           <DialogDescription className="text-[12px] text-ink-muted">
-            Into <span className="font-medium text-ink">{glossaryName}</span>. A row near the top must
-            name the columns; <span className="font-medium">Term</span> and{" "}
-            <span className="font-medium">Translation</span> are required. Field, Definition, Note,
-            Part of speech and Priority are used when present.
+            {t.rich("description", {
+              glossaryName: () => <span className="font-medium text-ink">{glossaryName}</span>,
+              term: (chunks) => <span className="font-medium">{chunks}</span>,
+              translation: (chunks) => <span className="font-medium">{chunks}</span>,
+            })}
           </DialogDescription>
           {/* WT-522: said in words, not left to the sample file. The sample was the only thing
               telling anyone what belonged in the second column, and it was hardcoded to a pair
@@ -368,7 +373,7 @@ export function GlossaryImportDialog({
             onClick={() => downloadSampleTemplate(sourceLanguage, targetLanguage)}
             className="self-start text-[12px] font-medium text-primary underline-offset-2 hover:underline"
           >
-            Download a sample file
+            {t("downloadSample")}
           </button>
         </DialogHeader>
 
@@ -392,17 +397,17 @@ export function GlossaryImportDialog({
           >
             <FileArrowUp className="h-6 w-6 text-ink-muted" />
             <span className="text-[13px] font-medium text-ink">
-              {fileName ?? "Choose an .xlsx or .csv file"}
+              {fileName ?? t("chooseFile")}
             </span>
             <span className="text-[11px] text-ink-subtle">
-              {fileName ? "Choose a different file" : "Excel or comma-separated"}
+              {fileName ? t("chooseDifferentFile") : t("excelOrCsv")}
             </span>
           </button>
 
           {isParsing ? (
             <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-muted">
               <Spinner className="h-3.5 w-3.5 animate-spin" />
-              Reading the file…
+              {t("readingFile")}
             </p>
           ) : null}
 
@@ -415,19 +420,16 @@ export function GlossaryImportDialog({
 
           {rows.length > 0 ? (
             <div className="mt-4">
-              <p className="text-[12px] text-ink-muted">
-                {rows.length} row{rows.length === 1 ? "" : "s"} ready. Terms already in this
-                glossary are skipped, and the count is reported after the import.
-              </p>
+              <p className="text-[12px] text-ink-muted">{t("rowsReady", { count: rows.length })}</p>
               {/* The preview is what catches a header row read as data, or a file whose columns
                   are in another language — before it becomes 200 junk terms. */}
               <div className="mt-2 max-h-[180px] overflow-y-auto rounded-[8px] border border-hairline">
                 <table className="w-full text-left text-[12px]">
                   <thead className="sticky top-0 bg-surface-2 text-[11px] uppercase tracking-wide text-ink-muted">
                     <tr>
-                      <th className="px-2.5 py-1.5 font-medium">Term</th>
-                      <th className="px-2.5 py-1.5 font-medium">Translation</th>
-                      <th className="px-2.5 py-1.5 font-medium">Field</th>
+                      <th className="px-2.5 py-1.5 font-medium">{t("term")}</th>
+                      <th className="px-2.5 py-1.5 font-medium">{t("translation")}</th>
+                      <th className="px-2.5 py-1.5 font-medium">{t("field")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -443,7 +445,7 @@ export function GlossaryImportDialog({
               </div>
               {rows.length > 50 ? (
                 <p className="mt-1.5 text-[11px] text-ink-subtle">
-                  Showing the first 50 of {rows.length}. All {rows.length} will be imported.
+                  {t("showingFirst", { count: rows.length })}
                 </p>
               ) : null}
             </div>
@@ -452,7 +454,7 @@ export function GlossaryImportDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="shadow-none">
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             onClick={() => void submit()}
@@ -462,10 +464,10 @@ export function GlossaryImportDialog({
             {isImporting ? (
               <>
                 <Spinner className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Importing…
+                {t("importing")}
               </>
             ) : (
-              `Import ${rows.length || ""} term${rows.length === 1 ? "" : "s"}`.trim()
+              t("importCount", { count: rows.length })
             )}
           </Button>
         </DialogFooter>

@@ -1,0 +1,105 @@
+{
+  "heading": "設定",
+  "subheading": "ミーティング、議事録、翻訳に関するワークスペースの既定値です。アクセスとデータ保護はセキュリティにあります。",
+  "accessDenied": {
+    "title": "アクセス拒否",
+    "description": "ワークスペースのオーナーと管理者のみが構成を表示・変更できます。"
+  },
+  "loadError": {
+    "title": "ワークスペース設定を読み込めませんでした",
+    "description": "現在の構成を読み取れなかったため、このワークスペースのものではない既定値を表示するのではなく、ここには何も表示していません。再試行し、それでも失敗する場合はワークスペースサービスに到達できるか確認してください。",
+    "retrying": "再試行中…",
+    "retry": "再試行"
+  },
+  "workspaceInfo": {
+    "heading": "ワークスペース情報",
+    "slugLabel": "ワークスペースSlug",
+    "slugDescription": "このワークスペースを識別するための一意のハンドルです。",
+    "copySlug": "Slugをコピー",
+    "urlLabel": "ワークスペースURL",
+    "urlDescription": "メンバーがこのワークスペースにアクセスするための直接リンクです。",
+    "copyUrl": "URLをコピー"
+  },
+  "toasts": {
+    "slugCopied": "ワークスペースSlugをコピーしました!",
+    "urlCopied": "ワークスペースURLをコピーしました!",
+    "saveFailed": "ワークスペース設定の保存に失敗しました。"
+  },
+  "general": {
+    "heading": "ワークスペースの一般的な既定値",
+    "defaultLanguage": {
+      "label": "既定の言語",
+      "description": "新しい翻訳ルームで話される既定の言語です。",
+      "placeholder": "言語を選択"
+    },
+    "timezone": {
+      "label": "タイムゾーン",
+      "description": "ミーティングのスケジュールと監査タイムスタンプに使用されるタイムゾーンです。",
+      "placeholder": "タイムゾーンを選択"
+    },
+    "maxActiveRooms": {
+      "label": "最大アクティブルーム数",
+      "description": "このワークスペースで許可される同時翻訳ルームの最大数です。",
+      "ceiling": {
+        "plan": "現在のプランでは同時に{ceiling}ルームまで許可されているため、適用されるのは{ceiling}です。ここでより大きい数値を設定しても効果はありません — この設定は上限を下げることしかできません。",
+        "platformDefault": "このワークスペースが有効なプランを持つまでは{ceiling}ルームに制限されているため、適用されるのは{ceiling}です。ここでより大きい数値を設定しても効果はありません — この設定は上限を下げることしかできません。",
+        "workspaceOverride": "このワークスペースは{ceiling}ルームに制限されているため、適用されるのは{ceiling}です。ここでより大きい数値を設定しても効果はありません — この設定は上限を下げることしかできません。"
+      }
+    },
+    "artifactRetentionDays": {
+      "label": "成果物の保持日数",
+      "description": "ミーティングの文字起こしと録画を保持する日数(0 = 無期限)です。"
+    },
+    "minutesClassification": {
+      "label": "議事録の機密区分",
+      "description": "このワークスペースの新しいミーティング議事録に印字される既定の機密区分です。",
+      "placeholder": "機密区分を選択"
+    },
+    "minutesTemplate": {
+      "label": "議事録テンプレート",
+      "description": "このワークスペースの議事録が開かれ、出力される形式です。どちらのテンプレートも他方の代わりにはならず、両方とも同じ記録を表します。",
+      "placeholder": "テンプレートを選択",
+      "optionVietnamese": "ベトナム(政令30/2020)",
+      "optionInternational": "国際(英語)"
+    },
+    "allowedTargetLanguages": {
+      "label": "許可される翻訳先言語",
+      "description": "ミーティングルームでのリアルタイム翻訳に使用できる言語です。",
+      "ceiling": {
+        "plan": "現在のプランでは1回のミーティングにつき{ceiling}言語まで許可されています。ここでさらに多く許可することはできますが、1回のミーティングで同時に使えるのは{ceiling}言語までです。",
+        "platformDefault": "このワークスペースが有効なプランを持つまでは1回のミーティングにつき{ceiling}言語に制限されています。ここでさらに多く許可することはできますが、1回のミーティングで同時に使えるのは{ceiling}言語までです。",
+        "workspaceOverride": "このワークスペースは1回のミーティングにつき{ceiling}言語に制限されています。ここでさらに多く許可することはできますが、1回のミーティングで同時に使えるのは{ceiling}言語までです。"
+      }
+    },
+    "voiceCloning": {
+      "label": "音声クローン合成",
+      "description": "元の話者のニューラル音声クローンを使用して翻訳音声を合成します。"
+    },
+    "profanityFilter": {
+      "label": "不適切表現フィルター",
+      "description": "文字起こし内の不適切または卑猥な表現を検閲します。"
+    },
+    "allowPersonalPlugins": {
+      "label": "個人プラグインを許可",
+      "description": "このワークスペースのWarpBotの会話でメンバーが接続済みのプラグインを使用することを許可します。"
+    }
+  },
+  "aiTranslation": {
+    "heading": "AIと翻訳",
+    "useGlobalGlossary": {
+      "label": "グローバル用語集を使用",
+      "description": "新しい文字起こしと翻訳のプロンプトにグローバル用語集を統合します。"
+    }
+  },
+  "validation": {
+    "defaultLanguageRequired": "既定の言語を選択してください",
+    "timezoneRequired": "タイムゾーンを選択してください",
+    "wholeNumber": "整数で入力してください",
+    "maxActiveRoomsMin": "1ルーム以上にしてください",
+    "maxActiveRoomsMax": "最大50ルームまでです",
+    "retentionMin": "保持日数は0(無期限)または正の数にしてください",
+    "retentionMax": "最大3650日までです",
+    "invitationExpiryMin": "有効期限は1日以上にしてください",
+    "invitationExpiryMax": "最大365日までです"
+  }
+}

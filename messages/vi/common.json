@@ -29,5 +29,17 @@
   "meetingDayStrip": {
     "previousWeek": "Tuần trước",
     "nextWeek": "Tuần sau"
+  },
+  "accountMenu": {
+    "credits": "Tín dụng không gian làm việc",
+    "creditsLoadFailed": "Không thể tải tín dụng không gian làm việc.",
+    "lowBalance": "Sắp hết tín dụng — cuộc họp sẽ ngừng dịch khi dùng hết.",
+    "memberFallback": "Thành viên",
+    "internalFallback": "Nội bộ",
+    "profileSettings": "Cài đặt hồ sơ",
+    "members": "Thành viên",
+    "workspaceSettings": "Cài đặt không gian làm việc",
+    "billing": "Thanh toán",
+    "signOut": "Đăng xuất"
   }
 }

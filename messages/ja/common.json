@@ -29,5 +29,17 @@
   "meetingDayStrip": {
     "previousWeek": "前の週",
     "nextWeek": "次の週"
+  },
+  "accountMenu": {
+    "credits": "ワークスペースのクレジット",
+    "creditsLoadFailed": "ワークスペースのクレジットを読み込めませんでした。",
+    "lowBalance": "残高が少なくなっています — なくなるとミーティングの翻訳が止まります。",
+    "memberFallback": "メンバー",
+    "internalFallback": "内部",
+    "profileSettings": "プロフィール設定",
+    "members": "メンバー",
+    "workspaceSettings": "ワークスペース設定",
+    "billing": "請求",
+    "signOut": "サインアウト"
   }
 }

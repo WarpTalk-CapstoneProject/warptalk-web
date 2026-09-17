@@ -29,5 +29,17 @@
   "meetingDayStrip": {
     "previousWeek": "Previous week",
     "nextWeek": "Next week"
+  },
+  "accountMenu": {
+    "credits": "Workspace credits",
+    "creditsLoadFailed": "Couldn't load workspace credits.",
+    "lowBalance": "Low balance — meetings stop translating when this runs out.",
+    "memberFallback": "Member",
+    "internalFallback": "Internal",
+    "profileSettings": "Profile settings",
+    "members": "Members",
+    "workspaceSettings": "Workspace settings",
+    "billing": "Billing",
+    "signOut": "Sign out"
   }
 }

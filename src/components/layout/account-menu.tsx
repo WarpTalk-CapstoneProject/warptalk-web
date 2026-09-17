@@ -25,6 +25,7 @@
 
 import type { ReactElement } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import {
   CreditCard,
@@ -41,6 +42,7 @@ import { billingService } from "@/services/billing.service";
 import type { UserDto } from "@/types/auth";
 
 function CreditBar({ workspaceId }: { workspaceId: string }) {
+  const t = useTranslations("common.accountMenu");
   // `status`, not `isLoading`. isLoading is `isPending && isFetching`, so it is FALSE in the
   // gap between a failed attempt and its retry — and in that gap isError is false too and data
   // is undefined, so every guard fell through and the bar rendered as nothing. That window is
@@ -86,7 +88,7 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   if (status === "error") {
     return (
       <div className="rounded-lg border border-border/60 bg-surface-1 px-3 py-2">
-        <p className="text-[11px] text-ink-subtle">Couldn&rsquo;t load workspace credits.</p>
+        <p className="text-[11px] text-ink-subtle">{t("creditsLoadFailed")}</p>
       </div>
     );
   }
@@ -101,7 +103,7 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
   return (
     <div className="rounded-lg border border-border/60 bg-surface-1 p-3">
       <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-medium text-ink">Workspace credits</span>
+        <span className="text-[12px] font-medium text-ink">{t("credits")}</span>
         <span className="text-[12px] tabular-nums text-ink-muted">
           {remaining.toLocaleString()} / {data.totalCredits.toLocaleString()}
         </span>
@@ -114,7 +116,7 @@ function CreditBar({ workspaceId }: { workspaceId: string }) {
       </div>
       {isLow ? (
         <p className="mt-2 text-[11px] text-destructive">
-          Low balance — meetings stop translating when this runs out.
+          {t("lowBalance")}
         </p>
       ) : null}
     </div>
@@ -143,6 +145,7 @@ export function AccountMenu({
   membershipType: string | null;
   onSignOut: () => void;
 }) {
+  const t = useTranslations("common.accountMenu");
   const normalizedRole = role?.toLowerCase() ?? "";
   const isOwnerOrAdmin = normalizedRole === "owner" || normalizedRole === "admin";
   const base = workspaceSlug ? `/${workspaceSlug}` : null;
@@ -175,11 +178,11 @@ export function AccountMenu({
             <p className="truncate text-[13px] font-medium text-ink">{user.fullName}</p>
             <p className="truncate text-[11px] text-ink-muted">{user.email}</p>
             <p className="mt-0.5 truncate text-[10px] font-medium text-primary">
-              {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+              {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : t("memberFallback")}
               {" · "}
               {membershipType
                 ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-                : "Internal"}
+                : t("internalFallback")}
             </p>
           </div>
         </div>
@@ -192,13 +195,13 @@ export function AccountMenu({
               <MenuLink
                 href={`${base}/settings/account/profile`}
                 icon={<UserIcon className="h-4 w-4" />}
-                label="Profile settings"
+                label={t("profileSettings")}
                 onNavigate={close}
               />
               <MenuLink
                 href={`${base}/members`}
                 icon={<UsersThree className="h-4 w-4" />}
-                label="Members"
+                label={t("members")}
                 onNavigate={close}
               />
               {isOwnerOrAdmin ? (
@@ -206,13 +209,13 @@ export function AccountMenu({
                   <MenuLink
                     href={`${base}/settings`}
                     icon={<GearSix className="h-4 w-4" />}
-                    label="Workspace settings"
+                    label={t("workspaceSettings")}
                     onNavigate={close}
                   />
                   <MenuLink
                     href={`${base}/settings/billing`}
                     icon={<CreditCard className="h-4 w-4" />}
-                    label="Billing"
+                    label={t("billing")}
                     onNavigate={close}
                   />
                 </>
@@ -229,7 +232,7 @@ export function AccountMenu({
             className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] text-ink transition-colors hover:bg-surface-2"
           >
             <SignOut className="h-4 w-4" />
-            Sign out
+            {t("signOut")}
           </button>
         </div>
       </PopoverContent>

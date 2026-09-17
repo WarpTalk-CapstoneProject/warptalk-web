@@ -18,6 +18,9 @@ const NAMESPACES = [
   "voiceProfiles",
   "knowledge",
   "aiChat",
+  "glossary",
+  "documents",
+  "settingsWorkspace",
 ] as const;
 
 async function loadMessages(locale: string) {

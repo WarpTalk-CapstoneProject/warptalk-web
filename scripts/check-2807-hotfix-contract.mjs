@@ -9,6 +9,9 @@ const persistentMeeting = read("src/components/rooms/live/persistent-meeting-ses
 const liveRoom = `${room}\n${persistentMeeting}`;
 const documents = read("src/app/(app)/[workspaceSlug]/documents/page.tsx");
 const glossary = read("src/app/(app)/admin/global-glossary/page.tsx");
+// i18n: the uploader/approver labels and the supported-formats sentence now live in the
+// translation catalog rather than as literal source text — see documents.json.
+const documentsMessagesEn = JSON.parse(read("messages/en/documents.json"));
 
 const checks = [
   ["invite suggestions exclude the signed-in user id", invite.includes("m.userId !== user?.id")],
@@ -18,9 +21,9 @@ const checks = [
   ["active meeting assistant context reports live", liveRoom.includes('status: "live"')],
   ["meeting top bar only exposes host end controls to the actual room host", liveRoom.includes("isHost={isRoomHost}")],
   ["ended-room realtime event notifies and redirects participants", liveRoom.includes('connection.on("TranslationRoomEnded"') && liveRoom.includes('toast.info("This meeting has ended.")') && liveRoom.includes('router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`)')],
-  ["document list renders uploader identity", documents.includes("Uploader") && documents.includes("doc.uploadedBy")],
-  ["document list renders approver identity", documents.includes("Approver") && documents.includes("doc.approvedBy")],
-  ["document upload help only advertises backend-supported formats", documents.replace(/\s+/g, " ").includes("Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP, GIF")],
+  ["document list renders uploader identity", documents.includes('kind="uploader"') && documents.includes("doc.uploadedBy")],
+  ["document list renders approver identity", documents.includes('kind="approver"') && documents.includes("doc.approvedBy")],
+  ["document upload help only advertises backend-supported formats", documentsMessagesEn.uploadDialog.supportedFormats.includes("Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP, GIF")],
   ["global glossary CRUD screen remains available", glossary.includes("useCreateGlobalGlossaryTerm") && glossary.includes("useUpdateGlobalGlossaryTerm") && glossary.includes("useDeleteGlobalGlossaryTerm") && glossary.includes("useBulkImportGlobalGlossaryTerms")],
 ];
 
