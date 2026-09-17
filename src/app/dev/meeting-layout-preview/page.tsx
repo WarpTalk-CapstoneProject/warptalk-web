@@ -54,8 +54,7 @@ export default function MeetingLayoutPreview() {
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
 
   useEffect(() => {
-    useTranslationRoomStore.setState({
-      transcriptSegments: SEGMENTS.map((segment, index) => ({
+    const seeded = SEGMENTS.map((segment, index) => ({
         segmentId: `s${index}`,
         speakerId: segment.speakerId,
         speakerName: segment.speakerName,
@@ -65,8 +64,8 @@ export default function MeetingLayoutPreview() {
         startTimeMs: index * 4000,
         endTimeMs: index * 4000 + 3000,
         receivedAt: Date.now(),
-      })),
-    });
+      }));
+    useTranslationRoomStore.setState({ captionSegments: seeded, transcriptSegments: seeded });
   }, []);
 
   return (

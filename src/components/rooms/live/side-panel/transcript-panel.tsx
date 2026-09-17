@@ -95,6 +95,10 @@ export function TranscriptPanel({
   const currentUserId = useAuthStore((state) => state.user?.id);
   const suggestions = useTranslationRoomStore((state) => state.suggestions);
   const dismissSuggestion = useTranslationRoomStore((state) => state.dismissSuggestion);
+  // Segments said during the current pause that never reached this panel's list — the store
+  // routes them to captions only. What the placeholder counts now that the render filter below
+  // rarely has anything left to drop.
+  const withheldWhilePaused = useTranslationRoomStore((state) => state.withheldWhilePaused);
   const sessionsQuery = useTranslationRoomSessions(roomId);
   const sessions = sessionsQuery.data;
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and
@@ -303,7 +307,7 @@ export function TranscriptPanel({
           are visibly talking, which is indistinguishable from a transcript that has broken, and
           that is the report this whole ticket started as; and in the inert case (see
           pauseFilterInert) it is the only mark of a hole the divider cannot yet be drawn for. */}
-      {recorded.hiddenCount > 0 || pauseFilterInert ? <PausedLinesPlaceholder /> : null}
+      {recorded.hiddenCount > 0 || withheldWhilePaused > 0 || pauseFilterInert ? <PausedLinesPlaceholder /> : null}
     </div>
       {/* The panel stops following the moment the reader scrolls up — which is right, and left
           them stranded in the middle of an hour of talking with the newest line somewhere below
@@ -375,15 +379,20 @@ function SessionDivider({ block }: { block: TranslationSessionBlock<GroupedTrans
  *
  * NOT UPPERCASED, unlike the SessionDivider it sits among. That divider is a two-word label
  * ("Translation 1"); this is now a sentence with two clock times in it, and a sentence set in
- * 10px all-caps is read letter by letter or not at all. The line rules and the muted colour keep
- * the two legible as the same kind of mark.
+ * 10px all-caps is read letter by letter or not at all.
+ *
+ * AMBER, not muted: the same colour as the paused banner, so the mark left in the flow after a
+ * Resume reads as that pause. It appears once per pause, where the pause happened, and scrolls away
+ * with the lines after it — the saved transcript draws it the same way.
  */
 function TranscriptPauseDivider({ gaps }: { gaps: readonly TranscriptPauseGap[] }) {
   return (
-    <div className="flex items-center gap-2 py-2 text-[10px] font-semibold tracking-wide text-ink-subtle">
-      <div className="h-px flex-1 bg-border" />
-      <span className="text-center">{formatTranscriptPauseGapRun(gaps)}</span>
-      <div className="h-px flex-1 bg-border" />
+    <div role="separator" className="flex items-center gap-2 py-2 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+      <div className="h-[1.5px] flex-1 bg-amber-500/60" />
+      <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-center leading-snug">
+        {formatTranscriptPauseGapRun(gaps)}
+      </span>
+      <div className="h-[1.5px] flex-1 bg-amber-500/60" />
     </div>
   );
 }
