@@ -384,6 +384,9 @@ export const API = {
       `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
     pluginConnection: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    /** WT-687: PUT `{ tools: { [toolName]: "allow" | "approval" | "blocked" } }`, merged per tool. */
+    pluginToolPolicy: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/tool-policy`,
     /**
      * `client` tells the API which surface is asking, so it can seal that into the OAuth state.
      * The desktop app opens consent in the system browser, and by the time the callback runs

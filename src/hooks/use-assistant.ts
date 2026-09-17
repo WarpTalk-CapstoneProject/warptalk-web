@@ -6,6 +6,7 @@ import type { ChatAttachment } from "@/lib/assistant/attachments";
 import type {
   AssistantMentionDto,
   AssistantPageContextDto,
+  PluginToolPolicy,
   WorkspacePluginToolAuditQuery,
 } from "@/types/assistant";
 
@@ -197,6 +198,26 @@ export function useDisableAssistantPlugin() {
   });
 }
 
+/** WT-687 — saves per-tool choices, then refreshes every cached view of the catalog. */
+export function useUpdatePluginToolPolicy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+      tools,
+    }: {
+      pluginKey: string;
+      tools: Record<string, PluginToolPolicy>;
+    }) => {
+      const { data } = await assistantService.updatePluginToolPolicy(pluginKey, tools);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
+    },
+  });
+}
+
 export function useSendAssistantMessage() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -206,6 +227,7 @@ export function useSendAssistantMessage() {
       pageContext,
       mentions,
       attachments,
+      disabledPluginKeys,
     }: {
       conversationId: string;
       content: string;
@@ -213,8 +235,17 @@ export function useSendAssistantMessage() {
       mentions?: AssistantMentionDto[];
       /** WT-474: attachments for this turn only. Not persisted. */
       attachments?: ChatAttachment[];
+      /** WT-687: plugins switched off for this conversation. */
+      disabledPluginKeys?: string[];
     }) => {
-      const { data } = await assistantService.sendMessage(conversationId, content, pageContext, mentions, attachments);
+      const { data } = await assistantService.sendMessage(
+        conversationId,
+        content,
+        pageContext,
+        mentions,
+        attachments,
+        disabledPluginKeys,
+      );
       return data;
     },
     onSuccess: (_data, variables) => {
