@@ -14,24 +14,29 @@
  *   credits something you found by scrolling; it is an errand, so it is now a modal reached from
  *   the balance it changes.
  *
- * THE SHAPE (owner's call, 2026-09-17: "not cards — a grid, like OpenAI")
- *   The balance flat on the page: plan line, the remaining credits as the one large number, the
- *   two actions, and overages as a single line under them because it changes what that number
- *   means. Then a grid of link tiles, one per sibling page. The plan ladder moved behind "Plans &
- *   pricing" (/payment/plans), where changing plan already happens through Checkout.
+ * THE SHAPE
+ *   Overages first, because it is a standing condition that changes what every number below it
+ *   means. Then the two balances. Then the current plan with one control — Manage subscription —
+ *   that owns every state change short of a purchase. Then the ladder.
+ *
+ * THE FRAME: ONE RULED SURFACE, NOT A STACK OF CARDS
+ *   Those four blocks used to be separate rounded boxes with gaps between them, and the ladder a
+ *   fifth box of its own. They are now cells of a single grid on the shell's panel, split by 1px
+ *   hairlines that run edge to edge (the platform.openai.com/usage look): each row rules its bottom
+ *   edge, the two balances rule the line between them, and the ladder's columns continue the same
+ *   rules. The page paints no ground of its own — see scripts/check-page-ground.mjs.
+ *
+ *   Only the framing changed. A "flat overview + link tiles" rewrite that moved the ladder off
+ *   this page was rejected; the owner's call, 2026-09-17: "giữ nguyên content cũ của billing nhưng
+ *   làm dạng grid line" — keep the old content, lay it out as grid lines.
  *
  * NO SHADOWS anywhere on this surface. See ./components/billing-primitives.
  */
 
 import {
   ArrowClockwise,
-  ChartLine,
-  ListChecks,
   Lock,
-  Money,
-  Receipt,
   Spinner,
-  Stack,
   Wallet,
   WarningCircle,
 } from "@phosphor-icons/react";
@@ -56,11 +61,18 @@ import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
-import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
+import type { PlanDto } from "@/types/billing";
 
-import { BillingButton } from "./components/billing-primitives";
+import {
+  BannerRow,
+  BillingButton,
+  GridRow,
+  Pill,
+  StatCell,
+} from "./components/billing-primitives";
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
+import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
 
 /**
@@ -222,6 +234,13 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     queryClient.invalidateQueries({ queryKey: ["billing"] });
   };
 
+  // Changing plan is a PURCHASE and goes through Stripe Checkout, which lives on the plans page.
+  // There is no in-place "change plan" call to make: WT-381 established that the change-plan route
+  // never existed, and that a payment for a different plan IS the change.
+  const goToCheckout = (plan: PlanDto) => {
+    window.location.assign(`/${workspaceSlug}/payment/plans?plan=${plan.slug}`);
+  };
+
   if (!role) {
     return (
       <div className="flex h-[60vh] w-full items-center justify-center">
@@ -274,155 +293,98 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   }
 
   const overagesOn = overage?.enabled === true;
-  const lowBalance = totalCredits > 0 && remainingRatioPercent <= 15;
-  const spentPercent = Math.min(100, Math.max(0, usageRatioPercent));
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8 text-ink">
-      {/* The balance, flat on the page. It is the one number this screen exists to answer, so it
-          is not boxed in a card competing with the tiles below — the same shape as the OpenAI
-          billing overview the owner pointed at. */}
-      <section className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-muted">
-          <span className="inline-flex h-[22px] items-center rounded-full border border-hairline bg-surface-1 px-2.5 text-[12px] font-medium text-ink">
-            {subscription?.planName ?? "No active plan"}
-          </span>
-          {subscription ? (
-            <span>{formatMoney(subscription.price, activePlan?.currency)} per cycle</span>
-          ) : null}
-          <span aria-hidden="true">·</span>
-          <span className={cn(subscription?.cancelAtPeriodEnd && "text-amber-600 dark:text-amber-400")}>
-            {subscription?.cancelAtPeriodEnd
-              ? `Cancelled — translation stops ${renewsDate}`
-              : `Renews ${renewsDate}`}
-          </span>
-        </div>
-
-        <div>
-          <p className="text-[13px] text-ink-muted">Credits remaining</p>
-          <p
-            className={cn(
-              "mt-1 text-[40px] font-semibold leading-none tracking-[-0.8px] tabular-nums",
-              lowBalance ? "text-amber-600 dark:text-amber-400" : "text-ink",
-            )}
+    <div className="flex min-w-0 flex-col text-ink">
+      <BannerRow
+        title="Allow overages"
+        badge={<Pill tone="accent">Recommended</Pill>}
+        description={
+          overagesOn
+            ? `Meetings keep translating past zero credits, up to ${formatAmount(overage?.effectiveCapCredits ?? 0)} credits this cycle.`
+            : "Meetings stop the moment the credits run out. Turn this on to let them continue up to the allowance your plan already grants."
+        }
+        action={
+          <BillingButton
+            tone={overagesOn ? "outline" : "primary"}
+            className="w-auto px-4"
+            onClick={() => setIsManageOpen(true)}
           >
-            {formatAmount(currentCredits)}
-          </p>
-          {totalCredits > 0 ? (
-            <div className="mt-4 max-w-md">
-              <div
-                className="h-1.5 overflow-hidden rounded-full bg-surface-3"
-                role="progressbar"
-                aria-label="Credits spent this cycle"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={Math.round(spentPercent)}
-              >
-                <div
-                  className={cn("h-full rounded-full", lowBalance ? "bg-amber-500" : "bg-primary")}
-                  style={{ width: `${spentPercent}%` }}
-                />
-              </div>
-              <p className="mt-2 text-[12px] tabular-nums text-ink-muted">
-                {formatAmount(creditsUsed)} spent of {formatAmount(totalCredits)} granted this
-                cycle
-              </p>
-            </div>
-          ) : (
-            <p className="mt-2 text-[12px] text-ink-muted">No allowance on this cycle.</p>
-          )}
-        </div>
+            {overagesOn ? "Manage" : "Enable"}
+          </BillingButton>
+        }
+      />
 
-        <div className="flex flex-wrap items-center gap-2">
-          <BillingButton tone="primary" className="w-auto px-4" onClick={() => setIsTopUpOpen(true)}>
+      {/* Stacked on a phone, where the first cell's bottom rule is the line between them; side by
+          side from sm, where that rule becomes the vertical one. */}
+      <div className="grid sm:grid-cols-2">
+        <StatCell
+          label="Credits Remaining"
+          className="sm:border-r"
+          value={formatAmount(currentCredits)}
+          tone={totalCredits > 0 && remainingRatioPercent <= 15 ? "warn" : "default"}
+          lines={[
+            totalCredits > 0
+              ? `${formatAmount(totalCredits)} granted this cycle.`
+              : "No allowance on this cycle.",
+            `${formatAmount(creditsUsed)} spent since the cycle began.`,
+            `Cycle ends ${renewsDate}.`,
+          ]}
+        />
+        <StatCell
+          label="Current Plan"
+          value={subscription?.planName ?? "No active plan"}
+          tone={subscription?.cancelAtPeriodEnd ? "warn" : "default"}
+          lines={[
+            subscription
+              ? `${formatMoney(subscription.price, activePlan?.currency)} per cycle.`
+              : "Meetings translate against a credit balance.",
+            activePlan
+              ? `${activePlan.maxParticipants} participants · ${activePlan.maxLanguages} languages per meeting.`
+              : "Plan limits unavailable.",
+            subscription?.cancelAtPeriodEnd
+              ? `Cancelled — translation stops ${renewsDate}. Resubscribe from Manage subscription.`
+              : `Renews ${renewsDate}.`,
+          ]}
+        />
+      </div>
+
+      <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[12px] text-ink-muted">Current plan</p>
+          <p className="mt-1 truncate text-[20px] font-semibold leading-tight text-ink">
+            {subscription?.planName ?? "No active plan"}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="hidden text-[12px] text-ink-muted sm:inline">
+            {subscription?.cancelAtPeriodEnd ? "Ends" : "Renews"} on {renewsDate}
+          </span>
+          <BillingButton
+            tone="outline"
+            className="w-auto px-3"
+            onClick={() => setIsTopUpOpen(true)}
+          >
             <Wallet className="h-3.5 w-3.5" />
             Buy credits
           </BillingButton>
-          <BillingButton tone="outline" className="w-auto px-4" onClick={() => setIsManageOpen(true)}>
+          <BillingButton
+            tone="outline"
+            className="w-auto px-3"
+            onClick={() => setIsManageOpen(true)}
+          >
             Manage subscription
           </BillingButton>
         </div>
+      </GridRow>
 
-        {/* Overages is a standing condition that changes what the number above means, so it
-            stays in this block as one line rather than a banner of its own. */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-hairline pt-4 text-[13px]">
-          <span className="inline-flex items-center gap-1.5 font-medium text-ink">
-            <span
-              aria-hidden="true"
-              className={cn("h-2 w-2 rounded-full", overagesOn ? "bg-emerald-500" : "bg-ink-subtle")}
-            />
-            Overages {overagesOn ? "on" : "off"}
-          </span>
-          <span className="min-w-0 flex-1 text-ink-muted">
-            {overagesOn
-              ? `Meetings keep translating past zero credits, up to ${formatAmount(overage?.effectiveCapCredits ?? 0)} credits this cycle.`
-              : "Meetings stop the moment the credits run out."}
-          </span>
-          <button
-            type="button"
-            onClick={() => setIsManageOpen(true)}
-            className="text-[13px] font-medium text-primary hover:underline"
-          >
-            {overagesOn ? "Manage" : "Turn on"}
-          </button>
-        </div>
-      </section>
-
-      {/* Everything else about money is a destination, not a panel: one tile per sibling page,
-          laid out as a grid of links. The plan ladder that used to fill the bottom of this page
-          lives behind "Plans & pricing", where it is the whole subject. */}
-      <nav aria-label="Billing" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {[
-          {
-            href: `/${workspaceSlug}/settings/billing/usage`,
-            icon: ChartLine,
-            title: "Usage",
-            description: "Where credits went, by service and by day.",
-          },
-          {
-            href: `/${workspaceSlug}/settings/billing/invoices`,
-            icon: Receipt,
-            title: "Invoices",
-            description: "Past and current invoices for this workspace.",
-          },
-          {
-            href: `/${workspaceSlug}/settings/billing/payments`,
-            icon: Money,
-            title: "Payments",
-            description: "Every payment and whether it went through.",
-          },
-          {
-            href: `/${workspaceSlug}/settings/features`,
-            icon: ListChecks,
-            title: "Features",
-            description: activePlan
-              ? `${activePlan.maxParticipants} participants · ${activePlan.maxLanguages} languages, and what else your plan includes.`
-              : "What your plan includes and the limits in force.",
-          },
-          {
-            href: `/${workspaceSlug}/payment/plans`,
-            icon: Stack,
-            title: "Plans & pricing",
-            description: "Compare plans and change yours.",
-          },
-        ].map(({ href, icon: Icon, title, description }) => (
-          <Link
-            key={title}
-            href={href}
-            className="group flex items-start gap-3 rounded-[10px] border border-hairline bg-surface-1 p-4 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-          >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-hairline bg-surface-2 text-ink-muted group-hover:text-ink">
-              <Icon className="h-4 w-4" weight="duotone" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-[13px] font-medium text-ink">{title}</span>
-              <span className="mt-0.5 block text-[12px] leading-relaxed text-ink-muted">
-                {description}
-              </span>
-            </span>
-          </Link>
-        ))}
-      </nav>
+      {activePlans.length > 0 ? (
+        <PlanGrid
+          plans={activePlans}
+          currentPlanId={subscription?.planId ?? null}
+          onSelect={goToCheckout}
+        />
+      ) : null}
 
       <ManageSubscriptionModal
         open={isManageOpen}
