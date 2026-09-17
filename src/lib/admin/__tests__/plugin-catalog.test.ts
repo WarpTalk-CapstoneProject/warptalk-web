@@ -7,6 +7,7 @@ import {
   describePluginToolOutcome,
   EMPTY_NEW_PLUGIN_DRAFT,
   formatToolManifest,
+  formatWorkspaceCount,
   isReservedPluginKey,
   parseToolManifest,
   RESERVED_PLUGIN_KEYS,
@@ -404,5 +405,18 @@ describe("tool-call outcomes — the recorder writes \"success\", not \"ok\"", (
       code: "unknown_tool",
     });
     assert.equal(describePluginToolOutcome("").code, "failed");
+  });
+});
+
+describe("formatWorkspaceCount", () => {
+  test("counts workspaces, singular and plural", () => {
+    assert.equal(formatWorkspaceCount(0), "0 workspaces");
+    assert.equal(formatWorkspaceCount(1), "1 workspace");
+    assert.equal(formatWorkspaceCount(6), "6 workspaces");
+  });
+
+  test("a server that sends no count reads as a dash, not as zero", () => {
+    assert.equal(formatWorkspaceCount(undefined), "—");
+    assert.equal(formatWorkspaceCount(null), "—");
   });
 });

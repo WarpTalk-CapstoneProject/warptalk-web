@@ -171,22 +171,20 @@ export interface PluginWorkspaceBlock {
 }
 
 /**
- * A workspace configures exactly one plugin attribute — whether its members may use plugins at all
- * — so there is exactly one refusal to explain. An earlier revision of this ticket also carried a
- * per-plugin allowlist, and with it a second refusal ("permits some plugins, not this one") that
- * needed a different next step; that scope was cut, and the backend no longer emits it.
+ * Since the plugin marketplace (2026-09-17) a workspace refuses a plugin it has not added, and the
+ * member page shows that as a Request button rather than as this notice — see
+ * `memberPluginAction` in plugin-availability.ts. The notice survives for the one case the button
+ * cannot cover: a plugin the member already installed, whose dialog still has to explain why Connect
+ * is disabled while Disconnect and Remove are not.
  *
- * The match is kept rather than assuming the single message, because the catalog DTO carries the
- * sentence and not the error code. If the backend rewords it, the remedy line disappears and the
- * user still sees the reason — better than confidently offering a remedy for a refusal this is not.
- * A `workspacePolicyBlockCode` on the DTO would retire the guesswork entirely.
+ * Matched on the sentence because the catalog DTO carries the sentence, not the error code. An
+ * unrecognised sentence keeps its reason and gets no invented remedy.
  */
 const WORKSPACE_POLICY_REMEDIES: ReadonlyArray<{ marker: string; remedy: string }> = [
   {
-    // PluginConstants.WorkspacePolicyMessages.PluginsDisabled
-    marker: "do not allow personal plugins",
-    remedy:
-      "Your workspace has turned plugins off. Only a workspace Owner or Admin can turn them back on.",
+    // WorkspacePluginConstants.Messages.NotAdded
+    marker: "has not been added to this workspace",
+    remedy: "Only your workspace owner can add plugins. Close this and use Request to ask them.",
   },
 ];
 

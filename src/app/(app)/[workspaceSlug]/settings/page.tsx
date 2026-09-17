@@ -5,7 +5,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
+  CaretRight,
   Lock,
   Spinner,
   Copy,
@@ -719,17 +721,24 @@ export default function WorkspaceSettingsPage() {
               />
             </div>
 
-            {/* Personal MCP Plugins */}
+            {/* Plugins. The "Allow personal plugins" switch that lived here was the whole of a
+                workspace's plugin policy until the marketplace (2026-09-17). The Owner now picks
+                which plugins the workspace has on its own page, so this row only points there.
+                allowAnyPlugins still exists on the server as the transition input: a workspace
+                whose list has never been changed keeps what the switch said until its Owner edits
+                the list — see WorkspacePluginAvailability in the assistant service. */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5 max-w-[70%]">
-                <span className="text-xs font-semibold text-ink">Allow personal plugins</span>
-                <span className="text-[11px] text-ink-muted">Allow members to use their connected plugins in WarpBot conversations for this workspace.</span>
+                <span className="text-xs font-semibold text-ink">Plugins</span>
+                <span className="text-[11px] text-ink-muted">Choose which plugins members of this workspace can connect in WarpBot.</span>
               </div>
-              <Switch
-                checked={watchAll.allowAnyPlugins}
-                onCheckedChange={(val) => commitTopLevel("allowAnyPlugins", val)}
-                disabled={isSubmitting || !isOwnerOrAdmin}
-              />
+              <Link
+                href={`/${activeWorkspaceSlug}/settings/plugins`}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-border bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-surface-2"
+              >
+                Manage plugins
+                <CaretRight size={12} weight="bold" />
+              </Link>
             </div>
 
           </div>

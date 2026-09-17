@@ -606,3 +606,12 @@ export function describePluginToolOutcome(
   if (PROVIDER_TOOL_CODES.has(code)) return { label: "Provider error", tone: "failed", code };
   return { label: "Failed", tone: "failed", code: code || "failed" };
 }
+
+/**
+ * "6 workspaces" for the admin listing's Workspaces column. A server older than the marketplace sends
+ * no count at all, which reads as a dash rather than as a confident zero.
+ */
+export function formatWorkspaceCount(count: number | null | undefined): string {
+  if (typeof count !== "number" || !Number.isFinite(count)) return "—";
+  return `${count} workspace${count === 1 ? "" : "s"}`;
+}
