@@ -1578,12 +1578,12 @@ function TranscriptPauseDivider({
   meetingEnded: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 text-[10px] font-semibold tracking-wide text-muted-foreground">
-      <div className="h-px flex-1 bg-border" />
-      <span className="text-center">
+    <div role="separator" className="flex items-center gap-2 py-2 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+      <div className="h-[1.5px] flex-1 bg-amber-500/60" />
+      <span className="rounded-full bg-amber-500/10 px-2.5 py-1 text-center leading-snug">
         {formatTranscriptPauseGapRun(gaps, { meetingEnded })}
       </span>
-      <div className="h-px flex-1 bg-border" />
+      <div className="h-[1.5px] flex-1 bg-amber-500/60" />
     </div>
   );
 }
