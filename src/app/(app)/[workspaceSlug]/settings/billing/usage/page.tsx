@@ -198,7 +198,7 @@ export default function WorkspaceUsagePage() {
   const isLoading = isBalanceLoading || isLedgerLoading;
 
   return (
-    <div className="bg-surface-1 px-4 py-4 text-ink">
+    <div className="px-4 py-4 text-ink">
       <div className="overflow-hidden rounded-[12px] border border-border bg-surface-1 shadow-none">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline px-4 py-3">
           <h1 className="text-[14px] font-semibold text-ink">Usage</h1>

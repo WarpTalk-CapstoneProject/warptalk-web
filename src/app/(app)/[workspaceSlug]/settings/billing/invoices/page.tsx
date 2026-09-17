@@ -120,7 +120,7 @@ export default function WorkspaceInvoicesPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 bg-surface-1 px-4 py-4 text-ink">
+    <div className="flex flex-col gap-4 px-4 py-4 text-ink">
       <Section>
         <SectionHeader
           title="Invoices"

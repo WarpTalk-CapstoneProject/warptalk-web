@@ -86,7 +86,7 @@ export default function WorkspacePaymentsPage() {
   // would flash "only Owners" at the very Owner the page is for.
   if (!roleLoaded) {
     return (
-      <div className="flex h-[160px] items-center justify-center bg-surface-1">
+      <div className="flex h-[160px] items-center justify-center">
         <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
       </div>
     );
@@ -103,7 +103,7 @@ export default function WorkspacePaymentsPage() {
   const pageScope = totalPages > 1 ? " on this page" : "";
 
   return (
-    <div className="flex flex-col gap-4 bg-surface-1 px-4 py-4 text-ink">
+    <div className="flex flex-col gap-4 px-4 py-4 text-ink">
       <Section>
         <SectionHeader
           title="Payments"
