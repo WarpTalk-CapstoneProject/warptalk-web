@@ -44,6 +44,9 @@ const invoicesPage = read("src/app/(app)/[workspaceSlug]/settings/billing/invoic
 const invoicesEnCatalog = JSON.parse(
   read("messages/en/settingsBillingInvoices.json"),
 );
+// Same reasoning for the collapsed settings rail's Billing row: its label now goes through
+// t("settingsNav.billing") rather than a literal string.
+const commonEnCatalog = JSON.parse(read("messages/en/common.json"));
 
 /**
  * The `workspaceNav` array is the main sidebar's second group. Slicing to it rather than searching
@@ -114,7 +117,8 @@ const checks = [
   ],
   [
     "the collapsed settings rail offers Billing",
-    /settingsItems\.push\(\{[\s\S]{0,120}label: "Billing"/.test(sidebar),
+    /settingsItems\.push\(\{[\s\S]{0,120}label: t\("settingsNav\.billing"\)/.test(sidebar) &&
+      commonEnCatalog.sidebar?.settingsNav?.billing === "Billing",
   ],
   [
     "the settings chrome survives the trip to /payment/plans",
