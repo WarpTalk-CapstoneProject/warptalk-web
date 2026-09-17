@@ -53,7 +53,12 @@
     "minutesClassification": {
       "label": "議事録の機密区分",
       "description": "このワークスペースの新しいミーティング議事録に印字される既定の機密区分です。",
-      "placeholder": "機密区分を選択"
+      "placeholder": "機密区分を選択",
+      "options": {
+        "internal": "社内限定",
+        "confidential": "機密",
+        "public": "公開"
+      }
     },
     "minutesTemplate": {
       "label": "議事録テンプレート",

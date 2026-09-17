@@ -53,7 +53,12 @@
     "minutesClassification": {
       "label": "Minutes Classification",
       "description": "Default classification printed on new meeting minutes for this workspace.",
-      "placeholder": "Select classification"
+      "placeholder": "Select classification",
+      "options": {
+        "internal": "Internal",
+        "confidential": "Confidential",
+        "public": "Public"
+      }
     },
     "minutesTemplate": {
       "label": "Minutes Template",

@@ -53,7 +53,12 @@
     "minutesClassification": {
       "label": "Phân loại biên bản",
       "description": "Phân loại mặc định in trên biên bản cuộc họp mới của không gian làm việc này.",
-      "placeholder": "Chọn phân loại"
+      "placeholder": "Chọn phân loại",
+      "options": {
+        "internal": "Nội bộ",
+        "confidential": "Bảo mật",
+        "public": "Công khai"
+      }
     },
     "minutesTemplate": {
       "label": "Mẫu biên bản",

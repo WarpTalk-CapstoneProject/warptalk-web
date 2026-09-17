@@ -99,9 +99,26 @@ const languages = languagesInScope("meeting").map((language) => ({
   label: language.name,
 }));
 
-// The classification values are already the words a reader wants, so they are their own labels —
-// wrapping "Internal" in a lookup that returns "Internal" would only invite the two to drift.
+// The classification values are filing-convention ids the backend stores and compares ordinally,
+// spelled in English the same way minutesTemplate's ids are — see getMinutesTemplateOptions. Only
+// the label an Owner reads is translated.
 const minutesClassificationOptions: MinutesClassification[] = ["Internal", "Confidential", "Public"];
+
+function getMinutesClassificationLabel(
+  t: ReturnType<typeof useTranslations>,
+  classification: MinutesClassification,
+): string {
+  switch (classification) {
+    case "Internal":
+      return t("general.minutesClassification.options.internal");
+    case "Confidential":
+      return t("general.minutesClassification.options.confidential");
+    case "Public":
+      return t("general.minutesClassification.options.public");
+    default:
+      return classification;
+  }
+}
 
 // The template values are not translated: "vn-nd30" and "global-en" are filing-convention ids the
 // backend stores and the document writer switches on, and the value underneath is what travels
@@ -640,13 +657,17 @@ export default function WorkspaceSettingsPage() {
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
                   <SelectValue>
-                    {(value) => (value ? String(value) : t("general.minutesClassification.placeholder"))}
+                    {(value) =>
+                      value
+                        ? getMinutesClassificationLabel(t, value as MinutesClassification)
+                        : t("general.minutesClassification.placeholder")
+                    }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {minutesClassificationOptions.map((classification) => (
                     <SelectItem key={classification} value={classification} className="text-xs">
-                      {classification}
+                      {getMinutesClassificationLabel(t, classification)}
                     </SelectItem>
                   ))}
                 </SelectContent>
