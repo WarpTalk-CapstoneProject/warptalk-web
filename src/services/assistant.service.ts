@@ -9,6 +9,7 @@ import type {
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
   PluginConnectResultDto,
+  PluginToolPolicy,
   SendAssistantMessageResponse,
   WorkspacePluginToolAuditDto,
   WorkspacePluginToolAuditQuery,
@@ -43,7 +44,12 @@ export const assistantService = {
      *
      * `size` is dropped on the way out: it is only there for the chip's label.
      */
-    attachments?: ChatAttachment[]
+    attachments?: ChatAttachment[],
+    /**
+     * WT-687 — plugins switched off for this conversation. WarpBot is not offered their tools this
+     * turn. Omitted when every plugin is on, which is what an older client sends.
+     */
+    disabledPluginKeys?: string[]
   ) {
     return apiClient.post<SendAssistantMessageResponse>(API.assistant.sendMessage(conversationId), {
       content,
@@ -52,6 +58,7 @@ export const assistantService = {
       attachments: attachments?.length
         ? attachments.map(({ dataUrl, name, mimeType }) => ({ dataUrl, name, mimeType }))
         : undefined,
+      disabledPluginKeys: disabledPluginKeys?.length ? disabledPluginKeys : undefined,
     });
   },
 
@@ -108,6 +115,14 @@ export const assistantService = {
 
   disablePlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.disablePlugin(pluginKey));
+  },
+
+  /**
+   * WT-687 — what WarpBot may do with each named tool, for this user. Tools left out keep their
+   * choice. Answers with the catalog row, whose tools carry the resolved `policy`.
+   */
+  updatePluginToolPolicy(pluginKey: string, tools: Record<string, PluginToolPolicy>) {
+    return apiClient.put<AssistantPluginCatalogItemDto>(API.assistant.pluginToolPolicy(pluginKey), { tools });
   },
 
   /**
