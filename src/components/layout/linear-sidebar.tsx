@@ -24,6 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
+import { pendingRequestBadge } from "@/lib/assistant/plugin-availability";
 import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { cn } from "@/lib/utils";
@@ -54,6 +56,7 @@ import {
   PaperPlaneTilt,
   EnvelopeSimple,
   PlugsConnected,
+  PuzzlePiece,
   ClockCounterClockwise,
   SignOut,
   Plus,
@@ -93,6 +96,8 @@ interface NavItem {
    * change moves the tour's target with the element instead of silently detaching it.
    */
   tourId?: string;
+  /** A count beside the label (a dot on the collapsed rail), or null for none. */
+  badge?: string | null;
   actions?: Array<{
     icon: IconType;
     href?: string;
@@ -118,6 +123,24 @@ function navRowTone(active: boolean): string {
   return active
     ? "bg-surface-3 text-ink [&_svg]:text-ink [&_span]:text-ink"
     : "hover:bg-surface-3/60";
+}
+
+/**
+ * The pending-count pill the mock gives Workspace → Plugins. Beside the label when expanded; on the
+ * collapsed rail it rides the icon's corner, because there is no label to sit beside.
+ */
+function NavBadge({ count, collapsed = false }: { count: string; collapsed?: boolean }) {
+  return (
+    <span
+      aria-label={`${count} pending`}
+      className={cn(
+        "grid h-[18px] min-w-[18px] place-items-center rounded-full bg-ink px-[5px] text-[11px] font-semibold leading-none text-panel",
+        collapsed && "pointer-events-none absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px]",
+      )}
+    >
+      {count}
+    </span>
+  );
 }
 
 function NavLink({
@@ -168,6 +191,7 @@ function NavLink({
           </span>
         )}
       </Link>
+      {item.badge ? <NavBadge count={item.badge} collapsed={collapsed} /> : null}
       {!collapsed && item.actions && (
         <div className="flex items-center">
           {item.actions.map((action, i) => (
@@ -392,6 +416,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const isSettingsPage =
     pathname.includes("/settings") ||
     pathname.includes("/payment");
+
+  // Workspace → Plugins badge: requests from members waiting on the Owner. Owner/Admin only, and only
+  // while Settings is on screen — the one place the row is drawn — so no other page pays for the read.
+  const { data: workspacePluginsOverview } = useWorkspacePlugins(
+    activeWorkspaceId,
+    isOwnerOrAdmin && isSettingsPage,
+  );
+  const pluginRequestBadge = pendingRequestBadge(workspacePluginsOverview);
 
   /**
    * The platform admin console gets its own chrome — a third branch beside the app and Settings.
@@ -663,7 +695,15 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         exact: true,
         href: `/${activeWorkspaceSlug}/settings`,
       });
-      // Beside Workspace settings because it is the evidence for the plugin switch that lives there.
+      // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
+      settingsItems.push({
+        icon: PuzzlePiece,
+        label: "Plugins",
+        exact: true,
+        href: `/${activeWorkspaceSlug}/settings/plugins`,
+        badge: pluginRequestBadge,
+      });
+      // Beside the workspace's plugin list because it is the record of what that list let through.
       settingsItems.push({
         icon: ClockCounterClockwise,
         label: "Plugin activity",
@@ -876,8 +916,22 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </span>
                   </Link>
                 </div>
-                {/* Plugin activity sits under Workspace Settings: that page holds the one plugin switch,
-                    and this is the record of what it let through and refused. Owner/Admin. */}
+                {/* The workspace's plugin list (marketplace, 2026-09-17): the Owner adds plugins here and
+                    answers members' requests, which the badge counts. Owner/Admin. */}
+                <div className={cn(
+                  "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
+                  navRowTone(pathname === `/${activeWorkspaceSlug}/settings/plugins`)
+                )}>
+                  <Link href={`/${activeWorkspaceSlug}/settings/plugins`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
+                    <PuzzlePiece size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
+                    <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
+                      Plugins
+                    </span>
+                  </Link>
+                  {pluginRequestBadge ? <NavBadge count={pluginRequestBadge} /> : null}
+                </div>
+                {/* Plugin activity sits beside the workspace's plugin list: it is the record of what
+                    that list let through and refused. Owner/Admin. */}
                 <div className={cn(
                   "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
                   navRowTone(pathname === `/${activeWorkspaceSlug}/settings/plugin-activity`)
