@@ -183,7 +183,7 @@
     "test:document-reading": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/document-reading.test.ts",
     "test:reading-rail": "node scripts/check-reading-rail-contract.mjs",
     "test:minutes-document": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/minutes-document.test.ts",
-    "test:transcript-pause": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/transcript-pause.test.ts && node scripts/check-transcript-pause-wired.mjs",
+    "test:transcript-pause": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/transcript-pause.test.ts src/stores/__tests__/caption-transcript-lanes.test.ts && node scripts/check-transcript-pause-wired.mjs",
     "test:plugin-marketplace": "node scripts/check-plugin-marketplace-contract.mjs",
     "test:plugin-confirmation": "node scripts/check-plugin-confirmation-surfaces.mjs",
     "test:plugin-connection-action": "node scripts/check-plugin-connection-action-contract.mjs",

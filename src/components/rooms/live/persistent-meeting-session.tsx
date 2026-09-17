@@ -1070,6 +1070,14 @@ export function PersistentMeetingSession({
     windows: pauseWindowsQuery.data,
     event: transcriptPauseEvent,
   });
+  // Which lane a new segment joins: captions always, the transcript only while it is running.
+  // Mirrored from the same answer the banner shows, so the two cannot disagree. The broadcast
+  // handler below also writes it synchronously, because segments arriving between the event and
+  // this effect would otherwise land in the transcript lane.
+  const setStoreTranscriptPaused = useTranslationRoomStore((state) => state.setTranscriptPaused);
+  useEffect(() => {
+    setStoreTranscriptPaused(transcriptPause.paused);
+  }, [transcriptPause.paused, setStoreTranscriptPaused]);
 
   // WT-357: the session as it is right now, for handlers registered once on the hub connection.
   const currentMeetingSessionRef = useRef<JoinMeetingResponseDto | null>(null);
@@ -2554,6 +2562,7 @@ export function PersistentMeetingSession({
     // did not ask for it: the host's own mutation has already set the state by the time this
     // arrives, so `wasPaused === paused` and they are not told twice.
     const applyTranscriptPause = (paused: boolean) => {
+      useTranslationRoomStore.getState().setTranscriptPaused(paused);
       setTranscriptPauseEvent((previous) => {
         if (previous?.paused !== paused) {
           toast[paused ? "info" : "success"](
