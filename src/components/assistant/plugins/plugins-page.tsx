@@ -17,6 +17,7 @@ import {
   Warning,
   X,
 } from "@phosphor-icons/react";
+import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
@@ -26,11 +27,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   useAssistantPlugins,
   useDisableAssistantPlugin,
   useUpdatePluginToolPolicy,
   useDisconnectAssistantPlugin,
+  useConnectPluginWithApiKey,
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
@@ -402,6 +405,7 @@ function ConnectPluginDialog({
   isSavingToolPolicy,
   onClose,
   onContinue,
+  onSubmitApiKey,
   onDisconnect,
   onRemove,
   onToolPolicyChange,
@@ -433,11 +437,16 @@ function ConnectPluginDialog({
   isSavingToolPolicy: boolean;
   onClose: () => void;
   onContinue: () => void;
+  /** `api_key` rows only. Resolves to an error to show under the field, or null once connected. */
+  onSubmitApiKey: (apiKey: string) => Promise<string | null>;
   onDisconnect: () => void;
   onRemove: () => void;
   onToolPolicyChange: (tools: Record<string, PluginToolPolicy>) => void;
 }) {
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const usesApiKey = plugin.authMode === "api_key";
   const isConnected = plugin.connectionStatus === "connected";
   const hasProviderGrant = providerConnectionStatus === "connected";
   /** Signed in, but this plugin's own permission was declined — the case Continue actually fixes. */
@@ -480,7 +489,9 @@ function ConnectPluginDialog({
             <p className="mt-1.5 text-sm text-ink-muted">
               {isConnected
                 ? `WarpBot can use ${plugin.label} for you.`
-                : coveredByExistingGrant
+                : usesApiKey
+                  ? `Paste an API key from your own ${plugin.label} account.`
+                  : coveredByExistingGrant
                   ? `Uses the ${plugin.connectedAccountEmail ?? "account"} you already signed in with. No sign-in needed.`
                   : "You will sign in and confirm this on the provider's own page."}
             </p>
@@ -533,7 +544,61 @@ function ConnectPluginDialog({
         {/* Not offered once the plugin is connected: "Continue to ..." beside "Connected as ..."
             read as an unfinished connection. Partially granted still gets it — that is the case
             Continue actually fixes. */}
-        {isConnected ? null : (
+        {isConnected ? null : usesApiKey ? (
+          // The key goes straight to the server, which checks it against the MCP server before
+          // saving. It is never stored here and never read back: a connected row shows no field.
+          <form
+            className={cn("flex flex-col gap-2", workspaceBlock ? "mt-3" : "mt-6")}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const trimmed = apiKey.trim();
+              if (!trimmed) {
+                setApiKeyError("Paste an API key first.");
+                return;
+              }
+              setApiKeyError(null);
+              void onSubmitApiKey(trimmed).then((error) => {
+                if (error) setApiKeyError(error);
+                else setApiKey("");
+              });
+            }}
+          >
+            <label htmlFor="plugin-api-key" className="text-left text-xs font-medium text-ink">
+              {plugin.label} API key
+            </label>
+            <Input
+              id="plugin-api-key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={apiKey}
+              disabled={isConnecting || workspaceBlock !== null}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                if (apiKeyError) setApiKeyError(null);
+              }}
+              aria-invalid={apiKeyError ? true : undefined}
+              data-testid="plugin-api-key-input"
+            />
+            {apiKeyError ? (
+              <p role="alert" className="text-left text-xs text-destructive">
+                {apiKeyError}
+              </p>
+            ) : (
+              <p className="text-left text-xs text-ink-muted">
+                Only you use this key. Disconnect deletes it.
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={isConnecting || workspaceBlock !== null || !apiKey.trim()}
+              className="mt-1 h-10 w-full"
+            >
+              {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
+              Connect {plugin.label}
+            </Button>
+          </form>
+        ) : (
           <Button
             type="button"
             // Connecting is what workspace policy actually refuses. Disconnect and Remove below stay
@@ -788,6 +853,7 @@ export default function PluginsPage() {
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();
   const connectUrl = usePluginConnectUrl();
+  const connectWithApiKey = useConnectPluginWithApiKey();
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
   const updateToolPolicy = useUpdatePluginToolPolicy();
@@ -865,6 +931,8 @@ export default function PluginsPage() {
   // rows, because it is a question about the grant, not about whether the sibling is usable.
   const coveredByExistingGrant = useMemo(() => {
     if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return false;
+    // A key is the user's own; no sibling's grant can stand in for it.
+    if (selectedPlugin.authMode === "api_key") return false;
     return pluginsSharingConnection(selectedPlugin, plugins).some(
       (sibling) =>
         sibling.connectionStatus === "connected"
@@ -935,6 +1003,22 @@ export default function PluginsPage() {
       });
     } catch {
       toast.error(`Could not start the ${plugin.label} connection.`);
+    }
+  }
+
+  /** Resolves to the message to show under the key field, or null once the plugin is connected. */
+  async function submitApiKey(plugin: AssistantPluginCatalogItemDto, apiKey: string): Promise<string | null> {
+    try {
+      await connectWithApiKey.mutateAsync({ pluginKey: plugin.key, apiKey, workspaceId });
+      await refetch();
+      toast.success(` connected`);
+      return null;
+    } catch (error) {
+      // The API answers a refused key with a plain-text body, which getErrorMessage does not read.
+      const body = isAxiosError(error) ? error.response?.data : undefined;
+      return typeof body === "string" && body.trim()
+        ? body
+        : getErrorMessage(error, `Could not connect . Check the key and try again.`);
     }
   }
 
@@ -1026,6 +1110,22 @@ export default function PluginsPage() {
     params.delete("reason");
     params.delete("ref");
     params.delete("client");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [isLoading, plugins]);
+
+  // A chat surface sent the user here to paste a key (pluginApiKeyPageHref): open that plugin's
+  // dialog once the catalog has it, then strip the hint so a reload does not reopen it.
+  const apiKeyHintHandled = useRef(false);
+  useEffect(() => {
+    if (apiKeyHintHandled.current || isLoading) return;
+    apiKeyHintHandled.current = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connect") !== "api_key") return;
+    const pluginKey = params.get("plugin");
+    if (plugins.some((plugin) => plugin.key === pluginKey)) setSelectedPluginKey(pluginKey);
+    params.delete("connect");
+    params.delete("plugin");
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   }, [isLoading, plugins]);
@@ -1177,9 +1277,6 @@ export default function PluginsPage() {
               layout change (it has its own empty, filtered and two-column cases) and belongs with
               whoever designs it, not smuggled in behind a sort. */}
           <h2 className="text-sm font-semibold text-ink">All plugins</h2>
-          {workspaceId && workspaceName ? (
-            <span className="truncate text-xs text-ink-muted">{workspaceName} decides which ones you can connect</span>
-          ) : null}
         </div>
 
         {isLoading ? (
@@ -1316,12 +1413,13 @@ export default function PluginsPage() {
           providerConnectionStatus={selectedPlugin.connectionStatus}
           sharedConnectionPlugins={sharedConnectionPlugins}
           coveredByExistingGrant={coveredByExistingGrant}
-          isConnecting={connectUrl.isPending}
+          isConnecting={connectUrl.isPending || connectWithApiKey.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
           isSavingToolPolicy={updateToolPolicy.isPending}
           onClose={() => setSelectedPluginKey(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
+          onSubmitApiKey={(apiKey) => submitApiKey(selectedPlugin, apiKey)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
           onToolPolicyChange={(tools) => void saveToolPolicy(selectedPlugin, tools)}

@@ -45,7 +45,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -713,6 +713,10 @@ export function ChatPanel({
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: activeWorkspaceId ?? undefined,
       });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
       // Connected on the server already: the provider's grant covered it, nothing to open. Said
       // out loud, because this is the common case for a second Google plugin — and returning
       // silently left the button flipping back to "Connect", which reads as a click that failed.
