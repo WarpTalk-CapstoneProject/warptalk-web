@@ -699,13 +699,16 @@ function ServiceCards({
     );
   }
   return (
-    <div className="grid gap-4 px-4 pb-6 pt-5 sm:px-6 @min-[560px]:grid-cols-2">
+    // Cells ruled by hairlines, not bordered cards: the page's main content box is the one card on
+    // this screen (owner, 2026-09-17: "card lồng card, để card main content làm card chính"). The
+    // rule between columns belongs to the left cell, so an odd last card leaves no stray line.
+    <div className="grid @min-[560px]:grid-cols-2">
       {cards.map((card) => {
         const color = serviceColor(slots.get(card.key) ?? 0);
         return (
           <article
             key={card.key}
-            className="min-w-0 rounded-[10px] border border-hairline px-4 py-3.5"
+            className="min-w-0 border-b border-hairline px-4 py-4 sm:px-6 @min-[560px]:odd:border-r"
           >
             <h3 className="truncate text-[13px] font-medium text-ink" title={card.label}>
               {card.label}
