@@ -88,25 +88,52 @@ export function countPlayableRecordings(
   );
 }
 
+export type UnplayableRecordingState = "processing" | "failed";
+
+/** A recording row with no file behind it that will never get one. See unplayableRecordingState. */
+const FAILED_RECORDING_STATUSES: ReadonlySet<RoomHistoryArtifact["status"]> = new Set([
+  "failed",
+  "missing",
+]);
+
 /**
- * Whether a recording of this meeting exists but has nothing behind it yet.
+ * What became of this meeting's recordings that cannot be played — `"processing"`, `"failed"`,
+ * or null when there is nothing to say.
  *
- * The difference between "not recorded" and "recorded, still being written" — which
+ * The difference between "not recorded" and "recorded, but not watchable" — which
  * `findPlayableRecording` collapses into the same null, because for its purpose they are the same:
  * neither one can be played. They are not the same thing to tell the reader. A meeting nobody
- * recorded gets no notice at all; a meeting whose file is still processing is worth one, because
- * the answer changes on its own in a minute.
+ * recorded gets no notice at all; a recording still being written is worth one, because the answer
+ * changes on its own in a minute; and a recording that failed is worth a DIFFERENT one, because it
+ * never will.
  *
- * Any non-ready status counts, not only `processing` — `failed` and `missing` are equally
- * "there was a recording and you cannot watch it", and neither is served by claiming the meeting
- * was never recorded.
+ * WHY FAILED IS NO LONGER "PROCESSING" (rec-loss)
+ *   This used to be a boolean that counted every non-ready status, and the page read it as
+ *   "processing". Harmless while a recording row only appeared once its file had landed. Since
+ *   rec-loss the row exists from the moment recording starts and turns `failed` when LiveKit
+ *   produced nothing — so the boolean put a spinner and "this page updates on its own" over a
+ *   video that does not exist, forever. That is the silent loss rec-loss is about, with a spinner
+ *   on top.
+ *
+ * WHICH STATUSES COUNT AS FAILED
+ *   `failed` and `missing`: both are "a recording was made and there is no file", and neither
+ *   resolves itself. `expired` and `deleted` are NOT failures — retention ran out, or someone
+ *   removed the file on purpose; the recording worked. Calling them failed would send a host
+ *   looking for a fault that is really the policy working, so they return null here and the
+ *   Artifacts tab's own status label is where they are named.
+ *
+ * Processing outranks failed: with a restart in the meeting, one run can have failed while the
+ * next is still being written, and "wait a minute" is the answer that is about to change.
  */
-export function hasPendingRecording(
+export function unplayableRecordingState(
   artifacts: RoomHistoryArtifact[] | undefined | null,
-): boolean {
-  return Boolean(
-    artifacts?.some((artifact) => isRecording(artifact) && !canDownloadArtifact(artifact)),
-  );
+): UnplayableRecordingState | null {
+  const recordings = (artifacts ?? []).filter(isRecording);
+  if (recordings.some((artifact) => artifact.status === "processing")) return "processing";
+  if (recordings.some((artifact) => FAILED_RECORDING_STATUSES.has(artifact.status))) {
+    return "failed";
+  }
+  return null;
 }
 
 /**
@@ -134,10 +161,9 @@ export type PendingOutput = {
  * So the two outputs that are ALWAYS produced get a row of their own before they exist — processing
  * inside the window, "not produced" after it — and a row that does exist speaks for itself.
  *
- * The recording is deliberately not in this list. Nothing on the ended record says whether a
- * meeting was recorded at all (the egress id lives in MeetingService and never reaches the web), so
- * a "Recording · Processing" row would be a guess on every meeting nobody recorded. The panel names
- * it in a note instead.
+ * The recording is deliberately not in this list: not every meeting is recorded, so it is not owed.
+ * It needs no placeholder either — since rec-loss the backend writes a recording row the moment
+ * recording starts (processing, then ready or failed), so a recorded meeting's row speaks for itself.
  */
 export function pendingOutputs(
   artifacts: RoomHistoryArtifact[] | undefined | null,

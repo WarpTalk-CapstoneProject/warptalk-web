@@ -3218,11 +3218,19 @@ export function PersistentMeetingSession({
           state.recording ? "Recording started." : "Recording stopped.",
         );
       },
-      onError: () =>
+      // rec-loss: the server's reason first. A start is refused for reasons the host can act on —
+      // the workspace's recording minutes are used up (LIVEKIT_EGRESS_QUOTA_EXCEEDED) is the one
+      // that prompted this — and "Could not start recording." alone reads as the product being
+      // broken, so the host presses again, gets the same toast, and gives up without ever learning
+      // it was a quota. The generic sentence stays as the fallback for a failure with no body.
+      onError: (error) =>
         toast.error(
-          action === "start"
-            ? "Could not start recording."
-            : "Could not stop recording.",
+          getErrorMessage(
+            error,
+            action === "start"
+              ? "Could not start recording."
+              : "Could not stop recording.",
+          ),
         ),
     });
   }
