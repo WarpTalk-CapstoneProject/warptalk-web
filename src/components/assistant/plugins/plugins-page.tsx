@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import {
   useAssistantPlugins,
   useDisableAssistantPlugin,
+  useUpdatePluginToolPolicy,
   useDisconnectAssistantPlugin,
   useInstallAssistantPlugin,
   usePluginConnectUrl,
@@ -40,12 +41,21 @@ import {
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
+import {
+  TOOL_POLICIES,
+  TOOL_POLICY_LABEL,
+  groupToolsByEffect,
+  summarizeToolPolicies,
+  toolPolicyOf,
+  trustsAWriteTool,
+} from "@/lib/assistant/tool-policy";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
   AssistantPluginCatalogItemDto,
   AssistantPluginConnectionStatus,
+  PluginToolPolicy,
 } from "@/types/assistant";
 
 /**
@@ -60,8 +70,9 @@ import type {
 const CATALOG_TWO_COLUMN_MINIMUM = 4;
 
 function pluginActionLabel(plugin: AssistantPluginCatalogItemDto) {
-  if (plugin.installationStatus === "disabled") return "Enable";
-  if (plugin.installationStatus !== "installed") return "Install";
+  // WT-687: one action, as in Claude's connector directory. Installing is a step on the way to
+  // connecting, not a separate decision the user has to make first — see handlePrimaryAction.
+  if (plugin.installationStatus !== "installed") return "Connect";
   // An installed row the workspace refuses cannot be connected or reconnected, so offering either
   // word would be an instruction that leads to a refusal. "Manage" is the honest one: the dialog
   // it opens still lets the plugin be disconnected and removed.
@@ -258,6 +269,125 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   );
 }
 
+const TOOL_POLICY_TONE: Record<PluginToolPolicy, string> = {
+  allow: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  approval: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  blocked: "bg-red-500/10 text-red-700 dark:text-red-400",
+};
+
+/** Allow / Ask / Block for one tool, or for a whole group when `value` is null (mixed). */
+function ToolPolicyControl({
+  label,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: PluginToolPolicy | null;
+  disabled: boolean;
+  onChange: (policy: PluginToolPolicy) => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border"
+    >
+      {TOOL_POLICIES.map((policy) => {
+        const selected = value === policy;
+        return (
+          <button
+            key={policy}
+            type="button"
+            aria-pressed={selected}
+            disabled={disabled}
+            onClick={() => onChange(policy)}
+            className={cn(
+              "px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-60",
+              "border-l border-border first:border-l-0",
+              selected ? TOOL_POLICY_TONE[policy] : "bg-popover text-ink-muted hover:bg-surface-1 hover:text-ink",
+            )}
+          >
+            {TOOL_POLICY_LABEL[policy]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * What WarpBot may do with each of this plugin's tools, for this user. WT-687.
+ *
+ * Claude's connector settings are the model: every tool is Allow, Ask or Block, grouped read-only
+ * then write, with one control per group. A tool nobody has touched shows the server's default —
+ * reads allowed, writes ask — so opening this changes nothing until the user does.
+ */
+function ToolPolicyEditor({
+  plugin,
+  isSaving,
+  onChange,
+}: {
+  plugin: AssistantPluginCatalogItemDto;
+  isSaving: boolean;
+  onChange: (tools: Record<string, PluginToolPolicy>) => void;
+}) {
+  const groups = useMemo(() => groupToolsByEffect(plugin.tools), [plugin.tools]);
+
+  return (
+    <div className="mt-6 flex flex-col gap-4" data-testid="tool-policy-editor">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
+          What WarpBot may do
+        </h3>
+        <span className="text-[11px] tabular-nums text-ink-subtle">{summarizeToolPolicies(plugin.tools)}</span>
+      </div>
+
+      {groups.map((group) => (
+        <section key={group.effect} className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">{group.title}</h4>
+            <ToolPolicyControl
+              label={`All ${group.title.toLowerCase()}`}
+              value={group.policy}
+              disabled={isSaving}
+              onChange={(policy) =>
+                onChange(Object.fromEntries(group.tools.map((tool) => [tool.name, policy])))
+              }
+            />
+          </div>
+          <ul className="flex flex-col">
+            {group.tools.map((tool) => (
+              <li key={tool.name} className="flex items-center justify-between gap-3 py-1.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm text-ink">{tool.label || tool.name}</div>
+                  <div className="truncate font-mono text-[11px] text-ink-subtle">{tool.name}</div>
+                </div>
+                <ToolPolicyControl
+                  label={tool.label || tool.name}
+                  value={toolPolicyOf(tool)}
+                  disabled={isSaving}
+                  onChange={(policy) => onChange({ [tool.name]: policy })}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+
+      {trustsAWriteTool(plugin.tools) ? (
+        <p
+          data-testid="tool-policy-write-warning"
+          className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-300"
+        >
+          <Warning size={14} weight="fill" className="mt-0.5 shrink-0" />
+          <span>WarpBot can change data in {plugin.label} without asking for the write tools you allowed.</span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
@@ -266,10 +396,12 @@ function ConnectPluginDialog({
   isConnecting,
   isDisconnecting,
   isRemoving,
+  isSavingToolPolicy,
   onClose,
   onContinue,
   onDisconnect,
   onRemove,
+  onToolPolicyChange,
 }: {
   /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
   plugin: AssistantPluginCatalogItemDto;
@@ -295,10 +427,12 @@ function ConnectPluginDialog({
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
+  isSavingToolPolicy: boolean;
   onClose: () => void;
   onContinue: () => void;
   onDisconnect: () => void;
   onRemove: () => void;
+  onToolPolicyChange: (tools: Record<string, PluginToolPolicy>) => void;
 }) {
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
   const isConnected = plugin.connectionStatus === "connected";
@@ -311,7 +445,7 @@ function ConnectPluginDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
-      <section className="relative w-full max-w-[560px] rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl">
+      <section className="relative max-h-[90vh] w-full max-w-[560px] overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl">
         <Button
           type="button"
           size="icon-sm"
@@ -350,7 +484,13 @@ function ConnectPluginDialog({
           </div>
         </div>
 
-        <PermissionList plugin={plugin} />
+        {/* Once installed, each tool's permission is the user's to set (WT-687) — the server only
+            accepts a choice for an installation. Before that, the list says what connecting grants. */}
+        {isInstalled && plugin.tools.length > 0 ? (
+          <ToolPolicyEditor plugin={plugin} isSaving={isSavingToolPolicy} onChange={onToolPolicyChange} />
+        ) : (
+          <PermissionList plugin={plugin} />
+        )}
 
         <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
@@ -361,10 +501,11 @@ function ConnectPluginDialog({
             <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
             {/* One text node for the flex row: bare text beside a <span> becomes three flex items,
                 which laid "Tokens stay encrypted. Every", "write" and "action asks you first." out
-                as three columns. */}
+                as three columns. "Every write action asks" stopped being unconditional in WT-687,
+                so the sentence names the exception. */}
             <span>
-              Tokens stay encrypted. Every <span className="font-medium text-ink">write</span> action asks
-              you first.
+              Tokens stay encrypted. <span className="font-medium text-ink">Write</span> actions ask you
+              first unless you allow them.
             </span>
           </p>
           {sharedConnectionPlugins.length ? (
@@ -550,6 +691,7 @@ export default function PluginsPage() {
   const connectUrl = usePluginConnectUrl();
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
+  const updateToolPolicy = useUpdatePluginToolPolicy();
 
   const [query, setQuery] = useState("");
   // The KEY, not the row. Holding the object froze the dialog at the moment it opened: it kept
@@ -643,13 +785,15 @@ export default function PluginsPage() {
     if (plugin.installationStatus !== "installed") {
       try {
         await installPlugin.mutateAsync({ pluginKey: plugin.key, workspaceId });
-        toast.success(`${plugin.label} installed`);
       } catch {
         // Without this the button simply does nothing on a 500: the label never changes, no
         // toast appears, and the only trace is an unhandled rejection in the console.
-        toast.error(`Could not install ${plugin.label}.`);
+        toast.error(`Could not connect ${plugin.label}.`);
+        return;
       }
-      return;
+      // WT-687: straight on to the connect dialog rather than stopping at "installed". Consent is
+      // not opened from here: the install awaited, and Safari and Firefox drop the click's
+      // pop-up permission across an await. The dialog's Continue is a fresh click that keeps it.
     }
 
     setSelectedPluginKey(plugin.key);
@@ -800,6 +944,18 @@ export default function PluginsPage() {
       document.removeEventListener("visibilitychange", onReturn);
     };
   }, [consent, settleConsent]);
+
+  /** WT-687 — one tool or a whole group; the catalog refetch brings the resolved choices back. */
+  async function saveToolPolicy(
+    plugin: AssistantPluginCatalogItemDto,
+    tools: Record<string, PluginToolPolicy>,
+  ) {
+    try {
+      await updateToolPolicy.mutateAsync({ pluginKey: plugin.key, tools });
+    } catch {
+      toast.error(`Could not save what WarpBot may do in ${plugin.label}.`);
+    }
+  }
 
   async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
@@ -1001,10 +1157,12 @@ export default function PluginsPage() {
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
+          isSavingToolPolicy={updateToolPolicy.isPending}
           onClose={() => setSelectedPluginKey(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
+          onToolPolicyChange={(tools) => void saveToolPolicy(selectedPlugin, tools)}
         />
       ) : null}
     </div>
