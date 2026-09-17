@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import type { WorkspaceEntitlementsDto } from "@/types/workspace-entitlements";
 import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 import type { DuplicateStrategy } from "@/lib/documents/document-review";
 import type {
@@ -57,6 +58,12 @@ export const WorkspaceService = {
 
   async getSettings(id: string): Promise<WorkspaceSettingsDto> {
     const { data } = await apiClient.get<WorkspaceSettingsDto>(API.workspaces.settings(id));
+    return data;
+  },
+
+  /** Resolved entitlements (read-only snapshot from billing), with provenance. */
+  async getEntitlements(id: string): Promise<WorkspaceEntitlementsDto> {
+    const { data } = await apiClient.get<WorkspaceEntitlementsDto>(API.workspaces.entitlements(id));
     return data;
   },
 

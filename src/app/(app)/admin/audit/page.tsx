@@ -11,6 +11,7 @@ import {
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
+import { AuditStateSummary, formatAuditWhen } from "@/components/audit/audit-state-summary";
 import { useAdminAuditLog } from "@/hooks/use-admin-audit";
 import { cn } from "@/lib/utils";
 import type { AdminAuditLogEntryDto } from "@/types/admin-audit";
@@ -29,57 +30,6 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 
 function isResultFilter(value: string | null): value is ResultFilter {
   return RESULT_TABS.some((tab) => tab.value === value);
-}
-
-function formatWhen(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-/**
- * The before/after pairs an action recorded, if any.
- *
- * Rendered as plain key–value text rather than a JSON blob: these are already redacted twice and
- * are usually one or two fields, and a collapsed `{...}` would hide the only part of the row that
- * says what actually changed.
- */
-function StateSummary({
-  before,
-  after,
-}: {
-  before: Record<string, string | null> | null;
-  after: Record<string, string | null> | null;
-}) {
-  const keys = Array.from(
-    new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]),
-  );
-
-  if (keys.length === 0) return null;
-
-  return (
-    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-      {keys.map((key) => {
-        const from = before?.[key];
-        const to = after?.[key];
-        return (
-          <span key={key} className="font-mono text-[11px] text-ink-subtle">
-            {key}:{" "}
-            {from != null && to != null && from !== to ? (
-              <>
-                <span className="line-through">{from}</span> → <span className="text-ink">{to}</span>
-              </>
-            ) : (
-              <span className="text-ink">{to ?? from ?? "—"}</span>
-            )}
-          </span>
-        );
-      })}
-    </div>
-  );
 }
 
 function AuditLog() {
@@ -238,7 +188,7 @@ function AuditRow({ entry }: { entry: AdminAuditLogEntryDto }) {
     <div className="border-b border-hairline/60 px-4 py-3 last:border-b-0">
       <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-0">
         <div className="w-[140px] shrink-0 text-[12px] text-ink-muted">
-          {formatWhen(entry.performedAt)}
+          {formatAuditWhen(entry.performedAt)}
         </div>
 
         <div className="w-[170px] shrink-0">
@@ -271,7 +221,7 @@ function AuditRow({ entry }: { entry: AdminAuditLogEntryDto }) {
               one at write time; an audit table that hides it is worth about as much as no audit
               table at all. */}
           <p className="text-[13px] text-ink">{entry.reason || <span className="text-ink-subtle">— no reason recorded</span>}</p>
-          <StateSummary before={entry.beforeSummary} after={entry.afterSummary} />
+          <AuditStateSummary before={entry.beforeSummary} after={entry.afterSummary} />
         </div>
 
         <div className="w-[110px] shrink-0 font-mono text-[11px] text-ink-subtle md:text-right">

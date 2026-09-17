@@ -15,6 +15,13 @@ export interface UserDto {
   timezone?: string;
   emailVerified: boolean;
   roles: string[];
+  /**
+   * Sign-in methods, read by Settings > Connected accounts. Optional because an auth service
+   * older than the fields omits them — and absent must read as "unknown", never as false. See
+   * lib/auth/google-link-state.ts.
+   */
+  googleLinked?: boolean;
+  hasPassword?: boolean;
 }
 
 /**
@@ -104,4 +111,21 @@ export interface UpdateUserSettingsRequest {
   showTranslatedTranscript?: boolean;
   highContrast?: boolean;
   screenReaderMode?: boolean;
+}
+
+/**
+ * One of the signed-in user's own sessions — a refresh-token family on the server.
+ *
+ * `id` is the family id, which survives token rotation, so a row rendered before a refresh still
+ * names the same session afterwards. `lastActiveAt` is the last time the session refreshed its
+ * access token, so it can trail real activity by up to one access-token lifetime.
+ */
+export interface UserSessionDto {
+  id: string;
+  deviceInfo: string | null;
+  ipAddress: string | null;
+  signedInAt: string;
+  lastActiveAt: string;
+  expiresAt: string;
+  isCurrent: boolean;
 }

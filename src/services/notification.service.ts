@@ -11,7 +11,9 @@ import type {
 /** Notification service — maps to NotificationsController endpoints */
 export const notificationService = {
   getPreferences() {
-    return apiClient.get<NotificationPreferenceDto[]>(
+    // One object, not an array: the service keeps a single row per user and GET creates it with
+    // every channel on when it is missing. This was typed as an array while nothing called it.
+    return apiClient.get<NotificationPreferenceDto>(
       API.notifications.preferences
     );
   },

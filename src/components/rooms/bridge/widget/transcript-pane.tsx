@@ -28,8 +28,9 @@
  *     the captions. This pane is fed by the SAVED transcript (see use-bridge-widget-state.ts), and
  *     a paused transcript is one nothing is written into — the same reasoning, and the same
  *     danger of an unclosed window swallowing the rest of a meeting, that keeps the filter off
- *     meeting-transcript-panel.tsx. TODO(WT-525 relay / backend): the day live segments reach this
- *     window, they will carry speech spoken into a pause, and the filter has to come with them.
+ *     meeting-transcript-panel.tsx. Live segments DO reach this window, and the gateway sends them
+ *     through a pause for the captions' sake; use-bridge-widget-state keeps the ones that arrive
+ *     while paused out of the pane before they get here.
  *   - AI suggestion badges: see transcript/widget-transcript-bubble.tsx.
  */
 

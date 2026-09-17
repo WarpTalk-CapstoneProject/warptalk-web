@@ -21,6 +21,10 @@ export const API = {
     registerInvited: "/auth/register-invited",
     login: "/auth/login",
     googleLogin: "/auth/google-login",
+    /** Attach Google to the signed-in account. Body `{ idToken }`; the Google email must match. */
+    googleLink: "/auth/google/link",
+    /** Detach Google. Refused (MIN_AUTH_METHOD_REQUIRED) when the account has no password. */
+    googleUnlink: "/auth/google/unlink",
     refresh: "/auth/refresh",
     logout: "/auth/logout",
     me: "/auth/me",
@@ -34,6 +38,14 @@ export const API = {
      * needed it. Answers 204 for any address, so it says nothing about who has an account.
      */
     resendVerification: "/auth/resend-verification-request",
+    /**
+     * The caller's own signed-in sessions (refresh-token families). There is deliberately no
+     * endpoint for ending the CURRENT one here — that is `logout`, which clears the cookies in the
+     * same response; the server answers 409 if `revokeSession` is pointed at it.
+     */
+    sessions: "/auth/sessions",
+    revokeSession: (id: string) => `/auth/sessions/${id}`,
+    revokeOtherSessions: "/auth/sessions/revoke-others",
   },
   voiceProfiles: {
     list: "/auth/voice-profiles",
@@ -305,6 +317,7 @@ export const API = {
     get: (id: string) => `/workspaces/${id}`,
     select: (id: string) => `/workspaces/${id}/select`,
     settings: (id: string) => `/workspaces/${id}/settings`,
+    entitlements: (id: string) => `/workspaces/${id}/entitlements`,
     members: (workspaceId: string) => `/workspaces/${workspaceId}/members`,
     memberDetail: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}`,
     memberRole: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role`,
@@ -312,6 +325,8 @@ export const API = {
     memberRoleChange: (workspaceId: string, userId: string) => `/workspaces/${workspaceId}/members/${userId}/role-change`,
     transferOwnership: (workspaceId: string) => `/workspaces/${workspaceId}/members/transfer-ownership`,
     verifiedDomains: (workspaceId: string) => `/workspaces/${workspaceId}/verified-domains`,
+    /** Owner/Admin only. Staff actions on this workspace, actor redacted server-side. */
+    auditLog: (workspaceId: string) => `/workspaces/${workspaceId}/audit-log`,
     verifiedDomainDetail: (workspaceId: string, domainId: string) =>
       `/workspaces/${workspaceId}/verified-domains/${domainId}`,
     invitations: (workspaceId: string) => `/workspaces/${workspaceId}/invitations`,
@@ -369,6 +384,9 @@ export const API = {
       `/assistant/plugins/${encodeURIComponent(pluginKey)}`,
     pluginConnection: (pluginKey: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connection`,
+    /** WT-687: PUT `{ tools: { [toolName]: "allow" | "approval" | "blocked" } }`, merged per tool. */
+    pluginToolPolicy: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/tool-policy`,
     /**
      * `client` tells the API which surface is asking, so it can seal that into the OAuth state.
      * The desktop app opens consent in the system browser, and by the time the callback runs
@@ -514,6 +532,13 @@ export const API = {
      * the platform "admin" role before it ever asks the workspace service about membership.
      */
     cancel: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}`,
+    /**
+     * Undo a scheduled cancellation (renewal back on, period still running). Not `resume`: that
+     * one lifts an AI-service suspension and refuses a cancelled-but-healthy subscription.
+     */
+    reactivate: (workspaceId: string) =>
+      `/subscriptions/workspace/${workspaceId}/reactivate`,
+    /** Lift an AI-service suspension (overage cap, overdue invoice). Unrelated to cancellation. */
     resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
     /**
      * The one action that IS admin-only (2026-08-17): customers change plans through checkout,

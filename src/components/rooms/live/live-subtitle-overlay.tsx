@@ -85,7 +85,9 @@ export function LiveSubtitleOverlay({
    */
   translationActive?: boolean;
 }) {
-  const segments = useTranslationRoomStore((state) => state.transcriptSegments);
+  // The caption lane, not the transcript lane: captions keep running while the transcript is
+  // paused, and this list is the one a pause never withholds from. See captionSegments.
+  const segments = useTranslationRoomStore((state) => state.captionSegments);
   const identities = useMeetingIdentities();
   const scrollRef = useRef<HTMLDivElement>(null);
 
