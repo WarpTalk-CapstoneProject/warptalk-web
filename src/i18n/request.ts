@@ -50,6 +50,7 @@ const NAMESPACES = [
   "adminGlobalGlossary",
   "adminPlugins",
   "adminBillingLedger",
+  "download",
 ] as const;
 
 async function loadMessages(locale: string) {

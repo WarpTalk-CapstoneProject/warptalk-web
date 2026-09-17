@@ -6,6 +6,7 @@ import {
   LinuxLogo,
   WindowsLogo,
 } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
 import {
@@ -120,6 +121,7 @@ export function DownloadPrimaryCta({
   assets: DesktopAsset[];
   allDownloadsHref?: string;
 }) {
+  const t = useTranslations("download.cta");
   const [detected, setDetected] = useState<{
     platform: DesktopPlatform | null;
     arch: DesktopArch;
@@ -148,7 +150,7 @@ export function DownloadPrimaryCta({
         className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black shadow-[0_14px_40px_-22px_rgba(255,255,255,0.6)] transition hover:bg-white/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       >
         <DownloadSimple size={16} weight="bold" />
-        See all downloads
+        {t("seeAllDownloads")}
       </a>
     );
   }
@@ -168,7 +170,7 @@ export function DownloadPrimaryCta({
         )}
       >
         <PlatformIcon size={16} weight="fill" />
-        Download for {PLATFORM_LABEL[primary.platform]}
+        {t("downloadFor", { platform: PLATFORM_LABEL[primary.platform] })}
         <span className="text-black/38">·</span>
         <span className="font-medium text-black/60">{primary.label}</span>
       </a>
@@ -177,12 +179,12 @@ export function DownloadPrimaryCta({
         {size ? `${size} · ` : ""}
         {otherPlatforms.length > 0 ? (
           <>
-            Also on{" "}
+            {t("alsoOn")}{" "}
             <a
               href={allDownloadsHref}
               className="text-white/52 underline decoration-white/20 underline-offset-4 transition hover:text-white"
             >
-              {otherPlatforms.map((platform) => PLATFORM_LABEL[platform]).join(" and ")}
+              {otherPlatforms.map((platform) => PLATFORM_LABEL[platform]).join(t("platformJoiner"))}
             </a>
           </>
         ) : (
@@ -190,7 +192,7 @@ export function DownloadPrimaryCta({
             href={allDownloadsHref}
             className="text-white/52 underline decoration-white/20 underline-offset-4 transition hover:text-white"
           >
-            All downloads
+            {t("allDownloads")}
           </a>
         )}
       </p>
