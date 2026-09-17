@@ -101,7 +101,7 @@ import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-displa
 import {
   countPlayableRecordings,
   findPlayableRecording,
-  hasPendingRecording,
+  unplayableRecordingState,
 } from "@/lib/meeting/meeting-artifacts";
 import { resolveCitationRowId } from "@/lib/meeting/citation-target";
 import {
@@ -441,14 +441,34 @@ export default function RoomInformationPage() {
    * seek problem at all, it is "the file is still being written, come back in a minute" — and
    * `findPlayableRecording` cannot report it, because it collapses "never recorded" and "not ready"
    * into the same null on purpose. The union is fixed by meeting-record-panels.
+   *
+   * rec-loss: only a recording that is ACTUALLY processing. A failed one used to land here too, and
+   * the player spun over "it will appear here once it is ready" for a file that never would — see
+   * unplayableRecordingState. A failure is said by `recordingFailure` below instead.
    */
+  const unplayableRecording = unplayableRecordingState(endedRecordQuery.data?.artifacts);
   const recordingUnavailableReason: "processing" | "multiple" | null =
     playableRecordingCount > 1
       ? "multiple"
-      : playableRecordingCount === 0 &&
-          hasPendingRecording(endedRecordQuery.data?.artifacts)
+      : playableRecordingCount === 0 && unplayableRecording === "processing"
         ? "processing"
         : null;
+
+  /**
+   * rec-loss — a recording that was started and produced no file, said out loud.
+   *
+   * The bug this closes: a host pressed Record, the meeting ended, and this page showed no video and
+   * no reason — the reader could not tell "it failed" from "nobody recorded". `"all"` is the meeting
+   * with nothing to watch; `"some"` is a stop-and-restart meeting where one run failed and another
+   * plays, which still lost part of the meeting and still deserves a line. Null while anything is
+   * processing: that run may be the one that works, and the player already says to wait.
+   *
+   * A line above the reading surface rather than a player state, because the player's union belongs
+   * to meeting-record-panels and a failure has nothing to put in a video frame. See
+   * RECORDING_FAILURE_MESSAGES.
+   */
+  const recordingFailure: "all" | "some" | null =
+    unplayableRecording === "failed" ? (playableRecordingCount === 0 ? "all" : "some") : null;
 
   /**
    * WT-655 — true only for the instant a `?t=` arrival is being applied.
@@ -1120,6 +1140,7 @@ export default function RoomInformationPage() {
                 onJumpToMoment={jumpToTranscriptMoment}
                 seekUnavailableReason={seekUnavailableReason}
                 recordingUnavailableReason={recordingUnavailableReason}
+                recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
                 transcript={
                   <MeetingTranscriptArtifact
@@ -1305,6 +1326,18 @@ const SEEK_UNAVAILABLE_MESSAGES: Record<"unalignable" | "multiple", string> = {
 };
 
 /**
+ * rec-loss — what a reader is told when a recording was started and no file came of it.
+ *
+ * No "yet" and no "this page updates on its own": a failed recording is final, and wording that
+ * hints at a wait sends people back to refresh a page that will never change. It says the meeting
+ * WAS recorded, because the question a reader arrives with is "did I forget to press Record?".
+ */
+const RECORDING_FAILURE_MESSAGES: Record<"all" | "some", string> = {
+  all: "This meeting was recorded, but the recording failed — no video file was produced, so there is nothing to watch or download.",
+  some: "Part of this meeting's recording failed — one of its recordings produced no video file. The recordings that were saved are still available.",
+};
+
+/**
  * Everything a meeting left behind, on the meeting's own page.
  *
  * The transcript, the AI summary and the retained files used to be a separate Transcripts
@@ -1332,6 +1365,7 @@ function MeetingRecordSection({
   onJumpToMoment,
   seekUnavailableReason,
   recordingUnavailableReason,
+  recordingFailure,
   speakerDirectory,
   tab,
   onTabChange,
@@ -1395,6 +1429,8 @@ function MeetingRecordSection({
   seekUnavailableReason?: "unalignable" | "multiple" | null;
   /** Passed straight to the player. The union is meeting-record-panels'. */
   recordingUnavailableReason?: "processing" | "multiple" | null;
+  /** rec-loss: a recording that produced no file — derived on the page beside the reason above. */
+  recordingFailure?: "all" | "some" | null;
   /** Faces for the reading rail's attendees tab, from the same workspace member list the
    *  transcript's own speakers come from — the only place an avatar exists. */
   speakerDirectory?: Readonly<
@@ -1877,6 +1913,17 @@ function MeetingRecordSection({
       {activeTab === "recap" && seekUnavailableReason ? (
         <div className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted">
           {SEEK_UNAVAILABLE_MESSAGES[seekUnavailableReason]}
+        </div>
+      ) : null}
+      {/* rec-loss: beside the seek line and styled like it — both are "about the recording, above
+          what you are reading". role="status" so a screen reader announces it when the poll turns
+          a processing recording into a failed one while the page is open. */}
+      {activeTab === "recap" && recordingFailure ? (
+        <div
+          role="status"
+          className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted"
+        >
+          {RECORDING_FAILURE_MESSAGES[recordingFailure]}
         </div>
       ) : null}
       {activeTab === "recap" ? (

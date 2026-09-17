@@ -202,16 +202,23 @@ describe("WT-646 — a workspace's plugin policy, in words a member can act on",
     assert.equal(block?.remedy, null);
   });
 
-  test("plugins switched off is explained, and points at the one person who can undo it", () => {
-    // PluginConstants.WorkspacePolicyMessages.PluginsDisabled — the single refusal a workspace can
-    // now produce, since a workspace configures exactly one plugin attribute.
+  test("a plugin the workspace has not added points at the one person who can add it", () => {
+    // WorkspacePluginConstants.Messages.NotAdded — the refusal a workspace produces since the
+    // plugin marketplace replaced the single "allow personal plugins" switch.
     const block = pluginWorkspaceBlock(
       plugin({
-        workspacePolicyBlockReason: "Workspace settings do not allow personal plugins in WarpBot.",
+        workspacePolicyBlockReason:
+          "This plugin has not been added to this workspace. Ask your workspace owner to add it.",
       }),
     );
-    assert.ok(block?.remedy?.includes("turned plugins off"), block?.remedy ?? "");
-    assert.ok(block?.remedy?.includes("Owner or Admin"), block?.remedy ?? "");
+    assert.ok(block?.remedy?.includes("workspace owner"), block?.remedy ?? "");
+  });
+
+  test("the retired all-or-nothing sentence gets no remedy any more", () => {
+    const block = pluginWorkspaceBlock(
+      plugin({ workspacePolicyBlockReason: "Workspace settings do not allow personal plugins in WarpBot." }),
+    );
+    assert.equal(block?.remedy, null);
   });
 
   test("an unrecognised reason is still shown, with no invented advice attached", () => {

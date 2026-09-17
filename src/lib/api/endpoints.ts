@@ -402,6 +402,31 @@ export const API = {
      * 200 server-side). Not the system-admin audit under `adminPluginCatalog.audits`.
      */
     workspacePluginToolAudits: "/assistant/mcp/tools/audits",
+    /**
+     * The workspace half of the plugin marketplace (2026-09-17). Its own prefix rather than more
+     * literals under `/assistant/plugins`, where every literal beside `{pluginKey}` reserves a key.
+     * Authorised against the workspace in the path: reads Owner/Admin, writes Owner, requests any
+     * active member.
+     */
+    workspacePlugins: {
+      base: (workspaceId: string) => `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins`,
+      marketplace: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/marketplace/${encodeURIComponent(pluginKey)}`,
+      plugin: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}`,
+      private: (workspaceId: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/private`,
+      privatePlugin: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/private/${encodeURIComponent(pluginKey)}`,
+      requests: (workspaceId: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests`,
+      myRequests: (workspaceId: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests/mine`,
+      approveRequest: (workspaceId: string, requestId: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests/${encodeURIComponent(requestId)}/approve`,
+      declineRequest: (workspaceId: string, requestId: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests/${encodeURIComponent(requestId)}/decline`,
+    },
   },
   /**
    * The system-admin half of the plugin catalog (assistant service, WT-646).

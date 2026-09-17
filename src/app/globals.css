@@ -167,6 +167,19 @@
   --speaker-4: #a8397a;
   --speaker-5: #6d4bd8;
   --speaker-6: #0b7f97;
+
+  /* Usage services — the stacked spend chart and its per-service cards
+     (settings/billing/usage, lib/billing/usage-overview.ts serviceColorSlots). Five, because the
+     chart gives the five largest services a colour each and folds the rest into "Other", which
+     draws in --usage-service-other. Picked to stay apart from each other in both themes and to read
+     against a hairline grid; slot 1 sits near --primary on purpose, since the largest service is
+     the one the headline number is mostly about. */
+  --usage-service-1: #6b62e0;
+  --usage-service-2: #2f9e8f;
+  --usage-service-3: #d9913a;
+  --usage-service-4: #d0578f;
+  --usage-service-5: #4a8fdb;
+  --usage-service-other: #9ca3af;
 }
 
 .dark {
@@ -204,6 +217,12 @@
   --surface-4: #2d2f33;
   --hairline: #232428;
   --hairline-strong: #313338;
+  --usage-service-1: #8c84ee;
+  --usage-service-2: #45b8a8;
+  --usage-service-3: #e6a553;
+  --usage-service-4: #e07aa8;
+  --usage-service-5: #6aa8ec;
+  --usage-service-other: #6b7079;
   /* A cast shadow on a near-black ground is invisible; the step between panel and card is what
      separates them. Kept non-none so the rule still resolves. */
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.4);

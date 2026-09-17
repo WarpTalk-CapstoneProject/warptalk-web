@@ -75,6 +75,12 @@ export interface AdminPluginCatalogListItemDto {
   hasClientSecret: boolean;
   toolCount: number;
   installationCount: number;
+  /**
+   * How many workspaces have added this plugin to their list. Explicit lists only: a workspace that
+   * has never edited its list is still on the pre-marketplace "every plugin" default and is not
+   * counted. Optional because a server older than the marketplace does not send it.
+   */
+  workspaceCount?: number;
 }
 
 /** One row in full, with the tool manifest `PUT .../tools` replaces. */

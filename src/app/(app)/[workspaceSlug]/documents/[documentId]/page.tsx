@@ -216,7 +216,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
 
   if (documentQuery.isLoading) {
     return (
-      <div className="flex h-[80vh] items-center justify-center text-ink bg-canvas">
+      <div className="flex h-[80vh] items-center justify-center text-ink">
         <Spinner className="h-8 w-8 animate-spin text-primary" />
       </div>
     );

@@ -107,12 +107,12 @@ import {
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupSegmentsByTranslationSession,
-  pendingCorrections,
   resolveTranscriptPauseGaps,
   splitSegmentsAroundPauseGaps,
   type GroupedSavedTranscriptSegment,
   type TranscriptPauseGap,
 } from "@/lib/transcript/transcript-display";
+import { planLineCorrection, type PlannedCorrection } from "@/lib/transcript/merged-correction";
 import {
   AS_SPOKEN,
   assembleTranscriptText,
@@ -925,27 +925,53 @@ export function MeetingTranscriptArtifact({
   const isFinalized = transcriptStatus === "finalized";
   const canCorrect = Boolean(canEdit && transcriptId) && !isFinalized;
 
-  async function saveCorrection(segment: TranscriptSegmentDto) {
-    const correctedText = draftText.trim();
+  /**
+   * A line is every stored row the merge glued into it, and a correction has to reach each of
+   * them. Posting the merged text to the first row alone left the others as they were, and the
+   * next load read the old wording back in after the new — see merged-correction.ts.
+   *
+   * `null` when the edit cannot be spread over the rows; the caller says so rather than saving it
+   * in a shape that reads back differently.
+   */
+  function planCorrectionFor(line: GroupedSavedTranscriptSegment, text: string): PlannedCorrection[] | null {
+    const rows = line.mergedSegmentIds
+      .map((id) => segments.find((row) => row.id === id))
+      .filter((row): row is TranscriptSegmentDto => row !== undefined);
+    return planLineCorrection(rows.length > 0 ? rows : [line], text);
+  }
+
+  // Sequential, for the reason saveBatch gives. Throws on the first failure, after the rows before
+  // it have landed.
+  async function postPlannedCorrections(plan: readonly PlannedCorrection[]) {
+    if (!transcriptId) return;
+    for (const correction of plan) {
+      // No triggeredRetranslation flag: the server has no such request field, and it is not the
+      // caller's decision — SubmitCorrectionAsync sets it from whether the row actually had
+      // translations to redo.
+      await transcriptService.correctSegment(transcriptId, correction.segmentId, {
+        originalText: correction.originalText,
+        correctedText: correction.correctedText,
+        correctionType: "stt",
+      });
+    }
+  }
+
+  async function saveCorrection(segment: GroupedSavedTranscriptSegment) {
     // Closing without a change is not a correction — posting one would record an edit that
     // changed nothing and count against the transcript's revision history.
-    if (!transcriptId || !correctedText || correctedText === segment.originalText.trim()) {
+    const plan = transcriptId && draftText.trim() ? planCorrectionFor(segment, draftText) : [];
+    if (plan === null) {
+      toast.error("This edit removes too much of the line to save. Keep at least a word per sentence.");
+      return;
+    }
+    if (plan.length === 0) {
       setEditingSegmentId(null);
       return;
     }
 
     setIsSavingCorrection(true);
     try {
-      // No triggeredRetranslation flag: the server has no such request field, and it is not the
-      // caller's decision — SubmitCorrectionAsync sets it from whether the line actually had
-      // translations to redo. Sending `false` here read like a switch that was off; it never was
-      // one. (It also used to be set true on every correction while nothing retranslated anything:
-      // the message it pushed went to a stream no worker consumed.)
-      await transcriptService.correctSegment(transcriptId, segment.id, {
-        originalText: segment.originalText,
-        correctedText,
-        correctionType: "stt",
-      });
+      await postPlannedCorrections(plan);
       onSegmentsChanged?.();
       // The line updates now; its translations are redone by warptalk-ai and land seconds later.
       // Without this the reader sees the corrected sentence beside translations of the one it
@@ -1008,24 +1034,32 @@ export function MeetingTranscriptArtifact({
   async function saveBatch(): Promise<boolean> {
     if (!transcriptId) return false;
 
-    const pending = pendingCorrections(segments, batchDrafts);
+    // Drafts are keyed by the LINE (its first row's id) and hold the line's merged text, so they are
+    // planned against the line — comparing them to the first stored row found a "change" in every
+    // merged line and posted the whole line into that one row.
+    const pending: { lineId: string; plan: PlannedCorrection[] }[] = [];
+    let unsplittable = 0;
+    for (const line of grouped) {
+      const draft = batchDrafts[line.id];
+      // An emptied line is somebody mid-retype, not a delete: there is no delete on this path.
+      if (draft === undefined || !draft.trim()) continue;
+      const plan = planCorrectionFor(line, draft);
+      if (plan === null) unsplittable += 1;
+      else if (plan.length > 0) pending.push({ lineId: line.id, plan });
+    }
 
-    if (pending.length === 0) return true;
+    if (pending.length === 0 && unsplittable === 0) return true;
 
     setIsSavingBatch(true);
     let saved = 0;
     const failed: string[] = [];
     try {
-      for (const segment of pending) {
+      for (const { lineId, plan } of pending) {
         try {
-          await transcriptService.correctSegment(transcriptId, segment.id, {
-            originalText: segment.originalText,
-            correctedText: batchDrafts[segment.id].trim(),
-            correctionType: "stt",
-          });
+          await postPlannedCorrections(plan);
           saved += 1;
         } catch {
-          failed.push(segment.id);
+          failed.push(lineId);
         }
       }
     } finally {
@@ -1035,6 +1069,14 @@ export function MeetingTranscriptArtifact({
     if (saved > 0) {
       onSegmentsChanged?.();
       refreshTranslationsAfterCorrection();
+    }
+
+    if (unsplittable > 0) {
+      // Same reason as a failure to stay in batch mode: the typed text is the only copy.
+      toast.error(
+        `Saved ${saved}, but ${unsplittable} ${unsplittable === 1 ? "line removes" : "lines remove"} too much to save. Keep at least a word per sentence.`,
+      );
+      return false;
     }
 
     if (failed.length === 0) {
