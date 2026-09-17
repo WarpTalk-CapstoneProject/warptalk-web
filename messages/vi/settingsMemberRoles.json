@@ -1,0 +1,50 @@
+{
+  "loadingAccess": "Đang tải quyền truy cập không gian làm việc...",
+  "ownerRequired": {
+    "title": "Cần quyền chủ sở hữu",
+    "description": "Chỉ chủ sở hữu không gian làm việc mới có thể quản lý vai trò thành viên."
+  },
+  "heading": "Vai trò thành viên",
+  "subheading": "Thay đổi vai trò cho các thành viên nội bộ đang hoạt động.",
+  "latestRoleChange": {
+    "heading": "Thay đổi vai trò gần nhất",
+    "roleChangeSummary": "{oldRole} sang {newRole}",
+    "effectiveAt": "Có hiệu lực từ {date}.",
+    "auditId": "Mã kiểm toán: {id}"
+  },
+  "internalMembers": {
+    "heading": "Thành viên nội bộ",
+    "loading": "Đang tải thành viên...",
+    "loadFailed": "Không thể tải thành viên không gian làm việc.",
+    "retrying": "Đang thử lại...",
+    "retry": "Thử lại",
+    "empty": "Không có thành viên nội bộ nào đủ điều kiện.",
+    "changeRoleAria": "Đổi vai trò cho {name}",
+    "loadingButton": "Đang tải...",
+    "changeRole": "Đổi vai trò"
+  },
+  "review": {
+    "promoteTitle": "Thăng cấp lên Quản trị viên",
+    "demoteTitle": "Hạ cấp xuống Thành viên",
+    "loading": "Đang tải xem xét vai trò...",
+    "memberSummary": "{email} | {role} sang {targetRole}",
+    "promoteHint": "Thăng cấp sẽ mở khóa sau thời gian chờ 60 giây.",
+    "demoteHint": "Hạ cấp áp dụng cho yêu cầu hoặc phiên tiếp theo.",
+    "confirmLabel": "Xác nhận thay đổi này",
+    "confirmPlaceholder": "Gõ {value} để xác nhận",
+    "applying": "Đang áp dụng...",
+    "waitSeconds": "Chờ {seconds}s",
+    "checkingCooldown": "Đang kiểm tra thời gian chờ...",
+    "cancel": "Hủy"
+  },
+  "toasts": {
+    "invalidPreview": "Máy chủ trả về bản xem xét vai trò không hợp lệ. Tải lại thành viên và thử lại.",
+    "invalidCooldown": "Bản xem xét vai trò không có thời gian chờ hợp lệ. Vui lòng thử lại.",
+    "previewFailed": "Không thể tải bản xem xét vai trò. Tải lại thành viên và thử lại.",
+    "confirmationRequired": "Gõ chính xác email hoặc tên đầy đủ của người này để xác nhận.",
+    "promotionLocked": "Thăng cấp sẽ mở khóa sau {seconds} giây.",
+    "staleReview": "Bản xem xét vai trò bị thiếu hoặc đã cũ. Tải lại thành viên và thử lại.",
+    "applySuccess": "Đã áp dụng thay đổi vai trò cho yêu cầu hoặc phiên tiếp theo.",
+    "applyFailed": "Thay đổi vai trò thất bại. Tải lại bản xem xét và thử lại."
+  }
+}

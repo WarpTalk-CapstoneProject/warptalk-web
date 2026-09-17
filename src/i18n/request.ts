@@ -21,6 +21,8 @@ const NAMESPACES = [
   "glossary",
   "documents",
   "settingsWorkspace",
+  "settingsSecurity",
+  "settingsMemberRoles",
 ] as const;
 
 async function loadMessages(locale: string) {

@@ -1,0 +1,50 @@
+{
+  "loadingAccess": "Loading workspace access...",
+  "ownerRequired": {
+    "title": "Owner access required",
+    "description": "Only the workspace owner can manage member roles."
+  },
+  "heading": "Member roles",
+  "subheading": "Change roles for active internal members.",
+  "latestRoleChange": {
+    "heading": "Latest role change",
+    "roleChangeSummary": "{oldRole} to {newRole}",
+    "effectiveAt": "Effective at {date}.",
+    "auditId": "Audit ID: {id}"
+  },
+  "internalMembers": {
+    "heading": "Internal members",
+    "loading": "Loading members...",
+    "loadFailed": "Couldn't load workspace members.",
+    "retrying": "Retrying...",
+    "retry": "Retry",
+    "empty": "No eligible internal members.",
+    "changeRoleAria": "Change role for {name}",
+    "loadingButton": "Loading...",
+    "changeRole": "Change role"
+  },
+  "review": {
+    "promoteTitle": "Promote to Admin",
+    "demoteTitle": "Demote to Member",
+    "loading": "Loading role review...",
+    "memberSummary": "{email} | {role} to {targetRole}",
+    "promoteHint": "Promotion unlocks after a 60-second cooling-off period.",
+    "demoteHint": "Demotion applies to the next request or session.",
+    "confirmLabel": "Confirm this change",
+    "confirmPlaceholder": "Type {value} to confirm",
+    "applying": "Applying...",
+    "waitSeconds": "Wait {seconds}s",
+    "checkingCooldown": "Checking cooldown...",
+    "cancel": "Cancel"
+  },
+  "toasts": {
+    "invalidPreview": "The server returned an invalid role review. Reload members and try again.",
+    "invalidCooldown": "The role review did not include a valid cooling-off period. Try again.",
+    "previewFailed": "Couldn't load the role review. Reload members and try again.",
+    "confirmationRequired": "Type the target email or full name exactly to confirm.",
+    "promotionLocked": "Promotion unlocks in {seconds}s.",
+    "staleReview": "The role review is missing or stale. Reload members and try again.",
+    "applySuccess": "Role change applied for the next request or session.",
+    "applyFailed": "Role change failed. Reload the role review and try again."
+  }
+}

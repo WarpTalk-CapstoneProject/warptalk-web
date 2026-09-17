@@ -3,6 +3,7 @@
 import { Spinner } from "@phosphor-icons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,8 @@ type RoleChangeReceipt = Pick<
 >;
 
 export default function MemberRolesPage() {
+  const t = useTranslations("settingsMemberRoles");
+  const locale = useLocale();
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const role = useWorkspaceRole();
   const roleLoaded = useWorkspaceRoleLoaded();
@@ -91,7 +94,7 @@ export default function MemberRolesPage() {
         selectedMember.fullName,
       )
     : false;
-  const reviewTitle = targetRole === "Admin" ? "Promote to Admin" : "Demote to Member";
+  const reviewTitle = targetRole === "Admin" ? t("review.promoteTitle") : t("review.demoteTitle");
   const isCoolingOff = targetRole === "Admin" && cooldownDeadline !== null;
 
   const resetReviewState = () => {
@@ -121,14 +124,14 @@ export default function MemberRolesPage() {
       if (previewRequestId.current !== requestId) return;
 
       if (!isRoleChangePreviewForTarget(result, userId, nextRole)) {
-        throw new Error("The server returned an invalid role review. Reload members and try again.");
+        throw new Error(t("toasts.invalidPreview"));
       }
 
       const promotionDeadline = nextRole === "Admin"
         ? getPromotionCooldownDeadline(result.coolingOffUntil)
         : 0;
       if (promotionDeadline === null) {
-        throw new Error("The role review did not include a valid cooling-off period. Try again.");
+        throw new Error(t("toasts.invalidCooldown"));
       }
 
       setRoleChangeIntent(createMemberRoleChangeIntent(result, () => crypto.randomUUID()));
@@ -137,7 +140,7 @@ export default function MemberRolesPage() {
     } catch (error) {
       if (previewRequestId.current !== requestId) return;
       toast.error(
-        getErrorMessage(error, "Couldn't load the role review. Reload members and try again."),
+        getErrorMessage(error, t("toasts.previewFailed")),
       );
       resetReviewState();
     }
@@ -145,12 +148,12 @@ export default function MemberRolesPage() {
 
   const applyRoleChange = async () => {
     if (!selectedMember || !confirmationMatches) {
-      toast.error("Type the target email or full name exactly to confirm.");
+      toast.error(t("toasts.confirmationRequired"));
       return;
     }
 
     if (isCoolingOff) {
-      toast.error(`Promotion unlocks in ${remainingCooldownSeconds}s.`);
+      toast.error(t("toasts.promotionLocked", { seconds: remainingCooldownSeconds }));
       return;
     }
 
@@ -162,7 +165,7 @@ export default function MemberRolesPage() {
         targetRole,
       )
     ) {
-      toast.error("The role review is missing or stale. Reload members and try again.");
+      toast.error(t("toasts.staleReview"));
       resetReviewState();
       return;
     }
@@ -179,11 +182,11 @@ export default function MemberRolesPage() {
         newRole: result.newRole,
         effectiveAt: result.effectiveAt,
       });
-      toast.success("Role change applied for the next request or session.");
+      toast.success(t("toasts.applySuccess"));
       resetReviewState();
     } catch (error) {
       toast.error(
-        getErrorMessage(error, "Role change failed. Reload the role review and try again."),
+        getErrorMessage(error, t("toasts.applyFailed")),
       );
     }
   };
@@ -192,7 +195,7 @@ export default function MemberRolesPage() {
     return (
       <div className="flex h-[80vh] items-center justify-center gap-2 text-xs text-ink-muted">
         <Spinner className="size-4 animate-spin" />
-        Loading workspace access...
+        {t("loadingAccess")}
       </div>
     );
   }
@@ -201,9 +204,9 @@ export default function MemberRolesPage() {
     return (
       <div className="flex h-[80vh] items-center justify-center px-4">
         <div className="max-w-md rounded-lg border border-hairline bg-surface-1 p-6 text-center">
-          <h1 className="text-lg font-bold text-ink">Owner access required</h1>
+          <h1 className="text-lg font-bold text-ink">{t("ownerRequired.title")}</h1>
           <p className="mt-2 text-xs text-ink-muted">
-            Only the workspace owner can manage member roles.
+            {t("ownerRequired.description")}
           </p>
         </div>
       </div>
@@ -213,8 +216,8 @@ export default function MemberRolesPage() {
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 text-ink">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight">Member roles</h1>
-        <p className="text-xs text-ink-muted">Change roles for active internal members.</p>
+        <h1 className="text-xl font-bold tracking-tight">{t("heading")}</h1>
+        <p className="text-xs text-ink-muted">{t("subheading")}</p>
       </div>
 
       {receipt && (
@@ -223,14 +226,18 @@ export default function MemberRolesPage() {
             id="latest-role-change"
             className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle"
           >
-            Latest role change
+            {t("latestRoleChange.heading")}
           </h2>
           <div className="rounded-lg border border-hairline bg-surface-1 px-4 py-3 text-xs text-ink-muted">
             <p className="font-semibold text-ink">
-              {receipt.oldRole} to {receipt.newRole}
+              {t("latestRoleChange.roleChangeSummary", { oldRole: receipt.oldRole, newRole: receipt.newRole })}
             </p>
-            <p className="mt-1">Effective at {new Date(receipt.effectiveAt).toLocaleString()}.</p>
-            <p className="mt-1 font-mono text-[11px]">Audit ID: {receipt.auditId}</p>
+            <p className="mt-1">
+              {t("latestRoleChange.effectiveAt", {
+                date: new Date(receipt.effectiveAt).toLocaleString(locale),
+              })}
+            </p>
+            <p className="mt-1 font-mono text-[11px]">{t("latestRoleChange.auditId", { id: receipt.auditId })}</p>
           </div>
         </section>
       )}
@@ -240,20 +247,20 @@ export default function MemberRolesPage() {
           id="internal-members-heading"
           className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle"
         >
-          Internal members
+          {t("internalMembers.heading")}
         </h2>
         <div className="overflow-hidden rounded-lg border border-hairline bg-surface-1 divide-y divide-hairline">
           {membersQuery.isPending && (
             <div className="flex items-center justify-center gap-2 px-4 py-8 text-xs text-ink-muted">
               <Spinner className="size-4 animate-spin" />
-              Loading members...
+              {t("internalMembers.loading")}
             </div>
           )}
 
           {membersQuery.isError && (
             <div className="flex flex-col items-start gap-3 px-4 py-5">
               <p className="text-xs text-ink-muted">
-                {getErrorMessage(membersQuery.error, "Couldn't load workspace members.")}
+                {getErrorMessage(membersQuery.error, t("internalMembers.loadFailed"))}
               </p>
               <Button
                 type="button"
@@ -262,14 +269,14 @@ export default function MemberRolesPage() {
                 disabled={membersQuery.isFetching}
                 onClick={() => void membersQuery.refetch()}
               >
-                {membersQuery.isFetching ? "Retrying..." : "Retry"}
+                {membersQuery.isFetching ? t("internalMembers.retrying") : t("internalMembers.retry")}
               </Button>
             </div>
           )}
 
           {membersQuery.isSuccess && internalMembers.length === 0 && (
             <p className="px-4 py-8 text-center text-xs text-ink-muted">
-              No eligible internal members.
+              {t("internalMembers.empty")}
             </p>
           )}
 
@@ -298,10 +305,10 @@ export default function MemberRolesPage() {
                     size="sm"
                     className="w-full sm:w-auto"
                     disabled={previewMutation.isPending || changeMutation.isPending}
-                    aria-label={`Change role for ${member.fullName}`}
+                    aria-label={t("internalMembers.changeRoleAria", { name: member.fullName })}
                     onClick={() => void openRoleReview(member.userId, nextRole)}
                   >
-                    {isLoadingThisMember ? "Loading..." : "Change role"}
+                    {isLoadingThisMember ? t("internalMembers.loadingButton") : t("internalMembers.changeRole")}
                   </Button>
                 </div>
               );
@@ -321,7 +328,7 @@ export default function MemberRolesPage() {
             {previewMutation.isPending && !roleChangeIntent ? (
               <div className="flex items-center gap-2 py-4 text-xs text-ink-muted">
                 <Spinner className="size-4 animate-spin" />
-                Loading role review...
+                {t("review.loading")}
               </div>
             ) : (
               roleChangeIntent && (
@@ -329,14 +336,18 @@ export default function MemberRolesPage() {
                   <div>
                     <p className="text-xs font-semibold text-ink">{selectedMember.fullName}</p>
                     <p className="text-[11px] text-ink-muted">
-                      {selectedMember.email} | {selectedMember.roleName} to {targetRole}
+                      {t("review.memberSummary", {
+                        email: selectedMember.email,
+                        role: selectedMember.roleName,
+                        targetRole,
+                      })}
                     </p>
                   </div>
 
                   <p className="text-xs text-ink-muted">
                     {targetRole === "Admin"
-                      ? "Promotion unlocks after a 60-second cooling-off period."
-                      : "Demotion applies to the next request or session."}
+                      ? t("review.promoteHint")
+                      : t("review.demoteHint")}
                   </p>
 
                   {(roleChangeIntent.preview.impact?.length ?? 0) > 0 && (
@@ -349,14 +360,14 @@ export default function MemberRolesPage() {
 
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="member-role-confirmation" className="text-xs font-semibold">
-                      Confirm this change
+                      {t("review.confirmLabel")}
                     </Label>
                     <Input
                       id="member-role-confirmation"
                       value={confirmation}
                       autoComplete="off"
                       onChange={(event) => setConfirmation(event.target.value)}
-                      placeholder={`Type ${confirmationValue} to confirm`}
+                      placeholder={t("review.confirmPlaceholder", { value: confirmationValue })}
                     />
                   </div>
 
@@ -371,11 +382,11 @@ export default function MemberRolesPage() {
                       onClick={() => void applyRoleChange()}
                     >
                       {changeMutation.isPending
-                        ? "Applying..."
+                        ? t("review.applying")
                         : isCoolingOff
                           ? remainingCooldownSeconds > 0
-                            ? `Wait ${remainingCooldownSeconds}s`
-                            : "Checking cooldown..."
+                            ? t("review.waitSeconds", { seconds: remainingCooldownSeconds })
+                            : t("review.checkingCooldown")
                           : reviewTitle}
                     </Button>
                     <Button
@@ -384,7 +395,7 @@ export default function MemberRolesPage() {
                       disabled={changeMutation.isPending}
                       onClick={resetReviewState}
                     >
-                      Cancel
+                      {t("review.cancel")}
                     </Button>
                   </div>
                 </div>

@@ -1,0 +1,50 @@
+{
+  "loadingAccess": "ワークスペースへのアクセスを読み込み中...",
+  "ownerRequired": {
+    "title": "オーナー権限が必要です",
+    "description": "ワークスペースのオーナーのみがメンバーの役割を管理できます。"
+  },
+  "heading": "メンバーの役割",
+  "subheading": "アクティブな内部メンバーの役割を変更します。",
+  "latestRoleChange": {
+    "heading": "最新の役割変更",
+    "roleChangeSummary": "{oldRole}から{newRole}へ",
+    "effectiveAt": "{date}に有効。",
+    "auditId": "監査ID: {id}"
+  },
+  "internalMembers": {
+    "heading": "内部メンバー",
+    "loading": "メンバーを読み込み中...",
+    "loadFailed": "ワークスペースのメンバーを読み込めませんでした。",
+    "retrying": "再試行中...",
+    "retry": "再試行",
+    "empty": "対象となる内部メンバーはいません。",
+    "changeRoleAria": "{name}の役割を変更",
+    "loadingButton": "読み込み中...",
+    "changeRole": "役割を変更"
+  },
+  "review": {
+    "promoteTitle": "管理者に昇格",
+    "demoteTitle": "メンバーに降格",
+    "loading": "役割の確認を読み込み中...",
+    "memberSummary": "{email} | {role}から{targetRole}へ",
+    "promoteHint": "昇格は60秒のクールダウン期間後に有効になります。",
+    "demoteHint": "降格は次のリクエストまたはセッションから適用されます。",
+    "confirmLabel": "この変更を確認",
+    "confirmPlaceholder": "確認のため{value}と入力",
+    "applying": "適用中...",
+    "waitSeconds": "{seconds}秒待機",
+    "checkingCooldown": "クールダウンを確認中...",
+    "cancel": "キャンセル"
+  },
+  "toasts": {
+    "invalidPreview": "サーバーが無効な役割確認を返しました。メンバーを再読み込みして再試行してください。",
+    "invalidCooldown": "役割の確認に有効なクールダウン期間が含まれていませんでした。もう一度お試しください。",
+    "previewFailed": "役割の確認を読み込めませんでした。メンバーを再読み込みして再試行してください。",
+    "confirmationRequired": "確認のため対象のメールアドレスまたはフルネームを正確に入力してください。",
+    "promotionLocked": "昇格は{seconds}秒後に解除されます。",
+    "staleReview": "役割の確認が見つからないか古くなっています。メンバーを再読み込みして再試行してください。",
+    "applySuccess": "役割の変更は次のリクエストまたはセッションから適用されます。",
+    "applyFailed": "役割の変更に失敗しました。確認を再読み込みして再試行してください。"
+  }
+}
