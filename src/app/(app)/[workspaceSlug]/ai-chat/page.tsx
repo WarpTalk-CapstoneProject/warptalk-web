@@ -28,7 +28,7 @@ import {
   parsePluginOperatorSetupAction,
   type PluginOperatorSetupAction,
 } from "@/components/layout/plugin-operator-setup-card";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
@@ -143,6 +143,10 @@ export default function AiChatPage() {
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: workspaceId ?? undefined,
       });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
       const consentUrl = result.url;
       if (result.connected || !consentUrl) {
         toast.success("Plugin connected.");

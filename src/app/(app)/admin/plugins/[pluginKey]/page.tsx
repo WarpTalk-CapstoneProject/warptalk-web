@@ -394,7 +394,10 @@ export default function AdminPluginDetailPage() {
           so a re-seeded detail was invisible to fields initialised with useState. That is what
           useSeededField above handles, per field. */}
       <MetadataSection key={`meta-${detail.pluginKey}`} detail={detail} />
-      <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
+      {detail.kind === "mcp" ? <AuthModeSection key={`auth-${detail.pluginKey}`} detail={detail} /> : null}
+      {detail.oAuthClientSource === "api_key" ? null : (
+        <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
+      )}
       <ToolsSection key={`tools-${detail.pluginKey}`} detail={detail} />
 
       <SectionHeading
@@ -741,6 +744,67 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
  * nothing an operator could re-send even if asked to.
  */
 type SecretMode = "keep" | "replace" | "clear";
+
+/**
+ * OAuth or a per-user API key. Switching ends every user's connection to the row, because the
+ * credential each of them holds belongs to the other mode; the server does that, this only warns.
+ */
+function AuthModeSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
+  const mutation = useUpdateAdminPlugin(detail.pluginKey);
+  const current = detail.oAuthClientSource === "api_key" ? "api_key" : "oauth";
+  const next = current === "api_key" ? "oauth" : "api_key";
+  const [confirming, setConfirming] = useState(false);
+
+  const submit = async () => {
+    try {
+      await mutation.mutateAsync({ authMode: next });
+      setConfirming(false);
+      toast.success(
+        next === "api_key"
+          ? "Users now connect with their own API key. Existing connections were ended."
+          : "Users now sign in with OAuth. Existing connections were ended.",
+      );
+    } catch (error) {
+      reportFailure(error, "Could not change how users connect.");
+    }
+  };
+
+  return (
+    <>
+      <SectionHeading
+        icon={<Key size={14} weight="duotone" />}
+        title="How users connect"
+        note={current === "api_key" ? "API key" : "OAuth"}
+      />
+      <AdminPanel>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 text-[12px]">
+          <p className="max-w-xl leading-5 text-ink-muted">
+            {current === "api_key"
+              ? "Each user pastes their own API key. WarpTalk checks it against the server, stores it encrypted and sends it as a Bearer token."
+              : "Users sign in on the provider's own page. The OAuth client below is resolved on the first connect."}
+          </p>
+          {confirming ? (
+            <div className="flex items-center gap-2">
+              <span className="text-amber-700 dark:text-amber-400">
+                Every user connected to {detail.label} will have to connect again.
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={mutation.isPending}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={() => void submit()} disabled={mutation.isPending}>
+                Switch
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+              {next === "api_key" ? "Switch to API key" : "Switch to OAuth"}
+            </Button>
+          )}
+        </div>
+      </AdminPanel>
+    </>
+  );
+}
 
 function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
   const mutation = useSetAdminPluginOAuthClient(detail.pluginKey);

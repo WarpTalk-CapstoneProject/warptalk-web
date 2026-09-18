@@ -451,7 +451,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           // Exact, or every /admin/* page lights this row up too: NavLink treats a non-exact item
           // as active for anything beneath its href, and every admin page is beneath /admin.
-          { icon: Gauge, label: "Overview", href: "/admin", exact: true },
+          // "Insights", not "Overview" (owner's call, 2026-09-17): the landing page became the
+          // period-compared business insights page. The route did not move.
+          { icon: Gauge, label: "Insights", href: "/admin", exact: true },
           { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
           // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
           // "Users" is the same word the workspace sidebar uses for that workspace's members —
@@ -1319,7 +1321,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Gauge,
-                  label: "Overview",
+                  label: "Insights",
                   href: "/admin",
                   exact: true,
                 }}
