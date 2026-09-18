@@ -29,7 +29,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   useAssistantPlugins,
   useDisableAssistantPlugin,
-  useUpdatePluginToolPolicy,
   useDisconnectAssistantPlugin,
   useInstallAssistantPlugin,
   usePluginConnectUrl,
@@ -44,21 +43,12 @@ import {
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
-import {
-  TOOL_POLICIES,
-  TOOL_POLICY_LABEL,
-  groupToolsByEffect,
-  summarizeToolPolicies,
-  toolPolicyOf,
-  trustsAWriteTool,
-} from "@/lib/assistant/tool-policy";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
   AssistantPluginCatalogItemDto,
   AssistantPluginConnectionStatus,
-  PluginToolPolicy,
 } from "@/types/assistant";
 
 /**
@@ -272,139 +262,18 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   );
 }
 
-const TOOL_POLICY_TONE: Record<PluginToolPolicy, string> = {
-  allow: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  approval: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  blocked: "bg-red-500/10 text-red-700 dark:text-red-400",
-};
-
-/** Allow / Ask / Block for one tool, or for a whole group when `value` is null (mixed). */
-function ToolPolicyControl({
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value: PluginToolPolicy | null;
-  disabled: boolean;
-  onChange: (policy: PluginToolPolicy) => void;
-}) {
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border"
-    >
-      {TOOL_POLICIES.map((policy) => {
-        const selected = value === policy;
-        return (
-          <button
-            key={policy}
-            type="button"
-            aria-pressed={selected}
-            disabled={disabled}
-            onClick={() => onChange(policy)}
-            className={cn(
-              "px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-60",
-              "border-l border-border first:border-l-0",
-              selected ? TOOL_POLICY_TONE[policy] : "bg-popover text-ink-muted hover:bg-surface-1 hover:text-ink",
-            )}
-          >
-            {TOOL_POLICY_LABEL[policy]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * What WarpBot may do with each of this plugin's tools, for this user. WT-687.
- *
- * Claude's connector settings are the model: every tool is Allow, Ask or Block, grouped read-only
- * then write, with one control per group. A tool nobody has touched shows the server's default —
- * reads allowed, writes ask — so opening this changes nothing until the user does.
- */
-function ToolPolicyEditor({
-  plugin,
-  isSaving,
-  onChange,
-}: {
-  plugin: AssistantPluginCatalogItemDto;
-  isSaving: boolean;
-  onChange: (tools: Record<string, PluginToolPolicy>) => void;
-}) {
-  const groups = useMemo(() => groupToolsByEffect(plugin.tools), [plugin.tools]);
-
-  return (
-    <div className="mt-6 flex flex-col gap-4" data-testid="tool-policy-editor">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          What WarpBot may do
-        </h3>
-        <span className="text-[11px] tabular-nums text-ink-subtle">{summarizeToolPolicies(plugin.tools)}</span>
-      </div>
-
-      {groups.map((group) => (
-        <section key={group.effect} className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">{group.title}</h4>
-            <ToolPolicyControl
-              label={`All ${group.title.toLowerCase()}`}
-              value={group.policy}
-              disabled={isSaving}
-              onChange={(policy) =>
-                onChange(Object.fromEntries(group.tools.map((tool) => [tool.name, policy])))
-              }
-            />
-          </div>
-          <ul className="flex flex-col">
-            {group.tools.map((tool) => (
-              <li key={tool.name} className="flex items-center justify-between gap-3 py-1.5">
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-ink">{tool.label || tool.name}</div>
-                  <div className="truncate font-mono text-[11px] text-ink-subtle">{tool.name}</div>
-                </div>
-                <ToolPolicyControl
-                  label={tool.label || tool.name}
-                  value={toolPolicyOf(tool)}
-                  disabled={isSaving}
-                  onChange={(policy) => onChange({ [tool.name]: policy })}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-
-      {trustsAWriteTool(plugin.tools) ? (
-        <p
-          data-testid="tool-policy-write-warning"
-          className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-300"
-        >
-          <Warning size={14} weight="fill" className="mt-0.5 shrink-0" />
-          <span>WarpBot can change data in {plugin.label} without asking for the write tools you allowed.</span>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
   sharedConnectionPlugins,
-  coveredByExistingGrant,
+  grantReusedFrom,
   isConnecting,
   isDisconnecting,
   isRemoving,
-  isSavingToolPolicy,
   onClose,
   onContinue,
   onDisconnect,
   onRemove,
-  onToolPolicyChange,
 }: {
   /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
   plugin: AssistantPluginCatalogItemDto;
@@ -424,18 +293,17 @@ function ConnectPluginDialog({
   sharedConnectionPlugins: AssistantPluginCatalogItemDto[];
   /**
    * A connected sibling's grant already covers every scope this plugin needs, so Connect links it
-   * on the server without a trip to the provider. The dialog must not promise a sign-in page then.
+   * on the server without a trip to the provider. The dialog must not promise a sign-in page then,
+   * and it names this sibling so the reused account has a visible origin.
    */
-  coveredByExistingGrant: boolean;
+  grantReusedFrom: AssistantPluginCatalogItemDto | null;
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
-  isSavingToolPolicy: boolean;
   onClose: () => void;
   onContinue: () => void;
   onDisconnect: () => void;
   onRemove: () => void;
-  onToolPolicyChange: (tools: Record<string, PluginToolPolicy>) => void;
 }) {
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
   const isConnected = plugin.connectionStatus === "connected";
@@ -445,6 +313,7 @@ function ConnectPluginDialog({
   const isInstalled = plugin.installationStatus === "installed";
   const isPendingBusy = isDisconnecting || isRemoving;
   const workspaceBlock = pluginWorkspaceBlock(plugin);
+  const coveredByExistingGrant = grantReusedFrom !== null;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
@@ -480,20 +349,17 @@ function ConnectPluginDialog({
             <p className="mt-1.5 text-sm text-ink-muted">
               {isConnected
                 ? `WarpBot can use ${plugin.label} for you.`
-                : coveredByExistingGrant
-                  ? `Uses the ${plugin.connectedAccountEmail ?? "account"} you already signed in with. No sign-in needed.`
+                : grantReusedFrom
+                  ? `Uses the sign-in you already gave WarpTalk for ${grantReusedFrom.label}. No new sign-in.`
                   : "You will sign in and confirm this on the provider's own page."}
             </p>
           </div>
         </div>
 
-        {/* Once installed, each tool's permission is the user's to set (WT-687) — the server only
-            accepts a choice for an installation. Before that, the list says what connecting grants. */}
-        {isInstalled && plugin.tools.length > 0 ? (
-          <ToolPolicyEditor plugin={plugin} isSaving={isSavingToolPolicy} onChange={onToolPolicyChange} />
-        ) : (
-          <PermissionList plugin={plugin} />
-        )}
+        {/* The per-tool Allow / Ask / Block editor (WT-687) was taken out of this dialog: it read as
+            clutter. Server defaults still apply — reads run, writes ask — and a write can still be
+            set to "Always allow" from its confirmation card in the chat. */}
+        <PermissionList plugin={plugin} />
 
         <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
@@ -557,7 +423,9 @@ function ConnectPluginDialog({
         {isConnected ? (
           <div className="mt-6 flex items-center justify-center gap-2 text-xs text-emerald-600">
             <CheckCircle size={15} weight="fill" />
-            Connected as {plugin.connectedAccountEmail ?? "this account"}
+            {/* No provider email anywhere in the UI: on a machine already signed into Google it was
+                a developer's personal address, and it read as WarpTalk's own identity. */}
+            Connected to WarpTalk
           </div>
         ) : isPartiallyGranted ? (
           // Without this line the dialog is incoherent: it offers Disconnect, which only exists
@@ -566,7 +434,7 @@ function ConnectPluginDialog({
           // rather than starting from nothing.
           <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-amber-700 dark:text-amber-500">
             <Warning size={15} weight="fill" className="shrink-0" />
-            Signed in as {plugin.connectedAccountEmail ?? "this account"}, but a permission{" "}
+            Signed in, but a permission{" "}
             {plugin.label} needs was not approved. Continue to approve it.
           </div>
         ) : null}
@@ -790,7 +658,6 @@ export default function PluginsPage() {
   const connectUrl = usePluginConnectUrl();
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
-  const updateToolPolicy = useUpdatePluginToolPolicy();
   const requestPlugin = useRequestPlugin(workspaceId);
   // The row whose Request dialog is open, by key for the same reason as selectedPluginKey below.
   const [requestPluginKey, setRequestPluginKey] = useState<string | null>(null);
@@ -863,13 +730,15 @@ export default function PluginsPage() {
   // Mirrors the server's shortcut in ConnectAsync: a connected sibling whose grant already carries
   // every scope this plugin needs means Connect links it without leaving WarpTalk. Read off the RAW
   // rows, because it is a question about the grant, not about whether the sibling is usable.
-  const coveredByExistingGrant = useMemo(() => {
-    if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return false;
-    return pluginsSharingConnection(selectedPlugin, plugins).some(
+  // The sibling itself, not a yes/no: the dialog has to say WHICH plugin's sign-in is reused, or an
+  // email the user never typed on this page reads as WarpTalk borrowing some other account.
+  const grantReusedFrom = useMemo(() => {
+    if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return null;
+    return pluginsSharingConnection(selectedPlugin, plugins).find(
       (sibling) =>
         sibling.connectionStatus === "connected"
         && scopesSatisfied(selectedPlugin.requiredScopes, sibling.grantedScopes),
-    );
+    ) ?? null;
   }, [selectedPlugin, plugins]);
 
   // Purely local: it narrows the catalog already fetched above. There is no marketplace search
@@ -1060,18 +929,6 @@ export default function PluginsPage() {
       toast.success("Request sent to your workspace owner");
     } catch {
       toast.error(`Could not ask for ${plugin.label}.`);
-    }
-  }
-
-  /** WT-687 — one tool or a whole group; the catalog refetch brings the resolved choices back. */
-  async function saveToolPolicy(
-    plugin: AssistantPluginCatalogItemDto,
-    tools: Record<string, PluginToolPolicy>,
-  ) {
-    try {
-      await updateToolPolicy.mutateAsync({ pluginKey: plugin.key, tools });
-    } catch {
-      toast.error(`Could not save what WarpBot may do in ${plugin.label}.`);
     }
   }
 
@@ -1315,16 +1172,14 @@ export default function PluginsPage() {
           plugin={withEffectiveConnectionStatus(selectedPlugin)}
           providerConnectionStatus={selectedPlugin.connectionStatus}
           sharedConnectionPlugins={sharedConnectionPlugins}
-          coveredByExistingGrant={coveredByExistingGrant}
+          grantReusedFrom={grantReusedFrom}
           isConnecting={connectUrl.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
-          isSavingToolPolicy={updateToolPolicy.isPending}
           onClose={() => setSelectedPluginKey(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
-          onToolPolicyChange={(tools) => void saveToolPolicy(selectedPlugin, tools)}
         />
       ) : null}
     </div>
