@@ -369,4 +369,104 @@ if (!page.includes("workspaceBlock && !hasAvailability ?")) {
   );
 }
 
+// ---------------------------------------------------------------------------------------------
+// THE OWNER FLOW, AND THE GAPS THE AUDIT FOUND IN IT (2026-09-18)
+// ---------------------------------------------------------------------------------------------
+const sidebar = readFileSync(join(root, "src/components/layout/linear-sidebar.tsx"), "utf8");
+const widget = readFileSync(join(root, "src/components/layout/global-chatbot.tsx"), "utf8");
+
+// The header line was removed on request. It must not drift back in.
+if (/decides which (ones|plugins) you can connect/.test(page)) {
+  throw new Error(
+    "The member page must not say the workspace 'decides which ones you can connect' — that line was removed on request.",
+  );
+}
+
+// "With MCP": the approved fields, plus how members connect. authMode goes out through the helper,
+// which is where "only send it on edit when it changed" is tested.
+for (const token of [
+  'placeholder="https://mcp.example.com/mcp"',
+  "How members connect",
+  "Each member pastes an API key",
+  "createPrivatePluginRequest(draft)",
+  "privatePluginUpdateRequest(plugin, draft)",
+]) {
+  if (!workspacePage.includes(token)) {
+    throw new Error(`The owner page's MCP form must include '${token}'.`);
+  }
+}
+
+// Usage, never connections: a connection is personal, and the server has no per-workspace count.
+if (/members connected|of \$\{[^}]*\} members/.test(workspacePage)) {
+  throw new Error(
+    "The owner page must not claim a connected-member count; the server only knows how many members USED a plugin here (membersUsedCount).",
+  );
+}
+if (!workspacePage.includes("workspacePluginFacts(plugin, addedByName)")) {
+  throw new Error("The Manage dialog's facts line must come from workspacePluginFacts (usage + added by).");
+}
+
+// Gap 12a — the transition note is decided from the rows, not asserted. "Every marketplace plugin is
+// available" is false for a workspace whose old switch was off.
+if (!workspacePage.includes("workspacePluginsTransitionNote(overview)")) {
+  throw new Error("The owner page must word its transition note through workspacePluginsTransitionNote.");
+}
+if (workspacePage.includes("Every marketplace plugin is available")) {
+  throw new Error(
+    "The owner page must not hardcode 'Every marketplace plugin is available'; which note is true depends on the old switch.",
+  );
+}
+
+// Gap 12b — the empty state keeps the Marketplace section under it.
+{
+  const start = workspacePage.indexOf('data-testid="workspace-plugins-empty"');
+  const end = workspacePage.indexOf("} else {", start);
+  if (start < 0 || end < 0 || !workspacePage.slice(start, end).includes("{marketplaceSection}")) {
+    throw new Error("The empty owner page must still render the Marketplace section below the empty state.");
+  }
+}
+
+// Gap 12c — names resolve past the first page of members.
+if (/useWorkspaceMembers\(/.test(workspacePage)) {
+  throw new Error(
+    "The owner page must not name requesters from useWorkspaceMembers(…, 1, 100) — that is the first hundred members. Use useWorkspaceMemberNames.",
+  );
+}
+if (!workspacePage.includes("useWorkspaceMemberNames(")) {
+  throw new Error("The owner page must resolve requester and adder names through useWorkspaceMemberNames.");
+}
+
+// Gap 12d — an Admin views, the Owner acts. One helper decides it for the page and the badge.
+if (!workspacePage.includes("canManageWorkspacePlugins(overview, role)")) {
+  throw new Error("The owner page must decide who may act through canManageWorkspacePlugins.");
+}
+if (/canManage\s*\?\?\s*(true|false)/.test(workspacePage)) {
+  throw new Error("The owner page must not default canManage by itself; canManageWorkspacePlugins falls back to the role.");
+}
+if (!/pendingRequestBadge\(\s*workspacePluginsOverview,\s*canManageWorkspacePlugins\(/.test(sidebar)) {
+  throw new Error(
+    "The sidebar's request count must be gated on canManageWorkspacePlugins: an Admin cannot answer requests, so a count on their sidebar never clears.",
+  );
+}
+
+// Gap 8 — a failed request shows what the server said, JSON or plain text, on both pages.
+if (!page.includes("pluginErrorMessage(error, `Could not ask for")) {
+  throw new Error("A failed plugin request must show the server's message (pluginErrorMessage), not a fixed sentence.");
+}
+if (/getErrorMessage\(/.test(workspacePage) || !workspacePage.includes("pluginErrorMessage(")) {
+  throw new Error("The owner page must report failures through pluginErrorMessage, which also reads plain-text bodies.");
+}
+
+// Gap 9 — the Owner adds instead of asking themselves.
+if (!page.includes('action.kind === "add"') || !page.includes("addToWorkspace(plugin)")) {
+  throw new Error("An Owner's not-added row on the member page must offer Add (memberPluginAction kind 'add').");
+}
+
+// Gap 11 — chat offers only what the workspace has.
+if (!widget.includes("isOfferedInWorkspaceChat(plugin)")) {
+  throw new Error(
+    "WarpBot's plugin menu and @mention list must leave out plugins the workspace has not added (isOfferedInWorkspaceChat).",
+  );
+}
+
 console.log("Plugin marketplace contract passed.");
