@@ -10,6 +10,14 @@
  * It is also the one place the URL is checked. It comes from our own API, but it is handed
  * straight to the browser to follow, and nothing but https should be.
  */
+/**
+ * Where an pi_key plugin is connected. Chat surfaces send the user here instead of opening a
+ * consent page, and the plugins page opens that plugin's key field on arrival.
+ */
+export function pluginApiKeyPageHref(pluginKey: string): string {
+  return `/settings/plugins?plugin=${encodeURIComponent(pluginKey)}&connect=api_key`;
+}
+
 export function openProviderConsent(url: string): boolean {
   let parsed: URL;
   try {
