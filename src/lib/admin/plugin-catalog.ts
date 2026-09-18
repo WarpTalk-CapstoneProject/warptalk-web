@@ -389,7 +389,7 @@ export interface NewPluginDraft {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   revokeEndpoint: string;
-  /** How users connect. pi_key leaves the OAuth boxes empty. */
+  /** How users connect. `api_key` leaves the OAuth boxes empty. */
   authMode: AdminPluginAuthMode;
 }
 
