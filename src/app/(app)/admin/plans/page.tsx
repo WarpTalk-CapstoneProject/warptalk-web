@@ -32,6 +32,7 @@ import {
   useAdminRateCards,
   useCreateAdminPlan,
   useDeactivateAdminRateCard,
+  useSetAdminRateCardProviderCost,
   useUpdateAdminPlan,
   useUpdateAdminPricingConfig,
   useUpsertAdminRateCard,
@@ -267,6 +268,7 @@ export default function AdminPlansPage() {
   const createPlan = useCreateAdminPlan();
   const upsertRateCard = useUpsertAdminRateCard();
   const deactivateRateCard = useDeactivateAdminRateCard();
+  const setRateCardProviderCost = useSetAdminRateCardProviderCost();
   const updateConfig = useUpdateAdminPricingConfig();
 
   /**
@@ -481,7 +483,10 @@ export default function AdminPlansPage() {
           if (!open) setEditingCard(null);
         }}
         onSubmit={(request) => upsertRateCard.mutateAsync(request)}
-        isSaving={upsertRateCard.isPending}
+        onSetProviderCost={(id, providerUnitCostUsd) =>
+          setRateCardProviderCost.mutateAsync({ id, request: { providerUnitCostUsd } })
+        }
+        isSaving={upsertRateCard.isPending || setRateCardProviderCost.isPending}
       />
 
       <RateCardDeactivateDialog

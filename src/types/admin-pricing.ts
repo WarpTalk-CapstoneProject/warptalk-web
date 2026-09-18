@@ -91,6 +91,18 @@ export interface UpsertUsageRateCardRequest {
 }
 
 /**
+ * The body `PUT /usages/rate-card/{id}/provider-cost` takes — USD per the card's own `unit`.
+ *
+ * Only for the internal credit-unit (CRD) cards usage is actually settled on. Their credit price
+ * is not derived from a provider cost, so the full editor (which reprices from cost × markup) is
+ * the wrong tool for them; this changes nothing but the cost. See lib/billing/rate-card-margin.ts
+ * `providerCostEffect` for what the server does with it.
+ */
+export interface SetRateCardProviderCostRequest {
+  providerUnitCostUsd: number;
+}
+
+/**
  * The body `PUT /usages/pricing-config` takes.
  *
  * `PricingConfigDto` minus `formula` and `resolverKey` — those two describe how the config is

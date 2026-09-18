@@ -233,7 +233,21 @@
       },
       "cancel": "Hủy",
       "save": "Lưu bảng giá",
-      "saving": "Đang lưu…"
+      "saving": "Đang lưu…",
+      "creditCost": {
+        "title": "Chi phí nhà cung cấp",
+        "description": "Số tiền nhà cung cấp tính cho WarpTalk trên mỗi đơn vị của thẻ đơn vị tín dụng (CRD) — thẻ mà mức sử dụng thực sự được quyết toán. Giá tín dụng của thẻ được đặt riêng và không thay đổi ở đây. Trang Insights dùng chi phí này để tính chi phí nhà cung cấp AI.",
+        "field": "Chi phí nhà cung cấp (USD mỗi {unit})",
+        "hint": "Tính bằng USD cho một {unit} sử dụng, đúng như nhà cung cấp tính phí. Phải lớn hơn 0.",
+        "noUnit": "đơn vị",
+        "effectBackfill": "Thẻ này chưa có chi phí nhà cung cấp. Giá trị cũng sẽ áp dụng cho mức sử dụng đã quyết toán trên thẻ, nên các kỳ trước trong Insights sẽ có chi phí.",
+        "effectSupersede": "Thẻ này đã có chi phí. Một phiên bản mới của thẻ có hiệu lực từ bây giờ; mức sử dụng đã quyết toán giữ nguyên chi phí đã áp dụng.",
+        "save": "Lưu chi phí nhà cung cấp",
+        "errors": {
+          "invalid": "Nhập một số tiền dương bằng USD, ví dụ 0.00049.",
+          "noUnit": "Thẻ này không có đơn vị, nên không thể áp dụng chi phí theo đơn vị."
+        }
+      }
     },
     "deactivate": {
       "title": "Vô hiệu hóa bảng giá này?",

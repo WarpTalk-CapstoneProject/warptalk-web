@@ -36,6 +36,7 @@ assert.match(endpoints, /`\/subscriptions\/workspace\/\$\{workspaceId\}\/contrac
 assert.match(endpoints, /markPaid: \(invoiceId: string\) => `\/invoices\/\$\{invoiceId\}\/mark-paid`/);
 assert.match(endpoints, /`\/usages\/rate-card\/\$\{id\}\/deactivate`/);
 assert.match(endpoints, /rateCardPreview: "\/usages\/rate-card\/preview"/);
+assert.match(endpoints, /`\/usages\/rate-card\/\$\{id\}\/provider-cost`/);
 
 // ── services use the verbs the controllers accept ────────────────────────────
 assert.match(service, /apiClient\.post<[\s\S]*?API\.adminSubscriptions\.createContract/);
@@ -43,6 +44,7 @@ assert.match(service, /apiClient\.put<[\s\S]*?API\.adminSubscriptions\.contractT
 assert.match(service, /apiClient\.post<InvoiceDto>\(API\.adminInvoices\.markPaid/);
 assert.match(pricingService, /apiClient\.post<UsageRateCardDto>\(\s*API\.adminPricing\.rateCardDeactivate/);
 assert.match(pricingService, /apiClient\.post<RateCardPreviewDto>\(\s*API\.adminPricing\.rateCardPreview/);
+assert.match(pricingService, /apiClient\.put<UsageRateCardDto>\(\s*API\.adminPricing\.rateCardProviderCost/);
 
 // POST /payments creates a pending, list-priced, invoiceless payment. It is not a reconciliation.
 assert.doesNotMatch(service, /["'`]\/payments["'`]/, "manual payment creation must not be wired");
@@ -75,5 +77,11 @@ assert.match(plans, /<RateCardDeactivateDialog/);
 assert.match(plans, /deactivateRateCard\.mutateAsync\(card\.id\)/);
 assert.match(editors, /canSaveRateCard\(/, "rate-card saves must be gated on a current preview");
 assert.match(editors, /disabled=\{isSaving \|\| !saveGate\.ok\}/);
+
+// ── credit-unit (CRD) cards: the provider cost Insights computes AI cost from ─
+assert.match(pricingHooks, /export function useSetAdminRateCardProviderCost/);
+assert.match(plans, /setRateCardProviderCost\.mutateAsync\(\{ id, request: \{ providerUnitCostUsd \} \}\)/);
+assert.match(editors, /isCreditRateCard\(card\)/, "a CRD card must not open the repricing editor");
+assert.match(editors, /providerCostEffect\(card, cost\)/, "the form must say whether history is affected");
 
 console.log("Admin contract billing contract passed.");
