@@ -35,7 +35,7 @@
     "test:plan-pricing": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/billing/__tests__/plan-pricing.test.ts",
     "test:api-status": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/api/__tests__/api-status.test.ts",
     "test:english-ui": "node scripts/check-english-ui.mjs",
-    "test:i18n-catalog": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/i18n/__tests__/catalog-completeness.test.ts",
+    "test:i18n-catalog": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/i18n/__tests__/catalog-completeness.test.ts src/i18n/__tests__/message-fallback.test.ts",
     "test:currency": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/format/__tests__/currency.test.ts",
     "test:dead-session": "node scripts/check-dead-session-recovery-contract.mjs",
     "test:google-link-state": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/auth/__tests__/google-link-state.test.ts",

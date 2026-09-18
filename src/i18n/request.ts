@@ -1,5 +1,12 @@
 import { getRequestConfig } from "next-intl/server";
 import { getUserLocale } from "@/i18n/locale";
+import { DEFAULT_LOCALE } from "@/i18n/locale-constants";
+import {
+  getMessageFallback,
+  mergeWithFallback,
+  onIntlError,
+  type Messages,
+} from "@/i18n/message-fallback";
 
 /**
  * Namespaces available in `messages/{locale}/*.json`. Add a file here as a
@@ -53,7 +60,7 @@ const NAMESPACES = [
   "download",
 ] as const;
 
-async function loadMessages(locale: string) {
+async function loadMessages(locale: string): Promise<Messages> {
   const entries = await Promise.all(
     NAMESPACES.map(async (namespace) => {
       const mod = await import(`../../messages/${locale}/${namespace}.json`);
@@ -65,8 +72,17 @@ async function loadMessages(locale: string) {
 
 export default getRequestConfig(async () => {
   const locale = await getUserLocale();
+  const localeMessages = await loadMessages(locale);
+  // English is the source of truth: a key forgotten in vi/ja renders in English
+  // rather than as its key path.
+  const messages =
+    locale === DEFAULT_LOCALE
+      ? localeMessages
+      : mergeWithFallback(await loadMessages(DEFAULT_LOCALE), localeMessages);
   return {
     locale,
-    messages: await loadMessages(locale),
+    messages,
+    getMessageFallback,
+    onError: onIntlError,
   };
 });
