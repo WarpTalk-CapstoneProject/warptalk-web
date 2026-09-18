@@ -83,6 +83,22 @@ export interface TranslationRoomDto {
    * mistake "one occurrence of many" for "the whole booking".
    */
   series?: SeriesListSummary | null;
+  /**
+   * WT-703: the languages new post-meeting content (summary, minutes, translation) may be
+   * GENERATED in — the meeting's L2 snapshot narrowed by the workspace's current L1 policy,
+   * computed server-side in one place. Reading content that already exists is never filtered
+   * by this.
+   *
+   * - `undefined` — an older backend that does not send the field.
+   * - `null` — the room has not finished yet, or the server could not compute the set.
+   */
+  artifactLanguages?: RoomArtifactLanguagesDto | null;
+}
+
+/** WT-703: server-computed language set for a finished room's artifacts. */
+export interface RoomArtifactLanguagesDto {
+  /** Language codes new artifact content may be generated in. Never includes "as spoken". */
+  generatable: string[];
 }
 
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
