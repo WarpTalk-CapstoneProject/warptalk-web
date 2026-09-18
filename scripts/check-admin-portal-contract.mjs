@@ -19,19 +19,40 @@ const [layout, overview, sidebar, appLayout, commonEn] = await Promise.all([
 
 assert.match(layout, /useIsSystemAdmin/, "admin layout must enforce the system-admin gate");
 assert.match(layout, /Access denied/, "admin layout must render a safe forbidden state");
-assert.match(overview, /billingService\.getGlobalMetrics/, "overview must load real platform metrics");
-// Redesigned 2026-08-17 to the hairline-sectioned reference: the recharts card components are
-// gone from this page, but each data surface must still be drawn from its real endpoint.
-assert.match(overview, /getGlobalUsageChart/, "overview must chart real monthly usage");
-assert.match(overview, /getTopWorkspaces/, "overview must include top workspace activity");
-assert.match(overview, /getGlobalUsageBreakdown/, "overview must show service adoption");
-assert.match(overview, /getUsageAlerts/, "overview must surface the operations feed");
-// i18n: these labels now render through t("adminNav.items.*") rather than as literal source
-// text — see common.json for the English wording each assertion below still pins.
+// Redesigned 2026-09-17 into Insights (the OpenBoox ERP business-insights shape). The page is a
+// view over real endpoints — every data surface must still be drawn from one, and the ones that
+// predate Insights must not be dropped on the way.
+const [dashboard, insightsHooks] = await Promise.all([
+  source("src/components/admin/insights/insights-dashboard.tsx"),
+  source("src/hooks/use-admin-insights.ts"),
+]);
+for (const hook of [
+  "useAdminBillingInsights",
+  "useAdminBillingSnapshot",
+  "useAdminUsersInsights",
+  "useAdminWorkspacesInsights",
+  "useAdminMeetingsInsights",
+]) {
+  assert.match(overview, new RegExp(`\\b${hook}\\(`), `insights must load ${hook}`);
+  assert.match(insightsHooks, new RegExp(`export function ${hook}\\(`), `${hook} must exist`);
+}
+assert.match(overview, /useAdminMeetingCounts\(/, "insights must show live meeting counts");
+assert.match(overview, /useAdminOutboxDeadLetters\(/, "insights must count dead-lettered events");
+assert.match(overview, /useAdminSalesLeads\(/, "insights must count new sales leads");
+assert.match(overview, /useAdminPlatformHealth\(/, "insights must read System Health");
+// The old Overview's two operator signals, folded into Needs attention.
+assert.match(overview, /useAdminWorkspaceDirectory\([\s\S]{0,80}status: "suspended"/, "insights must keep the suspended-workspaces signal");
+assert.match(overview, /getUsageAlerts/, "insights must keep the usage alerts when the snapshot is unavailable");
+assert.match(dashboard, /assembleNeedsAttention\(/, "insights must assemble Needs attention");
+// A source that errors must degrade to "not available", not take the page down.
+assert.match(overview, /isError \? \{ status: "unavailable" \}/, "an errored source must render as unavailable");
+assert.match(dashboard, /NOT_AVAILABLE_NOTE/, "unavailable sources must say so");
+// i18n: these labels render through t("adminNav.items.*") rather than as literal source text —
+// see messages/en/common.json for the English wording each assertion below still pins.
 const adminNavItems = commonEn.sidebar?.adminNav?.items ?? {};
-assert.match(sidebar, /label: t\("adminNav\.items\.overview"\)[\s\S]*href: "\/admin"/, "platform navigation must lead with Overview");
-assert.match(sidebar, /label: t\("adminNav\.items\.overview"\)[\s\S]*href: "\/admin"[\s\S]*exact: true/, "Overview must not stay active on every nested admin route");
-assert.equal(adminNavItems.overview, "Overview", "the Overview nav label must read Overview in English");
+assert.match(sidebar, /label: t\("adminNav\.items\.insights"\)[\s\S]*href: "\/admin"/, "platform navigation must lead with Insights");
+assert.match(sidebar, /label: t\("adminNav\.items\.insights"\)[\s\S]*href: "\/admin"[\s\S]*exact: true/, "Insights must not stay active on every nested admin route");
+assert.equal(adminNavItems.insights, "Insights", "the Insights nav label must read Insights in English");
 assert.match(sidebar, /label: t\("adminNav\.items\.workspaces"\)[\s\S]*href: "\/admin\/workspaces"/, "platform navigation must expose Workspaces");
 assert.equal(adminNavItems.workspaces, "Workspaces", "the Workspaces nav label must read Workspaces in English");
 assert.match(sidebar, /label: t\("adminNav\.items\.billingLedger"\)[\s\S]*href: "\/admin\/billing"/, "platform navigation must expose Billing");

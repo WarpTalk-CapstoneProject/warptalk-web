@@ -17,6 +17,7 @@ import {
   Warning,
   X,
 } from "@phosphor-icons/react";
+import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
@@ -27,11 +28,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { getErrorMessage } from "@/lib/api/errors";
 import {
   useAssistantPlugins,
   useDisableAssistantPlugin,
-  useUpdatePluginToolPolicy,
   useDisconnectAssistantPlugin,
+  useConnectPluginWithApiKey,
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
@@ -45,20 +47,12 @@ import {
   withEffectiveConnectionStatus,
   type PluginWorkspaceBlock,
 } from "@/lib/assistant/plugin-connection";
-import {
-  TOOL_POLICIES,
-  groupToolsByEffect,
-  summarizeToolPolicies,
-  toolPolicyOf,
-  trustsAWriteTool,
-} from "@/lib/assistant/tool-policy";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type {
   AssistantPluginCatalogItemDto,
   AssistantPluginConnectionStatus,
-  PluginToolPolicy,
 } from "@/types/assistant";
 
 /**
@@ -278,135 +272,6 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   );
 }
 
-const TOOL_POLICY_TONE: Record<PluginToolPolicy, string> = {
-  allow: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  approval: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
-  blocked: "bg-red-500/10 text-red-700 dark:text-red-400",
-};
-
-/** Allow / Ask / Block for one tool, or for a whole group when `value` is null (mixed). */
-function ToolPolicyControl({
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value: PluginToolPolicy | null;
-  disabled: boolean;
-  onChange: (policy: PluginToolPolicy) => void;
-}) {
-  const t = useTranslations("pluginsPage");
-  const policyLabel: Record<PluginToolPolicy, string> = {
-    allow: t("toolPolicy.allow"),
-    approval: t("toolPolicy.ask"),
-    blocked: t("toolPolicy.block"),
-  };
-  return (
-    <div
-      role="group"
-      aria-label={label}
-      className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border"
-    >
-      {TOOL_POLICIES.map((policy) => {
-        const selected = value === policy;
-        return (
-          <button
-            key={policy}
-            type="button"
-            aria-pressed={selected}
-            disabled={disabled}
-            onClick={() => onChange(policy)}
-            className={cn(
-              "px-2 py-1 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:opacity-60",
-              "border-l border-border first:border-l-0",
-              selected ? TOOL_POLICY_TONE[policy] : "bg-popover text-ink-muted hover:bg-surface-1 hover:text-ink",
-            )}
-          >
-            {policyLabel[policy]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * What WarpBot may do with each of this plugin's tools, for this user. WT-687.
- *
- * Claude's connector settings are the model: every tool is Allow, Ask or Block, grouped read-only
- * then write, with one control per group. A tool nobody has touched shows the server's default —
- * reads allowed, writes ask — so opening this changes nothing until the user does.
- */
-function ToolPolicyEditor({
-  plugin,
-  isSaving,
-  onChange,
-}: {
-  plugin: AssistantPluginCatalogItemDto;
-  isSaving: boolean;
-  onChange: (tools: Record<string, PluginToolPolicy>) => void;
-}) {
-  const t = useTranslations("pluginsPage");
-  const toolPolicyT = useCallback((key: string) => t(`toolPolicy.${key}`), [t]);
-  const groups = useMemo(() => groupToolsByEffect(plugin.tools, toolPolicyT), [plugin.tools, toolPolicyT]);
-
-  return (
-    <div className="mt-6 flex flex-col gap-4" data-testid="tool-policy-editor">
-      <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-          {t("toolPolicy.heading")}
-        </h3>
-        <span className="text-[11px] tabular-nums text-ink-subtle">
-          {summarizeToolPolicies(plugin.tools, toolPolicyT)}
-        </span>
-      </div>
-
-      {groups.map((group) => (
-        <section key={group.effect} className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-ink-subtle">{group.title}</h4>
-            <ToolPolicyControl
-              label={t("toolPolicy.allGroup", { group: group.title.toLowerCase() })}
-              value={group.policy}
-              disabled={isSaving}
-              onChange={(policy) =>
-                onChange(Object.fromEntries(group.tools.map((tool) => [tool.name, policy])))
-              }
-            />
-          </div>
-          <ul className="flex flex-col">
-            {group.tools.map((tool) => (
-              <li key={tool.name} className="flex items-center justify-between gap-3 py-1.5">
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-ink">{tool.label || tool.name}</div>
-                  <div className="truncate font-mono text-[11px] text-ink-subtle">{tool.name}</div>
-                </div>
-                <ToolPolicyControl
-                  label={tool.label || tool.name}
-                  value={toolPolicyOf(tool)}
-                  disabled={isSaving}
-                  onChange={(policy) => onChange({ [tool.name]: policy })}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-
-      {trustsAWriteTool(plugin.tools) ? (
-        <p
-          data-testid="tool-policy-write-warning"
-          className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-amber-800 dark:text-amber-300"
-        >
-          <Warning size={14} weight="fill" className="mt-0.5 shrink-0" />
-          <span>{t("toolPolicy.writeWarning", { label: plugin.label })}</span>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 function ConnectPluginDialog({
   plugin,
   providerConnectionStatus,
@@ -415,12 +280,11 @@ function ConnectPluginDialog({
   isConnecting,
   isDisconnecting,
   isRemoving,
-  isSavingToolPolicy,
   onClose,
   onContinue,
+  onSubmitApiKey,
   onDisconnect,
   onRemove,
-  onToolPolicyChange,
 }: {
   /** Mapped through `withEffectiveConnectionStatus` — what this dialog may CLAIM about the plugin. */
   plugin: AssistantPluginCatalogItemDto;
@@ -447,15 +311,18 @@ function ConnectPluginDialog({
   isConnecting: boolean;
   isDisconnecting: boolean;
   isRemoving: boolean;
-  isSavingToolPolicy: boolean;
   onClose: () => void;
   onContinue: () => void;
+  /** `api_key` rows only. Resolves to an error to show under the field, or null once connected. */
+  onSubmitApiKey: (apiKey: string) => Promise<string | null>;
   onDisconnect: () => void;
   onRemove: () => void;
-  onToolPolicyChange: (tools: Record<string, PluginToolPolicy>) => void;
 }) {
   const t = useTranslations("pluginsPage");
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const usesApiKey = plugin.authMode === "api_key";
   const isConnected = plugin.connectionStatus === "connected";
   const hasProviderGrant = providerConnectionStatus === "connected";
   /** Signed in, but this plugin's own permission was declined — the case Continue actually fixes. */
@@ -499,20 +366,19 @@ function ConnectPluginDialog({
             <p className="mt-1.5 text-sm text-ink-muted">
               {isConnected
                 ? t("connectDialog.subtitleConnected", { label: plugin.label })
-                : grantReusedFrom
+                : usesApiKey
+                  ? t("connectDialog.subtitleApiKey", { label: plugin.label })
+                  : grantReusedFrom
                   ? t("connectDialog.subtitleReused", { siblingLabel: grantReusedFrom.label })
                   : t("connectDialog.subtitleDefault")}
             </p>
           </div>
         </div>
 
-        {/* Once installed, each tool's permission is the user's to set (WT-687) — the server only
-            accepts a choice for an installation. Before that, the list says what connecting grants. */}
-        {isInstalled && plugin.tools.length > 0 ? (
-          <ToolPolicyEditor plugin={plugin} isSaving={isSavingToolPolicy} onChange={onToolPolicyChange} />
-        ) : (
-          <PermissionList plugin={plugin} />
-        )}
+        {/* The per-tool Allow / Ask / Block editor (WT-687) was taken out of this dialog: it read as
+            clutter. Server defaults still apply — reads run, writes ask — and a write can still be
+            set to "Always allow" from its confirmation card in the chat. */}
+        <PermissionList plugin={plugin} />
 
         <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
@@ -553,7 +419,61 @@ function ConnectPluginDialog({
         {/* Not offered once the plugin is connected: "Continue to ..." beside "Connected as ..."
             read as an unfinished connection. Partially granted still gets it — that is the case
             Continue actually fixes. */}
-        {isConnected ? null : (
+        {isConnected ? null : usesApiKey ? (
+          // The key goes straight to the server, which checks it against the MCP server before
+          // saving. It is never stored here and never read back: a connected row shows no field.
+          <form
+            className={cn("flex flex-col gap-2", workspaceBlock ? "mt-3" : "mt-6")}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const trimmed = apiKey.trim();
+              if (!trimmed) {
+                setApiKeyError(t("connectDialog.apiKey.empty"));
+                return;
+              }
+              setApiKeyError(null);
+              void onSubmitApiKey(trimmed).then((error) => {
+                if (error) setApiKeyError(error);
+                else setApiKey("");
+              });
+            }}
+          >
+            <label htmlFor="plugin-api-key" className="text-left text-xs font-medium text-ink">
+              {t("connectDialog.apiKey.label", { label: plugin.label })}
+            </label>
+            <Input
+              id="plugin-api-key"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={apiKey}
+              disabled={isConnecting || workspaceBlock !== null}
+              onChange={(event) => {
+                setApiKey(event.target.value);
+                if (apiKeyError) setApiKeyError(null);
+              }}
+              aria-invalid={apiKeyError ? true : undefined}
+              data-testid="plugin-api-key-input"
+            />
+            {apiKeyError ? (
+              <p role="alert" className="text-left text-xs text-destructive">
+                {apiKeyError}
+              </p>
+            ) : (
+              <p className="text-left text-xs text-ink-muted">
+                {t("connectDialog.apiKey.hint")}
+              </p>
+            )}
+            <Button
+              type="submit"
+              disabled={isConnecting || workspaceBlock !== null || !apiKey.trim()}
+              className="mt-1 h-10 w-full"
+            >
+              {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
+              {t("connectDialog.connectLabel", { label: plugin.label })}
+            </Button>
+          </form>
+        ) : (
           <Button
             type="button"
             // Connecting is what workspace policy actually refuses. Disconnect and Remove below stay
@@ -818,9 +738,9 @@ export default function PluginsPage() {
   const { data: plugins = [], isLoading, isError, refetch } = useAssistantPlugins(workspaceId);
   const installPlugin = useInstallAssistantPlugin();
   const connectUrl = usePluginConnectUrl();
+  const connectWithApiKey = useConnectPluginWithApiKey();
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
-  const updateToolPolicy = useUpdatePluginToolPolicy();
   const requestPlugin = useRequestPlugin(workspaceId);
   // The row whose Request dialog is open, by key for the same reason as selectedPluginKey below.
   const [requestPluginKey, setRequestPluginKey] = useState<string | null>(null);
@@ -897,6 +817,8 @@ export default function PluginsPage() {
   // email the user never typed on this page reads as WarpTalk borrowing some other account.
   const grantReusedFrom = useMemo(() => {
     if (!selectedPlugin || selectedPlugin.connectionStatus === "connected") return null;
+    // A key is the user's own; no sibling's grant can stand in for it.
+    if (selectedPlugin.authMode === "api_key") return null;
     return pluginsSharingConnection(selectedPlugin, plugins).find(
       (sibling) =>
         sibling.connectionStatus === "connected"
@@ -967,6 +889,22 @@ export default function PluginsPage() {
       });
     } catch {
       toast.error(t("toasts.couldNotStartConnection", { label: plugin.label }));
+    }
+  }
+
+  /** Resolves to the message to show under the key field, or null once the plugin is connected. */
+  async function submitApiKey(plugin: AssistantPluginCatalogItemDto, apiKey: string): Promise<string | null> {
+    try {
+      await connectWithApiKey.mutateAsync({ pluginKey: plugin.key, apiKey, workspaceId });
+      await refetch();
+      toast.success(t("toasts.connected", { label: plugin.label }));
+      return null;
+    } catch (error) {
+      // The API answers a refused key with a plain-text body, which getErrorMessage does not read.
+      const body = isAxiosError(error) ? error.response?.data : undefined;
+      return typeof body === "string" && body.trim()
+        ? body
+        : getErrorMessage(error, t("toasts.couldNotConnectApiKey", { label: plugin.label }));
     }
   }
 
@@ -1064,6 +1002,22 @@ export default function PluginsPage() {
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
   }, [isLoading, plugins, t]);
 
+  // A chat surface sent the user here to paste a key (pluginApiKeyPageHref): open that plugin's
+  // dialog once the catalog has it, then strip the hint so a reload does not reopen it.
+  const apiKeyHintHandled = useRef(false);
+  useEffect(() => {
+    if (apiKeyHintHandled.current || isLoading) return;
+    apiKeyHintHandled.current = true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("connect") !== "api_key") return;
+    const pluginKey = params.get("plugin");
+    if (plugins.some((plugin) => plugin.key === pluginKey)) setSelectedPluginKey(pluginKey);
+    params.delete("connect");
+    params.delete("plugin");
+    const query = params.toString();
+    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+  }, [isLoading, plugins]);
+
   useEffect(() => {
     if (consent?.phase !== "awaiting") return;
     const { pluginKey, openedAt } = consent;
@@ -1094,18 +1048,6 @@ export default function PluginsPage() {
       toast.success(t("toasts.requestSent"));
     } catch {
       toast.error(t("toasts.couldNotAsk", { label: plugin.label }));
-    }
-  }
-
-  /** WT-687 — one tool or a whole group; the catalog refetch brings the resolved choices back. */
-  async function saveToolPolicy(
-    plugin: AssistantPluginCatalogItemDto,
-    tools: Record<string, PluginToolPolicy>,
-  ) {
-    try {
-      await updateToolPolicy.mutateAsync({ pluginKey: plugin.key, tools });
-    } catch {
-      toast.error(t("toasts.couldNotSavePolicy", { label: plugin.label }));
     }
   }
 
@@ -1211,11 +1153,6 @@ export default function PluginsPage() {
               layout change (it has its own empty, filtered and two-column cases) and belongs with
               whoever designs it, not smuggled in behind a sort. */}
           <h2 className="text-sm font-semibold text-ink">{t("allPlugins.title")}</h2>
-          {workspaceId && workspaceName ? (
-            <span className="truncate text-xs text-ink-muted">
-              {t("allPlugins.workspaceDecides", { workspaceName })}
-            </span>
-          ) : null}
         </div>
 
         {isLoading ? (
@@ -1352,15 +1289,14 @@ export default function PluginsPage() {
           providerConnectionStatus={selectedPlugin.connectionStatus}
           sharedConnectionPlugins={sharedConnectionPlugins}
           grantReusedFrom={grantReusedFrom}
-          isConnecting={connectUrl.isPending}
+          isConnecting={connectUrl.isPending || connectWithApiKey.isPending}
           isDisconnecting={disconnectPlugin.isPending}
           isRemoving={disablePlugin.isPending}
-          isSavingToolPolicy={updateToolPolicy.isPending}
           onClose={() => setSelectedPluginKey(null)}
           onContinue={() => void continueToProvider(selectedPlugin)}
+          onSubmitApiKey={(apiKey) => submitApiKey(selectedPlugin, apiKey)}
           onDisconnect={() => void disconnectSelected(selectedPlugin)}
           onRemove={() => void removeSelected(selectedPlugin)}
-          onToolPolicyChange={(tools) => void saveToolPolicy(selectedPlugin, tools)}
         />
       ) : null}
     </div>

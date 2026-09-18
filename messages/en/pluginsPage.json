@@ -11,8 +11,7 @@
     "empty": "No plugins installed yet."
   },
   "allPlugins": {
-    "title": "All plugins",
-    "workspaceDecides": "{workspaceName} decides which ones you can connect"
+    "title": "All plugins"
   },
   "loading": "Loading plugins...",
   "error": {
@@ -67,10 +66,10 @@
     "partialPermission": "{label} is connected, but a permission it needs was not approved.",
     "connected": "{label} connected",
     "couldNotConnect": "Could not connect {label}.",
+    "couldNotConnectApiKey": "Could not connect {label}. Check the key and try again.",
     "couldNotStartConnection": "Could not start the {label} connection.",
     "requestSent": "Request sent to your workspace owner",
     "couldNotAsk": "Could not ask for {label}.",
-    "couldNotSavePolicy": "Could not save what WarpBot may do in {label}.",
     "disconnected": "{label} disconnected",
     "couldNotDisconnect": "Could not disconnect {label}.",
     "removed": "{label} removed",
@@ -80,31 +79,24 @@
     "empty": "This plugin publishes its permissions when you connect. The provider's consent screen lists exactly what it is asking for before you approve.",
     "heading": "Authorizing allows this plugin to"
   },
-  "toolPolicy": {
-    "heading": "What WarpBot may do",
-    "allGroup": "All {group}",
-    "writeWarning": "WarpBot can change data in {label} without asking for the write tools you allowed.",
-    "allow": "Allow",
-    "ask": "Ask",
-    "block": "Block",
-    "readOnlyTools": "Read-only tools",
-    "writeTools": "Write tools",
-    "allowedCount": "allowed",
-    "askCount": "ask",
-    "blockedCount": "blocked"
-  },
   "connectDialog": {
     "closeAria": "Close plugin dialog",
     "titleWarpBot": "WarpBot",
     "titleWantsAccess": "by WarpTalk wants access to your {label}",
     "subtitleConnected": "WarpBot can use {label} for you.",
     "subtitleReused": "Uses the sign-in you already gave WarpTalk for {siblingLabel}. No new sign-in.",
+    "subtitleApiKey": "Paste an API key from your own {label} account.",
     "subtitleDefault": "You will sign in and confirm this on the provider's own page.",
     "notOwned": "WarpTalk is not owned or operated by this provider.",
     "tokensEncrypted": "Tokens stay encrypted. <b>Write</b> actions ask you first unless you allow them.",
     "sharedConnectionNote": "<b>{labels}</b> can reuse this sign-in, but each plugin is connected and disconnected on its own.",
     "continueTo": "Continue to {label}",
     "connectLabel": "Connect {label}",
+    "apiKey": {
+      "label": "{label} API key",
+      "empty": "Paste an API key first.",
+      "hint": "Only you use this key. Disconnect deletes it."
+    },
     "connectedToWarpTalk": "Connected to WarpTalk",
     "partiallyGranted": "Signed in, but a permission {label} needs was not approved. Continue to approve it.",
     "manageThisPlugin": "Manage this plugin for your own account",

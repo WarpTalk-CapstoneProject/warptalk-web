@@ -46,7 +46,8 @@
       "unresolved": "unresolved",
       "preregistered": "preregistered",
       "cimd": "CIMD",
-      "dcr": "DCR"
+      "dcr": "DCR",
+      "api_key": "API key"
     },
     "serverConfig": "server config",
     "noClientIdBadge": "no client id",
@@ -56,7 +57,11 @@
     "footerNote": "A native row is served by compiled-in code and takes its OAuth client from service configuration, not from the catalog — so this screen can neither set nor vouch for one.",
     "dialog": {
       "title": "Add an MCP app",
-      "description": "The row appears in every user's plugin list as soon as it is saved — no deploy and no restart. It is created as an MCP row that takes its key as its OAuth provider, with no tools: those arrive from the server's own tools/list on the first connect, and can be written by hand from the row's page.",
+      "intro": "The row appears in every user's plugin list as soon as it is saved — no deploy and no restart. It is created as an MCP row that takes its key as its OAuth provider, with no tools: those arrive from the server's own tools/list on the first connect, and can be written by hand from the row's page.",
+      "description": {
+        "label": "Description",
+        "hint": "What a user reads in the catalog before installing it."
+      },
       "pluginKey": {
         "label": "Plugin key",
         "placeholder": "linear",
@@ -66,13 +71,9 @@
         "label": "Label",
         "placeholder": "Linear"
       },
-      "description": {
-        "label": "Description",
-        "hint": "What a user reads in the catalog before installing it."
-      },
       "mcpServerUrl": {
         "label": "MCP server URL",
-        "placeholder": "https://mcp.example.com/sse",
+        "placeholder": "https://mcp.example.com/mcp",
         "hint": "Absolute https://. The tokens this row carries travel over it, so http is refused — on localhost too."
       },
       "avatarUrl": {
@@ -82,6 +83,13 @@
       "requiredScopes": {
         "label": "Required scopes",
         "hint": "Optional, one per line. Most MCP servers advertise their own on connect."
+      },
+      "authMode": {
+        "legend": "How users connect",
+        "oauthTitle": "Sign in with OAuth",
+        "oauthNote": "Users sign in on the provider's page. Recommended when the server supports it.",
+        "apiKeyTitle": "Each user pastes an API key",
+        "apiKeyNote": "No OAuth. The key is checked against the server, stored encrypted, and sent as a Bearer token."
       },
       "oauth": {
         "checkboxTitle": "This server needs a hand-registered OAuth client",
@@ -192,19 +200,38 @@
         "saveFail": "Could not save the plugin."
       }
     },
+    "authMode": {
+      "heading": "How users connect",
+      "modeApiKey": "API key",
+      "modeOAuth": "OAuth",
+      "descriptionApiKey": "Each user pastes their own API key. WarpTalk checks it against the server, stores it encrypted and sends it as a Bearer token.",
+      "descriptionOAuth": "Users sign in on the provider's own page. The OAuth client below is resolved on the first connect.",
+      "confirmWarning": "Every user connected to {label} will have to connect again.",
+      "cancel": "Cancel",
+      "switch": "Switch",
+      "switchToApiKey": "Switch to API key",
+      "switchToOAuth": "Switch to OAuth",
+      "toast": {
+        "switchedToApiKey": "Users now connect with their own API key. Existing connections were ended.",
+        "switchedToOAuth": "Users now sign in with OAuth. Existing connections were ended.",
+        "switchFail": "Could not change how users connect."
+      }
+    },
     "oauth": {
       "heading": "OAuth client",
       "sourceLabels": {
         "unresolved": "unresolved",
         "preregistered": "preregistered",
         "cimd": "CIMD",
-        "dcr": "DCR"
+        "dcr": "DCR",
+        "api_key": "API key"
       },
       "sourceNotes": {
         "unresolved": "Discovery has not run. The registration ladder chooses on the first connect.",
         "preregistered": "An operator supplied the client id. It must be present on this row.",
         "cimd": "The client is identified by our published metadata document URL.",
-        "dcr": "Credentials came from RFC 7591 dynamic registration."
+        "dcr": "Credentials came from RFC 7591 dynamic registration.",
+        "api_key": "No OAuth. Each user pastes their own API key, sent to the server as a Bearer token."
       },
       "clientIdSummary": "Client id",
       "clientIdNotSet": "not set",

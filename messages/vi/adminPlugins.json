@@ -46,7 +46,8 @@
       "unresolved": "chưa xác định",
       "preregistered": "pre-registered",
       "cimd": "CIMD",
-      "dcr": "DCR"
+      "dcr": "DCR",
+      "api_key": "API key"
     },
     "serverConfig": "cấu hình server",
     "noClientIdBadge": "thiếu client id",
@@ -56,7 +57,11 @@
     "footerNote": "Một dòng native được phục vụ bởi mã đã biên dịch sẵn và lấy OAuth client từ cấu hình dịch vụ, không phải từ danh mục — nên màn hình này không thể đặt hay xác nhận client cho dòng đó.",
     "dialog": {
       "title": "Thêm một ứng dụng MCP",
-      "description": "Dòng này sẽ xuất hiện trong danh sách plugin của mọi người dùng ngay khi được lưu — không cần triển khai lại, không cần khởi động lại. Nó được tạo dưới dạng dòng MCP lấy chính key làm tên nhà cung cấp OAuth, chưa có công cụ nào: các công cụ sẽ đến từ tools/list của chính server ở lần kết nối đầu tiên, và có thể được viết tay từ trang của dòng này.",
+      "intro": "Dòng này sẽ xuất hiện trong danh sách plugin của mọi người dùng ngay khi được lưu — không cần triển khai lại, không cần khởi động lại. Nó được tạo dưới dạng dòng MCP lấy chính key làm tên nhà cung cấp OAuth, chưa có công cụ nào: các công cụ sẽ đến từ tools/list của chính server ở lần kết nối đầu tiên, và có thể được viết tay từ trang của dòng này.",
+      "description": {
+        "label": "Mô tả",
+        "hint": "Nội dung người dùng đọc trong danh mục trước khi cài đặt."
+      },
       "pluginKey": {
         "label": "Plugin key",
         "placeholder": "linear",
@@ -66,13 +71,9 @@
         "label": "Tên hiển thị",
         "placeholder": "Linear"
       },
-      "description": {
-        "label": "Mô tả",
-        "hint": "Nội dung người dùng đọc trong danh mục trước khi cài đặt."
-      },
       "mcpServerUrl": {
         "label": "URL server MCP",
-        "placeholder": "https://mcp.example.com/sse",
+        "placeholder": "https://mcp.example.com/mcp",
         "hint": "Phải là https:// tuyệt đối. Token của dòng này đi qua đường truyền này, nên http bị từ chối — kể cả trên localhost."
       },
       "avatarUrl": {
@@ -82,6 +83,13 @@
       "requiredScopes": {
         "label": "Scope bắt buộc",
         "hint": "Tùy chọn, mỗi dòng một scope. Hầu hết server MCP tự công bố scope của mình khi kết nối."
+      },
+      "authMode": {
+        "legend": "Cách người dùng kết nối",
+        "oauthTitle": "Đăng nhập bằng OAuth",
+        "oauthNote": "Người dùng đăng nhập trên trang của nhà cung cấp. Nên dùng khi máy chủ hỗ trợ.",
+        "apiKeyTitle": "Mỗi người dùng dán một API key",
+        "apiKeyNote": "Không dùng OAuth. Key được kiểm tra với máy chủ, lưu trữ mã hóa và gửi dưới dạng Bearer token."
       },
       "oauth": {
         "checkboxTitle": "Server này cần OAuth client đăng ký thủ công",
@@ -192,19 +200,38 @@
         "saveFail": "Không thể lưu plugin."
       }
     },
+    "authMode": {
+      "heading": "Cách người dùng kết nối",
+      "modeApiKey": "API key",
+      "modeOAuth": "OAuth",
+      "descriptionApiKey": "Mỗi người dùng dán API key của riêng mình. WarpTalk kiểm tra key với máy chủ, lưu trữ mã hóa và gửi dưới dạng Bearer token.",
+      "descriptionOAuth": "Người dùng đăng nhập trên trang riêng của nhà cung cấp. OAuth client bên dưới được xác định ở lần kết nối đầu tiên.",
+      "confirmWarning": "Mọi người dùng đã kết nối với {label} sẽ phải kết nối lại.",
+      "cancel": "Hủy",
+      "switch": "Chuyển",
+      "switchToApiKey": "Chuyển sang API key",
+      "switchToOAuth": "Chuyển sang OAuth",
+      "toast": {
+        "switchedToApiKey": "Người dùng giờ kết nối bằng API key của riêng họ. Các kết nối hiện có đã bị kết thúc.",
+        "switchedToOAuth": "Người dùng giờ đăng nhập bằng OAuth. Các kết nối hiện có đã bị kết thúc.",
+        "switchFail": "Không thể thay đổi cách người dùng kết nối."
+      }
+    },
     "oauth": {
       "heading": "OAuth client",
       "sourceLabels": {
         "unresolved": "chưa xác định",
         "preregistered": "pre-registered",
         "cimd": "CIMD",
-        "dcr": "DCR"
+        "dcr": "DCR",
+        "api_key": "API key"
       },
       "sourceNotes": {
         "unresolved": "Discovery chưa chạy. Quy trình đăng ký sẽ tự chọn ở lần kết nối đầu tiên.",
         "preregistered": "Người vận hành đã nhập client id. Dòng này bắt buộc phải có client id.",
         "cimd": "Client được xác định bằng URL tài liệu metadata đã công bố của chúng ta.",
-        "dcr": "Thông tin xác thực đến từ dynamic registration theo RFC 7591."
+        "dcr": "Thông tin xác thực đến từ dynamic registration theo RFC 7591.",
+        "api_key": "Không dùng OAuth. Mỗi người dùng dán API key của riêng mình, được gửi đến máy chủ dưới dạng Bearer token."
       },
       "clientIdSummary": "Client id",
       "clientIdNotSet": "chưa đặt",

@@ -392,6 +392,9 @@ export const API = {
      * The desktop app opens consent in the system browser, and by the time the callback runs
      * nothing on that request remembers which app started it.
      */
+    /** POST `{ apiKey }` — connects an `api_key` plugin with the caller's own key. */
+    pluginApiKey: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/api-key`,
     pluginConnect: (pluginKey: string, client?: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect` +
       (client ? `?client=${encodeURIComponent(client)}` : ""),
@@ -519,6 +522,18 @@ export const API = {
   adminMeetings: {
     base: "/admin/meetings",
     counts: "/admin/meetings/counts",
+  },
+  /**
+   * The Insights page (`/admin`). One period endpoint per owning service plus billing's "right now"
+   * snapshot; each rides its service's existing admin gateway route. Built alongside the page, so
+   * any of them may 404 on an older backend — the page shows that source as not available yet.
+   */
+  adminInsights: {
+    billing: "/admin/billing/insights",
+    billingSnapshot: "/admin/billing/insights/snapshot",
+    users: "/admin/users/insights",
+    workspaces: "/admin/workspaces/insights",
+    meetings: "/admin/meetings/insights",
   },
   /**
    * The platform's own vitals, read back out of the metrics store. Query-only: nothing behind

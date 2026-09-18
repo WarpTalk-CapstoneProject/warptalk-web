@@ -79,7 +79,6 @@
       "logOut": "ログアウト"
     },
     "adminQuickLinks": {
-      "overview": "概要",
       "workspaces": "ワークスペース",
       "billing": "請求",
       "globalGlossary": "グローバル用語集"
@@ -97,7 +96,7 @@
         "configuration": "構成"
       },
       "items": {
-        "overview": "概要",
+        "insights": "インサイト",
         "workspaces": "ワークスペース",
         "accounts": "アカウント",
         "subscriptions": "サブスクリプション",

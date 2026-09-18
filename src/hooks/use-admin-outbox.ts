@@ -9,12 +9,14 @@ export const ADMIN_OUTBOX_KEYS = {
   deadLetters: (limit: number) => ["admin", "workspace-outbox", "dead-letters", limit] as const,
 };
 
-export function useAdminOutboxDeadLetters(limit: number) {
+/** `refetchInterval` is for a page that shows the count live (Insights); the Outbox list does not poll. */
+export function useAdminOutboxDeadLetters(limit: number, options: { refetchInterval?: number } = {}) {
   return useQuery({
     queryKey: ADMIN_OUTBOX_KEYS.deadLetters(limit),
     queryFn: () => adminOutboxService.listDeadLetters(limit),
     placeholderData: (previous) => previous,
     staleTime: 15_000,
+    refetchInterval: options.refetchInterval,
   });
 }
 

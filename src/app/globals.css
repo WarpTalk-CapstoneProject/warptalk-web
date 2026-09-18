@@ -66,6 +66,12 @@
      clickable and invisible — and no error text was red anywhere in the product. */
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /* Status tones for figures: money in, cost, and good/bad movement (the admin Insights page's
+     delta chips and value colours). Theme-aware, unlike --color-semantic-success above, which is a
+     fixed hex. Danger is --destructive; there is deliberately no second red. */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
 
   /* Radius */
   --radius-xs: 4px;
@@ -180,6 +186,11 @@
   --usage-service-4: #d0578f;
   --usage-service-5: #4a8fdb;
   --usage-service-other: #9ca3af;
+
+  /* Status tones — see --color-success in @theme. Picked to read on --surface-1 in each theme. */
+  --success: #27a644;
+  --warning: #d97706;
+  --info: #2f6fd0;
 }
 
 .dark {
@@ -223,6 +234,9 @@
   --usage-service-4: #e07aa8;
   --usage-service-5: #6aa8ec;
   --usage-service-other: #6b7079;
+  --success: #3fbf5f;
+  --warning: #f59e0b;
+  --info: #6ba4f0;
   /* A cast shadow on a near-black ground is invisible; the step between panel and card is what
      separates them. Kept non-none so the rule still resolves. */
   --shadow-card: 0 1px 1px rgba(0, 0, 0, 0.4);

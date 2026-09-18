@@ -114,6 +114,15 @@ export const assistantService = {
     });
   },
 
+  /** Answers with the catalog row. The key is checked against the MCP server and never sent back. */
+  connectPluginWithApiKey(pluginKey: string, apiKey: string, workspaceId?: string | null) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(
+      API.assistant.pluginApiKey(pluginKey),
+      { apiKey },
+      { params: workspaceId ? { workspaceId } : undefined },
+    );
+  },
+
   disconnectPlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.pluginConnection(pluginKey));
   },

@@ -79,7 +79,6 @@
       "logOut": "Log out"
     },
     "adminQuickLinks": {
-      "overview": "Overview",
       "workspaces": "Workspaces",
       "billing": "Billing",
       "globalGlossary": "Global Glossary"
@@ -97,7 +96,7 @@
         "configuration": "Configuration"
       },
       "items": {
-        "overview": "Overview",
+        "insights": "Insights",
         "workspaces": "Workspaces",
         "accounts": "Accounts",
         "subscriptions": "Subscriptions",

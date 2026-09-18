@@ -79,7 +79,6 @@
       "logOut": "Đăng xuất"
     },
     "adminQuickLinks": {
-      "overview": "Tổng quan",
       "workspaces": "Không gian làm việc",
       "billing": "Thanh toán",
       "globalGlossary": "Thuật ngữ toàn cục"
@@ -97,7 +96,7 @@
         "configuration": "Cấu hình"
       },
       "items": {
-        "overview": "Tổng quan",
+        "insights": "Thông tin chi tiết",
         "workspaces": "Không gian làm việc",
         "accounts": "Tài khoản",
         "subscriptions": "Gói đăng ký",

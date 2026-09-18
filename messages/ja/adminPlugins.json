@@ -46,7 +46,8 @@
       "unresolved": "未解決",
       "preregistered": "pre-registered",
       "cimd": "CIMD",
-      "dcr": "DCR"
+      "dcr": "DCR",
+      "api_key": "APIキー"
     },
     "serverConfig": "サーバー設定",
     "noClientIdBadge": "クライアントIDなし",
@@ -56,7 +57,11 @@
     "footerNote": "nativeの行はコンパイル済みコードによって提供され、OAuthクライアントはカタログではなくサービス設定から取得されるため、この画面では設定も保証もできません。",
     "dialog": {
       "title": "MCPアプリを追加",
-      "description": "この行は保存された瞬間にすべてのユーザーのプラグイン一覧に表示されます — デプロイも再起動も不要です。この行はキーをOAuthプロバイダー名とするMCP行として作成され、ツールはまだありません。ツールは初回接続時にサーバー自身のtools/listから取得されるか、この行のページから手動で記述できます。",
+      "intro": "この行は保存された瞬間にすべてのユーザーのプラグイン一覧に表示されます — デプロイも再起動も不要です。この行はキーをOAuthプロバイダー名とするMCP行として作成され、ツールはまだありません。ツールは初回接続時にサーバー自身のtools/listから取得されるか、この行のページから手動で記述できます。",
+      "description": {
+        "label": "説明",
+        "hint": "インストール前にユーザーがカタログで読む内容です。"
+      },
       "pluginKey": {
         "label": "プラグインキー",
         "placeholder": "linear",
@@ -66,13 +71,9 @@
         "label": "表示名",
         "placeholder": "Linear"
       },
-      "description": {
-        "label": "説明",
-        "hint": "インストール前にユーザーがカタログで読む内容です。"
-      },
       "mcpServerUrl": {
         "label": "MCPサーバーURL",
-        "placeholder": "https://mcp.example.com/sse",
+        "placeholder": "https://mcp.example.com/mcp",
         "hint": "絶対URLのhttps://が必要です。この行が扱うトークンはこの通信路を通るため、httpはlocalhostであっても拒否されます。"
       },
       "avatarUrl": {
@@ -82,6 +83,13 @@
       "requiredScopes": {
         "label": "必要なスコープ",
         "hint": "任意項目で、1行に1つ指定します。ほとんどのMCPサーバーは接続時に自身のスコープを通知します。"
+      },
+      "authMode": {
+        "legend": "ユーザーの接続方法",
+        "oauthTitle": "OAuthでサインイン",
+        "oauthNote": "ユーザーはプロバイダーのページでサインインします。サーバーが対応している場合に推奨されます。",
+        "apiKeyTitle": "各ユーザーがAPIキーを貼り付ける",
+        "apiKeyNote": "OAuthは使いません。キーはサーバーで検証され、暗号化して保存され、Bearerトークンとして送信されます。"
       },
       "oauth": {
         "checkboxTitle": "このサーバーは手動登録のOAuthクライアントが必要",
@@ -192,19 +200,38 @@
         "saveFail": "プラグインを保存できませんでした。"
       }
     },
+    "authMode": {
+      "heading": "ユーザーの接続方法",
+      "modeApiKey": "APIキー",
+      "modeOAuth": "OAuth",
+      "descriptionApiKey": "各ユーザーが自分のAPIキーを貼り付けます。WarpTalkはキーをサーバーで検証し、暗号化して保存し、Bearerトークンとして送信します。",
+      "descriptionOAuth": "ユーザーはプロバイダー自身のページでサインインします。下のOAuthクライアントは最初の接続時に決定されます。",
+      "confirmWarning": "{label}に接続しているすべてのユーザーは再接続が必要になります。",
+      "cancel": "キャンセル",
+      "switch": "切り替える",
+      "switchToApiKey": "APIキーに切り替える",
+      "switchToOAuth": "OAuthに切り替える",
+      "toast": {
+        "switchedToApiKey": "ユーザーは自分のAPIキーで接続するようになりました。既存の接続は終了しました。",
+        "switchedToOAuth": "ユーザーはOAuthでサインインするようになりました。既存の接続は終了しました。",
+        "switchFail": "ユーザーの接続方法を変更できませんでした。"
+      }
+    },
     "oauth": {
       "heading": "OAuthクライアント",
       "sourceLabels": {
         "unresolved": "未解決",
         "preregistered": "pre-registered",
         "cimd": "CIMD",
-        "dcr": "DCR"
+        "dcr": "DCR",
+        "api_key": "APIキー"
       },
       "sourceNotes": {
         "unresolved": "ディスカバリーはまだ実行されていません。次回接続時に登録の仕組みが選択されます。",
         "preregistered": "管理者がクライアントIDを入力しました。この行には必ずクライアントIDが必要です。",
         "cimd": "クライアントは公開済みのメタデータドキュメントURLによって識別されます。",
-        "dcr": "認証情報はRFC 7591のdynamic registrationから取得されました。"
+        "dcr": "認証情報はRFC 7591のdynamic registrationから取得されました。",
+        "api_key": "OAuthは使いません。各ユーザーが自分のAPIキーを貼り付け、Bearerトークンとしてサーバーに送信されます。"
       },
       "clientIdSummary": "クライアントID",
       "clientIdNotSet": "未設定",

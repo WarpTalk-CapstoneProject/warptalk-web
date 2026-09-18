@@ -11,8 +11,7 @@
     "empty": "Chưa cài đặt plugin nào."
   },
   "allPlugins": {
-    "title": "Tất cả plugin",
-    "workspaceDecides": "{workspaceName} quyết định plugin nào bạn có thể kết nối"
+    "title": "Tất cả plugin"
   },
   "loading": "Đang tải plugin...",
   "error": {
@@ -67,10 +66,10 @@
     "partialPermission": "{label} đã kết nối, nhưng một quyền cần thiết chưa được chấp thuận.",
     "connected": "Đã kết nối {label}",
     "couldNotConnect": "Không thể kết nối {label}.",
+    "couldNotConnectApiKey": "Không thể kết nối {label}. Hãy kiểm tra key và thử lại.",
     "couldNotStartConnection": "Không thể bắt đầu kết nối {label}.",
     "requestSent": "Đã gửi yêu cầu đến chủ sở hữu không gian làm việc của bạn",
     "couldNotAsk": "Không thể gửi yêu cầu {label}.",
-    "couldNotSavePolicy": "Không thể lưu quyền WarpBot có thể thực hiện trong {label}.",
     "disconnected": "Đã ngắt kết nối {label}",
     "couldNotDisconnect": "Không thể ngắt kết nối {label}.",
     "removed": "Đã xóa {label}",
@@ -80,31 +79,24 @@
     "empty": "Plugin này sẽ công bố các quyền của nó khi bạn kết nối. Màn hình chấp thuận của nhà cung cấp liệt kê chính xác những gì nó yêu cầu trước khi bạn phê duyệt.",
     "heading": "Cấp quyền cho phép plugin này"
   },
-  "toolPolicy": {
-    "heading": "WarpBot có thể làm gì",
-    "allGroup": "Tất cả {group}",
-    "writeWarning": "WarpBot có thể thay đổi dữ liệu trong {label} mà không cần hỏi với các công cụ ghi bạn đã cho phép.",
-    "allow": "Cho phép",
-    "ask": "Hỏi trước",
-    "block": "Chặn",
-    "readOnlyTools": "Công cụ chỉ đọc",
-    "writeTools": "Công cụ ghi",
-    "allowedCount": "cho phép",
-    "askCount": "hỏi trước",
-    "blockedCount": "chặn"
-  },
   "connectDialog": {
     "closeAria": "Đóng hộp thoại plugin",
     "titleWarpBot": "WarpBot",
     "titleWantsAccess": "của WarpTalk muốn truy cập {label} của bạn",
     "subtitleConnected": "WarpBot có thể dùng {label} thay bạn.",
     "subtitleReused": "Dùng lại đăng nhập bạn đã cấp cho WarpTalk cho {siblingLabel}. Không cần đăng nhập mới.",
+    "subtitleApiKey": "Dán API key từ tài khoản {label} của riêng bạn.",
     "subtitleDefault": "Bạn sẽ đăng nhập và xác nhận điều này trên trang riêng của nhà cung cấp.",
     "notOwned": "WarpTalk không sở hữu hoặc vận hành nhà cung cấp này.",
     "tokensEncrypted": "Mã thông báo được mã hóa. Hành động <b>ghi</b> sẽ hỏi bạn trước trừ khi bạn cho phép.",
     "sharedConnectionNote": "<b>{labels}</b> có thể dùng lại đăng nhập này, nhưng mỗi plugin được kết nối và ngắt kết nối riêng.",
     "continueTo": "Tiếp tục đến {label}",
     "connectLabel": "Kết nối {label}",
+    "apiKey": {
+      "label": "API key của {label}",
+      "empty": "Hãy dán API key trước.",
+      "hint": "Chỉ bạn dùng key này. Ngắt kết nối sẽ xóa nó."
+    },
     "connectedToWarpTalk": "Đã kết nối với WarpTalk",
     "partiallyGranted": "Đã đăng nhập, nhưng một quyền {label} cần chưa được chấp thuận. Tiếp tục để phê duyệt.",
     "manageThisPlugin": "Quản lý plugin này cho tài khoản của riêng bạn",

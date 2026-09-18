@@ -11,8 +11,7 @@
     "empty": "まだプラグインがインストールされていません。"
   },
   "allPlugins": {
-    "title": "すべてのプラグイン",
-    "workspaceDecides": "{workspaceName}が接続できるプラグインを決定します"
+    "title": "すべてのプラグイン"
   },
   "loading": "プラグインを読み込み中...",
   "error": {
@@ -67,10 +66,10 @@
     "partialPermission": "{label}は接続されましたが、必要な権限が承認されていません。",
     "connected": "{label}を接続しました",
     "couldNotConnect": "{label}を接続できませんでした。",
+    "couldNotConnectApiKey": "{label}を接続できませんでした。キーを確認して、もう一度お試しください。",
     "couldNotStartConnection": "{label}の接続を開始できませんでした。",
     "requestSent": "ワークスペースのオーナーにリクエストを送信しました",
     "couldNotAsk": "{label}をリクエストできませんでした。",
-    "couldNotSavePolicy": "{label}でWarpBotが実行できる内容を保存できませんでした。",
     "disconnected": "{label}を切断しました",
     "couldNotDisconnect": "{label}を切断できませんでした。",
     "removed": "{label}を削除しました",
@@ -80,31 +79,24 @@
     "empty": "このプラグインは接続時に権限を公開します。プロバイダーの同意画面には、承認前に要求している内容が正確に表示されます。",
     "heading": "承認するとこのプラグインが可能になること"
   },
-  "toolPolicy": {
-    "heading": "WarpBotが実行できること",
-    "allGroup": "すべての{group}",
-    "writeWarning": "許可した書き込みツールについて確認せずに、WarpBotは{label}のデータを変更できます。",
-    "allow": "許可",
-    "ask": "確認",
-    "block": "ブロック",
-    "readOnlyTools": "読み取り専用ツール",
-    "writeTools": "書き込みツール",
-    "allowedCount": "許可",
-    "askCount": "確認",
-    "blockedCount": "ブロック"
-  },
   "connectDialog": {
     "closeAria": "プラグインダイアログを閉じる",
     "titleWarpBot": "WarpBot",
     "titleWantsAccess": "（WarpTalk提供）があなたの{label}へのアクセスを求めています",
     "subtitleConnected": "WarpBotはあなたの代わりに{label}を使用できます。",
     "subtitleReused": "{siblingLabel}向けにWarpTalkにすでに与えたサインインを使用します。新しいサインインは不要です。",
+    "subtitleApiKey": "ご自身の{label}アカウントのAPIキーを貼り付けてください。",
     "subtitleDefault": "プロバイダー自身のページでサインインして確認します。",
     "notOwned": "WarpTalkはこのプロバイダーを所有または運営していません。",
     "tokensEncrypted": "トークンは暗号化されたまま保存されます。<b>書き込み</b>操作は、許可しない限り事前に確認を求めます。",
     "sharedConnectionNote": "<b>{labels}</b>はこのサインインを再利用できますが、各プラグインは個別に接続・切断されます。",
     "continueTo": "{label}へ進む",
     "connectLabel": "{label}を接続",
+    "apiKey": {
+      "label": "{label}のAPIキー",
+      "empty": "先にAPIキーを貼り付けてください。",
+      "hint": "このキーを使うのはあなただけです。切断するとキーは削除されます。"
+    },
     "connectedToWarpTalk": "WarpTalkに接続済み",
     "partiallyGranted": "サインインしましたが、{label}が必要とする権限が承認されていません。続行して承認してください。",
     "manageThisPlugin": "自分のアカウント用にこのプラグインを管理",

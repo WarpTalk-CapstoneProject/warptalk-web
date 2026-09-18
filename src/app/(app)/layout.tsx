@@ -610,7 +610,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   const adminSeg = segments[1];
                   const key = adminSeg ? ADMIN_LABEL_KEYS[adminSeg] : undefined;
                   parts.push({
-                    label: key ? t(`sidebar.adminNav.items.${key}`) : t("sidebar.adminNav.items.overview"),
+                    label: key ? t(`sidebar.adminNav.items.${key}`) : t("sidebar.adminNav.items.insights"),
                   });
                 } else if (firstSeg === "voice-profiles") {
                   parts.push({ label: t("sidebar.nav.voiceProfiles") });

@@ -97,7 +97,7 @@ import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 import { toast } from "sonner";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
 import { MessageMentionChips } from "@/components/assistant/message-mention-chips";
@@ -630,6 +630,10 @@ export function GlobalChatbot() {
           client: isDesktopApp() ? "desktop" : "web",
           workspaceId: activeWorkspaceId ?? undefined,
         });
+        if (result.apiKeyRequired) {
+          window.location.assign(pluginApiKeyPageHref(plugin.key));
+          return;
+        }
         // The provider's grant already covered it, so there is no consent page to finish.
         if (result.connected || !result.url) {
           toast.success(t("pluginConnected", { label: plugin.label }));
@@ -663,6 +667,10 @@ export function GlobalChatbot() {
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: activeWorkspaceId ?? undefined,
       });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
       const consentUrl = result.url;
       if (result.connected || !consentUrl) {
         toast.success(tPluginToasts("pluginConnected"));
