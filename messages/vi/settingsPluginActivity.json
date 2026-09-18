@@ -1,0 +1,43 @@
+{
+  "accessDenied": {
+    "title": "Từ chối truy cập",
+    "description": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem hoạt động plugin."
+  },
+  "loadError": {
+    "title": "Không thể tải hoạt động plugin",
+    "description": "Hãy thử lại, và nếu vẫn thất bại hãy kiểm tra dịch vụ trợ lý có hoạt động không."
+  },
+  "retrying": "Đang thử lại…",
+  "retry": "Thử lại",
+  "allPlugins": "Tất cả plugin",
+  "allMembers": "Tất cả thành viên",
+  "memberFallback": "Thành viên",
+  "empty": {
+    "noMoreTitle": "Không còn hoạt động nào",
+    "noMoreDescription": "Đó là trang cuối cùng.",
+    "noMatchTitle": "Không có hoạt động nào khớp với bộ lọc này",
+    "noMatchDescription": "Xóa một bộ lọc để xem thêm.",
+    "noActivityTitle": "Chưa có hoạt động plugin nào",
+    "noActivityDescription": "Khi WarpBot chạy một công cụ plugin cho ai đó trong không gian làm việc này, nó sẽ được liệt kê ở đây."
+  },
+  "table": {
+    "time": "Thời gian",
+    "member": "Thành viên",
+    "plugin": "Plugin",
+    "tool": "Công cụ",
+    "result": "Kết quả"
+  },
+  "noLongerMember": "Không còn là thành viên",
+  "page": "Trang {page}",
+  "previous": "Trước",
+  "next": "Sau",
+  "outcome": {
+    "succeeded": "Thành công",
+    "blocked": "Đã chặn",
+    "awaitingConfirmation": "Đang chờ xác nhận",
+    "needsSetup": "Cần thiết lập",
+    "providerError": "Lỗi nhà cung cấp",
+    "failed": "Thất bại"
+  },
+  "formerMember": "Cựu thành viên"
+}

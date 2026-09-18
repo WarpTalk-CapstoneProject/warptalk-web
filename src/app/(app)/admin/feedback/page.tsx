@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowsClockwise, ChatCircleText, Star, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,17 +30,12 @@ import type {
 const PAGE_SIZE = 20;
 const numberFormatter = new Intl.NumberFormat("en-US");
 
-const RANGE_TABS = [
-  { value: "7", label: "7 days" },
-  { value: "30", label: "30 days" },
-  { value: "90", label: "90 days" },
-  { value: "365", label: "12 months" },
-] as const;
+const RANGE_VALUES = ["7", "30", "90", "365"] as const;
 
-type RangeValue = (typeof RANGE_TABS)[number]["value"];
+type RangeValue = (typeof RANGE_VALUES)[number];
 
 function isRange(value: string | null): value is RangeValue {
-  return RANGE_TABS.some((tab) => tab.value === value);
+  return (RANGE_VALUES as readonly string[]).includes(value ?? "");
 }
 
 function formatWhen(value: string) {
@@ -52,6 +48,7 @@ function formatWhen(value: string) {
 }
 
 function FeedbackReport() {
+  const t = useTranslations("adminMisc.feedback");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -88,13 +85,23 @@ function FeedbackReport() {
     router.replace(queryString ? `/admin/feedback?${queryString}` : "/admin/feedback");
   };
 
+  const rangeTabs = useMemo(
+    () => [
+      { value: "7" as const, label: t("rangeTabs.7") },
+      { value: "30" as const, label: t("rangeTabs.30") },
+      { value: "90" as const, label: t("rangeTabs.90") },
+      { value: "365" as const, label: t("rangeTabs.365") },
+    ],
+    [t],
+  );
+
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Star size={14} weight="fill" />}
-        title="Feedback"
-        description="What participants said about the product after a meeting ended. Aggregated, and shown without who said it."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -106,21 +113,21 @@ function FeedbackReport() {
             disabled={summaryQuery.isFetching}
           >
             <ArrowsClockwise size={14} className={cn(summaryQuery.isFetching && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
       <AdminFilterTabs
-        tabs={RANGE_TABS}
+        tabs={rangeTabs}
         value={range}
         onChange={(value) => updateParams({ range: value, page: undefined })}
-        label="Reporting window"
+        label={t("reportingWindowAria")}
         trailing={
           summaryQuery.isPending
-            ? "Loading…"
+            ? t("loading")
             : summary
-              ? `${numberFormatter.format(summary.responseCount)} response${summary.responseCount === 1 ? "" : "s"}`
+              ? t("responseCount", { count: summary.responseCount })
               : undefined
         }
       />
@@ -130,18 +137,15 @@ function FeedbackReport() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">Feedback could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the translation-room service and that your session still holds the platform
-                admin role.
-              </p>
+              <p className="font-medium">{t("error.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("error.description")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void summaryQuery.refetch()}
               >
-                Try again
+                {t("error.retry")}
               </Button>
             </div>
           </div>
@@ -156,13 +160,13 @@ function FeedbackReport() {
         <>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-lg border border-border bg-surface-1 px-4 py-3">
-              <p className="text-[11px] font-medium text-ink-muted">Responses</p>
+              <p className="text-[11px] font-medium text-ink-muted">{t("stats.responses")}</p>
               <p className="mt-1 text-[26px] font-semibold leading-none tabular-nums">
                 {numberFormatter.format(summary.responseCount)}
               </p>
             </div>
             <div className="rounded-lg border border-border bg-surface-1 px-4 py-3">
-              <p className="text-[11px] font-medium text-ink-muted">Meetings rated</p>
+              <p className="text-[11px] font-medium text-ink-muted">{t("stats.meetingsRated")}</p>
               <p className="mt-1 flex items-baseline gap-1.5">
                 <span className="text-[26px] font-semibold leading-none tabular-nums">
                   {numberFormatter.format(summary.ratedMeetings)}
@@ -170,23 +174,23 @@ function FeedbackReport() {
                 {/* The denominator is the whole point. Without it, an average rating says nothing
                     about whether anyone was listening. */}
                 <span className="text-[12px] text-ink-subtle">
-                  of {numberFormatter.format(summary.endedMeetings)} ended
+                  {t("stats.ofEnded", { count: numberFormatter.format(summary.endedMeetings) })}
                 </span>
               </p>
             </div>
             <div className="rounded-lg border border-border bg-surface-1 px-4 py-3">
-              <p className="text-[11px] font-medium text-ink-muted">Response rate</p>
+              <p className="text-[11px] font-medium text-ink-muted">{t("stats.responseRate")}</p>
               <p className="mt-1 text-[26px] font-semibold leading-none tabular-nums">
                 {formatResponseRate(summary.responseRate)}
               </p>
             </div>
           </div>
 
-          <h2 className="mb-2 mt-6 text-[13px] font-semibold">Ratings by dimension</h2>
+          <h2 className="mb-2 mt-6 text-[13px] font-semibold">{t("dimensions.title")}</h2>
           <AdminPanel>
             {summary.dimensions.length === 0 ? (
               <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-                No ratings were submitted in this window.
+                {t("dimensions.empty")}
               </p>
             ) : (
               <ul>
@@ -201,7 +205,7 @@ function FeedbackReport() {
 
           <h2 className="mb-2 mt-6 flex items-center gap-2 text-[13px] font-semibold">
             <ChatCircleText size={14} weight="duotone" />
-            Comments
+            {t("comments.title")}
             <span className="font-normal text-ink-muted">
               {numberFormatter.format(commentTotal)}
             </span>
@@ -209,7 +213,7 @@ function FeedbackReport() {
           <AdminPanel>
             {commentsQuery.isError ? (
               <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-                Comments could not be loaded.
+                {t("comments.error")}
               </p>
             ) : commentsQuery.isPending ? (
               <ul>
@@ -221,7 +225,7 @@ function FeedbackReport() {
               </ul>
             ) : comments.length === 0 ? (
               <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-                Nobody left a written comment in this window.
+                {t("comments.empty")}
               </p>
             ) : (
               <ul>
@@ -236,9 +240,7 @@ function FeedbackReport() {
 
           {totalPages > 1 ? (
             <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-              <span>
-                Page {page} of {totalPages}
-              </span>
+              <span>{t("pagination.pageOf", { page, totalPages })}</span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
@@ -246,7 +248,7 @@ function FeedbackReport() {
                   disabled={page <= 1}
                   onClick={() => updateParams({ page: String(page - 1) })}
                 >
-                  Previous
+                  {t("pagination.previous")}
                 </Button>
                 <Button
                   variant="outline"
@@ -254,16 +256,13 @@ function FeedbackReport() {
                   disabled={page >= totalPages}
                   onClick={() => updateParams({ page: String(page + 1) })}
                 >
-                  Next
+                  {t("pagination.next")}
                 </Button>
               </div>
             </div>
           ) : null}
 
-          <p className="mt-4 text-[12px] text-ink-muted">
-            Read-only, and anonymous by construction — the API does not send who wrote a comment.
-            A rating an administrator could edit or delete would not be worth reading.
-          </p>
+          <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
         </>
       )}
     </AdminPage>
@@ -271,6 +270,7 @@ function FeedbackReport() {
 }
 
 function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
+  const t = useTranslations("adminMisc.feedback");
   const shares = distributionShares(dimension);
   const thin = isThinSample(dimension);
 
@@ -281,8 +281,8 @@ function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
         <p className="text-[11px] text-ink-subtle">
           {/* Its OWN respondents. Four of the five dimensions are optional, so this is not the
               report's total and printing the report's total here would inflate every one. */}
-          {numberFormatter.format(dimension.responseCount)} rated
-          {thin ? <span className="ml-1 text-amber-600">· thin sample</span> : null}
+          {t("dimensions.ratedCount", { count: numberFormatter.format(dimension.responseCount) })}
+          {thin ? <span className="ml-1 text-amber-600">{t("dimensions.thinSample")}</span> : null}
         </p>
       </div>
 
@@ -310,9 +310,7 @@ function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
             <div
               key={rating}
               className="group relative h-6 flex-1 overflow-hidden rounded bg-surface-2"
-              title={`${rating}★ — ${dimension.distribution[index]} response${
-                dimension.distribution[index] === 1 ? "" : "s"
-              }`}
+              title={t("dimensions.ratingTooltip", { rating, count: dimension.distribution[index] })}
             >
               <div
                 className={cn(

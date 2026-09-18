@@ -43,6 +43,7 @@ import {
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import { format } from "date-fns";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -96,17 +97,19 @@ function isNoSubscriptionError(error: unknown): boolean {
   );
 }
 
-function getBillingErrorMessage(error: unknown): string {
+type BillingT = ReturnType<typeof useTranslations>;
+
+function getBillingErrorMessage(error: unknown, t: BillingT): string {
   if (isAxiosError<BillingErrorBody>(error)) {
     const body = error.response?.data;
     const detail = body?.message ?? body?.Message ?? body?.error;
     if (detail) return detail;
     if (error.response?.status) {
-      return `The billing service responded with HTTP ${error.response.status}.`;
+      return t("errorState.httpError", { status: error.response.status });
     }
     return error.message;
   }
-  return error instanceof Error ? error.message : "An unexpected error occurred.";
+  return error instanceof Error ? error.message : t("errorState.unexpected");
 }
 
 export default function WorkspaceBillingPage() {
@@ -121,6 +124,7 @@ export default function WorkspaceBillingPage() {
 }
 
 function WorkspaceBillingContent({ slug }: { slug: string }) {
+  const t = useTranslations("settingsBilling");
   const queryClient = useQueryClient();
   const { isAuthenticated, accessToken } = useAuthStore();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -257,10 +261,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Lock className="h-6 w-6" />
             </div>
-            <CardTitle className="text-lg font-bold">Access Denied</CardTitle>
+            <CardTitle className="text-lg font-bold">{t("accessDenied.title")}</CardTitle>
             <CardDescription className="text-xs">
-              Only workspace Owners and Administrators can view billing and subscription
-              configurations.
+              {t("accessDenied.description")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -286,7 +289,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   if (hardError) {
     return (
       <BillingErrorState
-        message={getBillingErrorMessage(hardError)}
+        message={getBillingErrorMessage(hardError, t)}
         onRetry={retryBillingQueries}
       />
     );
@@ -297,12 +300,14 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   return (
     <div className="flex min-w-0 flex-col text-ink">
       <BannerRow
-        title="Allow overages"
-        badge={<Pill tone="accent">Recommended</Pill>}
+        title={t("overages.title")}
+        badge={<Pill tone="accent">{t("overages.badge")}</Pill>}
         description={
           overagesOn
-            ? `Meetings keep translating past zero credits, up to ${formatAmount(overage?.effectiveCapCredits ?? 0)} credits this cycle.`
-            : "Meetings stop the moment the credits run out. Turn this on to let them continue up to the allowance your plan already grants."
+            ? t("overages.descriptionOn", {
+                cap: formatAmount(overage?.effectiveCapCredits ?? 0),
+              })
+            : t("overages.descriptionOff")
         }
         action={
           <BillingButton
@@ -310,7 +315,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             className="w-auto px-4"
             onClick={() => setIsManageOpen(true)}
           >
-            {overagesOn ? "Manage" : "Enable"}
+            {overagesOn ? t("overages.manage") : t("overages.enable")}
           </BillingButton>
         }
       />
@@ -319,46 +324,53 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           side from sm, where that rule becomes the vertical one. */}
       <div className="grid sm:grid-cols-2">
         <StatCell
-          label="Credits Remaining"
+          label={t("stats.creditsRemaining.label")}
           className="sm:border-r"
           value={formatAmount(currentCredits)}
           tone={totalCredits > 0 && remainingRatioPercent <= 15 ? "warn" : "default"}
           lines={[
             totalCredits > 0
-              ? `${formatAmount(totalCredits)} granted this cycle.`
-              : "No allowance on this cycle.",
-            `${formatAmount(creditsUsed)} spent since the cycle began.`,
-            `Cycle ends ${renewsDate}.`,
+              ? t("stats.creditsRemaining.granted", { total: formatAmount(totalCredits) })
+              : t("stats.creditsRemaining.noAllowance"),
+            t("stats.creditsRemaining.spent", { used: formatAmount(creditsUsed) }),
+            t("stats.creditsRemaining.cycleEnds", { date: renewsDate }),
           ]}
         />
         <StatCell
-          label="Current Plan"
-          value={subscription?.planName ?? "No active plan"}
+          label={t("stats.currentPlan.label")}
+          value={subscription?.planName ?? t("stats.currentPlan.noPlan")}
           tone={subscription?.cancelAtPeriodEnd ? "warn" : "default"}
           lines={[
             subscription
-              ? `${formatMoney(subscription.price, activePlan?.currency)} per cycle.`
-              : "Meetings translate against a credit balance.",
+              ? t("stats.currentPlan.pricePerCycle", {
+                  price: formatMoney(subscription.price, activePlan?.currency),
+                })
+              : t("stats.currentPlan.noBalance"),
             activePlan
-              ? `${activePlan.maxParticipants} participants · ${activePlan.maxLanguages} languages per meeting.`
-              : "Plan limits unavailable.",
+              ? t("stats.currentPlan.limits", {
+                  participants: activePlan.maxParticipants,
+                  languages: activePlan.maxLanguages,
+                })
+              : t("stats.currentPlan.limitsUnavailable"),
             subscription?.cancelAtPeriodEnd
-              ? `Cancelled — translation stops ${renewsDate}. Resubscribe from Manage subscription.`
-              : `Renews ${renewsDate}.`,
+              ? t("stats.currentPlan.cancelled", { date: renewsDate })
+              : t("stats.currentPlan.renews", { date: renewsDate }),
           ]}
         />
       </div>
 
       <GridRow className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <p className="text-[12px] text-ink-muted">Current plan</p>
+          <p className="text-[12px] text-ink-muted">{t("currentPlanRow.label")}</p>
           <p className="mt-1 truncate text-[20px] font-semibold leading-tight text-ink">
-            {subscription?.planName ?? "No active plan"}
+            {subscription?.planName ?? t("stats.currentPlan.noPlan")}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <span className="hidden text-[12px] text-ink-muted sm:inline">
-            {subscription?.cancelAtPeriodEnd ? "Ends" : "Renews"} on {renewsDate}
+            {subscription?.cancelAtPeriodEnd
+              ? t("currentPlanRow.endsOn", { date: renewsDate })
+              : t("currentPlanRow.renewsOn", { date: renewsDate })}
           </span>
           <BillingButton
             tone="outline"
@@ -366,14 +378,14 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
             onClick={() => setIsTopUpOpen(true)}
           >
             <Wallet className="h-3.5 w-3.5" />
-            Buy credits
+            {t("buyCredits")}
           </BillingButton>
           <BillingButton
             tone="outline"
             className="w-auto px-3"
             onClick={() => setIsManageOpen(true)}
           >
-            Manage subscription
+            {t("manageSubscription")}
           </BillingButton>
         </div>
       </GridRow>
@@ -404,17 +416,18 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
  * failure, and it carries the one action that resolves it.
  */
 function BillingNoSubscriptionState({ workspaceSlug }: { workspaceSlug: string }) {
+  const t = useTranslations("settingsBilling");
   return (
     <div className="px-4 py-4">
       <PagePlaceholder
         kind="billing"
-        title="No active subscription"
-        description="This workspace has no billing plan yet, so there is no balance or usage to report. Choose a plan to start tracking credits and AI usage."
+        title={t("noSubscription.title")}
+        description={t("noSubscription.description")}
         action={
           <Link href={`/${workspaceSlug}/payment/plans`}>
             <span className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background transition hover:opacity-90">
               <Wallet className="h-3.5 w-3.5" />
-              Choose a plan
+              {t("noSubscription.choosePlan")}
             </span>
           </Link>
         }
@@ -431,6 +444,7 @@ function BillingErrorState({
   message: string;
   onRetry: () => void;
 }) {
+  const t = useTranslations("settingsBilling");
   return (
     <div className="flex h-[80vh] w-full items-center justify-center">
       <Card className="max-w-md rounded-[14px] border-border bg-surface-1 p-6 text-center shadow-none">
@@ -438,10 +452,9 @@ function BillingErrorState({
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <WarningCircle className="h-6 w-6" />
           </div>
-          <CardTitle className="text-lg font-bold">Could not load billing data</CardTitle>
+          <CardTitle className="text-lg font-bold">{t("errorState.title")}</CardTitle>
           <CardDescription className="text-xs">
-            Your balance and usage are unavailable right now, so nothing is shown rather than a
-            figure that could be wrong. {message}
+            {t("errorState.description", { message })}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center pt-2">
@@ -451,7 +464,7 @@ function BillingErrorState({
             className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-md bg-primary px-4 text-xs font-semibold text-white transition duration-150 hover:bg-primary-hover"
           >
             <ArrowClockwise className="h-3.5 w-3.5" />
-            <span>Retry</span>
+            <span>{t("errorState.retry")}</span>
           </button>
         </CardContent>
       </Card>

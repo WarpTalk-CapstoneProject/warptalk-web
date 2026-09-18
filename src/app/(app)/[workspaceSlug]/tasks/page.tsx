@@ -23,6 +23,7 @@ import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { CheckSquare, Square, Spinner, XSquare } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import {
   WorkspaceFilterPill,
@@ -38,6 +39,7 @@ import type { ActionItemStatus, MeetingActionItemDto } from "@/types/meetingActi
 type Filter = "OPEN" | "DONE" | "ALL";
 
 export default function WorkspaceTasksPage() {
+  const t = useTranslations("tasks");
   const { workspaceSlug } = useParams<{ workspaceSlug: string }>();
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const [filter, setFilter] = useState<Filter>("OPEN");
@@ -64,7 +66,7 @@ export default function WorkspaceTasksPage() {
       await meetingActionItemService.updateStatus(item.id, status);
       await query.refetch();
     } catch {
-      toast.error("Could not update the item.");
+      toast.error(t("toasts.updateFailed"));
     }
   }
 
@@ -74,18 +76,18 @@ export default function WorkspaceTasksPage() {
         filters={
           <>
             <WorkspaceFilterPill
-              label="Open"
+              label={t("filters.open")}
               selected={filter === "OPEN"}
               onClick={() => setFilter("OPEN")}
               count={openCount}
             />
             <WorkspaceFilterPill
-              label="Closed"
+              label={t("filters.closed")}
               selected={filter === "DONE"}
               onClick={() => setFilter("DONE")}
             />
             <WorkspaceFilterPill
-              label="All"
+              label={t("filters.all")}
               selected={filter === "ALL"}
               onClick={() => setFilter("ALL")}
             />
@@ -97,20 +99,20 @@ export default function WorkspaceTasksPage() {
         {query.isLoading ? (
           <div className="flex items-center gap-2 py-8 text-[13px] text-ink-muted">
             <Spinner size={14} className="animate-spin" />
-            Loading…
+            {t("loading")}
           </div>
         ) : shown.length === 0 ? (
           <PagePlaceholder
             kind="tasks"
             title={
               filter === "OPEN"
-                ? "Nothing open"
-                : "No tasks in this state yet"
+                ? t("empty.openTitle")
+                : t("empty.otherTitle")
             }
             description={
               filter === "OPEN"
-                ? "Every task from your meetings is closed."
-                : "Tasks appear here when their meeting records an action item."
+                ? t("empty.openDescription")
+                : t("empty.otherDescription")
             }
           />
         ) : (
@@ -120,7 +122,7 @@ export default function WorkspaceTasksPage() {
                 <button
                   type="button"
                   onClick={() => setStatus(item, item.status === "OPEN" ? "DONE" : "OPEN")}
-                  aria-label={item.status === "OPEN" ? "Mark done" : "Reopen"}
+                  aria-label={item.status === "OPEN" ? t("markDone") : t("reopen")}
                   className="mt-[2px] shrink-0 text-ink-subtle hover:text-ink"
                 >
                   {item.status === "DONE" ? (
@@ -147,7 +149,7 @@ export default function WorkspaceTasksPage() {
                     href={`/${workspaceSlug}/rooms/${item.translationRoomId}`}
                     className="text-[11px] text-ink-subtle hover:text-ink"
                   >
-                    {item.roomTitle || "Untitled meeting"}
+                    {item.roomTitle || t("untitledMeeting")}
                   </Link>
                 </div>
 
@@ -157,7 +159,7 @@ export default function WorkspaceTasksPage() {
                     onClick={() => setStatus(item, "DROPPED")}
                     className="shrink-0 text-[11px] text-ink-subtle hover:text-ink"
                   >
-                    Drop
+                    {t("drop")}
                   </button>
                 ) : null}
               </li>

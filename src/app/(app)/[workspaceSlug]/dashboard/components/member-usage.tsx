@@ -19,6 +19,7 @@
  *   summing to the total above it. They are labelled rather than hidden.
  */
 
+import { useTranslations } from "next-intl";
 import { rankMemberUsage } from "@/lib/billing/member-usage-join";
 import type { MemberCreditUsageDto } from "@/types/billing";
 import type { WorkspaceMemberDto } from "@/types/workspace";
@@ -32,6 +33,7 @@ export function MemberUsage({
   members: WorkspaceMemberDto[];
   total: number;
 }) {
+  const t = useTranslations("dashboard.memberUsage");
   // Ranking, the name join and the former-member case all live in rankMemberUsage so they can
   // be tested without rendering — see lib/billing/member-usage-join.ts.
   const ranked = rankMemberUsage(rows, members, total);
@@ -41,7 +43,7 @@ export function MemberUsage({
     // 220px chart makes the shared frame look mis-drawn rather than empty.
     return (
       <p className="flex h-[220px] items-center justify-center text-center text-[12px] text-ink-muted">
-        No member has used credits in this window.
+        {t("empty")}
       </p>
     );
   }
@@ -59,7 +61,7 @@ export function MemberUsage({
               <span className="min-w-0 truncate text-ink">
                 {row.label}
                 {row.isFormerMember ? (
-                  <span className="ml-1.5 text-[11px] text-ink-muted">· no longer a member</span>
+                  <span className="ml-1.5 text-[11px] text-ink-muted">{t("formerMember")}</span>
                 ) : null}
               </span>
               <span className="shrink-0 tabular-nums text-ink-muted">
@@ -76,8 +78,7 @@ export function MemberUsage({
               />
             </div>
             <p className="mt-1 text-[11px] text-ink-muted">
-              {row.recordCount.toLocaleString()}{" "}
-              {row.recordCount === 1 ? "charge" : "charges"}
+              {t("charges", { count: row.recordCount })}
             </p>
           </div>
         );

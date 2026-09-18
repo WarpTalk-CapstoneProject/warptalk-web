@@ -1,0 +1,94 @@
+{
+  "billing": "Thanh toán",
+  "restricted": {
+    "title": "Chỉ Chủ sở hữu hoặc Quản trị viên mới xem được bảng điều khiển này",
+    "description": "Trang này báo cáo chi tiêu và tài nguyên toàn không gian làm việc, nên chỉ dành cho người quản lý chúng."
+  },
+  "loading": "Đang tải…",
+  "hero": {
+    "noPlanTitle": "Bắt đầu dịch trong không gian làm việc này",
+    "noPlanDescription": "Cuộc họp dịch dựa trên số dư tín dụng. Chọn một gói để cấp tín dụng cho không gian này, và mọi cuộc họp sẽ có dịch trực tiếp, bản ghi và tóm tắt AI.",
+    "hasPlanTitle": "Tổng quan không gian làm việc của bạn",
+    "hasPlanDescription": "Tín dụng, tốc độ tiêu thụ và những gì sắp diễn ra — mọi thứ quyết định liệu không gian này có tiếp tục dịch được không, trên một trang.",
+    "choosePlan": "Chọn gói",
+    "openBilling": "Mở trang thanh toán",
+    "dismiss": "Đóng"
+  },
+  "creditsError": {
+    "title": "Không thể đọc số tín dụng của không gian này",
+    "detail": "Hệ thống thanh toán không phản hồi. Phần còn lại của trang không bị ảnh hưởng."
+  },
+  "retry": "Thử lại",
+  "noPlan": {
+    "title": "Không gian này chưa có gói",
+    "description": "Cuộc họp dịch dựa trên số dư tín dụng, và không gian này chưa có gì để dùng.",
+    "choosePlan": "Chọn gói",
+    "usageChartedOncePlan": "Dữ liệu sử dụng sẽ hiển thị khi không gian này có gói.",
+    "reasonNoDates": "Chu kỳ này chưa có ngày tháng.",
+    "reasonTooEarly": "Còn quá sớm trong chu kỳ để ước tính tốc độ.",
+    "reasonNothingUsed": "Chưa dùng gì trong chu kỳ này."
+  },
+  "cells": {
+    "creditsLeft": "Tín dụng còn lại",
+    "creditsLeftDetail": "{percent}% trong tổng {available}",
+    "usedThisCycle": "Đã dùng chu kỳ này",
+    "usedThisCycleDetail": "{percent}% tín dụng của chu kỳ này",
+    "burnRate": "Tốc độ tiêu thụ",
+    "perDay": "{value}/ngày",
+    "burnRateDetailAverage": "Trung bình từ đầu chu kỳ",
+    "runsOut": "Sẽ hết",
+    "renews": "Gia hạn",
+    "runsOutDetail": "{count, plural, other {Còn # ngày}} — trước khi chu kỳ kết thúc",
+    "lastsDetail": "Còn {count} theo tốc độ này",
+    "renewsDetail": "{count, plural, other {Còn # ngày}}",
+    "cyclePerUnit": "chu kỳ"
+  },
+  "usedPercentOfCredits": "tín dụng đã dùng",
+  "elapsedPercentOfCycle": "chu kỳ đã trôi qua",
+  "cancelsAtPeriodEnd": "sẽ hủy khi hết chu kỳ",
+  "cancelWarning": "Mọi người trong không gian này sẽ ngừng dịch vào {date}.",
+  "usageCouldNotLoad": "Không thể tải dữ liệu sử dụng.",
+  "sections": {
+    "creditUsage": "Sử dụng tín dụng",
+    "creditUsageDescription": "Đã dùng so với đã nạp, theo từng tháng trong năm {year}.",
+    "whereCreditsGo": "Tín dụng dùng vào đâu",
+    "whoIsSpending": "Ai đang chi tiêu",
+    "needsDecision": "Cần quyết định",
+    "comingUp": "Sắp diễn ra"
+  },
+  "usageEmptyForYear": "Không có tín dụng nào được dùng hoặc nạp trong năm {year}.",
+  "memberUsageError": "Không thể tải dữ liệu sử dụng của thành viên.",
+  "nothingWaiting": "Không có gì đang chờ bạn.",
+  "documentsWaitingApproval": "{count, plural, other {# tài liệu đang chờ duyệt}}",
+  "creditsAtPercent": "Tín dụng còn {percent}%",
+  "creditsAtPercentDetail": "Còn {count} — cuộc họp sẽ ngừng dịch khi hết.",
+  "planCancelling": "Gói này sẽ bị hủy",
+  "planEndsOn": "{planName} kết thúc vào {date}.",
+  "noMeetingsScheduled": "Chưa có cuộc họp nào được lên lịch.",
+  "runningNow": "Đang diễn ra",
+  "noTimeSet": "Chưa đặt thời gian",
+  "counts": { "members": "thành viên", "documents": "tài liệu", "meetings": "cuộc họp" },
+  "usageTrend": {
+    "consumed": "Đã dùng",
+    "toppedUp": "Đã nạp",
+    "tooltipConsumed": "đã dùng",
+    "tooltipToppedUp": "đã nạp"
+  },
+  "memberUsage": {
+    "empty": "Chưa có thành viên nào dùng tín dụng trong khoảng thời gian này.",
+    "formerMember": "· không còn là thành viên",
+    "charges": "{count, plural, other {# lượt tính phí}}"
+  },
+  "usageBreakdown": { "empty": "Chưa có gì được dùng trong khoảng thời gian này." },
+  "usageLabels": {
+    "translation": "Dịch trực tiếp",
+    "dubbing": "Lồng tiếng",
+    "cloneDubbing": "Lồng tiếng bằng giọng nhân bản",
+    "transcription": "Phiên âm",
+    "assistant": "Trợ lý AI",
+    "summary": "Tóm tắt cuộc họp",
+    "voiceCloning": "Nhân bản giọng nói",
+    "documentTranslation": "Dịch tài liệu",
+    "otherUsage": "Sử dụng khác"
+  }
+}

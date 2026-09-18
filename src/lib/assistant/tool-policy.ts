@@ -37,11 +37,18 @@ export interface ToolPolicyGroup {
   policy: PluginToolPolicy | null;
 }
 
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type ToolPolicyTranslator = (key: string) => string;
+
 /**
  * Read-only tools first and write tools last, which puts the heavier permission closest to the
  * warning about it. A group with no tools is left out rather than rendered empty.
  */
-export function groupToolsByEffect(tools: readonly McpToolDescriptorDto[]): ToolPolicyGroup[] {
+export function groupToolsByEffect(
+  tools: readonly McpToolDescriptorDto[],
+  t?: ToolPolicyTranslator,
+): ToolPolicyGroup[] {
   const seen = new Set<string>();
   const unique = tools.filter((tool) => {
     if (seen.has(tool.name)) return false;
@@ -53,9 +60,10 @@ export function groupToolsByEffect(tools: readonly McpToolDescriptorDto[]): Tool
     .map((effect) => {
       const groupTools = unique.filter((tool) => tool.effect === effect);
       const policies = new Set(groupTools.map(toolPolicyOf));
+      const defaultTitle = effect === "read" ? "Read-only tools" : "Write tools";
       return {
         effect,
-        title: effect === "read" ? "Read-only tools" : "Write tools",
+        title: t ? t(effect === "read" ? "readOnlyTools" : "writeTools") : defaultTitle,
         tools: groupTools,
         policy: policies.size === 1 ? [...policies][0]! : null,
       };
@@ -64,12 +72,18 @@ export function groupToolsByEffect(tools: readonly McpToolDescriptorDto[]): Tool
 }
 
 /** "4 allowed · 2 ask · 1 blocked", counting each tool once. */
-export function summarizeToolPolicies(tools: readonly McpToolDescriptorDto[]): string {
+export function summarizeToolPolicies(
+  tools: readonly McpToolDescriptorDto[],
+  t?: ToolPolicyTranslator,
+): string {
   const counts: Record<PluginToolPolicy, number> = { allow: 0, approval: 0, blocked: 0 };
   for (const group of groupToolsByEffect(tools)) {
     for (const tool of group.tools) counts[toolPolicyOf(tool)] += 1;
   }
-  return `${counts.allow} allowed · ${counts.approval} ask · ${counts.blocked} blocked`;
+  const allowed = t ? t("allowedCount") : "allowed";
+  const ask = t ? t("askCount") : "ask";
+  const blocked = t ? t("blockedCount") : "blocked";
+  return `${counts.allow} ${allowed} · ${counts.approval} ${ask} · ${counts.blocked} ${blocked}`;
 }
 
 /** Whether a user trusts a write tool to run without asking — the choice the dialog warns about. */

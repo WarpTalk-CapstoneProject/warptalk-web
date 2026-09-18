@@ -9,11 +9,12 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
-const [layout, overview, sidebar, appLayout] = await Promise.all([
+const [layout, overview, sidebar, appLayout, commonEn] = await Promise.all([
   source("src/app/(app)/admin/layout.tsx"),
   source("src/app/(app)/admin/page.tsx"),
   source("src/components/layout/linear-sidebar.tsx"),
   source("src/app/(app)/layout.tsx"),
+  source("messages/en/common.json").then(JSON.parse),
 ]);
 
 assert.match(layout, /useIsSystemAdmin/, "admin layout must enforce the system-admin gate");
@@ -46,10 +47,16 @@ assert.match(dashboard, /assembleNeedsAttention\(/, "insights must assemble Need
 // A source that errors must degrade to "not available", not take the page down.
 assert.match(overview, /isError \? \{ status: "unavailable" \}/, "an errored source must render as unavailable");
 assert.match(dashboard, /NOT_AVAILABLE_NOTE/, "unavailable sources must say so");
-assert.match(sidebar, /label: "Insights"[\s\S]*href: "\/admin"/, "platform navigation must lead with Insights");
-assert.match(sidebar, /label: "Insights"[\s\S]*href: "\/admin"[\s\S]*exact: true/, "Insights must not stay active on every nested admin route");
-assert.match(sidebar, /label: "Workspaces"[\s\S]*href: "\/admin\/workspaces"/, "platform navigation must expose Workspaces");
-assert.match(sidebar, /label: "Billing"[\s\S]*href: "\/admin\/billing"/, "platform navigation must expose Billing");
+// i18n: these labels render through t("adminNav.items.*") rather than as literal source text —
+// see messages/en/common.json for the English wording each assertion below still pins.
+const adminNavItems = commonEn.sidebar?.adminNav?.items ?? {};
+assert.match(sidebar, /label: t\("adminNav\.items\.insights"\)[\s\S]*href: "\/admin"/, "platform navigation must lead with Insights");
+assert.match(sidebar, /label: t\("adminNav\.items\.insights"\)[\s\S]*href: "\/admin"[\s\S]*exact: true/, "Insights must not stay active on every nested admin route");
+assert.equal(adminNavItems.insights, "Insights", "the Insights nav label must read Insights in English");
+assert.match(sidebar, /label: t\("adminNav\.items\.workspaces"\)[\s\S]*href: "\/admin\/workspaces"/, "platform navigation must expose Workspaces");
+assert.equal(adminNavItems.workspaces, "Workspaces", "the Workspaces nav label must read Workspaces in English");
+assert.match(sidebar, /label: t\("adminNav\.items\.billingLedger"\)[\s\S]*href: "\/admin\/billing"/, "platform navigation must expose Billing");
+assert.equal(adminNavItems.billingLedger, "Billing ledger", "the Billing nav label must read Billing ledger in English");
 assert.match(appLayout, /isAdminRoute/, "platform routes must not require an active workspace");
 
 console.log("Admin portal contract passed.");

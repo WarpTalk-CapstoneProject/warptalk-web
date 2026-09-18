@@ -28,6 +28,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Check, UserPlus, X } from "@phosphor-icons/react/dist/ssr";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -37,6 +38,7 @@ import { translationRoomService } from "@/services/translation-room.service";
 import { useMeetingInviteStore } from "@/stores/meeting-invite-store";
 
 export function MeetingInviteBanner() {
+  const t = useTranslations("rooms.inviteBanner");
   const notice = useMeetingInviteStore((state) => state.notice);
   const dismiss = useMeetingInviteStore((state) => state.dismiss);
   const queryClient = useQueryClient();
@@ -69,13 +71,13 @@ export function MeetingInviteBanner() {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.WORKSPACE_ROOMS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.MEETINGS] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.NOTIFICATIONS] });
-      toast.success("Invitation accepted", { description: notice?.title });
+      toast.success(t("acceptedTitle"), { description: notice?.title });
     },
     onError: () => {
       // Left on screen deliberately — a failed Accept must not look like a completed one, and the
       // button has to still be there to press again.
-      toast.error("Could not accept the invitation", {
-        description: "Try again, or open the meeting from your notifications.",
+      toast.error(t("acceptErrorTitle"), {
+        description: t("acceptErrorDescription"),
       });
     },
   });
@@ -92,7 +94,7 @@ export function MeetingInviteBanner() {
 
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold leading-snug text-ink">
-          {accepted ? "Invitation accepted" : "You've been invited to a meeting"}
+          {accepted ? t("acceptedTitle") : t("invitedTitle")}
         </p>
         <p className="mt-0.5 truncate text-[12px] text-ink-muted" title={notice.title}>
           {notice.title}
@@ -106,12 +108,12 @@ export function MeetingInviteBanner() {
                 onClick={dismiss}
                 className="inline-flex h-[28px] items-center rounded-full bg-foreground px-3.5 text-[12px] font-medium text-background transition hover:opacity-90"
               >
-                Join now
+                {t("joinNow")}
               </Link>
             ) : (
               <span className="inline-flex items-center gap-1 text-[12px] text-ink-muted">
                 <Check size={12} weight="bold" />
-                You&apos;re on the list
+                {t("onTheList")}
               </span>
             )
           ) : (
@@ -127,7 +129,7 @@ export function MeetingInviteBanner() {
                   className="inline-flex h-[28px] items-center gap-1 rounded-full bg-foreground px-3.5 text-[12px] font-medium text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Check size={12} weight="bold" />
-                  {acceptMutation.isPending ? "Accepting…" : "Accept"}
+                  {acceptMutation.isPending ? t("accepting") : t("accept")}
                 </button>
               ) : null}
               {notice.joinHref ? (
@@ -136,7 +138,7 @@ export function MeetingInviteBanner() {
                   onClick={dismiss}
                   className="inline-flex h-[28px] items-center rounded-full border border-border px-3 text-[12px] font-medium text-ink-muted transition hover:text-ink"
                 >
-                  View
+                  {t("view")}
                 </Link>
               ) : null}
             </>
@@ -147,7 +149,7 @@ export function MeetingInviteBanner() {
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss"
+        aria-label={t("dismissAria")}
         className="-mr-1 -mt-1 grid size-6 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <X size={11} weight="bold" />

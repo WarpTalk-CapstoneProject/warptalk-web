@@ -13,7 +13,8 @@ import {
   Trash,
   Upload,
 } from "@phosphor-icons/react/dist/ssr";
-import { useState } from "react";
+import { useTranslations } from "next-intl";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -57,33 +58,31 @@ import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
 const glossaryLanguages = languagesInScope("glossary");
 const glossaryLanguageCodes = new Set(glossaryLanguages.map((language) => language.code));
 
-/** Empty (all languages) or a known code — nothing else. */
-const glossaryLanguageField = z
-  .string()
-  .optional()
-  .refine((value) => !value || glossaryLanguageCodes.has(value), {
-    message: "Choose a language the system supports, or leave it as All languages.",
+type TermFormTranslator = (key: string) => string;
+
+/** Schema is built per-render (inside the component) so its messages come from `t`. */
+function buildTermSchema(t: TermFormTranslator) {
+  /** Empty (all languages) or a known code — nothing else. */
+  const glossaryLanguageField = z
+    .string()
+    .optional()
+    .refine((value) => !value || glossaryLanguageCodes.has(value), {
+      message: t("validation.invalidLanguage"),
+    });
+
+  return z.object({
+    term: z.string().min(3, t("validation.termMin")),
+    preferredTranslation: z.string().min(1, t("validation.translationRequired")),
+    sourceLanguage: glossaryLanguageField,
+    targetLanguage: glossaryLanguageField,
+    businessDomain: z.string().optional(),
+    definition: z.string().optional(),
+    usageNote: z.string().optional(),
+    priority: z.number().min(0).max(10),
   });
+}
 
-const termSchema = z.object({
-  term: z
-    .string()
-    .min(
-      3,
-      "Term must be at least 3 characters — short/common words risk hijacking every meeting's STT.",
-    ),
-  preferredTranslation: z
-    .string()
-    .min(1, "Preferred translation cannot be empty"),
-  sourceLanguage: glossaryLanguageField,
-  targetLanguage: glossaryLanguageField,
-  businessDomain: z.string().optional(),
-  definition: z.string().optional(),
-  usageNote: z.string().optional(),
-  priority: z.number().min(0).max(10),
-});
-
-type TermFormData = z.infer<typeof termSchema>;
+type TermFormData = z.infer<ReturnType<typeof buildTermSchema>>;
 
 const statusFilters = ["all", "draft", "published", "archived"] as const;
 import {
@@ -93,6 +92,7 @@ import {
 } from "@/components/admin/admin-page-chrome";
 
 export default function AdminGlobalGlossaryPage() {
+  const t = useTranslations("adminGlobalGlossary");
   const isSystemAdmin = useIsSystemAdmin();
 
   const [page, setPage] = useState(1);
@@ -125,6 +125,8 @@ export default function AdminGlobalGlossaryPage() {
   const archiveMutation = useArchiveGlobalGlossaryTerm();
   const bulkImportMutation = useBulkImportGlobalGlossaryTerms();
 
+  const termSchema = useMemo(() => buildTermSchema(t), [t]);
+
   const {
     register,
     handleSubmit,
@@ -143,11 +145,8 @@ export default function AdminGlobalGlossaryPage() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
         <ShieldWarning className="h-10 w-10 text-ink-muted" />
-        <p className="text-sm font-semibold text-ink">Admin access required</p>
-        <p className="text-xs text-ink-muted max-w-sm">
-          The global glossary is a system-wide baseline applied to every
-          workspace. Only platform administrators can view or edit it.
-        </p>
+        <p className="text-sm font-semibold text-ink">{t("accessDenied.title")}</p>
+        <p className="text-xs text-ink-muted max-w-sm">{t("accessDenied.description")}</p>
       </div>
     );
   }
@@ -168,11 +167,11 @@ export default function AdminGlobalGlossaryPage() {
         usageNote: data.usageNote || null,
         priority: data.priority,
       });
-      toast.success(`Term "${data.term}" created as draft.`);
+      toast.success(t("toasts.createdDraft", { term: data.term }));
       reset();
       setIsCreateOpen(false);
     } catch {
-      toast.error("Failed to create term.");
+      toast.error(t("toasts.createFailed"));
     }
   };
 
@@ -203,24 +202,20 @@ export default function AdminGlobalGlossaryPage() {
         usageNote: data.usageNote || null,
         priority: data.priority,
       });
-      toast.success(`Term "${data.term}" updated.`);
+      toast.success(t("toasts.updated", { term: data.term }));
       setTermToEdit(null);
     } catch {
-      toast.error("Failed to update term.");
+      toast.error(t("toasts.updateFailed"));
     }
   };
 
   const handlePublish = async (id: string, term: string) => {
     try {
       await publishMutation.mutateAsync(id);
-      toast.success(
-        `"${term}" published — now live for every opted-in workspace.`,
-      );
+      toast.success(t("toasts.published", { term }));
     } catch (err) {
       const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to publish term (a definition is required).";
+        err instanceof Error ? err.message : t("toasts.publishFailedDefault");
       toast.error(message);
     }
   };
@@ -228,9 +223,9 @@ export default function AdminGlobalGlossaryPage() {
   const handleArchive = async (id: string, term: string) => {
     try {
       await archiveMutation.mutateAsync(id);
-      toast.success(`"${term}" archived.`);
+      toast.success(t("toasts.archived", { term }));
     } catch {
-      toast.error("Failed to archive term.");
+      toast.error(t("toasts.archiveFailed"));
     }
   };
 
@@ -238,10 +233,10 @@ export default function AdminGlobalGlossaryPage() {
     if (!termToDelete) return;
     try {
       await deleteMutation.mutateAsync(termToDelete.id);
-      toast.success(`"${termToDelete.term}" deleted.`);
+      toast.success(t("toasts.deleted", { term: termToDelete.term }));
       setTermToDelete(null);
     } catch {
-      toast.error("Failed to delete term.");
+      toast.error(t("toasts.deleteFailed"));
     }
   };
 
@@ -253,7 +248,7 @@ export default function AdminGlobalGlossaryPage() {
     const transIdx = idx("Translation");
 
     if (termIdx === -1 || transIdx === -1) {
-      toast.error("CSV must include at least Term and Translation columns.");
+      toast.error(t("toasts.csvMissingColumns"));
       return;
     }
 
@@ -283,7 +278,7 @@ export default function AdminGlobalGlossaryPage() {
       }));
 
     if (rows.length === 0) {
-      toast.error("No valid rows found.");
+      toast.error(t("toasts.csvNoValidRows"));
       return;
     }
 
@@ -301,43 +296,49 @@ export default function AdminGlobalGlossaryPage() {
     );
     if (badLanguages.length > 0) {
       toast.error(
-        `Unknown language code(s): ${badLanguages.join(", ")}. Use ${[...glossaryLanguageCodes].join(", ")}, or leave the column blank for all languages.`,
+        t("toasts.csvUnknownLanguages", {
+          codes: badLanguages.join(", "),
+          allowed: [...glossaryLanguageCodes].join(", "),
+        }),
       );
       return;
     }
 
     try {
       const result = await bulkImportMutation.mutateAsync({ rows });
-      toast.success(`Imported ${result.imported}, skipped ${result.skipped}.`);
+      toast.success(
+        t("toasts.bulkImported", {
+          imported: result.imported,
+          skipped: result.skipped,
+        }),
+      );
       if (result.errors.length > 0) {
-        toast.info(
-          `${result.errors.length} row(s) had issues — check console.`,
-        );
+        toast.info(t("toasts.bulkImportIssues", { count: result.errors.length }));
         console.warn("Bulk import issues:", result.errors);
       }
       setCsvText("");
       setIsBulkImportOpen(false);
     } catch {
-      toast.error("Bulk import failed.");
+      toast.error(t("toasts.bulkImportFailed"));
     }
   };
 
   return (
     <AdminPage>
         <AdminPageHeader
-          eyebrow="Platform terminology"
+          eyebrow={t("header.eyebrow")}
           eyebrowIcon={<Globe size={14} weight="fill" />}
-          title="Global Glossary"
-          description="System-wide terminology baseline applied to every workspace (unless it opts out). A workspace’s own glossary term always overrides a matching global term."
+          title={t("header.title")}
+          description={t("header.description")}
           actions={
             <>
               <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
                 <Upload className="h-4 w-4" />
-                Bulk import CSV
+                {t("actions.bulkImportCsv")}
               </Button>
               <Button size="sm" onClick={() => setIsCreateOpen(true)}>
                 <Plus className="h-4 w-4" />
-                New term
+                {t("actions.newTerm")}
               </Button>
             </>
           }
@@ -346,14 +347,14 @@ export default function AdminGlobalGlossaryPage() {
         <AdminFilterTabs
           tabs={statusFilters.map((s) => ({
             value: s,
-            label: s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1),
+            label: t(`filters.status.${s}`),
           }))}
           value={status}
           onChange={(value) => {
             setStatus(value);
             setPage(1);
           }}
-          label="Term status"
+          label={t("filters.statusLabel")}
           trailing={
             <Input
               value={search}
@@ -361,7 +362,7 @@ export default function AdminGlobalGlossaryPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search term or translation…"
+              placeholder={t("filters.searchPlaceholder")}
               className="h-7 w-[240px] text-[12px] shadow-none"
             />
           }
@@ -377,17 +378,17 @@ export default function AdminGlobalGlossaryPage() {
           ) : terms.length === 0 ? (
             <div className="flex h-48 flex-col items-center justify-center gap-2 text-center p-6">
               <Globe className="h-8 w-8 text-ink-muted" />
-              <p className="text-sm font-medium">No terms found</p>
+              <p className="text-sm font-medium">{t("table.emptyTitle")}</p>
             </div>
           ) : (
             <div className="min-w-[800px] divide-y divide-hairline">
               <div className="grid grid-cols-[1fr_1fr_100px_80px_90px_140px] items-center gap-3 px-4 py-2 bg-surface-2 text-[10px] font-semibold text-ink-muted uppercase tracking-wider">
-                <span>Term</span>
-                <span>Translation</span>
-                <span>Domain</span>
-                <span>Priority</span>
-                <span>Status</span>
-                <span className="text-right">Actions</span>
+                <span className="truncate">{t("table.term")}</span>
+                <span className="truncate">{t("table.translation")}</span>
+                <span className="truncate">{t("table.domain")}</span>
+                <span className="truncate">{t("table.priority")}</span>
+                <span className="truncate">{t("table.status")}</span>
+                <span className="text-right truncate">{t("table.actions")}</span>
               </div>
 
               {terms.map((term) => (
@@ -409,7 +410,7 @@ export default function AdminGlobalGlossaryPage() {
                     {term.preferredTranslation}
                   </span>
                   <span className="text-xs text-ink-muted truncate">
-                    {term.businessDomain || "—"}
+                    {term.businessDomain || t("table.noDomain")}
                   </span>
                   <span className="text-xs text-ink-muted">
                     {term.priority}
@@ -420,13 +421,13 @@ export default function AdminGlobalGlossaryPage() {
                     }
                     className="w-fit capitalize"
                   >
-                    {term.status}
+                    {t(`filters.status.${term.status}`)}
                   </Badge>
                   <div className="flex justify-end items-center gap-1">
                     <button
                       onClick={() => openEditDialog(term)}
                       className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors"
-                      title="Edit"
+                      title={t("rowActions.edit")}
                     >
                       <PencilSimple className="h-3.5 w-3.5" />
                     </button>
@@ -435,7 +436,7 @@ export default function AdminGlobalGlossaryPage() {
                         onClick={() => handlePublish(term.id, term.term)}
                         disabled={publishMutation.isPending}
                         className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors"
-                        title="Publish"
+                        title={t("rowActions.publish")}
                       >
                         <CheckCircle className="h-3.5 w-3.5" />
                       </button>
@@ -445,7 +446,7 @@ export default function AdminGlobalGlossaryPage() {
                         onClick={() => handleArchive(term.id, term.term)}
                         disabled={archiveMutation.isPending}
                         className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 transition-colors"
-                        title="Archive"
+                        title={t("rowActions.archive")}
                       >
                         <Archive className="h-3.5 w-3.5" />
                       </button>
@@ -453,7 +454,7 @@ export default function AdminGlobalGlossaryPage() {
                     <button
                       onClick={() => setAuditsTermId(term.id)}
                       className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 transition-colors"
-                      title="View audit history"
+                      title={t("rowActions.viewAuditHistory")}
                     >
                       <ClockCounterClockwise className="h-3.5 w-3.5" />
                     </button>
@@ -462,7 +463,7 @@ export default function AdminGlobalGlossaryPage() {
                         setTermToDelete({ id: term.id, term: term.term })
                       }
                       className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors"
-                      title="Delete"
+                      title={t("rowActions.delete")}
                     >
                       <Trash className="h-3.5 w-3.5" />
                     </button>
@@ -481,17 +482,15 @@ export default function AdminGlobalGlossaryPage() {
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             className="h-7 px-2.5 rounded-md border border-hairline bg-surface-1 disabled:opacity-40"
           >
-            Previous
+            {t("pagination.previous")}
           </button>
-          <span>
-            Page {page} of {totalPages} ({totalCount} terms)
-          </span>
+          <span>{t("pagination.summary", { page, totalPages, count: totalCount })}</span>
           <button
             disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             className="h-7 px-2.5 rounded-md border border-hairline bg-surface-1 disabled:opacity-40"
           >
-            Next
+            {t("pagination.next")}
           </button>
         </div>
       )}
@@ -501,11 +500,10 @@ export default function AdminGlobalGlossaryPage() {
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
-              New Global Glossary Term
+              {t("createDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Created as a draft — publish explicitly to make it live for every
-              workspace.
+              {t("createDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -514,10 +512,10 @@ export default function AdminGlobalGlossaryPage() {
             className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
           >
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Term</label>
+              <label className="text-xs font-semibold">{t("fields.term")}</label>
               <Input
                 className="h-8 border-hairline text-xs"
-                placeholder="e.g. architect"
+                placeholder={t("fields.termPlaceholder")}
                 {...register("term")}
               />
               {errors.term && (
@@ -528,11 +526,11 @@ export default function AdminGlobalGlossaryPage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">
-                Preferred Translation
+                {t("fields.preferredTranslation")}
               </label>
               <Input
                 className="h-8 border-hairline text-xs"
-                placeholder="e.g. architect (keep verbatim)"
+                placeholder={t("fields.preferredTranslationPlaceholder")}
                 {...register("preferredTranslation")}
               />
               {errors.preferredTranslation && (
@@ -550,14 +548,14 @@ export default function AdminGlobalGlossaryPage() {
                 every other picker uses — so this cannot drift from what the pipeline accepts. */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">Source Lang (opt.)</label>
+                <label className="text-xs font-semibold">{t("fields.sourceLanguageOptional")}</label>
                 <select
                   className="h-8 rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
                   {...register("sourceLanguage")}
                 >
                   {/* Empty is a real, meaningful choice: a term with no language applies to
                       ALL of them. Named so nobody has to guess what a blank row means. */}
-                  <option value="">All languages</option>
+                  <option value="">{t("fields.allLanguages")}</option>
                   {glossaryLanguages.map((language) => (
                     <option key={language.code} value={language.code}>
                       {language.name}
@@ -566,12 +564,12 @@ export default function AdminGlobalGlossaryPage() {
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">Target Lang (opt.)</label>
+                <label className="text-xs font-semibold">{t("fields.targetLanguageOptional")}</label>
                 <select
                   className="h-8 rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
                   {...register("targetLanguage")}
                 >
-                  <option value="">All languages</option>
+                  <option value="">{t("fields.allLanguages")}</option>
                   {glossaryLanguages.map((language) => (
                     <option key={language.code} value={language.code}>
                       {language.name}
@@ -582,31 +580,31 @@ export default function AdminGlobalGlossaryPage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">
-                Business Domain (opt.)
+                {t("fields.businessDomainOptional")}
               </label>
               <Input
                 className="h-8 border-hairline text-xs"
-                placeholder="e.g. IT, Finance"
+                placeholder={t("fields.businessDomainPlaceholder")}
                 {...register("businessDomain")}
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Definition</label>
+              <label className="text-xs font-semibold">{t("fields.definition")}</label>
               <Input
                 className="h-8 border-hairline text-xs"
-                placeholder="required before publishing"
+                placeholder={t("fields.definitionPlaceholder")}
                 {...register("definition")}
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Usage Note (opt.)</label>
+              <label className="text-xs font-semibold">{t("fields.usageNoteOptional")}</label>
               <Input
                 className="h-8 border-hairline text-xs"
                 {...register("usageNote")}
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Priority (0-10)</label>
+              <label className="text-xs font-semibold">{t("fields.priority")}</label>
               <Input
                 type="number"
                 min={0}
@@ -622,7 +620,7 @@ export default function AdminGlobalGlossaryPage() {
                 onClick={() => setIsCreateOpen(false)}
                 className="h-8 px-3 rounded border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
               >
-                Cancel
+                {t("createDialog.cancel")}
               </button>
               <button
                 type="submit"
@@ -632,7 +630,7 @@ export default function AdminGlobalGlossaryPage() {
                 {isSubmitting ? (
                   <Spinner className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Create Draft"
+                  t("createDialog.submit")
                 )}
               </button>
             </DialogFooter>
@@ -648,10 +646,10 @@ export default function AdminGlobalGlossaryPage() {
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
-              Edit Global Glossary Term
+              {t("editDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Updates are audited and apply immediately when the term is published.
+              {t("editDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -660,7 +658,7 @@ export default function AdminGlobalGlossaryPage() {
             className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
           >
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Term</label>
+              <label className="text-xs font-semibold">{t("fields.term")}</label>
               <Input className="h-8 border-hairline text-xs" {...editForm.register("term")} />
               {editForm.formState.errors.term && (
                 <p className="text-[10px] text-destructive">
@@ -669,7 +667,7 @@ export default function AdminGlobalGlossaryPage() {
               )}
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Preferred Translation</label>
+              <label className="text-xs font-semibold">{t("fields.preferredTranslation")}</label>
               <Input
                 className="h-8 border-hairline text-xs"
                 {...editForm.register("preferredTranslation")}
@@ -682,28 +680,28 @@ export default function AdminGlobalGlossaryPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">Source Lang</label>
+                <label className="text-xs font-semibold">{t("fields.sourceLanguage")}</label>
                 <Input className="h-8 border-hairline text-xs" {...editForm.register("sourceLanguage")} />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold">Target Lang</label>
+                <label className="text-xs font-semibold">{t("fields.targetLanguage")}</label>
                 <Input className="h-8 border-hairline text-xs" {...editForm.register("targetLanguage")} />
               </div>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Business Domain</label>
+              <label className="text-xs font-semibold">{t("fields.businessDomain")}</label>
               <Input className="h-8 border-hairline text-xs" {...editForm.register("businessDomain")} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Definition</label>
+              <label className="text-xs font-semibold">{t("fields.definition")}</label>
               <Input className="h-8 border-hairline text-xs" {...editForm.register("definition")} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Usage Note</label>
+              <label className="text-xs font-semibold">{t("fields.usageNote")}</label>
               <Input className="h-8 border-hairline text-xs" {...editForm.register("usageNote")} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold">Priority (0-10)</label>
+              <label className="text-xs font-semibold">{t("fields.priority")}</label>
               <Input
                 type="number"
                 min={0}
@@ -718,7 +716,7 @@ export default function AdminGlobalGlossaryPage() {
                 onClick={() => setTermToEdit(null)}
                 className="h-8 px-3 rounded border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
               >
-                Cancel
+                {t("editDialog.cancel")}
               </button>
               <button
                 type="submit"
@@ -728,7 +726,7 @@ export default function AdminGlobalGlossaryPage() {
                 {updateMutation.isPending ? (
                   <Spinner className="h-4 w-4 animate-spin" />
                 ) : (
-                  "Save Changes"
+                  t("editDialog.submit")
                 )}
               </button>
             </DialogFooter>
@@ -741,13 +739,10 @@ export default function AdminGlobalGlossaryPage() {
         <DialogContent className="border-hairline bg-surface-1 max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
-              Bulk Import (CSV)
+              {t("bulkImportDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Headers:
-              Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority
-              (only Term and Translation are required). Imported rows land as
-              drafts.
+              {t("bulkImportDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <textarea
@@ -762,7 +757,7 @@ export default function AdminGlobalGlossaryPage() {
               onClick={() => setIsBulkImportOpen(false)}
               className="h-8 px-3 rounded border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
             >
-              Cancel
+              {t("bulkImportDialog.cancel")}
             </button>
             <button
               onClick={handleBulkImport}
@@ -772,7 +767,7 @@ export default function AdminGlobalGlossaryPage() {
               {bulkImportMutation.isPending ? (
                 <Spinner className="h-4 w-4 animate-spin" />
               ) : (
-                "Import"
+                t("bulkImportDialog.submit")
               )}
             </button>
           </DialogFooter>
@@ -787,10 +782,10 @@ export default function AdminGlobalGlossaryPage() {
         <DialogContent className="border-hairline bg-surface-1 max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
-              Audit History
+              {t("auditDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Who changed this term, and when.
+              {t("auditDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[50vh] overflow-y-auto flex flex-col gap-2">
@@ -800,7 +795,7 @@ export default function AdminGlobalGlossaryPage() {
               </div>
             ) : !auditsQuery.data || auditsQuery.data.length === 0 ? (
               <p className="text-xs text-ink-muted text-center py-6">
-                No audit entries yet.
+                {t("auditDialog.noEntries")}
               </p>
             ) : (
               auditsQuery.data.map((audit) => (
@@ -817,7 +812,7 @@ export default function AdminGlobalGlossaryPage() {
                     </span>
                   </div>
                   <p className="text-[10px] text-ink-muted mt-1">
-                    Actor: {audit.actorUserId}
+                    {t("auditDialog.actor", { actorId: audit.actorUserId })}
                   </p>
                 </div>
               ))
@@ -834,15 +829,14 @@ export default function AdminGlobalGlossaryPage() {
         <DialogContent className="border-hairline bg-surface-1 max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-center font-bold text-base">
-              Delete Term?
+              {t("deleteDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted">
-              This removes{" "}
-              <span className="font-semibold text-ink">
-                {termToDelete?.term}
-              </span>{" "}
-              from the global glossary for every workspace. This cannot be
-              undone from the UI.
+              {t.rich("deleteDialog.description", {
+                term: () => (
+                  <span className="font-semibold text-ink">{termToDelete?.term}</span>
+                ),
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex gap-2">
@@ -850,13 +844,13 @@ export default function AdminGlobalGlossaryPage() {
               onClick={() => setTermToDelete(null)}
               className="flex-1 h-8 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition"
             >
-              Cancel
+              {t("deleteDialog.cancel")}
             </button>
             <button
               onClick={handleDelete}
               className="flex-1 h-8 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition"
             >
-              Delete
+              {t("deleteDialog.confirm")}
             </button>
           </DialogFooter>
         </DialogContent>

@@ -19,6 +19,7 @@ import {
 } from "@phosphor-icons/react";
 import { isAxiosError } from "axios";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
@@ -65,17 +66,19 @@ import type {
  */
 const CATALOG_TWO_COLUMN_MINIMUM = 4;
 
-function pluginActionLabel(plugin: AssistantPluginCatalogItemDto) {
+type PluginsT = ReturnType<typeof useTranslations>;
+
+function pluginActionLabel(plugin: AssistantPluginCatalogItemDto, t: PluginsT) {
   // WT-687: one action, as in Claude's connector directory. Installing is a step on the way to
   // connecting, not a separate decision the user has to make first — see handlePrimaryAction.
-  if (plugin.installationStatus !== "installed") return "Connect";
+  if (plugin.installationStatus !== "installed") return t("actionLabels.connect");
   // An installed row the workspace refuses cannot be connected or reconnected, so offering either
   // word would be an instruction that leads to a refusal. "Manage" is the honest one: the dialog
   // it opens still lets the plugin be disconnected and removed.
-  if (pluginWorkspaceBlock(plugin)) return "Manage";
-  if (plugin.connectionStatus === "connected") return "Manage";
-  if (plugin.connectionStatus === "expired" || plugin.connectionStatus === "revoked") return "Reconnect";
-  return "Connect";
+  if (pluginWorkspaceBlock(plugin)) return t("actionLabels.manage");
+  if (plugin.connectionStatus === "connected") return t("actionLabels.manage");
+  if (plugin.connectionStatus === "expired" || plugin.connectionStatus === "revoked") return t("actionLabels.reconnect");
+  return t("actionLabels.connect");
 }
 
 /**
@@ -136,31 +139,34 @@ type ConsentPhase =
   /** A grant exists, but this plugin's own scopes were declined on the consent screen. */
   | "partial";
 
-const CONSENT_NOTICE_COPY: Record<
-  ConsentPhase,
-  { headline: (label: string) => string; detail: string | null; action: string }
-> = {
-  awaiting: {
-    headline: (label) => `Finish connecting ${label} in your browser`,
-    detail: null,
-    action: "Open browser",
-  },
-  blocked: {
-    headline: (label) => `Your browser blocked the ${label} sign-in window`,
-    detail: "Allow pop-ups for WarpTalk, or open it yourself.",
-    action: "Open browser",
-  },
-  unconfirmed: {
-    headline: (label) => `WarpTalk did not receive a ${label} connection`,
-    detail: "If you closed or cancelled the provider page, nothing was changed.",
-    action: "Try again",
-  },
-  partial: {
-    headline: (label) => `${label} is still missing a permission it needs`,
-    detail: "Your account is connected, but a permission this plugin asks for was not approved.",
-    action: "Try again",
-  },
-};
+function consentNoticeCopy(t: PluginsT, phase: ConsentPhase, label: string) {
+  switch (phase) {
+    case "awaiting":
+      return {
+        headline: t("consentNotice.awaitingHeadline", { label }),
+        detail: null,
+        action: t("consentNotice.openBrowser"),
+      };
+    case "blocked":
+      return {
+        headline: t("consentNotice.blockedHeadline", { label }),
+        detail: t("consentNotice.blockedDetail"),
+        action: t("consentNotice.openBrowser"),
+      };
+    case "unconfirmed":
+      return {
+        headline: t("consentNotice.unconfirmedHeadline", { label }),
+        detail: t("consentNotice.unconfirmedDetail"),
+        action: t("consentNotice.tryAgain"),
+      };
+    case "partial":
+      return {
+        headline: t("consentNotice.partialHeadline", { label }),
+        detail: t("consentNotice.partialDetail"),
+        action: t("consentNotice.tryAgain"),
+      };
+  }
+}
 
 function ConnectionNotice({
   plugin,
@@ -173,7 +179,8 @@ function ConnectionNotice({
   onAct: () => void;
   onDismiss: () => void;
 }) {
-  const copy = CONSENT_NOTICE_COPY[phase];
+  const t = useTranslations("pluginsPage");
+  const copy = consentNoticeCopy(t, phase, plugin.label);
 
   return (
     <div
@@ -183,7 +190,7 @@ function ConnectionNotice({
     >
       <PluginGlyph plugin={plugin} size="sm" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{copy.headline(plugin.label)}</p>
+        <p className="truncate text-sm font-medium">{copy.headline}</p>
         {copy.detail ? (
           <p className="truncate text-xs text-ink-muted">{copy.detail}</p>
         ) : null}
@@ -195,7 +202,7 @@ function ConnectionNotice({
         type="button"
         size="icon-sm"
         variant="ghost"
-        aria-label="Dismiss connection notice"
+        aria-label={t("consentNotice.dismissAria")}
         onClick={onDismiss}
       >
         <X size={14} />
@@ -217,6 +224,7 @@ function ConnectionNotice({
  * of rendering an empty box.
  */
 function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
+  const t = useTranslations("pluginsPage");
   const permissions = useMemo(() => {
     const seen = new Set<string>();
     return plugin.tools
@@ -232,8 +240,7 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   if (!permissions.length) {
     return (
       <p className="mt-6 rounded-xl border border-border bg-surface-1 px-4 py-3 text-sm leading-6 text-ink-muted">
-        This plugin publishes its permissions when you connect. The provider&apos;s consent screen lists
-        exactly what it is asking for before you approve.
+        {t("permissionList.empty")}
       </p>
     );
   }
@@ -241,7 +248,7 @@ function PermissionList({ plugin }: { plugin: AssistantPluginCatalogItemDto }) {
   return (
     <div className="mt-6 flex flex-col gap-3">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-ink-muted">
-        Authorizing allows this plugin to
+        {t("permissionList.heading")}
       </h3>
       <ul className="flex flex-col gap-2.5">
         {permissions.map((permission) => (
@@ -311,6 +318,7 @@ function ConnectPluginDialog({
   onDisconnect: () => void;
   onRemove: () => void;
 }) {
+  const t = useTranslations("pluginsPage");
   const [pendingAction, setPendingAction] = useState<"disconnect" | "remove" | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
@@ -331,7 +339,7 @@ function ConnectPluginDialog({
           type="button"
           size="icon-sm"
           variant="ghost"
-          aria-label="Close plugin dialog"
+          aria-label={t("connectDialog.closeAria")}
           onClick={onClose}
           className="absolute right-4 top-4"
         >
@@ -352,17 +360,17 @@ function ConnectPluginDialog({
           </div>
           <div>
             <h2 className="text-lg font-medium leading-snug tracking-tight">
-              <span className="font-semibold">WarpBot</span> by WarpTalk wants access to your{" "}
-              {plugin.label}
+              <span className="font-semibold">{t("connectDialog.titleWarpBot")}</span>{" "}
+              {t("connectDialog.titleWantsAccess", { label: plugin.label })}
             </h2>
             <p className="mt-1.5 text-sm text-ink-muted">
               {isConnected
-                ? `WarpBot can use ${plugin.label} for you.`
+                ? t("connectDialog.subtitleConnected", { label: plugin.label })
                 : usesApiKey
-                  ? `Paste an API key from your own ${plugin.label} account.`
+                  ? t("connectDialog.subtitleApiKey", { label: plugin.label })
                   : grantReusedFrom
-                  ? `Uses the sign-in you already gave WarpTalk for ${grantReusedFrom.label}. No new sign-in.`
-                  : "You will sign in and confirm this on the provider's own page."}
+                  ? t("connectDialog.subtitleReused", { siblingLabel: grantReusedFrom.label })
+                  : t("connectDialog.subtitleDefault")}
             </p>
           </div>
         </div>
@@ -375,7 +383,7 @@ function ConnectPluginDialog({
         <div className="mt-5 flex flex-col gap-2.5 border-t border-border pt-4">
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
             <Prohibit size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
-            WarpTalk is not owned or operated by this provider.
+            {t("connectDialog.notOwned")}
           </p>
           <p className="flex items-start gap-2.5 text-xs leading-5 text-ink-muted">
             <Lock size={14} className="mt-0.5 shrink-0 text-ink-subtle" />
@@ -384,8 +392,9 @@ function ConnectPluginDialog({
                 as three columns. "Every write action asks" stopped being unconditional in WT-687,
                 so the sentence names the exception. */}
             <span>
-              Tokens stay encrypted. <span className="font-medium text-ink">Write</span> actions ask you
-              first unless you allow them.
+              {t.rich("connectDialog.tokensEncrypted", {
+                b: (chunks) => <span className="font-medium text-ink">{chunks}</span>,
+              })}
             </span>
           </p>
           {sharedConnectionPlugins.length ? (
@@ -394,10 +403,10 @@ function ConnectPluginDialog({
               {/* Each plugin is connected on its own; the sign-in is what they share. Connecting
                   one never switches the others on, and disconnecting one never takes them down. */}
               <span>
-                <span className="font-medium text-ink">
-                  {formatPluginLabelList(sharedConnectionPlugins.map((sibling) => sibling.label))}
-                </span>{" "}
-                can reuse this sign-in, but each plugin is connected and disconnected on its own.
+                {t.rich("connectDialog.sharedConnectionNote", {
+                  labels: formatPluginLabelList(sharedConnectionPlugins.map((sibling) => sibling.label)),
+                  b: (chunks) => <span className="font-medium text-ink">{chunks}</span>,
+                })}
               </span>
             </p>
           ) : null}
@@ -419,7 +428,7 @@ function ConnectPluginDialog({
               event.preventDefault();
               const trimmed = apiKey.trim();
               if (!trimmed) {
-                setApiKeyError("Paste an API key first.");
+                setApiKeyError(t("connectDialog.apiKey.empty"));
                 return;
               }
               setApiKeyError(null);
@@ -430,7 +439,7 @@ function ConnectPluginDialog({
             }}
           >
             <label htmlFor="plugin-api-key" className="text-left text-xs font-medium text-ink">
-              {plugin.label} API key
+              {t("connectDialog.apiKey.label", { label: plugin.label })}
             </label>
             <Input
               id="plugin-api-key"
@@ -452,7 +461,7 @@ function ConnectPluginDialog({
               </p>
             ) : (
               <p className="text-left text-xs text-ink-muted">
-                Only you use this key. Disconnect deletes it.
+                {t("connectDialog.apiKey.hint")}
               </p>
             )}
             <Button
@@ -461,7 +470,7 @@ function ConnectPluginDialog({
               className="mt-1 h-10 w-full"
             >
               {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
-              Connect {plugin.label}
+              {t("connectDialog.connectLabel", { label: plugin.label })}
             </Button>
           </form>
         ) : (
@@ -475,10 +484,10 @@ function ConnectPluginDialog({
           >
             {isConnecting ? <Spinner className="animate-spin" size={16} /> : null}
             {coveredByExistingGrant ? (
-              <>Connect {plugin.label}</>
+              <>{t("connectDialog.connectLabel", { label: plugin.label })}</>
             ) : (
               <>
-                Continue to {plugin.label}
+                {t("connectDialog.continueTo", { label: plugin.label })}
                 <ArrowSquareOut size={16} />
               </>
             )}
@@ -490,7 +499,7 @@ function ConnectPluginDialog({
             <CheckCircle size={15} weight="fill" />
             {/* No provider email anywhere in the UI: on a machine already signed into Google it was
                 a developer's personal address, and it read as WarpTalk's own identity. */}
-            Connected to WarpTalk
+            {t("connectDialog.connectedToWarpTalk")}
           </div>
         ) : isPartiallyGranted ? (
           // Without this line the dialog is incoherent: it offers Disconnect, which only exists
@@ -499,8 +508,7 @@ function ConnectPluginDialog({
           // rather than starting from nothing.
           <div className="mt-4 flex items-center justify-center gap-2 text-center text-xs text-amber-700 dark:text-amber-500">
             <Warning size={15} weight="fill" className="shrink-0" />
-            Signed in, but a permission{" "}
-            {plugin.label} needs was not approved. Continue to approve it.
+            {t("connectDialog.partiallyGranted", { label: plugin.label })}
           </div>
         ) : null}
 
@@ -510,8 +518,8 @@ function ConnectPluginDialog({
               <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-1 px-4 py-3">
                 <p className="text-sm leading-6 text-ink-muted">
                   {pendingAction === "disconnect"
-                    ? `Disconnect ${plugin.label}? WarpBot loses access to it until you connect the account again.`
-                    : `Remove ${plugin.label}? Its tools disappear from WarpBot and it is disconnected.`}
+                    ? t("connectDialog.confirmDisconnect", { label: plugin.label })
+                    : t("connectDialog.confirmRemove", { label: plugin.label })}
                 </p>
                 {/* No sibling warning any more: a disconnect ends this plugin's connection only.
                     The shared grant is revoked by the server when the last plugin on it goes. */}
@@ -523,7 +531,7 @@ function ConnectPluginDialog({
                     disabled={isPendingBusy}
                     onClick={() => setPendingAction(null)}
                   >
-                    Cancel
+                    {t("connectDialog.cancel")}
                   </Button>
                   <Button
                     type="button"
@@ -533,13 +541,13 @@ function ConnectPluginDialog({
                     onClick={() => (pendingAction === "disconnect" ? onDisconnect() : onRemove())}
                   >
                     {isPendingBusy ? <Spinner className="animate-spin" size={14} /> : null}
-                    {pendingAction === "disconnect" ? "Disconnect" : "Remove"}
+                    {pendingAction === "disconnect" ? t("connectDialog.disconnect") : t("connectDialog.remove")}
                   </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-ink-muted">Manage this plugin for your own account</span>
+                <span className="text-xs text-ink-muted">{t("connectDialog.manageThisPlugin")}</span>
                 <div className="flex gap-2">
                   {/* The grant, not the plugin's usability — see providerConnectionStatus. */}
                   {hasProviderGrant ? (
@@ -550,7 +558,7 @@ function ConnectPluginDialog({
                       onClick={() => setPendingAction("disconnect")}
                     >
                       <Plugs size={15} />
-                      Disconnect
+                      {t("connectDialog.disconnect")}
                     </Button>
                   ) : null}
                   <Button
@@ -560,7 +568,7 @@ function ConnectPluginDialog({
                     onClick={() => setPendingAction("remove")}
                   >
                     <Trash size={15} />
-                    Remove
+                    {t("connectDialog.remove")}
                   </Button>
                 </div>
               </div>
@@ -590,6 +598,7 @@ function RequestPluginDialog({
   onClose: () => void;
   onSend: (reason: string) => void;
 }) {
+  const t = useTranslations("pluginsPage");
   const [reason, setReason] = useState("");
 
   return (
@@ -597,7 +606,7 @@ function RequestPluginDialog({
       <section
         role="dialog"
         aria-modal="true"
-        aria-label={`Ask for ${plugin.label}`}
+        aria-label={t("requestDialog.ariaLabel", { label: plugin.label })}
         data-testid="plugin-request-dialog"
         className="relative max-h-[90vh] w-full max-w-[520px] overflow-y-auto rounded-2xl border border-border bg-popover p-6 text-ink shadow-2xl"
       >
@@ -605,7 +614,7 @@ function RequestPluginDialog({
           type="button"
           size="icon-sm"
           variant="ghost"
-          aria-label="Close request dialog"
+          aria-label={t("requestDialog.closeAria")}
           onClick={onClose}
           className="absolute right-4 top-4"
         >
@@ -625,10 +634,13 @@ function RequestPluginDialog({
             <PluginGlyph plugin={plugin} size="lg" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold leading-snug tracking-tight">Ask for {plugin.label}</h2>
+            <h2 className="text-lg font-semibold leading-snug tracking-tight">
+              {t("requestDialog.title", { label: plugin.label })}
+            </h2>
             <p className="mx-auto mt-1.5 max-w-[400px] text-sm text-ink-muted">
-              Only a workspace owner can add plugins to {workspaceName?.trim() || "this workspace"}.
-              They&apos;ll get a notification, and you&apos;ll hear back either way.
+              {t("requestDialog.onlyOwnerCanAdd", {
+                workspaceName: workspaceName?.trim() || t("requestDialog.defaultWorkspaceName"),
+              })}
             </p>
           </div>
         </div>
@@ -642,23 +654,24 @@ function RequestPluginDialog({
         >
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             <span>
-              Why do you need it? <span className="font-normal text-ink-muted">Optional</span>
+              {t("requestDialog.reasonLabel")}{" "}
+              <span className="font-normal text-ink-muted">{t("requestDialog.optional")}</span>
             </span>
             <Textarea
               value={reason}
               maxLength={PLUGIN_REQUEST_REASON_MAX}
               onChange={(event) => setReason(event.target.value)}
-              placeholder={`e.g. Use ${plugin.label} with meeting action items`}
+              placeholder={t("requestDialog.reasonPlaceholder", { label: plugin.label })}
               className="min-h-20 bg-surface-1 text-sm"
             />
           </label>
           <div className="mt-2 flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSending}>
-              Cancel
+              {t("connectDialog.cancel")}
             </Button>
             <Button type="submit" disabled={isSending}>
               {isSending ? <Spinner className="animate-spin" size={14} /> : null}
-              Send request
+              {t("requestDialog.sendRequest")}
             </Button>
           </div>
         </form>
@@ -684,24 +697,27 @@ function RequestPluginDialog({
  * ?plugin=<key>&error=<slug> when it could not finish, and these are those slugs. The original tab
  * still settles on focus; the two mechanisms answer different tabs and neither replaces the other.
  */
-const CONSENT_CALLBACK_ERRORS: Record<string, string> = {
-  access_denied: "You cancelled the sign-in, so nothing was connected.",
-  permission_denied: "That sign-in link had already been used or expired. Start the connection again.",
-  unknown_plugin: "That plugin is no longer available.",
-  plugin_not_installed: "That plugin is not installed for this account. Install it, then connect.",
-  connection_required: "The provider did not return lasting access. Connect again and approve the request.",
-  // Deliberately not "try again in a moment": no amount of retrying fixes a client secret that is
-  // not set, and saying otherwise sends the user round the consent screen for as long as they are
-  // willing. The reference is what turns this into something an operator can act on.
-  provider_configuration: "WarpTalk's connection to this provider is not configured correctly. Nothing is wrong with your account.",
-  provider_unavailable: "The provider could not complete the sign-in. Try again in a moment.",
-  // The generic fallback below would say "start the connection again", which is the one thing that
-  // cannot work here: signing in again with the same second account produces the same refusal. One
-  // account connects per provider and every plugin from that provider shares it, so the remedy is
-  // to end the connection that exists before starting another.
-  provider_account_mismatch:
-    "You signed in with a different account than the one already connected. Disconnect the connected account first, then connect this one.",
-};
+/**
+ * The keys CONSENT_CALLBACK_ERRORS answered for — kept as a set so the effect below can validate a
+ * slug from the URL against it before asking the translator for a key that may not exist.
+ * Deliberately not "try again in a moment" for provider_configuration: no amount of retrying fixes
+ * a client secret that is not set, and saying otherwise sends the user round the consent screen for
+ * as long as they are willing. The reference is what turns this into something an operator can act
+ * on. provider_account_mismatch does not say "start the connection again" for the same reason:
+ * signing in again with the same second account produces the same refusal, so the remedy is to end
+ * the connection that exists before starting another. See messages/en/pluginsPage.json
+ * consentCallbackErrors for the actual copy.
+ */
+const CONSENT_CALLBACK_ERROR_KEYS = [
+  "access_denied",
+  "permission_denied",
+  "unknown_plugin",
+  "plugin_not_installed",
+  "connection_required",
+  "provider_configuration",
+  "provider_unavailable",
+  "provider_account_mismatch",
+] as const;
 
 const CONSENT_ROUND_TRIP_FLOOR_MS = 1500;
 
@@ -715,6 +731,7 @@ export default function PluginsPage() {
   // Read from the store rather than from the route: /settings/plugins is deliberately not
   // workspace-shaped (the [workspaceSlug] route redirects here), and the store is where the rest of
   // the shell reads the active workspace on routes like this one.
+  const t = useTranslations("pluginsPage");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
 
@@ -832,7 +849,7 @@ export default function PluginsPage() {
       } catch {
         // Without this the button simply does nothing on a 500: the label never changes, no
         // toast appears, and the only trace is an unhandled rejection in the console.
-        toast.error(`Could not connect ${plugin.label}.`);
+        toast.error(t("toasts.couldNotConnect", { label: plugin.label }));
         return;
       }
       // WT-687: straight on to the connect dialog rather than stopping at "installed". Consent is
@@ -856,7 +873,7 @@ export default function PluginsPage() {
       // There is no consent round trip to wait for, only a catalog to re-read.
       if (result.connected || !result.url) {
         await refetch();
-        toast.success(`${plugin.label} connected`);
+        toast.success(t("toasts.connected", { label: plugin.label }));
         return;
       }
       // `openProviderConsent` reports a blocked pop-up by returning false, and it is the whole
@@ -871,7 +888,7 @@ export default function PluginsPage() {
         openedAt: Date.now(),
       });
     } catch {
-      toast.error(`Could not start the ${plugin.label} connection.`);
+      toast.error(t("toasts.couldNotStartConnection", { label: plugin.label }));
     }
   }
 
@@ -880,14 +897,14 @@ export default function PluginsPage() {
     try {
       await connectWithApiKey.mutateAsync({ pluginKey: plugin.key, apiKey, workspaceId });
       await refetch();
-      toast.success(` connected`);
+      toast.success(t("toasts.connected", { label: plugin.label }));
       return null;
     } catch (error) {
       // The API answers a refused key with a plain-text body, which getErrorMessage does not read.
       const body = isAxiosError(error) ? error.response?.data : undefined;
       return typeof body === "string" && body.trim()
         ? body
-        : getErrorMessage(error, `Could not connect . Check the key and try again.`);
+        : getErrorMessage(error, t("toasts.couldNotConnectApiKey", { label: plugin.label }));
     }
   }
 
@@ -924,11 +941,11 @@ export default function PluginsPage() {
       else if (!scopesSatisfied(row.requiredScopes, row.grantedScopes)) settle("partial");
       else {
         settle(null);
-        toast.success(`${row.label} connected`);
+        toast.success(t("toasts.connected", { label: row.label }));
       }
       return true;
     },
-    [refetch],
+    [refetch, t],
   );
 
   // Announced once, in the tab the provider redirected. No state: the outcome is read straight
@@ -953,23 +970,25 @@ export default function PluginsPage() {
     consentCallbackAnnounced.current = true;
     const pluginKey = params.get("plugin");
     const row = plugins.find((plugin) => plugin.key === pluginKey);
-    const label = row?.label ?? "The plugin";
+    const label = row?.label ?? t("toasts.defaultPluginLabel");
 
     if (error) {
       // The reference only exists on a failure, and only there is it worth reading out: it is the
       // one string a user can quote that turns "it did not work" into a line an operator can find.
       const reference = params.get("ref");
+      const knownError = (CONSENT_CALLBACK_ERROR_KEYS as readonly string[]).includes(error);
       toast.error(
-        (CONSENT_CALLBACK_ERRORS[error] ??
-          `${label} could not be connected. Start the connection again.`) +
-          (reference ? ` (ref ${reference})` : ""),
+        (knownError
+          ? t(`consentCallbackErrors.${error}`)
+          : t("consentCallbackErrors.generic", { label })) +
+          (reference ? t("consentCallbackErrors.refSuffix", { ref: reference }) : ""),
       );
     } else if (status === "partial" || (row && !scopesSatisfied(row.requiredScopes, row.grantedScopes))) {
       // Connected, but the consent screen declined a permission this plugin needs. Saying
       // "connected" here would be the same lie the card takes care not to tell.
-      toast.warning(`${label} is connected, but a permission it needs was not approved.`);
+      toast.warning(t("toasts.partialPermission", { label }));
     } else {
-      toast.success(`${label} connected`);
+      toast.success(t("toasts.connected", { label }));
     }
 
     // Strip it, so a reload does not re-announce an outcome the user has seen and the slug does
@@ -981,7 +1000,7 @@ export default function PluginsPage() {
     params.delete("client");
     const query = params.toString();
     window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
-  }, [isLoading, plugins]);
+  }, [isLoading, plugins, t]);
 
   // A chat surface sent the user here to paste a key (pluginApiKeyPageHref): open that plugin's
   // dialog once the catalog has it, then strip the hint so a reload does not reopen it.
@@ -1026,19 +1045,19 @@ export default function PluginsPage() {
     try {
       await requestPlugin.mutateAsync({ pluginKey: plugin.key, reason });
       setRequestPluginKey(null);
-      toast.success("Request sent to your workspace owner");
+      toast.success(t("toasts.requestSent"));
     } catch {
-      toast.error(`Could not ask for ${plugin.label}.`);
+      toast.error(t("toasts.couldNotAsk", { label: plugin.label }));
     }
   }
 
   async function disconnectSelected(plugin: AssistantPluginCatalogItemDto) {
     try {
       await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
-      toast.success(`${plugin.label} disconnected`);
+      toast.success(t("toasts.disconnected", { label: plugin.label }));
       setSelectedPluginKey(null);
     } catch {
-      toast.error(`Could not disconnect ${plugin.label}.`);
+      toast.error(t("toasts.couldNotDisconnect", { label: plugin.label }));
     }
   }
 
@@ -1057,12 +1076,12 @@ export default function PluginsPage() {
         await disconnectPlugin.mutateAsync({ pluginKey: plugin.key });
       }
       await disablePlugin.mutateAsync({ pluginKey: plugin.key });
-      toast.success(`${plugin.label} removed`);
+      toast.success(t("toasts.removed", { label: plugin.label }));
       setSelectedPluginKey(null);
     } catch {
       // Two calls, and the first can land while the second throws - which leaves the plugin
       // disconnected but still installed. Saying so beats a silent half-removal.
-      toast.error(`Could not finish removing ${plugin.label}.`);
+      toast.error(t("toasts.couldNotFinishRemoving", { label: plugin.label }));
     }
   }
 
@@ -1085,8 +1104,8 @@ export default function PluginsPage() {
       ) : null}
 
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">Plugins</h1>
-        <p className="text-xs text-ink-muted">Work with WarpBot across your favorite tools.</p>
+        <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
+        <p className="text-xs text-ink-muted">{t("header.subtitle")}</p>
       </header>
 
       <div className="relative">
@@ -1094,14 +1113,14 @@ export default function PluginsPage() {
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Filter plugins"
+          placeholder={t("search.placeholder")}
           className="h-9 rounded-full bg-surface-1 pl-9 text-sm"
         />
       </div>
 
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between border-b border-border pb-3">
-          <h2 className="text-sm font-semibold text-ink">Installed</h2>
+          <h2 className="text-sm font-semibold text-ink">{t("installed.title")}</h2>
         </div>
         {installedPlugins.length ? (
           <div className="flex flex-wrap gap-3">
@@ -1120,7 +1139,7 @@ export default function PluginsPage() {
         ) : (
           <div className="flex items-center gap-2 text-xs text-ink-muted">
             <PlugsConnected size={16} weight="duotone" />
-            No plugins installed yet.
+            {t("installed.empty")}
           </div>
         )}
       </section>
@@ -1133,20 +1152,20 @@ export default function PluginsPage() {
               "Featured" would be the same untrue claim as before. A separate featured band is a
               layout change (it has its own empty, filtered and two-column cases) and belongs with
               whoever designs it, not smuggled in behind a sort. */}
-          <h2 className="text-sm font-semibold text-ink">All plugins</h2>
+          <h2 className="text-sm font-semibold text-ink">{t("allPlugins.title")}</h2>
         </div>
 
         {isLoading ? (
           <div className="flex items-center gap-2 py-8 text-sm text-ink-muted">
             <Spinner className="animate-spin" size={16} />
-            Loading plugins...
+            {t("loading")}
           </div>
         ) : isError ? (
           <Card className="border-hairline bg-surface-1 shadow-sm">
             <CardContent className="flex items-center justify-between gap-3 px-0">
-              <span className="text-sm text-destructive">Could not load plugins.</span>
+              <span className="text-sm text-destructive">{t("error.message")}</span>
               <Button type="button" size="sm" variant="outline" onClick={() => void refetch()}>
-                Retry
+                {t("error.retry")}
               </Button>
             </CardContent>
           </Card>
@@ -1155,18 +1174,16 @@ export default function PluginsPage() {
             <div className="flex items-center gap-2 text-sm text-ink-muted">
               <PuzzlePiece size={16} weight="duotone" />
               {query.trim()
-                ? `No plugin in this catalog matches "${query.trim()}".`
-                : "No plugins are available yet."}
+                ? t("empty.withQuery", { query: query.trim() })
+                : t("empty.withoutQuery")}
             </div>
             {query.trim() ? (
               <>
                 {/* The box above narrows the list on this page. Saying "no results" alone would
                     read as "WarpTalk has searched and found nothing", which it has not done. */}
-                <p className="text-xs text-ink-subtle">
-                  This filters the plugins WarpTalk offers today. It does not search a wider marketplace.
-                </p>
+                <p className="text-xs text-ink-subtle">{t("empty.filterNote")}</p>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setQuery("")}>
-                  Clear filter
+                  {t("empty.clearFilter")}
                 </Button>
               </>
             ) : null}
@@ -1187,7 +1204,9 @@ export default function PluginsPage() {
               const isBlockedFromAdding = workspaceBlock !== null && !isInstalled;
               // The marketplace's verdict, when the server sends one: a plugin the workspace has not
               // added becomes a Request, and the old block notice is not rendered beside it.
-              const action = memberPluginAction(plugin, workspaceName);
+              const action = memberPluginAction(plugin, workspaceName, (key, values) =>
+                t(`memberAction.${key}`, values),
+              );
               const hasAvailability = plugin.workspaceAvailability != null;
 
               return (
@@ -1219,11 +1238,11 @@ export default function PluginsPage() {
                         disabled={!workspaceId || requestPlugin.isPending}
                         onClick={() => setRequestPluginKey(plugin.key)}
                       >
-                        Request
+                        {t("actionLabels.request")}
                       </Button>
                     ) : action.kind === "requested" ? (
                       <Button type="button" size="sm" variant="outline" disabled>
-                        Requested
+                        {t("actionLabels.requested")}
                       </Button>
                     ) : (
                       <Button
@@ -1233,7 +1252,7 @@ export default function PluginsPage() {
                         disabled={installPlugin.isPending || connectUrl.isPending || isBlockedFromAdding}
                         onClick={() => void handlePrimaryAction(plugin)}
                       >
-                        {pluginActionLabel(plugin)}
+                        {pluginActionLabel(plugin, t)}
                       </Button>
                     )}
                     {action.caption ? (

@@ -2,18 +2,24 @@
 
 import type { ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { enUS, ja, vi } from "date-fns/locale";
+import { useLocale, useTranslations } from "next-intl";
 import { DeviceMobile, Desktop } from "@phosphor-icons/react";
 
 import { describeSessionDevice } from "@/lib/auth/describe-session-device";
 
-function relative(iso: string): string {
+const DATE_FNS_LOCALES = { en: enUS, vi, ja };
+
+function relative(iso: string, locale: keyof typeof DATE_FNS_LOCALES, unknownLabel: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "unknown" : formatDistanceToNow(date, { addSuffix: true });
+  return Number.isNaN(date.getTime())
+    ? unknownLabel
+    : formatDistanceToNow(date, { addSuffix: true, locale: DATE_FNS_LOCALES[locale] });
 }
 
-function absolute(iso: string): string {
+function absolute(iso: string, locale: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString(locale);
 }
 
 /**
@@ -41,8 +47,12 @@ export function SessionRow({
   isCurrent?: boolean;
   action?: ReactNode;
 }) {
-  const device = describeSessionDevice(deviceInfo);
+  const t = useTranslations("settingsSessions.row");
+  const tRoot = useTranslations("settingsSessions");
+  const locale = useLocale() as keyof typeof DATE_FNS_LOCALES;
+  const device = describeSessionDevice(deviceInfo, (key, values) => tRoot(`deviceLabel.${key}`, values));
   const Icon = device.mobile ? DeviceMobile : Desktop;
+  const unknownLabel = t("unknown");
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
@@ -57,23 +67,29 @@ export function SessionRow({
             </span>
             {isCurrent && (
               <span className="rounded-full border border-primary/20 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
-                This device
+                {t("thisDevice")}
               </span>
             )}
           </span>
           <span className="text-[11px] text-ink-muted">
-            {ipAddress || "Unknown IP"}
+            {ipAddress || t("unknownIp")}
             {lastActiveAt ? (
               <>
                 {" · "}
-                <span title={absolute(lastActiveAt)}>Last active {relative(lastActiveAt)}</span>
+                <span title={absolute(lastActiveAt, locale)}>
+                  {t("lastActive", { when: relative(lastActiveAt, locale, unknownLabel) })}
+                </span>
               </>
             ) : null}
           </span>
           <span className="text-[11px] text-ink-subtle">
-            <span title={absolute(signedInAt)}>Signed in {relative(signedInAt)}</span>
+            <span title={absolute(signedInAt, locale)}>
+              {t("signedIn", { when: relative(signedInAt, locale, unknownLabel) })}
+            </span>
             {" · "}
-            <span title={absolute(expiresAt)}>Expires {relative(expiresAt)}</span>
+            <span title={absolute(expiresAt, locale)}>
+              {t("expires", { when: relative(expiresAt, locale, unknownLabel) })}
+            </span>
           </span>
         </div>
       </div>

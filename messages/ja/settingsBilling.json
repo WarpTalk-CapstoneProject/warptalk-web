@@ -1,0 +1,125 @@
+{
+  "accessDenied": {
+    "title": "アクセスが拒否されました",
+    "description": "ワークスペースのオーナーと管理者のみが請求とサブスクリプションの設定を表示できます。"
+  },
+  "errorState": {
+    "title": "請求データを読み込めませんでした",
+    "description": "残高と使用状況を現在取得できないため、誤った数値を表示するのではなく、何も表示していません。{message}",
+    "httpError": "請求サービスが HTTP {status} を返しました。",
+    "unexpected": "予期しないエラーが発生しました。",
+    "retry": "再試行"
+  },
+  "overages": {
+    "title": "超過利用を許可する",
+    "badge": "推奨",
+    "descriptionOn": "クレジットがゼロになっても、このサイクルで最大 {cap} クレジットまで翻訳を続行します。",
+    "descriptionOff": "クレジットがなくなると会議は停止します。これをオンにすると、プランで許可されている上限まで継続できます。",
+    "manage": "管理",
+    "enable": "有効にする"
+  },
+  "stats": {
+    "creditsRemaining": {
+      "label": "残りクレジット",
+      "granted": "このサイクルで {total} 付与されました。",
+      "noAllowance": "このサイクルには割り当てがありません。",
+      "spent": "サイクル開始以降 {used} 使用しました。",
+      "cycleEnds": "サイクル終了日: {date}"
+    },
+    "currentPlan": {
+      "label": "現在のプラン",
+      "noPlan": "有効なプランがありません",
+      "pricePerCycle": "サイクルごとに {price}。",
+      "noBalance": "会議はクレジット残高に対して課金されます。",
+      "limits": "1会議あたり参加者{participants}人・{languages}言語。",
+      "limitsUnavailable": "プランの上限情報がありません。",
+      "cancelled": "解約済み — {date} に翻訳が停止します。サブスクリプションの管理から再登録できます。",
+      "renews": "更新日: {date}"
+    }
+  },
+  "currentPlanRow": {
+    "label": "現在のプラン",
+    "renewsOn": "{date} に更新",
+    "endsOn": "{date} に終了"
+  },
+  "buyCredits": "クレジットを購入",
+  "manageSubscription": "サブスクリプションを管理",
+  "noSubscription": {
+    "title": "有効なサブスクリプションがありません",
+    "description": "このワークスペースにはまだ請求プランがないため、残高や使用状況を報告できません。プランを選択してクレジットとAI利用状況の記録を開始してください。",
+    "choosePlan": "プランを選択"
+  },
+  "capabilities": {
+    "voiceCloning": "ボイスクローン",
+    "aiAssistant": "AIアシスタント",
+    "customGlossary": "カスタム用語集",
+    "dedicatedGpu": "専用GPU"
+  },
+  "planGrid": {
+    "mostPopular": "人気No.1",
+    "currentPlan": "現在のプラン",
+    "coveredByCurrentPlan": "現在のプランに含まれています",
+    "upgrade": "アップグレード",
+    "choose": "選択",
+    "creditsPerCycle": "{credits} クレジット/サイクル",
+    "limits": "参加者{participants}人・{languages}言語",
+    "everythingInPlus": "{name} のすべての機能に加えて",
+    "moreCreditsAndLimits": "クレジットと上限がさらに増加"
+  },
+  "planPanel": {
+    "currentPlan": "現在のプラン",
+    "noPlan": "有効なプランがありません",
+    "noBalance": "会議はクレジット残高に対して課金されます。",
+    "pricePerYear": "{price} / 年",
+    "pricePerMonth": "{price} / 月",
+    "change": "変更",
+    "choose": "選択",
+    "creditsPerCycle": "サイクルあたりのクレジット",
+    "participantsPerMeeting": "1会議あたりの参加者数",
+    "languagesPerMeeting": "1会議あたりの言語数",
+    "cycle": "サイクル",
+    "cancelled": "解約済みです。このワークスペースの翻訳は {date} に停止します。",
+    "renewsAutomatically": "{date} に自動更新されます。",
+    "doesNotAutoRenew": "自動更新されません — クレジットは {date} に停止します。"
+  },
+  "manageModal": {
+    "title": "サブスクリプションを管理",
+    "description": "現在のプラン、そのサイクル、変更可能な設定です。",
+    "currentPlan": "現在のプラン",
+    "noPlan": "有効なプランがありません",
+    "planType": "プランの種類",
+    "overageCreditsUsed": "使用した超過クレジット",
+    "cappedThisCycle": "このサイクルの上限は {cap}",
+    "nextCreditRefresh": "次回のクレジット更新",
+    "nextBillingDate": "次回請求日",
+    "cancelledNoRenew": "解約済み — このプランは更新されません",
+    "nextPaymentAmount": "次回請求額",
+    "enableOverages": "超過利用を有効にする",
+    "recommended": "推奨",
+    "modifyPlan": "プランを変更",
+    "changePlan": "プランを変更",
+    "reactivating": "再開中…",
+    "resubscribe": "再登録",
+    "cancelling": "解約中…",
+    "confirmCancel": "解約を確定",
+    "cancelPlan": "プランを解約",
+    "managePayments": "支払いを管理",
+    "invoices": "請求書",
+    "cancelledNotice": "このワークスペースの翻訳は {date} に停止します。継続するにはそれまでに再登録してください — 現在の期間はすでに支払い済みのため追加費用はかかりません。",
+    "billingCycle": {
+      "yearly": "年払い",
+      "semiannual": "半年払い",
+      "monthly": "月払い",
+      "unknown": "—"
+    },
+    "toasts": {
+      "overageOn": "クレジットがゼロになっても、プランの上限まで会議は継続します。",
+      "overageOff": "クレジットがなくなると会議は停止します。",
+      "overageFailed": "超過利用の設定を変更できませんでした。",
+      "cancelled": "サブスクリプションを解約しました。期間終了まで有効です。",
+      "cancelFailed": "サブスクリプションを解約できませんでした。",
+      "reactivated": "更新が再開されました。このプランは現在の期間終了後も継続します。",
+      "reactivateFailed": "サブスクリプションを再開できませんでした。"
+    }
+  }
+}

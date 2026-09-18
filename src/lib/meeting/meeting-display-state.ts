@@ -32,7 +32,17 @@ const LABELS: Record<MeetingDisplayState, string> = {
   cancelled: "Cancelled",
 };
 
-/** The spoken/printed name of that state — the label half of the same decision. */
-export function meetingStateLabel(meeting: StatefulMeeting): string {
-  return LABELS[meetingDisplayState(meeting)];
+/**
+ * The spoken/printed name of that state — the label half of the same decision.
+ *
+ * `t` is optional so every caller — and the `node:test` files pinning the English strings —
+ * keeps working unchanged. A translated component passes its own `useTranslations("schedules")`
+ * lookup (e.g. `(state) => t(`states.${state}`)`) instead of hard-coding English here.
+ */
+export function meetingStateLabel(
+  meeting: StatefulMeeting,
+  t?: (state: MeetingDisplayState) => string,
+): string {
+  const state = meetingDisplayState(meeting);
+  return t ? t(state) : LABELS[state];
 }

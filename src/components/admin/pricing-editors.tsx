@@ -16,6 +16,7 @@
  */
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -237,15 +238,13 @@ export function PlanEditDialog({
   onSubmit: (request: PlanRequest) => Promise<unknown>;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.planForm");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Edit plan</DialogTitle>
-          <DialogDescription>
-            Saving replaces the whole plan. Members on it keep their subscription; the new terms
-            apply from their next cycle.
-          </DialogDescription>
+          <DialogTitle>{t("editDialog.title")}</DialogTitle>
+          <DialogDescription>{t("editDialog.description")}</DialogDescription>
         </DialogHeader>
 
         {plan ? (
@@ -306,15 +305,13 @@ export function PlanCreateDialog({
   onSubmit: (request: PlanRequest) => Promise<unknown>;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.planForm");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>New plan</DialogTitle>
-          <DialogDescription>
-            Creates a catalogue entry. Nobody is subscribed to it until a subscription is moved
-            onto it or a checkout sells it; leave it hidden to stage it.
-          </DialogDescription>
+          <DialogTitle>{t("createDialog.title")}</DialogTitle>
+          <DialogDescription>{t("createDialog.description")}</DialogDescription>
         </DialogHeader>
 
         {open ? (
@@ -345,6 +342,7 @@ function PlanEditForm({
   onSaved: () => void;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.planForm");
   const [draft, setDraft] = useState<PlanDraft>(() => draftFromPlan(plan));
   const [error, setError] = useState<string | null>(null);
 
@@ -367,36 +365,36 @@ function PlanEditForm({
       await onSubmit(request);
       onSaved();
     } catch (err) {
-      setError(getErrorMessage(err, "The plan could not be saved."));
+      setError(getErrorMessage(err, t("saveError")));
     }
   };
 
   return (
     <>
         <div className="mt-4 grid gap-5">
-            <Section title="Identity">
-              <Field label="Name" htmlFor="plan-name">
+            <Section title={t("sections.identity")}>
+              <Field label={t("fields.name")} htmlFor="plan-name">
                 <Input
                   id="plan-name"
                   value={draft.name}
                   onChange={(event) => set("name", event.target.value)}
                 />
               </Field>
-              <Field label="Slug" htmlFor="plan-slug" hint="Lowercase, digits and hyphens.">
+              <Field label={t("fields.slug")} htmlFor="plan-slug" hint={t("fields.slugHint")}>
                 <Input
                   id="plan-slug"
                   value={draft.slug}
                   onChange={(event) => set("slug", event.target.value)}
                 />
               </Field>
-              <Field label="Tier" htmlFor="plan-tier">
+              <Field label={t("fields.tier")} htmlFor="plan-tier">
                 <Input
                   id="plan-tier"
                   value={draft.tier}
                   onChange={(event) => set("tier", event.target.value)}
                 />
               </Field>
-              <Field label="Sort order" htmlFor="plan-sort" hint="Where it sits on the pricing page.">
+              <Field label={t("fields.sortOrder")} htmlFor="plan-sort" hint={t("fields.sortOrderHint")}>
                 <Input
                   id="plan-sort"
                   inputMode="numeric"
@@ -405,15 +403,15 @@ function PlanEditForm({
                 />
               </Field>
               <ToggleField
-                label="Active"
-                hint="Hidden plans stay on old invoices. This is how a plan is retired — there is no delete."
+                label={t("fields.active")}
+                hint={t("fields.activeHint")}
                 checked={draft.isActive}
                 onChange={(next) => set("isActive", next)}
               />
             </Section>
 
-            <Section title="Price">
-              <Field label="Price" htmlFor="plan-price">
+            <Section title={t("sections.price")}>
+              <Field label={t("fields.price")} htmlFor="plan-price">
                 <Input
                   id="plan-price"
                   inputMode="decimal"
@@ -421,7 +419,7 @@ function PlanEditForm({
                   onChange={(event) => set("price", event.target.value)}
                 />
               </Field>
-              <Field label="Currency" htmlFor="plan-currency">
+              <Field label={t("fields.currency")} htmlFor="plan-currency">
                 <select
                   id="plan-currency"
                   value={draft.currency}
@@ -436,17 +434,17 @@ function PlanEditForm({
                 </select>
               </Field>
               <Field
-                label="Billing cycle"
+                label={t("fields.billingCycle")}
                 htmlFor="plan-cycle"
-                hint="Monthly only — the update endpoint accepts no other value."
+                hint={t("fields.billingCycleHint")}
                 className="sm:col-span-2"
               >
                 <Input id="plan-cycle" value={PLAN_BILLING_CYCLE} disabled readOnly />
               </Field>
             </Section>
 
-            <Section title="Credits and overage">
-              <Field label="Credits per cycle" htmlFor="plan-credits">
+            <Section title={t("sections.creditsOverage")}>
+              <Field label={t("fields.creditsPerCycle")} htmlFor="plan-credits">
                 <Input
                   id="plan-credits"
                   inputMode="numeric"
@@ -455,9 +453,9 @@ function PlanEditForm({
                 />
               </Field>
               <Field
-                label="Overage cap (credits)"
+                label={t("fields.overageCap")}
                 htmlFor="plan-overage-cap"
-                hint="Zero means the plan allows no overage."
+                hint={t("fields.overageCapHint")}
               >
                 <Input
                   id="plan-overage-cap"
@@ -466,7 +464,7 @@ function PlanEditForm({
                   onChange={(event) => set("overageCapCredits", event.target.value)}
                 />
               </Field>
-              <Field label="Overage price per credit" htmlFor="plan-overage-price">
+              <Field label={t("fields.overagePrice")} htmlFor="plan-overage-price">
                 <Input
                   id="plan-overage-price"
                   inputMode="decimal"
@@ -475,9 +473,9 @@ function PlanEditForm({
                 />
               </Field>
               <Field
-                label="Low-balance threshold"
+                label={t("fields.lowBalance")}
                 htmlFor="plan-low-balance"
-                hint="Must sit above the overage cap, or the warning lands after billing starts."
+                hint={t("fields.lowBalanceHint")}
               >
                 <Input
                   id="plan-low-balance"
@@ -486,7 +484,7 @@ function PlanEditForm({
                   onChange={(event) => set("lowBalanceThresholdCredits", event.target.value)}
                 />
               </Field>
-              <Field label="Rollover cap (credits)" htmlFor="plan-rollover">
+              <Field label={t("fields.rolloverCap")} htmlFor="plan-rollover">
                 <Input
                   id="plan-rollover"
                   inputMode="numeric"
@@ -496,8 +494,8 @@ function PlanEditForm({
               </Field>
             </Section>
 
-            <Section title="Invoicing">
-              <Field label="Terms (days)" htmlFor="plan-terms">
+            <Section title={t("sections.invoicing")}>
+              <Field label={t("fields.invoiceTerms")} htmlFor="plan-terms">
                 <Input
                   id="plan-terms"
                   inputMode="numeric"
@@ -505,7 +503,7 @@ function PlanEditForm({
                   onChange={(event) => set("invoiceTermsDays", event.target.value)}
                 />
               </Field>
-              <Field label="Grace (hours)" htmlFor="plan-grace">
+              <Field label={t("fields.invoiceGrace")} htmlFor="plan-grace">
                 <Input
                   id="plan-grace"
                   inputMode="numeric"
@@ -515,8 +513,8 @@ function PlanEditForm({
               </Field>
             </Section>
 
-            <Section title="Limits">
-              <Field label="Max participants" htmlFor="plan-participants">
+            <Section title={t("sections.limits")}>
+              <Field label={t("fields.maxParticipants")} htmlFor="plan-participants">
                 <Input
                   id="plan-participants"
                   inputMode="numeric"
@@ -524,7 +522,7 @@ function PlanEditForm({
                   onChange={(event) => set("maxParticipants", event.target.value)}
                 />
               </Field>
-              <Field label="Max languages" htmlFor="plan-languages" hint="Between 1 and 3.">
+              <Field label={t("fields.maxLanguages")} htmlFor="plan-languages" hint={t("fields.maxLanguagesHint")}>
                 <Input
                   id="plan-languages"
                   inputMode="numeric"
@@ -534,31 +532,31 @@ function PlanEditForm({
               </Field>
             </Section>
 
-            <Section title="Entitlements">
+            <Section title={t("sections.entitlements")}>
               <ToggleField
-                label="Voice cloning"
+                label={t("fields.voiceCloning")}
                 checked={draft.voiceCloneEnabled}
                 onChange={(next) => set("voiceCloneEnabled", next)}
               />
               <ToggleField
-                label="AI assistant"
+                label={t("fields.aiAssistant")}
                 checked={draft.aiAssistantEnabled}
                 onChange={(next) => set("aiAssistantEnabled", next)}
               />
               <ToggleField
-                label="Glossary"
+                label={t("fields.glossary")}
                 checked={draft.glossaryEnabled}
                 onChange={(next) => set("glossaryEnabled", next)}
               />
               <ToggleField
-                label="Dedicated GPU"
+                label={t("fields.dedicatedGpu")}
                 checked={draft.dedicatedGpu}
                 onChange={(next) => set("dedicatedGpu", next)}
               />
               <Field
-                label="Features"
+                label={t("fields.features")}
                 htmlFor="plan-features"
-                hint="The JSON blob the pricing page reads. An array or an object."
+                hint={t("fields.featuresHint")}
                 className="sm:col-span-2"
               >
                 <Textarea
@@ -576,10 +574,10 @@ function PlanEditForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={() => void handleSave()} disabled={isSaving}>
-          {isSaving ? "Saving…" : "Save plan"}
+          {isSaving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
     </>
@@ -621,16 +619,13 @@ export function RateCardEditDialog({
   onSubmit: (request: UpsertUsageRateCardRequest) => Promise<unknown>;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.rateCard");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Edit rate card</DialogTitle>
-          <DialogDescription>
-            What this unit sells for and what it costs to serve. The charge type, provider and
-            model identify the card and cannot be retyped here — a new billing identity arrives
-            with the migration that registers it.
-          </DialogDescription>
+          <DialogTitle>{t("editDialog.title")}</DialogTitle>
+          <DialogDescription>{t("editDialog.description")}</DialogDescription>
         </DialogHeader>
 
         {card ? (
@@ -661,6 +656,7 @@ function RateCardEditForm({
   onSaved: () => void;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.rateCard");
   const [draft, setDraft] = useState<RateCardDraft>(() => draftFromCard(card));
   const [error, setError] = useState<string | null>(null);
 
@@ -669,8 +665,8 @@ function RateCardEditForm({
       card.sourceLanguageCode || card.targetLanguageCode
         ? ` · ${card.sourceLanguageCode ?? "*"}→${card.targetLanguageCode ?? "*"}`
         : "";
-    return `${card.chargeType} · ${card.provider}${card.model ? ` · ${card.model}` : ""} · per ${card.unit}${scope}`;
-  }, [card]);
+    return `${card.chargeType} · ${card.provider}${card.model ? ` · ${card.model}` : ""} · ${t("perUnit", { unit: card.unit })}${scope}`;
+  }, [card, t]);
 
   const set = <K extends keyof RateCardDraft>(key: K, value: RateCardDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -701,7 +697,7 @@ function RateCardEditForm({
       setPreview({ inputs: previewable, result });
     } catch (err) {
       setPreview(null);
-      setError(getErrorMessage(err, "The pricing preview could not be calculated."));
+      setError(getErrorMessage(err, t("errors.previewFailed")));
     }
   };
 
@@ -709,14 +705,14 @@ function RateCardEditForm({
     if (!saveGate.ok) {
       setError(
         saveGate.reason === "preview-stale"
-          ? "Cost or markup changed since the preview. Preview again before saving."
-          : "Preview the new pricing before saving a change to cost or markup.",
+          ? t("errors.previewStale")
+          : t("errors.previewRequired"),
       );
       return;
     }
     const unitPrice = toNumber(draft.unitPrice);
     if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-      setError("Unit price must be a positive amount.");
+      setError(t("errors.unitPriceInvalid"));
       return;
     }
 
@@ -724,13 +720,13 @@ function RateCardEditForm({
     // an unknown rather than a zero. Only a typed value is parsed.
     const cost = draft.providerUnitCostUsd.trim() === "" ? null : toNumber(draft.providerUnitCostUsd);
     if (cost != null && (!Number.isFinite(cost) || cost < 0)) {
-      setError("Provider cost must be a positive amount in USD, or left blank.");
+      setError(t("errors.providerCostInvalid"));
       return;
     }
 
     const markup = draft.markupMultiplier.trim() === "" ? null : toNumber(draft.markupMultiplier);
     if (markup != null && (!Number.isFinite(markup) || markup <= 0)) {
-      setError("Markup multiplier must be above zero, or left blank.");
+      setError(t("errors.markupInvalid"));
       return;
     }
 
@@ -753,7 +749,7 @@ function RateCardEditForm({
       });
       onSaved();
     } catch (err) {
-      setError(getErrorMessage(err, "The rate card could not be saved."));
+      setError(getErrorMessage(err, t("errors.saveFailed")));
     }
   };
 
@@ -765,7 +761,7 @@ function RateCardEditForm({
             </p>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Unit price" htmlFor="card-price">
+              <Field label={t("fields.unitPrice")} htmlFor="card-price">
                 <Input
                   id="card-price"
                   inputMode="decimal"
@@ -773,7 +769,7 @@ function RateCardEditForm({
                   onChange={(event) => set("unitPrice", event.target.value)}
                 />
               </Field>
-              <Field label="Currency" htmlFor="card-currency">
+              <Field label={t("fields.currency")} htmlFor="card-currency">
                 <select
                   id="card-currency"
                   value={draft.currency}
@@ -788,9 +784,9 @@ function RateCardEditForm({
                 </select>
               </Field>
               <Field
-                label="Provider cost (USD)"
+                label={t("fields.providerCost")}
                 htmlFor="card-cost"
-                hint="Blank means no cost is recorded. Not the same as zero."
+                hint={t("fields.providerCostHint")}
               >
                 <Input
                   id="card-cost"
@@ -800,9 +796,9 @@ function RateCardEditForm({
                 />
               </Field>
               <Field
-                label="Markup multiplier"
+                label={t("fields.markup")}
                 htmlFor="card-markup"
-                hint="What the margin column reports. Blank leaves it to be derived, or left unknown."
+                hint={t("fields.markupHint")}
               >
                 <Input
                   id="card-markup"
@@ -816,11 +812,9 @@ function RateCardEditForm({
         <div className="rounded-lg border border-hairline/60 px-3 py-2.5">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[13px] text-ink">Pricing preview</p>
+              <p className="text-[13px] text-ink">{t("preview.heading")}</p>
               <p className="mt-0.5 text-[11px] text-ink-subtle">
-                {previewable
-                  ? "Prices one unit at this cost and markup against the stored FX rate and credit value. Publishes nothing."
-                  : "Enter both a provider cost and a markup to preview."}
+                {previewable ? t("preview.hintReady") : t("preview.hintNotReady")}
               </p>
             </div>
             <Button
@@ -829,7 +823,7 @@ function RateCardEditForm({
               onClick={() => void handlePreview()}
               disabled={!previewable || previewMutation.isPending || isSaving}
             >
-              {previewMutation.isPending ? "Pricing…" : "Preview"}
+              {previewMutation.isPending ? t("preview.pricing") : t("preview.button")}
             </Button>
           </div>
           {preview ? (
@@ -839,17 +833,19 @@ function RateCardEditForm({
                 !saveGate.ok && "opacity-50",
               )}
             >
-              <dt className="text-ink-muted">Credits per unit</dt>
+              <dt className="text-ink-muted">{t("preview.creditsPerUnit")}</dt>
               <dd className="text-right tabular-nums text-ink">{preview.result.unitPriceCredits}</dd>
-              <dt className="text-ink-muted">Customer price</dt>
+              <dt className="text-ink-muted">{t("preview.customerPrice")}</dt>
               <dd className="text-right tabular-nums text-ink">
-                {formatAdminMoney({ amount: preview.result.customerPriceVnd, currency: "VND" })} (VND)
+                {formatAdminMoney({ amount: preview.result.customerPriceVnd, currency: "VND" })}{" "}
+                {t("preview.vndSuffix")}
               </dd>
-              <dt className="text-ink-muted">Provider cost</dt>
+              <dt className="text-ink-muted">{t("preview.providerCost")}</dt>
               <dd className="text-right tabular-nums text-ink">
-                {formatAdminMoney({ amount: preview.result.providerCostVnd, currency: "VND" })} (VND)
+                {formatAdminMoney({ amount: preview.result.providerCostVnd, currency: "VND" })}{" "}
+                {t("preview.vndSuffix")}
               </dd>
-              <dt className="text-ink-muted">Margin</dt>
+              <dt className="text-ink-muted">{t("preview.margin")}</dt>
               <dd
                 className={cn(
                   "text-right font-semibold tabular-nums",
@@ -860,16 +856,19 @@ function RateCardEditForm({
                 {formatMarginRatio(preview.result.marginRatio)}
               </dd>
               <dt className="col-span-2 mt-1 font-mono text-[10px] text-ink-subtle">
-                {preview.result.formula} · FX {preview.result.fxRateUsdVnd} · credit{" "}
-                {preview.result.creditValueVnd} VND
+                {t("preview.formulaLine", {
+                  formula: preview.result.formula,
+                  fx: preview.result.fxRateUsdVnd,
+                  credit: preview.result.creditValueVnd,
+                })}
               </dt>
             </dl>
           ) : null}
         </div>
 
         <ToggleField
-          label="Active"
-          hint="An inactive card stops being charged against; the row stays for the invoices that used it."
+          label={t("fields.active")}
+          hint={t("fields.activeHint")}
           checked={draft.isActive}
           onChange={(next) => set("isActive", next)}
         />
@@ -879,10 +878,10 @@ function RateCardEditForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={() => void handleSave()} disabled={isSaving || !saveGate.ok}>
-          {isSaving ? "Saving…" : "Save rate card"}
+          {isSaving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
     </>
@@ -937,6 +936,8 @@ function RateCardDeactivateForm({
   onCancel: () => void;
   onConfirm: () => Promise<void>;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.deactivate");
+  const tRateCard = useTranslations("adminPlansSettings.pricingEditors.rateCard");
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
   const matches = typed.trim() === card.chargeType;
@@ -947,28 +948,24 @@ function RateCardDeactivateForm({
       setError(null);
       await onConfirm();
     } catch (err) {
-      setError(getErrorMessage(err, "The rate card could not be deactivated."));
+      setError(getErrorMessage(err, t("error")));
     }
   };
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Deactivate this rate card?</DialogTitle>
-        <DialogDescription>
-          It stops pricing new usage now and leaves this list — it cannot be reactivated from this
-          screen. Usage that resolves to it is not charged until a new rate is published for the
-          identity. The row itself stays, because settled charges point at it.
-        </DialogDescription>
+        <DialogTitle>{t("title")}</DialogTitle>
+        <DialogDescription>{t("description")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-3">
         <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 font-mono text-[11px] text-ink-muted">
           {card.chargeType} · {card.provider}
-          {card.model ? ` · ${card.model}` : ""} · per {card.unit} ·{" "}
+          {card.model ? ` · ${card.model}` : ""} · {tRateCard("perUnit", { unit: card.unit })} ·{" "}
           {formatAdminMoney({ amount: card.unitPrice, currency: card.currency })} ({card.currency})
         </p>
-        <Field label={`Type ${card.chargeType} to confirm`} htmlFor="card-deactivate-confirm">
+        <Field label={t("confirmLabel", { chargeType: card.chargeType })} htmlFor="card-deactivate-confirm">
           <Input
             id="card-deactivate-confirm"
             className="font-mono"
@@ -983,10 +980,10 @@ function RateCardDeactivateForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Back
+          {t("back")}
         </Button>
         <Button variant="destructive" onClick={() => void handleConfirm()} disabled={!matches || isSaving}>
-          {isSaving ? "Deactivating…" : "Deactivate"}
+          {isSaving ? t("deactivating") : t("confirm")}
         </Button>
       </DialogFooter>
     </>
@@ -1001,28 +998,33 @@ function RateCardDeactivateForm({
  * `formula` and `resolverKey` are on the DTO and not here on purpose: they describe how the config
  * was resolved rather than what it holds, and `UpdatePricingConfigRequest` has no room for them.
  */
-const CONFIG_FIELDS: {
-  key: keyof UpdatePricingConfigRequest;
-  label: string;
-  hint?: string;
-}[] = [
-  { key: "fxRateUsdVnd", label: "FX rate USD→VND", hint: "How a USD provider cost is read in VND." },
-  { key: "creditValueVnd", label: "Credit value (VND)" },
-  {
-    key: "minimumPricePerCreditVnd",
-    label: "Minimum price per credit (VND)",
-    hint: "The floor a VND plan's price ÷ credits is checked against.",
-  },
-  { key: "minimumContractPriceVnd", label: "Minimum contract price (VND)" },
-  { key: "minimumContractPriceUsd", label: "Minimum contract price (USD)" },
-  { key: "salesUsageWeight", label: "Sales weight · usage" },
-  { key: "salesMembersWeight", label: "Sales weight · members" },
-  { key: "salesLanguagesWeight", label: "Sales weight · languages" },
-  { key: "salesAiServicesWeight", label: "Sales weight · AI services" },
-  { key: "defaultOverageCapRatio", label: "Default overage cap ratio" },
-  { key: "defaultInvoiceTermsDays", label: "Default invoice terms (days)" },
-  { key: "defaultInvoiceGraceHours", label: "Default invoice grace (hours)" },
+const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
+  "fxRateUsdVnd",
+  "creditValueVnd",
+  "minimumPricePerCreditVnd",
+  "minimumContractPriceVnd",
+  "minimumContractPriceUsd",
+  "salesUsageWeight",
+  "salesMembersWeight",
+  "salesLanguagesWeight",
+  "salesAiServicesWeight",
+  "defaultOverageCapRatio",
+  "defaultInvoiceTermsDays",
+  "defaultInvoiceGraceHours",
 ];
+
+function useConfigFields(
+  t: ReturnType<typeof useTranslations>,
+): { key: keyof UpdatePricingConfigRequest; label: string; hint?: string }[] {
+  return useMemo(
+    () =>
+      CONFIG_FIELD_KEYS.map((key) => {
+        const hint = t.has(`fields.${key}.hint`) ? t(`fields.${key}.hint`) : undefined;
+        return { key, label: t(`fields.${key}.label`), hint };
+      }),
+    [t],
+  );
+}
 
 export function PricingConfigDialog({
   config,
@@ -1037,16 +1039,13 @@ export function PricingConfigDialog({
   onSubmit: (request: UpdatePricingConfigRequest) => Promise<unknown>;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.config");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] gap-0 overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Edit pricing configuration</DialogTitle>
-          <DialogDescription>
-            Platform-wide. These are the floors and rates every plan is validated against and every
-            quote is built from, so a change here can make an existing plan invalid on its next
-            edit.
-          </DialogDescription>
+          <DialogTitle>{t("dialog.title")}</DialogTitle>
+          <DialogDescription>{t("dialog.description")}</DialogDescription>
         </DialogHeader>
 
         {config ? (
@@ -1076,21 +1075,23 @@ function PricingConfigForm({
   onSaved: () => void;
   isSaving: boolean;
 }) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.config");
+  const configFields = useConfigFields(t);
   const [draft, setDraft] = useState<Record<string, string>>(() =>
-    Object.fromEntries(CONFIG_FIELDS.map(({ key }) => [key, String(config[key])])),
+    Object.fromEntries(configFields.map(({ key }) => [key, String(config[key])])),
   );
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
     const parsed: Partial<UpdatePricingConfigRequest> = {};
-    for (const { key, label } of CONFIG_FIELDS) {
+    for (const { key, label } of configFields) {
       const value = toNumber(draft[key] ?? "");
       if (!Number.isFinite(value)) {
-        setError(`${label} must be a number.`);
+        setError(t("numberError", { label }));
         return;
       }
       if (value < 0) {
-        setError(`${label} cannot be negative.`);
+        setError(t("negativeError", { label }));
         return;
       }
       parsed[key] = value;
@@ -1101,7 +1102,7 @@ function PricingConfigForm({
       await onSubmit(parsed as UpdatePricingConfigRequest);
       onSaved();
     } catch (err) {
-      setError(getErrorMessage(err, "The pricing configuration could not be saved."));
+      setError(getErrorMessage(err, t("saveError")));
     }
   };
 
@@ -1109,7 +1110,7 @@ function PricingConfigForm({
     <>
       <div className="mt-4 grid gap-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          {CONFIG_FIELDS.map(({ key, label, hint }) => (
+          {configFields.map(({ key, label, hint }) => (
             <Field key={key} label={label} hint={hint} htmlFor={`config-${key}`}>
               <Input
                 id={`config-${key}`}
@@ -1128,10 +1129,10 @@ function PricingConfigForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={() => void handleSave()} disabled={isSaving}>
-          {isSaving ? "Saving…" : "Save configuration"}
+          {isSaving ? t("saving") : t("save")}
         </Button>
       </DialogFooter>
     </>

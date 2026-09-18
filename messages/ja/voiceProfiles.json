@@ -1,0 +1,134 @@
+{
+  "filters": {
+    "allVoices": "すべての音声",
+    "mine": "自分の音声",
+    "library": "ライブラリ",
+    "needsAttention": "要確認"
+  },
+  "search": { "placeholder": "音声を検索...", "ariaLabel": "音声を検索" },
+  "createProfile": "音声プロファイルを作成",
+  "consent": {
+    "title": "ミーティングでのあなたの声の複製",
+    "allowed": "許可済み",
+    "descriptionGranted": "ミーティングは、あなたの発話の最初の数秒から音声モデルを構築し、その声であなたを吹き替えることがあります。このモデルは生体情報であり、あなたの発言の吹き替えにのみ使用され、この許可を取り消した時点で使用を停止します。",
+    "descriptionOff": "オフです。ミーティングはあなたのライブ音声から声を作成しません — 翻訳された発言はライブラリの音声で読み上げられます。以下で音声をアップロードすることは別の権限であり、これをオンにしなくても機能します。",
+    "loading": "読み込み中…",
+    "granted": "許可日",
+    "termsVersion": "・規約 {version}",
+    "withdraw": "取り消す",
+    "allowIt": "許可する",
+    "toasts": {
+      "withdrawn": "取り消しました。ミーティングはあなたの声を複製しません。",
+      "withdrawFailed": "同意を取り消せませんでした。もう一度お試しください。",
+      "granted": "ミーティングがあなたの声を複製できるようになりました。",
+      "grantFailed": "同意を記録できませんでした。もう一度お試しください。"
+    }
+  },
+  "dubPicker": {
+    "title": "吹き替えに使う声",
+    "description": "別の言語を聞いている人にどう聞こえるか。",
+    "cloneLiveOption": "ミーティング中にライブで声を複製する",
+    "myVoice": "自分の声",
+    "voiceYouPicked": "選択した声",
+    "yourVoicesGroup": "自分の声",
+    "libraryVoicesGroup": "ライブラリの声・{language}",
+    "ariaLabel": "吹き替えに使う声",
+    "cloneMeLiveInstead": "代わりにライブで複製する",
+    "toasts": {
+      "savedDubbed": "保存しました。この声で吹き替えられます。",
+      "backToLiveClone": "ライブ複製に戻りました。",
+      "saveFailed": "吹き替えに使う声を保存できませんでした。"
+    }
+  },
+  "library": {
+    "title": "ライブラリの音声",
+    "languageAriaLabel": "音声ライブラリの言語",
+    "loading": "音声を読み込み中…",
+    "noVoicesTitle": "{language}のライブラリ音声はありません",
+    "noVoicesDescription": "この言語にはCartesiaの音声が公開されていないか、再起動後にライブラリがまだ読み込み中です。",
+    "noMatch": "検索に一致するライブラリの音声はありません。",
+    "youHearThis": "代役の声",
+    "yourDefault": "あなたの代役",
+    "clear": "クリア",
+    "use": "使用",
+    "toasts": {
+      "setAsHeard": "保存しました — 自分の声を持たない、この言語の話者に使われます。",
+      "clearedAutomatic": "クリアしました — 自動音声に戻ります。",
+      "saveFailed": "代役の声を保存できませんでした。"
+    }
+  },
+  "listeningSummary": {
+    "title": "代役の声",
+    "description": "自分の声を選んでいない{language}の話者に使われます。選んでいる人は、その人自身の声で聞こえます。",
+    "automatic": "自動",
+    "loading": "読み込み中…",
+    "savedVoice": "保存済みの声",
+    "unavailable": "現在{language}では提供されていないため、利用可能になるまで自動音声が使われます。この言語への最初の翻訳の後にカタログが埋まります。",
+    "clear": "クリア",
+    "previewLabel": "代役の声",
+    "hint": "ライブラリの音声で「使用」を押すと、この言語用に選択できます。",
+    "toasts": {
+      "cleared": "クリアしました — 自動音声に戻ります。",
+      "clearFailed": "代役の声をクリアできませんでした。"
+    }
+  },
+  "yourVoices": {
+    "title": "自分の声",
+    "loading": "自分の声を読み込み中…",
+    "emptyTitle": "まだ自分の声がありません",
+    "emptyDescription": "はっきりとしたサンプルを1つ録音すると、WarpTalkはあなたの声で翻訳を話せます。それまではライブラリの音声が使われます。",
+    "noMatch": "このフィルターに一致する声はありません。",
+    "untitledProfile": "無題のプロファイル",
+    "thisVoiceProfile": "この音声プロファイル",
+    "dubbingYou": "吹き替え中",
+    "noLanguage": "言語未設定",
+    "ready": "準備完了",
+    "couldNotClone": "複製できませんでした",
+    "cloning": "複製中",
+    "cloningDetail": "通常1分以内",
+    "reRecord": "録音し直す",
+    "actionsFor": "{name}の操作",
+    "stopBeingDubbed": "この声での吹き替えを停止",
+    "beDubbedIn": "この声で吹き替える",
+    "deleteProfile": "プロファイルを削除",
+    "profileCount": "{count, plural, other {#件のプロファイル}}",
+    "usableToday": "、今すぐ使えるのは{count}件",
+    "tally": { "ready": "準備完了", "cloning": "複製中", "failed": "失敗" },
+    "toasts": {
+      "deleted": "音声プロファイルを削除しました",
+      "deleteFailed": "音声プロファイルの削除に失敗しました",
+      "savedDubbed": "保存しました。この声で吹き替えられます。",
+      "backToLiveClone": "ライブ複製に戻りました。",
+      "saveFailed": "吹き替えに使う声を保存できませんでした。"
+    }
+  },
+  "createDialog": {
+    "title": "音声プロファイルを作成",
+    "description": "名前を付け、話す言語を選び、はっきりとした音声サンプルを1つ提供してください。",
+    "nameLabel": "名前",
+    "namePlaceholder": "プレゼン用の声",
+    "languageLabel": "言語",
+    "selectLanguage": "言語を選択…",
+    "sampleLabel": "サンプル",
+    "record": "録音",
+    "stop": "停止",
+    "uploadFile": "ファイルをアップロード",
+    "sampleInstructions": "普段の声でこう読んでください:「WarpTalkは私のチームがすべての会話を明確に理解するのに役立ちます。」1人の話者、静かな部屋、5〜120秒、最大20MB。",
+    "consentIntro": "この録音への同意です。ミーティングでライブ複製を許可することとは別で、自分でオンにしない限りオフのままです。",
+    "allFiveConfirmed": "5項目すべて確認済みです。",
+    "leftToConfirm": "残り{count}/5項目の確認が必要です。",
+    "saving": "保存中…",
+    "agreeAndSave": "同意して保存",
+    "recordingHint": "録音中…下の文を静かな部屋で読んでください。",
+    "toasts": {
+      "sampleTooLarge": "音声サンプルは20MB未満にしてください。",
+      "recordingUnsupported": "このブラウザは直接録音に対応していません。",
+      "micDenied": "マイクへのアクセスが拒否されたか、利用できません。",
+      "nameRequired": "プロファイルに名前を付けてください。",
+      "sampleRequired": "先に明瞭な音声サンプルを録音またはアップロードしてください。",
+      "consentRequired": "続けるには5項目すべてに同意してください。",
+      "created": "音声プロファイルを保存しました。複製中です — 通常1分以内。",
+      "createFailed": "音声プロファイルの作成に失敗しました"
+    }
+  }
+}

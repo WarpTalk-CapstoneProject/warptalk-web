@@ -1,0 +1,129 @@
+{
+  "list": {
+    "eyebrow": "Vận hành",
+    "title": "Thông báo",
+    "description": "Các thông báo toàn nền tảng đã gửi tới người dùng.",
+    "compose": "Soạn thông báo",
+    "refresh": "Làm mới",
+    "error": {
+      "title": "Không thể tải danh sách thông báo.",
+      "description": "Hãy kiểm tra dịch vụ thông báo và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "empty": {
+      "title": "Chưa có thông báo nào được gửi",
+      "description": "Các thông báo gửi từ nền tảng sẽ xuất hiện ở đây."
+    },
+    "pagination": {
+      "pageOf": "Trang {page} / {totalPages} · {total} tổng cộng",
+      "previous": "Trước",
+      "next": "Tiếp"
+    },
+    "footerNote": "Một thông báo chỉ được gửi một lần tới những người được nêu tên và không thể chỉnh sửa, thu hồi hay xóa sau đó. Không có đối tượng “tất cả mọi người”: dịch vụ chỉ chấp nhận danh sách nêu tên cho đến khi có bộ phân giải phân khúc."
+  },
+  "detail": {
+    "back": "Thông báo",
+    "eyebrow": "Vận hành · Thông báo",
+    "headerDescription": "{type} · tạo lúc {date}",
+    "refresh": "Làm mới",
+    "notFound": {
+      "title": "Thông báo này không tồn tại.",
+      "description": "Có thể liên kết đã cũ."
+    },
+    "loadError": {
+      "title": "Không thể tải thông báo.",
+      "description": "Hãy kiểm tra dịch vụ thông báo và thử lại."
+    },
+    "retry": "Thử lại",
+    "sections": {
+      "message": "Nội dung",
+      "record": "Hồ sơ",
+      "audience": "Đối tượng",
+      "payload": "Dữ liệu đính kèm"
+    },
+    "fields": {
+      "type": "Loại",
+      "status": "Trạng thái",
+      "author": "Người tạo",
+      "created": "Ngày tạo",
+      "lastUpdated": "Cập nhật lần cuối",
+      "announcementId": "Mã thông báo",
+      "mode": "Chế độ",
+      "rawTargeting": "Dữ liệu đối tượng thô",
+      "segment": "Phân khúc",
+      "namedRecipients": "Người nhận được nêu tên"
+    },
+    "resolving": "· đang tra cứu…",
+    "toasts": {
+      "copied": "Đã sao chép {label}",
+      "copyFailed": "Không thể sao chép {label}"
+    },
+    "recipients": {
+      "none": "Không có ai được liệt kê",
+      "count": "{count, plural, other {# id người dùng}}",
+      "showFewer": "Thu gọn",
+      "showAll": "Xem tất cả {count}"
+    },
+    "payloadFields": {
+      "image": "Hình ảnh",
+      "cta": "Kêu gọi hành động",
+      "discountCode": "Mã giảm giá",
+      "severity": "Mức độ nghiêm trọng",
+      "actionRequired": "Cần hành động",
+      "yes": "Có",
+      "no": "Không",
+      "downtimeWindow": "Khung thời gian bảo trì",
+      "downtimeRange": "{start} → {end}",
+      "empty": "Không có hình ảnh, liên kết, mã hay khung thời gian bảo trì."
+    },
+    "footerNote": "Dịch vụ thông báo không ghi lại thời điểm gửi hay số lượt gửi cho một thông báo, nên các mục này không hiển thị ở đây."
+  },
+  "composer": {
+    "types": {
+      "ANNOUNCEMENT": { "label": "Thông báo", "hint": "Tin tức chung từ nền tảng." },
+      "PROMOTION": { "label": "Khuyến mãi", "hint": "Có ưu đãi, liên kết và mã giảm giá." },
+      "MAINTENANCE": { "label": "Bảo trì", "hint": "Nêu rõ khung thời gian bảo trì. Bắt buộc cả hai mốc thời gian." },
+      "SYSTEM": { "label": "Hệ thống", "hint": "Nền tảng tự thông báo về chính mình. Không liên kết, không ưu đãi." }
+    },
+    "title": "Soạn một thông báo",
+    "description": "Chỉ gửi một lần tới những người bạn nêu tên. Không có bản nháp, không lên lịch và không thể thu hồi.",
+    "typeLabel": "Loại",
+    "titleLabel": "Tiêu đề",
+    "messageLabel": "Nội dung",
+    "messageHint": "Chỉ văn bản thuần. Dịch vụ thông báo sẽ từ chối bất cứ nội dung nào trông giống thẻ HTML.",
+    "ctaLabel": "Liên kết kêu gọi hành động",
+    "optional": "(không bắt buộc)",
+    "imageLabel": "URL hình ảnh",
+    "discountLabel": "Mã giảm giá",
+    "noPayloadFields": "Thông báo hệ thống không có liên kết, hình ảnh hay mã giảm giá. Dịch vụ sẽ từ chối các trường này với loại thông báo này.",
+    "downtimeStartLabel": "Bắt đầu bảo trì",
+    "downtimeEndLabel": "Kết thúc bảo trì",
+    "downtimeHint": "Nhập theo múi giờ của bạn và được gửi dưới dạng thời điểm tuyệt đối.",
+    "recipients": {
+      "label": "Người nhận",
+      "nobodySelected": "Chưa chọn ai",
+      "selectedCount": "{count, plural, other {đã chọn #}}",
+      "searchPlaceholder": "Tìm trong danh bạ nền tảng theo tên hoặc email",
+      "searching": "Đang tìm…",
+      "directoryError": "Không thể tải danh bạ người dùng.",
+      "noMatch": "Không có tài khoản nào khớp.",
+      "selected": "Đã chọn",
+      "add": "Thêm",
+      "remove": "Xóa {email}",
+      "clear": "Xóa hết",
+      "footerNote": "Chỉ chấp nhận danh sách nêu tên. Dịch vụ không hỗ trợ đối tượng “tất cả mọi người” cho đến khi có bộ phân giải phân khúc."
+    },
+    "cancel": "Hủy",
+    "review": "Xem lại trước khi gửi",
+    "sendFailed": "Không thể gửi thông báo này.",
+    "confirm": {
+      "title": "Gửi thông báo này?",
+      "description": "Thông báo sẽ đến với tất cả những người bên dưới ngay khi bạn xác nhận. Không thể chỉnh sửa, thu hồi hay xóa sau đó.",
+      "recipientCount": "{count, plural, other {# người nhận}}",
+      "andMore": "và {count} người khác",
+      "back": "Quay lại",
+      "sending": "Đang gửi…",
+      "send": "Gửi cho {count} người"
+    }
+  }
+}

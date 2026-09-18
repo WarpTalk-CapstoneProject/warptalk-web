@@ -348,7 +348,15 @@ export function entryExcerpt(entry: LibraryEntry, maxChars = 320): string {
  * decision and names who can change it, which is the difference between "ask the host" and
  * "this product is broken".
  */
-export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): string {
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type ArtifactAbsenceTranslator = (key: string) => string | undefined;
+
+export function describeAbsence(
+  absence: ArtifactAbsence,
+  kind: ArtifactKind,
+  t?: ArtifactAbsenceTranslator,
+): string {
   switch (absence) {
     case "withheld":
       // The app's existing sentence, imported rather than rewritten. Two things were wrong with
@@ -364,19 +372,26 @@ export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): s
       // host-or-participant, full stop), so the same person can often read the very transcript
       // this card called unreadable. This sentence is about the file the host has not shared,
       // which is what is actually true here.
-      return ARTIFACT_WITHHELD_FALLBACK;
+      return t?.("withheld") ?? ARTIFACT_WITHHELD_FALLBACK;
     case "generating":
       return kind === "summary"
-        ? "The assistant is still writing this summary."
-        : "This is still being produced.";
+        ? (t?.("generatingSummary") ?? "The assistant is still writing this summary.")
+        : (t?.("generatingOther") ?? "This is still being produced.");
     case "empty":
       return kind === "minutes"
-        ? "Drawn up but not written yet."
-        : "Nobody spoke, so there was nothing to write down.";
+        ? (t?.("emptyMinutes") ?? "Drawn up but not written yet.")
+        : (t?.("emptyOther") ?? "Nobody spoke, so there was nothing to write down.");
     case "unavailable":
-      return "The file behind this is no longer available.";
+      return t?.("unavailable") ?? "The file behind this is no longer available.";
   }
 }
+
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type RelativeTimeTranslator = (
+  key: "justNow" | "minutesAgo" | "hoursAgo" | "daysAgo",
+  values: { count: number },
+) => string;
 
 /**
  * "6h ago", "Aug 28" — how the card dates a document.
@@ -384,26 +399,31 @@ export function describeAbsence(absence: ArtifactAbsence, kind: ArtifactKind): s
  * Relative only inside a week. Past that, a weekday-less "36 days ago" is arithmetic the reader
  * has to do in their head to get back to a date, and a date is what they were looking for.
  */
-export function relativeTime(value: string | null | undefined, now: number = Date.now()): string {
+export function relativeTime(
+  value: string | null | undefined,
+  now: number = Date.now(),
+  t?: RelativeTimeTranslator,
+  locale?: string,
+): string {
   if (!value) return "—";
   const at = Date.parse(value);
   if (Number.isNaN(at)) return "—";
 
   const seconds = Math.round((now - at) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return t ? t("justNow", { count: 0 }) : "just now";
 
   const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return t ? t("minutesAgo", { count: minutes }) : `${minutes}m ago`;
 
   const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t ? t("hoursAgo", { count: hours }) : `${hours}h ago`;
 
   const days = Math.round(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return t ? t("daysAgo", { count: days }) : `${days}d ago`;
 
   const date = new Date(at);
   const sameYear = date.getFullYear() === new Date(now).getFullYear();
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(locale, {
     month: "short",
     day: "numeric",
     ...(sameYear ? {} : { year: "numeric" }),

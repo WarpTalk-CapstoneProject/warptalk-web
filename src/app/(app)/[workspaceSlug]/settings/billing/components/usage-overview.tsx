@@ -12,6 +12,7 @@
 
 import { CalendarBlank, CaretDown, DownloadSimple, ArrowClockwise, Spinner } from "@phosphor-icons/react";
 import { format } from "date-fns";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
@@ -89,6 +90,7 @@ export function UsageOverview({
   workspaceSlug,
   onRefresh,
 }: UsageOverviewProps) {
+  const t = useTranslations("settingsBillingUsage");
   const [memberKey, setMemberKey] = useState<string | null>(null);
   const [bucketChoice, setBucketChoice] = useState<OverviewBucketSize | null>(null);
   const [leftTab, setLeftTab] = useState<"services" | "movements">("services");
@@ -220,8 +222,8 @@ export function UsageOverview({
       .sort((a, b) => (slots.get(a.key) ?? 0) - (slots.get(b.key) ?? 0))
       .map((service) => ({ key: service.key, label: service.label, slot: slots.get(service.key)! }));
     const hasOther = present.some((service) => (slots.get(service.key) ?? 0) === 0);
-    return hasOther ? [...named, { key: "other", label: "Other services", slot: 0 }] : named;
-  }, [spend, slots]);
+    return hasOther ? [...named, { key: "other", label: t("usageSpendChart.otherServices"), slot: 0 }] : named;
+  }, [spend, slots, t]);
 
   // Workspace figures. They add up: granted + carried + topped up = available.
   const toppedUp = cycleActivity ? Math.round(cycleActivity.totalToppedUp) : 0;
@@ -236,7 +238,9 @@ export function UsageOverview({
 
   const spent = memberKey ? Math.round(spend?.total ?? 0) : workspaceConsumed;
   const selectedMember = memberKey ? memberOptions.find((row) => row.key === memberKey) : null;
-  const memberLabel = memberKey ? (selectedMember?.label ?? "Selected member") : "All members";
+  const memberLabel = memberKey
+    ? (selectedMember?.label ?? t("header.selectedMember"))
+    : t("header.allMembers");
 
   const elapsedFraction = balance
     ? cycleElapsedFraction(balance.currentPeriodStart, balance.currentPeriodEnd, now)
@@ -265,13 +269,13 @@ export function UsageOverview({
       {/* 1. Header row */}
       <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-hairline px-4 py-3.5 sm:px-6">
         <h1 className="mr-auto text-[20px] font-semibold leading-tight tracking-[-0.3px] text-ink">
-          Usage
+          {t("header.title")}
         </h1>
 
         <DropdownMenu>
           <DropdownMenuTrigger
             className="inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-full border border-border px-3 text-[13px] font-medium text-ink outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-            aria-label="Filter by member"
+            aria-label={t("header.filterByMember")}
           >
             <span className="truncate">{memberLabel}</span>
             <CaretDown className="size-3.5 shrink-0 text-ink-muted" />
@@ -281,7 +285,7 @@ export function UsageOverview({
               value={memberKey ?? ALL_MEMBERS}
               onValueChange={(value) => setMemberKey(value === ALL_MEMBERS ? null : String(value))}
             >
-              <DropdownMenuRadioItem value={ALL_MEMBERS}>All members</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value={ALL_MEMBERS}>{t("header.allMembers")}</DropdownMenuRadioItem>
               {memberOptions.map((option) => (
                 <DropdownMenuRadioItem key={option.key} value={option.key}>
                   <span className="truncate">{option.label}</span>
@@ -294,18 +298,21 @@ export function UsageOverview({
         <span className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-full border border-border px-3 text-[13px] font-medium text-ink">
           <CalendarBlank className="size-3.5 text-ink-muted" />
           {balance
-            ? `${format(new Date(balance.currentPeriodStart), "MMM d")} – ${format(
-                new Date(balance.currentPeriodEnd),
-                "MMM d",
-              )} · ${cycleDaysElapsed}d elapsed`
-            : "This billing cycle"}
+            ? t("header.cycleRangeElapsed", {
+                range: `${format(new Date(balance.currentPeriodStart), "MMM d")} – ${format(
+                  new Date(balance.currentPeriodEnd),
+                  "MMM d",
+                )}`,
+                days: cycleDaysElapsed,
+              })
+            : t("header.thisBillingCycle")}
         </span>
 
-        <IconButton label="Refresh" onClick={onRefresh}>
+        <IconButton label={t("header.refresh")} onClick={onRefresh}>
           <ArrowClockwise className="size-4" />
         </IconButton>
         <IconButton
-          label="Export CSV"
+          label={t("header.exportCsv")}
           onClick={exportCsv}
           disabled={transactions.length === 0}
         >
@@ -317,15 +324,15 @@ export function UsageOverview({
       <div className="grid border-b border-hairline @min-[940px]:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 border-b border-hairline px-4 py-5 sm:px-6 @min-[940px]:border-b-0 @min-[940px]:border-r">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[13px] text-ink-muted">Credits spent</span>
+            <span className="text-[13px] text-ink-muted">{t("chart.creditsSpent")}</span>
             <div className="flex items-center gap-1.5">
               {/* One grouping exists today. A label, not a menu that offers a single choice. */}
               <span className="px-1.5 text-[13px] text-ink-muted">
-                Group by: <b className="font-medium text-ink">Service</b>
+                {t("chart.groupBy")} <b className="font-medium text-ink">{t("chart.service")}</b>
               </span>
               <div
                 role="group"
-                aria-label="Bucket size"
+                aria-label={t("chart.bucketSizeAria")}
                 className="flex gap-0.5 border-l border-hairline pl-1.5"
               >
                 {(["day", "week"] as const).map((size) => (
@@ -341,7 +348,7 @@ export function UsageOverview({
                         : "text-ink-muted hover:bg-surface-2 hover:text-ink",
                     )}
                   >
-                    {size === "day" ? "1d" : "1w"}
+                    {size === "day" ? t("chart.day") : t("chart.week")}
                   </button>
                 ))}
               </div>
@@ -349,16 +356,20 @@ export function UsageOverview({
           </div>
 
           <p className="mt-1 text-[28px] font-semibold leading-tight tracking-[-0.4px] tabular-nums text-ink">
-            {formatAmount(spent)} credits
+            {t("chart.creditsHeadline", { amount: formatAmount(spent) })}
           </p>
           <p className="mt-0.5 text-[13px] tabular-nums text-[var(--primary)]">
-            avg {formatAmount(Math.round(spend?.averagePerBucket ?? 0))} / {bucketWord}
+            {t("chart.avgPerBucket", {
+              amount: formatAmount(Math.round(spend?.averagePerBucket ?? 0)),
+              bucket: bucketWord,
+            })}
           </p>
           {overageDate && burnUp ? (
             <p className="mt-0.5 text-[12px] font-semibold text-destructive">
-              {memberKey ? "Workspace " : ""}
-              {burnUp.overageIsMeasured ? "in overage since" : "projected overage on"}{" "}
-              {format(overageDate, "d MMM")}
+              {memberKey ? t("chart.workspacePrefix") : ""}
+              {burnUp.overageIsMeasured
+                ? t("chart.inOverageSince", { date: format(overageDate, "d MMM") })
+                : t("chart.projectedOverageOn", { date: format(overageDate, "d MMM") })}
             </p>
           ) : null}
 
@@ -369,15 +380,15 @@ export function UsageOverview({
               </div>
             ) : !spend ? (
               <p className="flex h-[260px] items-center justify-center text-[12px] text-ink-muted">
-                This cycle has no dates to chart against.
+                {t("chart.noDatesToChart")}
               </p>
             ) : spend.total === 0 ? (
               <div className="flex h-[260px] flex-col items-center justify-center gap-1 text-center">
                 <p className="text-[13px] text-ink">
-                  {memberKey ? "No credits spent by this member yet." : "No credits spent yet this cycle."}
+                  {memberKey ? t("chart.noSpendMember") : t("chart.noSpendWorkspace")}
                 </p>
                 <p className="text-[12px] text-ink-muted">
-                  Spending appears here per {bucketWord} as meetings are translated.
+                  {t("chart.spendingAppearsHere", { bucket: bucketWord })}
                 </p>
               </div>
             ) : (
@@ -395,24 +406,24 @@ export function UsageOverview({
             cells moves with the layout, or the cells hang together with nothing between them. */}
         <div className="grid min-w-0 @min-[600px]:grid-cols-3 @min-[940px]:flex @min-[940px]:flex-col">
           <div className="min-w-0 border-b border-hairline px-4 py-[18px] sm:px-6 @min-[600px]:border-b-0 @min-[600px]:border-r @min-[940px]:border-b @min-[940px]:border-r-0">
-            <p className="text-[13px] text-ink-muted">Cycle credits</p>
+            <p className="text-[13px] text-ink-muted">{t("rail.cycleCredits")}</p>
             <div className="mt-2.5 flex items-baseline justify-between gap-2 tabular-nums">
               <b className="truncate text-[13px] font-medium text-ink">
-                {memberKey ? `Spent by ${memberLabel}` : "Spent"}
+                {memberKey ? t("rail.spentByMember", { member: memberLabel }) : t("rail.spent")}
               </b>
               <span className="shrink-0 text-[13px] text-ink">
-                {formatAmount(spent)} / {formatAmount(available)}
+                {t("rail.spentOfAvailable", { spent: formatAmount(spent), available: formatAmount(available) })}
               </span>
             </div>
             <PaceTrack spent={spent} available={available} elapsed={elapsedFraction} />
             <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[12px] tabular-nums">
-              <dt className="text-ink-muted">Granted</dt>
+              <dt className="text-ink-muted">{t("rail.granted")}</dt>
               <dd className="text-right text-ink">{formatAmount(granted)}</dd>
-              <dt className="text-ink-muted">{carried < 0 ? "Adjustments" : "Carried over"}</dt>
+              <dt className="text-ink-muted">{carried < 0 ? t("rail.adjustments") : t("rail.carriedOver")}</dt>
               <dd className="text-right text-ink">{formatAmount(carried)}</dd>
-              <dt className="text-ink-muted">Topped up</dt>
+              <dt className="text-ink-muted">{t("rail.toppedUp")}</dt>
               <dd className="text-right text-ink">{formatAmount(toppedUp)}</dd>
-              <dt className="text-ink-muted">Remaining</dt>
+              <dt className="text-ink-muted">{t("rail.remaining")}</dt>
               <dd className={cn("text-right", remaining <= 0 ? "text-destructive" : "text-ink")}>
                 {formatAmount(remaining)}
               </dd>
@@ -428,38 +439,39 @@ export function UsageOverview({
           </div>
 
           <div className="min-w-0 border-b border-hairline px-4 py-[18px] sm:px-6 @min-[600px]:border-b-0 @min-[600px]:border-r @min-[940px]:border-b @min-[940px]:border-r-0">
-            <p className="text-[13px] text-ink-muted">Settlements</p>
+            <p className="text-[13px] text-ink-muted">{t("rail.settlements")}</p>
             <p className="mt-1 text-[22px] font-semibold leading-tight tabular-nums text-ink">
               {formatAmount(miniSpend?.settlements ?? 0)}
             </p>
             <div className="mt-1.5">
               <MiniBars
                 values={miniSpend?.buckets.map((b) => b.settlements) ?? []}
-                label={`Settlements per ${defaultBucket}`}
+                label={t("rail.settlementsPerBucket", { bucket: defaultBucket })}
               />
             </div>
-            <p className="mt-2 text-[12px] text-ink-muted">Times credits were deducted</p>
+            <p className="mt-2 text-[12px] text-ink-muted">{t("rail.settlementsDetail")}</p>
           </div>
 
           <div className="min-w-0 px-4 py-[18px] sm:px-6">
-            <p className="text-[13px] text-ink-muted">Meetings billed</p>
+            <p className="text-[13px] text-ink-muted">{t("rail.meetingsBilled")}</p>
             <p className="mt-1 text-[22px] font-semibold leading-tight tabular-nums text-ink">
               {formatAmount(miniSpend?.meetings ?? 0)}
             </p>
             <div className="mt-1.5">
               <MiniBars
                 values={miniSpend?.buckets.map((b) => b.meetings) ?? []}
-                label={`Meetings billed per ${defaultBucket}`}
+                label={t("rail.meetingsBilledPerBucket", { bucket: defaultBucket })}
               />
             </div>
             <p className="mt-2 text-[12px] text-ink-muted">
-              Busiest {defaultBucket}{" "}
+              {t("rail.busiestBucket", { bucket: defaultBucket })}{" "}
               <b className="font-medium text-ink">
                 {miniSpend?.busiest
-                  ? `${format(miniSpend.busiest.start, "MMM d")} · ${formatAmount(
-                      Math.round(miniSpend.busiest.total),
-                    )} credits`
-                  : "—"}
+                  ? t("rail.busiestValue", {
+                      date: format(miniSpend.busiest.start, "MMM d"),
+                      amount: formatAmount(Math.round(miniSpend.busiest.total)),
+                    })
+                  : t("rail.noValue")}
               </b>
             </p>
           </div>
@@ -470,12 +482,12 @@ export function UsageOverview({
       <div className="grid @min-[940px]:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0 border-b border-hairline @min-[940px]:border-b-0 @min-[940px]:border-r">
           <TabBar
-            label="Spending detail"
+            label={t("tabs.spendingDetail")}
             value={leftTab}
             onChange={setLeftTab}
             tabs={[
-              { value: "services", label: "AI services" },
-              { value: "movements", label: "Top-ups & adjustments" },
+              { value: "services", label: t("tabs.aiServices") },
+              { value: "movements", label: t("tabs.movements") },
             ]}
           />
           {leftTab === "services" ? (
@@ -487,34 +499,34 @@ export function UsageOverview({
 
         <div className="min-w-0">
           <TabBar
-            label="Spending by"
+            label={t("tabs.spendingBy")}
             value={rightTab}
             onChange={setRightTab}
             tabs={[
-              { value: "members", label: "Members" },
-              { value: "meetings", label: "Meetings" },
+              { value: "members", label: t("tabs.members") },
+              { value: "meetings", label: t("tabs.meetings") },
             ]}
           />
           {rightTab === "members" ? (
-            <RankedList rows={memberRows} empty="No member has spent credits this cycle." />
+            <RankedList rows={memberRows} empty={t("rankedList.noMembers")} />
           ) : (
             <>
               <RankedList
                 rows={meetingRows}
-                empty="No meeting has been billed this cycle."
+                empty={t("rankedList.noMeetings")}
                 hrefOf={(row) =>
                   row.meetingId && workspaceSlug ? roomDetailPath(workspaceSlug, row.meetingId) : null
                 }
                 subOf={(row) =>
-                  `${format(row.firstAt, "MMM d")} · ${formatAmount(row.settlements)} settlement${
-                    row.settlements === 1 ? "" : "s"
-                  }`
+                  t("rankedList.meetingSub", {
+                    date: format(row.firstAt, "MMM d"),
+                    count: row.settlements,
+                  })
                 }
               />
               {meetingRows.length > 0 ? (
                 <p className="px-4 pb-4 text-[11px] leading-relaxed text-ink-subtle sm:px-6">
-                  Matched by meeting time: a charge records the transcript line it paid for, not
-                  the room.
+                  {t("rankedList.meetingsFootnote")}
                 </p>
               ) : null}
             </>
@@ -561,12 +573,13 @@ function PaceTrack({
   available: number;
   elapsed: number;
 }) {
+  const t = useTranslations("settingsBillingUsage");
   const share = available > 0 ? spent / available : 0;
   const ahead = share > elapsed;
   return (
     <div
       role="progressbar"
-      aria-label="Credits spent of available"
+      aria-label={t("rail.progressAria")}
       aria-valuemin={0}
       aria-valuemax={Math.max(available, 0)}
       aria-valuenow={Math.max(spent, 0)}
@@ -581,7 +594,7 @@ function PaceTrack({
       />
       {available > 0 ? (
         <div
-          title="Where an even spend would be today"
+          title={t("rail.pointToday")}
           className="absolute -inset-y-[3px] w-0.5 rounded-[1px] bg-ink"
           style={{ left: `calc(${elapsed * 100}% - 1px)` }}
         />
@@ -605,30 +618,31 @@ function PaceNote({
   overageIsMeasured: boolean;
   hasRate: boolean;
 }) {
+  const t = useTranslations("settingsBillingUsage");
   let text: React.ReactNode;
   let bad = false;
   if (overageDate) {
     bad = true;
-    text = overageIsMeasured ? (
-      <>
-        In overage since <b className="font-medium">{format(overageDate, "MMM d")}</b>.
-      </>
-    ) : (
-      <>
-        At this pace, overage starts <b className="font-medium">{format(overageDate, "MMM d")}</b>.
-      </>
-    );
+    text = overageIsMeasured
+      ? t.rich("rail.paceNote.inOverageSince", {
+          date: () => <b className="font-medium">{format(overageDate, "MMM d")}</b>,
+        })
+      : t.rich("rail.paceNote.projectedOverageStarts", {
+          date: () => <b className="font-medium">{format(overageDate, "MMM d")}</b>,
+        });
   } else if (available <= 0) {
-    text = "No allowance on this cycle.";
+    text = t("rail.paceNote.noAllowance");
   } else if (!hasRate) {
-    text = "Too early in the cycle to project a pace.";
+    text = t("rail.paceNote.tooEarly");
   } else {
     const even = available * elapsed;
     const delta = even > 0 ? Math.round(((spent - even) / even) * 100) : 0;
     text = (
       <>
-        At this pace the allowance <b className="font-medium text-ink">lasts the whole cycle</b>
-        {delta > 0 ? ` · ${delta}% ahead of an even spend` : ""}.
+        {t.rich("rail.paceNote.lastsWholeCycle", {
+          b: (chunks) => <b className="font-medium text-ink">{chunks}</b>,
+        })}
+        {delta > 0 ? t("rail.paceNote.aheadOfEvenSpend", { delta }) : ""}.
       </>
     );
   }
@@ -691,10 +705,11 @@ function ServiceCards({
   slots: Map<string, number>;
   bucketWord: OverviewBucketSize;
 }) {
+  const t = useTranslations("settingsBillingUsage");
   if (cards.length === 0) {
     return (
       <p className="px-4 py-10 text-center text-[12px] text-ink-muted sm:px-6">
-        No AI usage recorded this cycle.
+        {t("serviceCards.empty")}
       </p>
     );
   }
@@ -716,18 +731,22 @@ function ServiceCards({
             <div className="mt-1.5 flex flex-wrap gap-x-3.5 gap-y-0.5 text-[12px] tabular-nums text-ink-muted">
               <span className="inline-flex items-center gap-1.5">
                 <span aria-hidden className="size-[9px] rounded-[2px]" style={{ background: color }} />
-                {formatAmount(card.credits)} credits
+                {t("serviceCards.credits", { amount: formatAmount(card.credits) })}
               </span>
-              <span>{formatAmount(card.uses)} uses</span>
+              <span>{t("serviceCards.uses", { amount: formatAmount(card.uses) })}</span>
               {/* An em dash, never "0.00": no recorded use is unknown, not free. */}
-              <span>{card.creditsPerUse === null ? "—" : formatPerUse(card.creditsPerUse)} / use</span>
+              <span>
+                {t("serviceCards.perUse", {
+                  value: card.creditsPerUse === null ? t("serviceCards.noValue") : formatPerUse(card.creditsPerUse),
+                })}
+              </span>
             </div>
             <div className="mt-2.5">
               <MiniBars
                 values={card.series}
                 color={color}
                 height={72}
-                label={`${card.label} credits per ${bucketWord}`}
+                label={t("serviceCards.creditsPerBucket", { label: card.label, bucket: bucketWord })}
               />
             </div>
           </article>
@@ -744,10 +763,11 @@ function MovementList({
   movements: CreditTransactionDto[];
   directory: ReturnType<typeof memberDirectory>;
 }) {
+  const t = useTranslations("settingsBillingUsage");
   if (movements.length === 0) {
     return (
       <p className="px-4 py-10 text-center text-[12px] text-ink-muted sm:px-6">
-        No top-ups, refunds or adjustments this cycle.
+        {t("movements.empty")}
       </p>
     );
   }

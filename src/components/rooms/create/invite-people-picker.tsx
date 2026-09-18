@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
+import { useTranslations } from "next-intl";
 import {
   Popover,
   PopoverContent,
@@ -25,6 +26,7 @@ export function InvitePeoplePicker({
   emails: string[];
   onChange: (val: string[]) => void;
 }) {
+  const t = useTranslations("rooms.create.invite");
   const [input, setInput] = useState("");
   const [inputError, setInputError] = useState("");
   const user = useAuthStore((state) => state.user);
@@ -83,11 +85,11 @@ export function InvitePeoplePicker({
       e.preventDefault();
       const email = input.trim().toLowerCase();
       if (!isValidInviteEmail(email)) {
-        setInputError("Enter a complete email address.");
+        setInputError(t("invalidEmail"));
         return;
       }
       if (emails.includes(email)) {
-        setInputError("This email is already invited.");
+        setInputError(t("alreadyInvited"));
         return;
       }
       onChange([...emails, email]);
@@ -103,7 +105,7 @@ export function InvitePeoplePicker({
   const addEmail = (email: string, fullName?: string) => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!isValidInviteEmail(normalizedEmail)) {
-      setInputError("This workspace member does not have a valid email.");
+      setInputError(t("memberNoValidEmail"));
       return;
     }
     if (!emails.includes(normalizedEmail)) {
@@ -121,7 +123,7 @@ export function InvitePeoplePicker({
         render={
           <PillButton
             icon={Users}
-            label={active ? `${emails.length} people` : "People"}
+            label={active ? t("peopleCount", { count: emails.length }) : t("people")}
             active={active}
           />
         }
@@ -132,7 +134,7 @@ export function InvitePeoplePicker({
       >
         <div className="space-y-2">
           <label className="text-[11px] font-medium text-ink-muted px-1">
-            Invite by Email
+            {t("inviteByEmail")}
           </label>
           <div className="relative">
             <Users
@@ -147,7 +149,7 @@ export function InvitePeoplePicker({
                 setInputError("");
               }}
               onKeyDown={handleKeyDown}
-              placeholder="name@company.com..."
+              placeholder={t("emailPlaceholder")}
               className="w-full h-8 pl-8 pr-3 text-[13px] bg-surface-1 border border-border/20 rounded-md focus:outline-none focus:ring-0 focus:border-border/20 text-ink"
               autoFocus
             />
@@ -185,7 +187,7 @@ export function InvitePeoplePicker({
           {suggestedMembers.length > 0 && (
             <div className="mt-3">
               <label className="text-[11px] font-medium text-ink-muted px-1 mb-1 block">
-                Suggested Workspace Members
+                {t("suggestedMembers")}
               </label>
               <div className="flex flex-col gap-1 max-h-[160px] overflow-y-auto">
                 {suggestedMembers.map((member) => (

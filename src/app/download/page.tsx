@@ -8,6 +8,7 @@ import {
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import { DownloadNavbar } from "@/components/download/download-navbar";
 import { DownloadPrimaryCta } from "@/components/download/download-primary-cta";
@@ -22,11 +23,13 @@ import {
   getReleasesPageUrl,
 } from "@/lib/desktop-releases.server";
 
-export const metadata: Metadata = {
-  title: "Download WarpTalk",
-  description:
-    "Download the WarpTalk desktop app for macOS, Windows, and Linux.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslations("download.meta");
+  return {
+    title: t("title"),
+    description: t("description"),
+  };
+}
 
 export const revalidate = 600;
 
@@ -50,10 +53,12 @@ function DesktopAssetRows({
   title,
   description,
   rows,
+  downloadLabel,
 }: {
   title: string;
   description: string;
   rows: DownloadRow[];
+  downloadLabel: string;
 }) {
   return (
     <section className="grid gap-8 border-t border-white/10 py-9 md:grid-cols-[280px_1fr]">
@@ -98,7 +103,7 @@ function DesktopAssetRows({
                   )}
                 </span>
                 <span className="inline-flex h-6 items-center rounded-full bg-white/[0.08] px-2.5 text-[11px] font-semibold text-white transition group-hover:bg-white/[0.14]">
-                  Download
+                  {downloadLabel}
                 </span>
               </a>
             );
@@ -202,15 +207,28 @@ function firstAsset(assets: DesktopAsset[]) {
   return assets[0] ?? null;
 }
 
+const DATE_LOCALE_TAG: Record<string, string> = {
+  en: "en-US",
+  vi: "vi-VN",
+  ja: "ja-JP",
+};
+
 export default async function DownloadPage() {
+  const locale = await getLocale();
+  const t = await getTranslations("download");
+  const installNotesT = await getTranslations("download.installNotes");
+
   const release = await fetchLatestDesktopRelease();
   const releasesPageUrl = getReleasesPageUrl();
   const grouped = groupAssetsByPlatform(release?.assets ?? []);
-  const installNotes = buildInstallNotes({
-    version: release?.version ?? null,
-    hasMacAsset: grouped.mac.length > 0,
-    hasWindowsAsset: grouped.windows.length > 0,
-  });
+  const installNotes = buildInstallNotes(
+    {
+      version: release?.version ?? null,
+      hasMacAsset: grouped.mac.length > 0,
+      hasWindowsAsset: grouped.windows.length > 0,
+    },
+    installNotesT,
+  );
 
   const desktopRows: DownloadRow[] = [
     firstAsset(grouped.mac)
@@ -225,7 +243,7 @@ export default async function DownloadPage() {
           icon: AppleLogo,
           label: "macOS",
           href: releasesPageUrl,
-          action: "Coming soon",
+          action: t("assets.comingSoon"),
           external: true,
         },
     firstAsset(grouped.windows)
@@ -240,7 +258,7 @@ export default async function DownloadPage() {
           icon: WindowsLogo,
           label: "Windows",
           href: releasesPageUrl,
-          action: "Coming soon",
+          action: t("assets.comingSoon"),
           external: true,
         },
     firstAsset(grouped.linux)
@@ -255,13 +273,13 @@ export default async function DownloadPage() {
           icon: LinuxLogo,
           label: "Linux",
           href: releasesPageUrl,
-          action: "Coming soon",
+          action: t("assets.comingSoon"),
           external: true,
         },
   ];
 
   const publishedLabel = release?.publishedAt
-    ? new Date(release.publishedAt).toLocaleDateString("en-US", {
+    ? new Date(release.publishedAt).toLocaleDateString(DATE_LOCALE_TAG[locale] ?? "en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -284,10 +302,10 @@ export default async function DownloadPage() {
           />
 
           <h1 className="mt-8 text-[30px] font-semibold leading-[1.1] tracking-[-0.035em] text-white">
-            Download WarpTalk
+            {t("hero.title")}
           </h1>
           <p className="mx-auto mt-3 max-w-[460px] text-[14px] leading-6 text-white/50">
-            Available for macOS, Windows, and Linux.
+            {t("hero.subtitle")}
           </p>
 
           <div className="mt-6 flex flex-col items-center gap-2.5">
@@ -295,8 +313,8 @@ export default async function DownloadPage() {
               <>
                 <DownloadPrimaryCta assets={release.assets} />
                 <p className="text-[11px] text-white/34">
-                  Version {release.version}
-                  {publishedLabel ? ` · Released ${publishedLabel}` : ""}
+                  {t("hero.version", { version: release.version })}
+                  {publishedLabel ? ` · ${t("hero.released", { date: publishedLabel })}` : ""}
                   {release.notesUrl ? (
                     <>
                       {" · "}
@@ -306,7 +324,7 @@ export default async function DownloadPage() {
                         rel="noopener noreferrer"
                         className="text-white/50 underline decoration-white/20 underline-offset-4 transition hover:text-white"
                       >
-                        Release notes
+                        {t("hero.releaseNotes")}
                       </a>
                     </>
                   ) : null}
@@ -320,11 +338,11 @@ export default async function DownloadPage() {
                   rel="noopener noreferrer"
                   className="inline-flex h-9 items-center gap-2 rounded-full bg-white px-4 text-[13px] font-semibold text-black transition hover:bg-white/85"
                 >
-                  View releases
+                  {t("hero.viewReleases")}
                   <ArrowSquareOut size={13} weight="bold" />
                 </a>
                 <p className="text-[11px] text-white/34">
-                  Desktop builds will appear here once a release is published.
+                  {t("hero.comingSoonNotice")}
                 </p>
               </>
             )}
@@ -333,9 +351,10 @@ export default async function DownloadPage() {
 
         <section id="all-downloads" className="mx-auto max-w-[760px] px-6 pb-20">
           <DesktopAssetRows
-            title="WarpTalk Desktop"
-            description="A focused desktop experience for live translation, system audio capture, and meeting workflows outside the browser."
+            title={t("assets.sectionTitle")}
+            description={t("assets.sectionDescription")}
             rows={desktopRows}
+            downloadLabel={t("assets.download")}
           />
           {installNotes.map((note) => (
             <InstallNoteSection key={note.platform} note={note} />
@@ -345,14 +364,14 @@ export default async function DownloadPage() {
 
       <footer className="border-t border-white/10">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6 text-[11px] text-white/34 md:px-12">
-          <span>© {new Date().getFullYear()} WarpTalk</span>
+          <span>{t("footer.copyright", { year: new Date().getFullYear() })}</span>
           <a
             href={releasesPageUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 transition hover:text-white"
           >
-            Releases
+            {t("footer.releases")}
             <CaretRight size={12} weight="bold" />
           </a>
         </div>

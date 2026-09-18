@@ -1,0 +1,15 @@
+{
+  "filters": { "open": "Open", "closed": "Closed", "all": "All" },
+  "loading": "Loading…",
+  "empty": {
+    "openTitle": "Nothing open",
+    "otherTitle": "No tasks in this state yet",
+    "openDescription": "Every task from your meetings is closed.",
+    "otherDescription": "Tasks appear here when their meeting records an action item."
+  },
+  "markDone": "Mark done",
+  "reopen": "Reopen",
+  "untitledMeeting": "Untitled meeting",
+  "drop": "Drop",
+  "toasts": { "updateFailed": "Could not update the item." }
+}

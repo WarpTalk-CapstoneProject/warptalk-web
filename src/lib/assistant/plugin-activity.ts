@@ -61,22 +61,44 @@ const NEEDS_SETUP = new Set([
 ]);
 const PROVIDER = new Set(["provider_rate_limited", "provider_unavailable", "provider_configuration"]);
 
-export function describePluginActivityOutcome(resultStatus: string): PluginActivityOutcome {
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type PluginActivityTranslator = (key: string) => string;
+
+const DEFAULT_PLUGIN_ACTIVITY_COPY: Record<string, string> = {
+  "outcome.succeeded": "Succeeded",
+  "outcome.blocked": "Blocked",
+  "outcome.awaitingConfirmation": "Awaiting confirmation",
+  "outcome.needsSetup": "Needs setup",
+  "outcome.providerError": "Provider error",
+  "outcome.failed": "Failed",
+  formerMember: "Former member",
+};
+
+function defaultT(key: string): string {
+  return DEFAULT_PLUGIN_ACTIVITY_COPY[key] ?? key;
+}
+
+export function describePluginActivityOutcome(
+  resultStatus: string,
+  t: PluginActivityTranslator = defaultT,
+): PluginActivityOutcome {
   const code = (resultStatus ?? "").trim().toLowerCase();
-  if (code === "success") return { label: "Succeeded", tone: "success", code: null };
-  if (BLOCKED.has(code)) return { label: "Blocked", tone: "blocked", code };
+  if (code === "success") return { label: t("outcome.succeeded"), tone: "success", code: null };
+  if (BLOCKED.has(code)) return { label: t("outcome.blocked"), tone: "blocked", code };
   if (code === "confirmation_required") {
-    return { label: "Awaiting confirmation", tone: "attention", code };
+    return { label: t("outcome.awaitingConfirmation"), tone: "attention", code };
   }
-  if (NEEDS_SETUP.has(code)) return { label: "Needs setup", tone: "attention", code };
-  if (PROVIDER.has(code)) return { label: "Provider error", tone: "failed", code };
-  return { label: "Failed", tone: "failed", code: code || "failed" };
+  if (NEEDS_SETUP.has(code)) return { label: t("outcome.needsSetup"), tone: "attention", code };
+  if (PROVIDER.has(code)) return { label: t("outcome.providerError"), tone: "failed", code };
+  return { label: t("outcome.failed"), tone: "failed", code: code || "failed" };
 }
 
 export function toPluginActivityRows(
   audits: readonly WorkspacePluginToolAuditDto[],
   members: readonly ActivityMemberLike[],
   plugins: readonly ActivityPluginLike[],
+  t: PluginActivityTranslator = defaultT,
 ): PluginActivityRow[] {
   const membersById = new Map(members.map((member) => [member.userId, member]));
   const pluginsByKey = new Map(plugins.map((plugin) => [plugin.key, plugin]));
@@ -89,10 +111,10 @@ export function toPluginActivityRows(
       ...audit,
       // The call really happened; hiding a departed member's row would make the log lie.
       isFormerMember: !member,
-      memberLabel: member?.fullName || member?.email || "Former member",
+      memberLabel: member?.fullName || member?.email || t("formerMember"),
       pluginLabel: plugin?.label || audit.pluginKey,
       toolLabel: tool?.label || audit.toolName,
-      outcome: describePluginActivityOutcome(audit.resultStatus),
+      outcome: describePluginActivityOutcome(audit.resultStatus, t),
     };
   });
 }

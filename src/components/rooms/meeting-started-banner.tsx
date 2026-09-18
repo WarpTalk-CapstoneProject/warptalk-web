@@ -24,6 +24,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { VideoCamera, X } from "@phosphor-icons/react/dist/ssr";
 
 import { useMeetingStartedStore } from "@/stores/meeting-started-store";
@@ -35,6 +36,7 @@ import { useMeetingStartedStore } from "@/stores/meeting-started-store";
 const VISIBLE_MS = 20_000;
 
 export function MeetingStartedBanner() {
+  const t = useTranslations("rooms.startedBanner");
   const notice = useMeetingStartedStore((state) => state.notice);
   const dismiss = useMeetingStartedStore((state) => state.dismiss);
 
@@ -56,7 +58,7 @@ export function MeetingStartedBanner() {
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold leading-snug text-ink">A meeting has started</p>
+        <p className="text-[13px] font-semibold leading-snug text-ink">{t("title")}</p>
         <p className="mt-0.5 truncate text-[12px] text-ink-muted" title={notice.title}>
           {notice.title}
         </p>
@@ -67,17 +69,17 @@ export function MeetingStartedBanner() {
             onClick={dismiss}
             className="mt-2.5 inline-flex h-[28px] items-center rounded-full bg-foreground px-3.5 text-[12px] font-medium text-background transition hover:opacity-90"
           >
-            Join now
+            {t("joinNow")}
           </Link>
         ) : (
-          <p className="mt-2 text-[11px] text-ink-subtle">Open it from your notifications.</p>
+          <p className="mt-2 text-[11px] text-ink-subtle">{t("openFromNotifications")}</p>
         )}
       </div>
 
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Dismiss"
+        aria-label={t("dismissAria")}
         className="-mr-1 -mt-1 grid size-6 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <X size={11} weight="bold" />

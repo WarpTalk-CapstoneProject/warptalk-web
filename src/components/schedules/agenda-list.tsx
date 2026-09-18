@@ -12,6 +12,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   type AgendaDay,
@@ -22,11 +23,10 @@ import {
   type TimedMeeting,
 } from "@/lib/meeting/agenda-sections";
 import { monthKey } from "@/lib/meeting/meeting-day";
+import { intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { cn } from "@/lib/utils";
 
 import { AgendaRow } from "./agenda-row";
-
-const APP_CALENDAR_LOCALE = "en-GB";
 
 /** How long a deep-linked row stays highlighted. Long enough to find, short enough to not linger. */
 const HIGHLIGHT_MS = 2000;
@@ -109,6 +109,8 @@ export function AgendaList({
   /** The day currently at the top of the list, for the mini calendar to mark. */
   onVisibleDayChange?: (day: Date) => void;
 }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   /**
@@ -332,14 +334,14 @@ export function AgendaList({
       className="h-full min-h-0 overflow-y-auto overscroll-contain bg-panel"
     >
       {sections.map((week) => (
-        <section key={week.key} aria-label={`Week of ${week.label}`}>
+        <section key={week.key} aria-label={t("agendaView.weekOf", { label: week.label })}>
           <h2
             data-week-header
             className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface-1/95 px-5 py-1.5 text-[11px] font-medium tabular-nums text-ink-muted backdrop-blur lg:px-8"
           >
             <span>{week.label}</span>
             {week.isCurrentWeek ? (
-              <span className="font-semibold text-primary">This week</span>
+              <span className="font-semibold text-primary">{t("agendaView.thisWeek")}</span>
             ) : null}
           </h2>
 
@@ -366,7 +368,9 @@ export function AgendaList({
         data-agenda-tail
         className="px-5 pt-4 text-center text-[11px] text-ink-subtle lg:px-8"
       >
-        End of {month.toLocaleDateString(APP_CALENDAR_LOCALE, { month: "long", year: "numeric" })}
+        {t("agendaView.endOfMonth", {
+          month: month.toLocaleDateString(intlCalendarLocale(locale), { month: "long", year: "numeric" }),
+        })}
       </div>
     </div>
   );
@@ -387,6 +391,8 @@ function AgendaDayBlock({
   highlightedId: string | null;
   onOpenMeeting: (meeting: TimedMeeting) => void;
 }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const isEmpty = day.meetings.length === 0;
 
   // Only today has a now rule, and only once there is a clock. Same boundary rule as the week
@@ -404,7 +410,7 @@ function AgendaDayBlock({
     >
       <div className={cn("flex w-[76px] shrink-0 items-center gap-2", !isEmpty && "pt-[5px]")}>
         {/* The full date is for screen readers; the number and the weekday are drawn for eyes. */}
-        <span className="sr-only">{formatDayHeading(day.date)}</span>
+        <span className="sr-only">{formatDayHeading(day.date, locale)}</span>
         <span
           aria-hidden
           className={cn(
@@ -427,7 +433,7 @@ function AgendaDayBlock({
 
       {isEmpty ? (
         <p className="min-w-0 text-[12px] text-ink-subtle">
-          {hasAnyMeeting ? "Nothing here matches this filter" : "No meetings"}
+          {hasAnyMeeting ? t("agendaView.noMeetingsMatchFilter") : t("agendaView.noMeetings")}
         </p>
       ) : (
         <ol className="min-w-0 flex-1">
@@ -459,7 +465,9 @@ function AgendaDayBlock({
  * column's own rhythm, where "14:05" alone reads as one more meeting.
  */
 function AgendaNowLine({ now }: { now: Date }) {
-  const label = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const label = new Intl.DateTimeFormat(intlCalendarLocale(locale), {
     hour: "2-digit",
     minute: "2-digit",
   }).format(now);
@@ -470,11 +478,11 @@ function AgendaNowLine({ now }: { now: Date }) {
     <li>
       <div
         role="separator"
-        aria-label={`Current time, ${label}`}
+        aria-label={t("ariaLabels.currentTime", { time: label })}
         className="flex items-center gap-2 px-2 py-0.5"
       >
         <span className="shrink-0 text-[11px] font-medium tabular-nums text-rose-600 dark:text-rose-400">
-          Now {label}
+          {t("agendaView.now", { time: label })}
         </span>
         <span className="size-1.5 shrink-0 rounded-full bg-rose-500" />
         <span className="h-px flex-1 bg-rose-500" />
@@ -532,8 +540,8 @@ function cssEscape(value: string) {
 }
 
 /** "Tuesday, 8 September 2026" — the same heading the page's day panel uses. */
-function formatDayHeading(day: Date) {
-  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+function formatDayHeading(day: Date, locale: string) {
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",

@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowsClockwise,
@@ -41,32 +42,35 @@ import type {
 
 const PAGE_SIZE = 20;
 
-const STATUS_TABS = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "locked", label: "Locked" },
-  { value: "unverified", label: "Unverified" },
-  { value: "deactivated", label: "Deactivated" },
-  { value: "deleted", label: "Deleted" },
+// Values only — labels are looked up via adminUsers.list.statusTabs / sortOptions so they
+// translate, while these arrays stay the stable source of truth for URL parsing/validation.
+const STATUS_TAB_VALUES = ["all", "active", "locked", "unverified", "deactivated", "deleted"] as const;
+
+const SORT_OPTION_VALUES = [
+  "created_desc",
+  "created_asc",
+  "last_login_desc",
+  "last_login_asc",
+  "name_asc",
+  "name_desc",
 ] as const;
 
-const SORT_OPTIONS = [
-  { value: "created_desc", label: "Newest" },
-  { value: "created_asc", label: "Oldest" },
-  { value: "last_login_desc", label: "Recently active" },
-  { value: "last_login_asc", label: "Least recently active" },
-  { value: "name_asc", label: "Name A–Z" },
-  { value: "name_desc", label: "Name Z–A" },
-] as const;
-
-const numberFormatter = new Intl.NumberFormat("en-US");
+// camelCase keys matching adminUsers.list.sortOptions in the message catalog.
+const SORT_OPTION_KEYS: Record<(typeof SORT_OPTION_VALUES)[number], string> = {
+  created_desc: "createdDesc",
+  created_asc: "createdAsc",
+  last_login_desc: "lastLoginDesc",
+  last_login_asc: "lastLoginAsc",
+  name_asc: "nameAsc",
+  name_desc: "nameDesc",
+};
 
 function isStatusFilter(value: string | null): value is AdminUserStatusFilter {
-  return STATUS_TABS.some((tab) => tab.value === value);
+  return STATUS_TAB_VALUES.some((tab) => tab === value);
 }
 
 function isSort(value: string | null): value is AdminUserSort {
-  return SORT_OPTIONS.some((option) => option.value === value);
+  return SORT_OPTION_VALUES.some((option) => option === value);
 }
 
 function formatDate(value: string) {
@@ -84,17 +88,19 @@ function formatDate(value: string) {
  * a blank cell reads as neither — it reads as missing data.
  */
 function LastLoginCell({ value }: { value: string | null }) {
+  const t = useTranslations("adminUsers.list");
   if (!value) {
-    return <span className="text-xs italic text-ink-subtle">Never signed in</span>;
+    return <span className="text-xs italic text-ink-subtle">{t("neverSignedIn")}</span>;
   }
   return <span className="text-[13px] text-ink-muted">{formatDate(value)}</span>;
 }
 
 function RolesCell({ roles }: { roles: string[] }) {
+  const t = useTranslations("adminUsers.list");
   if (roles.length === 0) {
     // No platform role is the ordinary state for an ordinary user — every workspace-scoped role
     // lives in another service. Saying "none" would imply something is missing.
-    return <span className="text-xs text-ink-subtle">—</span>;
+    return <span className="text-xs text-ink-subtle">{t("noRoles")}</span>;
   }
 
   return (
@@ -117,6 +123,7 @@ function RolesCell({ roles }: { roles: string[] }) {
 }
 
 function UsersDirectory() {
+  const t = useTranslations("adminUsers.list");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -197,10 +204,10 @@ function UsersDirectory() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Platform directory"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<UsersIcon size={14} weight="fill" />}
-        title="Accounts"
-        description="Every account on the platform, independent of workspace membership."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -212,22 +219,25 @@ function UsersDirectory() {
               size={14}
               className={cn(directoryQuery.isFetching && "animate-spin")}
             />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
       <AdminFilterTabs
-        tabs={STATUS_TABS}
+        tabs={STATUS_TAB_VALUES.map((value) => ({
+          value,
+          label: t(`statusTabs.${value}`),
+        }))}
         value={status}
         onChange={(value) =>
           updateParams({ status: value === "all" ? undefined : value, page: undefined })
         }
-        label="Account status"
+        label={t("statusTabsLabel")}
         trailing={
           directoryQuery.isPending
-            ? "Loading…"
-            : `${numberFormatter.format(total)} account${total === 1 ? "" : "s"}`
+            ? t("loading")
+            : t("accountCount", { count: total })
         }
       />
 
@@ -247,22 +257,22 @@ function UsersDirectory() {
             type="search"
             value={searchDraft}
             onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder="Search name or email…"
-            aria-label="Search users"
+            placeholder={t("searchPlaceholder")}
+            aria-label={t("searchAriaLabel")}
             className="h-9 w-full rounded-lg border border-border bg-surface-1 pl-8 pr-3 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-subtle focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
           />
         </form>
 
         <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-          Sort
+          {t("sortLabel")}
           <select
             value={sort}
             onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
             className="h-9 rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
           >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+            {SORT_OPTION_VALUES.map((value) => (
+              <option key={value} value={value}>
+                {t(`sortOptions.${SORT_OPTION_KEYS[value]}`)}
               </option>
             ))}
           </select>
@@ -274,17 +284,15 @@ function UsersDirectory() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">The user directory could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the auth service and that your session still holds the platform admin role.
-              </p>
+              <p className="font-medium">{t("loadErrorTitle")}</p>
+              <p className="mt-1 text-ink-muted">{t("loadErrorDescription")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void directoryQuery.refetch()}
               >
-                Try again
+                {t("tryAgain")}
               </Button>
             </div>
           </div>
@@ -309,21 +317,19 @@ function UsersDirectory() {
               <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
                 <UsersIcon size={20} weight="duotone" />
               </span>
-              <p className="mt-3 text-sm font-medium">No accounts match these filters</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Clear the search or pick a different status tab.
-              </p>
+              <p className="mt-3 text-sm font-medium">{t("emptyTitle")}</p>
+              <p className="mt-1 text-xs text-ink-muted">{t("emptyDescription")}</p>
             </div>
           </div>
         ) : (
           <div>
             <div className="hidden border-b border-hairline/80 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle md:flex md:items-center">
-              <div className="flex-1">User</div>
-              <div className="w-[110px] shrink-0">Status</div>
-              <div className="w-[160px] shrink-0">Roles</div>
-              <div className="w-[90px] shrink-0 text-right">Sessions</div>
-              <div className="w-[130px] shrink-0 text-right">Last Login</div>
-              <div className="w-[230px] shrink-0 text-right">Actions</div>
+              <div className="flex-1">{t("columns.user")}</div>
+              <div className="w-[110px] shrink-0">{t("columns.status")}</div>
+              <div className="w-[160px] shrink-0">{t("columns.roles")}</div>
+              <div className="w-[90px] shrink-0 text-right">{t("columns.sessions")}</div>
+              <div className="w-[130px] shrink-0 text-right">{t("columns.lastLogin")}</div>
+              <div className="w-[230px] shrink-0 text-right">{t("columns.actions")}</div>
             </div>
             <ul>
               {items.map((user) => (
@@ -351,9 +357,7 @@ function UsersDirectory() {
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
+          <span>{t("pagination.pageOf", { page, totalPages })}</span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -361,7 +365,7 @@ function UsersDirectory() {
               disabled={page <= 1}
               onClick={() => updateParams({ page: String(page - 1) })}
             >
-              Previous
+              {t("pagination.previous")}
             </Button>
             <Button
               variant="outline"
@@ -369,7 +373,7 @@ function UsersDirectory() {
               disabled={page >= totalPages}
               onClick={() => updateParams({ page: String(page + 1) })}
             >
-              Next
+              {t("pagination.next")}
             </Button>
           </div>
         </div>
@@ -385,6 +389,7 @@ function UserRow({
   user: AdminUserSummaryDto;
   onAction: (user: AdminUserSummaryDto, action: AdminUserAction) => void;
 }) {
+  const t = useTranslations("adminUsers.list");
   return (
     <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
       {/* The NAME is the link, not the row. Four action buttons sit at the other end of this
@@ -417,9 +422,9 @@ function UserRow({
           everywhere" looks like — so it is printed rather than blanked. */}
       <div className="w-[90px] shrink-0 text-[13px] tabular-nums text-ink-muted md:text-right">
         {user.activeSessionCount === 0 ? (
-          <span className="text-ink-subtle">0 sessions</span>
+          <span className="text-ink-subtle">{t("sessionCount", { count: 0 })}</span>
         ) : (
-          `${user.activeSessionCount} session${user.activeSessionCount === 1 ? "" : "s"}`
+          t("sessionCount", { count: user.activeSessionCount })
         )}
       </div>
 
@@ -432,30 +437,30 @@ function UserRow({
           to clear, so the row never offers a no-op. */}
       <div className="w-[230px] shrink-0 flex items-center justify-end gap-1.5">
         {user.status === "deleted" ? (
-          <span className="text-[11px] text-ink-subtle">—</span>
+          <span className="text-[11px] text-ink-subtle">{t("noActionsAvailable")}</span>
         ) : (
           <>
             {user.status === "locked" ? (
               <Button variant="outline" size="sm" onClick={() => onAction(user, "unlock")}>
                 <LockOpen size={13} />
-                Unlock
+                {t("unlock")}
               </Button>
             ) : null}
             {user.activeSessionCount > 0 ? (
               <Button variant="outline" size="sm" onClick={() => onAction(user, "revoke-sessions")}>
                 <SignOut size={13} />
-                Sign out
+                {t("signOut")}
               </Button>
             ) : null}
             {user.status === "deactivated" ? (
               <Button variant="outline" size="sm" onClick={() => onAction(user, "reactivate")}>
                 <UserCirclePlus size={13} />
-                Reactivate
+                {t("reactivate")}
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={() => onAction(user, "deactivate")}>
                 <UserCircleMinus size={13} />
-                Deactivate
+                {t("deactivate")}
               </Button>
             )}
           </>

@@ -22,6 +22,7 @@
  */
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowUpRight, Warning } from "@phosphor-icons/react/dist/ssr";
 
 import { formatMoney } from "@/lib/format/currency";
@@ -36,6 +37,17 @@ import type { CreditBalanceDto, SubscriptionDto } from "@/types/billing";
 /** Below this share remaining, the balance is a thing to act on rather than a thing to know. */
 const LOW_CREDIT_PERCENT = 15;
 
+/**
+ * `projectCycle`'s `reason` strings, translated at the call site rather than in
+ * `lib/billing/cycle-projection.ts` itself — that file's own test asserts these exact English
+ * strings, so this keeps that contract untouched while still showing a translated reason here.
+ */
+const PROJECTION_REASON_KEYS: Record<string, string> = {
+  "This cycle has no dates on it.": "noPlan.reasonNoDates",
+  "Too early in the cycle to project a rate.": "noPlan.reasonTooEarly",
+  "Nothing used yet this cycle.": "noPlan.reasonNothingUsed",
+};
+
 export function CycleSummary({
   credits,
   subscription,
@@ -49,6 +61,7 @@ export function CycleSummary({
   billingHref: string;
   plansHref: string;
 }) {
+  const t = useTranslations("dashboard");
   if (!credits) {
     return (
       /* Plain. The gradient this used to carry now lives in DashboardHero above.
@@ -59,18 +72,17 @@ export function CycleSummary({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[13px] font-medium text-ink">
-              No plan on this workspace
+              {t("noPlan.title")}
             </p>
             <p className="mt-0.5 text-[12px] text-ink-muted">
-              Meetings translate against a credit balance, and this workspace
-              has none to draw from.
+              {t("noPlan.description")}
             </p>
           </div>
           <Link
             href={plansHref}
             className="inline-flex h-[28px] shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 text-[13px] font-medium text-ink transition hover:bg-surface-2"
           >
-            Choose a plan
+            {t("noPlan.choosePlan")}
             <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         </div>
@@ -102,35 +114,38 @@ export function CycleSummary({
           separate cards. */}
       <div className="grid grid-cols-2 divide-x divide-y divide-hairline sm:grid-cols-4 sm:divide-y-0">
         <Cell
-          label="Credits left"
+          label={t("cells.creditsLeft")}
           value={remaining.toLocaleString()}
           detail={
             remainingPercent !== null
-              ? `${remainingPercent}% of ${available.toLocaleString()} available`
+              ? t("cells.creditsLeftDetail", { percent: remainingPercent, available: available.toLocaleString() })
               : undefined
           }
           tone={isLow ? "warn" : "default"}
         />
         <Cell
-          label="Used this cycle"
+          label={t("cells.usedThisCycle")}
           value={used.toLocaleString()}
-          detail={`${usedPercent}% of this cycle's credits`}
+          detail={t("cells.usedThisCycleDetail", { percent: usedPercent })}
         />
         <Cell
-          label="Burn rate"
+          label={t("cells.burnRate")}
           value={
             projection.kind === "unknown"
               ? "—"
-              : `${Math.round(projection.perDay).toLocaleString()}/day`
+              : t("cells.perDay", { value: Math.round(projection.perDay).toLocaleString() })
           }
           detail={
             projection.kind === "unknown"
-              ? projection.reason
-              : "Average since the cycle began"
+              ? (() => {
+                  const key = PROJECTION_REASON_KEYS[projection.reason];
+                  return key ? t(key as never) : projection.reason;
+                })()
+              : t("cells.burnRateDetailAverage")
           }
         />
         <Cell
-          label={willRunOut ? "Runs out" : "Renews"}
+          label={willRunOut ? t("cells.runsOut") : t("cells.renews")}
           value={
             projection.kind === "runs-out"
               ? formatDay(projection.onDate)
@@ -138,10 +153,10 @@ export function CycleSummary({
           }
           detail={
             projection.kind === "runs-out"
-              ? `In ${Math.max(1, Math.round(projection.daysToEmpty))} day${Math.round(projection.daysToEmpty) === 1 ? "" : "s"} — before the cycle ends`
+              ? t("cells.runsOutDetail", { count: Math.max(1, Math.round(projection.daysToEmpty)) })
               : projection.kind === "lasts"
-                ? `${projection.creditsLeftAtRenewal.toLocaleString()} left at this rate`
-                : `In ${daysLeft} day${daysLeft === 1 ? "" : "s"}`
+                ? t("cells.lastsDetail", { count: projection.creditsLeftAtRenewal.toLocaleString() })
+                : t("cells.renewsDetail", { count: daysLeft })
           }
           tone={willRunOut ? "warn" : "default"}
         />
@@ -169,15 +184,15 @@ export function CycleSummary({
 
         <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-[12px]">
           <p className="text-ink-muted">
-            <span className="font-medium text-ink">{usedPercent}%</span> of
-            credits used
+            <span className="font-medium text-ink">{usedPercent}%</span>{" "}
+            {t("usedPercentOfCredits")}
             {elapsedPercent !== null ? (
               <>
                 {" · "}
                 <span className="font-medium text-ink">
                   {elapsedPercent}%
                 </span>{" "}
-                of the cycle elapsed
+                {t("elapsedPercentOfCycle")}
               </>
             ) : null}
           </p>
@@ -191,10 +206,10 @@ export function CycleSummary({
                 {/* With its currency, like the billing page. A bare "1,290,000" beside a credit
                     count reads as more credits. */}
                 {subscription.price > 0
-                  ? ` · ${formatMoney(subscription.price, "VND")}/cycle`
+                  ? ` · ${formatMoney(subscription.price, "VND")}/${t("cells.cyclePerUnit")}`
                   : ""}
                 {subscription.cancelAtPeriodEnd
-                  ? " · cancels at period end"
+                  ? ` · ${t("cancelsAtPeriodEnd")}`
                   : ""}
               </span>
             ) : null}
@@ -202,7 +217,7 @@ export function CycleSummary({
               href={billingHref}
               className="inline-flex items-center gap-1 text-ink-muted transition-colors hover:text-ink"
             >
-              Billing
+              {t("billing")}
               <ArrowUpRight className="h-3 w-3" />
             </Link>
           </div>
@@ -211,8 +226,7 @@ export function CycleSummary({
         {subscription?.cancelAtPeriodEnd ? (
           <p className="mt-2 flex items-center gap-1.5 text-[12px] text-amber-500">
             <Warning className="h-3.5 w-3.5" />
-            Translation stops for everyone in this workspace on{" "}
-            {formatDay(new Date(end))}.
+            {t("cancelWarning", { date: formatDay(new Date(end)) })}
           </p>
         ) : null}
       </div>
