@@ -228,17 +228,20 @@ export function transcriptLanguageOptions(
 /**
  * The picker's list: what the transcript already has, plus what it could be given.
  *
- * `transcriptLanguageOptions` is built from the record, and its reason for refusing to offer a
- * language with no text in it was sound — a dropdown entry whose only effect is to return every
- * line untranslated reads as a broken page. That reason no longer holds. Choosing a language now
- * translates the lines missing from it, so an entry with a coverage of zero is an offer rather
- * than a dead end, and withholding it is what leaves a reader stuck: a meeting where translation
- * was never started had NO entries at all, which is the case the picker was most needed for.
+ * `transcriptLanguageOptions` is built from the record, and it refuses to invent a language with
+ * no text in it. This adds those languages back, but only as OFFERS: `offerable` is the room's
+ * GENERATABLE set (WT-705 — the meeting's L2 snapshot intersected with the workspace's current L1,
+ * see `resolveGeneratableLanguages`), never the product's whole translation catalogue. A VI/EN/ES
+ * meeting must not be offered French.
+ *
+ * Choosing an entry only READS the transcript in it. Filling in the missing lines is a separate,
+ * confirmed action that only someone with host authority can take; a zero-coverage entry is a
+ * place that action can start from, not a translation that starts on selection.
  *
  * Kept separate from `transcriptLanguageOptions` rather than folded into it because
  * `defaultTranscriptLanguage` reads that list to decide what to open on, and it must keep
- * deciding from what the meeting actually produced. A catalogue of offers is not evidence that
- * a meeting was multilingual.
+ * deciding from what the meeting actually produced. A list of offers is not evidence that a
+ * meeting was multilingual.
  */
 export function withOfferableLanguages(
   options: readonly TranscriptLanguageOption[],
@@ -273,17 +276,30 @@ export function withOfferableLanguages(
  * A meeting held in ONE language falls back to as-spoken. Unifying a transcript that is already
  * unified changes nothing, and starting on a language chip implies a choice was made about a
  * question that was never asked.
+ *
+ * `allowed` (WT-705) is the room's generatable set. When given, only options inside it may be
+ * opened on automatically: a language the transcript already holds but the meeting no longer
+ * generates stays in the menu and stays readable, it is just never the default. An empty
+ * `allowed` (room not loaded, or nothing generatable) opens on as-spoken.
  */
 export function defaultTranscriptLanguage(
   options: readonly TranscriptLanguageOption[],
   preferredLanguage?: string | null,
+  allowed?: readonly string[],
 ): string {
   if (options.length <= 1) return AS_SPOKEN;
 
-  const preferred = normalizeLanguageCode(preferredLanguage ?? "");
-  if (preferred && options.some((option) => option.code === preferred)) return preferred;
+  const allowedCodes = allowed
+    ? new Set(allowed.map((code) => normalizeLanguageCode(code)).filter(Boolean))
+    : null;
+  const candidates = allowedCodes
+    ? options.filter((option) => allowedCodes.has(option.code))
+    : options;
 
-  return options[0]?.code ?? AS_SPOKEN;
+  const preferred = normalizeLanguageCode(preferredLanguage ?? "");
+  if (preferred && candidates.some((option) => option.code === preferred)) return preferred;
+
+  return candidates[0]?.code ?? AS_SPOKEN;
 }
 
 /** The language a display choice actually asks for — "" when it asks for none. */
