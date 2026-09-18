@@ -85,7 +85,8 @@ import {
   printDocument,
   type MinutesEditHandlers,
 } from "@/components/rooms/minutes-document";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import type { MinutesTranslationDto } from "@/types/meetingMinutes";
 
 /** The short form, for the badge beside the number. */
@@ -238,10 +239,13 @@ export function MinutesPanel({
             return data;
           });
           return superseded || data.status !== "generating";
-        } catch {
+        } catch (error) {
           setReadingLanguage(null);
           setFetched(null);
-          toast.error("Could not read this record in that language.");
+          // The server's own sentence. WT-703 refuses a language the meeting does not offer with
+          // one that names the languages it does — replacing it with a generic apology is what
+          // made this picker look broken rather than bounded.
+          toast.error(getErrorMessage(error, "Could not read this record in that language."));
           return true;
         }
       };
@@ -507,6 +511,8 @@ export function MinutesPanel({
               half-typed correction is a document nobody is reading. */}
           <ReadingLanguagePicker
             carried={carriedLanguages}
+            primaryLanguage={stored?.primaryLanguage}
+            generatable={room?.artifactLanguages?.generatable}
             reading={readingLanguage}
             busy={fetched?.status === "generating"}
             disabled={dirty}
@@ -813,19 +819,29 @@ function SecretaryPicker({
  */
 function ReadingLanguagePicker({
   carried,
+  primaryLanguage,
+  generatable,
   reading,
   busy,
   disabled,
   onChange,
 }: {
   carried: string[];
+  /** The language the record was drawn up in — "As drawn up" already is that reading. */
+  primaryLanguage?: string | null;
+  /** WT-703: what the server will generate this meeting in. See artifact-language-options.ts. */
+  generatable?: readonly string[] | null;
   reading: string | null;
   busy: boolean;
   disabled: boolean;
   onChange: (language: string) => void;
 }) {
-  const offered = languagesInScope("chatTarget").filter(
-    (language) => !carried.includes(language.code),
+  // The meeting's own languages, not every language the product knows: anything else is refused
+  // by the server, and a choice that can only fail is not a choice. The reading on screen stays
+  // listed so the select never blanks.
+  const primary = normalizeLanguageCode(primaryLanguage ?? "");
+  const offered = artifactLanguageOptions(generatable, [reading]).filter(
+    (language) => !carried.includes(language.code) && language.code !== primary,
   );
 
   return (
@@ -848,13 +864,15 @@ function ReadingLanguagePicker({
             ))}
           </optgroup>
         ) : null}
-        <optgroup label="Written on request">
-          {offered.map((language) => (
-            <option key={language.code} value={language.code}>
-              {language.name}
-            </option>
-          ))}
-        </optgroup>
+        {offered.length > 0 ? (
+          <optgroup label="Written on request">
+            {offered.map((language) => (
+              <option key={language.code} value={language.code}>
+                {language.label}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
       </select>
       {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
     </div>
