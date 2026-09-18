@@ -2233,7 +2233,7 @@ export function GlobalChatbot() {
                                             ? "Connect to use in WarpBot"
                                             : disabledPluginKeys.includes(plugin.key)
                                               ? "Off in this chat"
-                                              : plugin.connectedAccountEmail ?? "Connected"}
+                                              : "Connected"}
                                         </div>
                                       </div>
                                       {connected ? (
