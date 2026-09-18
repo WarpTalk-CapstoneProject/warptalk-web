@@ -392,6 +392,9 @@ export const API = {
      * The desktop app opens consent in the system browser, and by the time the callback runs
      * nothing on that request remembers which app started it.
      */
+    /** POST `{ apiKey }` — connects an `api_key` plugin with the caller's own key. */
+    pluginApiKey: (pluginKey: string) =>
+      `/assistant/plugins/${encodeURIComponent(pluginKey)}/api-key`,
     pluginConnect: (pluginKey: string, client?: string) =>
       `/assistant/plugins/${encodeURIComponent(pluginKey)}/connect` +
       (client ? `?client=${encodeURIComponent(client)}` : ""),

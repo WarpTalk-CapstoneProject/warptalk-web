@@ -484,7 +484,7 @@ function NewPluginDialog({
             >
               <Input
                 id="new-plugin-server-url"
-                placeholder="https://mcp.example.com/sse"
+                placeholder="https://mcp.example.com/mcp"
                 className="font-mono text-[12px]"
                 {...bind("mcpServerUrl")}
               />
@@ -514,8 +514,37 @@ function NewPluginDialog({
           </DraftField>
         </div>
 
-        <div className="rounded-lg border border-hairline bg-surface-2/50 px-3 py-3">
-          <label className="flex items-start gap-2 text-[12px]">
+        <fieldset className="rounded-lg border border-hairline bg-surface-2/50 px-3 py-3">
+          <legend className="px-1 text-[12px] font-medium text-ink">How users connect</legend>
+          <div className="grid gap-2 md:grid-cols-2">
+            {(
+              [
+                ["oauth", "Sign in with OAuth", "Users sign in on the provider's page. Recommended when the server supports it."],
+                ["api_key", "Each user pastes an API key", "No OAuth. The key is checked against the server, stored encrypted, and sent as a Bearer token."],
+              ] as const
+            ).map(([mode, title, note]) => (
+              <label key={mode} className="flex items-start gap-2 text-[12px]">
+                <input
+                  type="radio"
+                  name="new-plugin-auth-mode"
+                  className="mt-0.5"
+                  checked={draft.authMode === mode}
+                  onChange={() => {
+                    update("authMode", mode);
+                    if (mode === "api_key") toggleOAuth(false);
+                  }}
+                />
+                <span>
+                  <span className="font-medium text-ink">{title}</span>
+                  <span className="mt-1 block leading-5 text-ink-muted">{note}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {draft.authMode === "api_key" ? null : (
+        <div className="rounded-lg border border-hairline bg-surface-2/50 px-3 py-3">          <label className="flex items-start gap-2 text-[12px]">
             <input
               type="checkbox"
               className="mt-0.5"
@@ -608,6 +637,7 @@ function NewPluginDialog({
             </div>
           ) : null}
         </div>
+        )}
 
         {!catalogLoaded ? (
           <p className="text-[11px] leading-5 text-ink-muted">

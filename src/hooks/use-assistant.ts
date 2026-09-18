@@ -166,6 +166,27 @@ export function usePluginConnectUrl() {
   });
 }
 
+export function useConnectPluginWithApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+      apiKey,
+      workspaceId,
+    }: {
+      pluginKey: string;
+      apiKey: string;
+      workspaceId?: string | null;
+    }) => {
+      const { data } = await assistantService.connectPluginWithApiKey(pluginKey, apiKey, workspaceId);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
+    },
+  });
+}
+
 export function useDisconnectAssistantPlugin() {
   const queryClient = useQueryClient();
   return useMutation({
