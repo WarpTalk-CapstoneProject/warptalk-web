@@ -233,7 +233,21 @@
       },
       "cancel": "Cancel",
       "save": "Save rate card",
-      "saving": "Saving…"
+      "saving": "Saving…",
+      "creditCost": {
+        "title": "Provider cost",
+        "description": "What the provider charges WarpTalk per unit on a credit-unit (CRD) card — the card usage is actually settled on. Its credit price is set separately and does not change here. Admin Insights reads this cost to compute AI provider cost.",
+        "field": "Provider cost (USD per {unit})",
+        "hint": "In USD for one {unit} of usage, as the provider bills it. Must be above zero.",
+        "noUnit": "unit",
+        "effectBackfill": "This card has no provider cost yet. The value will also apply to the usage already settled on it, so past periods in Insights gain a cost.",
+        "effectSupersede": "This card already has a cost. A new version of the card takes effect now; usage already settled keeps the cost that applied to it.",
+        "save": "Save provider cost",
+        "errors": {
+          "invalid": "Enter a positive amount in USD, for example 0.00049.",
+          "noUnit": "This card has no unit, so a per-unit cost cannot be applied to it."
+        }
+      }
     },
     "deactivate": {
       "title": "Deactivate this rate card?",
