@@ -252,4 +252,68 @@ for (const [name, source] of [
   );
 }
 
+// ── WT-705: the summary's languages follow the meeting, and rewriting is the host's ──
+//
+// The picker used to offer the whole product catalogue, so most choices ended in a 400 from the
+// server (WT-703). What can be READ is every rendering that exists; what can be WRITTEN is the
+// room's generatable set. Pinned here because both regressions render perfectly well.
+assert.doesNotMatch(
+  rail,
+  /languagesInScope\("chatTarget"\)/,
+  "The summary language picker must not offer the product catalogue — the server refuses to "
+    + "write a summary in a language outside the meeting's generatable set.",
+);
+assert.match(
+  rail,
+  /resolveGeneratableLanguages\(/,
+  "The picker's writable languages come from the room's artifactLanguages (WT-703).",
+);
+assert.match(
+  rail,
+  /artifactLanguageGroups\(/,
+  "Existing renderings and writable languages are split by the shared contract, so what already "
+    + "exists is never re-filtered.",
+);
+assert.match(
+  rail,
+  /useSummaryRenderings\(/,
+  "The picker must know which renderings already exist — those are readable in any language.",
+);
+assert.match(
+  rail,
+  /<optgroup label="Available">[\s\S]*<optgroup label="Can be written">/,
+  "Readable and writable languages are offered as two separate groups.",
+);
+assert.match(
+  rail,
+  /<option value="">As spoken<\/option>/,
+  "\"As spoken\" is always offered, ahead of both groups.",
+);
+assert.match(
+  rail,
+  /canGenerateIn\(currentLanguage, generatable\)/,
+  "Changing the shape must not carry a language the new shape can neither read nor write.",
+);
+assert.match(
+  rail,
+  /stale && onRewrite && isHost/,
+  "Rewriting the meeting's summary is host-only on the server; the button is the host's alone.",
+);
+const renderingsHook = read("src/hooks/use-summary-renderings.ts");
+assert.match(
+  renderingsHook,
+  /queryKey: SUMMARY_RENDERINGS_KEY\(/,
+  "The renderings list is cached under its own key.",
+);
+assert.match(
+  renderingsHook,
+  /"summary-renderings", roomId\]/,
+  "The renderings query key is [\"summary-renderings\", roomId].",
+);
+assert.match(
+  renderingsHook,
+  /enabled: !!roomId/,
+  "No room id, no request.",
+);
+
 console.log("Reading rail contract (Option C): PASS");

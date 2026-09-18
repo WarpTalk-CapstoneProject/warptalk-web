@@ -43,7 +43,7 @@
  *   while making every sentence of it answerable.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CaretDown,
   CaretUp,
@@ -66,7 +66,14 @@ import {
   useReadingSync,
 } from "@/components/rooms/transcript-reading-sync";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
-import { languagesInScope } from "@/lib/language/languages";
+import { useSummaryRenderings } from "@/hooks/use-summary-renderings";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import {
+  artifactLanguageGroups,
+  canGenerateIn,
+  resolveGeneratableLanguages,
+} from "@/lib/language/artifact-languages";
+import { getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
@@ -87,6 +94,7 @@ import {
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -712,23 +720,72 @@ function RailSummary({
   const isRendering = rendering?.status === "generating";
 
   /**
-   * Every language the product can translate into, not only the ones this meeting produced.
+   * WT-705 — the languages on offer follow the MEETING, not the product catalogue.
    *
-   * The same rule the transcript picker follows, and for the same reason: a summary is
-   * rewritten from the transcript on demand, so a language this meeting never touched is an
-   * offer rather than a dead end. "As spoken" is listed only when that is what the current
-   * summary actually is — offering it against a summary already written in a chosen language
-   * would be offering to un-choose, which no request can express.
+   * Languages narrow at every level: workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3). Two
+   * questions are kept apart here, because confusing them is the bug this replaces:
+   *
+   * - What can be READ: every rendering that already exists, in whatever language — never
+   *   re-filtered. A summary written in French stays readable after the workspace drops French.
+   * - What can be WRITTEN: only `room.artifactLanguages.generatable`, the server's set (the
+   *   meeting's languages still allowed by the workspace). Offering the whole catalogue meant
+   *   most choices ended in a 400 from the server.
+   *
+   * `record.id` is the room id — the same id the page reads renderings with.
    */
-  const languageOptions = useMemo(() => {
-    const offered = languagesInScope("chatTarget").map((language) => ({
-      code: language.code,
-      label: language.name,
-    }));
-    return currentLanguage
-      ? offered
-      : [{ code: "", label: "As spoken" }, ...offered];
-  }, [currentLanguage]);
+  const roomId = record?.id;
+  const { data: room } = useTranslationRoom(roomId ?? "");
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  // Mirrors the room page's rule. Rewriting the meeting's summary is host-only on the server
+  // (403 otherwise), so nobody else is shown a button that can only fail.
+  const isHost = Boolean(room && (room.isHost || (currentUserId && room.hostId === currentUserId)));
+  const generatable = useMemo(() => resolveGeneratableLanguages(room).codes, [room]);
+  const { data: renderings, refetch: refetchRenderings } = useSummaryRenderings(roomId);
+
+  // A rendering that just finished is a new "Available" language — refresh the list so the
+  // picker moves it out of "Can be written".
+  const renderingReadyKey =
+    rendering?.status === "ready" ? `${rendering.templateKey}:${rendering.language}` : null;
+  useEffect(() => {
+    if (renderingReadyKey && roomId) void refetchRenderings();
+  }, [renderingReadyKey, roomId, refetchRenderings]);
+
+  /** Languages this template can be READ in right now. "As spoken" ("") is never in here. */
+  function existingLanguagesFor(templateKey: string): string[] {
+    const fromRenderings = (renderings ?? [])
+      .filter((item) => item.templateKey === templateKey)
+      .map((item) => item.language);
+    const published = record?.summary;
+    const fromPublished =
+      published && (published.templateKey ?? DEFAULT_SUMMARY_TEMPLATE) === templateKey
+        ? [published.summaryLanguage]
+        : [];
+    return [...fromRenderings, ...fromPublished].filter(
+      (code): code is string => Boolean(code),
+    );
+  }
+
+  // Cheap enough to derive on every render: a handful of renderings at most.
+  const languageGroups = artifactLanguageGroups(
+    [...existingLanguagesFor(currentTemplate), summary?.summaryLanguage, currentLanguage],
+    generatable,
+  );
+
+  /** The select's value must be one of its options; the groups carry normalized codes. */
+  const selectedLanguage = currentLanguage ? normalizeLanguageCode(currentLanguage) : "";
+
+  /**
+   * Changing the SHAPE keeps the language when that pair can be read or written. When it can do
+   * neither — a language that exists for the old shape only and is no longer generatable — the
+   * request falls back to "as spoken" instead of asking for a guaranteed 400.
+   */
+  function languageForTemplate(templateKey: string): string {
+    if (!currentLanguage) return "";
+    const target = normalizeLanguageCode(currentLanguage);
+    const readable = existingLanguagesFor(templateKey).map((code) => normalizeLanguageCode(code));
+    if (readable.includes(target)) return currentLanguage;
+    return canGenerateIn(currentLanguage, generatable) ? currentLanguage : "";
+  }
 
   function selectRendering(template: string, language: string) {
     // Reading, not rewriting: nobody else's summary changes. The deadline and the polling live
@@ -805,7 +862,7 @@ function RailSummary({
               onChange={(event) => {
                 const templateKey = event.target.value;
                 if (templateKey === currentTemplate) return;
-                selectRendering(templateKey, currentLanguage);
+                selectRendering(templateKey, languageForTemplate(templateKey));
               }}
               aria-label="Summary shape"
               title="Read this meeting in a different shape"
@@ -818,22 +875,38 @@ function RailSummary({
               ))}
             </select>
             <select
-              value={currentLanguage}
+              value={selectedLanguage}
               disabled={isRendering}
               onChange={(event) => {
                 const language = event.target.value;
-                if (language === currentLanguage) return;
+                if (language === selectedLanguage) return;
                 selectRendering(currentTemplate, language);
               }}
               aria-label="Summary language"
               title="Read this meeting in a different language"
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
-              {languageOptions.map((language) => (
-                <option key={language.code || "as-spoken"} value={language.code}>
-                  {language.label}
-                </option>
-              ))}
+              {/* "As spoken" is always offered: it follows the transcript and is never outside
+                  the meeting's languages. */}
+              <option value="">As spoken</option>
+              {languageGroups.existing.length ? (
+                <optgroup label="Available">
+                  {languageGroups.existing.map((code) => (
+                    <option key={code} value={code}>
+                      {getLanguageName(code)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {languageGroups.generatable.length ? (
+                <optgroup label="Can be written">
+                  {languageGroups.generatable.map((code) => (
+                    <option key={code} value={code}>
+                      {getLanguageName(code)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </>
         ) : null}
@@ -881,7 +954,10 @@ function RailSummary({
         </p>
       ) : null}
 
-      {stale && onRewrite ? (
+      {/* Host-only, like the endpoint behind it (403 for anyone else). A reader who is not the
+          host still sees the summary is out of date through the transcript itself; offering them
+          a button that can only fail would be worse than offering nothing. */}
+      {stale && onRewrite && isHost ? (
         <div className="px-1 pt-2">
           <SummaryStalenessNotice
             busy={regenerating}
