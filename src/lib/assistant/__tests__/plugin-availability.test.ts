@@ -93,7 +93,7 @@ describe("memberPluginAction", () => {
           workspaceAvailability: "not_added",
           requestStatus: "pending",
           installationStatus: "not_installed",
-          canAddToWorkspace: true,
+          canAdd: true,
         },
         "WarpTalk Demo",
       ),
@@ -102,10 +102,10 @@ describe("memberPluginAction", () => {
   });
 
   test("no flag, or a false one, is a member's Request", () => {
-    for (const canAddToWorkspace of [undefined, false]) {
+    for (const canAdd of [undefined, false]) {
       assert.equal(
         memberPluginAction(
-          { workspaceAvailability: "not_added", installationStatus: "not_installed", canAddToWorkspace },
+          { workspaceAvailability: "not_added", installationStatus: "not_installed", canAdd },
           "X",
         ).kind,
         "request",
@@ -116,14 +116,14 @@ describe("memberPluginAction", () => {
   test("the flag does not turn a plugin the workspace has, or an installed one, into Add", () => {
     assert.equal(
       memberPluginAction(
-        { workspaceAvailability: "added", installationStatus: "not_installed", canAddToWorkspace: true },
+        { workspaceAvailability: "added", installationStatus: "not_installed", canAdd: true },
         "X",
       ).kind,
       "connect",
     );
     assert.equal(
       memberPluginAction(
-        { workspaceAvailability: "not_added", installationStatus: "installed", canAddToWorkspace: true },
+        { workspaceAvailability: "not_added", installationStatus: "installed", canAdd: true },
         "X",
       ).kind,
       "connect",

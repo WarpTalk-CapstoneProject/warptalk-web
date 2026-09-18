@@ -176,7 +176,7 @@ export interface AssistantPluginCatalogItemDto {
    * Optional, and absent reads as "not the Owner": a server older than the flag gets the member's
    * Request, which it already accepts. Only meaningful on a `not_added` row.
    */
-  canAddToWorkspace?: boolean;
+  canAdd?: boolean;
 }
 
 export type PluginAuthMode = "oauth" | "api_key";

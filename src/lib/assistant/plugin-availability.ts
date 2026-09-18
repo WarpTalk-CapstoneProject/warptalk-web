@@ -37,12 +37,12 @@ export interface MemberPluginAction {
  * decides. The page's own label logic (Connect / Manage / Reconnect) still applies to `connect`.
  *
  * `add` is the Owner's version of `request`: asking yourself for a plugin files a request nobody is
- * told about. It needs the server to say so (`canAddToWorkspace`); absent, the row is a member's.
+ * told about. It needs the server to say so (`canAdd`); absent, the row is a member's.
  */
 export function memberPluginAction(
   plugin: Pick<
     AssistantPluginCatalogItemDto,
-    "workspaceAvailability" | "requestStatus" | "installationStatus" | "canAddToWorkspace"
+    "workspaceAvailability" | "requestStatus" | "installationStatus" | "canAdd"
   >,
   workspaceName: string | null | undefined,
 ): MemberPluginAction {
@@ -62,7 +62,7 @@ export function memberPluginAction(
     return { kind: "connect", caption: notAdded, subtitle: null };
   }
 
-  if (plugin.canAddToWorkspace === true) {
+  if (plugin.canAdd === true) {
     return { kind: "add", caption: notAdded, subtitle: null };
   }
 
