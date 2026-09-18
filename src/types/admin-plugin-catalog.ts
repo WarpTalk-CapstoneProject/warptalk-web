@@ -161,7 +161,7 @@ export interface CreateAdminMcpPluginRequest {
    * `oAuthClientSource` on the way back produces `oAuth` on the way in.
    */
   oAuth?: CreateAdminMcpPluginOAuthRequest;
-  /** Omitted means oauth. pi_key cannot be combined with oAuth; the server refuses it. */
+  /** Omitted means oauth. `api_key` cannot be combined with oAuth; the server refuses it. */
   authMode?: AdminPluginAuthMode;
 }
 
