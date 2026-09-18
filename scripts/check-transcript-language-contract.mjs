@@ -28,13 +28,14 @@
  *      500 translations) and present it as the whole meeting, and a longer one was silently
  *      truncated mid-sentence. Reading in one language makes that worse: the dropdown would be
  *      built from a fraction of the meeting and report coverage for the rest.
- *   6. Choosing a language means the WHOLE meeting is in it. The live pipeline only ever
- *      translated into the target selected at that moment, so a meeting that switched languages
- *      half way through covered neither of them end to end, and one where translation was never
- *      started covered none — the picker had no entries at all. Every language the product can
- *      translate into is offered, and picking one asks the server to fill in what is missing.
- *      Reverting this to "offer only what there is text for" restores a picker that reports the
- *      gap and cannot close it.
+ *   6. Reading a language never translates; generating one is offered per the meeting's
+ *      languages (WT-705). Languages narrow workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3).
+ *      Every language the transcript already holds stays in the picker and stays readable. The
+ *      extra, not-yet-translated entries are the room's GENERATABLE languages
+ *      (resolveGeneratableLanguages), never the product's chatTarget catalogue — a VI/EN/ES
+ *      meeting used to be offered FR/JA/KO/ZH. Picking an entry only sets the language: it used
+ *      to start translating 88 entries on the spot, for any viewer, with no confirmation. The
+ *      backfill is started only from the confirmation dialog (or a retry of a confirmed run).
  *   7. A corrected line's translations are refetched after the correction. Correcting what
  *      somebody said invalidates every translation of that line; redoing them happens in
  *      warptalk-ai and lands seconds later, so a page that only refetches segments shows the
@@ -152,23 +153,51 @@ assert.match(
   "A merged saved utterance must record every segment id it absorbed.",
 );
 
-// 6. A language with no text in it yet is an offer, not a missing row.
+// 6. Reading never translates; the offers are the room's generatable languages.
+assert.ok(
+  panel.includes("resolveGeneratableLanguages("),
+  "The picker's not-yet-translated entries must come from the room's generatable languages"
+    + " (WT-705), the meeting's L2 intersected with the workspace's current L1.",
+);
+assert.ok(
+  !panel.includes('languagesInScope("chatTarget")'),
+  "The picker must not offer the product's whole translation catalogue — that is how a VI/EN/ES"
+    + " meeting was offered French, Japanese, Korean and Chinese.",
+);
 assert.ok(
   panel.includes("withOfferableLanguages("),
-  "The picker must be built from every language the product can translate into, not only the"
-    + " ones this meeting happened to produce — a meeting where translation was never started"
-    + " has no entries of its own.",
+  "The generatable languages must still be added to the picker, or a meeting where translation"
+    + " was never started has nothing a host can translate into.",
 );
 assert.ok(
   /<TranscriptLanguageMenu[\s\S]{0,400}options=\{offeredLanguages\}/.test(panel),
   "The picker must be handed the offered languages, or the extra entries are computed and"
     + " thrown away.",
 );
+const chooseAt = panel.indexOf("function chooseLanguage");
+assert.ok(chooseAt > 0, "chooseLanguage must exist.");
 assert.ok(
-  /function chooseLanguage[\s\S]{0,400}backfill\.request\(/.test(panel),
-  "Picking a language must request the missing translations. 'Read it in English' already means"
-    + " 'translate the rest into English'; making the reader ask twice is the bug.",
+  !panel.slice(chooseAt, chooseAt + 400).includes("backfill.request("),
+  "Picking a language must only READ it. Starting a backfill on selection translated a whole"
+    + " meeting for any viewer, without asking, and spent the workspace's credits.",
 );
+{
+  const requestSites = [...panel.matchAll(/backfill\.request\(/g)].map((match) => match.index);
+  const confirmAt = panel.indexOf("function confirmTranslation");
+  const confirmEnd = panel.indexOf("\n  }", confirmAt);
+  const retryAt = panel.indexOf("onRetry={() => {");
+  const retryEnd = panel.indexOf("\n        }}", retryAt);
+  assert.ok(confirmAt > 0 && confirmEnd > confirmAt, "confirmTranslation must exist.");
+  assert.ok(retryAt > 0 && retryEnd > retryAt, "The status line's retry handler must exist.");
+  assert.ok(requestSites.length > 0, "A confirmed translation must still start a backfill.");
+  for (const at of requestSites) {
+    assert.ok(
+      (at > confirmAt && at < confirmEnd) || (at > retryAt && at < retryEnd),
+      "backfill.request( may only be called from the confirmation handler or the retry of a"
+        + " confirmed run — anywhere else translates without asking.",
+    );
+  }
+}
 assert.ok(
   hooks.includes("export function useTranscriptLanguageBackfill"),
   "The hook that follows a running backfill must exist.",
