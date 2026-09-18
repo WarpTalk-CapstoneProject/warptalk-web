@@ -1142,6 +1142,7 @@ export default function RoomInformationPage() {
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
+                generatableLanguages={room.artifactLanguages?.generatable}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
@@ -1367,6 +1368,7 @@ function MeetingRecordSection({
   recordingUnavailableReason,
   recordingFailure,
   speakerDirectory,
+  generatableLanguages,
   tab,
   onTabChange,
   expanded,
@@ -1442,6 +1444,8 @@ function MeetingRecordSection({
   /** WT-588: whether the record has the page to itself, with the right rail dropped. */
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
+  generatableLanguages?: readonly string[] | null;
 }) {
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
@@ -1964,6 +1968,7 @@ function MeetingRecordSection({
             rewriteFailure={rewriteFailure}
             rendering={rendering}
             onSelectRendering={endedRecord ? selectRendering : undefined}
+            generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
           />
         ) : (
