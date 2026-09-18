@@ -1017,14 +1017,14 @@ export default function PluginsPage() {
     try {
       await connectWithApiKey.mutateAsync({ pluginKey: plugin.key, apiKey, workspaceId });
       await refetch();
-      toast.success(` connected`);
+      toast.success(`${plugin.label} connected`);
       return null;
     } catch (error) {
       // The API answers a refused key with a plain-text body, which getErrorMessage does not read.
       const body = isAxiosError(error) ? error.response?.data : undefined;
       return typeof body === "string" && body.trim()
         ? body
-        : getErrorMessage(error, `Could not connect . Check the key and try again.`);
+        : getErrorMessage(error, `Could not connect ${plugin.label}. Check the key and try again.`);
     }
   }
 

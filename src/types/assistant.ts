@@ -249,7 +249,7 @@ export interface UpdatePrivatePluginRequest {
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
-  /** An pi_key plugin: no consent page exists, the user pastes a key on the plugins page. */
+  /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
   apiKeyRequired?: boolean;
 }
 

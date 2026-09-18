@@ -11,7 +11,7 @@
  * straight to the browser to follow, and nothing but https should be.
  */
 /**
- * Where an pi_key plugin is connected. Chat surfaces send the user here instead of opening a
+ * Where an `api_key` plugin is connected. Chat surfaces send the user here instead of opening a
  * consent page, and the plugins page opens that plugin's key field on arrival.
  */
 export function pluginApiKeyPageHref(pluginKey: string): string {
