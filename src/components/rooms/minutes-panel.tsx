@@ -85,7 +85,11 @@ import {
   printDocument,
   type MinutesEditHandlers,
 } from "@/components/rooms/minutes-document";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName } from "@/lib/language/languages";
+import {
+  artifactLanguageGroups,
+  resolveGeneratableLanguages,
+} from "@/lib/language/artifact-languages";
 import type { MinutesTranslationDto } from "@/types/meetingMinutes";
 
 /** The short form, for the badge beside the number. */
@@ -141,6 +145,9 @@ export function MinutesPanel({
   const { data: workspace } = useWorkspace(workspaceId ?? "");
   const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
   const { data: room } = useTranslationRoom(roomId);
+  // WT-705: a NEW translation may only be asked for in the meeting's languages that the workspace
+  // still allows. Translations already stored in the minutes stay readable regardless.
+  const generatable = useMemo(() => resolveGeneratableLanguages(room).codes, [room]);
 
   // WHAT IS BEING TYPED, OR NULL WHEN NOTHING IS.
   //
@@ -238,10 +245,13 @@ export function MinutesPanel({
             return data;
           });
           return superseded || data.status !== "generating";
-        } catch {
+        } catch (error) {
           setReadingLanguage(null);
           setFetched(null);
-          toast.error("Could not read this record in that language.");
+          // WT-703: a 400 says why (e.g. the language is no longer allowed here); say that.
+          toast.error(
+            (await validationMessageOf(error)) ?? "Could not read this record in that language.",
+          );
           return true;
         }
       };
@@ -446,7 +456,7 @@ export function MinutesPanel({
       toast.error(
         status === 503
           ? "PDF conversion is unavailable here. The Word file still downloads."
-          : "Could not download the minutes.",
+          : ((await validationMessageOf(error)) ?? "Could not download the minutes."),
       );
     } finally {
       setDownloading(null);
@@ -507,6 +517,7 @@ export function MinutesPanel({
               half-typed correction is a document nobody is reading. */}
           <ReadingLanguagePicker
             carried={carriedLanguages}
+            generatable={generatable}
             reading={readingLanguage}
             busy={fetched?.status === "generating"}
             disabled={dirty}
@@ -813,20 +824,31 @@ function SecretaryPicker({
  */
 function ReadingLanguagePicker({
   carried,
+  generatable,
   reading,
   busy,
   disabled,
   onChange,
 }: {
   carried: string[];
+  /** WT-705: the languages a new translation may be written in (meeting L2 ∩ workspace L1). */
+  generatable: string[];
   reading: string | null;
   busy: boolean;
   disabled: boolean;
   onChange: (language: string) => void;
 }) {
-  const offered = languagesInScope("chatTarget").filter(
-    (language) => !carried.includes(language.code),
-  );
+  // What is carried is always offered, unfiltered; only what would be WRITTEN is narrowed.
+  const groups = artifactLanguageGroups(carried, generatable);
+  // A reading fetched before the policy changed must still show as selected, or the select
+  // would silently snap back to "As drawn up" while the page shows the translation.
+  const orphanReading =
+    reading &&
+    !carried.includes(reading) &&
+    !groups.existing.includes(reading) &&
+    !groups.generatable.includes(reading)
+      ? reading
+      : null;
 
   return (
     <div className="inline-flex items-center gap-1.5">
@@ -848,17 +870,42 @@ function ReadingLanguagePicker({
             ))}
           </optgroup>
         ) : null}
-        <optgroup label="Written on request">
-          {offered.map((language) => (
-            <option key={language.code} value={language.code}>
-              {language.name}
-            </option>
-          ))}
-        </optgroup>
+        {groups.generatable.length > 0 ? (
+          <optgroup label="Written on request">
+            {groups.generatable.map((code) => (
+              <option key={code} value={code}>
+                {getLanguageName(code)}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        {orphanReading ? (
+          <option value={orphanReading}>{getLanguageName(orphanReading)}</option>
+        ) : null}
       </select>
       {busy ? <Spinner size={13} className="animate-spin text-ink-subtle" /> : null}
     </div>
   );
+}
+
+/**
+ * WT-703: the server's reason for refusing a reading, when it gave one. Only a 400 carries a
+ * sentence meant for the reader; anything else falls back to the caller's generic message.
+ * File downloads ask for a Blob, so an error body arrives as a Blob too and is read here.
+ */
+async function validationMessageOf(error: unknown): Promise<string | null> {
+  if (!isAxiosError(error) || error.response?.status !== 400) return null;
+  let data: unknown = error.response.data;
+  if (typeof Blob !== "undefined" && data instanceof Blob) {
+    try {
+      data = JSON.parse(await data.text());
+    } catch {
+      return null;
+    }
+  }
+  const message =
+    data && typeof data === "object" ? (data as { message?: unknown }).message : undefined;
+  return typeof message === "string" && message.trim() ? message : null;
 }
 
 /**
