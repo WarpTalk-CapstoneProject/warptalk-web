@@ -498,6 +498,8 @@ export const API = {
     rateCardDeactivate: (id: string) => `/usages/rate-card/${id}/deactivate`,
     /** POST. Read-only: prices a proposed cost and markup without publishing anything. */
     rateCardPreview: "/usages/rate-card/preview",
+    /** PUT. Records the provider cost of a credit-unit (CRD) card; its credit price stays. */
+    rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */

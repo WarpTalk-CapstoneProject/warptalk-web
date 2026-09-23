@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aiCostBasisView,
   assembleNeedsAttention,
+  CARTESIA_STALE_MINUTES,
+  cartesiaLineView,
   churnSub,
   computeDelta,
   deltaText,
@@ -25,6 +28,7 @@ import {
 import type {
   BillingInsightsDto,
   BillingSnapshotDto,
+  CartesiaUsageDto,
   InsightsMetric,
 } from "../../../types/admin-insights.ts";
 
@@ -373,4 +377,75 @@ test("a null outstanding amount is a dash plus its note, in the card and in Need
 test("notes join only what says something", () => {
   assert.equal(joinNotes("a", null, "  ", undefined, "b"), "a · b");
   assert.equal(joinNotes(null, ""), null);
+});
+
+// ── Cartesia ────────────────────────────────────────────────────────────────
+
+const NOW_MS = Date.parse("2026-09-18T09:30:00Z");
+
+function cartesia(overrides: Partial<CartesiaUsageDto> = {}): CartesiaUsageDto {
+  return {
+    status: "ok",
+    statusNote: null,
+    filteredToApiKey: true,
+    creditsThisMonth: 812_340,
+    creditsToday: 12_003,
+    remainingCredits: null,
+    remainingCreditsNote: "Cartesia's API reports usage only, not the credit balance",
+    lastSyncedAt: "2026-09-18T09:27:00Z",
+    lastAttemptAt: "2026-09-18T09:27:00Z",
+    usdPerCredit: 0.0000392,
+    ...overrides,
+  };
+}
+
+test("a fresh Cartesia sync is neutral, and says how long ago it ran", () => {
+  const view = cartesiaLineView(cartesia(), NOW_MS);
+  assert.equal(view.state, "ok");
+  assert.equal(view.tone, "neutral");
+  assert.equal(view.syncedMinutesAgo, 3);
+  assert.equal(view.creditsThisMonth, 812_340);
+  assert.equal(view.remainingCredits, null, "the API has no balance; the page must not invent one");
+  assert.equal(view.note, null);
+});
+
+test("a disabled, failing or stale Cartesia sync is a warning with its reason", () => {
+  const disabled = cartesiaLineView(
+    cartesia({ status: "disabled", statusNote: "CARTESIA_ADMIN_API_KEY is not set", lastSyncedAt: null, creditsThisMonth: null }),
+    NOW_MS,
+  );
+  assert.deepEqual([disabled.state, disabled.tone, disabled.note, disabled.syncedMinutesAgo], [
+    "disabled", "warning", "CARTESIA_ADMIN_API_KEY is not set", null,
+  ]);
+
+  const failing = cartesiaLineView(cartesia({ status: "error", statusNote: "Cartesia rate-limited the usage sync (HTTP 429)" }), NOW_MS);
+  assert.equal(failing.tone, "warning");
+  assert.match(failing.note ?? "", /429/);
+
+  const old = new Date(NOW_MS - (CARTESIA_STALE_MINUTES + 1) * 60_000).toISOString();
+  const stale = cartesiaLineView(cartesia({ lastSyncedAt: old }), NOW_MS);
+  assert.deepEqual([stale.state, stale.tone], ["stale", "warning"]);
+
+  assert.equal(cartesiaLineView(cartesia({ status: "pending", lastSyncedAt: null }), NOW_MS).tone, "neutral");
+});
+
+test("the AI cost basis says measured, mixed or estimated, and warns only when the sync is down", () => {
+  assert.equal(aiCostBasisView(null), null, "an older backend claims no basis");
+  assert.equal(aiCostBasisView(undefined), null);
+
+  const measured = aiCostBasisView({
+    basis: "measured", measuredDays: 30, estimatedDays: 0, cartesiaCredits: 2500, cartesiaUsdPerCredit: 0.0000392, syncStatus: "ok",
+  });
+  assert.deepEqual(measured, { basis: "measured", measuredDays: 30, totalDays: 30, cartesiaCredits: 2500, tone: "neutral" });
+
+  const mixed = aiCostBasisView({
+    basis: "mixed", measuredDays: 28, estimatedDays: 2, cartesiaCredits: 900, cartesiaUsdPerCredit: 0.0000392, syncStatus: "ok",
+  });
+  assert.equal(mixed?.totalDays, 30);
+  assert.equal(mixed?.tone, "neutral", "history from before the sync existed is expected to be estimated");
+
+  const broken = aiCostBasisView({
+    basis: "estimated", measuredDays: 0, estimatedDays: 30, cartesiaCredits: 0, cartesiaUsdPerCredit: 0.0000392, syncStatus: "disabled",
+  });
+  assert.equal(broken?.tone, "warning");
 });

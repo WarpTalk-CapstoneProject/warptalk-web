@@ -97,6 +97,9 @@
       "errorWhat": "cấu hình giá",
       "fxRateLabel": "Tỷ giá (USD → VND)",
       "fxRateHint": "Dùng để quy đổi chi phí nhà cung cấp tính bằng USD sang VND.",
+      "cartesiaUsdPerCreditLabel": "Giá USD mỗi credit Cartesia",
+      "cartesiaUsdPerCreditHint": "Chi phí WarpTalk trả cho một credit Cartesia. Insights tính chi phí lồng tiếng bằng số credit Cartesia đo được × giá này × tỷ giá. Tài khoản đang dùng credit đã mua từ trước, nên hãy nhập giá đã trả cho chúng, không phải mức biên 0 của gói Free. Mặc định: gói Startup, $49 / 1.250.000.",
+      "cartesiaUsdPerCreditValue": "${price} mỗi credit",
       "creditValueLabel": "Giá trị 1 credit",
       "creditValueHint": "Chi phí khách hàng phải trả cho một credit, tính bằng VND.",
       "minimumPricePerCreditLabel": "Giá tối thiểu mỗi credit",
@@ -233,7 +236,21 @@
       },
       "cancel": "Hủy",
       "save": "Lưu bảng giá",
-      "saving": "Đang lưu…"
+      "saving": "Đang lưu…",
+      "creditCost": {
+        "title": "Chi phí nhà cung cấp",
+        "description": "Số tiền nhà cung cấp tính cho WarpTalk trên mỗi đơn vị của thẻ đơn vị tín dụng (CRD) — thẻ mà mức sử dụng thực sự được quyết toán. Giá tín dụng của thẻ được đặt riêng và không thay đổi ở đây. Trang Insights dùng chi phí này để tính chi phí nhà cung cấp AI.",
+        "field": "Chi phí nhà cung cấp (USD mỗi {unit})",
+        "hint": "Tính bằng USD cho một {unit} sử dụng, đúng như nhà cung cấp tính phí. Phải lớn hơn 0.",
+        "noUnit": "đơn vị",
+        "effectBackfill": "Thẻ này chưa có chi phí nhà cung cấp. Giá trị cũng sẽ áp dụng cho mức sử dụng đã quyết toán trên thẻ, nên các kỳ trước trong Insights sẽ có chi phí.",
+        "effectSupersede": "Thẻ này đã có chi phí. Một phiên bản mới của thẻ có hiệu lực từ bây giờ; mức sử dụng đã quyết toán giữ nguyên chi phí đã áp dụng.",
+        "save": "Lưu chi phí nhà cung cấp",
+        "errors": {
+          "invalid": "Nhập một số tiền dương bằng USD, ví dụ 0.00049.",
+          "noUnit": "Thẻ này không có đơn vị, nên không thể áp dụng chi phí theo đơn vị."
+        }
+      }
     },
     "deactivate": {
       "title": "Vô hiệu hóa bảng giá này?",
@@ -264,7 +281,8 @@
         "salesAiServicesWeight": { "label": "Trọng số bán hàng · dịch vụ AI" },
         "defaultOverageCapRatio": { "label": "Tỷ lệ trần vượt mức mặc định" },
         "defaultInvoiceTermsDays": { "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)" },
-        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" }
+        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" },
+        "cartesiaUsdPerCredit": { "label": "Giá USD mỗi credit Cartesia", "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại." }
       },
       "cancel": "Hủy",
       "save": "Lưu cấu hình",

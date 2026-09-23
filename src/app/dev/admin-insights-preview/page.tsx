@@ -120,6 +120,10 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
       { workspaceId: "44444444-4444-4444-8444-444444444444", workspaceName: "Saigon Clinic", credits: 740_000 },
       { workspaceId: "55555555-5555-4555-8555-555555555555", workspaceName: "Mekong Logistics", credits: 512_000 },
     ],
+    // "gaps" is the sync switched off: every day estimated, and the basis line turns amber.
+    aiProviderCostBasis: gaps
+      ? { basis: "estimated", measuredDays: 0, estimatedDays: days.length, cartesiaCredits: 0, cartesiaUsdPerCredit: 0.0000392, syncStatus: "disabled" }
+      : { basis: "mixed", measuredDays: Math.max(0, days.length - 2), estimatedDays: Math.min(2, days.length), cartesiaCredits: 1_842_300, cartesiaUsdPerCredit: 0.0000392, syncStatus: "ok" },
   };
 
   const snapshot: BillingSnapshotDto = {
@@ -165,6 +169,31 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
     highUsageAlerts: [
       { workspaceId: "11111111-1111-4111-8111-111111111111", workspaceName: "Hanoi Law Firm", credits24h: 312_400 },
     ],
+    cartesia: gaps
+      ? {
+          status: "disabled",
+          statusNote: "CARTESIA_ADMIN_API_KEY is not set, so Cartesia usage is not synced; dubbing cost is estimated from rate cards",
+          filteredToApiKey: false,
+          creditsThisMonth: null,
+          creditsToday: null,
+          remainingCredits: null,
+          remainingCreditsNote: "Cartesia's API reports usage only, not the credit balance; see play.cartesia.ai/subscription",
+          lastSyncedAt: null,
+          lastAttemptAt: null,
+          usdPerCredit: 0.0000392,
+        }
+      : {
+          status: "ok",
+          statusNote: null,
+          filteredToApiKey: true,
+          creditsThisMonth: 1_842_300,
+          creditsToday: 64_210,
+          remainingCredits: null,
+          remainingCreditsNote: "Cartesia's API reports usage only, not the credit balance; see play.cartesia.ai/subscription",
+          lastSyncedAt: new Date(NOW.getTime() - 4 * 60_000).toISOString(),
+          lastAttemptAt: new Date(NOW.getTime() - 4 * 60_000).toISOString(),
+          usdPerCredit: 0.0000392,
+        },
   };
 
   const meetingsByDay = days.map((day) => {

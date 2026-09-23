@@ -56,6 +56,8 @@ import { cn } from "@/lib/utils";
 import type { AdminVoiceConsentSummaryDto } from "@/types/admin-configuration";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+// USD per Cartesia credit is ~0.00004: the default six-digit cut would show 0.000039.
+const usdPerCreditFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 10 });
 
 /**
  * The divider that replaced the route split: what you can change, then what you can only read.
@@ -181,6 +183,17 @@ function PricingEconomicsPanel() {
             <SettingRow label={t("fxRateLabel")} hint={t("fxRateHint")}>
               <span className="text-[13px] tabular-nums text-ink">
                 {numberFormatter.format(config.fxRateUsdVnd)}
+              </span>
+            </SettingRow>
+            {/* Framed like the FX rate beside it: a conversion Insights applies to a measured
+                quantity, not a price anyone is charged. */}
+            <SettingRow label={t("cartesiaUsdPerCreditLabel")} hint={t("cartesiaUsdPerCreditHint")}>
+              <span className="text-[13px] tabular-nums text-ink">
+                {config.cartesiaUsdPerCredit == null
+                  ? "—"
+                  : t("cartesiaUsdPerCreditValue", {
+                      price: usdPerCreditFormatter.format(config.cartesiaUsdPerCredit),
+                    })}
               </span>
             </SettingRow>
             <SettingRow label={t("creditValueLabel")} hint={t("creditValueHint")}>
