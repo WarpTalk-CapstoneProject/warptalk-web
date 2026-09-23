@@ -350,6 +350,10 @@ export const API = {
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,
+    /** Takes a published document back from the workspace: public → private. */
+    documentUnpublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/unpublish`,
+    /** Shares a private document again — directly for an owner/admin, back through approval for the uploader. */
+    documentPublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/publish`,
     /** Replaces a rejected document's file in place, keeping its id and its history. WT-633. */
     documentRevision: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/revision`,
     /** A document's approval and feedback history, newest first. WT-633. */

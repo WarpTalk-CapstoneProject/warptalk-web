@@ -437,6 +437,24 @@ export const WorkspaceService = {
     await apiClient.post(API.workspaces.documentApprove(workspaceId, docId), { approve, reason });
   },
 
+  /**
+   * public → private. The server cuts reads for everyone not named, and deletes the document's
+   * chunks from the assistant's index. Returns the updated document.
+   */
+  async unpublishDocument(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
+    const { data } = await apiClient.post<WorkspaceDocumentDto>(API.workspaces.documentUnpublish(workspaceId, docId));
+    return data;
+  },
+
+  /**
+   * private → public for an owner/admin; private → pending_approval for the uploader alone.
+   * Returns the updated document, so the caller reads which of the two happened from `status`.
+   */
+  async publishDocument(workspaceId: string, docId: string): Promise<WorkspaceDocumentDto> {
+    const { data } = await apiClient.post<WorkspaceDocumentDto>(API.workspaces.documentPublish(workspaceId, docId));
+    return data;
+  },
+
   async downloadDocument(workspaceId: string, docId: string): Promise<Blob> {
     const { data } = await apiClient.get<Blob>(API.workspaces.documentDownload(workspaceId, docId), {
       responseType: "blob",
