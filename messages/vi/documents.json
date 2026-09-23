@@ -5,6 +5,7 @@
     "published": "Đã xuất bản",
     "pendingApproval": "Chờ duyệt",
     "rejected": "Bị từ chối",
+    "private": "Riêng tư",
     "aiContext": "Ngữ cảnh AI",
     "administrative": "Hành chính",
     "restricted": "Hạn chế",
@@ -33,6 +34,7 @@
   },
   "status": {
     "rejected": "Bị từ chối",
+    "private": "Riêng tư",
     "pendingApproval": "Chờ duyệt",
     "administrative": "Hành chính",
     "aiReady": "AI sẵn sàng",
