@@ -60,6 +60,8 @@ export default function DocumentSidePanelPreviewPage() {
   const [external, setExternal] = useState(false);
   const [locked, setLocked] = useState(false);
   const [aiAllowed, setAiAllowed] = useState(DOC.isAiAllowed);
+  // Public ↔ private, flipped straight from the panel's Visibility button (no dialog here).
+  const [isPrivate, setIsPrivate] = useState(false);
 
   return (
     <main className="min-h-dvh bg-surface-1 p-8">
@@ -92,7 +94,7 @@ export default function DocumentSidePanelPreviewPage() {
             className="flex flex-col gap-6 lg:sticky lg:top-0 lg:max-h-full lg:overflow-y-auto lg:pb-2"
           >
             <DocumentSidePanel
-              doc={{ ...DOC, isAiAllowed: aiAllowed }}
+              doc={{ ...DOC, isAiAllowed: aiAllowed, status: isPrivate ? "private" : "public" }}
               membersList={MEMBERS}
               formatBytes={formatBytes}
               canManagePolicies={!locked}
@@ -174,6 +176,9 @@ export default function DocumentSidePanelPreviewPage() {
               }
               onToggleAiIndexing={async (allowed) => setAiAllowed(allowed)}
               isAiIndexingBusy={false}
+              visibilityAction={locked ? null : isPrivate ? "make_public" : "make_private"}
+              onRequestVisibilityChange={(action) => setIsPrivate(action === "make_private")}
+              isVisibilityBusy={false}
             />
             {/* Enough height that the sidebar genuinely scrolls, as it does on a real document. */}
             <div className="h-64 shrink-0 rounded-xl border border-dashed border-hairline" />

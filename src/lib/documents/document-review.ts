@@ -38,6 +38,8 @@ export const DOCUMENT_TAB = {
   PUBLISHED: "published",
   PENDING: "pending",
   REJECTED: "rejected",
+  /** Published once, then taken back. Its own tab, or it would appear under nothing but All. */
+  PRIVATE: "private",
   ARCHIVED: "archived",
 } as const;
 
@@ -71,6 +73,10 @@ export function isPublished(doc: Pick<WorkspaceDocumentDto, "status">): boolean 
   return normalizedStatus(doc) === WORKSPACE_DOCUMENT_STATUS.PUBLIC;
 }
 
+export function isPrivate(doc: Pick<WorkspaceDocumentDto, "status">): boolean {
+  return normalizedStatus(doc) === WORKSPACE_DOCUMENT_STATUS.PRIVATE;
+}
+
 /**
  * Which documents a tab shows.
  *
@@ -92,6 +98,8 @@ export function documentMatchesTab(
       return isRejected(doc);
     case DOCUMENT_TAB.PUBLISHED:
       return isPublished(doc);
+    case DOCUMENT_TAB.PRIVATE:
+      return isPrivate(doc);
     default:
       return true;
   }
@@ -191,6 +199,8 @@ const HISTORY_ACTION_LABELS: Record<string, string> = {
   RemoveAccessPolicy: "Access rule removed",
   ArchiveDocument: "Archived",
   RestoreDocument: "Restored",
+  UnpublishDocument: "Made private",
+  PublishDocument: "Shared with the workspace again",
   DeleteDocument: "Deleted",
   SecurityScanCompleted: "Security scan completed",
   EmbeddingIndexed: "Indexed for AI",
@@ -207,6 +217,8 @@ export function isDecisionAction(action: string): boolean {
   return (
     action === "ApproveDocument" ||
     action === "RejectDocument" ||
-    action === "Reuploaded"
+    action === "Reuploaded" ||
+    action === "UnpublishDocument" ||
+    action === "PublishDocument"
   );
 }

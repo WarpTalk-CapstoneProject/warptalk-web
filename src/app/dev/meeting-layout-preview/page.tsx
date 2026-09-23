@@ -50,29 +50,49 @@ const SEGMENTS = [
   { speakerId: "u3", speakerName: "Kenji Watanabe", text: "遅延の数字を先に確認しましょう。", lang: "ja" },
 ];
 
+const HISTORY_LINES = 40;
+
+function fixtureSegment(index: number) {
+  const segment = SEGMENTS[index % SEGMENTS.length];
+  return {
+    segmentId: `s${index}`,
+    speakerId: segment.speakerId,
+    speakerName: segment.speakerName,
+    originalText: `${segment.text} (#${index + 1})`,
+    originalLanguage: segment.lang,
+    confidence: -0.2,
+    startTimeMs: index * 4000,
+    endTimeMs: index * 4000 + 3000,
+    receivedAt: Date.now(),
+  };
+}
+
 export default function MeetingLayoutPreview() {
   const segments = useTranslationRoomStore((state) => state.transcriptSegments);
 
   useEffect(() => {
-    const seeded = SEGMENTS.map((segment, index) => ({
-        segmentId: `s${index}`,
-        speakerId: segment.speakerId,
-        speakerName: segment.speakerName,
-        originalText: segment.text,
-        originalLanguage: segment.lang,
-        confidence: -0.2,
-        startTimeMs: index * 4000,
-        endTimeMs: index * 4000 + 3000,
-        receivedAt: Date.now(),
-      }));
+    // Forty lines, not three: the lane's caption history (scroll up in it) has nothing to show
+    // with only the lines that already fit. Cycling the three speakers keeps each line its own
+    // utterance, which is what the lane counts.
+    const seeded = Array.from({ length: HISTORY_LINES }, (_, index) => fixtureSegment(index));
     useTranslationRoomStore.setState({ captionSegments: seeded, transcriptSegments: seeded });
   }, []);
+
+  /** Appends one line, for checking that a reader scrolled up is not yanked and the pill counts. */
+  function addLine() {
+    const { captionSegments } = useTranslationRoomStore.getState();
+    const next = fixtureSegment(captionSegments.length);
+    useTranslationRoomStore.setState((state) => ({
+      captionSegments: [...state.captionSegments, next],
+      transcriptSegments: [...state.transcriptSegments, next],
+    }));
+  }
 
   return (
     <MeetingIdentityProvider identities={identities}>
       <div className="min-h-screen bg-canvas p-6 text-ink">
-        <div className="mx-auto flex h-[720px] max-w-5xl flex-col gap-2.5 rounded-2xl bg-surface-1 p-2.5">
-          <section className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-surface-1">
+        <div data-meeting-content className="mx-auto flex h-[720px] max-w-5xl flex-col gap-2.5 rounded-2xl bg-surface-1 p-2.5">
+          <section data-meeting-camera-view className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[24px] bg-surface-1">
             <div className="absolute left-4 top-4 rounded-full border border-border/70 bg-surface-1/90 px-2.5 py-1 text-[12px] font-medium">
               00:04:12
             </div>
@@ -91,8 +111,8 @@ export default function MeetingLayoutPreview() {
             </div>
           </section>
 
-          <div className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden">
-            <LiveSubtitleOverlay enabled />
+          <div className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center">
+            <LiveSubtitleOverlay enabled onOpenTranscript={() => undefined} />
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-2">
@@ -103,6 +123,14 @@ export default function MeetingLayoutPreview() {
               <span className="flex h-9 items-center gap-1.5 rounded-full bg-surface-2 px-2.5 text-[13px] font-medium">
                 VI · Vietnamese
               </span>
+              <button
+                type="button"
+                data-preview-add-caption
+                onClick={addLine}
+                className="grid h-10 place-items-center rounded-xl bg-surface-2 px-3 text-[12px] font-medium"
+              >
+                + line
+              </button>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">CC</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">A</span>
               <span className="grid h-10 w-10 place-items-center rounded-xl bg-surface-2">B</span>

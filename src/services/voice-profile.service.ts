@@ -49,6 +49,12 @@ export const VoiceProfileService = {
     await apiClient.delete(API.voiceProfiles.delete(id));
   },
 
+  /** Re-send a failed profile's stored recording to be cloned. Returns the row, now "Cloning". */
+  async retryClone(id: string): Promise<VoiceProfileDto> {
+    const { data } = await apiClient.post<VoiceProfileDto>(API.voiceProfiles.retryClone(id));
+    return data;
+  },
+
   /**
    * Voices offered for a language. An empty list is a normal answer, not an error — the
    * catalog is a cache the AI worker fills on its next synthesis for that language.
