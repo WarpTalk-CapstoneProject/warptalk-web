@@ -11,6 +11,7 @@ import {
   unplayableRecordingState,
   ARTIFACT_OUTPUT_WINDOW_MS,
   pendingOutputs,
+  recordingFailureText,
 } from "../meeting-artifacts.ts";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
@@ -108,6 +109,30 @@ test("WT-824: a recording with no file yet says so, not 'Consent required'", () 
       (key) => `t:${key}`,
     ),
     "t:processing",
+  );
+});
+
+test("WT-824: a failed recording says why, in the words the backend stored", () => {
+  assert.equal(
+    recordingFailureText(
+      artifact({
+        type: "recording",
+        status: "failed",
+        failureReason: "The recording failed and no file was saved. (LiveKit EGRESS_FAILED: upload refused)",
+      }),
+    ),
+    "Recording failed: The recording failed and no file was saved. (LiveKit EGRESS_FAILED: upload refused)",
+  );
+  // No stored reason (every row before the column) — nothing to add to the bare failed state.
+  assert.equal(recordingFailureText(artifact({ type: "recording", status: "failed" })), null);
+  // Only failures: a reason must never decorate a recording that worked.
+  assert.equal(
+    recordingFailureText(artifact({ type: "recording", status: "ready", failureReason: "stale" })),
+    null,
+  );
+  assert.equal(
+    recordingFailureText(artifact({ type: "summary_export", status: "failed", failureReason: "x" })),
+    null,
   );
 });
 

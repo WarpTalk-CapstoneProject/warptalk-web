@@ -24,6 +24,7 @@ import {
   artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
+  recordingFailureText,
   canDownloadArtifact,
   pendingOutputs,
 } from "@/lib/meeting/meeting-artifacts";
@@ -844,6 +845,12 @@ export function ArtifactsPanel({
               <span className="mt-0.5 block text-[10px] text-ink-subtle">
                 {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
               </span>
+              {/* WT-824: a failed recording says why, not only that it failed. */}
+              {recordingFailureText(artifact) ? (
+                <span className="mt-0.5 block text-[10px] leading-snug text-ink-muted">
+                  {recordingFailureText(artifact)}
+                </span>
+              ) : null}
             </span>
             {busyArtifactId === artifact.id ? (
               <SpinnerGap size={14} className="animate-spin text-ink-muted" />

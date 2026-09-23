@@ -80,6 +80,24 @@ export function findPlayableRecording(
   );
 }
 
+/**
+ * WT-824 — "Recording failed: <why>", for a failed recording whose reason the backend stored.
+ *
+ * Production's only two recordings both failed, and each row said "Failed" and nothing more —
+ * LiveKit's egress runs in LiveKit Cloud, so the reason it gave existed in one log line that the
+ * next deploy deleted. The backend now keeps it on the row (host-facing sentence plus LiveKit's
+ * status and error, URLs redacted); this is where a reader sees it.
+ *
+ * Null when there is nothing to add: not a recording, not failed, or failed before the column
+ * existed. The bare status label still covers those.
+ */
+export function recordingFailureText(artifact: RoomHistoryArtifact): string | null {
+  if (artifact.type !== "recording") return null;
+  if (artifact.status !== "failed" && artifact.status !== "missing") return null;
+  const reason = artifact.failureReason?.trim();
+  return reason ? `Recording failed: ${reason}` : null;
+}
+
 /** A recording artifact, whatever state it is in. The one predicate both counters below share. */
 function isRecording(artifact: RoomHistoryArtifact): boolean {
   return artifact.type === "recording";
