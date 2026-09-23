@@ -4,6 +4,7 @@ import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 import { AdminAlertsTab } from "@/components/admin/AdminAlertsTab";
 import { AdminInvoicesTab } from "@/components/admin/AdminInvoicesTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
+import { BillingGrowthOverview } from "@/components/admin/billing-growth-overview";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { UsageChart } from "@/components/admin/UsageChart";
@@ -456,37 +457,6 @@ export default function AdminBillingPage() {
           }
         />
 
-      {/* Metrics */}
-      <section className="mt-5 grid gap-4 md:grid-cols-4">
-        <AdminMetric
-          icon={Coins}
-          label={t("metrics.totalIssuedCredits.label")}
-          value={metrics ? metrics.totalBalance.toLocaleString() : "..."}
-          detail={t("metrics.totalIssuedCredits.detail")}
-        />
-        <AdminMetric
-          icon={ChartLineUp}
-          label={t("metrics.activeWorkspaces.label")}
-          value={metrics ? `${metrics.activeWorkspaces}` : "..."}
-          detail={t("metrics.activeWorkspaces.detail")}
-          isStatus
-        />
-        <AdminMetric
-          icon={FileText}
-          label={t("metrics.monthlyConsumption.label")}
-          value={metrics ? metrics.monthlyUsage.toLocaleString() : "..."}
-          detail={t("metrics.monthlyConsumption.detail")}
-        />
-        <AdminMetric
-          icon={Eye}
-          label={t("metrics.transactions30d.label")}
-          value={
-            metrics ? metrics.auditEventsLast30Days.toLocaleString() : "..."
-          }
-          detail={t("metrics.transactions30d.detail")}
-        />
-      </section>
-
       <Tabs defaultValue="overview" className="w-full mt-2">
         {/* Same shape as AdminFilterTabs on the other admin pages: ink fills the selected
             tab. shadcn Tabs stays because these panels are genuinely tabbed content, not a
@@ -525,7 +495,45 @@ export default function AdminBillingPage() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
-          {/* Charts */}
+          {/* WT-692: growth first — revenue, active accounts and workspaces, user growth — from the
+              same Insights endpoints /admin reads. Credit consumption follows as the secondary
+              view it is. */}
+          <BillingGrowthOverview />
+
+          <div className="pt-2">
+            <h2 className="text-[13px] font-semibold">{t("growth.usageHeading")}</h2>
+            <p className="mt-0.5 text-[12px] text-ink-muted">{t("growth.usageNote")}</p>
+          </div>
+          <section className="grid gap-4 md:grid-cols-4">
+            <AdminMetric
+              icon={Coins}
+              label={t("metrics.totalIssuedCredits.label")}
+              value={metrics ? metrics.totalBalance.toLocaleString() : "..."}
+              detail={t("metrics.totalIssuedCredits.detail")}
+            />
+            <AdminMetric
+              icon={ChartLineUp}
+              label={t("metrics.activeWorkspaces.label")}
+              value={metrics ? `${metrics.activeWorkspaces}` : "..."}
+              detail={t("metrics.activeWorkspaces.detail")}
+              isStatus
+            />
+            <AdminMetric
+              icon={FileText}
+              label={t("metrics.monthlyConsumption.label")}
+              value={metrics ? metrics.monthlyUsage.toLocaleString() : "..."}
+              detail={t("metrics.monthlyConsumption.detail")}
+            />
+            <AdminMetric
+              icon={Eye}
+              label={t("metrics.transactions30d.label")}
+              value={
+              metrics ? metrics.auditEventsLast30Days.toLocaleString() : "..."
+              }
+              detail={t("metrics.transactions30d.detail")}
+            />
+          </section>
+
           <section className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
               <UsageChart />

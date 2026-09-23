@@ -341,3 +341,103 @@ export function StackedBars({ rows, ariaLabel }: { rows: StackRow[]; ariaLabel: 
     </div>
   );
 }
+
+// ── several lines over the same months (WT-692) ─────────────────────────────
+
+export interface LineSeries {
+  key: string;
+  label: string;
+  color: string;
+  /** One value per axis point; null is a gap (a month the source did not report). */
+  values: (number | null)[];
+}
+
+export function MultiLine({
+  labels,
+  series,
+  height = 220,
+  ariaLabel,
+}: {
+  labels: string[];
+  series: LineSeries[];
+  height?: number;
+  ariaLabel: string;
+}) {
+  const [ref, width] = useMeasuredWidth<HTMLDivElement>(520);
+  const padLeft = 40;
+  const padBottom = 24;
+  const padTop = 10;
+  const innerWidth = Math.max(10, width - padLeft - 12);
+  const innerHeight = height - padBottom - padTop;
+  const rawMax = Math.max(0, ...series.flatMap((s) => s.values.map((v) => v ?? 0)));
+  const max = rawMax > 0 ? rawMax * 1.1 : 1;
+  const x = (index: number) =>
+    padLeft + (labels.length <= 1 ? innerWidth / 2 : (index / (labels.length - 1)) * innerWidth);
+  const y = (value: number) => padTop + innerHeight - (value / max) * innerHeight;
+
+  return (
+    <div ref={ref} className="w-full">
+      <div className="mb-2 flex flex-wrap gap-3 text-[11px] text-ink-muted">
+        {series.map((s) => (
+          <span key={s.key} className="flex items-center gap-1.5">
+            <span className="inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={ariaLabel} className="block">
+        {[0, rawMax / 2, rawMax].map((tick, index) => (
+          <g key={index}>
+            <line x1={padLeft} x2={width} y1={y(tick)} y2={y(tick)} style={{ stroke: HAIR }} />
+            <text x={padLeft - 8} y={y(tick) + 4} textAnchor="end" fontSize={11} style={{ fill: SUBTLE }}>
+              {compactNumber(tick)}
+            </text>
+          </g>
+        ))}
+        {series.map((s) => {
+          // Contiguous runs only: a missing month breaks the line instead of diving to zero.
+          const runs: { index: number; value: number }[][] = [];
+          let run: { index: number; value: number }[] = [];
+          s.values.forEach((value, index) => {
+            if (value === null) {
+              if (run.length) runs.push(run);
+              run = [];
+            } else run.push({ index, value });
+          });
+          if (run.length) runs.push(run);
+          return (
+            <g key={s.key}>
+              {runs.map((points, i) => (
+                <polyline
+                  key={i}
+                  points={points.map((p) => `${x(p.index)},${y(p.value)}`).join(" ")}
+                  fill="none"
+                  strokeWidth={2}
+                  strokeLinejoin="round"
+                  style={{ stroke: s.color }}
+                />
+              ))}
+              {runs.flat().map((p) => (
+                <circle key={p.index} cx={x(p.index)} cy={y(p.value)} r={3} style={{ fill: s.color }}>
+                  <title>{`${labels[p.index]} · ${s.label}: ${formatCount(p.value)}`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+        {labels.map((label, index) => (
+          <text
+            key={label + index}
+            x={x(index)}
+            y={height - 6}
+            textAnchor={index === 0 ? "start" : index === labels.length - 1 ? "end" : "middle"}
+            fontSize={11}
+            style={{ fill: SUBTLE }}
+          >
+            {label}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}

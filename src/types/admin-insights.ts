@@ -92,6 +92,11 @@ export interface BillingInsightsDto extends PeriodEnvelope {
    * Cartesia usage sync — the card then says nothing about the basis rather than claiming one.
    */
   aiProviderCostBasis?: AiProviderCostBasisDto | null;
+  /**
+   * WT-692: workspaces with at least one credit consumption in each of the same six months as
+   * `revenueByMonth` — used the product, paid or not. Absent from an older backend.
+   */
+  activeWorkspacesByMonth?: { month: string; activeWorkspaces: number }[] | null;
 }
 
 /**
@@ -210,12 +215,21 @@ export interface CartesiaUsageDto {
 export interface UsersInsightsDto extends PeriodEnvelope {
   /** Local days of `tz`, zero-filled. */
   newUsersByDay: { date: string; count: number }[];
+  /**
+   * WT-692: the six local months ending with the month of `to`. `totalUsers` = accounts existing
+   * at the month's end; `activeUsers` = signed in or refreshed a session that month. Absent from an
+   * older backend.
+   */
+  usersByMonth?: { month: string; newUsers: number; totalUsers: number; activeUsers: number }[] | null;
+  usersByMonthNote?: string | null;
 }
 
 // ── 4 · Workspace ────────────────────────────────────────────────────────────
 
 export interface WorkspacesInsightsDto extends PeriodEnvelope {
   suspendedNow: number;
+  /** WT-692: six local months; `totalWorkspaces` = existing at the month's end (suspended included). */
+  workspacesByMonth?: { month: string; newWorkspaces: number; totalWorkspaces: number }[] | null;
 }
 
 // ── 5 · Translation-room ─────────────────────────────────────────────────────

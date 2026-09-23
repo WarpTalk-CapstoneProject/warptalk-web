@@ -116,5 +116,38 @@
   },
   "idBadge": {
     "copyTooltip": "Click to copy ID: {id}"
+  },
+  "growth": {
+    "usageHeading": "Credit usage",
+    "usageNote": "Consumption and top-ups — secondary to growth, and what the ledger below itemises.",
+    "vsPrevious": "{delta} vs previous 6 months",
+    "monthGrowth": "{percent} in {month}",
+    "tiles": {
+      "revenue": "Revenue · 6 months",
+      "sixMonths": "Paid payments, last 6 months",
+      "mrr": "MRR",
+      "activeSubscriptions": "{count} active subscriptions",
+      "activeWorkspaces": "Active workspaces · 6 months",
+      "activeWorkspacesDetail": "Used credits at least once",
+      "activeAccounts": "Active accounts · 6 months",
+      "activeAccountsDetail": "Signed in at least once",
+      "totalUsers": "Registered users",
+      "newUsers": "{count} new in 6 months"
+    },
+    "revenueTitle": "Revenue by month",
+    "revenueNote": "Paid payments in VND; a Stripe checkout and its first invoice count once. The latest month is month to date.",
+    "activeTitle": "Active accounts and workspaces",
+    "activeNote": "Per month: accounts that signed in, workspaces that used credits. The latest month is month to date.",
+    "usersTitle": "User and workspace growth",
+    "series": {
+      "activeAccounts": "Active accounts",
+      "activeWorkspaces": "Active workspaces",
+      "totalUsers": "Registered users",
+      "totalWorkspaces": "Workspaces",
+      "newUsers": "New users"
+    },
+    "loading": "Loading…",
+    "noData": "No paid payments in these months.",
+    "unavailable": "Not available from this backend yet."
   }
 }
