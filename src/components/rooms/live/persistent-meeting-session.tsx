@@ -197,6 +197,10 @@ import { meetingService } from "@/services/meeting.service";
 import { translationRoomService } from "@/services/translation-room.service";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
+import {
+  TRANSLATION_RESTORED_NOTICE,
+  translationSuspendedNotice,
+} from "@/lib/billing/translation-credits-notice";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
@@ -2334,6 +2338,17 @@ export function PersistentMeetingSession({
     connection.on("TranslationStopped", () => {
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
+    // WT-699 / TC3705: the workspace could not pay for the last translated sentence, and
+    // translation_worker has stopped translating this room. Said to everyone — every listener
+    // loses their dub, not just the host — and in words that name the actual reason.
+    connection.on("TranslationCreditsExhausted", (_roomId: string, reason?: string) => {
+      toast.error(translationSuspendedNotice(reason), { duration: 15000 });
+      void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
+    connection.on("TranslationCreditsRestored", () => {
+      toast.success(TRANSLATION_RESTORED_NOTICE);
+      void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
     // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
     // after JoinTranslationRoom — every other participant event describes a CHANGE, so without a
     // starting point the live roster of a late joiner began empty and no later event could fill
@@ -2443,8 +2458,13 @@ export function PersistentMeetingSession({
     // channel RoomEnded/RoomStarted use, and the Gateway relays it to the room group. Every
     // waiting client is already in that group (JoinTranslationRoom runs regardless of waiting
     // state), so the admitted one re-runs its join here without touching anything.
+    //
+    // WT-699 / TC1806: while knocking, this connection sat in the room's LOBBY group, which carries
+    // nothing said inside the meeting. Joining the hub again once admitted is what moves it into
+    // the room group — without it the guest would see the meeting and receive none of its events.
     connection.on("ParticipantAdmitted", (admittedUserId: string) => {
       if (!user?.id || admittedUserId !== user.id) return;
+      void joinCurrentRoom();
       void refetchRoom().then(() => {
         retryMeetingConnectionRef.current();
       });
@@ -2602,8 +2622,20 @@ export function PersistentMeetingSession({
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
-    connection.on("ParticipantKicked", () => {
+    // The relay broadcasts this to the whole room with the KICKED user's id. It used to ignore
+    // that argument, so one kick closed the meeting for everybody in it. WT-699.
+    connection.on("ParticipantKicked", (kickedUserId?: string) => {
+      if (kickedUserId && kickedUserId !== currentUserIdRef.current) return;
       toast.error("You have been permanently removed from this room.");
+      onMeetingClosed();
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+    });
+
+    // WT-699 / TC2402: the lobby's "no". Sent to the room's lobby group — where a knocking client
+    // now sits (TC1806) — with the declined user's id; every other knock ignores it.
+    connection.on("ParticipantRejected", (rejectedUserId: string) => {
+      if (!rejectedUserId || rejectedUserId !== currentUserIdRef.current) return;
+      toast.error("The host declined your request to join this meeting.");
       onMeetingClosed();
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
@@ -2613,7 +2645,24 @@ export function PersistentMeetingSession({
 
     const wait = (ms: number) =>
       new Promise((resolve) => window.setTimeout(resolve, ms));
-    const joinCurrentRoom = () =>
+    // WT-699 / TC1806: the hub now refuses a join from anybody the room has not admitted, and
+    // answers a knock with the lobby group only. A refusal can be a race rather than a verdict —
+    // the REST join that writes the roster row can land a moment after the socket opens — so the
+    // join is retried a few times before it is given up on, instead of being swallowed once.
+    const joinRetryDelaysMs = [0, 1000, 2500, 5000];
+    const joinCurrentRoom = async () => {
+      for (const delay of joinRetryDelaysMs) {
+        if (cancelled) return;
+        if (delay) await wait(delay);
+        try {
+          await invokeJoinTranslationRoom();
+          return;
+        } catch {
+          // Refused or transport hiccup; the next attempt decides.
+        }
+      }
+    };
+    const invokeJoinTranslationRoom = () =>
       // targetLanguageRef.current (not the closed-over targetLanguage) so a language
       // picked via the dropdown before a reconnect (e.g. after a network drop) is what
       // gets rejoined with, and so this effect's dependency array below doesn't need
@@ -2638,8 +2687,7 @@ export function PersistentMeetingSession({
             ? sourceLanguageRef.current
             : "",
           targetLanguageRef.current,
-        )
-        .catch(() => undefined);
+        );
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
         if (cancelled) return;
@@ -3059,9 +3107,10 @@ export function PersistentMeetingSession({
       setRightSidebarOpen(true);
       toast.success("WarpTalk realtime translation started.");
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to start translation.",
-      );
+      // WT-699 / TC3705: the server's own sentence. `error.message` on an HTTP failure is
+      // "Request failed with status code 403" — the refusal for a workspace out of credits (or
+      // with an overdue invoice) says which, and that is what the host needs to read.
+      toast.error(getErrorMessage(error, "Failed to start translation."));
     }
   }
 

@@ -80,13 +80,25 @@
   },
   "composer": {
     "types": {
-      "ANNOUNCEMENT": { "label": "Announcement", "hint": "General news from the platform." },
-      "PROMOTION": { "label": "Promotion", "hint": "Carries an offer, a link and a discount code." },
-      "MAINTENANCE": { "label": "Maintenance", "hint": "States a downtime window. Both ends required." },
-      "SYSTEM": { "label": "System", "hint": "The platform speaking about itself. No links, no offers." }
+      "ANNOUNCEMENT": {
+        "label": "Announcement",
+        "hint": "General news from the platform."
+      },
+      "PROMOTION": {
+        "label": "Promotion",
+        "hint": "Carries an offer, a link and a discount code."
+      },
+      "MAINTENANCE": {
+        "label": "Maintenance",
+        "hint": "States a downtime window. Both ends required."
+      },
+      "SYSTEM": {
+        "label": "System",
+        "hint": "The platform speaking about itself. No links, no offers."
+      }
     },
     "title": "Compose an announcement",
-    "description": "Delivered to the people you name, once. There is no draft, no schedule and no recall.",
+    "description": "Delivered once to the people you choose — a named list, one workspace, or everyone. There is no draft, no schedule and no recall.",
     "typeLabel": "Type",
     "titleLabel": "Title",
     "messageLabel": "Message",
@@ -111,7 +123,7 @@
       "add": "Add",
       "remove": "Remove {email}",
       "clear": "Clear",
-      "footerNote": "A named list only. The service accepts no “everyone” audience until a segment resolver exists."
+      "footerNote": "A named list. Choose “One workspace” or “Everyone” above for a wider audience."
     },
     "cancel": "Cancel",
     "review": "Review before sending",
@@ -123,7 +135,34 @@
       "andMore": "and {count} more",
       "back": "Back",
       "sending": "Sending…",
-      "send": "Send to {count}"
+      "send": "Send to {count}",
+      "everyone": "Every active account on the platform",
+      "segment": "Every active member of {name} ({count, plural, one {# member} other {# members}} now)",
+      "sendAudience": "Send"
+    },
+    "audience": {
+      "label": "Audience",
+      "SPECIFIC_USERS": {
+        "label": "Named people",
+        "hint": "Pick accounts from the directory."
+      },
+      "SEGMENT": {
+        "label": "One workspace",
+        "hint": "Every active member of a workspace."
+      },
+      "BROADCAST": {
+        "label": "Everyone",
+        "hint": "Every active account on the platform."
+      }
+    },
+    "segment": {
+      "label": "Workspace",
+      "searchPlaceholder": "Search workspaces by name",
+      "searching": "Searching…",
+      "directoryError": "The workspace directory could not be read.",
+      "noMatch": "No workspace matches that.",
+      "change": "Change",
+      "memberCount": "{count, plural, one {# member} other {# members}}"
     }
   }
 }
