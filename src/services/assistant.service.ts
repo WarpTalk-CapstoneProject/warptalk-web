@@ -8,6 +8,7 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
+  CreateAssistantConversationOptions,
   CreatePrivatePluginRequest,
   PluginConnectResultDto,
   PluginToolPolicy,
@@ -31,8 +32,12 @@ export const assistantService = {
     return apiClient.get<AssistantConversationDetailDto>(API.assistant.conversation(id));
   },
 
-  createConversation(workspaceId: string) {
-    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, { workspaceId });
+  createConversation(workspaceId: string, options?: CreateAssistantConversationOptions) {
+    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, {
+      workspaceId,
+      ...(options?.title ? { title: options.title } : {}),
+      ...(options?.seedMessages?.length ? { seedMessages: options.seedMessages } : {}),
+    });
   },
 
   sendMessage(
