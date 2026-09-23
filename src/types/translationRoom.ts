@@ -425,6 +425,8 @@ export interface TranslationRoomArtifactDto {
   updatedAt?: string | null;
   /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
   recordingStartedAt?: string | null;
+  /** WT-824: why a FAILED recording has no file (host-facing reason + LiveKit status/error). */
+  failureReason?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {
