@@ -41,8 +41,6 @@
     },
     "configRows": {
       "fxRate": "為替レート USD→VND",
-      "creditValue": "クレジット単価（VND）",
-      "minimumPricePerCredit": "クレジットあたりの最低価格（VND）",
       "minimumContractPrice": "最低契約価格",
       "salesWeightUsage": "販売ウェイト・利用量",
       "salesWeightMembers": "販売ウェイト・メンバー数",
@@ -68,15 +66,15 @@
     },
     "bandReference": {
       "title": "参照データ",
-      "note": "ここでは参照のみ — これらの変更はマイグレーションによって行われます。"
+      "note": "言語カタログは監査対象、音声同意は読み取り専用です。"
     },
     "billingPolicyHeading": "課金ポリシー",
     "pricingEconomicsHeading": "価格エコノミクス",
-    "pricingEconomicsSubnote": "プラン検証と料金カードの利益率算出が参照するのと同じ設定です。プランと価格ページからもアクセスできます。",
+    "pricingEconomicsSubnote": "プラン検証と料金カードの利益率算出が参照するのと同じ設定です。プランと価格ページからもアクセスできます。顧客向け価格は Stripe が管理するため、クレジット単価とクレジットあたりの最低価格はここでは編集できません。変更はマイグレーションで行います。",
     "languageCatalogHeading": "言語カタログ",
     "voiceConsentHeading": "音声クローン同意",
     "voiceConsentCount": "{count} 件の決定を記録済み",
-    "explainer": "<strong>なぜ以下には何も操作できるものがないのか。</strong> このデータの背後にあるどちらのサービスも、誰が変更したかを記録できません。ここにスイッチを置くと、変更に対して名前が残らないまま、すべての会議が検証する基準を誰でも変えられてしまいます。そのため、これらの項目はレビューを経て担当者が明確になるマイグレーションによってのみ変更されます。",
+    "explainer": "<strong>ここで変更できること・できないこと。</strong> 言語カタログは編集できます。追加・名前変更・有効/無効の切り替えはすべて先にプラットフォームの監査ログへ記録され、記録できない場合は拒否されるため、各変更には実施者の名前が残ります。音声同意の台帳は引き続き読み取り専用です — そのサービスは変更者を記録できません。",
     "footerNote": "件数のみを表示しています。これは省略ではなく境界線です。クローンされた音声は生体データであり、誰が同意したかの一覧は生体認証の同意登録簿そのものになってしまいます。この画面のどの項目も、特定の個人に対して操作を行うものではありません。",
     "panelError": {
       "message": "{what}を読み込めませんでした。",
@@ -100,10 +98,6 @@
       "cartesiaUsdPerCreditLabel": "Cartesia 1 クレジットあたりの USD",
       "cartesiaUsdPerCreditHint": "WarpTalk が Cartesia の 1 クレジットに支払う金額です。Insights では、吹き替えのコストを「計測された Cartesia クレジット × この値 × 為替レート」で算出します。アカウントは以前に購入したクレジットを消費しているため、Free プランの限界費用 0 ではなく購入時の単価を入力してください。既定値: Startup プラン、$49 / 1,250,000。",
       "cartesiaUsdPerCreditValue": "1 クレジットあたり ${price}",
-      "creditValueLabel": "クレジット単価",
-      "creditValueHint": "顧客が1クレジットあたりに支払う金額（VND）。",
-      "minimumPricePerCreditLabel": "クレジットあたりの最低価格",
-      "minimumPricePerCreditHint": "プラン検証時の価格下限です — VND建てのプランはこれを下回る価格でクレジットを販売できません。",
       "minimumContractPriceLabel": "最低契約価格",
       "minimumContractPriceHint": "プランが有効と判定される前の、1サイクルあたりの金額。",
       "minimumContractPriceValue": "{vnd} ₫ ・ {usd} $",
@@ -113,6 +107,61 @@
       "editButton": "価格エコノミクスを編集"
     },
     "languageCatalog": {
+      "manage": {
+        "add": "言語を追加",
+        "edit": "編集",
+        "disable": "無効化",
+        "enable": "有効化",
+        "columns": {
+          "usage": "使用中",
+          "actions": ""
+        },
+        "usageNone": "—",
+        "usageLive": "進行中 {count}",
+        "usageUpcoming": "予定 {count}",
+        "form": {
+          "addTitle": "言語を追加",
+          "editTitle": "{code} を編集",
+          "description": "有効にするとすぐにルーム検証で受け付けられます。アプリのミーティング言語選択には、アプリが対応している言語のみ表示されます。新しい言語は対応するまで「コード表示」になります。",
+          "codeLabel": "コード",
+          "codeHint": "ISO 639 の言語コード、地域は任意 — 例: de または de-DE。",
+          "nameLabel": "名前",
+          "nativeNameLabel": "現地語名",
+          "enabledLabel": "新しいルームですぐに有効にする",
+          "cancel": "キャンセル",
+          "save": "保存",
+          "create": "言語を追加",
+          "saving": "保存中…",
+          "createdToast": "{code} をカタログに追加しました。",
+          "savedToast": "{code} を更新しました。",
+          "genericError": "何も変更されていません。カタログが更新されなかったか、変更を監査ログに記録できませんでした。",
+          "errors": {
+            "codeInvalid": "de や de-DE のような言語コードを使用してください。",
+            "codeTaken": "その言語はすでにカタログにあります。",
+            "codeCovered": "{code} ですでにカバーされています — ルームは地域ではなく言語で照合します。",
+            "nameRequired": "名前は必須です。",
+            "nameTooLong": "名前は100文字以内にしてください。",
+            "nativeNameTooLong": "現地語名は100文字以内にしてください。"
+          }
+        },
+        "toggle": {
+          "disableTitle": "{name} を無効にしますか？",
+          "enableTitle": "{name} を有効にしますか？",
+          "disableDescription": "ソフトな切り替えです。行は残り、過去のミーティングはこの言語を保持します。再度有効にするまで {code} の新しいルームは拒否されます。",
+          "enableDescription": "{code} の新しいルームが再び受け付けられます。",
+          "blocked": "{count, plural, other {進行中のミーティング # 件がこの言語を使用しています。}}終了後に無効化できます。",
+          "last": "有効な言語はこれだけです。無効にするとルームを作成できなくなります。",
+          "confirmUpcoming": "{count, plural, other {予定されているミーティング # 件がこの言語を使用しています}}。{code} で編集・参加しようとすると拒否されます。",
+          "confirmCheckbox": "理解したうえで無効にする",
+          "cancel": "キャンセル",
+          "confirmDisable": "無効化",
+          "confirmEnable": "有効化",
+          "pending": "処理中…",
+          "disabledToast": "{code} を新しいルームで無効にしました。",
+          "enabledToast": "{code} を有効にしました。",
+          "genericError": "何も変更されていません。"
+        }
+      },
       "errorWhat": "言語カタログ",
       "empty": "カタログが空です — どの言語でもルームを作成できません。",
       "driftTitle": "会議選択画面には、このカタログが拒否する言語が {count} 件表示されています。",
@@ -268,11 +317,6 @@
       },
       "fields": {
         "fxRateUsdVnd": { "label": "為替レート USD→VND", "hint": "USD建てのプロバイダーコストをVNDとして読み取る際に使用します。" },
-        "creditValueVnd": { "label": "クレジット単価（VND）" },
-        "minimumPricePerCreditVnd": {
-          "label": "クレジットあたりの最低価格（VND）",
-          "hint": "VND建てプランの「価格 ÷ クレジット数」がこの値を下回っていないか確認する下限です。"
-        },
         "minimumContractPriceVnd": { "label": "最低契約価格（VND）" },
         "minimumContractPriceUsd": { "label": "最低契約価格（USD）" },
         "salesUsageWeight": { "label": "販売ウェイト・利用量" },
