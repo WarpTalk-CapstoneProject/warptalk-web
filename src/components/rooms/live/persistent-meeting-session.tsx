@@ -100,6 +100,7 @@ import type {
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { continueMeetingChatInWidget } from "@/lib/assistant/continue-in-widget";
 
 // Import Refactored Components
 import {
@@ -2823,6 +2824,13 @@ export function PersistentMeetingSession({
   // handleStartWarptalk below. Either way a person decides, and the room leaves "Waiting"
   // because someone started it.
 
+  // Read by the WarpBot handoff below at the moment it fires. The chat hub effect is registered
+  // once per room, so a title it closed over would be the title as it was when the room opened.
+  const roomTitleRef = useRef<string | null>(null);
+  useEffect(() => {
+    roomTitleRef.current = room?.title ?? null;
+  }, [room?.title]);
+
   useEffect(() => {
     if (!roomId) return;
     const chatConnection = createHubConnection("/api/v1/meetings/chat-hub");
@@ -2910,6 +2918,20 @@ export function PersistentMeetingSession({
           store.setAssistantPluginConnectionJson(json);
           store.setAssistantPluginSetupJson(null);
         }
+      },
+    );
+
+    // "Chuyển qua widget để bàn tiếp" — WarpBot's continue_in_widget tool. The room group is
+    // shared, so every screen in the meeting receives this; only the person who ASKED acts on it,
+    // and the meeting service names them from its own request row. Their widget opens on a new
+    // conversation seeded with this thread — the same path as the "Continue in widget" button.
+    chatConnection.on(
+      "ChatAssistantHandoff",
+      (payload: { requestedByUserId?: string }) => {
+        const me = useAuthStore.getState().user?.id;
+        const asker = payload?.requestedByUserId;
+        if (!me || !asker || asker.toLowerCase() !== me.toLowerCase()) return;
+        void continueMeetingChatInWidget({ roomId, roomTitle: roomTitleRef.current });
       },
     );
 
