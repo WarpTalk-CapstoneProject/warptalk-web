@@ -9,7 +9,7 @@
  *   PlanEditDialog        every column, laid over the stored plan so nothing unseen is reset
  *   RateCardEditDialog    price and margin only — the identity columns are the upsert key;
  *                         on a credit-unit (CRD) card, the provider cost alone
- *   PricingConfigDialog   the thirteen knobs the endpoint accepts, not the two it computes
+ *   PricingConfigDialog   the editable knobs (not credit value / price floor — WT-690)
  *
  * PlanCreateDialog is the one creator: POST /plans exists as of 2026-08-17, with the same
  * validation as the PUT. Rate-card identities still arrive by migration; a retired plan is
@@ -1108,15 +1108,17 @@ function RateCardDeactivateForm({
 /* ── pricing config ──────────────────────────────────────────────────────── */
 
 /**
- * The thirteen knobs the endpoint accepts, in the order they are read on screen.
+ * The knobs this dialog edits, in the order they are read on screen.
+ *
+ * WT-690: `creditValueVnd` and `minimumPricePerCreditVnd` are deliberately absent. Stripe owns
+ * customer pricing; billing still reads both (top-up pricing and the plan/contract price floor),
+ * so the request omits them and the backend keeps the stored values.
  *
  * `formula` and `resolverKey` are on the DTO and not here on purpose: they describe how the config
  * was resolved rather than what it holds, and `UpdatePricingConfigRequest` has no room for them.
  */
 const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
   "fxRateUsdVnd",
-  "creditValueVnd",
-  "minimumPricePerCreditVnd",
   "minimumContractPriceVnd",
   "minimumContractPriceUsd",
   "salesUsageWeight",

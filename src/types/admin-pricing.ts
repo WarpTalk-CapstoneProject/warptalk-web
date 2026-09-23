@@ -110,8 +110,13 @@ export interface SetRateCardProviderCostRequest {
  */
 export interface UpdatePricingConfigRequest {
   fxRateUsdVnd: number;
-  creditValueVnd: number;
-  minimumPricePerCreditVnd: number;
+  /**
+   * Never sent by the admin UI (WT-690): Stripe owns pricing, and omitted means the backend keeps
+   * the stored value, which billing still reads to price top-ups.
+   */
+  creditValueVnd?: number;
+  /** Never sent by the admin UI (WT-690); omitted keeps the stored plan/contract price floor. */
+  minimumPricePerCreditVnd?: number;
   minimumContractPriceVnd: number;
   minimumContractPriceUsd: number;
   salesUsageWeight: number;
