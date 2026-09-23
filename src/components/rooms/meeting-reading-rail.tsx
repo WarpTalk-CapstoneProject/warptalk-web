@@ -66,7 +66,7 @@ import {
   useReadingSync,
 } from "@/components/rooms/transcript-reading-sync";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
-import { languagesInScope } from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
@@ -166,6 +166,7 @@ export function TranscriptReadingLayout({
   rewriteFailure,
   rendering,
   onSelectRendering,
+  generatableLanguages,
   speakerDirectory,
 }: {
   /** Built by the room page — see the note in transcript-reading-sync.tsx on why it arrives whole. */
@@ -224,6 +225,8 @@ export function TranscriptReadingLayout({
   rendering?: SummaryRenderingView | null;
   /** Ask to read another pair. Never rewrites the meeting's summary — see RailSummary. */
   onSelectRendering?: (templateKey: string, language: string) => void;
+  /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
+  generatableLanguages?: readonly string[] | null;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -272,6 +275,7 @@ export function TranscriptReadingLayout({
           rewriteFailure={rewriteFailure}
           rendering={rendering}
           onSelectRendering={onSelectRendering}
+          generatableLanguages={generatableLanguages}
           speakerDirectory={speakerDirectory}
         />
       </div>
@@ -297,6 +301,7 @@ function ReadingRail({
   rewriteFailure,
   rendering,
   onSelectRendering,
+  generatableLanguages,
   speakerDirectory,
 }: {
   record: EndedRoomHistoryItem | null;
@@ -321,6 +326,8 @@ function ReadingRail({
   rewriteFailure?: { token: number; reason: string } | null;
   rendering?: SummaryRenderingView | null;
   onSelectRendering?: (templateKey: string, language: string) => void;
+  /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
+  generatableLanguages?: readonly string[] | null;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -545,6 +552,7 @@ function ReadingRail({
             shownSummary={shownSummary}
             rendering={rendering}
             onSelectRendering={onSelectRendering}
+            generatableLanguages={generatableLanguages}
           />
         ) : (
           <RailTalkTime shares={shares} speakerDirectory={speakerDirectory} />
@@ -612,6 +620,7 @@ function RailSummary({
   shownSummary,
   rendering,
   onSelectRendering,
+  generatableLanguages,
 }: {
   record: EndedRoomHistoryItem | null;
   segments: readonly StalenessSegment[];
@@ -632,6 +641,8 @@ function RailSummary({
   shownSummary?: MeetingSummaryContent | null;
   rendering?: SummaryRenderingView | null;
   onSelectRendering?: (templateKey: string, language: string) => void;
+  /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
+  generatableLanguages?: readonly string[] | null;
 }) {
   // The pair being READ, which the mid component already resolved: the published summary
   // unless a rendering is ready. Passed in rather than re-derived so the panel and the claims
@@ -721,14 +732,13 @@ function RailSummary({
    * would be offering to un-choose, which no request can express.
    */
   const languageOptions = useMemo(() => {
-    const offered = languagesInScope("chatTarget").map((language) => ({
-      code: language.code,
-      label: language.name,
-    }));
+    // WT-703: the meeting's own languages when the server says which — offering the rest only
+    // bought the reader a refusal. The one on screen stays listed so the select never blanks.
+    const offered = artifactLanguageOptions(generatableLanguages, [currentLanguage]);
     return currentLanguage
       ? offered
       : [{ code: "", label: "As spoken" }, ...offered];
-  }, [currentLanguage]);
+  }, [currentLanguage, generatableLanguages]);
 
   function selectRendering(template: string, language: string) {
     // Reading, not rewriting: nobody else's summary changes. The deadline and the polling live
