@@ -127,6 +127,26 @@ assert.match(
   /<\/section>[\s\S]*subtitlesEnabled[\s\S]*data-meeting-subtitle-lane[\s\S]*<LiveSubtitleOverlay[\s\S]*data-meeting-bottom-dock/,
   "enabled subtitles must render in a reserved lane between camera and controls",
 );
+// Caption scroll-back. Scrolling up in the lane opens its history as a panel that grows UPWARD
+// over the camera view — an overlay, so the video never reflows. Two ways to lose that silently:
+// clip the lane's container (the panel is cut at the lane's own height and the history looks
+// like it is not there), or go back to rendering only the last few lines (the scroll has
+// nowhere to go — the owner's original report).
+assert.doesNotMatch(
+  roomPage,
+  /data-meeting-subtitle-lane[\s\S]{0,700}?className="[^"]*overflow-hidden[^"]*"\s*>\s*<LiveSubtitleOverlay/,
+  "the caption lane's container must not clip the expanded caption history",
+);
+assert.match(
+  liveSubtitle,
+  /windowCaptionLines\(/,
+  "the caption lane must render its bounded history, not only the newest lines",
+);
+assert.match(
+  roomPage,
+  /<LiveSubtitleOverlay[\s\S]{0,2500}?onOpenTranscript=\{/,
+  "the caption lane must offer a way into the full transcript panel",
+);
 assert.doesNotMatch(
   roomPage,
   /data-meeting-bottom-dock[\s\S]{0,180}overflow-x-auto/,
