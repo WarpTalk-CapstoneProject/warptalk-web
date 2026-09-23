@@ -50,8 +50,10 @@ import {
 import { markInstantMeetingStarted } from "@/lib/meeting/instant-meeting-handoff";
 import {
   type DailyRecurrenceDraft,
+  describeDailyDraftProblem,
   detectTimeZone,
   firstOccurrenceDate,
+  validateDailyDraft,
 } from "@/lib/meeting/daily-recurrence";
 import { describeRecurrenceSentence } from "@/lib/meeting/recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
@@ -236,9 +238,15 @@ export function CreateRoomDialog() {
   // three screens between the button and the meeting it promised.
   const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;
 
+  // WT-699: the repeat rule's own problem ("at most 365 days", a last date before the first
+  // meeting …) was shown in the options menu while this button stayed enabled, so the host could
+  // submit a draft the dialog had just called invalid and learn it from the server instead. The
+  // same verdict the menu prints now gates the submit.
+  const recurrenceProblem = dailyRecurrence ? validateDailyDraft(dailyRecurrence, new Date()) : null;
   const validation = {
     title: title.trim().length > 0,
     languages: meetingLanguages.length > 0,
+    recurrence: recurrenceProblem === null,
   };
   const canSubmit = Object.values(validation).every(Boolean);
   const inviteLink =
@@ -306,6 +314,10 @@ export function CreateRoomDialog() {
 
   async function handleSubmit() {
     setSubmitError(null);
+    if (recurrenceProblem) {
+      failSubmit(describeDailyDraftProblem(recurrenceProblem));
+      return;
+    }
     if (!canSubmit) {
       failSubmit(t("errors.requiredFields"));
       return;

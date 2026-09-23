@@ -342,7 +342,8 @@ assert.match(
 //   The thing a dimmed line would offer — "your words are being heard right now" — is not missing
 //   from the product. It has a surface of its own, and a better one. `live-subtitle-overlay` calls
 //   captionTextForReader(utterance, readerLanguage, translationActive): the lane shows every line
-//   translated into the language of whoever is looking, keeps the last LANE_LINES (3), and
+//   translated into the language of whoever is looking, rests on its last two lines (with a
+//   bounded scroll-back, CAPTION_HISTORY_LIMIT), and
 //   deliberately includes the reader's own speech — a test on development pins that, in as many
 //   words: "would stop anyone ever seeing their own words". The lane is ephemeral by construction,
 //   which is exactly right for a reassurance about the present moment.

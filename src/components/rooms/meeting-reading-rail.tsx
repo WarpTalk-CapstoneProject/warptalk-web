@@ -66,6 +66,7 @@ import {
   useReadingSync,
 } from "@/components/rooms/transcript-reading-sync";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
+import { InlineMarkdown, SummaryMarkdown } from "@/components/markdown/document-markdown";
 import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
@@ -948,10 +949,13 @@ function RailSummary({
           only the narrative version can be checked: printing the flat string above a citable copy
           of itself would put the unverifiable one first and largest, which is precisely the dead
           spot the narrative exists to remove. */}
+      {/* WT-697: rendered as markdown. The backend's untemplated FALLBACK summary — what a reader
+          sees first, right after the meeting ends — stores raw model markdown in this field, and a
+          <p> printed its `##` and `**` literally until a reload landed on the upgraded row. */}
       {summary?.summary && !hasNarrative ? (
-        <p className="border-b border-border px-2 pb-2.5 pt-2 text-[12.5px] leading-[1.55] text-ink">
+        <SummaryMarkdown className="border-b border-border px-2 pb-2.5 pt-2 text-[12.5px] leading-[1.55] text-ink">
           {summary.summary}
-        </p>
+        </SummaryMarkdown>
       ) : null}
 
       {claims.length === 0 ? (
@@ -1025,7 +1029,7 @@ function RailClaimButton({
     <>
       <span className="block text-[12.5px] leading-[1.55] text-ink">
         {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
+        <InlineMarkdown>{claim.text}</InlineMarkdown>
       </span>
       <span
         className={cn(
@@ -1114,7 +1118,7 @@ function RailNarrativeSentence({
     return (
       <p className="mb-px block w-full rounded-md border-l-2 border-l-transparent px-2.5 py-1 text-left text-[12.5px] leading-[1.55] text-ink">
         {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
+        <InlineMarkdown>{claim.text}</InlineMarkdown>
       </p>
     );
   }
@@ -1147,7 +1151,7 @@ function RailNarrativeSentence({
     >
       <span className="min-w-0 flex-1 text-[12.5px] leading-[1.55] text-ink">
         {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
+        <InlineMarkdown>{claim.text}</InlineMarkdown>
       </span>
       {/* Held in the layout at rest, never unmounted. `lit` is the reverse direction — the reader
           is already reading the turn this came from, and offering to take them there would be
