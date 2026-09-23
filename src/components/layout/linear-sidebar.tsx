@@ -71,7 +71,6 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-  CheckSquare,
   Files,
   ListChecks,
   Bell,
@@ -396,11 +395,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
     // can navigate to is indistinguishable from one that was never built.
     { icon: BookOpen, label: t("nav.glossary"), href: `/${slug}/glossary`, tourId: "nav-glossary" },
-    // Work the meetings assigned to you, keyed on the person rather than the meeting. Listed here
-    // for the same reason Glossary is: an endpoint no navigation reaches is indistinguishable
-    // from one that was never built, and this list is the whole point of action items becoming
-    // rows instead of sentences.
-    { icon: CheckSquare, label: t("nav.myTasks"), href: `/${slug}/tasks`, tourId: "nav-tasks" }
+    // No "My tasks" entry: taken off the main navigation on the owner's call (2026-09-23), and
+    // its old address forwards home in proxy.ts. Action items still live on each meeting's record.
   );
 
   if (isOwnerOrAdmin) {
@@ -768,12 +764,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         label: t("settingsNav.security"),
         href: `/${activeWorkspaceSlug}/settings/security`,
       });
-      // Staff actions on this workspace. Same audience as the endpoint behind it.
-      settingsItems.push({
-        icon: ClockCounterClockwise,
-        label: t("settingsNav.auditLog"),
-        href: `/${activeWorkspaceSlug}/settings/audit-log`,
-      });
+      // No Audit log entry: it only ever listed what WarpTalk staff did to the workspace — the
+      // platform's own trail, kept on /admin/audit. Its old address forwards in proxy.ts.
     }
 
     return (
@@ -1040,19 +1032,6 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     </Link>
                   </div>
                 )}
-                {isOwnerOrAdmin && (
-                  <div className={cn(
-                    "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-                    navRowTone(pathname === `/${activeWorkspaceSlug}/settings/audit-log`)
-                  )}>
-                    <Link href={`/${activeWorkspaceSlug}/settings/audit-log`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                      <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                        {t("settingsNav.auditLog")}
-                      </span>
-                    </Link>
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -1167,13 +1146,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               </DropdownMenuItem>
             )}
 
-            {/* 2. Invite and manage members */}
-            <DropdownMenuItem
-              onClick={() => setIsInviteModalOpen(true)}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
-            >
-              <span>{t("workspaceMenu.inviteAndManageMembers")}</span>
-            </DropdownMenuItem>
+            {/* 2. Invite and manage members (Owner & Admin only).
+                WT-699 TC0705: offered to every Member, whose invite the server then refused. The
+                same audience the Members page gives its Invite button and pending-invite rows. */}
+            {isOwnerOrAdmin && (
+              <DropdownMenuItem
+                onClick={() => setIsInviteModalOpen(true)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+              >
+                <span>{t("workspaceMenu.inviteAndManageMembers")}</span>
+              </DropdownMenuItem>
+            )}
 
             {/* 3. Download desktop app */}
             <DropdownMenuItem
@@ -1539,7 +1522,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       </Dialog>
 
       <InviteMemberDialog
-        open={isInviteModalOpen}
+        open={isOwnerOrAdmin && isInviteModalOpen}
         onOpenChange={setIsInviteModalOpen}
         workspaceId={activeWorkspaceId || ""}
         workspaceName={activeWorkspaceName}

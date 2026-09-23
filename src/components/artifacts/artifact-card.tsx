@@ -14,10 +14,11 @@ import {
 import { cn } from "@/lib/utils";
 import {
   describeAbsence,
-  entryExcerpt,
   preferredEntry,
   relativeTime,
 } from "@/lib/meeting/artifact-library";
+import { artifactPreviewMarkdown } from "@/lib/meeting/artifact-preview";
+import { PreviewMarkdown } from "@/components/markdown/document-markdown";
 import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
 import { UserChip } from "@/components/user/user-chip";
 import { recordDetailPath } from "@/lib/workspace/workspace-routes";
@@ -76,7 +77,9 @@ export function ArtifactCard({
 }) {
   const t = useTranslations("artifacts");
   const lead = preferredEntry(group);
-  const excerpt = entryExcerpt(lead);
+  // Markdown, rendered: the stored transcript IS markdown, and printing it verbatim put a room
+  // UUID header and `**[Name (VI)]**:` markers at the top of every card. See artifact-preview.
+  const excerpt = artifactPreviewMarkdown(lead.body);
 
   return (
     /* A link, not a button. The records open at their own URL now, so this has to be the thing a
@@ -102,9 +105,13 @@ export function ArtifactCard({
         </p>
 
         {excerpt ? (
-          <p className="mt-2 whitespace-pre-wrap break-words text-[8.5px] leading-[1.5] text-ink-muted">
+          <PreviewMarkdown className="mt-2 text-[8.5px] leading-[1.5] text-ink-muted">
             {excerpt}
-          </p>
+          </PreviewMarkdown>
+        ) : lead.body ? (
+          // A body with nothing left once the header and the pipeline's markers are gone — a
+          // transcript nobody spoke in. Said, rather than left as an empty frame.
+          <AbsenceNote entry={{ ...lead, absence: "empty" }} t={t} />
         ) : (
           <AbsenceNote entry={lead} t={t} />
         )}

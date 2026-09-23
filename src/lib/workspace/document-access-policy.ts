@@ -138,7 +138,11 @@ export function isMembershipPolicy(
 }
 
 /**
- * The rule that lets guests outside the workspace read this document.
+ * The rule that lets this workspace's EXTERNAL members read this document.
+ *
+ * Not people outside the workspace: no document route is anonymous, and a MembershipType policy
+ * can only ever match someone who is already a member. The panel used to say "guests outside the
+ * workspace", which read as a public link that does not exist.
  *
  * Still its own named function because the External switch is a product decision with its own
  * wording, not merely "a membership policy that happens to say external" — but it is one call to
