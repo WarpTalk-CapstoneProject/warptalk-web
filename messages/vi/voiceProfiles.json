@@ -38,6 +38,10 @@
       "savedDubbed": "Đã lưu. Bạn sẽ được lồng tiếng bằng giọng này.",
       "backToLiveClone": "Quay lại nhân bản giọng trực tiếp.",
       "saveFailed": "Không thể lưu giọng lồng tiếng cho bạn."
+    },
+    "retryToasts": {
+      "queued": "Đã gửi lại để nhân bản.",
+      "failed": "Không thể gửi bản ghi để nhân bản."
     }
   },
   "library": {
@@ -87,6 +91,18 @@
     "cloning": "Đang nhân bản",
     "cloningDetail": "thường dưới một phút",
     "reRecord": "Ghi âm lại",
+    "tryAgain": "Thử lại",
+    "cloneFailure": {
+      "planRequired": "Gói dịch vụ giọng nói hiện không hỗ trợ nhân bản. Bản ghi của bạn vẫn ổn — hãy thử lại sau khi quản trị viên nâng cấp gói.",
+      "outOfCredits": "Dịch vụ giọng nói đã hết credit. Bản ghi của bạn vẫn ổn — hãy thử lại sau khi quản trị viên nạp thêm.",
+      "providerRejected": "Dịch vụ giọng nói từ chối thông tin xác thực. Bản ghi của bạn vẫn ổn — hãy thử lại sau.",
+      "providerUnavailable": "Dịch vụ giọng nói tạm thời không khả dụng. Bản ghi của bạn vẫn ổn — hãy thử lại.",
+      "sampleRejected": "Dịch vụ giọng nói không dùng được bản ghi này. Hãy ghi lại rõ hơn và dài hơn.",
+      "sampleExpired": "Bản ghi không được xử lý kịp. Hãy thử lại.",
+      "unknown": "Dịch vụ giọng nói trả về lỗi không xác định. Hãy thử lại hoặc ghi lại.",
+      "notRecorded": "Không có lý do được lưu lại. Hãy thử lại hoặc ghi lại.",
+      "detail": "Chi tiết: {detail}"
+    },
     "actionsFor": "Thao tác cho {name}",
     "stopBeingDubbed": "Ngừng lồng tiếng bằng giọng này",
     "beDubbedIn": "Lồng tiếng bằng giọng này",
