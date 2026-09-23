@@ -2,7 +2,14 @@
 
 import { Suspense, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowsClockwise, ChatCircleText, Star, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowsClockwise,
+  ChatCircleText,
+  Info,
+  Star,
+  TrendDown,
+  WarningCircle,
+} from "@phosphor-icons/react/dist/ssr";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -14,17 +21,21 @@ import {
 } from "@/components/admin/admin-page-chrome";
 import { useAdminFeedbackComments, useAdminFeedbackSummary } from "@/hooks/use-admin-feedback";
 import {
+  confidenceOf,
+  deltaTone,
   dimensionLabel,
   distributionShares,
   formatAverage,
+  formatAverageDelta,
   formatResponseRate,
-  isThinSample,
+  formatShare,
   ratingTone,
 } from "@/lib/feedback/admin-feedback-view";
 import { cn } from "@/lib/utils";
 import type {
   AdminFeedbackCommentDto,
   AdminFeedbackDimensionDto,
+  AdminFeedbackSummaryDto,
 } from "@/types/admin-feedback";
 
 const PAGE_SIZE = 20;
@@ -54,6 +65,8 @@ function FeedbackReport() {
 
   const rangeParam = searchParams.get("range");
   const range: RangeValue = isRange(rangeParam) ? rangeParam : "30";
+  // WT-694: latest comments, or the unhappiest first — the ones most worth reading.
+  const commentSort: "recent" | "lowest" = searchParams.get("comments") === "lowest" ? "lowest" : "recent";
   const parsedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
 
@@ -67,7 +80,7 @@ function FeedbackReport() {
 
   const summaryQuery = useAdminFeedbackSummary(useMemo(() => ({ from }), [from]));
   const commentsQuery = useAdminFeedbackComments(
-    useMemo(() => ({ from, page, pageSize: PAGE_SIZE }), [from, page]),
+    useMemo(() => ({ from, page, pageSize: PAGE_SIZE, sort: commentSort }), [from, page, commentSort]),
   );
 
   const summary = summaryQuery.data;
@@ -91,6 +104,14 @@ function FeedbackReport() {
       { value: "30" as const, label: t("rangeTabs.30") },
       { value: "90" as const, label: t("rangeTabs.90") },
       { value: "365" as const, label: t("rangeTabs.365") },
+    ],
+    [t],
+  );
+
+  const commentTabs = useMemo(
+    () => [
+      { value: "recent" as const, label: t("comments.sortRecent") },
+      { value: "lowest" as const, label: t("comments.sortLowest") },
     ],
     [t],
   );
@@ -164,6 +185,11 @@ function FeedbackReport() {
               <p className="mt-1 text-[26px] font-semibold leading-none tabular-nums">
                 {numberFormatter.format(summary.responseCount)}
               </p>
+              {summary.previousResponseCount != null ? (
+                <p className="mt-1 text-[11px] text-ink-subtle">
+                  {t("stats.previous", { value: numberFormatter.format(summary.previousResponseCount) })}
+                </p>
+              ) : null}
             </div>
             <div className="rounded-lg border border-border bg-surface-1 px-4 py-3">
               <p className="text-[11px] font-medium text-ink-muted">{t("stats.meetingsRated")}</p>
@@ -183,8 +209,15 @@ function FeedbackReport() {
               <p className="mt-1 text-[26px] font-semibold leading-none tabular-nums">
                 {formatResponseRate(summary.responseRate)}
               </p>
+              {summary.previousFrom ? (
+                <p className="mt-1 text-[11px] text-ink-subtle">
+                  {t("stats.previous", { value: formatResponseRate(summary.previousResponseRate ?? null) })}
+                </p>
+              ) : null}
             </div>
           </div>
+
+          <FeedbackInsights summary={summary} />
 
           <h2 className="mb-2 mt-6 text-[13px] font-semibold">{t("dimensions.title")}</h2>
           <AdminPanel>
@@ -210,6 +243,15 @@ function FeedbackReport() {
               {numberFormatter.format(commentTotal)}
             </span>
           </h2>
+          <AdminFilterTabs
+            tabs={commentTabs}
+            value={commentSort}
+            onChange={(value) =>
+              updateParams({ comments: value === "recent" ? undefined : value, page: undefined })
+            }
+            label={t("comments.sortAria")}
+          />
+          <div className="mt-2" />
           <AdminPanel>
             {commentsQuery.isError ? (
               <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
@@ -269,10 +311,91 @@ function FeedbackReport() {
   );
 }
 
+/**
+ * WT-694: what to look at first, computed server-side and never extrapolated — the weakest
+ * dimension, whether the whole sample can be trusted, and which dimensions nobody answered.
+ */
+function FeedbackInsights({ summary }: { summary: AdminFeedbackSummaryDto }) {
+  const t = useTranslations("adminMisc.feedback.insights");
+  const lowest = summary.lowestDimension
+    ? summary.dimensions.find((d) => d.dimension === summary.lowestDimension)
+    : undefined;
+  const noData = summary.dimensionsWithoutData ?? [];
+  const lowSurvey = summary.confidence === "low" || summary.confidence === "none";
+  if (!lowest && noData.length === 0 && !lowSurvey) return null;
+
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-2">
+      {lowest ? (
+        <div className="rounded-lg border border-destructive/25 bg-destructive/5 px-4 py-3">
+          <p className="flex items-center gap-1.5 text-[11px] font-medium text-destructive">
+            <TrendDown size={13} weight="bold" />
+            {t("lowestTitle")}
+          </p>
+          <p className="mt-1 text-[15px] font-semibold">
+            {dimensionLabel(lowest.dimension)}{" "}
+            <span className="tabular-nums">{formatAverage(lowest.averageRating)}</span>
+            <span className="text-[11px] font-normal text-ink-subtle">/5</span>
+          </p>
+          <p className="mt-0.5 text-[12px] text-ink-muted">
+            {t("lowestDetail", { count: numberFormatter.format(lowest.responseCount) })}
+            {formatAverageDelta(lowest.averageDelta)
+              ? ` · ${t("vsPrevious", { delta: formatAverageDelta(lowest.averageDelta)! })}`
+              : ""}
+          </p>
+          {summary.lowestDimensionNote ? (
+            <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-300">{summary.lowestDimensionNote}</p>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="grid gap-3">
+        {lowSurvey ? (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-[12px]">
+            <Info size={14} weight="duotone" className="mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <p className="font-medium">{t("lowConfidenceTitle")}</p>
+              <p className="mt-0.5 text-ink-muted">
+                {summary.confidenceNote ?? ""}{" "}
+                {t("lowConfidenceRule", {
+                  min: summary.minResponses ?? 10,
+                  rate: formatShare(summary.minRate ?? 0.1),
+                })}
+              </p>
+            </div>
+          </div>
+        ) : null}
+        {noData.length > 0 ? (
+          <div className="rounded-lg border border-border bg-surface-2/60 px-4 py-3 text-[12px]">
+            <p className="font-medium">{t("noDataTitle", { count: noData.length })}</p>
+            <p className="mt-0.5 text-ink-muted">
+              {t("noDataBody", { names: noData.map(dimensionLabel).join(", ") })}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
   const t = useTranslations("adminMisc.feedback");
   const shares = distributionShares(dimension);
-  const thin = isThinSample(dimension);
+  const confidence = confidenceOf(dimension);
+  const delta = formatAverageDelta(dimension.averageDelta);
+  const tone = deltaTone(dimension.averageDelta);
+
+  if (confidence === "none") {
+    // No data is its own state, highlighted — not a row of empty bars that reads like a score.
+    return (
+      <div className="flex flex-col gap-1 border-b border-hairline/60 bg-surface-2/50 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-4">
+        <p className="w-[170px] shrink-0 text-[13px] font-medium">{dimensionLabel(dimension.dimension)}</p>
+        <span className="inline-flex w-fit items-center rounded-full border border-border bg-surface-1 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
+          {t("dimensions.noData")}
+        </span>
+        <span className="text-[12px] text-ink-subtle">{t("dimensions.noDataHint")}</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-4">
@@ -282,8 +405,15 @@ function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
           {/* Its OWN respondents. Four of the five dimensions are optional, so this is not the
               report's total and printing the report's total here would inflate every one. */}
           {t("dimensions.ratedCount", { count: numberFormatter.format(dimension.responseCount) })}
-          {thin ? <span className="ml-1 text-amber-600">{t("dimensions.thinSample")}</span> : null}
+          {dimension.responseShare != null
+            ? ` · ${t("dimensions.share", { share: formatShare(dimension.responseShare) })}`
+            : null}
         </p>
+        {confidence === "low" ? (
+          <p className="mt-0.5 text-[11px] font-medium text-amber-600" title={dimension.confidenceNote ?? undefined}>
+            {t("dimensions.lowConfidence")}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex w-[70px] shrink-0 items-baseline gap-1">
@@ -298,6 +428,28 @@ function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
         {dimension.averageRating != null ? (
           <span className="text-[11px] text-ink-subtle">/5</span>
         ) : null}
+      </div>
+
+      {/* Trend vs the previous window of equal length, as the server computed it. */}
+      <div className="w-[80px] shrink-0 text-[12px] tabular-nums">
+        {delta ? (
+          <span
+            className={cn(
+              "font-medium",
+              tone === "good" && "text-emerald-600 dark:text-emerald-400",
+              tone === "bad" && "text-destructive",
+              tone === "flat" && "text-ink-muted",
+            )}
+            title={t("dimensions.previousTooltip", {
+              average: formatAverage(dimension.previousAverageRating ?? null),
+              count: dimension.previousResponseCount ?? 0,
+            })}
+          >
+            {delta}
+          </span>
+        ) : (
+          <span className="text-ink-subtle">{t("dimensions.noTrend")}</span>
+        )}
       </div>
 
       {/* The distribution, not just the mean. A 3.0 from all threes and one from half ones and

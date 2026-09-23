@@ -400,14 +400,6 @@ export default function AdminPlansPage() {
                   value={numberFormatter.format(config.fxRateUsdVnd)}
                 />
                 <ConfigRow
-                  label={t("configRows.creditValue")}
-                  value={numberFormatter.format(config.creditValueVnd)}
-                />
-                <ConfigRow
-                  label={t("configRows.minimumPricePerCredit")}
-                  value={numberFormatter.format(config.minimumPricePerCreditVnd)}
-                />
-                <ConfigRow
                   label={t("configRows.minimumContractPrice")}
                   value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
                 />

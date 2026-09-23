@@ -561,10 +561,14 @@ export const API = {
   },
   /**
    * The catalog room validation reads — `translation_room.supported_languages`, inactive rows
-   * included. Read-only: translation-room has no bus, so a toggle could not be audited.
+   * included. Manageable since WT-691: each write is recorded in the platform audit log over gRPC
+   * before it is saved. No delete — disable is the soft switch.
    */
   adminLanguages: {
     base: "/admin/languages",
+    byCode: (code: string) => `/admin/languages/${encodeURIComponent(code)}`,
+    enable: (code: string) => `/admin/languages/${encodeURIComponent(code)}/enable`,
+    disable: (code: string) => `/admin/languages/${encodeURIComponent(code)}/disable`,
   },
   /** Voice-clone consent, counts only. No user ids cross this boundary. */
   adminVoiceConsent: {
