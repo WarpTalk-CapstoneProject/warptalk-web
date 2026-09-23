@@ -9,7 +9,7 @@
  *   PlanEditDialog        every column, laid over the stored plan so nothing unseen is reset
  *   RateCardEditDialog    price and margin only — the identity columns are the upsert key;
  *                         on a credit-unit (CRD) card, the provider cost alone
- *   PricingConfigDialog   the twelve knobs the endpoint accepts, not the two it computes
+ *   PricingConfigDialog   the thirteen knobs the endpoint accepts, not the two it computes
  *
  * PlanCreateDialog is the one creator: POST /plans exists as of 2026-08-17, with the same
  * validation as the PUT. Rate-card identities still arrive by migration; a retired plan is
@@ -1108,7 +1108,7 @@ function RateCardDeactivateForm({
 /* ── pricing config ──────────────────────────────────────────────────────── */
 
 /**
- * The twelve knobs the endpoint accepts, in the order they are read on screen.
+ * The thirteen knobs the endpoint accepts, in the order they are read on screen.
  *
  * `formula` and `resolverKey` are on the DTO and not here on purpose: they describe how the config
  * was resolved rather than what it holds, and `UpdatePricingConfigRequest` has no room for them.
@@ -1126,7 +1126,15 @@ const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
   "defaultOverageCapRatio",
   "defaultInvoiceTermsDays",
   "defaultInvoiceGraceHours",
+  "cartesiaUsdPerCredit",
 ];
+
+/**
+ * Fields a blank may leave alone: the request omits them and the backend keeps the stored value.
+ * Only the Cartesia price, which a backend that predates it does not return — requiring a value
+ * there would block every other save against that backend.
+ */
+const OPTIONAL_CONFIG_KEYS: ReadonlySet<keyof UpdatePricingConfigRequest> = new Set(["cartesiaUsdPerCredit"]);
 
 function useConfigFields(
   t: ReturnType<typeof useTranslations>,
@@ -1193,13 +1201,14 @@ function PricingConfigForm({
   const t = useTranslations("adminPlansSettings.pricingEditors.config");
   const configFields = useConfigFields(t);
   const [draft, setDraft] = useState<Record<string, string>>(() =>
-    Object.fromEntries(configFields.map(({ key }) => [key, String(config[key])])),
+    Object.fromEntries(configFields.map(({ key }) => [key, config[key] == null ? "" : String(config[key])])),
   );
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
     const parsed: Partial<UpdatePricingConfigRequest> = {};
     for (const { key, label } of configFields) {
+      if (OPTIONAL_CONFIG_KEYS.has(key) && (draft[key] ?? "").trim() === "") continue;
       const value = toNumber(draft[key] ?? "");
       if (!Number.isFinite(value)) {
         setError(t("numberError", { label }));

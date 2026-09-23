@@ -97,6 +97,9 @@
       "errorWhat": "The pricing configuration",
       "fxRateLabel": "FX rate (USD → VND)",
       "fxRateHint": "Reads a USD provider cost in VND terms.",
+      "cartesiaUsdPerCreditLabel": "Cartesia USD per credit",
+      "cartesiaUsdPerCreditHint": "What one Cartesia credit costs WarpTalk. Insights price dubbing as measured Cartesia credits × this × the FX rate. The account spends credits bought earlier, so enter what they cost, not the Free plan's marginal 0. Default: Startup plan, $49 / 1,250,000.",
+      "cartesiaUsdPerCreditValue": "${price} per credit",
       "creditValueLabel": "Credit value",
       "creditValueHint": "What one credit costs a customer, in VND.",
       "minimumPricePerCreditLabel": "Minimum price per credit",
@@ -278,7 +281,8 @@
         "salesAiServicesWeight": { "label": "Sales weight · AI services" },
         "defaultOverageCapRatio": { "label": "Default overage cap ratio" },
         "defaultInvoiceTermsDays": { "label": "Default invoice terms (days)" },
-        "defaultInvoiceGraceHours": { "label": "Default invoice grace (hours)" }
+        "defaultInvoiceGraceHours": { "label": "Default invoice grace (hours)" },
+        "cartesiaUsdPerCredit": { "label": "Cartesia USD per credit", "hint": "Measured Cartesia credits × this × FX is the dubbing cost in Insights. Leave blank to keep the stored value." }
       },
       "cancel": "Cancel",
       "save": "Save configuration",

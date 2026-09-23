@@ -97,6 +97,9 @@
       "errorWhat": "価格設定",
       "fxRateLabel": "為替レート（USD → VND）",
       "fxRateHint": "USD建てのプロバイダーコストをVND換算で読み取ります。",
+      "cartesiaUsdPerCreditLabel": "Cartesia 1 クレジットあたりの USD",
+      "cartesiaUsdPerCreditHint": "WarpTalk が Cartesia の 1 クレジットに支払う金額です。Insights では、吹き替えのコストを「計測された Cartesia クレジット × この値 × 為替レート」で算出します。アカウントは以前に購入したクレジットを消費しているため、Free プランの限界費用 0 ではなく購入時の単価を入力してください。既定値: Startup プラン、$49 / 1,250,000。",
+      "cartesiaUsdPerCreditValue": "1 クレジットあたり ${price}",
       "creditValueLabel": "クレジット単価",
       "creditValueHint": "顧客が1クレジットあたりに支払う金額（VND）。",
       "minimumPricePerCreditLabel": "クレジットあたりの最低価格",
@@ -278,7 +281,8 @@
         "salesAiServicesWeight": { "label": "販売ウェイト・AIサービス" },
         "defaultOverageCapRatio": { "label": "デフォルトの超過上限比率" },
         "defaultInvoiceTermsDays": { "label": "デフォルトの請求書支払期限（日）" },
-        "defaultInvoiceGraceHours": { "label": "デフォルトの請求書猶予期間（時間）" }
+        "defaultInvoiceGraceHours": { "label": "デフォルトの請求書猶予期間（時間）" },
+        "cartesiaUsdPerCredit": { "label": "Cartesia 1 クレジットあたりの USD", "hint": "計測された Cartesia クレジット × この値 × 為替レートが Insights の吹き替えコストになります。空欄の場合は現在の値を維持します。" }
       },
       "cancel": "キャンセル",
       "save": "設定を保存",

@@ -121,6 +121,11 @@ export interface UpdatePricingConfigRequest {
   defaultOverageCapRatio: number;
   defaultInvoiceTermsDays: number;
   defaultInvoiceGraceHours: number;
+  /**
+   * USD per Cartesia credit. Omitted leaves the stored value alone (the backend reads null as
+   * "unchanged"), so a blank field cannot reset it.
+   */
+  cartesiaUsdPerCredit?: number;
 }
 
 /** Platform-wide pricing knobs. Editable through `PUT /usages/pricing-config`. */
@@ -139,6 +144,12 @@ export interface PricingConfigDto {
   defaultInvoiceGraceHours: number;
   formula: string;
   resolverKey: string;
+  /**
+   * USD per Cartesia credit (`cartesia_usd_per_credit`). Insights price dubbing as measured Cartesia
+   * credits × this × `fxRateUsdVnd`. Default 0.0000392, the Startup plan's $49 / 1,250,000 credits.
+   * Absent from a backend that predates the Cartesia usage sync.
+   */
+  cartesiaUsdPerCredit?: number;
 }
 
 /** Platform billing policy. One knob today; the endpoint replaces the whole record. */

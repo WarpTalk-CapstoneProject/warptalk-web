@@ -80,5 +80,31 @@
     "justNow": "vừa xong",
     "noConsumerTooltip": "Chưa từng có consumer nào đọc nhóm này",
     "consumerSeenTooltip": "Tên consumer mà Redis từng ghi nhận, không phải số consumer đang kết nối hiện tại"
+  },
+  "insights": {
+    "aiCostBasis": {
+      "measured": "Lồng tiếng đo từ mức dùng Cartesia",
+      "mixed": "Lồng tiếng đo được trong {measured}/{total} ngày, các ngày còn lại là ước tính",
+      "estimated": "Lồng tiếng ước tính (12,5 ký tự/giây)"
+    },
+    "cartesia": {
+      "title": "Cartesia",
+      "status": {
+        "ok": "Đã đồng bộ",
+        "pending": "Đang chờ lần đồng bộ đầu tiên",
+        "disabled": "Đồng bộ đang tắt",
+        "error": "Đồng bộ đang lỗi",
+        "stale": "Đồng bộ đã cũ"
+      },
+      "thisMonth": "{credits} credit tháng này (UTC)",
+      "monthUnknown": "chưa đồng bộ mức dùng tháng này",
+      "today": "{credits} hôm nay",
+      "remaining": "còn {credits}",
+      "remainingUnknown": "số dư: API của Cartesia không cung cấp",
+      "syncedAgo": "{minutes, plural, =0 {vừa đồng bộ} other {đồng bộ # phút trước}}",
+      "neverSynced": "chưa từng đồng bộ",
+      "allKeys": "mọi API key",
+      "price": "${price} mỗi credit"
+    }
   }
 }

@@ -97,6 +97,9 @@
       "errorWhat": "cấu hình giá",
       "fxRateLabel": "Tỷ giá (USD → VND)",
       "fxRateHint": "Dùng để quy đổi chi phí nhà cung cấp tính bằng USD sang VND.",
+      "cartesiaUsdPerCreditLabel": "Giá USD mỗi credit Cartesia",
+      "cartesiaUsdPerCreditHint": "Chi phí WarpTalk trả cho một credit Cartesia. Insights tính chi phí lồng tiếng bằng số credit Cartesia đo được × giá này × tỷ giá. Tài khoản đang dùng credit đã mua từ trước, nên hãy nhập giá đã trả cho chúng, không phải mức biên 0 của gói Free. Mặc định: gói Startup, $49 / 1.250.000.",
+      "cartesiaUsdPerCreditValue": "${price} mỗi credit",
       "creditValueLabel": "Giá trị 1 credit",
       "creditValueHint": "Chi phí khách hàng phải trả cho một credit, tính bằng VND.",
       "minimumPricePerCreditLabel": "Giá tối thiểu mỗi credit",
@@ -278,7 +281,8 @@
         "salesAiServicesWeight": { "label": "Trọng số bán hàng · dịch vụ AI" },
         "defaultOverageCapRatio": { "label": "Tỷ lệ trần vượt mức mặc định" },
         "defaultInvoiceTermsDays": { "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)" },
-        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" }
+        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" },
+        "cartesiaUsdPerCredit": { "label": "Giá USD mỗi credit Cartesia", "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại." }
       },
       "cancel": "Hủy",
       "save": "Lưu cấu hình",
