@@ -10,6 +10,10 @@ import { Button } from "@/components/ui/button";
 import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { AnnouncementComposer } from "@/components/admin/announcement-composer";
 import { useAdminAnnouncements, useSendAdminAnnouncement } from "@/hooks/use-admin-announcements";
+import {
+  announcementDeliveredCount,
+  announcementStatusClasses,
+} from "@/lib/notifications/announcement-status";
 import { cn } from "@/lib/utils";
 import type { AdminAnnouncementSummaryDto } from "@/types/admin-announcement";
 
@@ -160,7 +164,8 @@ function AnnouncementsList() {
 }
 
 function AnnouncementRow({ announcement }: { announcement: AdminAnnouncementSummaryDto }) {
-  const isDraft = announcement.status.toLowerCase() === "draft";
+  const t = useTranslations("adminAnnouncements.list.delivery");
+  const delivered = announcementDeliveredCount(announcement);
 
   return (
     <Link
@@ -172,13 +177,13 @@ function AnnouncementRow({ announcement }: { announcement: AdminAnnouncementSumm
         <p className="truncate text-[11px] text-ink-subtle">{announcement.type}</p>
       </div>
 
+      {/* WT-699 TC4101: coloured by what the status SAYS. Every non-draft row used to be green,
+          so a Failed announcement read as delivered. */}
       <div className="w-[110px] shrink-0">
         <span
           className={cn(
             "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            isDraft
-              ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-              : "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+            announcementStatusClasses(announcement.status),
           )}
         >
           {announcement.status}
@@ -190,8 +195,17 @@ function AnnouncementRow({ announcement }: { announcement: AdminAnnouncementSumm
         {announcement.targetAudienceMode}
       </div>
 
+      {/* How far it actually went, now that the service records it (backend#406). */}
+      <div className="w-[150px] shrink-0 text-[12px] text-ink-muted">
+        {delivered !== null ? t("delivered", { count: delivered }) : "—"}
+      </div>
+
       <div className="w-[190px] shrink-0 text-[12px] text-ink-muted md:text-right">
-        {formatWhen(announcement.createdAt)}
+        {announcement.sentAt ? (
+          t("sentAt", { date: formatWhen(announcement.sentAt) })
+        ) : (
+          <span title={t("createdTitle")}>{formatWhen(announcement.createdAt)}</span>
+        )}
       </div>
     </Link>
   );

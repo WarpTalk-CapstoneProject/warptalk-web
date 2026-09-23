@@ -191,9 +191,23 @@ export function LiveKitMeetingStage({
   // The LAYOUT does not: the large tile used to swap on every "mm", then swap back, so a
   // two-person conversation flickered between two faces for its whole duration. Focus is
   // sticky, and only moves once someone else has held the floor for SPEAKER_HOLD_MS.
-  const speakingNow = visibleTracks
-    .filter((trackRef) => activeSpeakerIdentities.has(trackRef.participant.identity))
-    .map((trackRef) => trackRef.participant.identity);
+  //
+  // WT-825: the viewer's OWN voice never moves the layout. Google Meet never hands you the large
+  // tile on your own screen — you know what you look like, and the point of the stage is the
+  // people you are talking to. Counting the local participant here made every sentence the viewer
+  // spoke swap their own face onto the stage, which is the "inverted" layout in the report.
+  const localIdentity = room?.localParticipant.identity ?? null;
+  const speakingNow = [
+    ...new Set(
+      visibleTracks
+        .filter(
+          (trackRef) =>
+            activeSpeakerIdentities.has(trackRef.participant.identity) &&
+            trackRef.participant.identity !== localIdentity,
+        )
+        .map((trackRef) => trackRef.participant.identity),
+    ),
+  ];
 
   const [stickySpeaker, setStickySpeaker] = useState(INITIAL_STICKY_SPEAKER);
   const speakingKey = speakingNow.join("|");
@@ -216,19 +230,34 @@ export function LiveKitMeetingStage({
     visibleTracks.some((trackRef) => trackRef.participant.identity === stickySpeaker.focused)
       ? stickySpeaker.focused
       : undefined;
-  const localIdentity = room?.localParticipant.identity ?? null;
   const firstVisibleIdentity = visibleTracks[0]?.participant.identity;
   const firstRemoteIdentity = visibleTracks.find(
     (trackRef) => trackRef.participant.identity !== localIdentity,
   )?.participant.identity;
+  // People, not tracks: a participant sharing their screen is in visibleTracks twice.
+  const remoteIdentities = [
+    ...new Set(
+      visibleTracks
+        .map((trackRef) => trackRef.participant.identity)
+        .filter((identity) => identity !== localIdentity),
+    ),
+  ];
+  const localIsVisible =
+    localIdentity !== null &&
+    visibleTracks.some((trackRef) => trackRef.participant.identity === localIdentity);
+  // WT-825: a one-to-one call is the other person, large, with yourself in the corner — the
+  // Google Meet layout. It used to fall through to an even two-up grid (or, in Spotlight and
+  // Sidebar, to the first track LiveKit lists, which is the LOCAL one), so the viewer's own face
+  // took as much of the stage as the person they were talking to, or more.
+  const isOneToOne = localIsVisible && remoteIdentities.length === 1;
   const featuredIdentity =
     spotlightedUserId ||
     (layoutMode === "grid"
       ? null
       : layoutMode === "spotlight"
-        ? pinnedUserId || activeSpeakerIdentity || firstVisibleIdentity
+        ? pinnedUserId || activeSpeakerIdentity || firstRemoteIdentity || firstVisibleIdentity
         : layoutMode === "sidebar"
-          ? pinnedUserId || firstVisibleIdentity
+          ? pinnedUserId || firstRemoteIdentity || firstVisibleIdentity
           // Five is where an even grid stops being readable. Below it, everyone gets the
           // same tile — a two- or three-person call has no "main" person, and picking one
           // shrinks the others for nothing. At six and above the grid tiles get too small
@@ -238,8 +267,14 @@ export function LiveKitMeetingStage({
               activeSpeakerIdentity ||
               firstRemoteIdentity ||
               firstVisibleIdentity
-            : pinnedUserId) ||
+            : layoutMode === "auto" && isOneToOne
+              ? pinnedUserId || firstRemoteIdentity
+              : pinnedUserId) ||
     null;
+  // WT-825: in Auto's even grid the viewer is not one of the tiles either. The others share the
+  // grid; the viewer is the small self-view docked in the corner, as in the featured layout.
+  const selfViewDocked =
+    layoutMode === "auto" && !spotlightedUserId && localIsVisible && remoteIdentities.length >= 2;
   const isSpotlight = Boolean(spotlightedUserId);
 
   // WT-245: a camera-off participant's TrackReference is not stable — LiveKit swaps between a
@@ -489,6 +524,31 @@ export function LiveKitMeetingStage({
               className: "!rounded-none",
               tileClassName: "!rounded-none",
             })}
+          </div>
+        </div>
+      );
+    }
+
+    if (selfViewDocked) {
+      const remoteTracks = visibleTracks.filter(
+        (trackRef) => trackRef.participant.identity !== localIdentity,
+      );
+      const selfTracks = visibleTracks.filter(
+        (trackRef) => trackRef.participant.identity === localIdentity,
+      );
+      return (
+        <div className={`${STAGE_CLASSNAME} relative`}>
+          <div
+            className={`grid h-full min-h-0 gap-3 ${
+              remoteTracks.length === 2
+                ? "grid-cols-1 lg:grid-cols-2"
+                : gridClassName(remoteTracks.length)
+            }`}
+          >
+            {remoteTracks.map((trackRef) => renderTile(trackRef))}
+          </div>
+          <div className="absolute bottom-3 right-3 z-20 flex items-end justify-end gap-2">
+            {selfTracks.map((trackRef) => renderThumbnail(trackRef))}
           </div>
         </div>
       );

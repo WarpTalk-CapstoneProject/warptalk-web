@@ -85,6 +85,45 @@ assert.match(
   /layoutMode === "auto" && visibleTracks\.length > AUTO_FEATURED_MIN_PARTICIPANTS[\s\S]*pinnedUserId \|\|[\s\S]*activeSpeakerIdentity \|\|[\s\S]*firstRemoteIdentity \|\|[\s\S]*firstVisibleIdentity/,
   "auto layout must create a featured stage once a meeting outgrows an even grid",
 );
+// WT-825: the Google Meet layout. The people you are talking to are large; you are the small
+// self-view. It was inverted three ways: a one-to-one call split the stage evenly, Spotlight and
+// Sidebar fell back to the FIRST track (LiveKit lists the local one first), and the viewer's own
+// voice made them the sticky active speaker, swapping their own face onto the stage.
+assert.match(
+  meetingStage,
+  /const speakingNow = \[[\s\S]{0,400}trackRef\.participant\.identity !== localIdentity/,
+  "the viewer's own voice must never make them the featured speaker",
+);
+assert.match(
+  meetingStage,
+  /const isOneToOne = localIsVisible && remoteIdentities\.length === 1;/,
+  "a one-to-one call must be recognised by people, not by track count",
+);
+assert.match(
+  meetingStage,
+  /layoutMode === "auto" && isOneToOne\s*\?\s*pinnedUserId \|\| firstRemoteIdentity/,
+  "Auto must feature the other person in a one-to-one call",
+);
+assert.match(
+  meetingStage,
+  /layoutMode === "spotlight"\s*\?\s*pinnedUserId \|\| activeSpeakerIdentity \|\| firstRemoteIdentity/,
+  "Spotlight must fall back to a remote participant, never to the first (local) track",
+);
+assert.match(
+  meetingStage,
+  /layoutMode === "sidebar"\s*\?\s*pinnedUserId \|\| firstRemoteIdentity/,
+  "Sidebar must fall back to a remote participant, never to the first (local) track",
+);
+assert.match(
+  meetingStage,
+  /if \(selfViewDocked\) \{[\s\S]{0,1400}selfTracks\.map\(\(trackRef\) => renderThumbnail\(trackRef\)\)/,
+  "Auto's even grid must dock the viewer as a thumbnail rather than give them a full tile",
+);
+assert.match(
+  meetingStage,
+  /visibleTracks\.length === 1[\s\S]{0,200}const onlyTrack = visibleTracks\[0\]/,
+  "alone in the call, the local participant still fills the stage",
+);
 assert.match(
   meetingStage,
   /const AUTO_FEATURED_MIN_PARTICIPANTS = 5/,

@@ -36,22 +36,23 @@ test("a same-day range is valid, a reversed one is not", () => {
 });
 
 /**
- * The page is Owner/Admin only, and the workspace it reads is the active one from the store —
- * the id goes in the PATH, never a query parameter the backend would ignore anyway.
+ * The workspace Audit log page was taken out of the product (2026-09-23): it only ever listed what
+ * WarpTalk staff did to a workspace, which is the platform's own trail and stays on /admin/audit.
+ * The page is gone, nothing in the settings nav links to it, and an old bookmark forwards to the
+ * settings root instead of 404ing. The labelling helpers above stay: the admin page shares them.
  */
-test("the audit log page gates on owner/admin and never renders a staff identity", () => {
-  const page = read("../../../app/(app)/[workspaceSlug]/settings/audit-log/page.tsx");
-  assert.match(page, /isOwnerOrAdmin/);
-  assert.match(page, /useWorkspaceAuditLog\(\s*activeWorkspaceId/);
-  assert.match(page, /WorkspacePage/);
-  assert.doesNotMatch(page, /actorId|reason|correlationId/);
-
-  const endpoints = read("../../api/endpoints.ts");
-  assert.match(endpoints, /auditLog: \(workspaceId: string\) => `\/workspaces\/\$\{workspaceId\}\/audit-log`/);
+test("workspace owners have no audit log page; the platform admin one is untouched", () => {
+  assert.throws(
+    () => read("../../../app/(app)/[workspaceSlug]/settings/audit-log/page.tsx"),
+    "the workspace audit log page must stay deleted",
+  );
 
   const sidebar = read("../../../components/layout/linear-sidebar.tsx");
-  assert.ok(
-    sidebar.indexOf("/settings/audit-log") > sidebar.indexOf("/settings/security"),
-    "Audit log sits after Security in the settings group",
-  );
+  assert.ok(!sidebar.includes("/settings/audit-log"), "no settings nav entry may link to it");
+  assert.ok(sidebar.includes('href: "/admin/audit"'), "the platform admin audit log keeps its entry");
+  read("../../../app/(app)/admin/audit/page.tsx");
+
+  const proxy = read("../../../proxy.ts");
+  assert.ok(proxy.includes("\\/settings\\/audit-log\\/?$/.exec(pathname)"), "the old address forwards");
+  assert.ok(proxy.includes("`/${retiredAuditLog[1]}/settings`"), "…to the workspace settings root");
 });
