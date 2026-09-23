@@ -549,6 +549,47 @@ export function usePatchWorkspaceDocumentMetadata(workspaceId: string, docId: st
 }
 
 /**
+ * Makes a document private again, or shares a private one with the workspace.
+ *
+ * The detail page shows the new state from the server's own answer the moment it lands — the
+ * status badge, the Visibility section and the Access controls all read `status`, and waiting for
+ * a refetch would leave "Public" on screen after the confirm dialog closed. Only the fields the
+ * transition changes are copied in: the detail route adds `approvedBy` and `rejectionReason`,
+ * which this response does not carry, so replacing the whole object would blank them.
+ *
+ * Knowledge is invalidated too, because making a document private deletes its chunks from the
+ * index that page lists.
+ */
+export function useSetWorkspaceDocumentVisibility(workspaceId: string, docId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (visibility: "private" | "public") =>
+      visibility === "private"
+        ? WorkspaceService.unpublishDocument(workspaceId, docId)
+        : WorkspaceService.publishDocument(workspaceId, docId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        WORKSPACE_KEYS.documentDetail(workspaceId, docId),
+        (previous: Record<string, unknown> | undefined) =>
+          previous
+            ? {
+                ...previous,
+                status: updated.status,
+                ingestionStatus: updated.ingestionStatus,
+                aiEligible: updated.aiEligible,
+                updatedAt: updated.updatedAt,
+              }
+            : previous,
+      );
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentDetail(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentHistory(workspaceId, docId) });
+      queryClient.invalidateQueries({ queryKey: WORKSPACE_KEYS.documentLists(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: ["workspaces", "knowledge", workspaceId] });
+    },
+  });
+}
+
+/**
  * @param reason Required by the API when `approve` is false. WT-633: the uploader is shown this
  * sentence, and a rejection that does not carry one is the defect that ticket describes.
  */
