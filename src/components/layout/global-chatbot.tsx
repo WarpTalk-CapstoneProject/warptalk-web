@@ -4,6 +4,7 @@ import {
   useState,
   useRef,
   useEffect,
+  useEffectEvent,
   useMemo,
   useCallback,
   type ReactNode,
@@ -740,11 +741,12 @@ export function GlobalChatbot() {
     shouldAutoScrollRef.current = true;
   };
 
-  const openConversationFromHistory = async (
-    conversation: AssistantConversationDto,
-  ) => {
+  const openConversationFromHistory = (conversation: AssistantConversationDto) =>
+    openConversationById(conversation.id);
+
+  const openConversationById = async (id: string) => {
     try {
-      const detail = await loadConversation.mutateAsync(conversation.id);
+      const detail = await loadConversation.mutateAsync(id);
       clearResponseTimeout();
       setMessages(
         detail.messages
@@ -777,6 +779,30 @@ export function GlobalChatbot() {
       toast.error(t("openConversationFailed"));
     }
   };
+
+  /**
+   * A conversation handed over from somewhere else — today, a meeting's WarpBot thread ("Continue
+   * in widget", or WarpBot's own continue_in_widget tool). See lib/assistant/continue-in-widget.
+   *
+   * An effect EVENT, not a plain effect over openConversationById: that function is re-created
+   * every render, and a dependency on it would re-run this on every keystroke. Opening goes
+   * through the same path as picking the conversation from history, so a handed-over thread
+   * renders exactly as a reopened one does — including the turns the meeting seeded.
+   */
+  const pendingConversationId = useAssistantWidgetStore((state) => state.pendingConversationId);
+  const consumePendingConversation = useAssistantWidgetStore(
+    (state) => state.consumePendingConversation,
+  );
+  const openHandedOverConversation = useEffectEvent(async (id: string) => {
+    await openConversationById(id);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  });
+  useEffect(() => {
+    if (!pendingConversationId) return;
+    const id = consumePendingConversation();
+    if (!id) return;
+    void openHandedOverConversation(id);
+  }, [pendingConversationId, consumePendingConversation]);
 
   // Real workspace members/meetings/documents for the @mention picker — each refetches
   // as the user types after "@". Selecting one attaches a real entityId that rides along
