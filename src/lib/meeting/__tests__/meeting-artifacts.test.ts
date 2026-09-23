@@ -87,6 +87,30 @@ test("consent outranks status in the label", () => {
   );
 });
 
+test("WT-824: a recording with no file yet says so, not 'Consent required'", () => {
+  // Every recording row is written consent-required from the moment recording starts, so
+  // consent-first labelled a recording still being written — or one that failed — as a permission
+  // problem, and the download then said "not ready". The row was telling the wrong story.
+  assert.equal(
+    artifactStatusLabel(
+      artifact({ type: "recording", status: "processing", consentRequired: true }),
+    ),
+    "Processing",
+  );
+  assert.equal(
+    artifactStatusLabel(artifact({ type: "recording", status: "failed", consentRequired: true })),
+    "Failed",
+  );
+  // A translated page gets the status key, never the consent key, for the same row.
+  assert.equal(
+    artifactStatusLabel(
+      artifact({ type: "recording", status: "processing", consentRequired: true }),
+      (key) => `t:${key}`,
+    ),
+    "t:processing",
+  );
+});
+
 test("only a ready artifact is downloadable", () => {
   assert.equal(canDownloadArtifact(artifact({ status: "ready" })), true);
   for (const status of ["processing", "failed", "missing", "expired"] as const) {

@@ -30,9 +30,15 @@ export function artifactLabel(
 }
 
 /**
- * Consent outranks status. A file that is technically ready but still needs consent must not
- * read as "Ready" — the download will stop and ask, and saying "Ready" first makes that look
- * like a failure rather than the policy working.
+ * Consent outranks "Ready", and only "Ready". A file that is technically ready but still needs
+ * consent must not read as "Ready" — the download will stop and ask, and saying "Ready" first
+ * makes that look like a failure rather than the policy working.
+ *
+ * WT-824: but a file that is NOT ready has nothing behind the consent hold, and every recording
+ * row is written consent-required from the moment recording starts. Consent-first labelled a
+ * recording still being written, or one that failed, "Consent required" — and then the download
+ * said "not ready". The row sent people to the host about a permission when the real answer was
+ * "wait" or "this recording failed". So a non-ready status speaks for itself.
  *
  * `t` is optional for the same reason as `artifactLabel` above — see there.
  */
@@ -40,7 +46,9 @@ export function artifactStatusLabel(
   artifact: RoomHistoryArtifact,
   t?: (key: "consentRequired" | RoomHistoryArtifact["status"]) => string,
 ): string {
-  if (artifact.consentRequired) return t ? t("consentRequired") : "Consent required";
+  if (artifact.consentRequired && canDownloadArtifact(artifact)) {
+    return t ? t("consentRequired") : "Consent required";
+  }
   const status = artifact.status ?? "";
   if (t) return t(status);
   return status.charAt(0).toUpperCase() + status.slice(1);
