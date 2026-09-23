@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { getErrorMessage } from "@/lib/api/errors";
+import { getErrorStatus } from "@/lib/api/retry-policy";
 import { useAuthStore } from "@/stores/auth-store";
 import {
   useKickMeetingParticipant,
@@ -336,7 +337,11 @@ function ParticipantRow({
         toast.success("Participant admitted.");
       }
       if (action === "reject") {
-        await reject.mutateAsync(participant.id);
+        // WT-699 / TC2402: the USER id, like kick, mute and transfer beside it — all four are
+        // MeetingService routes, which speak user ids. `participant.id` is the room service's
+        // participant ROW id (right for admit, which is a room-service route), and sent here it
+        // matched nobody: the knock stayed in the lobby while the toast said it was rejected.
+        await reject.mutateAsync(participant.userId);
         toast.success("Participant rejected from lobby.");
       }
       if (action === "transfer") {
@@ -355,6 +360,13 @@ function ParticipantRow({
       toast.success("Participant removed from meeting.");
       setShowKickDialog(false);
     } catch (error: unknown) {
+      // WT-699 / TC2103: 409 is "already removed" — true, and not a failure the host has to fix.
+      // The server's sentence says so; the dialog closes as it would have on success.
+      if (getErrorStatus(error) === 409) {
+        toast.info(getErrorMessage(error, "This participant has already been removed from the meeting."));
+        setShowKickDialog(false);
+        return;
+      }
       toast.error(getErrorMessage(error, "Failed to kick participant."));
     }
   }
