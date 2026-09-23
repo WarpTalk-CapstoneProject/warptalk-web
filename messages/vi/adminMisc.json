@@ -109,26 +109,44 @@
       "responses": "Phản hồi",
       "meetingsRated": "Cuộc họp được đánh giá",
       "ofEnded": "trên {count} đã kết thúc",
-      "responseRate": "Tỷ lệ phản hồi"
+      "responseRate": "Tỷ lệ phản hồi",
+      "previous": "Kỳ trước: {value}"
     },
     "dimensions": {
       "title": "Đánh giá theo tiêu chí",
       "empty": "Không có đánh giá nào được gửi trong khoảng thời gian này.",
       "ratedCount": "{count} đánh giá",
-      "thinSample": "· mẫu còn ít",
-      "ratingTooltip": "{rating}★ — {count, plural, other {# phản hồi}}"
+      "ratingTooltip": "{rating}★ — {count, plural, other {# phản hồi}}",
+      "noData": "Không có dữ liệu",
+      "noDataHint": "Không ai đánh giá mục này trong kỳ — không có điểm để hiển thị.",
+      "share": "{share} người phản hồi",
+      "lowConfidence": "Độ tin cậy thấp",
+      "noTrend": "chưa có xu hướng",
+      "previousTooltip": "Kỳ trước: {average} từ {count, plural, other {# phản hồi}}"
     },
     "comments": {
       "title": "Bình luận",
       "error": "Không thể tải bình luận.",
-      "empty": "Chưa có ai để lại bình luận trong khoảng thời gian này."
+      "empty": "Chưa có ai để lại bình luận trong khoảng thời gian này.",
+      "sortRecent": "Mới nhất",
+      "sortLowest": "Điểm thấp nhất trước",
+      "sortAria": "Thứ tự bình luận"
     },
     "pagination": {
       "pageOf": "Trang {page} / {totalPages}",
       "previous": "Trước",
       "next": "Tiếp"
     },
-    "footerNote": "Chỉ xem, và ẩn danh theo thiết kế — API không gửi kèm ai là người viết bình luận. Một đánh giá mà quản trị viên có thể sửa hoặc xóa sẽ không còn đáng tin để đọc."
+    "footerNote": "Chỉ xem, và ẩn danh theo thiết kế — API không gửi kèm ai là người viết bình luận. Một đánh giá mà quản trị viên có thể sửa hoặc xóa sẽ không còn đáng tin để đọc.",
+    "insights": {
+      "lowestTitle": "Tiêu chí điểm thấp nhất",
+      "lowestDetail": "từ {count} lượt đánh giá",
+      "vsPrevious": "{delta} so với kỳ trước",
+      "lowConfidenceTitle": "Độ tin cậy thấp — hãy xem các số liệu này là tín hiệu, không phải kết luận.",
+      "lowConfidenceRule": "Một số liệu bị đánh dấu độ tin cậy thấp khi dưới {min} phản hồi hoặc tỷ lệ phản hồi dưới {rate}.",
+      "noDataTitle": "{count, plural, other {# tiêu chí chưa có dữ liệu}}",
+      "noDataBody": "{names}: không ai đánh giá trong kỳ này."
+    }
   },
   "audit": {
     "eyebrow": "Vận hành",
