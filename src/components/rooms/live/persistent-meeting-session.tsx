@@ -3692,7 +3692,11 @@ export function PersistentMeetingSession({
             {subtitlesEnabled ? (
               <div
                 data-meeting-subtitle-lane
-                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden"
+                // Not `overflow-hidden`, and z-30: scrolling up in the lane opens its caption
+                // history as a panel that grows UPWARD over the bottom of the camera view (so the
+                // video never reflows). Clipping here would cut that panel off at the lane's own
+                // height; z-30 puts it above the stage's badges and below the control dock (z-40).
+                className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
@@ -3710,6 +3714,12 @@ export function PersistentMeetingSession({
                   // ...but only once there IS another language. Before Start Translation the
                   // captions are the transcript and nothing else.
                   translationActive={translationStarted}
+                  // The lane's history is the recent past; the panel is the record. Both calls,
+                  // in this order — the panel only renders while the sidebar is open.
+                  onOpenTranscript={() => {
+                    setSidePanelMode("transcript");
+                    setRightSidebarOpen(true);
+                  }}
                 />
               </div>
             ) : null}
