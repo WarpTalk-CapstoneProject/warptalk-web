@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
+import { isUsableWorkspaceSlug, normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { isPlatformAdminToken } from "@/lib/api/token-lifecycle";
 import {
   ACCESS_TOKEN_COOKIE,
@@ -151,6 +151,27 @@ export function proxy(request: NextRequest) {
     const destination = new URL(`/${movedPayments[1]}/settings/billing/invoices`, request.url);
     destination.search = request.nextUrl.search;
     return NextResponse.redirect(destination);
+  }
+
+  /**
+   * Two workspace pages taken out of the product on the owner's call (2026-09-23), forwarded for
+   * the same reason as the two above: a bookmark lands somewhere real, not on a 404.
+   *
+   * - `/settings/audit-log` only ever listed actions WarpTalk STAFF took on the workspace, which
+   *   is the platform's own trail. It stays on /admin/audit; workspace owners no longer see it.
+   * - `/tasks` ("My tasks") is off the main navigation. Action items still live on each meeting's
+   *   record, where they were produced.
+   *
+   * Anchored like movedBilling, and only for a segment that can BE a workspace slug, so
+   * `/admin/...`, `/rooms/...` and every other reserved prefix is never rewritten.
+   */
+  const retiredAuditLog = /^\/([^/]+)\/settings\/audit-log\/?$/.exec(pathname);
+  if (retiredAuditLog && isUsableWorkspaceSlug(retiredAuditLog[1])) {
+    return NextResponse.redirect(new URL(`/${retiredAuditLog[1]}/settings`, request.url));
+  }
+  const retiredTasks = /^\/([^/]+)\/tasks\/?$/.exec(pathname);
+  if (retiredTasks && isUsableWorkspaceSlug(retiredTasks[1])) {
+    return NextResponse.redirect(new URL(`/${retiredTasks[1]}/home`, request.url));
   }
 
   // A dead cookie must not survive the response that noticed it was dead, or the next page

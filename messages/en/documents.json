@@ -5,6 +5,7 @@
     "published": "Published",
     "pendingApproval": "Pending Approval",
     "rejected": "Rejected",
+    "private": "Private",
     "aiContext": "AI Context",
     "administrative": "Administrative",
     "restricted": "Restricted",
@@ -33,6 +34,7 @@
   },
   "status": {
     "rejected": "Rejected",
+    "private": "Private",
     "pendingApproval": "Pending Approval",
     "administrative": "Administrative",
     "aiReady": "AI Ready",

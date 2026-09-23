@@ -26,6 +26,7 @@ import {
   Info,
   List,
   Lock,
+  LockSimple,
   ShieldWarning,
   SlidersHorizontal,
   Sparkle,
@@ -121,6 +122,7 @@ const STATUS_TABS: DocumentTab[] = [
   DOCUMENT_TAB.PUBLISHED,
   DOCUMENT_TAB.PENDING,
   DOCUMENT_TAB.REJECTED,
+  DOCUMENT_TAB.PRIVATE,
 ];
 
 function isStatusTab(category: FilterCategory): category is DocumentTab {
@@ -402,6 +404,9 @@ export default function WorkspaceDocumentsPage() {
   // The chip is hidden at zero rather than shown empty: for most people it always will be.
   const rejectedCount = countIn(DOCUMENT_TAB.REJECTED);
   const archivedCount = countIn(DOCUMENT_TAB.ARCHIVED);
+  // A document taken back from the workspace. Only people who can still open one ever see a
+  // count here — the API filters the list per caller — so the chip hides at zero like Rejected.
+  const privateCount = countIn(DOCUMENT_TAB.PRIVATE);
 
   const filteredDocs = rawDocsList.filter((doc) => {
     if (isStatusTab(activeCategory)) {
@@ -465,6 +470,15 @@ export default function WorkspaceDocumentsPage() {
               badge={rejectedCount}
             >
               {t("filters.rejected")}
+            </FilterChip>
+          )}
+          {privateCount > 0 && (
+            <FilterChip
+              selected={activeCategory === DOCUMENT_TAB.PRIVATE}
+              onClick={() => setActiveCategory(DOCUMENT_TAB.PRIVATE)}
+              badge={privateCount}
+            >
+              {t("filters.private")}
             </FilterChip>
           )}
           <FilterChip selected={activeCategory === "ai"} onClick={() => setActiveCategory("ai")}>
@@ -685,6 +699,14 @@ export default function WorkspaceDocumentsPage() {
                           <Warning className="h-3 w-3" />
                           <span>{t("status.rejected")}</span>
                         </span>
+                      ) : documentMatchesTab(doc, DOCUMENT_TAB.PRIVATE) ? (
+                        // Before any AI branch: a private document's ingestion is `skipped` with
+                        // AI still allowed, which fell through to "AI Context" — the one thing
+                        // it no longer is.
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">
+                          <LockSimple className="h-3 w-3" />
+                          <span>{t("status.private")}</span>
+                        </span>
                       ) : doc.status?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
                       doc.status?.toLowerCase().includes("pending") ? (
@@ -809,6 +831,13 @@ export default function WorkspaceDocumentsPage() {
                     title={t("status.rejected")}
                   >
                     <Warning className="h-3.5 w-3.5" />
+                  </span>
+                ) : documentMatchesTab(doc, DOCUMENT_TAB.PRIVATE) ? (
+                  <span
+                    className="p-1 text-ink-muted bg-surface-3 rounded-full"
+                    title={t("status.private")}
+                  >
+                    <LockSimple className="h-3.5 w-3.5" />
                   </span>
                 ) : !doc.isAiAllowed ? (
                   <span

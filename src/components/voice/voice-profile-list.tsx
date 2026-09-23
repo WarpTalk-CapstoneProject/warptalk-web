@@ -20,11 +20,17 @@ import {
   WorkspaceRailModule,
 } from "@/components/workspace/page-chrome";
 import { getErrorMessage } from "@/lib/api/errors";
-import { useDeleteVoiceProfile, useDubVoice, useSetDubVoice } from "@/hooks/use-voice-profiles";
+import {
+  useDeleteVoiceProfile,
+  useDubVoice,
+  useRetryVoiceProfileClone,
+  useSetDubVoice,
+} from "@/hooks/use-voice-profiles";
 import { getLanguageName } from "@/lib/language/languages";
 import type { VoiceProfileDto } from "@/types/voice-profile";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { isVoiceProfileCloning } from "@/lib/voice/profile-status";
+import { describeCloneFailure, type CloneFailure } from "@/lib/voice/clone-failure";
 
 /**
  * What has actually become of a recording somebody uploaded.
@@ -37,7 +43,7 @@ import { isVoiceProfileCloning } from "@/lib/voice/profile-status";
  */
 /** Optional translator, defaulted to English so `profile.status === "..."` callers that only
  * read `.tone` (e.g. the page's "needs attention" filter) are unaffected either way. */
-type ProfileStateTranslator = (key: string) => string;
+type ProfileStateTranslator = (key: string, values?: Record<string, string>) => string;
 
 const DEFAULT_PROFILE_STATE_COPY: Record<string, string> = {
   couldNotClone: "Couldn't clone",
@@ -53,26 +59,41 @@ export function profileState(
   tone: VoiceLineTone;
   label: string;
   detail: string;
+  /** The full reason plus the worker's detail, for the row's tooltip. Empty unless failed. */
+  explanation: string;
+  /** What can fix a failed clone. Null unless failed. */
+  failure: CloneFailure | null;
 } {
   if (profile.status === "clone_failed") {
+    // The reason is stored now (voice_profiles.clone_error_code). It was not, and on 2026-09-18
+    // that turned a provider-account outage into a bare "Couldn't clone" whose only offered fix,
+    // Re-record, could not work. The code decides the sentence; the worker's own detail goes in
+    // the tooltip, never as the headline, because it is written for whoever reads the logs.
+    const failure = describeCloneFailure(profile.cloneErrorCode);
+    const reason = t(`cloneFailure.${failure.reason}`);
+    const detail = profile.cloneError?.trim();
     return {
       tone: "failed",
       label: t("couldNotClone"),
-      // No detail, and not for want of room: the profile row carries no reason. The AI side's
-      // failure text is logged and dropped — VoiceProfileService only writes the status — so
-      // anything printed here would be a guess dressed as a diagnosis. The Re-record action on
-      // the same line is the honest next step.
-      detail: "",
+      detail: reason,
+      explanation: detail ? `${reason}\n${t("cloneFailure.detail", { detail })}` : reason,
+      failure,
     };
   }
   if (!isVoiceProfileCloning(profile)) {
     // Nothing to add. "Ready" is the whole fact, and a second clause repeating it in other words
     // is the kind of filler that made every row look like it had something wrong with it.
-    return { tone: "ready", label: t("ready"), detail: "" };
+    return { tone: "ready", label: t("ready"), detail: "", explanation: "", failure: null };
   }
   // WT-598: the same predicate the query polls on — this label and "keep asking the server" have
   // to be the same question, or the row says "Cloning" while nothing is checking.
-  return { tone: "pending", label: t("cloning"), detail: t("cloningDetail") };
+  return {
+    tone: "pending",
+    label: t("cloning"),
+    detail: t("cloningDetail"),
+    explanation: "",
+    failure: null,
+  };
 }
 
 export function VoiceProfileList({
@@ -92,6 +113,7 @@ export function VoiceProfileList({
   const t = useTranslations("voiceProfiles.yourVoices");
   const tRoot = useTranslations("voiceProfiles");
   const deleteProfile = useDeleteVoiceProfile();
+  const retryClone = useRetryVoiceProfileClone();
   const setDubVoice = useSetDubVoice();
   const { data: dubVoiceId } = useDubVoice();
 
@@ -112,6 +134,13 @@ export function VoiceProfileList({
     deleteProfile.mutate(profile.id, {
       onSuccess: () => toast.success(t("toasts.deleted")),
       onError: (error) => toast.error(getErrorMessage(error, t("toasts.deleteFailed"))),
+    });
+  }
+
+  function retry(profile: VoiceProfileDto) {
+    retryClone.mutate(profile.id, {
+      onSuccess: () => toast.success(t("retryToasts.queued")),
+      onError: (error) => toast.error(getErrorMessage(error, t("retryToasts.failed"))),
     });
   }
 
@@ -154,7 +183,7 @@ export function VoiceProfileList({
         </p>
       ) : (
         filtered.map((profile) => {
-          const state = profileState(profile, t);
+          const state = profileState(profile, (key, values) => t(key, values));
           const isDub = Boolean(profile.providerVoiceId) && profile.providerVoiceId === dubVoiceId;
 
           return (
@@ -165,6 +194,7 @@ export function VoiceProfileList({
               badge={isDub ? <VoiceChip tone="active">{t("dubbingYou")}</VoiceChip> : undefined}
               secondary={profile.language ? getLanguageName(profile.language) : t("noLanguage")}
               statusText={[state.label, state.detail].filter(Boolean).join(" · ")}
+              statusTitle={state.explanation}
               status={
                 <>
                   {state.tone === "ready" ? (
@@ -199,7 +229,23 @@ export function VoiceProfileList({
                     />
                   ) : null}
 
-                  {state.tone === "failed" ? (
+                  {/*
+                    Try again re-sends the STORED recording, so it is offered only when the
+                    recording was not the problem; Re-record only when a new take can help.
+                    Both when the reason is unknown or was never recorded.
+                  */}
+                  {state.failure?.canRetry ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-[12px] text-primary hover:text-primary"
+                      disabled={retryClone.isPending && retryClone.variables === profile.id}
+                      onClick={() => retry(profile)}
+                    >
+                      {t("tryAgain")}
+                    </Button>
+                  ) : null}
+                  {state.failure?.suggestReRecord ? (
                     <Button
                       variant="ghost"
                       size="sm"

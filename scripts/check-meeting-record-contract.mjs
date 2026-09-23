@@ -129,9 +129,10 @@ assert.ok(
   !fs.existsSync(path.join(root, "src/lib/meeting/meeting-navigation.ts")),
   "meeting-navigation.ts existed only to build the deleted wrap-up page's URL.",
 );
+// (The My tasks page used to be listed here too; it was retired on 2026-09-23 — see
+// check-retired-workspace-pages.mjs.)
 for (const rel of [
   "src/components/rooms/live/persistent-meeting-session.tsx",
-  "src/app/(app)/[workspaceSlug]/tasks/page.tsx",
 ]) {
   assert.ok(
     !/rooms\/\$\{[^}]+\}\/ended|buildMeetingEndedPath/.test(read(rel)),
