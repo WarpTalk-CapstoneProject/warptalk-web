@@ -30,10 +30,16 @@ import type { ArtifactKind, LibraryEntry } from "@/lib/meeting/artifact-library"
 // i18n-allow: a Vietnamese transcript is the PRODUCT'S OWN DATA, not UI copy — WarpTalk exists
 // to transcribe this, and previewing the card with English lorem would hide the two things the
 // preview is for: how diacritics sit at 8.5px, and how far four lines of Vietnamese actually get.
-const TRANSCRIPT_BODY = `Tú: Chào mọi người, hôm nay mình review sprint.
-Nhi: Phần dịch tiếng Việt đã ổn hơn nhiều so với tuần trước.
-Tú: Còn cái voice clone thì sao?
-Nhi: Vẫn chưa đều, lúc nghe tiếng Việt lúc không.`;
+// The export exactly as ArtifactsFinalizer writes it — header, bracketed speaker markers and the
+// pipeline's end sentinel — so the preview shows what the card makes of the real thing.
+const TRANSCRIPT_BODY = `# WarpTalk Transcription Room - Room: 01a0a94a-2fb2-7f2d-95f5-79cf2a9246af
+Generated on: 2026-09-16 08:40:12 UTC
+---
+**[Tú (VI)]**: Chào mọi người, hôm nay mình review sprint.
+**[Nhi (VI)]**: Phần dịch tiếng Việt đã ổn hơn nhiều so với tuần trước.
+**[Tú (VI)]**: Còn cái voice clone thì sao?
+**[Nhi (VI)]**: Vẫn chưa đều, lúc nghe tiếng Việt lúc không.
+**[System (SYSTEM)]**: __MEETING_END__`;
 
 const SUMMARY_BODY = `The team reviewed the sprint. Vietnamese translation quality has improved
 noticeably. Voice cloning remains inconsistent and was raised as the main risk for the demo.`;

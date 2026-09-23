@@ -19,7 +19,12 @@
       "previous": "Trước",
       "next": "Tiếp"
     },
-    "footerNote": "Một thông báo chỉ được gửi một lần tới những người được nêu tên và không thể chỉnh sửa, thu hồi hay xóa sau đó. Không có đối tượng “tất cả mọi người”: dịch vụ chỉ chấp nhận danh sách nêu tên cho đến khi có bộ phân giải phân khúc."
+    "footerNote": "Một thông báo chỉ được gửi một lần tới những người được nêu tên và không thể chỉnh sửa, thu hồi hay xóa sau đó. Không có đối tượng “tất cả mọi người”: dịch vụ chỉ chấp nhận danh sách nêu tên cho đến khi có bộ phân giải phân khúc.",
+    "delivery": {
+      "sentAt": "Đã gửi {date}",
+      "createdTitle": "Đã tạo — chưa gửi",
+      "delivered": "{count, plural, =0 {Chưa gửi tới ai} other {Đã gửi tới #}}"
+    }
   },
   "detail": {
     "back": "Thông báo",
@@ -51,7 +56,9 @@
       "mode": "Chế độ",
       "rawTargeting": "Dữ liệu đối tượng thô",
       "segment": "Phân khúc",
-      "namedRecipients": "Người nhận được nêu tên"
+      "namedRecipients": "Người nhận được nêu tên",
+      "sentAt": "Thời điểm gửi",
+      "delivered": "Đã gửi tới"
     },
     "resolving": "· đang tra cứu…",
     "toasts": {
@@ -76,7 +83,10 @@
       "downtimeRange": "{start} → {end}",
       "empty": "Không có hình ảnh, liên kết, mã hay khung thời gian bảo trì."
     },
-    "footerNote": "Dịch vụ thông báo không ghi lại thời điểm gửi hay số lượt gửi cho một thông báo, nên các mục này không hiển thị ở đây."
+    "footerNote": "Thời điểm gửi và số lượt gửi được ghi lại khi mọi phần gửi đã được đếm; thông báo có bất kỳ phần nào gửi lỗi sẽ giữ trạng thái Failed.",
+    "notSent": "Chưa gửi",
+    "deliveryUnknown": "Máy chủ chưa báo cáo",
+    "deliveredCount": "{count, plural, =0 {Không có người nhận} other {# người nhận}}"
   },
   "composer": {
     "types": {
