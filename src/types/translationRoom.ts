@@ -59,6 +59,12 @@ export interface TranslationRoomDto {
      * render a recorded meeting as an unrecorded one.
      */
     saveTranscript?: boolean;
+    /**
+     * WT-826: whether the record is shared with everyone who took part when the meeting ends.
+     * The server sends the EFFECTIVE value — a room that never stated it reads TRUE, because that
+     * is what will happen to it. Absent (an older server) is treated the same way.
+     */
+    autoShareRecord?: boolean;
   };
   participantCount?: number;
   /**
@@ -170,6 +176,8 @@ export interface CreateTranslationRoomRequest {
     participantsCanStartTranslation?: boolean;
     /** WT-587: send `false` for a meeting that is not to be written down. Omit to keep it. */
     saveTranscript?: boolean;
+    /** WT-826: send `false` to keep the record host-only when the meeting ends. Omit to share it. */
+    autoShareRecord?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];

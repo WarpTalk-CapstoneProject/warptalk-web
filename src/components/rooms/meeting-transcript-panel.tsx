@@ -267,6 +267,7 @@ export function MeetingTranscriptArtifact({
   transcriptLoading,
   meetingStartedAt,
   meetingEndedAt,
+  saveTranscript,
 }: {
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
@@ -317,6 +318,8 @@ export function MeetingTranscriptArtifact({
    */
   meetingStartedAt?: string | null;
   meetingEndedAt?: string | null;
+  /** WT-587/828: the room's `saveTranscript`, so an empty ephemeral meeting says so. */
+  saveTranscript?: boolean;
 }) {
   // Memoised on the fetched rows rather than recomputed per render: the language options and
   // the translation index are derived from these, and rebuilding them on every keystroke of a
@@ -390,6 +393,9 @@ export function MeetingTranscriptArtifact({
     isEnded,
     isLoading: transcriptLoading,
     errorCode: transcriptErrorCode,
+    // WT-828: why a finished meeting has nothing to show — kept no record, paused, or silence.
+    saveTranscript,
+    pausedAtSomePoint: (pauseWindowsQuery.data ?? []).length > 0,
   });
   const base = baseTime ? new Date(baseTime) : null;
 
