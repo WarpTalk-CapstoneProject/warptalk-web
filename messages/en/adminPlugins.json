@@ -145,7 +145,7 @@
     "activate": "Activate",
     "notFound": {
       "title": "No such plugin",
-      "body": "Nothing in the catalog is keyed {key}. It may have been hard-deleted."
+      "body": "Nothing in the marketplace catalog is keyed {key}. It may have been hard-deleted, or it may be a plugin a workspace created for itself — those belong to that workspace's owner and are not managed here."
     },
     "loadError": {
       "title": "This plugin could not be loaded",
