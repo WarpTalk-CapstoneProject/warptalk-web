@@ -56,6 +56,7 @@ import {
   resolveListenLanguage,
   resolveSpeakLanguage,
 } from "@/lib/language/participant-language-preference";
+import { BRIDGE_STAND_IN_USER_ID } from "@/lib/meeting/bridge-far-side-language";
 import { resolveTranscriptPause } from "@/lib/meeting/transcript-pause";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
@@ -307,6 +308,27 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     [participantsQuery.data, currentUserId],
   );
 
+  // ── the far side's language ──────────────────────────────────────────────
+
+  /**
+   * What the "External Meeting" stand-in speaks — the other side of the Meet call. Read from the
+   * same one-shot participants read: the stand-in is a row like any other, and its language only
+   * changes when the host changes it from this window's "They speak" picker, which records the
+   * pick below. A pick from the MAIN window is not reflected here (this window receives no room
+   * broadcasts); the pill then shows the last value it knew until the window is reopened.
+   */
+  const farSideParticipant = useMemo(
+    () => participantsQuery.data?.find((participant) => participant.userId === BRIDGE_STAND_IN_USER_ID),
+    [participantsQuery.data],
+  );
+  const [farSideLanguagePick, setFarSideLanguagePick] = useState<string | null>(null);
+  const setFarSideLanguage = useCallback((code: string) => {
+    setFarSideLanguagePick(normalizeLanguageCode(code) || null);
+  }, []);
+  const farSideLanguage =
+    farSideLanguagePick ??
+    (normalizeLanguageCode(farSideParticipant?.speakLanguage ?? undefined) || null);
+
   const [readerLanguagePick, setReaderLanguagePick] = useState<string | null>(null);
   const setReaderLanguage = useCallback((code: string) => {
     setReaderLanguagePick(normalizeLanguageCode(code) || null);
@@ -338,6 +360,8 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       hub,
       readerLanguage,
       setReaderLanguage,
+      farSideLanguage,
+      setFarSideLanguage,
       ended,
       markEnded,
     }),
@@ -355,6 +379,8 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       hub,
       readerLanguage,
       setReaderLanguage,
+      farSideLanguage,
+      setFarSideLanguage,
       ended,
       markEnded,
     ],
