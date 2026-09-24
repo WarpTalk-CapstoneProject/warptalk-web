@@ -179,7 +179,49 @@
     "skipTour": "Skip the tour",
     "previousStep": "Previous step",
     "done": "Done",
-    "next": "Next"
+    "next": "Next",
+    "steps": {
+      "welcome": {
+        "title": "Welcome to WarpTalk",
+        "body": "A meeting here is translated as it is spoken, in each person's own language and — if they have a voice profile — in something close to their own voice. This is a two-minute tour of where everything lives. You can leave at any point."
+      },
+      "meetings": {
+        "title": "Meetings",
+        "body": "Every room this workspace runs — scheduled, live and finished. A finished one keeps its transcript and its AI summary on its own page."
+      },
+      "create-meeting": {
+        "title": "Start one",
+        "body": "New meetings begin here. You choose which languages the room speaks, and everyone who joins picks the one they want to hear."
+      },
+      "voice-profiles": {
+        "title": "Voice profiles",
+        "body": "Record a short sample once and your translated speech is spoken in your own voice instead of a stock one. Recording it is a consent step, and you can withdraw it here."
+      },
+      "documents": {
+        "title": "Documents",
+        "body": "Upload the contracts, specs and glossaries this workspace works from. An Owner or Admin approves each one before it becomes something the assistant can draw on."
+      },
+      "knowledge": {
+        "title": "Knowledge",
+        "body": "Everything the assistant has actually indexed, one row per piece, with the fact it extracted from each. Open a row to correct a fact, take it out of retrieval, or remove it."
+      },
+      "members": {
+        "title": "Members",
+        "body": "Who is in this workspace, who is waiting to join, and what each of them may do."
+      },
+      "dashboard": {
+        "title": "Dashboard",
+        "body": "How fast this workspace is spending its credits, what it is spending them on, and whether the balance reaches the renewal date."
+      },
+      "warpbot": {
+        "title": "Ask WarpBot",
+        "body": "Ask about anything this workspace has indexed — a clause in an uploaded contract, what was decided in a meeting last week — and it answers from that, not from the open internet."
+      },
+      "help": {
+        "title": "That is the tour",
+        "body": "This button brings it back whenever you want it. Nothing here is a one-time offer."
+      }
+    }
   },
   "workspaceMembersPanel": {
     "pickWorkspace": "Pick a workspace to see who is in it.",

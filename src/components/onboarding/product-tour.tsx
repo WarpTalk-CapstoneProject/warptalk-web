@@ -217,7 +217,7 @@ function TourRunner() {
         style={rect ? cardPosition : undefined}
       >
         <div className="flex items-start justify-between gap-3">
-          <p className="text-[14px] font-semibold text-ink">{step.title}</p>
+          <p className="text-[14px] font-semibold text-ink">{t(`steps.${step.id}.title`)}</p>
           <button
             type="button"
             onClick={finish}
@@ -229,7 +229,7 @@ function TourRunner() {
         </div>
 
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
-          {step.body}
+          {t(`steps.${step.id}.body`)}
         </p>
 
         <div className="mt-4 flex items-center justify-between gap-3">

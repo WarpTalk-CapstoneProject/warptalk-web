@@ -179,7 +179,49 @@
     "skipTour": "Bỏ qua hướng dẫn",
     "previousStep": "Bước trước",
     "done": "Xong",
-    "next": "Tiếp theo"
+    "next": "Tiếp theo",
+    "steps": {
+      "welcome": {
+        "title": "Chào mừng đến với WarpTalk",
+        "body": "Một cuộc họp ở đây được dịch ngay khi đang nói, sang ngôn ngữ riêng của từng người — và nếu họ có hồ sơ giọng nói, gần giống với giọng của chính họ. Đây là chuyến tham quan hai phút qua mọi thứ trong ứng dụng. Bạn có thể rời đi bất cứ lúc nào."
+      },
+      "meetings": {
+        "title": "Cuộc họp",
+        "body": "Mọi phòng họp mà không gian làm việc này tổ chức — đã lên lịch, đang diễn ra và đã kết thúc. Một cuộc họp đã kết thúc sẽ giữ lại bản ghi và tóm tắt AI trên trang riêng của nó."
+      },
+      "create-meeting": {
+        "title": "Bắt đầu một cuộc họp",
+        "body": "Cuộc họp mới bắt đầu từ đây. Bạn chọn những ngôn ngữ mà phòng họp sử dụng, và mỗi người tham gia chọn ngôn ngữ họ muốn nghe."
+      },
+      "voice-profiles": {
+        "title": "Hồ sơ giọng nói",
+        "body": "Ghi âm một mẫu ngắn một lần và lời nói được dịch của bạn sẽ được phát bằng chính giọng của bạn thay vì giọng có sẵn. Việc ghi âm là một bước đồng ý, và bạn có thể rút lại sự đồng ý này tại đây."
+      },
+      "documents": {
+        "title": "Tài liệu",
+        "body": "Tải lên hợp đồng, đặc tả và bảng thuật ngữ mà không gian làm việc này sử dụng. Chủ sở hữu hoặc Quản trị viên sẽ duyệt từng tài liệu trước khi trợ lý có thể dựa vào đó."
+      },
+      "knowledge": {
+        "title": "Kiến thức",
+        "body": "Mọi thứ trợ lý thực sự đã lập chỉ mục, mỗi dòng là một phần, kèm sự kiện được trích xuất từ đó. Mở một dòng để sửa một sự kiện, loại nó khỏi việc truy xuất, hoặc xoá nó."
+      },
+      "members": {
+        "title": "Thành viên",
+        "body": "Ai đang ở trong không gian làm việc này, ai đang chờ tham gia, và mỗi người được phép làm gì."
+      },
+      "dashboard": {
+        "title": "Bảng điều khiển",
+        "body": "Không gian làm việc này đang tiêu tốn tín dụng nhanh đến mức nào, đang chi cho việc gì, và liệu số dư có đủ đến ngày gia hạn hay không."
+      },
+      "warpbot": {
+        "title": "Hỏi WarpBot",
+        "body": "Hỏi về bất cứ điều gì không gian làm việc này đã lập chỉ mục — một điều khoản trong hợp đồng đã tải lên, điều gì đã được quyết định trong cuộc họp tuần trước — và nó trả lời dựa trên đó, không phải từ internet."
+      },
+      "help": {
+        "title": "Đó là toàn bộ hướng dẫn",
+        "body": "Nút này sẽ mở lại hướng dẫn bất cứ khi nào bạn muốn. Không có gì ở đây chỉ xuất hiện một lần."
+      }
+    }
   },
   "workspaceMembersPanel": {
     "pickWorkspace": "Chọn một không gian làm việc để xem ai đang ở đó.",
