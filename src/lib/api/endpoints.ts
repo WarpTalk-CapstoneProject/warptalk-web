@@ -479,6 +479,23 @@ export const API = {
       `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
   },
   /**
+   * Which workspaces a marketplace plugin reaches (2026-09-25): its default, per-workspace
+   * overrides (bulk by id and/or plan), and both views. Platform-admin only. The workspace-centric
+   * routes live under `/assistant/admin/workspaces` so no literal sits beside `{pluginKey}`.
+   */
+  adminPluginWorkspaceAccess: {
+    workspaces: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/workspaces`,
+    availability: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/availability`,
+    overrides: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/workspaces/overrides`,
+    workspacePlugins: (workspaceId: string) =>
+      `/assistant/admin/workspaces/${encodeURIComponent(workspaceId)}/plugins`,
+    workspaceOverride: (workspaceId: string, pluginKey: string) =>
+      `/assistant/admin/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/override`,
+  },
+  /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
    * the workspace service's audit store — the transport that can refuse — which is what ended
    * the "no bus, so no privileged actions" era.

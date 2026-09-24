@@ -130,5 +130,10 @@
       "expired": "Đã hết hạn",
       "revoked": "Đã ngắt kết nối"
     }
+  },
+  "disabledByPlatform": {
+    "title": "WarpTalk đã tắt",
+    "note": "Hiện không dùng được trong workspace này",
+    "row": "WarpTalk đã tắt plugin này cho workspace này. Kết nối của thành viên được giữ, nhưng WarpBot sẽ không dùng ở đây."
   }
 }
