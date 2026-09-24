@@ -1,30 +1,31 @@
 "use client";
 
-import {
-  ArrowsClockwise,
-  Buildings,
-  CaretLeft,
-  CaretRight,
-  MagnifyingGlass,
-  Users,
-  WarningCircle,
-} from "@phosphor-icons/react/dist/ssr";
+import { ArrowsClockwise, Buildings, CalendarBlank, Users } from "@phosphor-icons/react/dist/ssr";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 
 import { WorkspaceStatusBadge } from "@/components/admin/WorkspaceStatusBadge";
+import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
+import {
+  AdminDataTable,
+  AdminListToolbar,
+  AdminStatusTabs,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import { Button } from "@/components/ui/button";
 import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
-import { cn } from "@/lib/utils";
 import {
-  AdminFilterTabs,
-  AdminPage,
-  AdminPageHeader,
-  AdminPanel,
-} from "@/components/admin/admin-page-chrome";
+  dateRangeBounds,
+  dateRangeValue,
+  enumValue,
+  numberRangeValue,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
+import { cn } from "@/lib/utils";
 import type {
+  AdminWorkspaceDirectoryQuery,
   AdminWorkspaceSort,
   AdminWorkspaceStatusFilter,
   AdminWorkspaceSummaryDto,
@@ -34,15 +35,39 @@ const PAGE_SIZE = 20;
 
 const STATUS_TAB_VALUES: AdminWorkspaceStatusFilter[] = ["all", "active", "suspended", "deleted"];
 
-const SORT_OPTION_VALUES: Array<{ value: AdminWorkspaceSort; labelKey: string }> = [
-  { value: "created_desc", labelKey: "createdDesc" },
-  { value: "created_asc", labelKey: "createdAsc" },
-  { value: "name_asc", labelKey: "nameAsc" },
-  { value: "name_desc", labelKey: "nameDesc" },
-  { value: "members_desc", labelKey: "membersDesc" },
-  { value: "members_asc", labelKey: "membersAsc" },
-  { value: "updated_desc", labelKey: "updatedDesc" },
-];
+/**
+ * The directory's view, all of it in the URL. Status is a filter the tabs write (`status=`), so a
+ * link to "suspended workspaces with 50+ members, fewest first" is one paste.
+ *
+ * Every filter here is server-side: the workspace service filters and pages in SQL
+ * (WorkspaceRepository.GetAdminDirectoryAsync), and this page only ever holds one page of rows.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: ["active", "suspended", "deleted"] },
+    { key: "members", kind: "numberRange" },
+    { key: "created", kind: "dateRange" },
+  ],
+  sortFields: ["created", "name", "members", "updated"],
+  defaultSort: { field: "created", direction: "desc" },
+  columns: [
+    { id: "workspace" },
+    { id: "status" },
+    { id: "owner" },
+    { id: "members" },
+    { id: "created" },
+    { id: "lastActivity" },
+  ],
+  groupings: ["status"],
+};
+
+/** The toolkit's field + direction, as the one sort string the directory API accepts. */
+function apiSort(field: string, direction: "asc" | "desc"): AdminWorkspaceSort {
+  if (field === "name") return direction === "asc" ? "name_asc" : "name_desc";
+  if (field === "members") return direction === "asc" ? "members_asc" : "members_desc";
+  if (field === "updated") return direction === "asc" ? "updated_asc" : "updated_desc";
+  return direction === "asc" ? "created_asc" : "created_desc";
+}
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -52,14 +77,6 @@ function formatDate(value: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(value));
-}
-
-function isStatusFilter(value: string | null): value is AdminWorkspaceStatusFilter {
-  return STATUS_TAB_VALUES.some((tab) => tab === value);
-}
-
-function isSort(value: string | null): value is AdminWorkspaceSort {
-  return SORT_OPTION_VALUES.some((option) => option.value === value);
 }
 
 function OwnerCell({ workspace }: { workspace: AdminWorkspaceSummaryDto }) {
@@ -82,47 +99,26 @@ function OwnerCell({ workspace }: { workspace: AdminWorkspaceSummaryDto }) {
 
 function WorkspacesDirectory() {
   const t = useTranslations("adminWorkspaces.list");
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const list = useAdminListState(LIST_CONFIG);
+  const { state } = list;
 
-  // The URL is the source of truth: a shared or refreshed link restores the same tab,
-  // search, sort, and page.
-  const statusParam = searchParams.get("status");
-  const sortParam = searchParams.get("sort");
-  const status: AdminWorkspaceStatusFilter = isStatusFilter(statusParam) ? statusParam : "all";
-  const sort: AdminWorkspaceSort = isSort(sortParam) ? sortParam : "created_desc";
-  const search = searchParams.get("q") ?? "";
-  const parsedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const status = (enumValue(state.filters, "status") ?? "all") as AdminWorkspaceStatusFilter;
+  const members = numberRangeValue(state.filters, "members");
+  const created = dateRangeBounds(dateRangeValue(state.filters, "created") ?? {});
 
-  // The input is a draft until submitted, but a back/forward navigation changes ?q= behind
-  // it — adjust during render rather than in an effect so the two never disagree.
-  const [searchDraft, setSearchDraft] = useState(search);
-  const [appliedSearch, setAppliedSearch] = useState(search);
-  if (search !== appliedSearch) {
-    setAppliedSearch(search);
-    setSearchDraft(search);
-  }
-
-  const updateParams = (next: Record<string, string | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(next)) {
-      if (value === undefined || value === "") params.delete(key);
-      else params.set(key, value);
-    }
-    const queryString = params.toString();
-    router.replace(queryString ? `/admin/workspaces?${queryString}` : "/admin/workspaces");
-  };
-
-  const query = useMemo(
+  const query = useMemo<AdminWorkspaceDirectoryQuery>(
     () => ({
-      page,
+      page: state.page,
       pageSize: PAGE_SIZE,
       status,
-      sort,
-      search: search || undefined,
+      sort: apiSort(state.sort.field, state.sort.direction),
+      search: state.search || undefined,
+      minMembers: members?.min,
+      maxMembers: members?.max,
+      createdFrom: created.from,
+      createdTo: created.toExclusive,
     }),
-    [page, status, sort, search],
+    [state.page, status, state.sort.field, state.sort.direction, state.search, members?.min, members?.max, created.from, created.toExclusive],
   );
 
   const directoryQuery = useAdminWorkspaceDirectory(query);
@@ -134,214 +130,163 @@ function WorkspacesDirectory() {
     () => STATUS_TAB_VALUES.map((value) => ({ value, label: t(`statusTabs.${value}`) })),
     [t],
   );
-  const sortOptions = useMemo(
-    () => SORT_OPTION_VALUES.map((option) => ({ value: option.value, label: t(`sortOptions.${option.labelKey}`) })),
+
+  const filterFields = useMemo<AdminFilterField[]>(
+    () => [
+      {
+        key: "members",
+        label: t("filters.members"),
+        icon: <Users size={13} />,
+        kind: "numberRange",
+        unit: t("filters.membersUnit"),
+        step: 1,
+        presets: [
+          { label: t("filters.membersPresets.solo"), max: 1 },
+          { label: t("filters.membersPresets.small"), min: 2, max: 10 },
+          { label: t("filters.membersPresets.medium"), min: 11, max: 50 },
+          { label: t("filters.membersPresets.large"), min: 51 },
+        ],
+      },
+      { key: "created", label: t("filters.created"), icon: <CalendarBlank size={13} />, kind: "dateRange" },
+    ],
+    [t],
+  );
+
+  const columns = useMemo<AdminColumn<AdminWorkspaceSummaryDto>[]>(
+    () => [
+      {
+        id: "workspace",
+        header: t("columns.workspace"),
+        primary: true,
+        sortField: "name",
+        cell: (workspace) => (
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-2 text-[11px] font-semibold uppercase text-ink-muted">
+              {workspace.name.slice(0, 2)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-ink">{workspace.name}</p>
+              <p className="truncate font-mono text-[11px] text-ink-subtle">{workspace.slug}</p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: t("columns.status"),
+        className: "w-[120px]",
+        cell: (workspace) => <WorkspaceStatusBadge status={workspace.status} />,
+      },
+      {
+        id: "owner",
+        header: t("columns.owner"),
+        className: "w-[230px]",
+        cell: (workspace) => <OwnerCell workspace={workspace} />,
+      },
+      {
+        id: "members",
+        header: t("columns.members"),
+        align: "right",
+        className: "w-[100px]",
+        sortField: "members",
+        defaultDirection: "desc",
+        cell: (workspace) => (
+          <span className="text-ink-muted">{numberFormatter.format(workspace.memberCount)}</span>
+        ),
+      },
+      {
+        id: "created",
+        header: t("columns.created"),
+        align: "right",
+        className: "w-[130px]",
+        sortField: "created",
+        defaultDirection: "desc",
+        cell: (workspace) => <span className="text-xs text-ink-muted">{formatDate(workspace.createdAt)}</span>,
+      },
+      {
+        id: "lastActivity",
+        header: t("columns.lastActivity"),
+        align: "right",
+        className: "w-[140px]",
+        // Not sortable: last activity is derived per page (member joins, uploads, edits); the
+        // server can only order by updated_at, which Display → Ordering offers under its own name.
+        cell: (workspace) => (
+          <span className="text-xs text-ink-muted">{formatDate(workspace.lastActivityAt)}</span>
+        ),
+      },
+    ],
     [t],
   );
 
   return (
     <AdminPage>
-        <AdminPageHeader
-          eyebrow={t("eyebrow")}
-          eyebrowIcon={<Buildings size={14} weight="fill" />}
-          title={t("title")}
-          description={t("description")}
-          actions={
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void directoryQuery.refetch()}
-              disabled={directoryQuery.isFetching}
-            >
-              <ArrowsClockwise
-                size={14}
-                className={cn(directoryQuery.isFetching && "animate-spin")}
-              />
-              {t("refresh")}
-            </Button>
-          }
+      <AdminPageHeader
+        eyebrow={t("eyebrow")}
+        eyebrowIcon={<Buildings size={14} weight="fill" />}
+        title={t("title")}
+        description={t("description")}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void directoryQuery.refetch()}
+            disabled={directoryQuery.isFetching}
+          >
+            <ArrowsClockwise size={14} className={cn(directoryQuery.isFetching && "animate-spin")} />
+            {t("refresh")}
+          </Button>
+        }
+      />
+
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filterLabel")} />
+
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("searchPlaceholder")}
+        filters={filterFields}
+        count={directoryQuery.isPending ? null : total}
+        countLabel={t("workspaceCount", { count: total })}
+        isFetching={directoryQuery.isFetching && !directoryQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "created", label: t("sortFields.created") },
+            { field: "name", label: t("sortFields.name") },
+            { field: "members", label: t("sortFields.members") },
+            { field: "updated", label: t("sortFields.updated") },
+          ],
+          groupOptions: [{ key: "status", label: t("columns.status") }],
+          columns: columns.filter((column) => !column.primary).map((column) => ({ id: column.id, label: column.header })),
+        }}
+      />
+
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={items}
+          rowKey={(workspace) => workspace.id}
+          // WT-560: the directory has the slug, so it links straight to the named URL — no id ever
+          // reaches the address bar from here, not even for a redirect.
+          rowHref={(workspace) => `/admin/workspaces/${workspace.slug}`}
+          isPending={directoryQuery.isPending}
+          isError={directoryQuery.isError}
+          onRetry={() => void directoryQuery.refetch()}
+          empty={{
+            title: t("emptyTitle"),
+            description: t("emptyDescription"),
+            icon: <Buildings size={20} weight="duotone" />,
+          }}
+          groupings={{
+            status: {
+              keyOf: (workspace) => workspace.status,
+              label: (key) => t(`statusTabs.${key}`),
+              order: ["active", "suspended", "deleted"],
+            },
+          }}
+          pagination={{ page: state.page, pageCount: totalPages, total, pageSize: PAGE_SIZE }}
+          caption={t("title")}
         />
-
-        <AdminFilterTabs
-          tabs={statusTabs}
-          value={status}
-          onChange={(value) =>
-            updateParams({
-              status: value === "all" ? undefined : value,
-              page: undefined,
-            })
-          }
-          label={t("filterLabel")}
-          trailing={directoryQuery.isPending ? t("loading") : t("workspaceCount", { count: total })}
-        />
-
-        <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-          <div className="flex flex-1 items-center gap-2 lg:max-w-md">
-            <form
-              className="relative flex-1"
-              onSubmit={(event) => {
-                event.preventDefault();
-                updateParams({ q: searchDraft.trim() || undefined, page: undefined });
-              }}
-            >
-              <MagnifyingGlass
-                size={15}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-subtle"
-              />
-              <input
-                type="search"
-                value={searchDraft}
-                onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder={t("searchPlaceholder")}
-                aria-label={t("searchAriaLabel")}
-                className="h-8 w-full rounded-lg border border-hairline bg-surface-1 pl-8 pr-2.5 text-[13px] text-ink placeholder:text-ink-subtle focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            </form>
-            <label className="sr-only" htmlFor="workspace-sort">
-              {t("sortLabel")}
-            </label>
-            <select
-              id="workspace-sort"
-              value={sort}
-              onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
-              className="h-8 rounded-lg border border-hairline bg-surface-1 px-2 text-[13px] text-ink focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            >
-              {sortOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <AdminPanel className="mt-4">
-          <div className="hidden items-center border-b border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle md:flex">
-            <span className="flex-1">{t("columns.workspace")}</span>
-            <span className="w-[110px] shrink-0">{t("columns.status")}</span>
-            <span className="w-[220px] shrink-0">{t("columns.owner")}</span>
-            <span className="w-[90px] shrink-0 text-right">{t("columns.members")}</span>
-            <span className="w-[120px] shrink-0 text-right">{t("columns.created")}</span>
-            <span className="w-[130px] shrink-0 text-right">{t("columns.lastActivity")}</span>
-          </div>
-
-          {directoryQuery.isError ? (
-            <div className="flex items-start gap-2 px-4 py-8 text-sm text-destructive">
-              <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0" />
-              <div>
-                <p className="font-medium">{t("errorTitle")}</p>
-                <p className="mt-1 text-ink-muted">{t("errorDescription")}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3"
-                  onClick={() => void directoryQuery.refetch()}
-                >
-                  {t("tryAgain")}
-                </Button>
-              </div>
-            </div>
-          ) : directoryQuery.isPending ? (
-            <ul>
-              {Array.from({ length: 6 }).map((_, index) => (
-                <li
-                  key={index}
-                  className="flex items-center gap-4 border-b border-hairline/60 px-4 py-3 last:border-b-0"
-                >
-                  <div className="h-8 w-8 animate-pulse rounded-lg bg-surface-2" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="h-3 w-40 animate-pulse rounded bg-surface-2" />
-                    <div className="h-2.5 w-24 animate-pulse rounded bg-surface-2" />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          ) : items.length === 0 ? (
-            <div className="grid place-items-center px-4 py-14 text-center">
-              <div>
-                <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-                  <Buildings size={20} weight="duotone" />
-                </span>
-                <p className="mt-3 text-sm font-medium">{t("emptyTitle")}</p>
-                <p className="mt-1 text-xs text-ink-muted">{t("emptyDescription")}</p>
-              </div>
-            </div>
-          ) : (
-            <ul>
-              {items.map((workspace) => (
-                <li key={workspace.id}>
-                  <Link
-                    // WT-560: the directory has the slug, so it links straight to the named URL — no
-                    // id ever reaches the address bar from here, not even for a redirect.
-                    href={`/admin/workspaces/${workspace.slug}`}
-                    className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-2/60 focus-visible:bg-surface-2/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40 md:flex-row md:items-center md:gap-0"
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-hairline bg-surface-2 text-[11px] font-semibold uppercase text-ink-muted">
-                        {workspace.name.slice(0, 2)}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium text-ink">
-                          {workspace.name}
-                        </p>
-                        <p className="truncate font-mono text-[11px] text-ink-subtle">
-                          {workspace.slug}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="w-[110px] shrink-0">
-                      <WorkspaceStatusBadge status={workspace.status} />
-                    </div>
-
-                    <div className="w-[220px] shrink-0">
-                      <OwnerCell workspace={workspace} />
-                    </div>
-
-                    <div className="flex w-[90px] shrink-0 items-center justify-end gap-1 text-[13px] tabular-nums text-ink-muted">
-                      <Users size={13} weight="duotone" className="md:hidden" />
-                      {numberFormatter.format(workspace.memberCount)}
-                    </div>
-
-                    <div className="w-[120px] shrink-0 text-right text-xs text-ink-muted">
-                      {formatDate(workspace.createdAt)}
-                    </div>
-
-                    <div className="w-[130px] shrink-0 text-right text-xs text-ink-muted">
-                      {formatDate(workspace.lastActivityAt)}
-                    </div>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {totalPages > 1 ? (
-            <div className="flex items-center justify-between border-t border-hairline px-4 py-2.5">
-              <p className="text-xs text-ink-muted">{t("pageOf", { page, totalPages })}</p>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => updateParams({ page: String(page - 1) })}
-                >
-                  <CaretLeft size={13} />
-                  {t("previous")}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => updateParams({ page: String(page + 1) })}
-                >
-                  {t("next")}
-                  <CaretRight size={13} />
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </AdminPanel>
+      </AdminPanel>
     </AdminPage>
   );
 }

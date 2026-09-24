@@ -47,7 +47,24 @@
     "emptyDescription": "検索条件をクリアするか、別のステータスタブを選択してください。",
     "pageOf": "{page} / {totalPages} ページ",
     "previous": "前へ",
-    "next": "次へ"
+    "next": "次へ",
+    "filters": {
+      "members": "メンバー数",
+      "membersUnit": "人",
+      "membersPresets": {
+        "solo": "1人以下",
+        "small": "2〜10人",
+        "medium": "11〜50人",
+        "large": "51人以上"
+      },
+      "created": "作成日"
+    },
+    "sortFields": {
+      "created": "作成日",
+      "name": "名前",
+      "members": "メンバー数",
+      "updated": "最終更新"
+    }
   },
   "detail": {
     "backToDirectory": "ワークスペース",

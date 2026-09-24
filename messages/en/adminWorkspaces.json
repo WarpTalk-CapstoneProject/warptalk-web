@@ -47,7 +47,24 @@
     "emptyDescription": "Clear the search or pick a different status tab.",
     "pageOf": "Page {page} of {totalPages}",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "filters": {
+      "members": "Members",
+      "membersUnit": "members",
+      "membersPresets": {
+        "solo": "Solo (1 or fewer)",
+        "small": "2–10",
+        "medium": "11–50",
+        "large": "More than 50"
+      },
+      "created": "Created"
+    },
+    "sortFields": {
+      "created": "Created",
+      "name": "Name",
+      "members": "Members",
+      "updated": "Last updated"
+    }
   },
   "detail": {
     "backToDirectory": "Workspaces",
