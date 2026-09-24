@@ -1,1 +1,131 @@
-{}
+{
+  "translation": {
+    "start": "Start Translation",
+    "stop": "Stop Translation"
+  },
+  "hostControls": {
+    "label": "Host controls",
+    "menuAriaLabel": "Host controls",
+    "lockRoom": {
+      "lockedLabel": "Room locked",
+      "unlockedLabel": "Lock room",
+      "description": "Blocks new joiners while active."
+    },
+    "muteOnEntry": {
+      "label": "Mute on entry",
+      "description": "New joiners start with mic muted."
+    },
+    "muteAll": {
+      "label": "Mute all",
+      "description": "Everyone but you — they can unmute themselves."
+    }
+  },
+  "recording": {
+    "pending": "Recording request in progress",
+    "stop": "Stop recording",
+    "start": "Start recording"
+  },
+  "captions": {
+    "hide": "Hide captions (transcript keeps recording)",
+    "show": "Show captions"
+  },
+  "screenShare": {
+    "stop": "Stop presenting",
+    "start": "Present now"
+  },
+  "raiseHand": {
+    "lower": "Lower hand",
+    "raise": "Raise hand"
+  },
+  "reactions": {
+    "send": "Send a reaction"
+  },
+  "cloneCapture": {
+    "dismissAriaLabel": "Dismiss voice capture status"
+  },
+  "trackControls": {
+    "muteMicrophone": "Mute microphone",
+    "unmuteMicrophone": "Unmute microphone",
+    "turnCameraOff": "Turn camera off",
+    "turnCameraOn": "Turn camera on",
+    "chooseMicrophoneAndSpeaker": "Choose microphone and speaker",
+    "chooseCamera": "Choose camera"
+  },
+  "settingsButton": "Settings",
+  "settingsMenu": {
+    "noiseSuppression": {
+      "label": "Noise suppression",
+      "on": "On",
+      "off": "Off"
+    },
+    "micNoiseFilter": {
+      "row": "Mic noise filter",
+      "submenuHeader": "Mic noise filter",
+      "description": "Filters your microphone before it is transcribed. Changes how accurately your words are recognised — not what other people hear."
+    },
+    "backgroundBlur": {
+      "label": "Background blur",
+      "on": "On",
+      "off": "Off"
+    },
+    "layout": {
+      "label": "Layout",
+      "submenuHeader": "Layout",
+      "auto": "Auto",
+      "grid": "Grid",
+      "spotlight": "Spotlight",
+      "sidebar": "Sidebar"
+    },
+    "voice": {
+      "label": "Voice",
+      "submenuHeader": "Voice"
+    },
+    "transcript": {
+      "resume": "Resume transcript",
+      "pause": "Pause transcript",
+      "paused": "Paused",
+      "recording": "Recording"
+    },
+    "copyJoinLink": "Copy join link",
+    "copyRoomCode": "Copy room code",
+    "joinLinkToastLabel": "Join link",
+    "roomCodeToastLabel": "Room code"
+  },
+  "roomSpeed": {
+    "heading": "Room speed",
+    "flashMode": {
+      "label": "Flash mode",
+      "editable": "Start translating while people are still speaking. Faster, and still experimental.",
+      "room": "Set by the host. Translation starts while people are still speaking.",
+      "deployment": "Following the platform default. Translation starts while people are still speaking.",
+      "unknown": "Not known right now — the room is using whatever the platform defaults to."
+    }
+  },
+  "languagePicker": {
+    "triggerTitle": "Choose your language",
+    "setLanguage": "Set language",
+    "myLanguage": {
+      "title": "My language",
+      "hint": "What you speak, and what everyone else is translated into for you."
+    },
+    "otherLanguages": {
+      "title": "Other languages",
+      "hint": "Not offered by this room, but still translated for you.",
+      "disclosure": "Another language"
+    }
+  },
+  "micCheck": {
+    "title": "Mic check",
+    "providerKrisp": "Krisp",
+    "providerBrowser": "Browser",
+    "liveLevelAriaLabel": "Live microphone level, as others hear it",
+    "prompt": "Say something — the bars are what others hear.",
+    "off": "Your microphone is off — unmute to check it.",
+    "background": {
+      "silent": "Background: silent — suppression is holding.",
+      "low": "Background: low.",
+      "noticeable": "Background: noticeable — others can hear your room.",
+      "loud": "Background: loud — check what your microphone is next to."
+    }
+  }
+}
