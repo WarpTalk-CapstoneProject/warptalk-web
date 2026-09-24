@@ -32,6 +32,21 @@ export interface MemberPluginAction {
  * caller that has not been migrated to next-intl) keeps working unchanged. */
 export type MemberPluginActionTranslator = (key: string, values?: Record<string, string>) => string;
 
+/**
+ * The same optional-translator pattern for the owner page's copy, widened to interpolate numbers
+ * (the usage line and the "N waiting" counts are ICU plurals in the catalog).
+ *
+ * Every function below takes one of these, already scoped to its own group in
+ * `messages/{locale}/workspacePlugins.json` — the caller passes
+ * `(key, values) => t(`facts.${key}`, values)`, exactly as `memberPluginAction` is called. The
+ * default keeps the pre-i18n English, which is what this file's `node --test` contract asserts and
+ * what any not-yet-migrated caller keeps rendering.
+ */
+export type WorkspacePluginCopyTranslator = (
+  key: string,
+  values?: Record<string, string | number>,
+) => string;
+
 const DEFAULT_MEMBER_ACTION_COPY: Record<string, (values?: Record<string, string>) => string> = {
   addedByWorkspace: () => "Added by your workspace",
   notAddedYet: (v) => `Not added to ${v!.workspaceName} yet`,
@@ -143,21 +158,48 @@ export function pendingRequestBadge(
  */
 export function workspacePluginsTransitionNote(
   overview: Pick<WorkspacePluginsOverviewDto, "isCurated" | "inWorkspace" | "marketplace">,
+  t: WorkspacePluginCopyTranslator = defaultTransitionT,
 ): string | null {
   if (overview.isCurated) return null;
   if (overview.inWorkspace.some((plugin) => plugin.availability === "added")) {
-    return "Every marketplace plugin is available here until this list is changed.";
+    return t("allAvailable");
   }
   if (overview.marketplace.length > 0) {
-    return "No marketplace plugin is available here yet. Plugins were switched off in this workspace's old settings.";
+    return t("noneAvailable");
   }
   return null;
 }
 
+const DEFAULT_TRANSITION_COPY: Record<string, string> = {
+  allAvailable: "Every marketplace plugin is available here until this list is changed.",
+  noneAvailable:
+    "No marketplace plugin is available here yet. Plugins were switched off in this workspace's old settings.",
+};
+
+function defaultTransitionT(key: string): string {
+  return DEFAULT_TRANSITION_COPY[key] ?? key;
+}
+
+const DEFAULT_FACTS_COPY: Record<string, (values?: Record<string, string | number>) => string> = {
+  notUsedYet: () => "Not used by any member yet",
+  usedBy: (v) => `Used by ${v!.count} member${v!.count === 1 ? "" : "s"}`,
+  addedBy: (v) => `added by ${v!.name}`,
+  onlyThisWorkspace: () => "only this workspace",
+  apiKeyPerMember: () => "each member pastes an API key",
+  onlyThisWorkspaceAlone: () => "Only this workspace",
+};
+
+function defaultFactsT(key: string, values?: Record<string, string | number>): string {
+  return DEFAULT_FACTS_COPY[key]?.(values) ?? key;
+}
+
 /** The Manage dialog's usage line. Never claims connections the server cannot count per workspace. */
-export function describeMembersUsed(count: number | null | undefined): string {
-  if (!count || count <= 0) return "Not used by any member yet";
-  return `Used by ${count} member${count === 1 ? "" : "s"}`;
+export function describeMembersUsed(
+  count: number | null | undefined,
+  t: WorkspacePluginCopyTranslator = defaultFactsT,
+): string {
+  if (!count || count <= 0) return t("notUsedYet");
+  return t("usedBy", { count });
 }
 
 /** Who added a plugin: the server's name for them, else the member lookup's, else nobody. */
@@ -174,12 +216,13 @@ export function pluginAddedByName(
 export function workspacePluginFacts(
   plugin: Pick<WorkspacePluginItemDto, "availability" | "membersUsedCount" | "authMode">,
   addedByName: string | null,
+  t: WorkspacePluginCopyTranslator = defaultFactsT,
 ): string {
   return [
-    describeMembersUsed(plugin.membersUsedCount),
-    addedByName ? `added by ${addedByName}` : null,
-    plugin.availability === "private" ? "only this workspace" : null,
-    plugin.authMode === "api_key" ? "each member pastes an API key" : null,
+    describeMembersUsed(plugin.membersUsedCount, t),
+    addedByName ? t("addedBy", { name: addedByName }) : null,
+    plugin.availability === "private" ? t("onlyThisWorkspace") : null,
+    plugin.authMode === "api_key" ? t("apiKeyPerMember") : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -188,11 +231,12 @@ export function workspacePluginFacts(
 /** The owner page's second line for a row in "In this workspace". */
 export function workspacePluginSubtitle(
   plugin: Pick<WorkspacePluginItemDto, "availability" | "description" | "mcpServerUrl">,
+  t: WorkspacePluginCopyTranslator = defaultFactsT,
 ): string {
   if (plugin.availability !== "private") return plugin.description;
   const host = hostOf(plugin.mcpServerUrl);
   const where = host ?? plugin.description;
-  return where ? `${where} · only this workspace` : "Only this workspace";
+  return where ? `${where} · ${t("onlyThisWorkspace")}` : t("onlyThisWorkspaceAlone");
 }
 
 function hostOf(url: string | null | undefined): string | null {
@@ -220,11 +264,14 @@ export type PrivatePluginDraftErrors = Partial<Record<keyof PrivatePluginDraft, 
  * The form's own check before a private plugin is sent. The server re-checks all of it and also
  * refuses private and internal addresses; this only catches what can be told from the text.
  */
-export function validatePrivatePluginDraft(draft: PrivatePluginDraft): PrivatePluginDraftErrors {
+export function validatePrivatePluginDraft(
+  draft: PrivatePluginDraft,
+  t: WorkspacePluginCopyTranslator = defaultDraftErrorT,
+): PrivatePluginDraftErrors {
   const errors: PrivatePluginDraftErrors = {};
   const label = draft.label.trim();
-  if (!label) errors.label = "Give the plugin a name.";
-  else if (label.length > 150) errors.label = "Keep the name under 150 characters.";
+  if (!label) errors.label = t("labelRequired");
+  else if (label.length > 150) errors.label = t("labelTooLong");
 
   const url = draft.mcpServerUrl.trim();
   let parsed: URL | null = null;
@@ -233,11 +280,23 @@ export function validatePrivatePluginDraft(draft: PrivatePluginDraft): PrivatePl
   } catch {
     parsed = null;
   }
-  if (!url) errors.mcpServerUrl = "Enter the MCP server URL.";
-  else if (!parsed || parsed.protocol !== "https:") errors.mcpServerUrl = "Use an https:// URL.";
+  if (!url) errors.mcpServerUrl = t("urlRequired");
+  else if (!parsed || parsed.protocol !== "https:") errors.mcpServerUrl = t("urlNotHttps");
 
-  if (draft.description.trim().length > 500) errors.description = "Keep the description under 500 characters.";
+  if (draft.description.trim().length > 500) errors.description = t("descriptionTooLong");
   return errors;
+}
+
+const DEFAULT_DRAFT_ERROR_COPY: Record<string, string> = {
+  labelRequired: "Give the plugin a name.",
+  labelTooLong: "Keep the name under 150 characters.",
+  urlRequired: "Enter the MCP server URL.",
+  urlNotHttps: "Use an https:// URL.",
+  descriptionTooLong: "Keep the description under 500 characters.",
+};
+
+function defaultDraftErrorT(key: string): string {
+  return DEFAULT_DRAFT_ERROR_COPY[key] ?? key;
 }
 
 /** The create body. `authMode` is always sent; a server older than API-key auth ignores it. */

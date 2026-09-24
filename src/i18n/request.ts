@@ -42,6 +42,7 @@ const NAMESPACES = [
   "artifacts",
   "members",
   "pluginsPage",
+  "workspacePlugins",
   "schedules",
   "settingsBilling",
   "settingsBillingUsage",

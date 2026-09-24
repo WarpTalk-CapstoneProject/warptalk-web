@@ -62,6 +62,33 @@ for (const [label, handler] of [
 const pluginsMessagesEn = JSON.parse(
   readFileSync(join(root, "messages/en/pluginsPage.json"), "utf8"),
 );
+const workspaceMessagesEn = JSON.parse(
+  readFileSync(join(root, "messages/en/workspacePlugins.json"), "utf8"),
+);
+
+/** Reads "a.b.c" out of a message catalog. */
+function messageAt(tree, path) {
+  return path.split(".").reduce((node, part) => (node == null ? node : node[part]), tree);
+}
+
+/**
+ * Both halves of a copy contract, after the next-intl migration (WT-607).
+ *
+ * A literal-text assertion against the component source stopped being able to fail once the copy
+ * moved into `messages/en/*.json` — the wording really is gone from the source. So each of these
+ * asserts that the component still calls the expected key AND that the English catalog still
+ * carries the original wording at it. See `.agents/page-docs/i18n-localization.md`.
+ */
+function assertCopyContract(source, tree, key, expected, what) {
+  // The key as written in the source: `t("a.b")`, `t("a.b", {…})`, or handed to a child as
+  // `titleKey: "a.b"` the way the auth-mode choices are.
+  if (!source.includes(`"${key}"`)) {
+    throw new Error(`${what} must render the translation key '${key}'.`);
+  }
+  if (messageAt(tree, key) !== expected) {
+    throw new Error(`The English copy for '${key}' must read '${expected}'.`);
+  }
+}
 
 if (!page.includes('t("empty.withQuery"')) {
   throw new Error("Plugins page must render an empty state when the filter matches nothing.");
@@ -350,19 +377,24 @@ if (workspaceRoute.includes("redirect(")) {
 if (!workspaceRoute.includes("@/components/assistant/plugins/workspace-plugins-page")) {
   throw new Error("The workspace plugins route must render WorkspacePluginsPage.");
 }
-for (const token of [
-  "Add plugin",
-  "From marketplace",
-  "With MCP",
-  "Requests",
-  "In this workspace",
-  "Marketplace",
-  "Add a plugin to this workspace",
-  "Remove from workspace",
+// The approved mock's vocabulary, asserted through the catalog since WT-607 moved it there.
+for (const [key, expected] of [
+  ["addMenu.trigger", "Add plugin"],
+  ["addMenu.fromMarketplace", "From marketplace"],
+  ["addMenu.withMcp", "With MCP"],
+  ["requests.title", "Requests"],
+  ["inWorkspace.title", "In this workspace"],
+  ["marketplace.title", "Marketplace"],
+  ["empty.title", "Add a plugin to this workspace"],
+  ["manageDialog.removeFromWorkspace", "Remove from workspace"],
 ]) {
-  if (!workspacePage.includes(token)) {
-    throw new Error(`The workspace plugins page must offer '${token}', as the approved mock does.`);
-  }
+  assertCopyContract(
+    workspacePage,
+    workspaceMessagesEn,
+    key,
+    expected,
+    "The workspace plugins page, as the approved mock does,",
+  );
 }
 if (/Skills only/i.test(workspacePage) || /Skills only/i.test(page)) {
   throw new Error("Plugins are MCP only (owner decision 2026-09-17): no page may offer a skills-only option.");
@@ -417,13 +449,14 @@ if (/decides which (ones|plugins) you can connect/.test(page)) {
 
 // "With MCP": the approved fields, plus how members connect. authMode goes out through the helper,
 // which is where "only send it on edit when it changed" is tested.
-for (const token of [
-  'placeholder="https://mcp.example.com/mcp"',
-  "How members connect",
-  "Each member pastes an API key",
-  "createPrivatePluginRequest(draft)",
-  "privatePluginUpdateRequest(plugin, draft)",
+for (const [key, expected] of [
+  ["form.urlPlaceholder", "https://mcp.example.com/mcp"],
+  ["authMode.legend", "How members connect"],
+  ["authMode.apiKeyTitle", "Each member pastes an API key"],
 ]) {
+  assertCopyContract(workspacePage, workspaceMessagesEn, key, expected, "The owner page's MCP form");
+}
+for (const token of ["createPrivatePluginRequest(draft)", "privatePluginUpdateRequest(plugin, draft)"]) {
   if (!workspacePage.includes(token)) {
     throw new Error(`The owner page's MCP form must include '${token}'.`);
   }
@@ -435,18 +468,32 @@ if (/members connected|of \$\{[^}]*\} members/.test(workspacePage)) {
     "The owner page must not claim a connected-member count; the server only knows how many members USED a plugin here (membersUsedCount).",
   );
 }
-if (!workspacePage.includes("workspacePluginFacts(plugin, addedByName)")) {
+// Matched without pinning the trailing translator argument, which WT-607 added.
+if (!/workspacePluginFacts\(plugin, addedByName[,)]/.test(workspacePage)) {
   throw new Error("The Manage dialog's facts line must come from workspacePluginFacts (usage + added by).");
 }
 
 // Gap 12a — the transition note is decided from the rows, not asserted. "Every marketplace plugin is
 // available" is false for a workspace whose old switch was off.
-if (!workspacePage.includes("workspacePluginsTransitionNote(overview)")) {
+if (!/workspacePluginsTransitionNote\(overview[,)]/.test(workspacePage)) {
   throw new Error("The owner page must word its transition note through workspacePluginsTransitionNote.");
 }
 if (workspacePage.includes("Every marketplace plugin is available")) {
   throw new Error(
     "The owner page must not hardcode 'Every marketplace plugin is available'; which note is true depends on the old switch.",
+  );
+}
+// The other half of the same guarantee: both notes still exist, and the "switched off" one still
+// does not claim availability. The helper picks between them; the catalog is where they are worded.
+if (
+  workspaceMessagesEn.transition.allAvailable !==
+  "Every marketplace plugin is available here until this list is changed."
+) {
+  throw new Error("The transition note's English copy for a workspace that had plugins on must be unchanged.");
+}
+if (/Every marketplace plugin is available/.test(workspaceMessagesEn.transition.noneAvailable)) {
+  throw new Error(
+    "The 'plugins were switched off' transition note must not claim every marketplace plugin is available.",
   );
 }
 
@@ -483,8 +530,11 @@ if (!/pendingRequestBadge\(\s*workspacePluginsOverview,\s*canManageWorkspacePlug
 }
 
 // Gap 8 — a failed request shows what the server said, JSON or plain text, on both pages.
-if (!page.includes("pluginErrorMessage(error, `Could not ask for")) {
+if (!page.includes('pluginErrorMessage(error, t("toasts.couldNotAsk"')) {
   throw new Error("A failed plugin request must show the server's message (pluginErrorMessage), not a fixed sentence.");
+}
+if (pluginsMessagesEn.toasts.couldNotAsk !== "Could not ask for {label}.") {
+  throw new Error("The failed-request fallback's English copy must still name the plugin.");
 }
 if (/getErrorMessage\(/.test(workspacePage) || !workspacePage.includes("pluginErrorMessage(")) {
   throw new Error("The owner page must report failures through pluginErrorMessage, which also reads plain-text bodies.");
@@ -493,6 +543,15 @@ if (/getErrorMessage\(/.test(workspacePage) || !workspacePage.includes("pluginEr
 // Gap 9 — the Owner adds instead of asking themselves.
 if (!page.includes('action.kind === "add"') || !page.includes("addToWorkspace(plugin)")) {
   throw new Error("An Owner's not-added row on the member page must offer Add (memberPluginAction kind 'add').");
+}
+// The Owner's add says which plugin landed where, and its failure says which one did not. Named,
+// because "Added" alone on a catalog of rows that all look alike says nothing.
+for (const [key, expected] of [
+  ["actionLabels.add", "Add"],
+  ["toasts.added", "{label} added to this workspace"],
+  ["toasts.couldNotAdd", "Could not add {label}."],
+]) {
+  assertCopyContract(page, pluginsMessagesEn, key, expected, "The member page's Owner add");
 }
 
 // Gap 11 — chat offers only what the workspace has.
