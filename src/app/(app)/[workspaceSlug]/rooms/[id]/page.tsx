@@ -1136,6 +1136,7 @@ export default function RoomInformationPage() {
                 isHost={isHost}
                 isEnded={isEnded}
                 artifactAccess={room.settings?.artifactAccess}
+                autoShareRecord={room.settings?.autoShareRecord}
                 endedRecord={endedRecordQuery.data ?? null}
                 segments={transcriptSegments}
                 hasTranscript={hasTranscript}
@@ -1181,6 +1182,7 @@ export default function RoomInformationPage() {
                     // the segments query never runs and the count is zero for a reason that has
                     // nothing to do with the meeting.
                     transcriptErrorCode={transcriptErrorCode}
+                    saveTranscript={room.settings?.saveTranscript}
                     transcriptLoading={
                       transcriptQuery.isLoading || segmentsQuery.isLoading
                     }
@@ -1362,6 +1364,7 @@ function MeetingRecordSection({
   isHost,
   isEnded,
   artifactAccess,
+  autoShareRecord,
   transcript,
   transcriptCount,
   endedRecord,
@@ -1393,6 +1396,8 @@ function MeetingRecordSection({
   isEnded: boolean;
   /** WT-480: the room's stored `artifactAccess`. Absent reads as not shared. */
   artifactAccess?: string | null;
+  /** WT-826: whether the room shares its record by itself when the meeting ends. */
+  autoShareRecord?: boolean;
   transcript: React.ReactNode;
   transcriptCount: number;
   /**
@@ -1461,7 +1466,7 @@ function MeetingRecordSection({
   const recording = findPlayableRecording(endedRecord?.artifacts);
   // WT-480: who may read this record. One derivation feeds the badge, the banner and the button.
   const setArtifactAccess = useSetArtifactAccess(roomId);
-  const sharing = describeRecordSharing({ artifactAccess, isHost });
+  const sharing = describeRecordSharing({ artifactAccess, isHost, isEnded, autoShareRecord });
 
   // What "the summary changed" means, as one value. The template alone could not answer it:
   // regenerating in the SAME shape leaves the template identical, so the old arrival test was
@@ -1785,7 +1790,9 @@ function MeetingRecordSection({
           <span
             className={cn(
               "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-              sharing.tone === "shared"
+              // Amber only for "nobody can read this but the host" — a draft, or a participant
+              // being withheld. Shared, and shared-at-the-end, are both good news.
+              sharing.tone !== "draft" && sharing.tone !== "withheld"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
             )}
@@ -1797,18 +1804,26 @@ function MeetingRecordSection({
         {sharing.action ? (
           <button
             type="button"
-            onClick={() => void setArtifactAccess.mutateAsync(nextArtifactAccess(artifactAccess))
+            onClick={() => {
+              // WT-826: the view says which level its control sends. Before the meeting ends, a
+              // record that will share itself reads as "not shared" today, and its control keeps
+              // it private — flipping the stored level would have published it early instead.
+              const next = sharing.nextLevel ?? nextArtifactAccess(artifactAccess);
+              void setArtifactAccess.mutateAsync(next)
               .then(() => {
                 toast.success(
-                  isRecordShared(artifactAccess)
-                    ? "Record unpublished. Only you can see it now."
+                  !isRecordShared(next)
+                    ? isEnded
+                      ? "Record unpublished. Only you can see it now."
+                      : "Record kept private. It will not be shared when the meeting ends."
                     : "Record published. Everyone who took part can read it.",
                 );
                 onRecordChanged();
               })
               .catch((error: unknown) =>
                 toast.error(getErrorMessage(error, "Could not change who this record is shared with.")),
-              )}
+              );
+            }}
             disabled={setArtifactAccess.isPending}
             className="rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[12.5px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
           >
@@ -1821,7 +1836,7 @@ function MeetingRecordSection({
         <div
           className={cn(
             "mt-3 rounded-[8px] border px-3.5 py-2.5 text-[13px] leading-relaxed",
-            sharing.tone === "shared"
+            sharing.tone === "shared" || sharing.tone === "scheduled"
               ? "border-emerald-500/25 bg-emerald-500/5 text-ink"
               : sharing.tone === "draft"
                 ? "border-amber-500/25 bg-amber-500/5 text-ink"
@@ -1999,6 +2014,9 @@ function MeetingRecordSection({
         <MinutesPanel
           roomId={roomId}
           canManage={isHost}
+          // The same set the summary rail is handed: one answer to "which languages may this
+          // meeting still be written in", read once on this page.
+          generatableLanguages={generatableLanguages}
           // The same switch the summary's citations make: the moment being cited is a node in
           // the transcript, and that node only exists while the transcript tab is rendered.
           onSeek={(atMs) => {

@@ -46,13 +46,42 @@ export function nextArtifactAccess(artifactAccess?: string | null): ArtifactAcce
 export type RecordSharingView = {
   /** Shown beside the "Meeting record" heading. */
   badge: string;
-  /** The banner's tone. `null` means show no banner at all. */
-  tone: "draft" | "shared" | "withheld" | null;
+  /**
+   * The banner's tone. `null` means show no banner at all. `scheduled` (WT-826) is a record that
+   * is not shared YET and will be the moment the meeting ends, with nobody having to press
+   * anything.
+   */
+  tone: "draft" | "shared" | "withheld" | "scheduled" | null;
   /** The banner's sentence, already written for the person reading it. */
   message: string | null;
   /** The label for the host's sharing control, or null when the viewer is not the host. */
   action: string | null;
+  /**
+   * The level the host's control sends. Not always the opposite of the stored level: before the
+   * meeting ends, a record that will share itself is "not shared" today, and the control on it
+   * keeps it private rather than publishing it early.
+   */
+  nextLevel: ArtifactAccessLevel | null;
 };
+
+/**
+ * WT-826: whether this record will be shared by the room itself when the meeting ends.
+ *
+ * Only while the meeting is still running, only when it is not already shared, and only when the
+ * room's toggle is not off. `autoShareRecord` absent reads as ON — the server reports the
+ * effective value, and a room created before the toggle is shared at the end like a new one.
+ */
+export function sharesWhenMeetingEnds({
+  artifactAccess,
+  isEnded,
+  autoShareRecord,
+}: {
+  artifactAccess?: string | null;
+  isEnded?: boolean;
+  autoShareRecord?: boolean | null;
+}): boolean {
+  return isEnded === false && !isRecordShared(artifactAccess) && autoShareRecord !== false;
+}
 
 /**
  * What the meeting-record header should say, for this viewer.
@@ -64,11 +93,42 @@ export type RecordSharingView = {
 export function describeRecordSharing({
   artifactAccess,
   isHost,
+  isEnded,
+  autoShareRecord,
 }: {
   artifactAccess?: string | null;
   isHost: boolean;
+  /**
+   * WT-826. `undefined` means the caller does not know, and then nothing is promised about the
+   * end of the meeting — the view describes only what is stored.
+   */
+  isEnded?: boolean;
+  /** WT-826: the room's "share automatically" toggle, as the server reports it. */
+  autoShareRecord?: boolean | null;
 }): RecordSharingView {
   const shared = isRecordShared(artifactAccess);
+
+  // WT-826. Before this, a meeting in progress told its host "Draft — only you can see this" and
+  // its participants "Not shared yet", about a record the room was going to share on its own the
+  // moment it ended. Both sentences were about a click that no longer has to happen.
+  if (sharesWhenMeetingEnds({ artifactAccess, isEnded, autoShareRecord })) {
+    return isHost
+      ? {
+          badge: "Shares when the meeting ends",
+          tone: "scheduled",
+          message:
+            "Everyone who took part will be able to read the transcript, AI summary and recording as soon as the meeting ends. Keep it private if this meeting should stay with you.",
+          action: "Keep private",
+          nextLevel: ARTIFACT_ACCESS.hostOnly,
+        }
+      : {
+          badge: "Shared when the meeting ends",
+          tone: null,
+          message: null,
+          action: null,
+          nextLevel: null,
+        };
+  }
 
   if (isHost) {
     return shared
@@ -80,6 +140,7 @@ export function describeRecordSharing({
           message:
             "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
           action: "Unpublish",
+          nextLevel: ARTIFACT_ACCESS.hostOnly,
         }
       : {
           badge: "Draft",
@@ -89,6 +150,7 @@ export function describeRecordSharing({
           message:
             "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
           action: "Publish to participants",
+          nextLevel: ARTIFACT_ACCESS.allParticipants,
         };
   }
 
@@ -96,7 +158,7 @@ export function describeRecordSharing({
   // nothing worth saying: they can simply read it, and a banner explaining that they are allowed
   // to read what is in front of them is noise.
   return shared
-    ? { badge: "Shared by host", tone: null, message: null, action: null }
+    ? { badge: "Shared by host", tone: null, message: null, action: null, nextLevel: null }
     : {
         badge: "Not shared yet",
         tone: "withheld",
@@ -106,5 +168,6 @@ export function describeRecordSharing({
         message:
           "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
         action: null,
+        nextLevel: null,
       };
 }

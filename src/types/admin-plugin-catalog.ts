@@ -67,6 +67,11 @@ export interface AdminPluginCatalogListItemDto {
   pluginKey: string;
   label: string;
   description: string;
+  /**
+   * The row's icon. Null for a row without one; `PluginGlyph` then draws the bundled brand mark for
+   * the key. Optional because a server older than the marketplace icons does not send it.
+   */
+  avatarUrl?: string | null;
   kind: AdminPluginKind;
   provider: string;
   isActive: boolean;
@@ -77,11 +82,12 @@ export interface AdminPluginCatalogListItemDto {
   hasClientId: boolean;
   hasClientSecret: boolean;
   toolCount: number;
+  /** Users who have it installed now; a removed installation is not counted. */
   installationCount: number;
   /**
-   * How many workspaces have added this plugin to their list. Explicit lists only: a workspace that
-   * has never edited its list is still on the pre-marketplace "every plugin" default and is not
-   * counted. Optional because a server older than the marketplace does not send it.
+   * How many workspaces have this plugin available, by the rule the server enforces: those whose
+   * list holds it, plus those that never edited their list and whose members already use it there.
+   * Optional because a server older than the marketplace does not send it.
    */
   workspaceCount?: number;
 }

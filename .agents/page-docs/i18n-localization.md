@@ -54,9 +54,48 @@ Per WT-607's own scope ("không cần dịch toàn bộ ứng dụng trong ticke
 - `knowledge` page **and its two subcomponents** (`knowledge-table`, `knowledge-chunk-sheet`) — including the shared lib `src/lib/knowledge/knowledge-view.ts` (`sourceLabel`, new `sourceTypeLabel`, `translatedSourceTabs`, all with the optional-translator pattern) and `src/lib/billing/usage-labels.ts` (`usageTypeLabel`/`usageTypeDetailLabel`, same pattern) — both **shared with not-yet-migrated pages** (the admin Knowledge tab, the billing pages), so those keep compiling and keep today's English via the same default-parameter trick as `getPlanDescription`.
 - `voice-profiles` page **and all five of its subcomponents** (`voice-consent-card`, `my-dub-voice-picker`, `library-voice-list`, `voice-profile-list`, `create-voice-profile-dialog`).
 
+**Done — the plugin marketplace (the `feat/marketplace-owner-flow` branch, caught up with this
+layer):**
+- The workspace Owner's Plugins page (`src/components/assistant/plugins/workspace-plugins-page.tsx`)
+  in full — header, Add-plugin menu, empty state, Requests, In this workspace, Marketplace, the
+  Manage dialog, the "With MCP" dialog including the OAuth / API-key choice, and every toast and
+  error line — under a **new `workspacePlugins` namespace**.
+- The member page's Owner-only Add button and its two toasts (`pluginsPage.actionLabels.add`,
+  `toasts.added`, `toasts.couldNotAdd`).
+- The marketplace helpers in `src/lib/assistant/plugin-availability.ts`
+  (`workspacePluginsTransitionNote`, `describeMembersUsed`, `workspacePluginFacts`,
+  `workspacePluginSubtitle`, `validatePrivatePluginDraft`) via the optional-translator pattern —
+  that file runs under plain `node --test` with type-only relative imports, so a hook is not an
+  option there.
+
+**Two traps this batch hit that the next one will hit too:**
+
+1. **A module-scope constant holding English cannot be translated in place.** The owner page's
+   `AUTH_CHOICES` was `[{ mode, title, note }, …]` evaluated at import time; `useTranslations` is a
+   hook and a locale switch must change the text. Fixed by storing *key names* in the constant and
+   resolving them at render. Any `const X = [...]` of user-facing strings at module scope needs the
+   same treatment.
+2. **`date-fns` output is not locale-neutral either.** The request rows' "3 hours ago" came from a
+   bare `formatDistanceToNow`, which stays English in `vi`/`ja`. There is already a shared mapping
+   for this — `dateFnsCalendarLocale` in `src/lib/meeting/calendar-locale.ts`, from the schedules
+   batch. Use it rather than adding a fourth private `DATE_FNS_LOCALES` table. Translating a page
+   is not done until its relative dates and formatted numbers follow the locale too.
+
 **A hard exception, found and deliberately preserved — not a gap to fix later:** the five consent statement labels in `create-voice-profile-dialog.tsx` (`CONSENT_ITEMS`) are **never routed through i18n**. The server hashes that exact English text (`VoiceProfileConsentContract.CanonicalContractText`) and the hash is the only record of what a person agreed to — translating the display text would desynchronize the on-screen wording from what the hash actually attests to. Only the chrome around them (dialog title, buttons, other fields) is translated. See the comment at that file's `CONSENT_ITEMS` declaration before ever touching it.
 
 **A `isKnownFactCategory` lesson worth repeating**: it was first added to `src/lib/knowledge/knowledge-view.ts`, which has a **hard contract-test-enforced constraint** (`check-admin-knowledge-contract.mjs`) requiring that file to stay free of *value* imports (type-only), so `node:test` can exercise it without a module resolver. Importing `FACT_CATEGORIES` as a value there broke that contract. Fixed by moving the helper to `src/types/workspace-knowledge.ts`, which already owns `FACT_CATEGORIES` as a value export. **Before adding a helper to a `lib/*-view.ts` file, check whether a contract script asserts that file's import shape.**
+
+**The same split, a second time — `scripts/check-plugin-marketplace-contract.mjs`.** That script
+required the approved mock's vocabulary ("Add plugin", "From marketplace", "With MCP", "Requests",
+"In this workspace", "Marketplace", "Add a plugin to this workspace", "Remove from workspace", the
+MCP form's placeholder and its "How members connect" / "Each member pastes an API key" labels) to
+appear literally in the page source. Once they moved into `messages/en/workspacePlugins.json`, the
+assertions could no longer fail. Each was split into `assertCopyContract(source, tree, key,
+expected, what)` — the page must name the key, and the English catalog must still carry that exact
+wording. Two others needed a regex rather than a literal, because the helpers gained a trailing
+translator argument: `workspacePluginsTransitionNote(overview` and
+`workspacePluginFacts(plugin, addedByName`. **Pinning a call's exact argument list makes adding a
+translator a contract break** — match the call, not its punctuation.
 
 **Contract tests updated to stay meaningful, not weakened:** `scripts/check-admin-knowledge-contract.mjs` used to `assert.match` the page/component *source* against literal English strings ("Only a workspace Owner or Admin can see what has been indexed", "Could not read the index", "Nothing indexed yet") to prove a gate/state existed. Once those strings became `t("key")` calls, the literal-text assertions started failing — correctly, since the literal text really was gone from the source. Fixed by asserting **both halves of the same guarantee**: the component source calls the expected translation key, AND `messages/en/<namespace>.json` still carries the original English wording at that key. This is the general fix pattern for any future contract test that breaks the same way — never delete the assertion, split it in two.
 
@@ -78,6 +117,7 @@ Per WT-607's own scope ("không cần dịch toàn bộ ứng dụng trong ticke
 - `src/app/terms/page.tsx`, `src/app/privacy/page.tsx`, `src/components/legal/legal-placeholder.tsx`
 - `src/components/layout/linear-sidebar.tsx`
 - `scripts/check-english-ui.mjs` (doc comment only — logic unchanged)
+- **Plugin marketplace**: `src/components/assistant/plugins/{workspace-plugins-page,plugins-page}.tsx`; `src/lib/assistant/plugin-availability.ts`; `messages/{en,vi,ja}/workspacePlugins.json` (new namespace) and `messages/{en,vi,ja}/pluginsPage.json`; `src/i18n/request.ts`; `scripts/check-plugin-marketplace-contract.mjs`. Page doc: `.agents/page-docs/workspace-plugins.md`.
 - **Phase B batch 1**: `src/app/(app)/[workspaceSlug]/{home,tasks,ai-chat,dashboard,knowledge,voice-profiles}/page.tsx`; `src/app/(app)/[workspaceSlug]/dashboard/components/*.tsx`; `src/components/knowledge/{knowledge-table,knowledge-chunk-sheet}.tsx`; `src/components/voice/{voice-consent-card,my-dub-voice-picker,library-voice-list,voice-profile-list,create-voice-profile-dialog}.tsx`; `src/lib/knowledge/knowledge-view.ts`; `src/lib/billing/usage-labels.ts`; `src/types/workspace-knowledge.ts`; `messages/{en,vi,ja}/{home,tasks,aiChat,dashboard,knowledge,voiceProfiles}.json`; `src/i18n/request.ts` (namespaces registered); `scripts/check-admin-knowledge-contract.mjs` (assertions updated to the i18n-aware pattern above).
 
 ## Typography note — CJK needs different metrics
@@ -116,4 +156,13 @@ This is not cosmetic fine-tuning — it fixes a real defect found during browser
 - [x] `2026-09-16`: the topbar `compact` `LanguageSwitcher` (`src/app/(app)/layout.tsx`) initially rendered its `Globe` icon at `size={16}` inside the same 24px circle its neighbors (`ThemeToggleButton`, the help button) use for a `size={12}` icon — caught by diffing against those sibling components' source, not by looking at a screenshot, and fixed to match.
 - [ ] Manual: inside a workspace (needs a running backend), confirm the sidebar nav labels translate **and** that the new topbar `compact` switcher renders and functions. Not exercised — the local backend/gateway was not running during this or the previous pass, so authenticated routes could not be loaded. These are covered by `test:i18n-catalog`, typecheck, and (for the icon sizing) direct comparison against sibling component source, but have not actually been seen on screen.
 - [x] `2026-09-16` Phase B batch 1 (`home`/`tasks`/`ai-chat`/`dashboard`/`knowledge`/`voice-profiles` + their subcomponents): `typecheck`, `lint` (0 errors), `test:i18n-catalog` (23 subtests), and `test:contracts` (full chain, exit 0 — including the two `check-admin-knowledge-contract.mjs` assertions repaired for the i18n-aware pattern) all pass; production `build` succeeds.
+- [x] `2026-09-24` plugin marketplace (owner page + the marketplace helpers, new `workspacePlugins`
+      namespace): `npx tsc --noEmit -p .` clean; `test:i18n-catalog` (94 subtests), `test:english-ui`,
+      `test:scripts-wired`, every `test:plugin-*` and `test:warpbot-*` script pass, including the
+      marketplace contract rewritten to the split-assertion pattern above.
+- [ ] Manual in-browser verification of the owner Plugins page in `vi`/`ja` is **still open**, for
+      the same reason batch 1's is: `src/proxy.ts` redirects every `(app)/[workspaceSlug]/*` route to
+      `/login` without an `HttpOnly` access-token cookie, and no local gateway was running. The
+      two-column auth-mode cards in the "With MCP" dialog are this page's risk zone — the Japanese
+      labels are meaningfully longer than the English they replaced.
 - [ ] Manual in-browser verification of batch 1's authenticated pages was **not possible** in this environment: `warptalk-backend`'s gateway isn't running, and `src/proxy.ts` gates every `(app)/[workspaceSlug]/*` route behind an `HttpOnly` access-token cookie that can't be set from a script — the middleware always redirects to `/login` before the page renders. This is a real gap, not a formality: the layout-safety analysis for this batch (knowledge-table's badge column, the various `Workspace*Module`/`Workspace*Pill` components) was done by reading source and cross-checking against the CSS classes already verified safe in the Phase A exploration, **not** by looking at the rendered page. Re-verify visually the first time a local backend is available, starting with `[workspaceSlug]/knowledge` in `ja` (the batch's one real risk zone: the State column's badge pills).

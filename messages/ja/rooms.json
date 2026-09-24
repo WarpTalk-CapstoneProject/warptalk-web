@@ -143,7 +143,11 @@
       "saveTranscript": "ミーティングの文字起こしを保存する",
       "saveTranscriptHint": "字幕と翻訳は引き続き機能します。このミーティングには文字起こし、要約、議事録が残りません。",
       "keepTranscript": "このミーティングの記録を残す",
-      "dontKeepTranscript": "このミーティングの記録を残さない"
+      "dontKeepTranscript": "このミーティングの記録を残さない",
+      "autoShareRecord": "記録を参加者と自動的に共有する",
+      "autoShareRecordOffHint": "公開するまで、文字起こし・AI要約・録画はあなただけが閲覧できます。",
+      "keepRecordPrivate": "公開するまで記録を非公開にする",
+      "shareRecordAutomatically": "ミーティング終了時に記録を参加者と共有する"
     },
     "startTime": {
       "label": "開始時刻",

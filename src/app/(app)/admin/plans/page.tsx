@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   AdminFilterTabs,
   AdminPage,
@@ -197,24 +198,27 @@ function RateCardRow({
       {/* The column this page exists for. It is the STORED multiplier where there is one, and a
           named refusal where price and cost are in different currencies — never price ÷ cost
           across VND and USD, which produces a plausible number that is off by the exchange rate. */}
-      <div
-        className={cn(
-          "w-[140px] shrink-0 text-[13px] tabular-nums md:text-right",
-          tone === "loss" && "font-semibold text-destructive",
-          tone === "thin" && "font-semibold text-amber-600 dark:text-amber-400",
-          tone === "healthy" && "font-semibold text-emerald-600 dark:text-emerald-400",
-          tone === "unknown" && "text-[11px] italic text-ink-subtle",
-        )}
-        title={
+      <Tooltip
+        content={
           margin.source === "derived"
             ? t("marginDerivedTooltip")
             : margin.source === "recorded"
               ? t("marginRecordedTooltip")
-              : undefined
+              : null
         }
       >
-        {marginLabel(margin)}
-      </div>
+        <div
+          className={cn(
+            "w-[140px] shrink-0 text-[13px] tabular-nums md:text-right",
+            tone === "loss" && "font-semibold text-destructive",
+            tone === "thin" && "font-semibold text-amber-600 dark:text-amber-400",
+            tone === "healthy" && "font-semibold text-emerald-600 dark:text-emerald-400",
+            tone === "unknown" && "text-[11px] italic text-ink-subtle",
+          )}
+        >
+          {marginLabel(margin)}
+        </div>
+      </Tooltip>
 
       <div className="w-[150px] shrink-0 text-[12px] text-ink-muted md:text-right">
         {t("from", { date: formatDate(card.effectiveFrom) })}

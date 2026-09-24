@@ -15,6 +15,7 @@ import type {
   SendAssistantMessageResponse,
   UpdatePrivatePluginRequest,
   WorkspacePluginItemDto,
+  WorkspacePluginMemberDto,
   WorkspacePluginRequestDto,
   WorkspacePluginsOverviewDto,
   WorkspacePluginToolAuditDto,
@@ -153,6 +154,11 @@ export const assistantService = {
   /** Removes a marketplace plugin from the workspace; a private plugin is retired. */
   removeWorkspacePlugin(workspaceId: string, pluginKey: string) {
     return apiClient.delete<void>(API.assistant.workspacePlugins.plugin(workspaceId, pluginKey));
+  },
+
+  /** Members who connected the plugin, most recently used first. Owner or Admin. */
+  listWorkspacePluginMembers(workspaceId: string, pluginKey: string) {
+    return apiClient.get<WorkspacePluginMemberDto[]>(API.assistant.workspacePlugins.members(workspaceId, pluginKey));
   },
 
   createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {

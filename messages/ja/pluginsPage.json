@@ -1,7 +1,7 @@
 {
   "header": {
-    "title": "プラグイン",
-    "subtitle": "お気に入りのツールでWarpBotを活用しましょう。"
+    "title": "マイ接続",
+    "subtitle": "WarpBotが使えるあなた自身のアカウントです。ワークスペースが提供するプラグインを接続しましょう。"
   },
   "search": {
     "placeholder": "プラグインを絞り込む"
@@ -29,7 +29,8 @@
     "manage": "管理",
     "reconnect": "再接続",
     "request": "リクエスト",
-    "requested": "リクエスト済み"
+    "requested": "リクエスト済み",
+    "add": "追加"
   },
   "memberAction": {
     "addedByWorkspace": "ワークスペースによって追加されました",
@@ -70,6 +71,8 @@
     "couldNotStartConnection": "{label}の接続を開始できませんでした。",
     "requestSent": "ワークスペースのオーナーにリクエストを送信しました",
     "couldNotAsk": "{label}をリクエストできませんでした。",
+    "added": "{label}をこのワークスペースに追加しました",
+    "couldNotAdd": "{label}を追加できませんでした。",
     "disconnected": "{label}を切断しました",
     "couldNotDisconnect": "{label}を切断できませんでした。",
     "removed": "{label}を削除しました",

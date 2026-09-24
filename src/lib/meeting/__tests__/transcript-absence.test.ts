@@ -96,8 +96,53 @@ describe("WT-516 — what each state says", () => {
   });
 
   test("every state has its own sentence", () => {
-    const states = ["withheld", "unavailable", "not-yet", "none"] as const;
+    const states = ["withheld", "unavailable", "not-yet", "not-kept", "paused", "none"] as const;
     const said = states.map(transcriptAbsenceMessage);
     assert.equal(new Set(said).size, states.length, "two states must not share a message");
+  });
+});
+
+describe("WT-828 — an empty record of a finished meeting says WHY", () => {
+  test("silence is named as the reason, not left as a bare fact", () => {
+    // The transcript no longer waits for Start Translation, so a finished meeting with zero saved
+    // lines had nobody speaking. The old sentence stopped at "no transcript was captured" and
+    // read as the product having lost the meeting.
+    const message = transcriptAbsenceMessage("none");
+    assert.match(message, /nobody spoke/i);
+    assert.match(message, /whether or not translation is started/i);
+  });
+
+  test("an ephemeral meeting is not reported as a silent one", () => {
+    assert.equal(
+      describeTranscriptAbsence({ lineCount: 0, isEnded: true, saveTranscript: false }),
+      "not-kept",
+    );
+    assert.doesNotMatch(transcriptAbsenceMessage("not-kept"), /nobody spoke/i);
+  });
+
+  test("a paused meeting does not claim nobody spoke", () => {
+    assert.equal(
+      describeTranscriptAbsence({ lineCount: 0, isEnded: true, pausedAtSomePoint: true }),
+      "paused",
+    );
+    assert.doesNotMatch(transcriptAbsenceMessage("paused"), /nobody spoke/i);
+  });
+
+  test("the reasons never outrank a refusal or a meeting still running", () => {
+    assert.equal(
+      describeTranscriptAbsence({
+        lineCount: 0,
+        isEnded: true,
+        errorCode: "FORBIDDEN",
+        saveTranscript: false,
+      }),
+      "withheld",
+    );
+    assert.equal(
+      describeTranscriptAbsence({ lineCount: 0, isEnded: false, saveTranscript: false }),
+      "not-yet",
+    );
+    // saveTranscript absent reads as a kept meeting (WT-587), so it is silence, not "not kept".
+    assert.equal(describeTranscriptAbsence({ lineCount: 0, isEnded: true }), "none");
   });
 });

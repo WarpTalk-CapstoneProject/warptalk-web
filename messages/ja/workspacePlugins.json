@@ -1,0 +1,134 @@
+{
+  "workspaceFallback": "このワークスペース",
+  "header": {
+    "title": "ワークスペースのプラグイン",
+    "subtitle": "{workspaceName}のメンバーが接続できるマーケットプレイスのプラグインです。各メンバーは自分のアカウントでサインインします。",
+    "readOnly": "このリストは閲覧できます。変更できるのはワークスペースのオーナーだけです。"
+  },
+  "addMenu": {
+    "trigger": "プラグインを追加",
+    "fromMarketplace": "マーケットプレイスから",
+    "withMcp": "MCPで追加"
+  },
+  "states": {
+    "loading": "プラグインを読み込み中...",
+    "forbiddenTitle": "このページを表示できるのはワークスペースのオーナーと管理者だけです",
+    "forbiddenBody": "マイ接続ページからリクエストしてください。",
+    "loadError": "このワークスペースのプラグインを読み込めませんでした。",
+    "retry": "再試行"
+  },
+  "empty": {
+    "title": "このワークスペースにプラグインを追加",
+    "readOnly": "プラグインを追加できるのはワークスペースのオーナーだけです。"
+  },
+  "transition": {
+    "carriedOver": "{count, plural, other {このワークスペースではまだプラグインが選ばれていないため、このリストを変更するまでは、メンバーがここですでに使っている#件のプラグインがそのまま利用できます。}}"
+  },
+  "requests": {
+    "title": "リクエスト",
+    "waiting": "{count}件の承認待ち",
+    "readOnly": "これらを承認または却下できるのはワークスペースのオーナーだけです。",
+    "askedFor": "がリクエストしました:",
+    "decline": "却下",
+    "approve": "追加",
+    "requesterFallback": "あるメンバー",
+    "requesterFallbackSentence": "リクエストしたメンバー"
+  },
+  "inWorkspace": {
+    "title": "このワークスペース内",
+    "count": "{count}件のプラグイン",
+    "empty": "まだプラグインがありません。下のマーケットプレイスから追加してください。",
+    "manage": "管理",
+    "view": "表示"
+  },
+  "marketplace": {
+    "title": "マーケットプレイス",
+    "note": "WarpTalk提供",
+    "allAdded": "マーケットプレイスのすべてのプラグインがすでにこのワークスペースにあります。",
+    "add": "追加"
+  },
+  "marketplaceDialog": {
+    "title": "マーケットプレイスから追加",
+    "subtitle": "追加するとすぐに、メンバーは自分のアカウントで接続できます。"
+  },
+  "mcpDialog": {
+    "title": "独自のMCPサーバーを追加",
+    "subtitle": "{workspaceName}のメンバーだけが表示できます。",
+    "submit": "プラグインを追加"
+  },
+  "form": {
+    "nameLabel": "名前",
+    "namePlaceholder": "社内CRM",
+    "urlLabel": "MCPサーバーのURL",
+    "urlPlaceholder": "https://mcp.example.com/mcp",
+    "descriptionLabel": "説明",
+    "optional": "任意",
+    "descriptionPlaceholder": "WarpBotがこれで何をできるか",
+    "cancel": "キャンセル",
+    "errors": {
+      "labelRequired": "プラグインの名前を入力してください。",
+      "labelTooLong": "名前は150文字以内にしてください。",
+      "urlRequired": "MCPサーバーのURLを入力してください。",
+      "urlNotHttps": "https:// のURLを使用してください。",
+      "descriptionTooLong": "説明は500文字以内にしてください。"
+    }
+  },
+  "authMode": {
+    "legend": "メンバーの接続方法",
+    "oauthTitle": "OAuthでサインイン",
+    "oauthNote": "各メンバーがサーバー自身のページでサインインします。",
+    "apiKeyTitle": "各メンバーがAPIキーを貼り付ける",
+    "apiKeyNote": "OAuthのないサーバー向けです。キーはサーバーで検証され、暗号化して保存されます。",
+    "changeWarning": "すでに接続しているメンバーは、接続し直す必要がある場合があります。"
+  },
+  "manageDialog": {
+    "ariaLabel": "{label}を管理",
+    "save": "保存",
+    "removeFromWorkspace": "ワークスペースから削除",
+    "readOnly": "これを変更できるのはワークスペースのオーナーだけです。",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "remove": "削除",
+    "confirmPrivate": "{label}を削除しますか？ {workspaceName}でも他のどこでも、メンバーはこれを表示も使用もできなくなります。",
+    "confirmShared": "{workspaceName}から{label}を削除しますか？ WarpBotはここでの使用を停止します。メンバー自身の接続は残り、マイ接続ページから切断できます。"
+  },
+  "facts": {
+    "notUsedYet": "まだどのメンバーも使用していません",
+    "usedBy": "{count}人のメンバーが使用",
+    "addedBy": "{name}が追加",
+    "onlyThisWorkspace": "このワークスペース限定",
+    "apiKeyPerMember": "各メンバーがAPIキーを貼り付ける",
+    "onlyThisWorkspaceAlone": "このワークスペース限定"
+  },
+  "dialog": {
+    "close": "閉じる"
+  },
+  "toasts": {
+    "added": "{label}を{workspaceName}に追加しました",
+    "couldNotAdd": "{label}を追加できませんでした。",
+    "removed": "{workspaceName}から削除しました",
+    "couldNotRemove": "{label}を削除できませんでした。",
+    "couldNotAddPlugin": "プラグインを追加できませんでした。",
+    "saved": "{label}を保存しました",
+    "couldNotSave": "{label}を保存できませんでした。",
+    "requestApproved": "{label}を追加しました · {name}に通知しました",
+    "requestDeclined": "{name}に、追加されなかったことを伝えました",
+    "couldNotDecide": "リクエストを更新できませんでした。"
+  },
+  "members": {
+    "title": "接続したメンバー",
+    "count": "{count}人",
+    "loading": "メンバーを読み込み中…",
+    "loadError": "このプラグインを接続したメンバーを読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "このワークスペースのメンバーはまだ誰も接続していません。",
+    "formerMember": "以前のメンバー",
+    "connectedAgo": "{when}に接続",
+    "lastUsedAgo": "最終使用 {when}",
+    "notUsedHereYet": "ここではまだ未使用",
+    "status": {
+      "expired": "期限切れ",
+      "revoked": "切断済み"
+    }
+  }
+}
