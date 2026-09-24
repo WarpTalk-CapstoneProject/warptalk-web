@@ -1,1 +1,30 @@
-{}
+{
+  "readyCard": {
+    "dismissAria": "閉じる",
+    "title": "ミーティングの準備ができました",
+    "description": "参加してほしい相手にこのリンクを共有してください。",
+    "addOthers": "参加者を追加"
+  },
+  "captions": {
+    "earlierCaptions": "これまでの字幕",
+    "fullTranscript": "文字起こし全文",
+    "closeHistoryAria": "字幕履歴を閉じてライブ字幕に戻る",
+    "backToLive": "ライブ字幕に戻る",
+    "openFullTranscript": "文字起こし全文を開く",
+    "liveRegionAria": "ライブ字幕。上にスクロールすると、これまでの字幕を確認できます。",
+    "emptyState": "誰かが話すと、ここに字幕が表示されます。"
+  },
+  "stage": {
+    "cameraOff": "カメラがオフです",
+    "presenting": "画面を共有しています",
+    "retryConnection": "再接続する",
+    "spotlightedByHost": "ホストがスポットライト表示中",
+    "pinned": "ピン留め済み",
+    "connectionState": {
+      "connected": "接続済み",
+      "connecting": "接続中…",
+      "reconnecting": "再接続中…",
+      "waiting": "LiveKit を待機中"
+    }
+  }
+}
