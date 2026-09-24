@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { adminInsightsService } from "@/services/admin-insights.service";
 import type { InsightsQuery } from "@/types/admin-insights";
@@ -12,6 +12,8 @@ export const ADMIN_INSIGHTS_KEYS = {
   users: (query: InsightsQuery) => ["admin", "insights", "users", query] as const,
   workspaces: (query: InsightsQuery) => ["admin", "insights", "workspaces", query] as const,
   meetings: (query: InsightsQuery) => ["admin", "insights", "meetings", query] as const,
+  pnl: (query: InsightsQuery) => ["admin", "insights", "pnl", query] as const,
+  fx: ["admin", "insights", "fx"] as const,
 };
 
 /**
@@ -82,4 +84,39 @@ export function useAdminMeetingsInsights(query: InsightsQuery) {
     // period bar does not flash every card back to a dash.
     placeholderData: (previous) => previous,
   });
+}
+
+export function useAdminProfitAndLoss(query: InsightsQuery) {
+  return useQuery({
+    queryKey: ADMIN_INSIGHTS_KEYS.pnl(query),
+    queryFn: () => adminInsightsService.getProfitAndLoss(query),
+    ...periodOptions,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useAdminFxRate() {
+  return useQuery({
+    queryKey: ADMIN_INSIGHTS_KEYS.fx,
+    queryFn: () => adminInsightsService.getFxRate(),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Refresh / override / back to Stripe. Each invalidates the rate, the pricing config (its FX row)
+ * and every Insights query, because every VND figure converts with it.
+ */
+export function useAdminFxActions() {
+  const queryClient = useQueryClient();
+  const invalidate = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ADMIN_INSIGHTS_KEYS.all }),
+      queryClient.invalidateQueries({ queryKey: ["admin-pricing"] }),
+    ]);
+  return {
+    refresh: useMutation({ mutationFn: () => adminInsightsService.refreshFxRate(), onSuccess: invalidate }),
+    setOverride: useMutation({ mutationFn: (rate: number) => adminInsightsService.setFxOverride(rate), onSuccess: invalidate }),
+    clearOverride: useMutation({ mutationFn: () => adminInsightsService.clearFxOverride(), onSuccess: invalidate }),
+  };
 }

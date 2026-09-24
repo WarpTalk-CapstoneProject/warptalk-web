@@ -241,3 +241,130 @@ export interface MeetingsInsightsDto extends PeriodEnvelope {
   /** Since the start of the local day of `tz`. */
   startedToday: number;
 }
+
+// ── 6 · Billing, profit and loss ─────────────────────────────────────────────
+//
+// GET /admin/billing/insights/pnl?from&to&compare&tz (backend #feat/insights-pnl-fx). Money is VND
+// unless the name says Usd; every USD amount was converted at the USD→VND rate of its own UTC day
+// (Stripe's, or an admin override). Metrics: revenue, aiProviderCost, grossMargin,
+// grossMarginPercent, arpa, activeWorkspaces, creditsConsumed.
+
+export interface PnlProviderPeriodDto {
+  provider: string;
+  credits: number;
+  costUsd: number;
+  /** Null when no USD→VND rate existed. */
+  costVnd: number | null;
+}
+
+/** One local day (`yyyy-MM-dd`) or month (`yyyy-MM`). */
+export interface PnlPeriodDto {
+  key: string;
+  revenue: number | null;
+  /** Null when the usage had no reconstructable provider cost, or no rate. */
+  aiCost: number | null;
+  aiCostUsd: number;
+  grossMargin: number | null;
+  /** Null when revenue is null or 0. */
+  marginPercent: number | null;
+  credits: number;
+  costCoveragePercent: number;
+  activeWorkspaces: number;
+  arpa: number | null;
+  fxRate: number | null;
+  providers: PnlProviderPeriodDto[];
+}
+
+export interface PnlProviderDto {
+  provider: string;
+  credits: number;
+  /** Credits with a known provider cost; the rest (e.g. TRANSLATION) is not in `costUsd`. */
+  coveredCredits: number;
+  coveragePercent: number;
+  costUsd: number;
+  costVnd: number | null;
+  /** The part measured from the provider's own usage API (Cartesia). */
+  measuredUsd: number;
+  services: { chargeType: string; service: string; credits: number; coveredCredits: number; costUsd: number }[];
+  note: string | null;
+}
+
+export interface PnlPlanDto {
+  /** Null with slug `unattributed`: measured provider cost on a day with no matching usage. */
+  planId: string | null;
+  planSlug: string;
+  planName: string;
+  revenue: number | null;
+  credits: number;
+  aiCost: number | null;
+  grossMargin: number | null;
+  marginPercent: number | null;
+  activeWorkspaces: number;
+  arpa: number | null;
+  costCoveragePercent: number;
+  note: string | null;
+}
+
+export interface PnlWorkspaceTrendDto {
+  workspaceId: string;
+  workspaceName: string | null;
+  planName: string | null;
+  credits: number;
+  /** One figure per entry of `days`. */
+  days: number[];
+}
+
+export interface ProfitAndLossDto extends PeriodEnvelope {
+  generatedAt: string;
+  aiCostUsd: number;
+  costCoveragePercent: number;
+  costNote: string | null;
+  /** Which USD→VND rate(s) the period converted at. Null when nothing was converted. */
+  fxNote: string | null;
+  days: PnlPeriodDto[];
+  months: PnlPeriodDto[];
+  providers: PnlProviderDto[];
+  plans: PnlPlanDto[];
+  topWorkspaces: PnlWorkspaceTrendDto[];
+  fx: FxRateStatusDto | null;
+}
+
+// ── 7 · USD→VND rate ─────────────────────────────────────────────────────────
+
+export type FxRateSource = "stripe_fx_quote" | "stripe_charge" | "manual" | "configured";
+
+/**
+ * GET /admin/billing/fx. `rate` is today's effective rate, `asOf` when it was fetched or set.
+ * `stale` (Stripe mode only): Stripe has not given a rate for over a day and reports run on the last
+ * known one — `warning` says so and must be shown, never swallowed.
+ */
+export interface FxRateStatusDto {
+  baseCurrency: string;
+  quoteCurrency: string;
+  rate: number | null;
+  source: FxRateSource;
+  sourceLabel: string;
+  rateDate: string | null;
+  asOf: string | null;
+  basis: "exact" | "carriedForward" | "beforeFirstRecord" | "configured" | "none";
+  mode: "stripe" | "manual";
+  manualRate: number | null;
+  latestStripe: {
+    rate: number;
+    feeInclusiveRate: number | null;
+    source: FxRateSource;
+    rateDate: string;
+    fetchedAt: string;
+    sourceRef: string | null;
+  } | null;
+  stale: boolean;
+  warning: string | null;
+  history: { date: string; rate: number; source: FxRateSource }[];
+}
+
+export interface FxRefreshResultDto {
+  quoteRecorded: boolean;
+  chargeDaysRecorded: number;
+  error: string | null;
+  status: FxRateStatusDto;
+}
