@@ -897,9 +897,9 @@ export function MeetingTranscriptArtifact({
       // answer as before (the page hands over ROW ids, and a row id is the first of its own list);
       // in Clean a citation resolved against the verbatim rows can name a segment this row
       // swallowed, and comparing ids alone would light nothing.
-      highlighted:
-        highlightedSegmentIds !== undefined
-        && anchorSegmentIds(segment, segment.id, cleanView).some((id) => highlightedSegmentIds.has(id)),
+      highlighted: anchorSegmentIds(segment, segment.id, cleanView).some(
+        (id) => highlightedSegmentIds?.has(id) ?? false,
+      ),
       // A chip on every line of a transcript that IS in one language is noise. Shown when the
       // line is not simply "spoken in the language you asked for", which makes its absence
       // meaningful: no chip means these are the speaker's own words.

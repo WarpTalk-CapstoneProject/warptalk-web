@@ -75,6 +75,26 @@ const transcriptScrollOffsets = new Map<
   { offset: number; atBottom: boolean }
 >();
 
+/**
+ * How the Clean view folds a LIVE segment into the merged sentence that replaces it. WT-716.
+ *
+ * Module-level rather than inline, so the call inside the component stays one line and the pause
+ * filter keeps sitting immediately above the grouping it must precede (check-transcript-pause-wired
+ * asserts that adjacency). Constant identity also keeps the memo below honest.
+ *
+ * Translations ride on the live segment itself, so a segment a sentence swallows would take its
+ * translations with it. They are folded per language, the way the utterance merge folds a bubble's
+ * — concatenating into one slot would splice a Vietnamese sentence onto an English one.
+ */
+const LIVE_CLEAN_VIEW_OPTIONS = {
+  idOf: (segment: TranscriptSegmentDto) => segment.segmentId,
+  absorb: (head: TranscriptSegmentDto, absorbed: TranscriptSegmentDto) => ({
+    ...head,
+    translations: mergeTranslations(head.translations, absorbed.translations),
+    confidence: Math.min(head.confidence, absorbed.confidence),
+  }),
+};
+
 export function TranscriptPanel({
   segments,
   roomId,
@@ -139,6 +159,21 @@ export function TranscriptPanel({
     [pauseWindowsQuery.data, baseTime, transcriptPause],
   );
 
+  // WT-716: Clean by default, Verbatim on request — this reader's choice only, shared with every
+  // other transcript surface they have open (see useTranscriptViewMode).
+  const [viewMode, setViewMode] = useTranscriptViewMode();
+  // Sentences come from two places, exactly as the segments do: the saved transcript for whatever
+  // was said before this browser connected (a late joiner's catch-up), and the realtime event for
+  // everything since. The by-room read is the one persistent-meeting-session already made, so it
+  // is a cache hit rather than a second request; a room that saves no transcript 404s and has none.
+  const savedTranscriptQuery = useTranscriptByRoom(roomId);
+  const savedCleanSentencesQuery = useTranscriptCleanSentences(savedTranscriptQuery.data?.id);
+  const liveCleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
+  const cleanSentences = useMemo(
+    () => mergeCleanSentences(savedCleanSentencesQuery.data ?? [], liveCleanSentences),
+    [savedCleanSentencesQuery.data, liveCleanSentences],
+  );
+
   // WT-605, the reported defect: the banner appeared and the words kept flowing under it.
   //
   // BEFORE the grouping, not after. groupTranscriptSegments folds consecutive chunks of one
@@ -150,6 +185,33 @@ export function TranscriptPanel({
     () => withoutSegmentsInOpenPauseGaps(segments, pauseGaps),
     [segments, pauseGaps],
   );
+
+  // WT-716, and it sits HERE rather than further down for a reason that is about reading rather
+  // than about logic: the pause filter and the grouping have to stay next to each other in this
+  // file — check-transcript-pause-wired asserts the one runs immediately before the other, because
+  // anything that got between them historically got between them in the wrong order.
+  //
+  // AFTER the pause filter and BEFORE the grouping is exactly where the clean view belongs, for
+  // the reasons each of those gives: a sentence may only stand in for segments that are actually
+  // being shown (one covering a withheld segment finds it missing and falls back — see
+  // isCleanSentenceStale), and the grouping has to see one segment per sentence or it would fold
+  // the sentence's parts back into a bubble one chunk at a time. Null in Verbatim, where this
+  // panel is exactly what it was.
+  const cleanView = useMemo(
+    () =>
+      viewMode === "clean"
+        ? buildCleanTranscriptView(recorded.segments, cleanSentences, LIVE_CLEAN_VIEW_OPTIONS)
+        : null,
+    [viewMode, recorded.segments, cleanSentences],
+  );
+
+  const blocks = useMemo(() => {
+    const grouped = groupTranscriptSegments(cleanView ? cleanView.segments : recorded.segments);
+    // The absorbed ids go back into each bubble's list, so an AI suggestion anchored to the second
+    // chunk of a merged sentence still finds its bubble.
+    const utterances = cleanView ? withAbsorbedSegmentIds(grouped, cleanView) : grouped;
+    return groupSegmentsByTranslationSession(utterances, sessions ?? [], baseTime);
+  }, [cleanView, recorded.segments, sessions, baseTime]);
 
   // THE FILTER ABOVE CAN BE A NO-OP, AND NOTHING ELSE ON SCREEN WOULD SAY SO.
   //
@@ -175,53 +237,6 @@ export function TranscriptPanel({
     // there — a chip that appears to do nothing.
     revision: recorded.segments.length,
   });
-
-  // WT-716: Clean by default, Verbatim on request — this reader's choice only, shared with every
-  // other transcript surface they have open (see useTranscriptViewMode).
-  const [viewMode, setViewMode] = useTranscriptViewMode();
-  // Sentences come from two places, like the segments do: the saved transcript for whatever was
-  // said before this browser connected (a late joiner's catch-up), and the realtime event for
-  // everything since. The by-room read is the one persistent-meeting-session already made, so it
-  // is a cache hit, not a second request; a room that saves no transcript 404s and has none.
-  const savedTranscriptQuery = useTranscriptByRoom(roomId);
-  const savedCleanSentencesQuery = useTranscriptCleanSentences(savedTranscriptQuery.data?.id);
-  const liveCleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
-  const cleanSentences = useMemo(
-    () => mergeCleanSentences(savedCleanSentencesQuery.data ?? [], liveCleanSentences),
-    [savedCleanSentencesQuery.data, liveCleanSentences],
-  );
-
-  // AFTER the pause filter and BEFORE the grouping, for the reasons each of those gives: a sentence
-  // may only stand in for segments that are actually being shown (one covering a withheld segment
-  // finds it missing and falls back — see isCleanSentenceStale), and the grouping has to see one
-  // segment per sentence or it would fold the sentence's parts back into a bubble one chunk at a
-  // time. Null in Verbatim, which is the panel exactly as it was.
-  const cleanView = useMemo<CleanTranscriptView<TranscriptSegmentDto> | null>(
-    () =>
-      viewMode === "clean"
-        ? buildCleanTranscriptView(recorded.segments, cleanSentences, {
-            idOf: (segment) => segment.segmentId,
-            // Translations ride on the live segment itself, so a segment the sentence swallows
-            // would take its translations with it. Folded into the head the way the grouping
-            // folds a merged bubble's — per language, so two languages never share one slot.
-            absorb: (head, absorbed) => ({
-              ...head,
-              translations: mergeTranslations(head.translations, absorbed.translations),
-              confidence: Math.min(head.confidence, absorbed.confidence),
-            }),
-          })
-        : null,
-    [viewMode, recorded.segments, cleanSentences],
-  );
-
-  const blocks = useMemo(() => {
-    const shown = cleanView ? cleanView.segments : recorded.segments;
-    const grouped = groupTranscriptSegments(shown);
-    // The absorbed ids go back into each bubble's list, so an AI suggestion anchored to the second
-    // chunk of a merged sentence still finds its bubble.
-    const utterances = cleanView ? withAbsorbedSegmentIds(grouped, cleanView) : grouped;
-    return groupSegmentsByTranslationSession(utterances, sessions ?? [], baseTime);
-  }, [cleanView, recorded.segments, sessions, baseTime]);
 
   // Each pause belongs to exactly ONE session block. Handing every block the whole list — which
   // is what both panels used to do — makes the trailing pass in splitSegmentsAroundPauseGaps
