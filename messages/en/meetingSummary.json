@@ -1,1 +1,68 @@
-{}
+{
+  "recording": {
+    "label": "Recording",
+    "hideTitle": "Hide the recording and widen the transcript",
+    "showTitle": "Show the recording beside the transcript",
+    "hide": "Hide",
+    "show": "Show"
+  },
+  "rail": {
+    "ariaLabel": "Meeting summary rail",
+    "summaryTab": "Summary",
+    "talkTimeTab": "Talk time"
+  },
+  "toasts": {
+    "copySuccess": "Summary copied.",
+    "copyError": "Could not copy the summary."
+  },
+  "empty": {
+    "generating": "Generating summary…",
+    "withheld": "Summary not shared with you",
+    "noTranscript": "Nothing was said to summarise",
+    "noSummary": "No summary yet"
+  },
+  "asSpoken": "As spoken",
+  "controls": {
+    "shapeAriaLabel": "Summary shape",
+    "shapeTitle": "Read this meeting in a different shape",
+    "languageAriaLabel": "Summary language",
+    "languageTitle": "Read this meeting in a different language",
+    "copyTitle": "Copy the summary as text",
+    "copyAriaLabel": "Copy the summary as text",
+    "downloadTitle": "Download the summary file",
+    "downloadAriaLabel": "Download the summary file"
+  },
+  "rendering": {
+    "writing": "Writing this version for you…",
+    "ownVersion": "Your own version of this meeting. What the host published is unchanged."
+  },
+  "copyText": {
+    "titleLine": "{title} — AI meeting summary",
+    "noOverview": "(no overview)",
+    "noneRecorded": "(none recorded)"
+  },
+  "narrative": {
+    "hint": "Click a sentence to see where it came from.",
+    "jumpTitle": "Go to where this sentence came from"
+  },
+  "claim": {
+    "jumpTitle": "Go to this moment in the transcript",
+    "noMoment": "no moment recorded"
+  },
+  "noCitations": "This summary was written before citations were recorded, so none of its points can be traced back to the transcript.",
+  "uncited": "{count, plural, one {# of these points has no moment recorded, so it cannot be checked against the transcript.} other {# of these points have no moment recorded, so they cannot be checked against the transcript.}}",
+  "talkTime": {
+    "empty": "Nobody was recorded speaking in this meeting.",
+    "heading": "Share of the talking",
+    "percentAriaLabel": "{percent}% of the speaking",
+    "footnote": "Measured from the transcript, so it counts time spent speaking rather than time spent in the meeting."
+  },
+  "absence": {
+    "generating": "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute.",
+    "failed": "Summary generation did not complete for this meeting. The transcript is still available.",
+    "insufficientData": "There wasn't enough transcript content in this meeting to generate a summary.",
+    "withheld": "A summary was produced for this meeting, but it is not shared with you. The meeting host controls who can read it.",
+    "noTranscript": "No transcript was captured for this meeting, so there was nothing to summarise.",
+    "absent": "This meeting ended without a summary artifact."
+  }
+}

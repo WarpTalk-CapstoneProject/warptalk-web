@@ -53,6 +53,7 @@ import {
   SpinnerGap,
   VideoCamera,
 } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import {
@@ -333,6 +334,7 @@ function ReadingRail({
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
+  const t = useTranslations("meetingSummary");
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
   /**
@@ -472,20 +474,16 @@ function ReadingRail({
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-subtle">
               <VideoCamera size={12} />
-              Recording
+              {t("recording.label")}
             </span>
             <button
               type="button"
               onClick={onTogglePip}
               aria-expanded={pipOpen}
-              title={
-                pipOpen
-                  ? "Hide the recording and widen the transcript"
-                  : "Show the recording beside the transcript"
-              }
+              title={pipOpen ? t("recording.hideTitle") : t("recording.showTitle")}
               className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
             >
-              {pipOpen ? "Hide" : "Show"}
+              {pipOpen ? t("recording.hide") : t("recording.show")}
               {pipOpen ? <CaretUp size={10} /> : <CaretDown size={10} />}
             </button>
           </div>
@@ -515,18 +513,18 @@ function ReadingRail({
       <div
         className="flex items-center gap-1 border-b border-border px-2"
         role="tablist"
-        aria-label="Meeting summary rail"
+        aria-label={t("rail.ariaLabel")}
       >
         <RailTabButton
           active={tab === "summary"}
           onClick={() => setTab("summary")}
-          label="Summary"
+          label={t("rail.summaryTab")}
           count={claims.length || undefined}
         />
         <RailTabButton
           active={tab === "talk"}
           onClick={() => setTab("talk")}
-          label="Talk time"
+          label={t("rail.talkTimeTab")}
           count={shares.length || undefined}
         />
       </div>
@@ -645,6 +643,7 @@ function RailSummary({
   /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
   generatableLanguages?: readonly string[] | null;
 }) {
+  const t = useTranslations("meetingSummary");
   // The pair being READ, which the mid component already resolved: the published summary
   // unless a rendering is ready. Passed in rather than re-derived so the panel and the claims
   // beside it can never disagree about which summary is on screen.
@@ -738,8 +737,8 @@ function RailSummary({
     const offered = artifactLanguageOptions(generatableLanguages, [currentLanguage]);
     return currentLanguage
       ? offered
-      : [{ code: "", label: "As spoken" }, ...offered];
-  }, [currentLanguage, generatableLanguages]);
+      : [{ code: "", label: t("asSpoken") }, ...offered];
+  }, [currentLanguage, generatableLanguages, t]);
 
   function selectRendering(template: string, language: string) {
     // Reading, not rewriting: nobody else's summary changes. The deadline and the polling live
@@ -750,24 +749,24 @@ function RailSummary({
   async function copyAsText() {
     if (!summary || !record) return;
     const lines = [
-      `${record.title} — AI meeting summary`,
+      t("copyText.titleLine", { title: record.title }),
       "",
       // The same substitution the panel makes: a summary whose narrative IS the overview would
       // otherwise be pasted with its opening paragraph printed twice.
-      ...(hasNarrative ? [] : [summary.summary || "(no overview)", ""]),
+      ...(hasNarrative ? [] : [summary.summary || t("copyText.noOverview"), ""]),
       ...(summary.sections ?? []).flatMap((section) => [
         section.title,
         ...(section.items.length
           ? section.items.map((item) => `- ${item.owner ? `${item.owner}: ` : ""}${item.text}`)
-          : ["(none recorded)"]),
+          : [t("copyText.noneRecorded")]),
         "",
       ]),
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
-      toast.success("Summary copied.");
+      toast.success(t("toasts.copySuccess"));
     } catch {
-      toast.error("Could not copy the summary.");
+      toast.error(t("toasts.copyError"));
     }
   }
 
@@ -781,15 +780,15 @@ function RailSummary({
         )}
         <h5 className="mt-3 text-[13px] font-semibold text-ink">
           {isGenerating
-            ? "Generating summary…"
+            ? t("empty.generating")
             : absence === "withheld"
-              ? "Summary not shared with you"
+              ? t("empty.withheld")
               : absence === "no-transcript"
-                ? "Nothing was said to summarise"
-                : "No summary yet"}
+                ? t("empty.noTranscript")
+                : t("empty.noSummary")}
         </h5>
         <p className="mt-1.5 text-[11.5px] leading-5 text-ink-muted">
-          {summaryAbsenceMessage(absence)}
+          {summaryAbsenceMessage(absence, t)}
         </p>
       </div>
     );
@@ -818,8 +817,8 @@ function RailSummary({
                 if (templateKey === currentTemplate) return;
                 selectRendering(templateKey, currentLanguage);
               }}
-              aria-label="Summary shape"
-              title="Read this meeting in a different shape"
+              aria-label={t("controls.shapeAriaLabel")}
+              title={t("controls.shapeTitle")}
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
               {SUMMARY_TEMPLATES.map((template) => (
@@ -836,8 +835,8 @@ function RailSummary({
                 if (language === currentLanguage) return;
                 selectRendering(currentTemplate, language);
               }}
-              aria-label="Summary language"
-              title="Read this meeting in a different language"
+              aria-label={t("controls.languageAriaLabel")}
+              title={t("controls.languageTitle")}
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
               {languageOptions.map((language) => (
@@ -854,8 +853,8 @@ function RailSummary({
         <button
           type="button"
           onClick={copyAsText}
-          title="Copy the summary as text"
-          aria-label="Copy the summary as text"
+          title={t("controls.copyTitle")}
+          aria-label={t("controls.copyAriaLabel")}
           className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
         >
           <Copy size={13} />
@@ -867,8 +866,8 @@ function RailSummary({
             type="button"
             onClick={() => onDownload(artifact)}
             disabled={!ready || downloading}
-            title="Download the summary file"
-            aria-label="Download the summary file"
+            title={t("controls.downloadTitle")}
+            aria-label={t("controls.downloadAriaLabel")}
             className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink disabled:opacity-60"
           >
             {downloading ? (
@@ -886,9 +885,7 @@ function RailSummary({
           beside it only ever serves the published one. */}
       {rendering && !rendering.isCanonical ? (
         <p className="border-b border-border px-2 pb-2 pt-1.5 text-[11px] leading-4 text-ink-muted">
-          {isRendering
-            ? "Writing this version for you…"
-            : "Your own version of this meeting. What the host published is unchanged."}
+          {isRendering ? t("rendering.writing") : t("rendering.ownVersion")}
         </p>
       ) : null}
 
@@ -960,8 +957,7 @@ function RailSummary({
 
       {claims.length === 0 ? (
         <p className="px-2 py-6 text-center text-[12px] leading-5 text-ink-muted">
-          This summary was written before citations were recorded, so none of its points can be
-          traced back to the transcript.
+          {t("noCitations")}
         </p>
       ) : (
         claims.map((claim) => (
@@ -976,7 +972,7 @@ function RailSummary({
                 consecutive sentences is the same striped table the timestamps would have been. */}
             {claim.heading && claim.sectionKey === NARRATIVE_SECTION_KEY ? (
               <p className="mb-1 px-2.5 text-[10.5px] leading-4 text-ink-subtle">
-                Click a sentence to see where it came from.
+                {t("narrative.hint")}
               </p>
             ) : null}
             {claim.sectionKey === NARRATIVE_SECTION_KEY ? (
@@ -1004,9 +1000,7 @@ function RailSummary({
       {uncitedCount > 0 ? (
         <div className="mt-3 border-t border-border px-2 pt-2.5">
           <p className="text-[11px] leading-5 text-ink-muted">
-            {uncitedCount} of these {uncitedCount === 1 ? "points has" : "points have"} no moment
-            recorded, so {uncitedCount === 1 ? "it" : "they"} cannot be checked against the
-            transcript.
+            {t("uncited", { count: uncitedCount })}
           </p>
         </div>
       ) : null}
@@ -1025,6 +1019,7 @@ function RailClaimButton({
   onMark: (atMs: number | null) => void;
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
 }) {
+  const t = useTranslations("meetingSummary");
   const body = (
     <>
       <span className="block text-[12.5px] leading-[1.55] text-ink">
@@ -1037,7 +1032,7 @@ function RailClaimButton({
           claim.atMs === null ? "text-ink-subtle" : lit ? "text-ink" : "text-ink-subtle",
         )}
       >
-        {claim.atMs === null ? "no moment recorded" : formatCitationTime(claim.atMs)}
+        {claim.atMs === null ? t("claim.noMoment") : formatCitationTime(claim.atMs)}
       </span>
     </>
   );
@@ -1066,7 +1061,7 @@ function RailClaimButton({
       onFocus={() => onMark(atMs)}
       onBlur={() => onMark(null)}
       onClick={() => onJumpToMoment(atMs)}
-      title="Go to this moment in the transcript"
+      title={t("claim.jumpTitle")}
       className={cn(
         "mb-0.5 block w-full rounded-md border-l-2 px-2.5 py-2 text-left transition-colors",
         lit
@@ -1114,6 +1109,7 @@ function RailNarrativeSentence({
   onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
 }) {
+  const t = useTranslations("meetingSummary");
   if (claim.atMs === null) {
     return (
       <p className="mb-px block w-full rounded-md border-l-2 border-l-transparent px-2.5 py-1 text-left text-[12.5px] leading-[1.55] text-ink">
@@ -1141,7 +1137,7 @@ function RailNarrativeSentence({
       onFocus={() => onMark(atMs, claim.alsoAtMs)}
       onBlur={() => onMark(null)}
       onClick={() => onJumpToMoment(atMs, claim.alsoAtMs)}
-      title="Go to where this sentence came from"
+      title={t("narrative.jumpTitle")}
       className={cn(
         "group mb-px flex w-full items-baseline gap-2 rounded-md border-l-2 px-2.5 py-1 text-left transition-colors",
         lit
@@ -1186,10 +1182,11 @@ function RailTalkTime({
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
+  const t = useTranslations("meetingSummary");
   if (shares.length === 0) {
     return (
       <p className="px-2 py-6 text-center text-[12px] leading-5 text-ink-muted">
-        Nobody was recorded speaking in this meeting.
+        {t("talkTime.empty")}
       </p>
     );
   }
@@ -1197,7 +1194,7 @@ function RailTalkTime({
   return (
     <div>
       <h5 className="mb-1.5 px-2 font-mono text-[10px] uppercase tracking-[0.09em] text-ink-subtle">
-        Share of the talking
+        {t("talkTime.heading")}
       </h5>
       {shares.map((share) => {
         const speaker = resolveTranscriptSpeaker(share.key, share.name, speakerDirectory);
@@ -1216,7 +1213,7 @@ function RailTalkTime({
             <span
               className="h-1 overflow-hidden rounded-full bg-surface-1"
               role="img"
-              aria-label={`${share.percent}% of the speaking`}
+              aria-label={t("talkTime.percentAriaLabel", { percent: share.percent })}
             >
               <span
                 className="block h-full rounded-full"
@@ -1233,8 +1230,7 @@ function RailTalkTime({
         );
       })}
       <p className="mt-2 px-2 text-[10.5px] leading-4 text-ink-subtle">
-        Measured from the transcript, so it counts time spent speaking rather than time spent in
-        the meeting.
+        {t("talkTime.footnote")}
       </p>
     </div>
   );

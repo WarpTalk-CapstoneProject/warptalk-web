@@ -1,1 +1,68 @@
-{}
+{
+  "recording": {
+    "label": "Bản ghi",
+    "hideTitle": "Ẩn bản ghi và mở rộng bản chép",
+    "showTitle": "Hiện bản ghi bên cạnh bản chép",
+    "hide": "Ẩn",
+    "show": "Hiện"
+  },
+  "rail": {
+    "ariaLabel": "Thanh tóm tắt cuộc họp",
+    "summaryTab": "Tóm tắt",
+    "talkTimeTab": "Thời lượng nói"
+  },
+  "toasts": {
+    "copySuccess": "Đã sao chép tóm tắt.",
+    "copyError": "Không thể sao chép tóm tắt."
+  },
+  "empty": {
+    "generating": "Đang tạo tóm tắt…",
+    "withheld": "Tóm tắt chưa được chia sẻ với bạn",
+    "noTranscript": "Không có nội dung nào được nói để tóm tắt",
+    "noSummary": "Chưa có tóm tắt"
+  },
+  "asSpoken": "Như đã nói",
+  "controls": {
+    "shapeAriaLabel": "Kiểu tóm tắt",
+    "shapeTitle": "Đọc cuộc họp này theo một kiểu khác",
+    "languageAriaLabel": "Ngôn ngữ tóm tắt",
+    "languageTitle": "Đọc cuộc họp này bằng một ngôn ngữ khác",
+    "copyTitle": "Sao chép tóm tắt dưới dạng văn bản",
+    "copyAriaLabel": "Sao chép tóm tắt dưới dạng văn bản",
+    "downloadTitle": "Tải tệp tóm tắt",
+    "downloadAriaLabel": "Tải tệp tóm tắt"
+  },
+  "rendering": {
+    "writing": "Đang soạn phiên bản này cho bạn…",
+    "ownVersion": "Đây là phiên bản riêng của bạn cho cuộc họp này. Bản do người tổ chức công bố vẫn không đổi."
+  },
+  "copyText": {
+    "titleLine": "{title} — Tóm tắt cuộc họp bằng AI",
+    "noOverview": "(không có tổng quan)",
+    "noneRecorded": "(không có mục nào được ghi nhận)"
+  },
+  "narrative": {
+    "hint": "Nhấp vào một câu để xem câu đó xuất phát từ đâu.",
+    "jumpTitle": "Đi đến chỗ câu này xuất phát"
+  },
+  "claim": {
+    "jumpTitle": "Đi đến thời điểm này trong bản chép",
+    "noMoment": "không ghi nhận thời điểm"
+  },
+  "noCitations": "Tóm tắt này được viết trước khi có tính năng trích dẫn, nên không điểm nào trong đó có thể truy ngược lại bản chép.",
+  "uncited": "{count, plural, other {# trong số các điểm này không ghi nhận thời điểm, nên không thể đối chiếu với bản chép.}}",
+  "talkTime": {
+    "empty": "Không có ai được ghi nhận là đã nói trong cuộc họp này.",
+    "heading": "Tỷ lệ thời gian nói",
+    "percentAriaLabel": "{percent}% thời gian nói",
+    "footnote": "Được đo từ bản chép, nên đây là thời gian nói thực tế chứ không phải thời gian có mặt trong cuộc họp."
+  },
+  "absence": {
+    "generating": "Trợ lý AI của WarpTalk đang phân tích bản chép. Việc này thường mất chưa đến một phút.",
+    "failed": "Việc tạo tóm tắt cho cuộc họp này chưa hoàn tất. Bản chép vẫn khả dụng.",
+    "insufficientData": "Cuộc họp này không có đủ nội dung trong bản chép để tạo tóm tắt.",
+    "withheld": "Một bản tóm tắt đã được tạo cho cuộc họp này, nhưng chưa được chia sẻ với bạn. Người tổ chức cuộc họp quyết định ai được đọc.",
+    "noTranscript": "Không có bản chép nào được ghi lại cho cuộc họp này, nên không có gì để tóm tắt.",
+    "absent": "Cuộc họp này kết thúc mà không có tóm tắt nào được tạo."
+  }
+}
