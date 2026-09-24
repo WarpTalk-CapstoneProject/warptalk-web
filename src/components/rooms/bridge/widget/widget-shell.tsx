@@ -36,6 +36,7 @@ import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "rea
 import { cn } from "@/lib/utils";
 
 import { CaptureConsentSlot } from "./capture-consent-slot";
+import { DockFarSideLanguagePill, FarSideLanguageNotice } from "./dock-far-side-language-pill";
 import { DockLanguagePill } from "./dock-language-pill";
 import { DockListenSwitch } from "./dock-listen-switch";
 import { DockSessionControls } from "./dock-session-controls";
@@ -222,14 +223,20 @@ function WidgetTabs({ children }: { children?: ReactNode }) {
 // ── dock ─────────────────────────────────────────────────────────────────────
 
 /**
- * One row: session controls │ language pill ··· Text | Voice, settings.
+ * One row: session controls │ my language, they speak ··· Text | Voice, settings.
  *
  * `relative` so the slots' flyouts can open upward from it (`bottom-full`). The left group may
- * shrink — the language pill is the one flexible item — and the right group never does, so the
- * listening switch and the settings button cannot be pushed out of a 320px-wide window.
+ * shrink — the host's language pill is the one flexible item; "They speak" shows only a code — and
+ * the right group never does, so the listening switch and the settings button cannot be pushed out
+ * of a 320px-wide window.
+ *
+ * Above the row, and only when it applies: the notice that host and far side share one language,
+ * which is a room that translates nothing.
  */
 function WidgetDock() {
   return (
+    <>
+    <FarSideLanguageNotice />
     <section
       aria-label="WarpTalk controls"
       data-slot="bridge-widget-dock"
@@ -239,11 +246,13 @@ function WidgetDock() {
         <DockSessionControls />
         <span aria-hidden="true" className="mx-0.5 h-[22px] w-px shrink-0 bg-border" />
         <DockLanguagePill />
+        <DockFarSideLanguagePill />
       </div>
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         <DockListenSwitch />
         <SettingsFlyout />
       </div>
     </section>
+    </>
   );
 }
