@@ -298,5 +298,21 @@
     "workspaceSettings": "Cài đặt không gian làm việc",
     "billing": "Thanh toán",
     "signOut": "Đăng xuất"
+  },
+  "announcements": {
+    "regionLabel": "Thông báo",
+    "readMore": "Xem thêm",
+    "pagerLabel": "Các thông báo khác",
+    "previous": "Thông báo trước",
+    "next": "Thông báo tiếp theo",
+    "position": "{current}/{total}",
+    "dismiss": "Đóng",
+    "dontShowAgain": "Không hiển thị lại",
+    "types": {
+      "ANNOUNCEMENT": "Thông báo",
+      "FEATURE": "Tính năng mới",
+      "MAINTENANCE": "Bảo trì",
+      "PROMOTION": "Ưu đãi"
+    }
   }
 }
