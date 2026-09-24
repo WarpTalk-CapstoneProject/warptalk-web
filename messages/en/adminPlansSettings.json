@@ -1,5 +1,70 @@
 {
   "plans": {
+    "list": {
+      "visibleOfTotal": "{visible} of {total}",
+      "cycles": {
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      },
+      "plans": {
+        "searchPlaceholder": "Search plans by name or slug",
+        "filters": {
+          "tier": "Tier",
+          "cycle": "Billing cycle",
+          "currency": "Currency",
+          "active": "Active"
+        },
+        "sortFields": {
+          "order": "Display order",
+          "name": "Name",
+          "price": "Price",
+          "credits": "Credits per cycle"
+        },
+        "columns": {
+          "plan": "Plan",
+          "tier": "Tier",
+          "cycle": "Billing cycle",
+          "price": "Price",
+          "credits": "Credits / cycle",
+          "status": "Status",
+          "order": "Order"
+        }
+      },
+      "rateCards": {
+        "searchPlaceholder": "Search charge type, provider or model",
+        "filters": {
+          "chargeType": "Charge type",
+          "provider": "Provider",
+          "unit": "Unit",
+          "currency": "Currency",
+          "margin": "Margin",
+          "active": "In force"
+        },
+        "marginBands": {
+          "loss": "Loss (below 1×)",
+          "thin": "Thin (1× to 1.5×)",
+          "healthy": "Healthy (1.5× and up)",
+          "unknown": "Not known"
+        },
+        "inForce": "In force",
+        "deactivated": "Deactivated",
+        "sortFields": {
+          "chargeType": "Charge type",
+          "provider": "Provider",
+          "price": "Unit price",
+          "margin": "Margin",
+          "effective": "Effective from"
+        },
+        "columns": {
+          "rateCard": "Rate card",
+          "unit": "Unit",
+          "price": "Unit price",
+          "providerCost": "Provider cost",
+          "margin": "Margin",
+          "effective": "Effective"
+        }
+      }
+    },
     "eyebrow": "Revenue",
     "title": "Plans & pricing",
     "description": "What the platform sells, and what each unit of it costs to serve.",

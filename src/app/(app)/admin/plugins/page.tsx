@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -8,20 +8,30 @@ import { toast } from "sonner";
 import {
   ArrowsClockwise,
   CaretRight,
-  MagnifyingGlass,
+  Cpu,
   Plugs,
   Plus,
   PlugsConnected,
+  Key,
+  PuzzlePiece,
+  Star,
+  SquaresFour,
   Warning,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
 import {
-  AdminFilterTabs,
   AdminPage,
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
+import {
+  AdminListToolbar,
+  AdminStatusTabs,
+  useAdminActionIntent,
+  useAdminListState,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +60,12 @@ import {
   validateNewPlugin,
   type NewPluginDraft,
 } from "@/lib/admin/plugin-catalog";
+import {
+  applyClientListState,
+  type ClientListAccessors,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
+import { matchesSearch } from "@/lib/admin/search-text";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { AdminPluginCatalogListItemDto } from "@/types/admin-plugin-catalog";
@@ -58,7 +74,47 @@ const numberFormatter = new Intl.NumberFormat("en-US");
 
 const STATUS_VALUES = ["all", "active", "retired"] as const;
 
-type StatusValue = (typeof STATUS_VALUES)[number];
+/**
+ * The listing's search, filters and order, in the URL (`?q=`, `?status=retired`, `?kind=mcp`…) so
+ * the palette's `/admin/plugins?q=…` lands filtered. The catalogue is small and fetched whole, so it
+ * is filtered here with `applyClientListState`. Status keeps its tabs; the rest is the Filter menu.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: ["active", "retired"] },
+    { key: "kind", kind: "enum", multiple: true, values: ["mcp", "native"] },
+    { key: "provider", kind: "enum", multiple: true },
+    { key: "category", kind: "enum", multiple: true },
+    { key: "featured", kind: "boolean" },
+    { key: "oauthClient", kind: "boolean" },
+  ],
+  sortFields: ["order", "label", "installs"],
+  defaultSort: { field: "order", direction: "asc" },
+};
+
+const LIST_ACCESSORS: ClientListAccessors<AdminPluginCatalogListItemDto> = {
+  search: (row) => [row.label, row.pluginKey, row.provider],
+  filters: {
+    status: (row) => (row.isActive ? "active" : "retired"),
+    kind: (row) => row.kind,
+    provider: (row) => row.provider,
+    category: (row) => row.category,
+    featured: (row) => row.isFeatured,
+    oauthClient: (row) => row.hasClientId,
+  },
+  sort: {
+    order: (row) => row.sortOrder,
+    label: (row) => row.label,
+    installs: (row) => row.installationCount,
+  },
+};
+
+/** Distinct non-empty values of one column, as filter options. */
+function distinctValues(rows: readonly AdminPluginCatalogListItemDto[], valueOf: (row: AdminPluginCatalogListItemDto) => string | null) {
+  return Array.from(new Set(rows.map(valueOf).filter((value): value is string => Boolean(value))))
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value, label: value }));
+}
 
 function Pill({
   children,
@@ -87,11 +143,22 @@ function Pill({
 }
 
 export default function AdminPluginsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
+      <PluginCatalogList />
+    </Suspense>
+  );
+}
+
+function PluginCatalogList() {
   const t = useTranslations("adminPlugins.list");
+  const tTable = useTranslations("adminLists.table");
   const catalogQuery = useAdminPluginCatalog();
-  const [status, setStatus] = useState<StatusValue>("all");
-  const [search, setSearch] = useState("");
+  const list = useAdminListState(LIST_CONFIG);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // The palette's "Add plugin" action.
+  useAdminActionIntent({ create: () => setCreateOpen(true) });
 
   const statusTabs = useMemo(
     () =>
@@ -106,19 +173,42 @@ export default function AdminPluginsPage() {
 
   const broken = useMemo(() => rows.filter(catalogRowCannotConnect), [rows]);
 
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (status === "active" && !row.isActive) return false;
-      if (status === "retired" && row.isActive) return false;
-      if (needle.length === 0) return true;
-      return (
-        row.label.toLowerCase().includes(needle)
-        || row.pluginKey.toLowerCase().includes(needle)
-        || row.provider.toLowerCase().includes(needle)
-      );
-    });
-  }, [rows, search, status]);
+  const visible = useMemo(
+    () => applyClientListState(rows, list.state, LIST_ACCESSORS, matchesSearch),
+    [rows, list.state],
+  );
+
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "kind",
+      label: t("listControls.filters.kind"),
+      icon: <PuzzlePiece size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: [
+        { value: "mcp", label: t("kindLabels.mcp") },
+        { value: "native", label: t("kindLabels.native") },
+      ],
+    },
+    {
+      key: "provider",
+      label: t("listControls.filters.provider"),
+      icon: <Cpu size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctValues(rows, (row) => row.provider),
+    },
+    {
+      key: "category",
+      label: t("listControls.filters.category"),
+      icon: <SquaresFour size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctValues(rows, (row) => row.category),
+    },
+    { key: "featured", label: t("listControls.filters.featured"), icon: <Star size={13} />, kind: "boolean" },
+    { key: "oauthClient", label: t("listControls.filters.oauthClient"), icon: <Key size={13} />, kind: "boolean" },
+  ];
 
   return (
     <AdminPage>
@@ -187,36 +277,26 @@ export default function AdminPluginsPage() {
         </AdminPanel>
       ) : null}
 
-      <AdminFilterTabs
-        tabs={statusTabs}
-        value={status}
-        onChange={setStatus}
-        label={t("filterAria")}
-        trailing={
-          catalogQuery.data
-            ? t("trailingCount", {
-                visible: numberFormatter.format(visible.length),
-                total: numberFormatter.format(rows.length),
-              })
-            : undefined
-        }
-      />
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filterAria")} />
 
-      <div className="my-3 flex items-center gap-2">
-        <div className="relative w-full max-w-sm">
-          <MagnifyingGlass
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
-          />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder={t("searchPlaceholder")}
-            className="pl-8"
-            aria-label={t("searchAria")}
-          />
-        </div>
-      </div>
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("searchPlaceholder")}
+        filters={filterFields}
+        count={catalogQuery.data ? visible.length : null}
+        countLabel={t("trailingCount", {
+          visible: numberFormatter.format(visible.length),
+          total: numberFormatter.format(rows.length),
+        })}
+        isFetching={catalogQuery.isFetching && !catalogQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "order", label: t("listControls.sortFields.order") },
+            { field: "label", label: t("listControls.sortFields.label") },
+            { field: "installs", label: t("listControls.sortFields.installs") },
+          ],
+        }}
+      />
 
       <AdminPanel>
         {catalogQuery.isError ? (
@@ -250,7 +330,12 @@ export default function AdminPluginsPage() {
         ) : rows.length === 0 ? (
           <p className="px-4 py-10 text-center text-[12px] text-ink-muted">{t("emptyCatalog")}</p>
         ) : visible.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">{t("noMatch")}</p>
+          <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+            <p className="text-[12px] text-ink-muted">{t("noMatch")}</p>
+            <Button variant="outline" size="sm" onClick={() => list.clearFilters()}>
+              {tTable("clearFilters")}
+            </Button>
+          </div>
         ) : (
           <>
             <div className="hidden border-b border-hairline/60 px-4 py-2 text-[11px] font-medium text-ink-muted md:flex">

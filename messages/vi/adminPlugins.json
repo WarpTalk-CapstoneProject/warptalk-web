@@ -11,7 +11,6 @@
     "filterAria": "Lọc danh mục theo trạng thái hoạt động của từng dòng",
     "trailingCount": "{visible} trên {total}",
     "searchPlaceholder": "Tìm theo tên hiển thị, key hoặc nhà cung cấp",
-    "searchAria": "Tìm kiếm trong danh mục plugin",
     "tabs": {
       "all": "Tất cả",
       "active": "Đang hoạt động",
@@ -122,6 +121,20 @@
         "problemCount": "{count, plural, other {# trường}} vẫn cần sửa. Chưa gửi gì cả.",
         "success": "{key} đã được thêm vào danh mục. Có hiệu lực ngay với mọi người dùng — không cần triển khai lại.",
         "errorFallback": "Không thể thêm plugin vào danh mục."
+      }
+    },
+    "listControls": {
+      "filters": {
+        "kind": "Loại",
+        "provider": "Nhà cung cấp",
+        "category": "Danh mục",
+        "featured": "Nổi bật",
+        "oauthClient": "Có client id OAuth"
+      },
+      "sortFields": {
+        "order": "Thứ tự danh mục",
+        "label": "Tên",
+        "installs": "Số người cài đặt"
       }
     }
   },

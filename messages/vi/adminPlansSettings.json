@@ -1,5 +1,70 @@
 {
   "plans": {
+    "list": {
+      "visibleOfTotal": "{visible} / {total}",
+      "cycles": {
+        "monthly": "Hằng tháng",
+        "yearly": "Hằng năm"
+      },
+      "plans": {
+        "searchPlaceholder": "Tìm gói theo tên hoặc slug",
+        "filters": {
+          "tier": "Hạng",
+          "cycle": "Chu kỳ thanh toán",
+          "currency": "Tiền tệ",
+          "active": "Đang hoạt động"
+        },
+        "sortFields": {
+          "order": "Thứ tự hiển thị",
+          "name": "Tên",
+          "price": "Giá",
+          "credits": "Tín dụng mỗi chu kỳ"
+        },
+        "columns": {
+          "plan": "Gói",
+          "tier": "Hạng",
+          "cycle": "Chu kỳ thanh toán",
+          "price": "Giá",
+          "credits": "Tín dụng / chu kỳ",
+          "status": "Trạng thái",
+          "order": "Thứ tự"
+        }
+      },
+      "rateCards": {
+        "searchPlaceholder": "Tìm loại phí, nhà cung cấp hoặc mô hình",
+        "filters": {
+          "chargeType": "Loại phí",
+          "provider": "Nhà cung cấp",
+          "unit": "Đơn vị",
+          "currency": "Tiền tệ",
+          "margin": "Biên lợi nhuận",
+          "active": "Đang áp dụng"
+        },
+        "marginBands": {
+          "loss": "Lỗ (dưới 1×)",
+          "thin": "Mỏng (1× đến 1,5×)",
+          "healthy": "Tốt (từ 1,5× trở lên)",
+          "unknown": "Chưa xác định"
+        },
+        "inForce": "Đang áp dụng",
+        "deactivated": "Đã ngừng",
+        "sortFields": {
+          "chargeType": "Loại phí",
+          "provider": "Nhà cung cấp",
+          "price": "Đơn giá",
+          "margin": "Biên lợi nhuận",
+          "effective": "Hiệu lực từ"
+        },
+        "columns": {
+          "rateCard": "Bảng giá",
+          "unit": "Đơn vị",
+          "price": "Đơn giá",
+          "providerCost": "Chi phí nhà cung cấp",
+          "margin": "Biên lợi nhuận",
+          "effective": "Hiệu lực"
+        }
+      }
+    },
     "eyebrow": "Doanh thu",
     "title": "Gói & bảng giá",
     "description": "Những gì nền tảng bán, và chi phí phục vụ từng đơn vị.",

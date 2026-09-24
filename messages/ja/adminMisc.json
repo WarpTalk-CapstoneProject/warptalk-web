@@ -18,16 +18,10 @@
     "statusUpdated": "{company} を「{status}」に更新しました",
     "statusUpdateFailed": "リードのステータスを更新できませんでした。",
     "searchPlaceholder": "氏名、メール、会社名で検索",
-    "searchAria": "リードを検索",
-    "search": "検索",
     "error": {
       "title": "営業リードを読み込めませんでした。",
       "description": "課金サービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
       "retry": "再試行"
-    },
-    "empty": {
-      "title": "このフィルターに一致するリードはありません",
-      "description": "別のステータスタブを選ぶか、検索条件をクリアしてください。"
     },
     "openWorkspace": "ワークスペースを開く",
     "noWorkspaceYet": "ワークスペース未作成",
@@ -38,10 +32,31 @@
     "statusAria": "{company} のステータス",
     "seats": "{count, plural, other {#席}}",
     "creditsPerMonth": "月{count}クレジット",
-    "pagination": {
-      "pageOf": "{page} / {totalPages} ページ",
-      "previous": "前へ",
-      "next": "次へ"
+    "list": {
+      "filters": {
+        "requestType": "リクエストの種類",
+        "source": "流入元",
+        "created": "作成日",
+        "workspace": "ワークスペース",
+        "workspacePlaceholder": "ワークスペースを検索…"
+      },
+      "sourceLabels": {
+        "landing_pricing": "料金ページ"
+      },
+      "sortFields": {
+        "created": "作成日",
+        "company": "会社"
+      },
+      "columns": {
+        "lead": "リード",
+        "request": "リクエスト",
+        "source": "流入元",
+        "created": "作成日",
+        "status": "ステータス"
+      },
+      "boardPageNote": "ボードにはリストの並び順で最大 {size} 件のリードを 1 ページ分表示します。残りはページを移動して確認してください。",
+      "emptyTitle": "営業リードはまだありません",
+      "emptyDescription": "料金ページからの営業担当へのお問い合わせがここに表示されます。"
     }
   },
   "feedback": {
@@ -84,16 +99,10 @@
     },
     "comments": {
       "title": "コメント",
-      "error": "コメントを読み込めませんでした。",
       "empty": "この期間に書かれたコメントはありません。",
       "sortRecent": "新しい順",
       "sortLowest": "低評価順",
       "sortAria": "コメントの並び順"
-    },
-    "pagination": {
-      "pageOf": "{page} / {totalPages} ページ",
-      "previous": "前へ",
-      "next": "次へ"
     },
     "footerNote": "閲覧専用で、構造上匿名です — APIはコメントの投稿者情報を送信しません。管理者が編集・削除できる評価では、読む価値がなくなってしまいます。",
     "insights": {
@@ -104,6 +113,27 @@
       "lowConfidenceRule": "回答が {min} 件未満、または回答率が {rate} 未満の数値は信頼度低として表示されます。",
       "noDataTitle": "{count, plural, other {# 項目にデータがありません}}",
       "noDataBody": "{names}: この期間に評価はありません。"
+    },
+    "list": {
+      "searchPlaceholder": "コメントや会議名を検索",
+      "commentCount": "{count, plural, other {# 件のコメント}}",
+      "filters": {
+        "rating": "評価",
+        "ratingUnit": "つ星",
+        "ratingPresets": {
+          "unhappy": "不満 (1–2)",
+          "neutral": "普通 (3)",
+          "happy": "満足 (4–5)"
+        },
+        "workspace": "ワークスペース",
+        "workspacePlaceholder": "ワークスペースを検索…"
+      },
+      "columns": {
+        "rating": "評価",
+        "comment": "コメント",
+        "meeting": "会議",
+        "submitted": "送信日時"
+      }
     }
   },
   "audit": {
