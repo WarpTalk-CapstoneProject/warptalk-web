@@ -38,11 +38,13 @@ for (const [key, target] of Object.entries(INSIGHTS_LINK_TARGETS)) {
     const source = pageSource(target.path);
     assert.ok(source, `${target.path} has a page under ${ADMIN_ROOT}`);
     for (const [param, value] of Object.entries(("params" in target ? target.params : {}) as Record<string, string>)) {
-      assert.match(
-        source,
-        new RegExp(`searchParams\\.get\\("${param}"\\)`),
-        `${target.path} reads ?${param}=`,
-      );
+      // Read by hand, or by the admin list toolkit: `useAdminListState` owns q/sort/dir/page and
+      // one param per filter the page's config declares (src/lib/admin/list-state.ts).
+      const readsByHand = new RegExp(`searchParams\\.get\\("${param}"\\)`).test(source);
+      const readsByToolkit =
+        /useAdminListState\(/.test(source) &&
+        (["q", "sort", "dir", "page"].includes(param) || new RegExp(`key: "${param}"`).test(source));
+      assert.ok(readsByHand || readsByToolkit, `${target.path} reads ?${param}=`);
       assert.ok(
         source.includes(`"${value}"`) || (param === "status" && target.path === "/admin/sales-leads"),
         `${target.path} knows the value ${param}=${value}`,

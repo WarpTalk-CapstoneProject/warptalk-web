@@ -47,7 +47,24 @@
     "emptyDescription": "Xóa nội dung tìm kiếm hoặc chọn một tab trạng thái khác.",
     "pageOf": "Trang {page}/{totalPages}",
     "previous": "Trước",
-    "next": "Sau"
+    "next": "Sau",
+    "filters": {
+      "members": "Thành viên",
+      "membersUnit": "thành viên",
+      "membersPresets": {
+        "solo": "Một người (≤ 1)",
+        "small": "2–10",
+        "medium": "11–50",
+        "large": "Trên 50"
+      },
+      "created": "Ngày tạo"
+    },
+    "sortFields": {
+      "created": "Ngày tạo",
+      "name": "Tên",
+      "members": "Số thành viên",
+      "updated": "Cập nhật gần nhất"
+    }
   },
   "detail": {
     "backToDirectory": "Không gian làm việc",

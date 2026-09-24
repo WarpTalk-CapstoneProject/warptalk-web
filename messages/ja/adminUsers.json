@@ -44,7 +44,8 @@
       "roles": "ロール",
       "sessions": "セッション",
       "lastLogin": "最終ログイン",
-      "actions": "操作"
+      "actions": "操作",
+      "created": "登録日"
     },
     "noRoles": "—",
     "neverSignedIn": "ログイン履歴なし",
@@ -58,6 +59,20 @@
       "pageOf": "{page} / {totalPages} ページ",
       "previous": "前へ",
       "next": "次へ"
+    },
+    "filters": {
+      "role": "プラットフォームロール",
+      "platformAdmin": "プラットフォーム管理者",
+      "signedIn": "サインイン",
+      "neverSignedIn": "一度もない",
+      "hasSignedIn": "1回以上",
+      "lastLogin": "最終ログイン",
+      "created": "登録日"
+    },
+    "sortFields": {
+      "created": "登録日",
+      "name": "名前",
+      "lastLogin": "最終ログイン"
     }
   },
   "detail": {

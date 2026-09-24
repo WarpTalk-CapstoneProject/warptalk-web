@@ -18,16 +18,10 @@
     "statusUpdated": "{company} marked {status}",
     "statusUpdateFailed": "The lead status could not be updated.",
     "searchPlaceholder": "Search name, email or company",
-    "searchAria": "Search leads",
-    "search": "Search",
     "error": {
       "title": "Sales leads could not be loaded.",
       "description": "Check the billing service and that your session still holds the platform admin role.",
       "retry": "Try again"
-    },
-    "empty": {
-      "title": "No leads match this filter",
-      "description": "Pick a different status tab or clear the search."
     },
     "openWorkspace": "Open workspace",
     "noWorkspaceYet": "No workspace yet",
@@ -38,10 +32,31 @@
     "statusAria": "Status for {company}",
     "seats": "{count, plural, one {# seat} other {# seats}}",
     "creditsPerMonth": "{count} credits / month",
-    "pagination": {
-      "pageOf": "Page {page} of {totalPages}",
-      "previous": "Previous",
-      "next": "Next"
+    "list": {
+      "filters": {
+        "requestType": "Request type",
+        "source": "Source",
+        "created": "Created",
+        "workspace": "Workspace",
+        "workspacePlaceholder": "Search workspaces…"
+      },
+      "sourceLabels": {
+        "landing_pricing": "Pricing page"
+      },
+      "sortFields": {
+        "created": "Created",
+        "company": "Company"
+      },
+      "columns": {
+        "lead": "Lead",
+        "request": "Request",
+        "source": "Source",
+        "created": "Created",
+        "status": "Status"
+      },
+      "boardPageNote": "The board shows one page of up to {size} leads, in the list's order. Page through for the rest.",
+      "emptyTitle": "No sales leads yet",
+      "emptyDescription": "Contact-sales requests from the pricing page land here."
     }
   },
   "feedback": {
@@ -84,16 +99,10 @@
     },
     "comments": {
       "title": "Comments",
-      "error": "Comments could not be loaded.",
       "empty": "Nobody left a written comment in this window.",
       "sortRecent": "Latest",
       "sortLowest": "Lowest rated first",
       "sortAria": "Comment order"
-    },
-    "pagination": {
-      "pageOf": "Page {page} of {totalPages}",
-      "previous": "Previous",
-      "next": "Next"
     },
     "footerNote": "Read-only, and anonymous by construction — the API does not send who wrote a comment. A rating an administrator could edit or delete would not be worth reading.",
     "insights": {
@@ -104,6 +113,27 @@
       "lowConfidenceRule": "A figure is marked low confidence under {min} responses or a {rate} response rate.",
       "noDataTitle": "{count, plural, one {# dimension has no data} other {# dimensions have no data}}",
       "noDataBody": "{names}: nobody rated it in this period."
+    },
+    "list": {
+      "searchPlaceholder": "Search comments or meeting titles",
+      "commentCount": "{count, plural, one {# comment} other {# comments}}",
+      "filters": {
+        "rating": "Rating",
+        "ratingUnit": "stars",
+        "ratingPresets": {
+          "unhappy": "Unhappy (1–2)",
+          "neutral": "Neutral (3)",
+          "happy": "Happy (4–5)"
+        },
+        "workspace": "Workspace",
+        "workspacePlaceholder": "Search workspaces…"
+      },
+      "columns": {
+        "rating": "Rating",
+        "comment": "Comment",
+        "meeting": "Meeting",
+        "submitted": "Submitted"
+      }
     }
   },
   "audit": {

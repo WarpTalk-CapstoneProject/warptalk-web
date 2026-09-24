@@ -67,6 +67,40 @@
       "pageOf": "Page {page} of {totalPages}",
       "previous": "Previous",
       "next": "Next"
+    },
+    "columns": {
+      "plan": "Plan",
+      "status": "Status",
+      "value": "Monthly value",
+      "credits": "Credits left",
+      "periodEnd": "Period ends",
+      "actions": "Actions"
+    },
+    "filters": {
+      "plan": "Plan",
+      "service": "Service state",
+      "serviceStates": {
+        "healthy": "Healthy",
+        "low_balance": "Low balance",
+        "in_overage": "In overage",
+        "suspended": "Service suspended"
+      },
+      "cycle": "Billing cycle",
+      "cycles": {
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      },
+      "autoRenew": "Auto-renew",
+      "renews": "Renews",
+      "doesNotRenew": "Does not renew",
+      "workspace": "Workspace",
+      "workspacePlaceholder": "Search workspaces by name or slug…",
+      "periodEnd": "Period ends"
+    },
+    "sortFields": {
+      "periodEnd": "Period end",
+      "created": "Created",
+      "credits": "Credits left"
     }
   },
   "lifecycleDialog": {

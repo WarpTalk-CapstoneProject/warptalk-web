@@ -1,39 +1,55 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { billingService } from "@/services/billing.service";
+import { Pulse, ShieldWarning, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   Bot,
   Building2,
   Check,
   Copy,
-  Loader2,
   Shield,
-  ShieldAlert,
   User,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+
+import { AdminPanel } from "@/components/admin/admin-page-chrome";
+import {
+  AdminDataTable,
+  AdminListToolbar,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
+import { buttonVariants } from "@/components/ui/button";
+import { applyClientListState, paginateRows, type ListStateConfig } from "@/lib/admin/list-state";
+import { matchesSearch } from "@/lib/admin/search-text";
+import { billingService } from "@/services/billing.service";
+import type { UsageAlertDto } from "@/types/billing";
+
+const PAGE_SIZE = 20;
+
+/**
+ * Alerts are grouped by subscription server-side, and a workspace whose name lookup failed comes
+ * back as the empty GUID — so neither the workspace id nor the name is unique. The arrival index is.
+ */
+type AlertRow = UsageAlertDto & { rowId: string };
+
+/**
+ * Usage alerts are computed, not stored: one row per workspace that consumed more than 50,000
+ * credits in the last 24 hours (BillingAnalyticsService.GetUsageAlertsAsync). That list is small
+ * and arrives whole, so it is filtered, ordered and paged here with `applyClientListState`.
+ *
+ * The DTO carries no alert type or severity — `reason` is one template filled with the same
+ * number as `consumedCreditsIn24h` — so the only property worth filtering is the consumption.
+ */
+const ALERT_LIST_CONFIG: ListStateConfig = {
+  filters: [{ key: "consumption", kind: "numberRange" }],
+  sortFields: ["consumption", "workspace"],
+  defaultSort: { field: "consumption", direction: "desc" },
+  columns: [{ id: "workspace" }, { id: "id" }, { id: "reason" }, { id: "consumption" }, { id: "actions" }],
+};
 
 function IdBadge({
   id,
@@ -44,6 +60,7 @@ function IdBadge({
   type: "workspace" | "user" | "system" | "admin";
   name?: string | null;
 }) {
+  const t = useTranslations("adminBillingLedger");
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -70,7 +87,7 @@ function IdBadge({
       <div
         className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-1 border border-border-dim border-b-border cursor-pointer hover:bg-surface-2 hover:border-border transition-colors group relative"
         onClick={handleCopy}
-        title={`Click to copy ID: ${id}`}
+        title={t("idBadge.copyTooltip", { id })}
       >
         <span
           className={`text-xs font-mono font-medium ${type === "system" ? "text-blue-400" : type === "admin" ? "text-primary" : "text-foreground-muted"}`}
@@ -88,262 +105,161 @@ function IdBadge({
 }
 
 export function AdminAlertsTab() {
-  const [page, setPage] = useState(1);
-  const [workspaceFilter, setWorkspaceFilter] = useState("");
-  const [minCreditsFilter, setMinCreditsFilter] = useState<number | "">("");
+  const t = useTranslations("adminBillingLedger.lists.alerts");
+  const tLists = useTranslations("adminBillingLedger.lists");
+  const list = useAdminListState(ALERT_LIST_CONFIG);
+  const { state } = list;
 
-  const { data: alerts = [], isLoading } = useQuery({
+  const alertsQuery = useQuery({
     queryKey: ["global-usage-alerts"],
     queryFn: () => billingService.getUsageAlerts(),
   });
 
-  const filteredAlerts = useMemo(() => {
-    return alerts.filter((alert) => {
-      const matchWorkspace = workspaceFilter
-        ? alert.workspaceId
-            ?.toLowerCase()
-            .includes(workspaceFilter.toLowerCase()) ||
-          alert.workspaceName
-            ?.toLowerCase()
-            .includes(workspaceFilter.toLowerCase())
-        : true;
-      const matchCredits =
-        minCreditsFilter !== ""
-          ? alert.consumedCreditsIn24h >= minCreditsFilter
-          : true;
-      return matchWorkspace && matchCredits;
-    });
-  }, [alerts, workspaceFilter, minCreditsFilter]);
+  const rows = useMemo<AlertRow[]>(
+    () => (alertsQuery.data ?? []).map((alert, index) => ({ ...alert, rowId: `${index}:${alert.workspaceId}` })),
+    [alertsQuery.data],
+  );
+  const filtered = useMemo(
+    () =>
+      applyClientListState(
+        rows,
+        state,
+        {
+          search: (alert: AlertRow) => [alert.workspaceName, alert.workspaceId],
+          filters: { consumption: (alert) => alert.consumedCreditsIn24h },
+          sort: {
+            consumption: (alert) => alert.consumedCreditsIn24h,
+            workspace: (alert) => alert.workspaceName,
+          },
+        },
+        matchesSearch,
+      ),
+    [rows, state],
+  );
+  const page = paginateRows(filtered, state.page, PAGE_SIZE);
 
-  const displayTotalCount = filteredAlerts.length;
-  const totalPages = Math.ceil(displayTotalCount / 20);
-  const paginatedAlerts = useMemo(() => {
-    return filteredAlerts.slice((page - 1) * 20, page * 20);
-  }, [filteredAlerts, page]);
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "consumption",
+      label: t("filters.consumption"),
+      icon: <Pulse size={13} />,
+      kind: "numberRange",
+      unit: tLists("creditsUnit"),
+      step: 1,
+      presets: [
+        { label: t("consumptionPresets.over100k"), min: 100_000 },
+        { label: t("consumptionPresets.over500k"), min: 500_000 },
+        { label: t("consumptionPresets.over1m"), min: 1_000_000 },
+      ],
+    },
+  ];
 
-  const activeFiltersCount = [
-    workspaceFilter !== "",
-    minCreditsFilter !== "",
-  ].filter(Boolean).length;
-
-  const resetFilters = () => {
-    setWorkspaceFilter("");
-    setMinCreditsFilter("");
-    setPage(1);
-  };
+  const columns: AdminColumn<AlertRow>[] = [
+    {
+      id: "workspace",
+      header: t("columns.workspace"),
+      primary: true,
+      sortField: "workspace",
+      cell: (alert) => <span className="text-sm font-medium text-ink">{alert.workspaceName}</span>,
+    },
+    {
+      id: "id",
+      header: t("columns.id"),
+      className: "w-[200px]",
+      cell: (alert) => (
+        <Link
+          href={`/billing/workspace/${alert.workspaceId}`}
+          className="block hover:opacity-80 transition-opacity"
+        >
+          <IdBadge id={alert.workspaceId} type="workspace" />
+        </Link>
+      ),
+    },
+    {
+      id: "reason",
+      header: t("columns.reason"),
+      cell: (alert) => (
+        <div className="flex items-center gap-1.5 text-rose-500 font-medium">
+          <WarningCircle size={16} aria-hidden />
+          {/* The server's `reason` is one English template around this same number. */}
+          <span className="text-sm">{t("reason", { credits: alert.consumedCreditsIn24h.toLocaleString() })}</span>
+        </div>
+      ),
+    },
+    {
+      id: "consumption",
+      header: t("columns.consumption"),
+      align: "right",
+      sortField: "consumption",
+      defaultDirection: "desc",
+      className: "w-[170px]",
+      cell: (alert) => (
+        <span className="font-semibold font-mono text-rose-500">
+          {alert.consumedCreditsIn24h.toLocaleString()} cr
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: t("columns.actions"),
+      align: "right",
+      className: "w-[130px]",
+      cell: (alert) => (
+        <Link
+          href={`/billing/workspace/${alert.workspaceId}`}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {t("investigate")}
+        </Link>
+      ),
+    },
+  ];
 
   return (
-    <Card className="rounded-xl border border-hairline bg-surface-1 shadow-linear flex flex-col h-[600px]">
-      <CardHeader className="p-4 border-b border-hairline bg-surface-1/50 flex-none">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="h-5 w-5 text-rose-500" />
-            <CardTitle className="text-lg">Fraud & Usage Alerts</CardTitle>
-          </div>
+    <>
+      <div className="flex items-start gap-2 pt-4">
+        <ShieldWarning size={18} weight="duotone" className="mt-0.5 shrink-0 text-rose-500" aria-hidden />
+        <div>
+          <h2 className="text-[13px] font-semibold text-ink">{t("title")}</h2>
+          <p className="mt-0.5 text-[12px] text-ink-muted">{t("description")}</p>
         </div>
-        <CardDescription className="text-xs text-muted-foreground mt-1">
-          Workspaces with unusually high credit consumption (&gt;50,000 credits
-          in the last 24 hours).
-        </CardDescription>
-
-        <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-hairline">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">
-              Workspace ID / Name
-            </Label>
-            <Input
-              type="text"
-              placeholder="Search workspace..."
-              className="h-8 text-sm w-[180px]"
-              value={workspaceFilter}
-              onChange={(e) => {
-                setWorkspaceFilter(e.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">
-              Min 24h Consumption (cr)
-            </Label>
-            <Input
-              type="number"
-              min={0}
-              placeholder="e.g. 50000"
-              className="h-8 text-sm w-[180px]"
-              value={minCreditsFilter}
-              onChange={(e) => {
-                setMinCreditsFilter(
-                  e.target.value ? Number(e.target.value) : "",
-                );
-                setPage(1);
-              }}
-            />
-          </div>
-
-          {activeFiltersCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 text-xs text-muted-foreground gap-1.5 self-end"
-              onClick={resetFilters}
-            >
-              <span>Clear</span>
-              <Badge className="h-4 px-1 text-[10px] font-semibold rounded-full">
-                {activeFiltersCount}
-              </Badge>
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-
-      <CardContent className="p-0 flex-1 overflow-auto">
-        <Table>
-          <TableHeader className="bg-surface-2 sticky top-0 z-10">
-            <TableRow className="border-hairline hover:bg-transparent">
-              <TableHead>Workspace</TableHead>
-              <TableHead>Workspace Name</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead className="text-right">24h Consumption</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
-                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
-                </TableCell>
-              </TableRow>
-            ) : paginatedAlerts.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  No anomalous usage detected in the last 24 hours.
-                </TableCell>
-              </TableRow>
-            ) : (
-              paginatedAlerts.map((alert, idx) => (
-                <TableRow
-                  key={idx}
-                  className="border-hairline hover:bg-surface-2"
-                >
-                  <TableCell>
-                    <Link
-                      href={`/billing/workspace/${alert.workspaceId}`}
-                      className="block hover:opacity-80 transition-opacity"
-                    >
-                      <IdBadge id={alert.workspaceId} type="workspace" />
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-sm font-medium text-ink">
-                    {alert.workspaceName}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5 text-rose-500 font-medium">
-                      <AlertTriangle className="h-4 w-4" />
-                      <span className="text-sm">{alert.reason}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-semibold font-mono text-rose-500">
-                    {alert.consumedCreditsIn24h.toLocaleString()} cr
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/billing/workspace/${alert.workspaceId}`}>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs font-medium rounded-md"
-                      >
-                        Investigate
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </CardContent>
-
-      {/* Pagination */}
-      <div className="p-4 border-t border-hairline flex items-center justify-between bg-surface-1">
-        <p className="text-xs text-muted-foreground">
-          {alerts ? (
-            <>
-              Showing{" "}
-              <strong>
-                {(page - 1) * 20 + 1}–{Math.min(page * 20, displayTotalCount)}
-              </strong>{" "}
-              of <strong>{displayTotalCount}</strong> alerts
-            </>
-          ) : (
-            "Loading..."
-          )}
-        </p>
-        {totalPages > 1 && (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 rounded-md"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              ‹
-            </Button>
-
-            {(() => {
-              const pages: (number | "...")[] = [];
-              const delta = 2;
-              for (let i = 1; i <= totalPages; i++) {
-                if (
-                  i === 1 ||
-                  i === totalPages ||
-                  (i >= page - delta && i <= page + delta)
-                ) {
-                  pages.push(i);
-                } else if (pages[pages.length - 1] !== "...") {
-                  pages.push("...");
-                }
-              }
-              return pages.map((p, i) =>
-                p === "..." ? (
-                  <span
-                    key={`ellipsis-${i}`}
-                    className="h-7 w-7 flex items-center justify-center text-xs text-muted-foreground"
-                  >
-                    …
-                  </span>
-                ) : (
-                  <Button
-                    key={p}
-                    variant={p === page ? "default" : "outline"}
-                    size="sm"
-                    className="h-7 w-7 p-0 rounded-md text-xs"
-                    onClick={() => setPage(p as number)}
-                  >
-                    {p}
-                  </Button>
-                ),
-              );
-            })()}
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 w-7 p-0 rounded-md"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              ›
-            </Button>
-          </div>
-        )}
       </div>
-    </Card>
+
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("searchPlaceholder")}
+        filters={filterFields}
+        count={alertsQuery.isPending ? null : filtered.length}
+        countLabel={t("count", { count: filtered.length })}
+        display={{
+          sortOptions: [
+            { field: "consumption", label: t("sort.consumption") },
+            { field: "workspace", label: t("sort.workspace") },
+          ],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
+      />
+
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={page.rows}
+          rowKey={(alert) => alert.rowId}
+          isPending={alertsQuery.isPending}
+          isError={alertsQuery.isError}
+          onRetry={() => void alertsQuery.refetch()}
+          empty={{
+            title: t("emptyTitle"),
+            description: t("emptyDescription"),
+            icon: <ShieldWarning size={20} weight="duotone" />,
+          }}
+          pagination={{ page: page.page, pageCount: page.pageCount, total: page.total, pageSize: PAGE_SIZE }}
+          caption={t("title")}
+        />
+      </AdminPanel>
+    </>
   );
 }

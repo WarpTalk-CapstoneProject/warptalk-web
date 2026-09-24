@@ -39,11 +39,6 @@
     "viewAuditHistory": "View audit history",
     "delete": "Delete"
   },
-  "pagination": {
-    "previous": "Previous",
-    "next": "Next",
-    "summary": "Page {page} of {totalPages} ({count, plural, one {# term} other {# terms}})"
-  },
   "fields": {
     "term": "Term",
     "termPlaceholder": "e.g. architect",
@@ -115,5 +110,26 @@
     "bulkImported": "Imported {imported}, skipped {skipped}.",
     "bulkImportIssues": "{count, plural, one {# row} other {# rows}} had issues — check console.",
     "bulkImportFailed": "Bulk import failed."
+  },
+  "list": {
+    "termCount": "{count, plural, one {# term} other {# terms}}",
+    "emptyDescription": "Add a term or import a CSV to set the platform-wide baseline.",
+    "anyLanguage": "Any language",
+    "noDomainGroup": "No domain",
+    "filters": {
+      "domain": "Domain",
+      "language": "Language"
+    },
+    "sortFields": {
+      "priority": "Priority (highest first)",
+      "updated": "Recently updated",
+      "created": "Recently created",
+      "term": "Term"
+    },
+    "columns": {
+      "languages": "Languages",
+      "updated": "Updated",
+      "created": "Created"
+    }
   }
 }
