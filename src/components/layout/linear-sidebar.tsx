@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
-import { pendingRequestBadge } from "@/lib/assistant/plugin-availability";
+import { canManageWorkspacePlugins, pendingRequestBadge } from "@/lib/assistant/plugin-availability";
 import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { cn } from "@/lib/utils";
@@ -429,13 +429,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     pathname.includes("/settings") ||
     pathname.includes("/payment");
 
-  // Workspace → Plugins badge: requests from members waiting on the Owner. Owner/Admin only, and only
-  // while Settings is on screen — the one place the row is drawn — so no other page pays for the read.
+  // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
+  // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
+  // read. Counted only for whoever can answer them: an Admin sees the requests on the page but cannot
+  // act on one, so a count on their sidebar would never clear.
   const { data: workspacePluginsOverview } = useWorkspacePlugins(
     activeWorkspaceId,
     isOwnerOrAdmin && isSettingsPage,
   );
-  const pluginRequestBadge = pendingRequestBadge(workspacePluginsOverview);
+  const pluginRequestBadge = pendingRequestBadge(
+    workspacePluginsOverview,
+    canManageWorkspacePlugins(workspacePluginsOverview, role),
+  );
 
   /**
    * The platform admin console gets its own chrome — a third branch beside the app and Settings.

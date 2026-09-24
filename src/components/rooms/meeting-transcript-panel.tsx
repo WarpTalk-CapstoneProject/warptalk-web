@@ -77,7 +77,8 @@ import {
 } from "@/lib/meeting/room-history-mapping";
 import { correctionAuthorName } from "@/lib/transcript/correction-history";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
-import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import { useTranslationRoom, useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 // WT-605. The pause-window read lives with the other transcript hooks, not with the room
 // ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
 // existed, and two hooks of the same name over the same endpoint is how they drift.
@@ -88,7 +89,12 @@ import {
 } from "@/components/rooms/transcript-speaker-avatar";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
-import { getLanguageCode, getLanguageName, languagesInScope } from "@/lib/language/languages";
+import {
+  getLanguageCode,
+  getLanguageName,
+  normalizeLanguageCode,
+} from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
@@ -336,18 +342,56 @@ export function MeetingTranscriptArtifact({
     () => transcriptLanguageOptions(grouped, translationIndex),
     [grouped, translationIndex],
   );
-  /* Every language the product can translate into, not only the ones this meeting happened to
-     produce — see withOfferableLanguages. A meeting where translation was never started has no
-     entries of its own, and that is exactly the reader who needs the picker most. */
-  const offeredLanguages = useMemo(
+  /* WT-705: languages narrow workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3). Everything the
+     transcript already holds stays readable (languageOptions is never filtered); the offers added
+     on top come from `artifactLanguageOptions`, the one helper that decides which languages a
+     finished meeting may be offered — never the product's whole catalogue read straight, which is
+     how a VI/EN/ES meeting used to be offered French. */
+  const { data: room } = useTranslationRoom(roomId);
+  const serverLanguages = room?.artifactLanguages?.generatable;
+  const offeredCodes = useMemo(
     () =>
-      withOfferableLanguages(
-        languageOptions,
-        languagesInScope("chatTarget").map((language) => language.code),
-        grouped.length,
-      ),
-    [languageOptions, grouped.length],
+      artifactLanguageOptions(
+        serverLanguages,
+        languageOptions.map((option) => option.code),
+      ).map((option) => option.code),
+    [serverLanguages, languageOptions],
   );
+  const offeredLanguages = useMemo(
+    () => withOfferableLanguages(languageOptions, offeredCodes, grouped.length),
+    [languageOptions, offeredCodes, grouped.length],
+  );
+  /*
+   * WHICH LANGUAGES THE TRANSLATE BUTTON MAY ACTUALLY START A RUN IN — narrower than the menu.
+   *
+   * `artifactLanguageOptions` fails OPEN on purpose: when the server sent no list, every product
+   * language is offered, because the server still enforces per request and an empty picker would
+   * hide allowed choices. For a summary that is a cheap refusal. Here it is not: a confirmed
+   * translation rewrites the whole meeting's transcript and spends workspace credits, so an
+   * unknown list must not become an invitation to translate a two-hour meeting into a language it
+   * never used. So: the server's list when there IS one, and otherwise only the languages the
+   * transcript already holds (where a run fills the lines that are missing from one it started).
+   */
+  const translatableCodes = useMemo(
+    () =>
+      new Set(
+        (serverLanguages
+          ? serverLanguages.map((code) => normalizeLanguageCode(code))
+          : languageOptions.map((option) => option.code)
+        ).filter(Boolean),
+      ),
+    [serverLanguages, languageOptions],
+  );
+  // Generating a translation spends workspace credits and changes what every reader of the record
+  // sees, so it is a host action on a finished meeting — the same authority the minutes panel
+  // uses: the host, or a workspace Owner/Admin (RoomHostAccess on the server).
+  const workspaceRole = useWorkspaceRole();
+  const hostAuthority =
+    Boolean(room?.isHost)
+    || (Boolean(currentUserId) && room?.hostId === currentUserId)
+    || workspaceRole === "owner"
+    || workspaceRole === "admin";
+  const canTranslate = Boolean(transcriptId) && isEnded && hostAuthority;
 
   // WT-701: an ended meeting's sessions are final — fetch once, do not poll every 5s.
   const sessionsQuery = useTranslationRoomSessions(roomId, { poll: !isEnded });
@@ -419,7 +463,7 @@ export function MeetingTranscriptArtifact({
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
 
   const displayLanguage =
-    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage);
+    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
 
   /* Filling in what the meeting never translated. Inert for as-spoken, and inert without a
      transcript id — the live tab has neither a saved transcript to work on nor an id to name it
@@ -430,15 +474,30 @@ export function MeetingTranscriptArtifact({
   );
 
   /**
-   * Picking a language is the request.
+   * Picking a language only READS the transcript in it. WT-705.
    *
-   * "Read it in English" and "translate the rest into English" are not two decisions a reader
-   * wants to make in sequence — the first one already means the second. The server does nothing
-   * when the language is already complete, so this is safe to fire on every pick.
+   * It used to be the request as well: choosing Spanish started translating 88 entries at once,
+   * for any viewer, with no confirmation. Generating a translation costs workspace credits and
+   * changes the record for everyone, so it is a separate, confirmed action (confirmTranslation)
+   * offered only to host authority and only in one of the room's generatable languages.
    */
   function chooseLanguage(code: string) {
     setChosenLanguage(code);
-    if (code !== AS_SPOKEN) backfill.request(code);
+  }
+
+  const [isTranslateDialogOpen, setIsTranslateDialogOpen] = useState(false);
+  // Narrower than the menu on purpose — see `translatableCodes`. As-spoken is not a language
+  // anything can be translated INTO, and normalising it would fold "as-spoken" to Assamese.
+  const canTranslateDisplayed =
+    canTranslate
+    && displayLanguage !== AS_SPOKEN
+    && translatableCodes.has(normalizeLanguageCode(displayLanguage));
+
+  /** The one place a reader's choice becomes a backfill — after they confirmed it. */
+  function confirmTranslation() {
+    setIsTranslateDialogOpen(false);
+    if (!canTranslateDisplayed || displayLanguage === AS_SPOKEN) return;
+    backfill.request(displayLanguage);
   }
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
   // with one part missing. Counted here and said out loud below, rather than left for the reader
@@ -1178,9 +1237,8 @@ export function MeetingTranscriptArtifact({
         {totalCount > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Offered for any transcript with lines in it, including a meeting held entirely in
-                one language: that used to render the same transcript twice over and read as a
-                broken control, but a language with no coverage is now something the reader can
-                ask for rather than a dead entry. */}
+                one language: its generatable languages are listed as "Not translated yet", which
+                a host can then translate from the status line — choosing one only reads. */}
             <TranscriptLanguageMenu
               options={offeredLanguages}
               value={displayLanguage}
@@ -1333,12 +1391,44 @@ export function MeetingTranscriptArtifact({
         incompleteCount={incompleteCount}
         totalCount={totalCount}
         coverage={backfill.coverage}
-        canBackfill={Boolean(transcriptId)}
+        canTranslate={canTranslateDisplayed}
         isStarting={backfill.isStarting}
         failedToStart={backfill.failedToStart}
         budgetExhausted={backfill.budgetExhausted}
-        onRetry={() => backfill.request(displayLanguage)}
+        onTranslate={() => setIsTranslateDialogOpen(true)}
+        onRetry={() => {
+          // A retry of a run the reader already confirmed; asking again would be noise.
+          if (canTranslateDisplayed) backfill.request(displayLanguage);
+        }}
       />
+
+      <Dialog open={isTranslateDialogOpen} onOpenChange={setIsTranslateDialogOpen}>
+        <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              Translate {incompleteCount} {incompleteCount === 1 ? "entry" : "entries"} into{" "}
+              {displayLanguage === AS_SPOKEN ? "" : getLanguageName(displayLanguage)}?
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-ink-subtle">
+              This uses workspace translation credits, and everyone who can read this record will
+              see the translation.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsTranslateDialogOpen(false)}
+              className="border-border bg-surface-2 text-ink hover:bg-surface-3"
+            >
+              Cancel
+            </Button>
+            <Button disabled={backfill.isStarting} onClick={confirmTranslation}>
+              <Languages />
+              Translate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {absence ? (
         // WT-516: "No transcript was captured for this meeting" is a claim about the MEETING,
@@ -1627,23 +1717,30 @@ function TranscriptLanguageStatus({
   incompleteCount,
   totalCount,
   coverage,
-  canBackfill,
+  canTranslate,
   isStarting,
   failedToStart,
   budgetExhausted,
+  onTranslate,
   onRetry,
 }: {
   language: string;
   incompleteCount: number;
   totalCount: number;
   coverage: TranscriptLanguageCoverage | null;
-  canBackfill: boolean;
+  /** WT-705: may this viewer generate this language here — host authority on a finished,
+   *  saved transcript, in one of the room's generatable languages. Without it the line only
+   *  reports the gap; reading what exists never depends on it. */
+  canTranslate: boolean;
   isStarting: boolean;
   /** The request to start one was refused or never arrived — a different failure from a run
    *  that started and then broke, and the reader can only act on it by asking again. */
   failedToStart: boolean;
   /** Refused for the day, not failed: asking again cannot help, so no button is offered. */
   budgetExhausted: boolean;
+  /** Opens the confirmation; never starts a translation by itself. */
+  onTranslate: () => void;
+  /** Restarts a run that was already confirmed, so it does not ask again. */
   onRetry: () => void;
 }) {
   if (language === AS_SPOKEN) return null;
@@ -1699,22 +1796,24 @@ function TranscriptLanguageStatus({
         <span>
           {missing} {missing === 1 ? "entry" : "entries"} could not be translated into {name}.
         </span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
-        >
-          Try again
-        </button>
+        {canTranslate ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
+          >
+            Try again
+          </button>
+        ) : null}
       </p>
     );
   }
 
   if (missing <= 0) return null;
 
-  if (!canBackfill) {
-    // The live tab: the transcript is still being written and there is no saved id to work on,
-    // so the honest footnote is all there is. It was the whole feature before backfill existed.
+  if (!canTranslate) {
+    // The live tab, a viewer without host authority, or a language the meeting cannot generate:
+    // the honest footnote is all there is. Reading what exists never waits on permission.
     return (
       <p className="mb-2 text-[12px] leading-relaxed text-muted-foreground">
         {missing} of {total} entries {missing === 1 ? "is" : "are"} not fully in {name} — marked,
@@ -1730,7 +1829,7 @@ function TranscriptLanguageStatus({
       </span>
       <button
         type="button"
-        onClick={onRetry}
+        onClick={onTranslate}
         className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
       >
         Translate {missing === 1 ? "it" : "them"}
@@ -1745,8 +1844,11 @@ function TranscriptLanguageStatus({
  * Every entry says how much of the meeting is readable in it before the reader commits. A meeting
  * can be readable end-to-end in a language nobody spoke — that is what the dubbing produced —
  * partially readable in one where translation was only running for part of it, or not readable in
- * it at all. The last of those used to be left out of the list; it is offered now, because
- * choosing it translates the meeting into it rather than returning a page of untranslated lines.
+ * it at all.
+ *
+ * WT-705: two groups. "In this transcript" is everything with text in it, never filtered.
+ * "Not translated yet" is the room's generatable languages with nothing in them yet. Choosing
+ * any entry only reads; translating is a separate, confirmed action on the status line.
  */
 function TranscriptLanguageMenu({
   options,
@@ -1761,6 +1863,18 @@ function TranscriptLanguageMenu({
   busyLanguage?: string | null;
 }) {
   const asSpoken = value === AS_SPOKEN;
+  const readable = options.filter((option) => option.readableCount > 0);
+  const notYet = options.filter((option) => option.readableCount <= 0);
+
+  const renderOption = (option: TranscriptLanguageOption) => (
+    <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
+      <TranscriptLanguageItem
+        label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
+        detail={languageDetail(option, busyLanguage === option.code)}
+        selected={!asSpoken && option.code === value}
+      />
+    </DropdownMenuItem>
+  );
 
   return (
     <DropdownMenu>
@@ -1781,16 +1895,19 @@ function TranscriptLanguageMenu({
               selected={asSpoken}
             />
           </DropdownMenuItem>
-          {options.map((option) => (
-            <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
-              <TranscriptLanguageItem
-                label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
-                detail={languageDetail(option, busyLanguage === option.code)}
-                selected={!asSpoken && option.code === value}
-              />
-            </DropdownMenuItem>
-          ))}
         </DropdownMenuGroup>
+        {readable.length > 0 ? (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>In this transcript</DropdownMenuLabel>
+            {readable.map(renderOption)}
+          </DropdownMenuGroup>
+        ) : null}
+        {notYet.length > 0 ? (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Not translated yet</DropdownMenuLabel>
+            {notYet.map(renderOption)}
+          </DropdownMenuGroup>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1804,13 +1921,13 @@ function TranscriptLanguageMenu({
  * whole meeting, where the number is just noise beside the name.
  */
 function languageDetail(option: TranscriptLanguageOption, busy: boolean): string {
-  if (busy) return "Translating the rest now";
+  if (busy) return "Translating now";
   // completeCount, not readableCount: a merged utterance with half a translation is readable and
   // is still marked incomplete in the transcript below, and a row promising "the whole meeting"
   // over that contradicts the line it sits above.
   if (option.totalCount > 0 && option.completeCount >= option.totalCount) return "The whole meeting";
-  if (option.completeCount === 0) return "Translate the meeting into this";
-  return `${option.completeCount} of ${option.totalCount} entries · translate the rest`;
+  if (option.readableCount <= 0) return "Not translated yet";
+  return `${option.completeCount} of ${option.totalCount} entries`;
 }
 
 function TranscriptLanguageItem({
