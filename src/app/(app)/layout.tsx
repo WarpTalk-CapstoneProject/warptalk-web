@@ -31,6 +31,7 @@ import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { AdminCommandPalette, AdminHeaderSearch } from "@/components/admin/admin-command-palette";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
@@ -743,7 +744,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             what gives up space on a narrow window.
           */}
           <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-            <HeaderSearch />
+            {/* The admin portal has no rooms to paste a code for: its box opens the admin command
+                palette (pages, records, actions) instead. See admin-command-palette.tsx. */}
+            {isAdminRoute ? <AdminHeaderSearch /> : <HeaderSearch />}
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
@@ -860,7 +863,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <CreateRoomDialog />
-      <SearchMeetingDialog />
+      {/* One palette per shell, never both: each owns ⌘K, and two would answer the same keypress. */}
+      {isAdminRoute ? <AdminCommandPalette /> : <SearchMeetingDialog />}
       <SetupRoomModal />
     </div>
   );

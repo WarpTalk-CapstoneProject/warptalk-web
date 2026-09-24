@@ -58,6 +58,7 @@ const NAMESPACES = [
   "adminGlobalGlossary",
   "adminPlugins",
   "adminBillingLedger",
+  "adminLists",
   "download",
 ] as const;
 
