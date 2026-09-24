@@ -23,9 +23,21 @@ import type {
 
 const PAGE_SIZE = 20;
 
+/**
+ * The tabs this screen offers, and the only `?status=` values it will honour from the URL.
+ *
+ * A subset of `AdminMeetingStatusFilter` on purpose — WAITING, IN_PROGRESS and PAUSED are real
+ * filters the API accepts but not questions an administrator asks, and `live` answers the one they
+ * do ask across the last two.
+ *
+ * OPEN (WT-612 / WT-621 / WT-714) is here because it is neither: a room the clock unlocked at its
+ * slot is not scheduled any more and is not live either, so without a tab of its own it was
+ * reachable only under All. It is not folded into `live` — see the note on the type.
+ */
 const STATUS_VALUES = [
   "all",
   "live",
+  "OPEN",
   "SCHEDULED",
   "ENDED",
   "CANCELLED",
@@ -113,6 +125,7 @@ function MeetingsDirectory() {
     () => [
       { value: "all" as const, label: t("statusTabs.all") },
       { value: "live" as const, label: t("statusTabs.live") },
+      { value: "OPEN" as const, label: t("statusTabs.open") },
       { value: "SCHEDULED" as const, label: t("statusTabs.scheduled") },
       { value: "ENDED" as const, label: t("statusTabs.ended") },
       { value: "CANCELLED" as const, label: t("statusTabs.cancelled") },
@@ -299,7 +312,14 @@ function MeetingRow({ meeting }: { meeting: AdminMeetingSummaryDto }) {
               ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
               : meeting.status === "FAILED"
                 ? "border-destructive/20 bg-destructive/10 text-destructive"
-                : meeting.status === "SCHEDULED" || meeting.status === "WAITING"
+                : // Amber is "expected, not happening yet", and OPEN belongs with the other two:
+                  // the door is unlocked but no audio is flowing, which is exactly why it is not
+                  // in LIVE_STATUSES above. EXPIRED and CANCELLED fall through to the neutral
+                  // grey with ENDED — all three are over, none of them is a fault, and the pill
+                  // spells the status out beside the colour.
+                  meeting.status === "SCHEDULED" ||
+                    meeting.status === "WAITING" ||
+                    meeting.status === "OPEN"
                   ? "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300"
                   : "border-border bg-surface-2 text-ink-muted",
           )}

@@ -221,6 +221,7 @@ type UserIdentity = {
 const statusLabels: Record<TranslationRoomStatus, string> = {
   scheduled: "Scheduled",
   waiting: "Waiting",
+  open: "Open",
   in_progress: "In Progress",
   paused: "Paused",
   ended: "Ended",
@@ -1080,10 +1081,16 @@ export default function RoomInformationPage() {
                         meetingTitle={room.title}
                       />
                     ) : null}
+                    {/* WT-714: "End meeting" is offered for every status that is NOT terminal,
+                        rather than for everything except the two that were reachable when this
+                        was written. `!isEnded && status !== "cancelled"` left an EXPIRED or
+                        FAILED room still offering it — and an expired room is precisely one that
+                        never ran, so there is nothing there to end. The server would refuse the
+                        request; the menu entry was the lie. */}
                     <RoomActionsMenu
                       room={room}
                       isHost={isHost}
-                      canEnd={isHost && !isEnded && room.status !== "cancelled"}
+                      canEnd={isHost && !isFinishedStatus(room.status)}
                       endPending={endRoomMutation.isPending}
                       onCopy={handleCopy}
                       onEnd={async () => {

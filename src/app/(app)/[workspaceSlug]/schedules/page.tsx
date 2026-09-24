@@ -55,7 +55,10 @@ import {
   canDownloadArtifact,
 } from "@/lib/meeting/meeting-artifacts";
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
-import { meetingDisplayState } from "@/lib/meeting/meeting-display-state";
+import {
+  meetingDisplayState,
+  type MeetingDisplayState,
+} from "@/lib/meeting/meeting-display-state";
 import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
 import { dateFnsCalendarLocale, intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { formatLanguageRoute } from "@/lib/language/languages";
@@ -1064,6 +1067,12 @@ function MonthGrid({
  * else. The icon is decorative here; the state, like the relation, is spoken by the chip's own
  * accessible name, because neither a glyph nor a fill is something a screen reader can announce.
  */
+/** The display states whose title is greyed: cancelled, and (WT-714) expired. */
+const MEETINGS_THAT_DID_NOT_HAPPEN: ReadonlySet<MeetingDisplayState> = new Set([
+  "cancelled",
+  "expired",
+]);
+
 function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => void }) {
   const t = useTranslations("schedules");
   const locale = useLocale();
@@ -1094,7 +1103,9 @@ function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => v
         className={cn(
           "min-w-0 truncate text-[12px] leading-4",
           isHostedByViewer(meeting) ? "font-semibold" : "font-normal",
-          meeting.status === "cancelled" && "text-ink-muted",
+          // Through the shared rule, so the chip's title agrees with the tone class and the glyph
+          // beside it about whether this meeting happened at all (WT-714).
+          MEETINGS_THAT_DID_NOT_HAPPEN.has(meetingDisplayState(meeting)) && "text-ink-muted",
         )}
       >
         {meeting.title}
@@ -1571,7 +1582,9 @@ function WeekCard({
   const t = useTranslations("schedules");
   const locale = useLocale();
   const displayState = meetingDisplayState(meeting);
-  const isCancelled = displayState === "cancelled";
+  // Cancelled and expired (WT-714) alike: the title is greyed because there is no meeting behind
+  // it, not because of which of the two reasons applies.
+  const didNotHappen = displayState === "cancelled" || displayState === "expired";
   const isLive = displayState === "live";
   const relation = relationLabel(meeting, t);
   const stateLabel = useMeetingStateLabel()(meeting);
@@ -1631,7 +1644,7 @@ function WeekCard({
         className={cn(
           "mt-1 line-clamp-2 text-[11px] leading-snug text-ink",
           isHostedByViewer(meeting) ? "font-semibold" : "font-normal",
-          isCancelled && "text-ink-muted",
+          didNotHappen && "text-ink-muted",
         )}
       >
         {meeting.title}
@@ -1956,7 +1969,18 @@ function isAhead(timeState: MeetingTimeState) {
  * destinations. The first has artifacts; the second still has a room sitting there unopened.
  */
 function hasFinished(meeting: MyMeetingItem) {
-  return !["scheduled", "waiting", "in_progress", "paused"].includes(meeting.status);
+  // `open` (WT-612 / WT-621) is a room standing unlocked, so it belongs with the four that are
+  // still to be entered. Left out, clicking the row would have opened the RECAP dialog — an empty
+  // one, because a meeting nobody has walked into yet has no transcript, summary or recording.
+  //
+  // `expired` (WT-714) is excluded for that same reason, and it is the case the reasoning was
+  // written for: the sweep expires a booking precisely BECAUSE nobody attended it, so the dialog
+  // it used to open was guaranteed to be the empty one — "Past meeting", no duration, no
+  // participants, "No outputs retained". `failed` stays in: a failed room is one that ran and
+  // broke, and it can have a partial transcript or recording worth reading.
+  return !["scheduled", "waiting", "open", "in_progress", "paused", "expired"].includes(
+    meeting.status,
+  );
 }
 
 /**
@@ -1987,7 +2011,11 @@ function hasFinished(meeting: MyMeetingItem) {
 function rowToneClass(meeting: TimedMeeting) {
   const hosted = isHostedByViewer(meeting);
   const state = meetingDisplayState(meeting);
-  if (state === "cancelled") {
+  // Expired shares cancelled's slate (WT-714). Both mean "this meeting did not take place", and
+  // that is what the hue is for; the badge's word is what separates called-off from lapsed. Giving
+  // it amber instead would file a room nobody entered under the same colour as a meeting that ran
+  // without the viewer, which is the confusion the state exists to remove.
+  if (state === "cancelled" || state === "expired") {
     return hosted
       ? "border-l-4 border-l-slate-400 border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2"
       : "border-l-4 border-l-slate-400 border-slate-400/60 bg-transparent text-ink-muted hover:bg-surface-2/60";
@@ -2021,7 +2049,8 @@ function rowToneClass(meeting: TimedMeeting) {
 function monthChipToneClass(meeting: TimedMeeting) {
   const hosted = isHostedByViewer(meeting);
   const state = meetingDisplayState(meeting);
-  if (state === "cancelled") {
+  // Slate for expired too — same reasoning as rowToneClass.
+  if (state === "cancelled" || state === "expired") {
     return hosted
       ? "border-border bg-surface-2/60 text-ink-muted hover:bg-surface-2"
       : "border-slate-400/60 bg-transparent text-ink-muted hover:bg-surface-2/60";
@@ -2091,7 +2120,7 @@ function relationPillClass(meeting: MyMeetingItem) {
  */
 function stateBadgeClass(meeting: TimedMeeting) {
   const state = meetingDisplayState(meeting);
-  if (state === "cancelled") return "bg-surface-3 text-ink-muted";
+  if (state === "cancelled" || state === "expired") return "bg-surface-3 text-ink-muted";
   if (state === "live") return "bg-rose-500/10 text-rose-700";
   if (state === "upcoming") return "bg-sky-500/10 text-sky-700";
   if (state === "missed") return "bg-amber-500/15 text-amber-700 dark:text-amber-400";

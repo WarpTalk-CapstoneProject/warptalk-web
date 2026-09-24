@@ -728,7 +728,14 @@ export function PersistentMeetingSession({
   );
 
   const room = roomQuery.data;
-  // The room is OPEN — somebody took the meeting live.
+  // Somebody took the meeting live — there is a room with people in it.
+  //
+  // NOT the `open` status, despite the wording this comment used to carry ("the room is OPEN").
+  // `open` (WT-612 / WT-621) is the clock unlocking the door at `scheduledAt`, with nobody inside
+  // and no TranslationRoomSession behind it, and the only thing this flag gates is the poll for
+  // that session. Polling a room that cannot have one yet would cost a request every few seconds
+  // to be told what its status already says. Entering the room is what takes it to IN_PROGRESS,
+  // so by the time a session can exist this is true.
   const meetingLive = room?.status === "in_progress";
   // Whether a transcript broadcast arriving right now still has somewhere to land.
   //
@@ -3118,6 +3125,11 @@ export function PersistentMeetingSession({
   // A room that is not open yet is still opened first. That is normally the lobby's job
   // (WT-232), but this button is reachable without going through it, and failing with "invalid
   // state" would be a worse answer than doing the obvious thing.
+  //
+  // An `open` room (WT-612 / WT-621) goes down that same path and must: the clock unlocked the
+  // door, nothing has taken the room to IN_PROGRESS, and the Start endpoint accepts OPEN for
+  // exactly this. Adding it to the skip list below would send /resume at a room with no session
+  // to resume.
   async function handleStartWarptalk() {
     if (!room?.id) return;
     try {

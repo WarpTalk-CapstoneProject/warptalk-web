@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "進行中",
+    "open": "入室可能",
     "waiting": "待機中",
     "scheduled": "予定あり",
     "ended": "終了",
@@ -158,7 +159,9 @@
   },
   "startedBanner": {
     "title": "ミーティングが開始されました",
+    "openedTitle": "ミーティングが入室可能になりました",
     "joinNow": "今すぐ参加",
+    "setUpAndJoin": "設定して参加",
     "openFromNotifications": "通知から開いてください。",
     "dismissAria": "閉じる"
   },

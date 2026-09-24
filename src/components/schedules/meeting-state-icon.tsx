@@ -33,6 +33,8 @@ export function useMeetingStateLabel() {
  * (same ring, warmer colour) — confusing the two is the bug WT-538 exists to remove. And nothing
  * here is struck through: `line-through` was removed from the schedule in 8953691 and stays gone.
  *
+ * WT-714 adds expired as a slate dashed ring — see the note beside it below.
+ *
  * Decorative by default, because the rows that use it already speak the state in their accessible
  * name. Pass `labelled` where the icon is the only place the state is said.
  */
@@ -91,9 +93,17 @@ function Glyph({ state, size }: { state: MeetingDisplayState; size: number }) {
     );
   }
 
-  // Upcoming and missed are the same ring drawn two ways, as SVG so the dash pattern is even at
-  // 13px — a CSS `border-dashed` on a circle this small renders as two or three uneven blobs.
+  // Upcoming, missed and expired are the same ring drawn three ways, as SVG so the dash pattern is
+  // even at 13px — a CSS `border-dashed` on a circle this small renders as two or three uneven
+  // blobs.
+  //
+  // Expired (WT-714) borrows one variable from each of its neighbours rather than claiming a sixth
+  // hue: the DASHES of `missed`, because the viewer was not in this meeting either, and the SLATE
+  // of `cancelled`, because — like a call-off and unlike a no-show — there was no meeting to be in.
+  // A sixth colour on a palette that already asks the reader to hold five would be the point at
+  // which the mark stops being readable at 13px.
   const missed = state === "missed";
+  const expired = state === "expired";
   return (
     <svg
       width={size}
@@ -101,7 +111,11 @@ function Glyph({ state, size }: { state: MeetingDisplayState; size: number }) {
       viewBox="0 0 16 16"
       fill="none"
       className={
-        missed ? "text-amber-500 dark:text-amber-400" : "text-sky-500 dark:text-sky-400"
+        expired
+          ? "text-slate-400 dark:text-slate-500"
+          : missed
+            ? "text-amber-500 dark:text-amber-400"
+            : "text-sky-500 dark:text-sky-400"
       }
     >
       <circle
@@ -110,7 +124,7 @@ function Glyph({ state, size }: { state: MeetingDisplayState; size: number }) {
         r="5.5"
         stroke="currentColor"
         strokeWidth="2"
-        strokeDasharray={missed ? "2.9 2.86" : undefined}
+        strokeDasharray={missed || expired ? "2.9 2.86" : undefined}
       />
     </svg>
   );

@@ -5,12 +5,21 @@
  * said in a meeting belongs to the workspace that held it, and the API does not send it.
  */
 
-/** A real room status, or the pseudo-status "live" which spans IN_PROGRESS and PAUSED. */
+/**
+ * A real room status, or the pseudo-status "live" which spans IN_PROGRESS and PAUSED.
+ *
+ * WT-612 / WT-621 / WT-714: `OPEN` is a real status now — the clock unlocks a booking at its slot
+ * — and it is deliberately NOT folded into `live`, which the server defines as IN_PROGRESS+PAUSED
+ * and counts for the "N live" figure in the header. An open room carries no audio and nobody may
+ * have arrived; counting it as live would overstate that figure. It needs its own filter instead,
+ * and the server's allow-list (AdminMeetingService.Statuses) has to carry it for one to work.
+ */
 export type AdminMeetingStatusFilter =
   | "all"
   | "live"
   | "SCHEDULED"
   | "WAITING"
+  | "OPEN"
   | "IN_PROGRESS"
   | "PAUSED"
   | "ENDED"
