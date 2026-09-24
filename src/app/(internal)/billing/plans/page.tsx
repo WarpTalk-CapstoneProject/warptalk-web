@@ -52,6 +52,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
@@ -123,6 +124,11 @@ const initialFormState: PlanFormState = {
 };
 
 export default function AdminPlansPage() {
+  const pathname = usePathname();
+  // Mounted at both /admin/billing/plans and the legacy /billing/plans — see the matching note
+  // in src/app/(internal)/billing/page.tsx. Stay on whichever base is already showing so the
+  // "Back" arrow below doesn't jump the person into the other layout's sidebar.
+  const basePath = pathname.startsWith("/admin") ? "/admin/billing" : "/billing";
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -344,7 +350,7 @@ export default function AdminPlansPage() {
       <div className="flex items-center justify-between bg-surface-1 p-6 rounded-xl border border-hairline shadow-linear">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Link href="/billing">
+            <Link href={basePath}>
               <Button
                 variant="ghost"
                 size="icon"

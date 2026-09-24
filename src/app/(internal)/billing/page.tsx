@@ -72,12 +72,20 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function AdminBillingPage() {
   const t = useTranslations("adminBillingLedger");
   const router = useRouter();
+  const pathname = usePathname();
+  // This page is mounted at both /admin/billing (inside the system-admin portal's own layout,
+  // src/app/(app)/admin/layout.tsx) and the legacy /billing (src/app/(internal)/layout.tsx,
+  // its own separate sidebar). A hardcoded "/billing/..." link would always jump OUT of
+  // whichever layout is currently showing, which is what silently swapped the sidebar out from
+  // under an admin browsing from /admin/billing. Staying on the same base keeps the sidebar the
+  // person is already looking at.
+  const basePath = pathname.startsWith("/admin") ? "/admin/billing" : "/billing";
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -411,14 +419,14 @@ export default function AdminBillingPage() {
               const uuidRegex =
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
               if (uuidRegex.test(term)) {
-                router.push(`/billing/workspace/${term}`);
+                router.push(`${basePath}/workspace/${term}`);
               } else {
                 try {
                   const { WorkspaceService } =
                     await import("@/services/workspace.service");
                   const result = await WorkspaceService.list(1, 1, term);
                   if (result.items && result.items.length > 0) {
-                    router.push(`/billing/workspace/${result.items[0].id}`);
+                    router.push(`${basePath}/workspace/${result.items[0].id}`);
                   } else {
                     alert(t("search.noWorkspaceFound", { term }));
                   }
@@ -446,7 +454,7 @@ export default function AdminBillingPage() {
             <Download className="mr-2 h-4 w-4" weight="light" />{" "}
             {t("actions.exportReport")}
           </Button>
-          <Link href="/billing/plans">
+          <Link href={`${basePath}/plans`}>
             <Button variant="outline" className="rounded-md h-9 px-4">
               <Settings className="mr-2 h-4 w-4 text-primary" />{" "}
               {t("actions.managePlans")}
@@ -745,7 +753,7 @@ export default function AdminBillingPage() {
                               </div>
                             ) : (
                               <Link
-                                href={`/billing/workspace/${log.workspaceId}`}
+                                href={`${basePath}/workspace/${log.workspaceId}`}
                                 className="block hover:opacity-80 transition-opacity"
                               >
                                 <IdBadge
