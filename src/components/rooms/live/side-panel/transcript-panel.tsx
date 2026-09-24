@@ -19,11 +19,23 @@ import {
   splitSegmentsAroundPauseGaps,
   withLivePauseGap,
   withoutSegmentsInOpenPauseGaps,
+  mergeTranslations,
   type GroupedTranscriptSegment,
   type TranscriptPauseGap,
   type TranslationSessionBlock,
 } from "@/lib/transcript/transcript-display";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
+import {
+  buildCleanTranscriptView,
+  mergeCleanSentences,
+  transcriptBubbleLines,
+  withAbsorbedSegmentIds,
+  type CleanTranscriptView,
+} from "@/lib/transcript/clean-transcript";
+import {
+  SelfRepairMarker,
+  TranscriptViewModeToggle,
+} from "@/components/rooms/transcript-clean-controls";
 import { AnimatedWords } from "@/components/rooms/live/animated-words";
 import { useMeetingIdentity } from "@/components/rooms/live/meeting-identity-context";
 import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
@@ -37,7 +49,12 @@ import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 // WT-605. The pause-window read lives with the other transcript hooks, not with the room
 // ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
 // existed, and two hooks of the same name over the same endpoint is how they drift.
-import { useTranscriptPauseWindows } from "@/hooks/use-transcripts";
+import {
+  useTranscriptByRoom,
+  useTranscriptCleanSentences,
+  useTranscriptPauseWindows,
+  useTranscriptViewMode,
+} from "@/hooks/use-transcripts";
 import { useAuthStore } from "@/stores/auth-store";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import type { AiSuggestionDto, TranscriptSegmentDto } from "@/types/realtime";
@@ -159,10 +176,52 @@ export function TranscriptPanel({
     revision: recorded.segments.length,
   });
 
+  // WT-716: Clean by default, Verbatim on request — this reader's choice only, shared with every
+  // other transcript surface they have open (see useTranscriptViewMode).
+  const [viewMode, setViewMode] = useTranscriptViewMode();
+  // Sentences come from two places, like the segments do: the saved transcript for whatever was
+  // said before this browser connected (a late joiner's catch-up), and the realtime event for
+  // everything since. The by-room read is the one persistent-meeting-session already made, so it
+  // is a cache hit, not a second request; a room that saves no transcript 404s and has none.
+  const savedTranscriptQuery = useTranscriptByRoom(roomId);
+  const savedCleanSentencesQuery = useTranscriptCleanSentences(savedTranscriptQuery.data?.id);
+  const liveCleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
+  const cleanSentences = useMemo(
+    () => mergeCleanSentences(savedCleanSentencesQuery.data ?? [], liveCleanSentences),
+    [savedCleanSentencesQuery.data, liveCleanSentences],
+  );
+
+  // AFTER the pause filter and BEFORE the grouping, for the reasons each of those gives: a sentence
+  // may only stand in for segments that are actually being shown (one covering a withheld segment
+  // finds it missing and falls back — see isCleanSentenceStale), and the grouping has to see one
+  // segment per sentence or it would fold the sentence's parts back into a bubble one chunk at a
+  // time. Null in Verbatim, which is the panel exactly as it was.
+  const cleanView = useMemo<CleanTranscriptView<TranscriptSegmentDto> | null>(
+    () =>
+      viewMode === "clean"
+        ? buildCleanTranscriptView(recorded.segments, cleanSentences, {
+            idOf: (segment) => segment.segmentId,
+            // Translations ride on the live segment itself, so a segment the sentence swallows
+            // would take its translations with it. Folded into the head the way the grouping
+            // folds a merged bubble's — per language, so two languages never share one slot.
+            absorb: (head, absorbed) => ({
+              ...head,
+              translations: mergeTranslations(head.translations, absorbed.translations),
+              confidence: Math.min(head.confidence, absorbed.confidence),
+            }),
+          })
+        : null,
+    [viewMode, recorded.segments, cleanSentences],
+  );
+
   const blocks = useMemo(() => {
-    const utterances = groupTranscriptSegments(recorded.segments);
+    const shown = cleanView ? cleanView.segments : recorded.segments;
+    const grouped = groupTranscriptSegments(shown);
+    // The absorbed ids go back into each bubble's list, so an AI suggestion anchored to the second
+    // chunk of a merged sentence still finds its bubble.
+    const utterances = cleanView ? withAbsorbedSegmentIds(grouped, cleanView) : grouped;
     return groupSegmentsByTranslationSession(utterances, sessions ?? [], baseTime);
-  }, [recorded.segments, sessions, baseTime]);
+  }, [cleanView, recorded.segments, sessions, baseTime]);
 
   // Each pause belongs to exactly ONE session block. Handing every block the whole list — which
   // is what both panels used to do — makes the trailing pass in splitSegmentsAroundPauseGaps
@@ -236,6 +295,15 @@ export function TranscriptPanel({
     <TranscriptPausedNotice since={transcriptPause.since} />
   ) : null;
 
+  // Its own slim row rather than a slot in the tab header: that row is already Transcript, Chat,
+  // People and the host's Pause control, and it scrolls sideways at the narrow widths this panel
+  // is dragged to. Right-aligned, so it reads as a setting of the list below it.
+  const viewModeBar = (
+    <div className="flex shrink-0 justify-end px-3 pt-2">
+      <TranscriptViewModeToggle value={viewMode} onChange={setViewMode} />
+    </div>
+  );
+
   if (!segments.length) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -253,6 +321,7 @@ export function TranscriptPanel({
           not a marker in the record: a reader parked at the bottom of an hour-long transcript
           would never scroll up to find it, and by the time they did it could be over. */}
       {pausedNotice}
+      {viewModeBar}
     <div
       ref={containerRef}
       onScroll={rememberScroll}
@@ -290,6 +359,7 @@ export function TranscriptPanel({
                     key={segment.segmentId}
                     segment={segment}
                     readerLanguage={readerLanguage}
+                    cleanView={cleanView}
                     isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}
                     suggestion={findSuggestionForUtterance(segment, suggestions)}
                     onDismissSuggestion={dismissSuggestion}
@@ -421,30 +491,27 @@ function formatSessionWindow(session: TranslationSessionBlock<unknown>["session"
   return ` · ${started}–${ended}`;
 }
 
-/**
- * The lines one bubble renders, in the order the speaker produced them.
+/*
+ * The lines one bubble renders come from transcriptBubbleLines (lib/transcript/clean-transcript),
+ * which this file used to hold a private copy of — and the Meet widget a second one.
  *
- * TWO SIGNALS, AND THE SECOND ONE IS FREE
+ * TWO SIGNALS, AND THE SECOND ONE IS FREE (Verbatim)
  *   `paragraphs` are the turn split where the SPEAKER stopped for more than a second — measured
  *   by VAD, carried in the timestamps, and previously thrown away. `splitIntoSentences` then
- *   splits each of those on punctuation the recogniser actually produced.
+ *   splits each of those on punctuation the recogniser actually produced. Punctuation alone leaves
+ *   a Vietnamese turn as one line, because the recogniser rarely emits a terminal stop; the pause
+ *   alone would run two written sentences together. Together they cover both.
  *
- *   The order matters. Punctuation alone leaves a Vietnamese turn as one line, because the
- *   recogniser rarely emits a terminal stop; the pause alone would run two written sentences
- *   together whenever they were spoken without a break. Together they cover both.
+ * AND IN CLEAN (WT-716)
+ *   Every merged sentence is a line of its own, and whatever no sentence covers is laid out the
+ *   Verbatim way from its cleaned text.
  */
-function transcriptLines(segment: GroupedTranscriptSegment): string[] {
-  const paragraphs = segment.paragraphs?.length
-    ? segment.paragraphs
-    : [segment.originalText];
-
-  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
-}
 
 function TranscriptBubble({
   segment,
   isSelf,
   readerLanguage,
+  cleanView,
   suggestion,
   onDismissSuggestion,
 }: {
@@ -454,6 +521,8 @@ function TranscriptBubble({
   isSelf: boolean;
   /** The language THIS viewer reads in. Every bubble in the panel resolves against it. */
   readerLanguage?: string;
+  /** WT-716: the Clean view this bubble was grouped from, or null for Verbatim. */
+  cleanView: CleanTranscriptView<TranscriptSegmentDto> | null;
   suggestion?: AiSuggestionDto;
   onDismissSuggestion: (segmentId: string) => void;
 }) {
@@ -474,6 +543,9 @@ function TranscriptBubble({
       initial={{ opacity: 0, y: 8, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      // Every segment this bubble stands for, the ones a merged sentence swallowed included, so a
+      // lookup by backend segment id finds the bubble whichever chunk it was aimed at.
+      data-segment-ids={segment.mergedSegmentIds.join(" ")}
       className={`flex gap-2 ${isSelf ? "flex-row-reverse" : "flex-row"}`}
     >
       {/* Who said it, as a face — the panel used to identify every line by a name in 10px grey,
@@ -525,12 +597,19 @@ function TranscriptBubble({
               its sentences are laid out inside it. A turn with no terminal punctuation, which
               Vietnamese STT produces constantly, comes back as a single line and renders exactly
               as it did before. */}
-          {transcriptLines(segment).map((line, at) => (
+          {transcriptBubbleLines(segment, cleanView, segment.segmentId).map((line, at) => (
             <p
-              key={`${segment.segmentId}-o-${at}`}
+              key={`${segment.segmentId}-o-${line.key}`}
+              data-clean-sentence-id={line.sentence?.sentenceId}
               className={`text-[13px] leading-relaxed ${at > 0 ? "mt-1" : ""} ${isSelf ? "text-white" : "text-ink-muted"}`}
             >
-              <AnimatedWords text={line} />
+              <AnimatedWords text={line.text} />
+              {/* The speaker changed their mind mid-sentence and the clean line states what they
+                  landed on. The marker is how that judgement stays checkable without leaving
+                  Clean: its hover is the words they actually said. */}
+              {line.sentence?.selfRepair ? (
+                <SelfRepairMarker rawText={line.sentence.rawText} inverted={isSelf} />
+              ) : null}
             </p>
           ))}
           {translation

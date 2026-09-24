@@ -1,8 +1,15 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { apiErrorCode } from "@/lib/api/errors";
+import {
+  DEFAULT_TRANSCRIPT_VIEW_MODE,
+  TRANSCRIPT_VIEW_MODE_STORAGE_KEY,
+  readTranscriptViewMode,
+  writeTranscriptViewMode,
+  type TranscriptViewMode,
+} from "@/lib/transcript/clean-transcript";
 import { sortCorrectionsNewestFirst } from "@/lib/transcript/correction-history";
 import { transcriptService } from "@/services/transcript.service";
 import type {
@@ -10,6 +17,7 @@ import type {
   CreateTranscriptExportRequest,
   CreateTranscriptRequest,
   PagedResult,
+  TranscriptCleanSentenceDto,
   TranscriptCorrectionDto,
   TranscriptPauseWindowDto,
 } from "@/types/transcript";
@@ -125,6 +133,123 @@ export function useTranscriptTranslations(transcriptId?: string) {
       }),
     enabled: !!transcriptId,
   });
+}
+
+/**
+ * How many clean sentences to ask for per request. WT-716.
+ *
+ * The contract documents `take=50`, and unlike segments and translations nothing says what the
+ * server does with a larger one — a silent cap is the likeliest answer. That is why this read
+ * advances by the rows it actually got (see collectCleanSentences) rather than by the page size,
+ * and why the size is modest: a cap below it costs extra requests, never skipped sentences.
+ */
+const CLEAN_SENTENCE_PAGE_SIZE = 100;
+
+/**
+ * Every clean sentence of a transcript.
+ *
+ * NOT collectAllPages. That helper advances `skip` by the page size because the translations
+ * endpoint filters after paging — a short page there is not the last one. The opposite risk holds
+ * here: if the server caps `take` below what was asked, advancing by the page size would step over
+ * the rows it did not return, and those sentences would be missing with nothing saying so. So this
+ * advances by the rows received, and stops on an empty page as well as on the total.
+ */
+async function collectCleanSentences(transcriptId: string): Promise<TranscriptCleanSentenceDto[]> {
+  const items: TranscriptCleanSentenceDto[] = [];
+  let skip = 0;
+
+  while (skip < MAX_ROWS) {
+    const { data } = await transcriptService.cleanSentences(transcriptId, {
+      skip,
+      take: CLEAN_SENTENCE_PAGE_SIZE,
+    });
+    const page = data.items ?? [];
+    items.push(...page);
+    skip += page.length;
+    if (page.length === 0 || skip >= (data.totalCount ?? skip)) break;
+  }
+
+  return items;
+}
+
+/**
+ * WT-716 tier 2 — the merged clean sentences of a saved transcript.
+ *
+ * Optional to every reader of it: a meeting from before WT-716 has none, and a backend that has
+ * not shipped the endpoint answers 404. Either way the Clean view falls back to the per-segment
+ * `cleanText`, which is why this never retries and why an error here is never shown — it is the
+ * absence of an improvement, not a fault.
+ *
+ * `refetchIntervalMs` is for a meeting still running, where tier 2 keeps producing sentences behind
+ * the segments. An ended meeting's sentences change only when somebody corrects a line, and the
+ * correction mutation invalidates this key itself.
+ */
+export function useTranscriptCleanSentences(
+  transcriptId?: string,
+  options: { refetchIntervalMs?: number | false } = {},
+) {
+  return useQuery({
+    queryKey: [...TRANSCRIPT_KEY, transcriptId, "clean-sentences"],
+    queryFn: () => collectCleanSentences(transcriptId!),
+    enabled: Boolean(transcriptId),
+    retry: false,
+    refetchInterval: options.refetchIntervalMs ?? false,
+  });
+}
+
+/**
+ * The reader's Clean / Verbatim choice. WT-716.
+ *
+ * PER READER, AND SHARED ACROSS EVERY SURFACE THEY HAVE OPEN
+ *   The choice is how THIS person likes to read, so it lives in their browser and never goes near
+ *   the room. One key serves the live side panel, the caption lane, the room record and the Meet
+ *   widget, and every mounted copy of this hook re-renders when any of them changes it — in this
+ *   tab through the listener set below, in another window of the same origin (the widget popup)
+ *   through the `storage` event.
+ *
+ * useSyncExternalStore rather than useState + an effect: localStorage is an external store, and
+ * the server snapshot (the default) is what makes hydration agree before the browser's own answer
+ * replaces it — the same hydration trap NotificationSoundToggle documents.
+ */
+const viewModeListeners = new Set<() => void>();
+
+function subscribeToViewMode(listener: () => void) {
+  viewModeListeners.add(listener);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key !== null && event.key !== TRANSCRIPT_VIEW_MODE_STORAGE_KEY) return;
+    // Another window chose; its choice is now the newest one, so this tab's copy steps aside.
+    viewModeOverride = undefined;
+    listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    viewModeListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/**
+ * In-memory copy, so a browser that refuses storage still gets a working switch for the session:
+ * the write is lost, the choice is not. Undefined until the reader picks something here.
+ */
+let viewModeOverride: TranscriptViewMode | undefined;
+
+function viewModeSnapshot(): TranscriptViewMode {
+  return viewModeOverride ?? readTranscriptViewMode();
+}
+
+export function useTranscriptViewMode(): [TranscriptViewMode, (mode: TranscriptViewMode) => void] {
+  const mode = useSyncExternalStore(
+    subscribeToViewMode,
+    viewModeSnapshot,
+    () => DEFAULT_TRANSCRIPT_VIEW_MODE,
+  );
+  const setMode = useCallback((next: TranscriptViewMode) => {
+    viewModeOverride = next;
+    writeTranscriptViewMode(next);
+    viewModeListeners.forEach((listener) => listener());
+  }, []);
+  return [mode, setMode];
 }
 
 /**
@@ -288,6 +413,9 @@ export function useCorrectTranscriptSegment() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: [...TRANSCRIPT_KEY, variables.transcriptId, "segments"] });
       queryClient.invalidateQueries({ queryKey: [...TRANSCRIPT_KEY, variables.transcriptId, "translations"] });
+      // WT-716: a correction does not invalidate a merged sentence server-side, and the Clean view
+      // already refuses a stale one — this only fetches whatever the backend re-cleaned since.
+      queryClient.invalidateQueries({ queryKey: [...TRANSCRIPT_KEY, variables.transcriptId, "clean-sentences"] });
     },
   });
 }

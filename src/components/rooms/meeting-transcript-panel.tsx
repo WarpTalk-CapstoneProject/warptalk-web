@@ -68,9 +68,24 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   useSegmentCorrections,
+  useTranscriptCleanSentences,
   useTranscriptLanguageBackfill,
+  useTranscriptViewMode,
   useTranslationRefreshAfterCorrection,
 } from "@/hooks/use-transcripts";
+import {
+  anchorSegmentIds,
+  buildCleanTranscriptView,
+  rawTextForSegmentIds,
+  transcriptBubbleLines,
+  withAbsorbedSegmentIds,
+  type CleanTranscriptView,
+  type TranscriptBubbleLine,
+} from "@/lib/transcript/clean-transcript";
+import {
+  SelfRepairMarker,
+  TranscriptViewModeToggle,
+} from "@/components/rooms/transcript-clean-controls";
 import {
   formatMeetingDuration,
   resolveMeetingDurationSeconds,
@@ -321,13 +336,56 @@ export function MeetingTranscriptArtifact({
   // Memoised on the fetched rows rather than recomputed per render: the language options and
   // the translation index are derived from these, and rebuilding them on every keystroke of a
   // correction would rebuild the whole transcript with them.
-  const grouped = useMemo(
-    () =>
-      groupSavedTranscriptSegments(
-        [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder),
-      ),
+  /**
+   * WT-716 — Clean by default, Verbatim one click away, and the choice is this reader's alone.
+   *
+   * The sentences are optional in every direction: a meeting recorded before WT-716 has none, an
+   * ephemeral room has no saved transcript to read them from, and the live tab has no transcript
+   * id yet. All three land on the per-segment `cleanText`, and a segment that was never cleaned
+   * lands on `originalText` — so the panel always has something to draw.
+   */
+  const [viewMode, setViewMode] = useTranscriptViewMode();
+  const cleanSentencesQuery = useTranscriptCleanSentences(transcriptId, {
+    // While the meeting is still running the cleaner is still writing sentences behind the
+    // segments this panel is already showing. Once it is over they only change when somebody
+    // corrects a line, and that invalidates the query itself.
+    refetchIntervalMs: isEnded ? false : 20_000,
+  });
+
+  const orderedSegments = useMemo(
+    () => [...segments].sort((left, right) => left.sequenceOrder - right.sequenceOrder),
     [segments],
   );
+  /**
+   * The Clean view, built BEFORE the grouping.
+   *
+   * A merged sentence has to replace its segments before `groupSavedTranscriptSegments` sees them,
+   * or the grouping folds the sentence's parts back in one chunk at a time and the sentence is
+   * printed beside the words it is made of. Null in Verbatim, where this panel behaves exactly as
+   * it did before.
+   */
+  const cleanView = useMemo<CleanTranscriptView<TranscriptSegmentDto> | null>(
+    () =>
+      viewMode === "clean"
+        ? buildCleanTranscriptView(orderedSegments, cleanSentencesQuery.data ?? [], {
+            idOf: (segment) => segment.id,
+          })
+        : null,
+    [viewMode, orderedSegments, cleanSentencesQuery.data],
+  );
+  /** The raw rows by id — what a correction is written against, whichever view is on screen. */
+  const rawSegmentsById = useMemo(
+    () => new Map(segments.map((segment) => [segment.id, segment])),
+    [segments],
+  );
+
+  const grouped = useMemo(() => {
+    const rows = groupSavedTranscriptSegments(cleanView ? cleanView.segments : orderedSegments);
+    // Put the absorbed ids back, so a row still names every stored segment it stands for: that
+    // list is what the translations are joined from, what a citation is resolved against, and
+    // what a correction is spread over.
+    return cleanView ? withAbsorbedSegmentIds(rows, cleanView) : rows;
+  }, [cleanView, orderedSegments]);
   const translationIndex = useMemo(
     () => indexTranslationsBySegment(translations),
     [translations],
@@ -808,11 +866,22 @@ export function MeetingTranscriptArtifact({
    * the language chip are the same behaviour in all three, and three copies of that wiring is
    * three places for them to drift.
    */
+  /** The raw words of a line — what the correction editor must open on. See rawTextForSegmentIds. */
+  function rawTextFor(segment: GroupedSavedTranscriptSegment): string {
+    if (!cleanView) return segment.originalText;
+    return rawTextForSegmentIds(segment.mergedSegmentIds, rawSegmentsById) || segment.originalText;
+  }
+
   function buildRow(segment: GroupedSavedTranscriptSegment): TranscriptRowBase {
     const resolved = resolveTranscriptLine(segment, translationIndex, displayLanguage);
     return {
       segment,
       resolved,
+      lines: rowLines(segment, resolved, cleanView),
+      // Every stored id this row answers to, the row's own first: the ids a merged sentence
+      // swallowed, plus the filler-only lines Clean hides. The row draws an anchor for each, so a
+      // citation or a deep link aimed at any of them still lands on the line that contains it.
+      anchorIds: anchorSegmentIds(segment, segment.id, cleanView),
       speaker: resolveTranscriptSpeaker(
         segment.speakerParticipantId,
         segment.speakerName,
@@ -824,7 +893,13 @@ export function MeetingTranscriptArtifact({
       // not a seek is possible, and gating on it would make every timestamp look clickable on a
       // meeting with no recording. See TranscriptLineTime.
       onSeek: onSeekToRecording ? () => seekToMoment(segment.startTimeMs) : undefined,
-      highlighted: highlightedSegmentIds?.has(segment.id) ?? false,
+      // Asked over every id the row answers to, not only its own. In Verbatim that is the same
+      // answer as before (the page hands over ROW ids, and a row id is the first of its own list);
+      // in Clean a citation resolved against the verbatim rows can name a segment this row
+      // swallowed, and comparing ids alone would light nothing.
+      highlighted:
+        highlightedSegmentIds !== undefined
+        && anchorSegmentIds(segment, segment.id, cleanView).some((id) => highlightedSegmentIds.has(id)),
       // A chip on every line of a transcript that IS in one language is noise. Shown when the
       // line is not simply "spoken in the language you asked for", which makes its absence
       // meaningful: no chip means these are the speaker's own words.
@@ -849,15 +924,19 @@ export function MeetingTranscriptArtifact({
       isEditing: isBatchEditing ? true : editingSegmentId === segment.id,
       onStartEdit: () => {
         setEditingSegmentId(segment.id);
-        setDraftText(segment.originalText);
+        // The RAW words, even when the reader is in Clean. A correction is a rewrite of the
+        // record, and an editor seeded with the cleaned line would post the cleaning itself as
+        // the correction — writing "um" out of the stored transcript on the reader's behalf and
+        // filing a revision they never made.
+        setDraftText(rawTextFor(segment));
       },
       editor: isBatchEditing ? (
         <TranscriptBatchLineEditor
           segmentId={segment.id}
           // `??` not `||`: a line the user has emptied must stay empty while they retype it.
           // Falling back to the original on every empty string would undo their deletion as
-          // they made it.
-          value={batchDrafts[segment.id] ?? segment.originalText}
+          // they made it. The fallback is the RAW line, for the reason onStartEdit gives.
+          value={batchDrafts[segment.id] ?? rawTextFor(segment)}
           speakerName={segment.speakerName}
           disabled={isSavingBatch}
           onChange={(next) =>
@@ -1110,7 +1189,11 @@ export function MeetingTranscriptArtifact({
 
   /** What is on screen, as text. Copy and Download must hand over the transcript being read,
    *  not the stored one — a reader who unified the languages and then copied it got back the
-   *  interleaving they had just resolved. */
+   *  interleaving they had just resolved.
+   *
+   *  WT-716: that now includes the wording. Copying in Clean copies the clean lines; somebody who
+   *  needs the recogniser's exact words switches to Verbatim first, which is the same rule the
+   *  language picker has always followed. */
   function transcriptAsText() {
     return assembleTranscriptText(blocks, translationIndex, displayLanguage);
   }
@@ -1186,6 +1269,10 @@ export function MeetingTranscriptArtifact({
               onChange={chooseLanguage}
               busyLanguage={backfill.coverage?.status === "running" ? backfill.coverage.targetLanguage : null}
             />
+            {/* WT-716. Beside the layout toggle because the two are read together — how the
+                transcript is laid out, and which words it is laid out from — and before it in the
+                row because the wording is the bigger of the two changes. */}
+            <TranscriptViewModeToggle value={viewMode} onChange={setViewMode} />
             <TranscriptLayoutToggle value={layout} onChange={setLayout} />
             {/* Offered in reading mode only, because that is the only layout that marks matches in
                 place — the other two draw one row per utterance, where a match highlighted inside a
@@ -1886,15 +1973,51 @@ function TranscriptLayoutToggle({
  * A row showing a TRANSLATION is a different text with its own sentence structure — MT writes
  * proper stops, so punctuation alone is the right and only signal there. Using the spoken turn's
  * pauses to break a translated line would cut it at positions that mean nothing in that language.
+ *
+ * WT-716: the spoken half now goes through transcriptBubbleLines, which lays a Verbatim row out
+ * exactly as the rule above describes and a Clean one as one line per merged sentence.
+ *
+ * TRANSLATIONS ARE NOT CLEANED, AND THAT IS THE DECISION (2026-09-18)
+ *   Cleaning runs over what was SAID, in the language it was said in; the translations are stored
+ *   per segment and were made from the raw text. So a merged sentence's translation is the covered
+ *   segments' translations joined — which is what `mergedSegmentIds` already gives
+ *   translationsForLine, at no cost and with nothing invented. A reader in another language sees
+ *   the same sentence boundaries as before; only the spoken line above it is cleaned.
  */
-function transcriptLines(
+function rowLines(
   segment: GroupedSavedTranscriptSegment,
   resolved: ResolvedTranscriptLine,
-): string[] {
-  if (resolved.isTranslated) return splitIntoSentences(resolved.text);
+  cleanView: CleanTranscriptView<TranscriptSegmentDto> | null,
+): TranscriptBubbleLine[] {
+  if (resolved.isTranslated) {
+    return splitIntoSentences(resolved.text).map((text, index) => ({
+      key: `${segment.id}-t${index}`,
+      text,
+      sentence: null,
+    }));
+  }
+  return transcriptBubbleLines(segment, cleanView, segment.id);
+}
 
-  const paragraphs = segment.paragraphs?.length ? segment.paragraphs : [resolved.text];
-  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
+/**
+ * The zero-height marks that let a lookup by STORED segment id find the row that contains it.
+ *
+ * The row's element is named after its own id, and that was the only id it answered to — fine
+ * while every other id in the row was reachable through `mergedSegmentIds` on the page's copy of
+ * the rows (see citation-target.ts). In Clean the rows are not the same rows: a sentence can cover
+ * what used to be two, and a filler-only line is not drawn at all, so a citation resolved against
+ * the verbatim rows can name an id no element carries. One empty span per extra id closes that
+ * without touching the layout — they are never duplicated, because each stored id belongs to
+ * exactly one row.
+ */
+function TranscriptRowAnchors({ ids }: { ids: readonly string[] }) {
+  return (
+    <>
+      {ids.slice(1).map((id) => (
+        <span key={id} id={`transcript-segment-${id}`} aria-hidden className="sr-only" />
+      ))}
+    </>
+  );
 }
 
 /**
@@ -1907,6 +2030,10 @@ function transcriptLines(
 type TranscriptRowBase = {
   segment: GroupedSavedTranscriptSegment;
   resolved: ResolvedTranscriptLine;
+  /** WT-716: the lines to print, already resolved for the reader's view mode and language. */
+  lines: TranscriptBubbleLine[];
+  /** WT-716: every stored segment id this row answers to, its own first. */
+  anchorIds: string[];
   /** Who said it — carries the colour every layout marks this line with. */
   speaker: TranscriptSpeaker;
   isSelf: boolean;
@@ -1930,6 +2057,8 @@ type TranscriptRowProps = TranscriptRowBase & { speakerName: string };
 function TranscriptChatRow({
   segment,
   resolved,
+  lines,
+  anchorIds,
   speaker,
   speakerName,
   isSelf,
@@ -1954,6 +2083,7 @@ function TranscriptChatRow({
         highlighted ? "bg-primary/10 ring-1 ring-primary/30" : "",
       )}
     >
+      <TranscriptRowAnchors ids={anchorIds} />
       <div className={cn("flex max-w-[75%] flex-col gap-1", isSelf ? "items-end" : "items-start")}>
         <div
           className={cn(
@@ -2002,16 +2132,20 @@ function TranscriptChatRow({
                   changes is that the sentences inside it stop running together. A turn with no
                   terminal punctuation — which Vietnamese STT produces constantly — comes back as
                   a single line and renders exactly as it did before. */}
-              {transcriptLines(segment, resolved).map((sentence, at) => (
+              {lines.map((line, at) => (
                 <p
-                  key={`${segment.id}-s-${at}`}
+                  key={`${segment.id}-s-${line.key}`}
+                  data-clean-sentence-id={line.sentence?.sentenceId}
                   className={cn(
                     "text-[13px] leading-6",
                     at > 0 && "mt-1",
                     isSelf ? "text-white" : "text-ink",
                   )}
                 >
-                  {sentence}
+                  {line.text}
+                  {line.sentence?.selfRepair ? (
+                    <SelfRepairMarker rawText={line.sentence.rawText} inverted={isSelf} />
+                  ) : null}
                 </p>
               ))}
               {canCorrect ? (
@@ -2270,6 +2404,8 @@ function TranscriptDocumentTurn({
 function TranscriptDocumentLine({
   segment,
   resolved,
+  lines,
+  anchorIds,
   showLanguage,
   revealed,
   onToggleReveal,
@@ -2287,13 +2423,15 @@ function TranscriptDocumentLine({
 
   return (
     <div id={`transcript-segment-${segment.id}`} className="group/line flex scroll-mt-4 gap-2">
+      <TranscriptRowAnchors ids={anchorIds} />
       <div className="min-w-0 flex-1">
         {/* Sentences, not one block. The reading rail is where a whole meeting is read end to
             end, so a turn that runs three sentences together is the hardest place to follow.
             Highlighting still runs per sentence, so a search match inside any of them is found. */}
-        {transcriptLines(segment, resolved).map((sentence, at) => (
+        {lines.map((line, at) => (
           <p
-            key={`${segment.id}-r-${at}`}
+            key={`${segment.id}-r-${line.key}`}
+            data-clean-sentence-id={line.sentence?.sentenceId}
             className={cn(
               "max-w-[var(--reading-measure,66ch)] text-[14.5px] leading-[1.75] transition-colors",
               // WT-655(C1): the playing line, and the ONLY thing that changes is the colour of the
@@ -2303,7 +2441,8 @@ function TranscriptDocumentLine({
               at > 0 && "mt-1",
             )}
           >
-            <TranscriptReadingText text={sentence} query={query} />
+            <TranscriptReadingText text={line.text} query={query} />
+            {line.sentence?.selfRepair ? <SelfRepairMarker rawText={line.sentence.rawText} /> : null}
           </p>
         ))}
         {revealed && resolved.isTranslated ? (
@@ -2430,6 +2569,8 @@ function TranscriptTimelineTurn({
 function TranscriptTimelineLine({
   segment,
   resolved,
+  lines,
+  anchorIds,
   showLanguage,
   revealed,
   onToggleReveal,
@@ -2448,8 +2589,22 @@ function TranscriptTimelineLine({
       id={`transcript-segment-${segment.id}`}
       className="group/line flex scroll-mt-4 items-start gap-2"
     >
+      <TranscriptRowAnchors ids={anchorIds} />
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] leading-6 text-ink">{resolved.text}</p>
+        {/* The rail's lines stay as tight as they were — this layout is about WHO held the floor
+            and when, so a turn is a paragraph here rather than a stack of sentences. The self
+            repair mark still rides along, because it belongs to the words and not to the layout. */}
+        <p className="text-[13px] leading-6 text-ink">
+          {resolved.text}
+          {lines.some((line) => line.sentence?.selfRepair) ? (
+            <SelfRepairMarker
+              rawText={lines
+                .filter((line) => line.sentence?.selfRepair)
+                .map((line) => line.sentence!.rawText)
+                .join(" ")}
+            />
+          ) : null}
+        </p>
         {revealed && resolved.isTranslated ? (
           <TranscriptSpokenOriginal resolved={resolved} />
         ) : null}

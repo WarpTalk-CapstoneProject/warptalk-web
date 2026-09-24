@@ -42,6 +42,7 @@ import type { HubConnection } from "@microsoft/signalr";
 
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import type { TranscriptSegmentDto } from "@/types/realtime";
+import type { TranscriptCleanSentenceDto } from "@/types/transcript";
 
 import { useBridgeWidgetState } from "./use-bridge-widget-state";
 
@@ -102,6 +103,16 @@ export type BridgeWidgetState = {
    * `receivedAt` is absent on lines that came from the saved transcript.
    */
   segments: TranscriptSegmentDto[];
+
+  /**
+   * WT-716 tier 2: the merged clean sentences for this transcript, highest revision per id.
+   *
+   * A sentence REPLACES the segments it covers, and only in the Clean view — see
+   * buildCleanTranscriptView. Empty on a meeting recorded before WT-716, on an ephemeral room
+   * (nothing is saved to read them from) and on a backend that does not serve them yet; the pane
+   * then falls back to each segment's own `cleanText`, and to `originalText` under that.
+   */
+  cleanSentences: TranscriptCleanSentenceDto[];
 
   /** This window's own connection to `/hubs/translation-room`. */
   connectionState: BridgeWidgetConnectionState;

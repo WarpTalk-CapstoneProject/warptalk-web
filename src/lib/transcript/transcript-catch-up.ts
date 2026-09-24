@@ -29,6 +29,12 @@ export function toLiveSegment(saved: SavedSegment): LiveSegment {
     confidence: saved.confidence ?? 1,
     startTimeMs: saved.startTimeMs,
     endTimeMs: saved.endTimeMs,
+    // WT-716: carried so a backfilled line reads clean like a live one, and so the Clean view can
+    // tell when a correction has made a merged sentence stale — the realtime event has neither.
+    cleanText: saved.cleanText,
+    cleanFlags: saved.cleanFlags,
+    isCorrected: saved.isCorrected,
+    updatedAt: saved.updatedAt,
   };
 }
 

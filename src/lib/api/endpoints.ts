@@ -270,6 +270,8 @@ export const API = {
     pauseWindows: (translationRoomId: string) =>
       `/transcripts/by-room/${translationRoomId}/pause-windows`,
     segments: (id: string) => `/transcripts/${id}/segments`,
+    /** WT-716 tier 2: merged clean sentences, conversation order, paged like segments. */
+    cleanSentences: (id: string) => `/transcripts/${id}/clean-sentences`,
     translations: (id: string) => `/transcripts/${id}/translations`,
     translationCoverage: (id: string) => `/transcripts/${id}/translations/coverage`,
     translationBackfill: (id: string) => `/transcripts/${id}/translations/backfill`,

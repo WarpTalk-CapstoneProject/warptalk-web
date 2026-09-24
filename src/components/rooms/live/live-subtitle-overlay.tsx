@@ -7,7 +7,13 @@ import { identityFor } from "@/lib/meeting/participant-identity";
 import {
   captionTextForReader,
   groupTranscriptSegments,
+  mergeTranslations,
 } from "@/lib/transcript/transcript-display";
+import {
+  buildCleanTranscriptView,
+  withAbsorbedSegmentIds,
+} from "@/lib/transcript/clean-transcript";
+import { useTranscriptViewMode } from "@/hooks/use-transcripts";
 import type { GroupedTranscriptSegment } from "@/lib/transcript/transcript-display";
 import { useMeetingIdentities } from "./meeting-identity-context";
 import { ParticipantAvatar } from "./participant-avatar";
@@ -88,14 +94,47 @@ export function LiveSubtitleOverlay({
   // The caption lane, not the transcript lane: captions keep running while the transcript is
   // paused, and this list is the one a pause never withholds from. See captionSegments.
   const segments = useTranslationRoomStore((state) => state.captionSegments);
+  const cleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
   const identities = useMeetingIdentities();
   const scrollRef = useRef<HTMLDivElement>(null);
+  /**
+   * WT-716 — the lane reads Clean or Verbatim, and it is the SAME choice the transcript panel
+   * uses rather than a switch of its own.
+   *
+   * The lane has no header to hang a toggle on (it is three lines over live video, with the
+   * control bar's CC button the only thing that governs it), and a caption surface that showed
+   * "ừm, ừm, cái đó" while the panel two inches away showed the same sentence cleaned would read
+   * as two transcripts of one meeting. So the preference is shared and there is no second control:
+   * a reader who wants the recogniser's exact words switches once, in the panel, and both follow.
+   */
+  const [viewMode] = useTranscriptViewMode();
 
   const lines = useMemo(() => {
+    // Clean captions are built from the SEGMENTS the lane already holds — tier 1 wording, with
+    // filler-only lines dropped so the lane never spends one of its three slots on "um". A merged
+    // sentence (tier 2) is used when one has arrived for lines still on screen; it usually has
+    // not, because the lane is showing what was said a second ago and the sentence is written
+    // afterwards. Falling back to the per-segment text is the ordinary case here, not the
+    // exception.
+    const view =
+      viewMode === "clean"
+        ? buildCleanTranscriptView(segments, cleanSentences, {
+            idOf: (segment) => segment.segmentId,
+            // A swallowed segment takes its translations with it unless they are folded in, and
+            // the translation is what this lane actually prints for a reader in another language.
+            absorb: (head, absorbed) => ({
+              ...head,
+              translations: mergeTranslations(head.translations, absorbed.translations),
+              confidence: Math.min(head.confidence, absorbed.confidence),
+            }),
+          })
+        : null;
+    const grouped = groupTranscriptSegments(view ? view.segments : segments);
+    const shown = view ? withAbsorbedSegmentIds(grouped, view) : grouped;
     // Resolved ONCE per utterance here rather than inside CaptionLine, so a line with nothing to
     // show this reader yet never occupies a slot. Filtering after the slice would leave the lane
     // rendering two lines and a gap.
-    const spoken = groupTranscriptSegments(segments)
+    const spoken = shown
       .map((utterance) => ({
         utterance,
         caption: captionTextForReader(utterance, readerLanguage, translationActive),
@@ -104,7 +143,7 @@ export function LiveSubtitleOverlay({
         Boolean(line.caption),
       );
     return spoken.slice(-(variant === "compact" ? 1 : LANE_LINES));
-  }, [segments, variant, readerLanguage, translationActive]);
+  }, [segments, cleanSentences, viewMode, variant, readerLanguage, translationActive]);
 
   const newest = lines[lines.length - 1];
   // Length, not just the id: a live utterance keeps the same segmentId while its text grows, and
