@@ -17,8 +17,15 @@ export type BrowserCaptureConsentState =
 export interface BrowserCaptureConsentInput {
   isBridgeRoom: boolean;
   isHost: boolean;
-  /** Before Start Translation there is no pipeline, so there is nothing to consent to yet. */
-  translationStarted: boolean;
+  /**
+   * The meeting is open and being transcribed.
+   *
+   * WT-828: this used to be `translationStarted`, on the theory that before Start Translation
+   * there was no pipeline to consume the far side's audio. There is: the transcript is saved
+   * whenever people speak, and Start Translation controls only translation and dubbing. Waiting
+   * for it left every word the far side said before Start out of the meeting's record.
+   */
+  meetingOpen: boolean;
   /** A second virtual device exists, so the far side arrives on its own endpoint. */
   hasInboundDevice: boolean;
   /** Windows process loopback is the only way in on this machine. */
@@ -40,7 +47,7 @@ export function browserCaptureConsentState(
   const wouldCaptureBrowser =
     input.isBridgeRoom &&
     input.isHost &&
-    input.translationStarted &&
+    input.meetingOpen &&
     !input.hasInboundDevice &&
     input.loopbackAvailable;
 

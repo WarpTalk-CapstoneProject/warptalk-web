@@ -728,7 +728,14 @@ export function PersistentMeetingSession({
   );
 
   const room = roomQuery.data;
-  // The room is OPEN — somebody took the meeting live.
+  // Somebody took the meeting live — there is a room with people in it.
+  //
+  // NOT the `open` status, despite the wording this comment used to carry ("the room is OPEN").
+  // `open` (WT-612 / WT-621) is the clock unlocking the door at `scheduledAt`, with nobody inside
+  // and no TranslationRoomSession behind it, and the only thing this flag gates is the poll for
+  // that session. Polling a room that cannot have one yet would cost a request every few seconds
+  // to be told what its status already says. Entering the room is what takes it to IN_PROGRESS,
+  // so by the time a session can exist this is true.
   const meetingLive = room?.status === "in_progress";
   // Whether a transcript broadcast arriving right now still has somewhere to land.
   //
@@ -786,12 +793,17 @@ export function PersistentMeetingSession({
   // WT-428: read inside the hub's ParticipantWaiting callback, which is registered once and
   // would otherwise close over the first render's value — where isHost is still false because
   // the room query has not resolved. Same reasoning as currentUserIdRef.
-  // Placed here, below `isHost` and `translationStarted`, because it reads both. The state it
+  // WT-828: the far side of a bridged call is heard for as long as the meeting is open — the same
+  // rule the caption lane and the transcript follow (TRANSCRIPT_CLOSED_STATUSES above). It used to
+  // wait for Start Translation, which kept every word the far side said before Start out of the
+  // meeting's record. `room` first, so no server render (which has no room) can ever read as open.
+  const bridgeListening = Boolean(room) && transcriptOpen;
+  // Placed here, below `isHost` and `bridgeListening`, because it reads both. The state it
   // depends on is declared with the other bridge state far above; only the derivation has to wait.
   const consentState = browserCaptureConsentState({
     isBridgeRoom,
     isHost,
-    translationStarted,
+    meetingOpen: bridgeListening,
     hasInboundDevice: Boolean(bridgeInboundDeviceId),
     loopbackAvailable: bridgeInboundLoopback,
     answer: browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null,
@@ -799,7 +811,7 @@ export function PersistentMeetingSession({
   const selectedLoopbackSourceId =
     loopbackSourceSelection?.roomId === roomId ? loopbackSourceSelection.sourceId : null;
   // Where the host is actually asked. Reading the desktop bridge during render is safe here only
-  // because consent is never "required" during SSR — it needs translationStarted, which no server
+  // because consent is never "required" during SSR — it needs a loaded room, which no server
   // render has — so this is "none" on the server either way and cannot mismatch on hydration.
   const consentSurface = bridgeConsentSurface({
     consent: consentState,
@@ -856,10 +868,12 @@ export function PersistentMeetingSession({
   // speaker Meet plays into, and published on a SECOND LiveKit connection under the stand-in
   // identity, so the pipeline attributes their speech to them rather than to the host.
   //
-  // Gated on `translationStarted`, not merely on being in the room. Before Start Translation
-  // there is no STT/MT/TTS pipeline to consume the track, so connecting early would publish into
-  // a room nothing is listening to and burn LiveKit connection minutes — the quota this project
-  // has already exhausted once (WT-269).
+  // Gated on the meeting being open (`bridgeListening`), NOT on Start Translation. WT-828: this
+  // used to wait for Start, on the theory that before it there was no pipeline to consume the
+  // track. There is — the transcript is saved whenever people speak, and Start Translation only
+  // controls translation and dubbing — so waiting left the far side's first minutes out of the
+  // record. The LiveKit minutes this costs (WT-269) are bounded by the idle reap below, which is
+  // what actually stops a forgotten bridge; a translation that was never started never did.
   //
   // Host-only because the token is host-only: a participant calling this would take a 403 on
   // every render, and a 403 here is a settled answer rather than a transient one.
@@ -885,7 +899,7 @@ export function PersistentMeetingSession({
     // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
     // publishing the far side — and billing — into a room nobody was in any more.
     const wanted =
-      isBridgeRoom && isHost && translationStarted && hasInboundSource && !meetingIsIdleReaped;
+      isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;
     if (!wanted) {
       // Covers Stop Translation, an idle reap and leaving the room. Not awaited: teardown is
       // fire-and-forget by nature and an effect cleanup cannot await anyway.
@@ -1000,7 +1014,7 @@ export function PersistentMeetingSession({
   }, [
     isBridgeRoom,
     isHost,
-    translationStarted,
+    bridgeListening,
     bridgeInboundDeviceId,
     bridgeInboundLoopback,
     consentState,
@@ -3118,6 +3132,11 @@ export function PersistentMeetingSession({
   // A room that is not open yet is still opened first. That is normally the lobby's job
   // (WT-232), but this button is reachable without going through it, and failing with "invalid
   // state" would be a worse answer than doing the obvious thing.
+  //
+  // An `open` room (WT-612 / WT-621) goes down that same path and must: the clock unlocked the
+  // door, nothing has taken the room to IN_PROGRESS, and the Start endpoint accepts OPEN for
+  // exactly this. Adding it to the skip list below would send /resume at a room with no session
+  // to resume.
   async function handleStartWarptalk() {
     if (!room?.id) return;
     try {

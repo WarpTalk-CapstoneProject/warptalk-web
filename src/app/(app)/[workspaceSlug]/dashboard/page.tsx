@@ -55,6 +55,7 @@ import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { useWorkspaceDocuments, useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { getErrorStatus } from "@/lib/api/retry-policy";
+import { UNFINISHED_ROOM_STATUSES_FILTER } from "@/lib/meeting/meeting-day";
 import { billingService } from "@/services/billing.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 
@@ -105,8 +106,12 @@ export default function WorkspaceAdminDashboardPage() {
   );
   // Same reason as the Meetings list: without workspaceId the server cannot widen this to a
   // workspace Owner/Admin, and the Meetings tile read 0 for an Admin while the Owner saw 3.
+  // `status` is sent rather than left to the server's default, which is the four statuses that
+  // existed when it was written. OPEN (WT-612 / WT-621) is not among them, so a meeting the clock
+  // had just opened was absent from "up next" — the one row it most belonged in.
   const { data: roomsData, isLoading: isLoadingRooms } = useTranslationRooms({
     pageSize: 100,
+    status: UNFINISHED_ROOM_STATUSES_FILTER,
     workspaceId: activeWorkspaceId ?? undefined,
   });
 
@@ -176,14 +181,19 @@ export default function WorkspaceAdminDashboardPage() {
     .filter(
       (room) =>
         room.status === "in_progress" ||
+        // WT-612 / WT-621: its slot came round and the door opened by itself. Unlike the
+        // `scheduled` clause below it carries no time test — an OPEN room is open NOW, whatever
+        // the hour it was booked for says.
+        room.status === "open" ||
         room.status === "waiting" ||
         (room.status === "scheduled" &&
           room.scheduledAt &&
           new Date(room.scheduledAt).getTime() >= now),
     )
     .sort((a, b) => {
-      // Running first — it is happening whether or not it was booked earliest.
-      const liveRank = (status: string) => (status === "in_progress" ? 0 : 1);
+      // Running or open first — it is happening whether or not it was booked earliest.
+      const liveRank = (status: string) =>
+        status === "in_progress" || status === "open" ? 0 : 1;
       if (liveRank(a.status) !== liveRank(b.status)) return liveRank(a.status) - liveRank(b.status);
       return new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime();
     })
@@ -415,17 +425,22 @@ export default function WorkspaceAdminDashboardPage() {
                     href={`/${activeWorkspaceSlug}/rooms/${room.id}`}
                     title={room.title || room.translationRoomCode}
                     detail={
+                      // Not "Running now" for an OPEN room: it has nobody in it and no translation
+                      // session behind it, and saying it is running would send someone in
+                      // expecting a meeting already under way (WT-612 / WT-621).
                       room.status === "in_progress"
                         ? t("runningNow")
+                        : room.status === "open"
+                        ? t("openNow")
                         : room.scheduledAt
-                          ? new Intl.DateTimeFormat("en-US", {
-                              weekday: "short",
-                              day: "numeric",
-                              month: "short",
-                              hour: "numeric",
-                              minute: "2-digit",
-                            }).format(new Date(room.scheduledAt))
-                          : t("noTimeSet")
+                        ? new Intl.DateTimeFormat("en-US", {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          }).format(new Date(room.scheduledAt))
+                        : t("noTimeSet")
                     }
                   />
                 ))}

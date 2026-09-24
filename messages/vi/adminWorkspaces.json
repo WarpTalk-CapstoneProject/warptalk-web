@@ -164,7 +164,7 @@
       "membersBilledHint": "Số tài khoản riêng biệt có phát sinh sử dụng",
       "dailyConsumption": "Mức tiêu thụ hàng ngày",
       "noBillableUsage": "Không có sử dụng tính phí trong khoảng thời gian này.",
-      "tooltip": "{date} · {credits} cr · {events} sự kiện",
+      "tooltipEvents": "{events} sự kiện",
       "byService": "Theo dịch vụ",
       "nothingBilled": "Không có gì được tính phí trong khoảng thời gian này.",
       "events": "{count} sự kiện",
@@ -470,7 +470,7 @@
     "balanceLegend": "Số dư",
     "grantedLegend": "Được cộng · {credits}",
     "aria": "Tiêu hao credit trong {days} ngày",
-    "barTitle": "{date}: {credits} credit",
+    "consumedFooter": "Đã dùng {credits} credit",
     "peakBalance": "số dư cao nhất {credits}"
   },
   "timeline": {

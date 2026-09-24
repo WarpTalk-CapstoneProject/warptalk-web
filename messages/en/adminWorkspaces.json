@@ -164,7 +164,7 @@
       "membersBilledHint": "Distinct accounts with usage",
       "dailyConsumption": "Daily consumption",
       "noBillableUsage": "No billable usage in this window.",
-      "tooltip": "{date} · {credits} cr · {events} events",
+      "tooltipEvents": "{events} events",
       "byService": "By service",
       "nothingBilled": "Nothing billed in this window.",
       "events": "{count} events",
@@ -470,7 +470,7 @@
     "balanceLegend": "Balance",
     "grantedLegend": "Granted · {credits}",
     "aria": "Credit burn over {days} days",
-    "barTitle": "{date}: {credits} credits",
+    "consumedFooter": "{credits} credits consumed",
     "peakBalance": "peak balance {credits}"
   },
   "timeline": {

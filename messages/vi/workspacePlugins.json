@@ -1,8 +1,8 @@
 {
   "workspaceFallback": "không gian làm việc này",
   "header": {
-    "title": "Plugin",
-    "subtitle": "Chọn những plugin mà thành viên của {workspaceName} có thể kết nối. Mỗi thành viên đăng nhập bằng tài khoản của riêng mình.",
+    "title": "Plugin của workspace",
+    "subtitle": "Các plugin trong kho mà thành viên của {workspaceName} có thể kết nối. Mỗi thành viên đăng nhập bằng tài khoản của riêng mình.",
     "readOnly": "Bạn có thể xem danh sách này. Chỉ chủ sở hữu không gian làm việc mới có thể thay đổi."
   },
   "addMenu": {
@@ -13,7 +13,7 @@
   "states": {
     "loading": "Đang tải plugin...",
     "forbiddenTitle": "Chỉ chủ sở hữu và quản trị viên không gian làm việc mới xem được trang này",
-    "forbiddenBody": "Hãy yêu cầu plugin từ trang Plugin của riêng bạn.",
+    "forbiddenBody": "Hãy yêu cầu plugin từ trang Kết nối của tôi.",
     "loadError": "Không thể tải plugin của không gian làm việc này.",
     "retry": "Thử lại"
   },
@@ -22,8 +22,7 @@
     "readOnly": "Chỉ chủ sở hữu không gian làm việc mới có thể thêm plugin."
   },
   "transition": {
-    "allAvailable": "Mọi plugin trong kho đều khả dụng ở đây cho đến khi danh sách này được thay đổi.",
-    "noneAvailable": "Chưa có plugin nào trong kho khả dụng ở đây. Plugin đã bị tắt trong cài đặt cũ của không gian làm việc này."
+    "carriedOver": "{count, plural, other {Không gian làm việc này chưa chọn plugin nào, nên vẫn giữ # plugin mà thành viên đang dùng ở đây cho đến khi bạn thay đổi danh sách này.}}"
   },
   "requests": {
     "title": "Yêu cầu",
@@ -91,7 +90,7 @@
     "cancel": "Hủy",
     "remove": "Xóa",
     "confirmPrivate": "Xóa {label}? Thành viên sẽ không còn thấy hay dùng được nó, dù ở {workspaceName} hay bất kỳ đâu.",
-    "confirmShared": "Xóa {label} khỏi {workspaceName}? WarpBot sẽ ngừng dùng nó ở đây. Thành viên vẫn giữ kết nối của riêng họ và có thể ngắt kết nối từ trang Plugin."
+    "confirmShared": "Xóa {label} khỏi {workspaceName}? WarpBot sẽ ngừng dùng nó ở đây. Thành viên vẫn giữ kết nối của riêng họ và có thể ngắt kết nối từ trang Kết nối của tôi."
   },
   "facts": {
     "notUsedYet": "Chưa có thành viên nào dùng",
@@ -115,5 +114,21 @@
     "requestApproved": "Đã thêm {label} · {name} đã được thông báo",
     "requestDeclined": "{name} đã được báo là plugin không được thêm",
     "couldNotDecide": "Không thể cập nhật yêu cầu."
+  },
+  "members": {
+    "title": "Thành viên đã kết nối",
+    "count": "{count} thành viên",
+    "loading": "Đang tải thành viên…",
+    "loadError": "Không tải được danh sách thành viên đã kết nối plugin này.",
+    "retry": "Thử lại",
+    "empty": "Chưa có thành viên nào của không gian làm việc này kết nối plugin.",
+    "formerMember": "Thành viên cũ",
+    "connectedAgo": "Kết nối {when}",
+    "lastUsedAgo": "dùng lần cuối {when}",
+    "notUsedHereYet": "chưa dùng ở đây",
+    "status": {
+      "expired": "Đã hết hạn",
+      "revoked": "Đã ngắt kết nối"
+    }
   }
 }

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
   WORKSPACE_ACTIONS,
   buildEntitlementPatch,
-  burnGeometry,
+  burnSeries,
   compedPeriodEnd,
   draftFromEntitlements,
   exportFileName,
@@ -109,33 +109,23 @@ test("the entitlement PUT carries only what changed; clearing a field sends null
 });
 
 test("the burn chart carries the balance over a day with no ledger rows", () => {
-  const geometry = burnGeometry(
-    [
-      { date: "2026-09-01", consumed: 100, granted: 0, balanceAfter: 900 },
-      { date: "2026-09-02", consumed: 0, granted: 0, balanceAfter: null },
-      { date: "2026-09-03", consumed: 50, granted: 500, balanceAfter: 1350 },
-    ],
-    300,
-    100,
-  );
+  const series = burnSeries([
+    { date: "2026-09-01", consumed: 100, granted: 0, balanceAfter: 900 },
+    { date: "2026-09-02", consumed: 0, granted: 0, balanceAfter: null },
+    { date: "2026-09-03", consumed: 50, granted: 500, balanceAfter: 1350 },
+  ]);
 
-  assert.equal(geometry.bars.length, 3);
-  assert.equal(geometry.bars[0]!.height, 100);
-  assert.equal(geometry.bars[1]!.height, 0);
-  assert.deepEqual(geometry.line.map((p) => p.balance), [900, 900, 1350]);
-  assert.equal(geometry.maxBalance, 1350);
+  assert.deepEqual(series.consumed, [100, 0, 50]);
+  assert.deepEqual(series.balances, [900, 900, 1350]);
+  assert.equal(series.maxBalance, 1350);
 });
 
-test("the burn chart draws no line before the first known balance", () => {
-  const geometry = burnGeometry(
-    [
-      { date: "2026-09-01", consumed: 0, granted: 0, balanceAfter: null },
-      { date: "2026-09-02", consumed: 10, granted: 0, balanceAfter: 90 },
-    ],
-    200,
-    100,
-  );
-  assert.deepEqual(geometry.line.map((p) => p.balance), [90]);
+test("the burn chart draws no balance before the first known one", () => {
+  const series = burnSeries([
+    { date: "2026-09-01", consumed: 0, granted: 0, balanceAfter: null },
+    { date: "2026-09-02", consumed: 10, granted: 0, balanceAfter: 90 },
+  ]);
+  assert.deepEqual(series.balances, [null, 90]);
 });
 
 test("the P&L tile never reads an unknown margin as break-even", () => {

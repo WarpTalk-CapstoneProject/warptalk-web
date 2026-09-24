@@ -174,6 +174,16 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(`/${retiredTasks[1]}/home`, request.url));
   }
 
+  /**
+   * Two admin portal pages taken out on the owner's call (2026-09-24), forwarded to Insights for
+   * the same reason: the platform meeting directory (`/admin/meetings`) and the Event outbox
+   * (`/admin/outbox`). Insights still shows live meetings and the dead-letter count; neither links
+   * here any more. Their backend endpoints are untouched — only the pages went.
+   */
+  if (/^\/admin\/(?:meetings|outbox)(?:\/.*)?$/.test(pathname)) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+
   // A dead cookie must not survive the response that noticed it was dead, or the next page
   // load starts from the same misleading state. Applied to whatever response we return
   // below.

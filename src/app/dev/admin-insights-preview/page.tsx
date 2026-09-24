@@ -13,7 +13,7 @@
  * Fixtures only; /dev is 404 in production (`src/app/dev/layout.tsx` and the proxy).
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { AdminPage } from "@/components/admin/admin-page-chrome";
 import {
@@ -238,6 +238,16 @@ const UNAVAILABLE = { status: "unavailable" } as const;
 
 export default function AdminInsightsPreviewPage() {
   const [dark, setDark] = useState(false);
+  // On <html> as well as the wrapper, as next-themes does in the app: the charts' hover readouts
+  // are portalled to <body>, outside the wrapper, and must still pick up the theme.
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.classList.contains("dark");
+    root.classList.toggle("dark", dark);
+    return () => {
+      root.classList.toggle("dark", before);
+    };
+  }, [dark]);
   const [scenario, setScenario] = useState<Scenario>("full");
   const [params, setParams] = useState<InsightsPeriodParams>({ period: "month" });
 
@@ -283,6 +293,10 @@ export default function AdminInsightsPreviewPage() {
             stageLatencies: [],
             alerts: [],
             warnings: [],
+            meetings: null,
+            stageOutcomes: [],
+            outboxDeadLetters: { count: 2, oldestAt: NOW.toISOString() },
+            grafanaEmbedPath: null,
           }),
   };
 

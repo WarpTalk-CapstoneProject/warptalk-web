@@ -612,6 +612,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   parts.push({
                     label: key ? t(`sidebar.adminNav.items.${key}`) : t("sidebar.adminNav.items.insights"),
                   });
+                } else if (firstSeg === "settings" && segments[1] === "plugins") {
+                  // The personal page, outside any workspace slug: "My connections", never the raw
+                  // segment, and never "Plugins", which is the workspace page's name.
+                  parts.push({ label: t("sidebar.settingsNav.myConnections") });
                 } else if (firstSeg === "voice-profiles") {
                   parts.push({ label: t("sidebar.nav.voiceProfiles") });
                 } else if (firstSeg === "join") {
@@ -655,7 +659,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   } else if (feature === "settings") {
                     const sub = segments[2];
                     const SETTINGS_SUB_KEYS: Record<string, string> = {
-                      plugins: "plugins",
+                      plugins: "workspacePlugins",
                       "plugin-activity": "pluginActivity",
                       billing: "billing",
                       features: "features",

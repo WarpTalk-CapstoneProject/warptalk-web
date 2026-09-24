@@ -201,48 +201,29 @@ export interface BurnPointLike {
   balanceAfter: number | null;
 }
 
-export interface BurnGeometry {
-  bars: { date: string; x: number; width: number; height: number; consumed: number }[];
-  /** The balance line, carried over days with no ledger rows; empty before the first known balance. */
-  line: { x: number; y: number; balance: number }[];
-  maxConsumed: number;
+export interface BurnSeries {
+  consumed: number[];
+  /** The ledger's end-of-day balance, carried over days with no ledger rows; null before the first known one. */
+  balances: (number | null)[];
   maxBalance: number;
 }
 
 /**
- * Daily consumption as bars, and the ledger's own end-of-day balance as a line on the same x axis.
- * A day with no rows carries the previous balance forward — the balance did not change, so drawing
- * a gap (or a drop to zero) would be a claim the ledger does not make.
+ * Daily consumption, and the ledger's own end-of-day balance on the same axis. A day with no rows
+ * carries the previous balance forward — the balance did not change, so drawing a gap (or a drop
+ * to zero) would be a claim the ledger does not make.
  */
-export function burnGeometry(points: BurnPointLike[], width: number, height: number): BurnGeometry {
-  const count = Math.max(points.length, 1);
-  const slot = width / count;
-  const barWidth = Math.max(1, slot * 0.7);
-  const maxConsumed = Math.max(1, ...points.map((p) => p.consumed));
-
+export function burnSeries(points: BurnPointLike[]): BurnSeries {
   let carried: number | null = null;
   const balances = points.map((p) => {
     if (p.balanceAfter !== null) carried = p.balanceAfter;
     return carried;
   });
   const known = balances.filter((b): b is number => b !== null);
-  const maxBalance = Math.max(1, ...known.map((b) => Math.max(b, 0)));
-
   return {
-    bars: points.map((p, i) => ({
-      date: p.date,
-      x: i * slot + (slot - barWidth) / 2,
-      width: barWidth,
-      height: (p.consumed / maxConsumed) * height,
-      consumed: p.consumed,
-    })),
-    line: balances.flatMap((balance, i) =>
-      balance === null
-        ? []
-        : [{ x: i * slot + slot / 2, y: height - (Math.max(balance, 0) / maxBalance) * height, balance }],
-    ),
-    maxConsumed,
-    maxBalance,
+    consumed: points.map((p) => p.consumed),
+    balances,
+    maxBalance: known.length > 0 ? Math.max(...known) : 0,
   };
 }
 

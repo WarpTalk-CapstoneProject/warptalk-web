@@ -44,48 +44,6 @@
       "next": "次へ"
     }
   },
-  "meetings": {
-    "eyebrow": "オペレーション",
-    "title": "ミーティング",
-    "description": "プラットフォーム上のすべての通訳ルーム。メタデータのみで、文字起こしやルーム操作はありません。",
-    "refresh": "更新",
-    "liveCount": "ライブ配信中 {count} 件",
-    "startedToday": "本日開始 {count} 件",
-    "statusTabs": {
-      "all": "すべて",
-      "live": "ライブ配信中",
-      "scheduled": "予定",
-      "ended": "終了",
-      "cancelled": "キャンセル",
-      "failed": "失敗",
-      "expired": "期限切れ"
-    },
-    "meetingStatusAria": "ミーティングのステータス",
-    "loading": "読み込み中…",
-    "meetingCount": "{count, plural, other {ミーティング #件}}",
-    "sort": {
-      "label": "並び替え",
-      "recentDesc": "新しい順",
-      "recentAsc": "古い順",
-      "durationDesc": "長い順"
-    },
-    "error": {
-      "title": "ミーティングを読み込めませんでした。",
-      "description": "通訳ルームサービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
-      "retry": "再試行"
-    },
-    "empty": {
-      "title": "このフィルターに一致するミーティングはありません",
-      "description": "別のステータスタブを選んでください。"
-    },
-    "openWorkspace": "ワークスペース",
-    "pagination": {
-      "pageOf": "{page} / {totalPages} ページ",
-      "previous": "前へ",
-      "next": "次へ"
-    },
-    "footerNote": "ここからミーティングを開いたり聴取したりする手段は意図的にありません。この画面はミーティングが行われた事実のみを示し、内容はそれを開催したワークスペースに帰属します。"
-  },
   "feedback": {
     "eyebrow": "オペレーション",
     "title": "フィードバック",

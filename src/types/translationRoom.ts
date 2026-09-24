@@ -8,6 +8,16 @@
 export type TranslationRoomStatus =
   | "scheduled"
   | "waiting"
+  /**
+   * WT-612 / WT-621: the clock opened the door at `scheduledAt` — nobody pressed Start.
+   *
+   * It is the gap between "booked" and "somebody is in it": the room is enterable, and there is
+   * no translation session behind it yet. The first person who actually walks in takes it to
+   * `in_progress`. So it is live for every purpose the UI has (it is joinable, it belongs in
+   * Active, it is not missed and not finished) while being nothing like `in_progress` for the
+   * one purpose that reads a session — see persistent-meeting-session's `meetingLive`.
+   */
+  | "open"
   | "in_progress"
   | "paused"
   | "ended"
@@ -59,6 +69,12 @@ export interface TranslationRoomDto {
      * render a recorded meeting as an unrecorded one.
      */
     saveTranscript?: boolean;
+    /**
+     * WT-826: whether the record is shared with everyone who took part when the meeting ends.
+     * The server sends the EFFECTIVE value — a room that never stated it reads TRUE, because that
+     * is what will happen to it. Absent (an older server) is treated the same way.
+     */
+    autoShareRecord?: boolean;
   };
   participantCount?: number;
   /**
@@ -181,6 +197,8 @@ export interface CreateTranslationRoomRequest {
     participantsCanStartTranslation?: boolean;
     /** WT-587: send `false` for a meeting that is not to be written down. Omit to keep it. */
     saveTranscript?: boolean;
+    /** WT-826: send `false` to keep the record host-only when the meeting ends. Omit to share it. */
+    autoShareRecord?: boolean;
   };
   scheduledAt?: string;
   invitedEmails?: string[];

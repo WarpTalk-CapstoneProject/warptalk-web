@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "In progress",
+    "open": "Open",
     "waiting": "Waiting",
     "scheduled": "Scheduled",
     "ended": "Ended",
@@ -142,7 +143,11 @@
       "saveTranscript": "Save the meeting transcript",
       "saveTranscriptHint": "Subtitles and translation still work. This meeting will have no transcript, summary or minutes afterwards.",
       "keepTranscript": "Keep a transcript of this meeting",
-      "dontKeepTranscript": "Do not keep a record of this meeting"
+      "dontKeepTranscript": "Do not keep a record of this meeting",
+      "autoShareRecord": "Share the record with participants automatically",
+      "autoShareRecordOffHint": "Only you will see the transcript, AI summary and recording until you publish them.",
+      "keepRecordPrivate": "Keep the record private until I publish it",
+      "shareRecordAutomatically": "Share the record with participants when the meeting ends"
     },
     "startTime": {
       "label": "Start time",
@@ -158,7 +163,9 @@
   },
   "startedBanner": {
     "title": "A meeting has started",
+    "openedTitle": "A meeting is open",
     "joinNow": "Join now",
+    "setUpAndJoin": "Set up & join",
     "openFromNotifications": "Open it from your notifications.",
     "dismissAria": "Dismiss"
   },
