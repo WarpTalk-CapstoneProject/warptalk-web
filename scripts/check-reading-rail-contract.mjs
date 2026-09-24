@@ -28,6 +28,7 @@ const sync = read("src/components/rooms/transcript-reading-sync.tsx");
 const player = read("src/components/rooms/meeting-record-panels.tsx");
 const roomDetail = read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx");
 const logic = read("src/lib/transcript/document-reading.ts");
+const meetingSummaryEn = JSON.parse(read("messages/en/meetingSummary.json"));
 
 // ── The measure: characters, never a percentage ─────────────────────────────
 
@@ -194,12 +195,15 @@ assert.doesNotMatch(
   "Every summary point must render in the rail. A point with no moment loses its jump, not its "
     + "place in the document.",
 );
+// "no moment recorded" moved into i18n (t("claim.noMoment")) — assert the rail still calls that
+// key, and the English catalog still carries the wording.
 assert.match(
   rail,
-  /no moment recorded/,
+  /claim\.atMs === null \? t\("claim\.noMoment"\) : formatCitationTime\(claim\.atMs\)/,
   "A point with no moment must say so in place of a timestamp, so it cannot be mistaken for one "
     + "the transcript vouches for.",
 );
+assert.equal(meetingSummaryEn.claim?.noMoment, "no moment recorded");
 assert.match(
   rail,
   /uncitedCount/,

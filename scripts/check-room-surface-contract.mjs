@@ -24,6 +24,7 @@ const pills = read(
   "src/app/(app)/[workspaceSlug]/rooms/[id]/MeetingPropertiesPills.tsx",
 );
 const roomsList = read("src/app/(app)/[workspaceSlug]/rooms/page.tsx");
+const meetingRoomPageEn = JSON.parse(read("messages/en/meetingRoomPage.json"));
 
 /**
  * Comments stripped, for the "this must not come back" checks below.
@@ -90,11 +91,15 @@ assert.match(
 // WT-330(5): the heading says "Participants" now. It was the page's only "Attendees", and the
 // seat rule, the roster panel and the pills row all say participants. The assertion that matters
 // is unchanged — the panel renders the SHARED label and does not count for itself.
+// "Participants: ${occupancy.label}" moved into i18n (t("people.participantsCount", { label })) —
+// assert the panel still calls that key with occupancy.label, and the English catalog still
+// carries the wording.
 assert.match(
   roomDetail,
-  /Participants: \$\{occupancy\.label\}/,
+  /t\("people\.participantsCount", \{ label: occupancy\.label \}\)/,
   "The Tracking panel must render the shared occupancy label.",
 );
+assert.equal(meetingRoomPageEn.people?.participantsCount, "Participants: {label}");
 // WT-641 — the two halves the label alone does not cover.
 //
 // The panel rendering the shared label says its NUMBER cannot drift. It says nothing about which
@@ -490,11 +495,14 @@ assert.doesNotMatch(
 // mentions in page.tsx are comments. The guarantee is unchanged and is what this asserts: the
 // panel holding the invitee list is the one that scrolls, so Actions and Meeting access stay
 // reachable however many invitees there are.
+// The literal title="People" moved into i18n (title={t("people.panelTitle")}) — assert the panel
+// still calls that key, and the English catalog still carries the wording.
 assert.match(
   roomDetail,
-  /title="People"[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
+  /title=\{t\("people\.panelTitle"\)\}[\s\S]{0,400}?bodyClassName="[^"]*xl:flex-1[^"]*xl:overflow-y-auto/,
   "The People panel's body must be the one bounded, flexing scroll region (WT-330(8)).",
 );
+assert.equal(meetingRoomPageEn.people?.panelTitle, "People");
 // "Meeting access" was pinned alongside Actions and is now deleted, on the owner's call. It
 // held a hardcoded "WarpTalk Session" over the room code, and the pills row under the title
 // already shows that code AND lets you click it to copy — the panel was the same fact with
