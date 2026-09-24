@@ -22,7 +22,8 @@ export type AdminWorkspaceSort =
   | "name_desc"
   | "members_desc"
   | "members_asc"
-  | "updated_desc";
+  | "updated_desc"
+  | "updated_asc";
 
 export interface AdminWorkspaceOwnerDto {
   id: string;
@@ -103,6 +104,9 @@ export interface AdminWorkspaceDirectoryQuery {
   status?: AdminWorkspaceStatusFilter;
   minMembers?: number;
   maxMembers?: number;
+  /** created_at bounds: `createdFrom` inclusive, `createdTo` exclusive (ISO instants). */
+  createdFrom?: string;
+  createdTo?: string;
   sort?: AdminWorkspaceSort;
 }
 

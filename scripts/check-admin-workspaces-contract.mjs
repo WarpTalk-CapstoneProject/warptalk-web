@@ -37,13 +37,17 @@ assert.doesNotMatch(
   "the admin service must not reuse the member-scoped workspace endpoints",
 );
 
-// URL is the source of truth for tab, search, sort, and page.
-for (const param of ["status", "sort", "page", "q"]) {
-  assert.match(
-    directory,
-    new RegExp(`searchParams\\.get\\("${param}"\\)`),
-    `directory must read "${param}" from the URL so navigation restores it`,
-  );
+// URL is the source of truth for tab, search, sort, filters and page. Since the admin list toolkit
+// the parsing lives in useAdminListState (q, sort/dir, page, and one param per filter — see
+// src/lib/admin/list-state.ts and its tests); the directory must drive its query from it.
+assert.match(directory, /useAdminListState\(LIST_CONFIG\)/, "directory must keep its view in the URL via useAdminListState");
+assert.match(
+  directory,
+  /key: "status", kind: "enum"/,
+  "the status tab must be a URL filter (status=) so navigation restores it",
+);
+for (const field of ["state.page", "state.search", "state.sort.field"]) {
+  assert.ok(directory.includes(field), `directory must send ${field} to the API`);
 }
 assert.match(
   directory,
@@ -82,7 +86,8 @@ assert.equal(
 // is for is unchanged: the row must lead somewhere, and it must be a URL rather than state.
 assert.match(
   directory,
-  /href=\{`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
+  // `href={…}` on a Link, or `rowHref={(workspace) => …}` on the admin list table.
+  /(?:href=\{|rowHref=\{\(workspace\) => )`\/admin\/workspaces\/\$\{workspace\.slug\}`\}/,
   "rows must link to the detail route",
 );
 
