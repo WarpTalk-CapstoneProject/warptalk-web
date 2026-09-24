@@ -1,1 +1,39 @@
-{}
+{
+  "composer": {
+    "placeholder": "Nhập tin nhắn…",
+    "attachFile": "Đính kèm tệp",
+    "sendMessage": "Gửi tin nhắn",
+    "uploadingFile": "Đang tải tệp lên… {progress}%",
+    "messageTooLong": "Tin nhắn quá dài ({current}/{max} ký tự)."
+  },
+  "errors": {
+    "sendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
+    "fileTooLarge": "Tệp vượt quá giới hạn {maxMb} MB.",
+    "fileUploadFailed": "Không thể tải tệp lên. Vui lòng thử lại.",
+    "fileDownloadFailed": "Không thể tải tệp xuống. Vui lòng thử lại.",
+    "translateFailed": "Không thể dịch tin nhắn.",
+    "popupBlocked": "Trình duyệt của bạn đã chặn cửa sổ xác nhận. Hãy cho phép cửa sổ bật lên rồi thử lại.",
+    "pluginFlowFailed": "Không thể mở luồng kết nối plugin. Vui lòng thử lại."
+  },
+  "queue": {
+    "full": "WarpBot đã có {max} câu hỏi đang chờ. Hãy để WarpBot xử lý xong trước khi hỏi thêm."
+  },
+  "history": {
+    "loading": "Đang tải tin nhắn",
+    "loadError": "Không thể tải lịch sử trò chuyện",
+    "retry": "Thử lại",
+    "empty": "Chưa có tin nhắn nào"
+  },
+  "message": {
+    "translateInto": "Dịch sang {language}",
+    "continueInWidget": "Tiếp tục trong cửa sổ WarpBot"
+  },
+  "assistant": {
+    "stillWorking": "WarpBot vẫn đang xử lý — lần này hơi lâu một chút.",
+    "thinking": "WarpBot đang suy nghĩ…",
+    "queued": "{count, plural, other {Còn # câu hỏi nữa đang chờ.}}"
+  },
+  "plugin": {
+    "connected": "Đã kết nối plugin."
+  }
+}

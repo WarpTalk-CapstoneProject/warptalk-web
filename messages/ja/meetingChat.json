@@ -1,1 +1,39 @@
-{}
+{
+  "composer": {
+    "placeholder": "メッセージを入力…",
+    "attachFile": "ファイルを添付",
+    "sendMessage": "メッセージを送信",
+    "uploadingFile": "ファイルをアップロード中… {progress}%",
+    "messageTooLong": "メッセージが長すぎます({current}/{max}文字)。"
+  },
+  "errors": {
+    "sendFailed": "メッセージを送信できませんでした。もう一度お試しください。",
+    "fileTooLarge": "ファイルが{maxMb}MBの上限を超えています。",
+    "fileUploadFailed": "ファイルをアップロードできませんでした。もう一度お試しください。",
+    "fileDownloadFailed": "ファイルをダウンロードできませんでした。もう一度お試しください。",
+    "translateFailed": "メッセージを翻訳できませんでした。",
+    "popupBlocked": "ブラウザが同意ウィンドウをブロックしました。ポップアップを許可してからもう一度お試しください。",
+    "pluginFlowFailed": "プラグインの接続フローを開けませんでした。もう一度お試しください。"
+  },
+  "queue": {
+    "full": "WarpBotにはすでに{max}件の質問が溜まっています。次の質問をする前に、処理が終わるのを待ってください。"
+  },
+  "history": {
+    "loading": "メッセージを読み込み中",
+    "loadError": "チャット履歴を読み込めませんでした",
+    "retry": "再試行",
+    "empty": "まだメッセージはありません"
+  },
+  "message": {
+    "translateInto": "{language}に翻訳",
+    "continueInWidget": "WarpBotウィジェットで続ける"
+  },
+  "assistant": {
+    "stillWorking": "WarpBotはまだ処理中です — 今回は少し時間がかかっています。",
+    "thinking": "WarpBotが考え中…",
+    "queued": "{count, plural, other {あと#件の質問が待っています。}}"
+  },
+  "plugin": {
+    "connected": "プラグインを接続しました。"
+  }
+}

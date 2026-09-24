@@ -1,1 +1,39 @@
-{}
+{
+  "composer": {
+    "placeholder": "Type a message…",
+    "attachFile": "Attach file",
+    "sendMessage": "Send message",
+    "uploadingFile": "Uploading file… {progress}%",
+    "messageTooLong": "Message is too long ({current}/{max} characters)."
+  },
+  "errors": {
+    "sendFailed": "Message could not be sent. Try again.",
+    "fileTooLarge": "File exceeds the {maxMb} MB limit.",
+    "fileUploadFailed": "File could not be uploaded. Try again.",
+    "fileDownloadFailed": "File could not be downloaded. Try again.",
+    "translateFailed": "Could not translate message.",
+    "popupBlocked": "Your browser blocked the consent window. Allow pop-ups and try again.",
+    "pluginFlowFailed": "Could not open the plugin connection flow. Try again."
+  },
+  "queue": {
+    "full": "WarpBot already has {max} questions waiting. Let it catch up before asking another."
+  },
+  "history": {
+    "loading": "Loading messages",
+    "loadError": "Could not load chat history",
+    "retry": "Retry",
+    "empty": "No messages yet"
+  },
+  "message": {
+    "translateInto": "Translate into {language}",
+    "continueInWidget": "Continue in WarpBot widget"
+  },
+  "assistant": {
+    "stillWorking": "WarpBot is still working — this one is taking a while.",
+    "thinking": "WarpBot is thinking…",
+    "queued": "{count, plural, one {Your next question is queued.} other {# more questions are queued.}}"
+  },
+  "plugin": {
+    "connected": "Plugin connected."
+  }
+}
