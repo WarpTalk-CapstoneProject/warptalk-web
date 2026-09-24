@@ -333,9 +333,6 @@ export function MeetingTranscriptArtifact({
   meetingStartedAt?: string | null;
   meetingEndedAt?: string | null;
 }) {
-  // Memoised on the fetched rows rather than recomputed per render: the language options and
-  // the translation index are derived from these, and rebuilding them on every keystroke of a
-  // correction would rebuild the whole transcript with them.
   /**
    * WT-716 — Clean by default, Verbatim one click away, and the choice is this reader's alone.
    *
@@ -378,7 +375,15 @@ export function MeetingTranscriptArtifact({
     () => new Map(segments.map((segment) => [segment.id, segment])),
     [segments],
   );
+  /** The raw words of a line — what the correction editor must open on. See rawTextForSegmentIds. */
+  function rawTextFor(segment: GroupedSavedTranscriptSegment): string {
+    if (!cleanView) return segment.originalText;
+    return rawTextForSegmentIds(segment.mergedSegmentIds, rawSegmentsById) || segment.originalText;
+  }
 
+  // Memoised on the fetched rows rather than recomputed per render: the language options and
+  // the translation index are derived from these, and rebuilding them on every keystroke of a
+  // correction would rebuild the whole transcript with them.
   const grouped = useMemo(() => {
     const rows = groupSavedTranscriptSegments(cleanView ? cleanView.segments : orderedSegments);
     // Put the absorbed ids back, so a row still names every stored segment it stands for: that
@@ -866,12 +871,6 @@ export function MeetingTranscriptArtifact({
    * the language chip are the same behaviour in all three, and three copies of that wiring is
    * three places for them to drift.
    */
-  /** The raw words of a line — what the correction editor must open on. See rawTextForSegmentIds. */
-  function rawTextFor(segment: GroupedSavedTranscriptSegment): string {
-    if (!cleanView) return segment.originalText;
-    return rawTextForSegmentIds(segment.mergedSegmentIds, rawSegmentsById) || segment.originalText;
-  }
-
   function buildRow(segment: GroupedSavedTranscriptSegment): TranscriptRowBase {
     const resolved = resolveTranscriptLine(segment, translationIndex, displayLanguage);
     return {
