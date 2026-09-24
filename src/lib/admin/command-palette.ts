@@ -243,7 +243,7 @@ export const ADMIN_PALETTE_ACTIONS: readonly AdminPaletteEntry[] = [
   {
     id: "composeAnnouncement",
     kind: "action",
-    // The announcements CMS (feat/admin-cms) owns this route; before it lands this is a 404.
+    // The announcements CMS (#577) owns this route: `posts/new` opens its composer.
     href: "/admin/announcements/posts/new",
     labelKey: "composeAnnouncement",
     // i18n-allow: search synonyms, matched in every language whatever the UI locale.

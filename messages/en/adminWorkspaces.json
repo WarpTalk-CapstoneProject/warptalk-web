@@ -501,6 +501,7 @@
       "dataExported": "Data summary exported",
       "sessionsRevoked": "Member signed out",
       "other": "Admin action"
-    }
+    },
+    "openInAuditLog": "Open in audit log"
   }
 }
