@@ -1,0 +1,300 @@
+{
+  "languageSwitcher": {
+    "srLabel": "言語を切り替える",
+    "switching": "言語を切り替えています…",
+    "en": "English",
+    "vi": "Tiếng Việt",
+    "ja": "日本語"
+  },
+  "topbar": {
+    "collapseSidebar": "サイドバーを折りたたむ",
+    "expandSidebar": "サイドバーを展開",
+    "loading": "読み込み中...",
+    "account": "アカウント",
+    "payment": "支払い",
+    "plans": "プラン",
+    "addTab": "{title}タブを追加",
+    "showMeAround": "ツアーを見る",
+    "searchAria": "検索、またはルームコードを入力",
+    "searchPlaceholder": "検索、またはルームコードを貼り付け"
+  },
+  "sidebar": {
+    "nav": {
+      "home": "ホーム",
+      "meetings": "ミーティング",
+      "joinByCode": "コードで参加",
+      "createMeeting": "ミーティングを作成",
+      "schedules": "カレンダー",
+      "history": "履歴",
+      "artifacts": "成果物",
+      "voiceProfiles": "ボイスプロファイル",
+      "dashboard": "ダッシュボード",
+      "members": "メンバー",
+      "documents": "ドキュメント",
+      "glossary": "用語集",
+      "myTasks": "自分のタスク",
+      "knowledge": "ナレッジ",
+      "settings": "設定"
+    },
+    "switchWorkspaceSuccess": "ワークスペース「{name}」に切り替えました",
+    "switchWorkspaceError": "ワークスペースの切り替えに失敗しました",
+    "workspaceSection": "ワークスペース",
+    "platformSection": "プラットフォーム",
+    "platformConsole": "プラットフォームコンソール",
+    "searchMeetings": "ミーティングを検索",
+    "switchWorkspaceLabel": "ワークスペースを切り替え",
+    "workspaceFallback": "ワークスペース",
+    "inviteTeamMembers": "チームメンバーを招待",
+    "inviteTeamMembersBody": "チームを招待して、ワークスペースのルームで共同作業しましょう。",
+    "dismissInvite": "{days}日間非表示にする",
+    "dismissInviteAria": "招待の提案を閉じる",
+    "profileFallback": "プロフィール",
+    "signOut": "サインアウト",
+    "memberFallback": "メンバー",
+    "internalFallback": "内部",
+    "roleLabels": {
+      "owner": "オーナー",
+      "admin": "管理者",
+      "member": "メンバー"
+    },
+    "membershipLabels": {
+      "internal": "内部",
+      "external": "外部"
+    },
+    "joinDialog": {
+      "title": "翻訳ルームに参加",
+      "description": "ホストから提供されたミーティングコードを入力してルームに参加します。",
+      "codeLabel": "ミーティングコード",
+      "codePlaceholder": "例: ROOM-abc-123",
+      "join": "参加"
+    },
+    "workspaceMenu": {
+      "settings": "設定",
+      "inviteAndManageMembers": "メンバーの招待と管理",
+      "downloadDesktopApp": "デスクトップアプリをダウンロード",
+      "switchWorkspace": "ワークスペースを切り替え",
+      "account": "アカウント",
+      "createOrJoinWorkspace": "ワークスペースを作成または参加...",
+      "addAnAccount": "アカウントを追加...",
+      "logOut": "ログアウト"
+    },
+    "adminQuickLinks": {
+      "workspaces": "ワークスペース",
+      "billing": "請求",
+      "globalGlossary": "グローバル用語集"
+    },
+    "adminNav": {
+      "backToApp": "アプリに戻る",
+      "platformConsole": "プラットフォームコンソール",
+      "platformName": "WarpTalk Platform",
+      "logOut": "ログアウト",
+      "platformAdmin": "プラットフォーム管理者",
+      "sections": {
+        "platform": "プラットフォーム",
+        "revenue": "収益",
+        "operations": "運用",
+        "configuration": "構成"
+      },
+      "items": {
+        "insights": "インサイト",
+        "workspaces": "ワークスペース",
+        "accounts": "アカウント",
+        "subscriptions": "サブスクリプション",
+        "plansAndPricing": "プランと価格",
+        "billingLedger": "請求台帳",
+        "salesLeads": "セールスリード",
+        "meetings": "ミーティング",
+        "systemHealth": "システムの状態",
+        "eventOutbox": "イベント送信キュー",
+        "feedback": "フィードバック",
+        "auditLog": "監査ログ",
+        "announcements": "お知らせ",
+        "emailTemplates": "メールテンプレート",
+        "platformSettings": "プラットフォーム設定",
+        "plugins": "プラグイン",
+        "globalGlossary": "グローバル用語集"
+      }
+    },
+    "settingsNav": {
+      "backToApp": "アプリに戻る",
+      "personal": "個人",
+      "workspaceSection": "ワークスペース",
+      "preferences": "環境設定",
+      "settingsLabel": "設定",
+      "profile": "プロフィール",
+      "notifications": "通知",
+      "connectedAccounts": "連携アカウント",
+      "sessionsDevices": "セッションとデバイス",
+      "plugins": "プラグイン",
+      "workspaceSettingsCollapsed": "ワークスペース設定",
+      "workspaceSettingsExpanded": "ワークスペース設定",
+      "pluginActivity": "プラグインアクティビティ",
+      "billing": "請求",
+      "usage": "使用状況",
+      "invoices": "請求書",
+      "features": "機能",
+      "memberRoles": "メンバーの役割",
+      "security": "セキュリティ",
+      "auditLog": "監査ログ"
+    }
+  },
+  "workspaceTabs": {
+    "items": {
+      "home": { "title": "ホーム", "description": "ワークスペースの開始ページ" },
+      "meetings": { "title": "ミーティング", "description": "進行中および予定されたルーム" },
+      "voiceProfiles": { "title": "ボイスプロファイル", "description": "音声とクローンの設定" },
+      "members": { "title": "メンバー", "description": "メンバーと役割" },
+      "documents": { "title": "ドキュメント", "description": "ナレッジと参考資料" },
+      "billing": { "title": "請求", "description": "プランと請求書" },
+      "settings": { "title": "設定", "description": "ワークスペースの設定" }
+    },
+    "actions": {
+      "closeTab": "{title}を閉じる",
+      "hideTabActions": "タブ操作を非表示",
+      "showTabActions": "タブ操作を表示",
+      "closeActiveTab": "アクティブなタブを閉じる",
+      "createNewView": "新しいビューを作成",
+      "open": "開いています"
+    }
+  },
+  "notifications": {
+    "ariaLabel": "通知",
+    "ariaLabelUnread": "通知、未読{count}件"
+  },
+  "soundToggle": {
+    "titleMuted": "通知音はオフです",
+    "titleUnmuted": "通知音はオンです",
+    "ariaTurnOn": "通知音をオンにする",
+    "ariaTurnOff": "通知音をオフにする"
+  },
+  "themeToggle": {
+    "switchToLight": "ライトモードに切り替え",
+    "switchToDark": "ダークモードに切り替え",
+    "lightMode": "ライトモード",
+    "darkMode": "ダークモード"
+  },
+  "productTour": {
+    "ariaLabel": "プロダクトツアー",
+    "closeTour": "ツアーを閉じる",
+    "skipTour": "ツアーをスキップ",
+    "previousStep": "前のステップ",
+    "done": "完了",
+    "next": "次へ"
+  },
+  "workspaceMembersPanel": {
+    "pickWorkspace": "ワークスペースを選択すると、そこにいるメンバーを確認できます。",
+    "loading": "メンバーを読み込み中…",
+    "loadError": "メンバーリストを読み込めませんでした。",
+    "aroundNow": "{total}人中{online}人がオンライン",
+    "memberCount": "{count, plural, other {メンバー#人}}",
+    "memberFallback": "メンバー"
+  },
+  "miniMeetingDock": {
+    "resizeAria": "ミーティングウィンドウのサイズを変更"
+  },
+  "meetingDayStrip": {
+    "previousWeek": "前の週",
+    "nextWeek": "次の週"
+  },
+  "chatbot": {
+    "askWarpBot": "WarpBotに質問",
+    "newChat": "新しいチャット",
+    "chatHistory": "チャット履歴",
+    "activePageContext": "有効なページコンテキスト",
+    "removePageContext": "ページコンテキストを削除",
+    "removeContext": "{title}を削除",
+    "removeContextAria": "このメッセージから{title}を削除",
+    "hidePageContext": "ページコンテキストを非表示",
+    "showPageContext": "ページコンテキストを表示",
+    "attachFiles": "画像やドキュメントを添付",
+    "offInThisChat": "このチャットではオフ",
+    "sendMessage": "メッセージを送信",
+    "thinking": "考え中...",
+    "stillWorking": "処理に少し時間がかかっています。",
+    "noMatchingCommand": "一致するコマンドがありません — Enterキーでそのままメッセージとして送信します",
+    "noContextsFound": "コンテキストが見つかりません",
+    "askWithPageContext": "ページコンテキストを添えて質問...",
+    "askPlaceholder": "WarpBotに質問...",
+    "tools": "ツール",
+    "pluginsInThisChat": "このチャットのプラグイン",
+    "manage": "管理",
+    "connectToUse": "WarpBotで使うには接続してください",
+    "connected": "接続済み",
+    "connect": "接続",
+    "useInThisChat": "このチャットで{label}を使う",
+    "noToolsForPage": "このページで使えるツールはありません。ミーティングかドキュメントを開いてください。",
+    "installPluginsHint": "個人設定からプラグインをインストールしてください。",
+    "loadingConversations": "会話を読み込み中…",
+    "loadHistoryFailed": "チャット履歴を読み込めませんでした。",
+    "noPastConversations": "過去の会話はまだありません",
+    "conversationStartFailed": "WarpBotとの会話を開始できませんでした。もう一度お試しください。",
+    "messageSendFailed": "そのメッセージを送信できませんでした。もう一度お試しください。",
+    "openConversationFailed": "その会話を開けませんでした。",
+    "fileReadFailed": "「{name}」を読み込めませんでした。",
+    "pluginInstalled": "{label}をインストールしました",
+    "pluginConnected": "{label}を接続しました",
+    "pluginConnectOpenBrowser": "ブラウザで{label}の接続を完了してください。",
+    "pluginConnectBlocked": "ブラウザが{label}の同意ウィンドウをブロックしました。",
+    "pluginConnectBlockedAction": "開く",
+    "pluginAlreadyConnected": "{label}は接続済みです。",
+    "pluginUpdateFailed": "{label}を更新できませんでした。",
+    "slashCommands": {
+      "summarize": {
+        "label": "このミーティングを要約",
+        "description": "文字起こしをもとにこのミーティングを要約します",
+        "prompt": "このミーティングを文字起こしをもとに要約してください。"
+      },
+      "actionItems": {
+        "label": "アクションアイテム",
+        "description": "このミーティングのアクションアイテムと決定事項を一覧表示します",
+        "prompt": "このミーティングの文字起こしからアクションアイテムと主な決定事項を一覧にしてください。"
+      },
+      "roomInfo": {
+        "label": "ルーム情報",
+        "description": "このルームのステータス、言語、ホストを確認します",
+        "prompt": "このルームのステータス、言語、ホストを教えてください。"
+      },
+      "summarizeDoc": {
+        "label": "このドキュメントを要約",
+        "description": "閲覧中のドキュメントを要約します",
+        "prompt": "このドキュメントを要約してください。"
+      },
+      "extractTerms": {
+        "label": "重要な用語を抽出",
+        "description": "このドキュメントから重要な用語を抽出します",
+        "prompt": "このドキュメントで使われている重要な用語を抽出してください。"
+      },
+      "recentMeetings": {
+        "label": "最近のミーティング",
+        "description": "最近のミーティングを一覧表示します",
+        "prompt": "最近のミーティングを一覧にしてください。"
+      },
+      "searchDocs": {
+        "label": "ドキュメントを検索",
+        "description": "ワークスペースのドキュメントを検索します — 続けて検索語を入力してください",
+        "prompt": "ワークスペースのドキュメントを次のキーワードで検索: "
+      }
+    },
+    "pageContextLabels": {
+      "roomDetail": "ミーティング",
+      "inMeeting": "進行中のミーティング",
+      "documentDetail": "ドキュメント",
+      "documents": "ドキュメント",
+      "history": "履歴",
+      "fallback": "ページ"
+    }
+  },
+  "accountMenu": {
+    "credits": "ワークスペースのクレジット",
+    "creditsLoadFailed": "ワークスペースのクレジットを読み込めませんでした。",
+    "lowBalance": "残高が少なくなっています — なくなるとミーティングの翻訳が止まります。",
+    "askOwnerToTopUp": "ワークスペースのオーナーにチャージを依頼してください。",
+    "memberFallback": "メンバー",
+    "internalFallback": "内部",
+    "profileSettings": "プロフィール設定",
+    "members": "メンバー",
+    "workspaceSettings": "ワークスペース設定",
+    "billing": "請求",
+    "signOut": "サインアウト"
+  }
+}

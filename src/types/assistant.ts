@@ -162,7 +162,15 @@ export interface AssistantPluginCatalogItemDto {
   workspaceAvailability?: WorkspacePluginAvailability | null;
   /** `pending` when the caller has already asked this workspace's Owner for the plugin. */
   requestStatus?: PluginRequestStatus | null;
+  /**
+   * How a user connects. `oauth`: the provider's own sign-in page. `api_key`: each user pastes a
+   * key of their own, which the server checks against the MCP server before saving. Absent from a
+   * server older than API-key auth, which only knows OAuth.
+   */
+  authMode?: PluginAuthMode;
 }
+
+export type PluginAuthMode = "oauth" | "api_key";
 
 export type WorkspacePluginAvailability = "added" | "private" | "not_added";
 
@@ -241,6 +249,8 @@ export interface UpdatePrivatePluginRequest {
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
+  /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
+  apiKeyRequired?: boolean;
 }
 
 /**

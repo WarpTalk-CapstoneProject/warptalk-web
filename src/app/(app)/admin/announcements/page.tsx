@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ArrowsClockwise, Megaphone, PaperPlaneTilt, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ function formatWhen(value: string) {
 }
 
 function AnnouncementsList() {
+  const t = useTranslations("adminAnnouncements.list");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -54,15 +56,15 @@ function AnnouncementsList() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Megaphone size={14} weight="fill" />}
-        title="Announcements"
-        description="Platform-wide notices that have been sent to users."
+        title={t("title")}
+        description={t("description")}
         actions={
           <>
             <Button size="sm" onClick={() => setIsComposing(true)}>
               <PaperPlaneTilt size={14} weight="fill" />
-              Compose
+              {t("compose")}
             </Button>
             <Button
               variant="outline"
@@ -71,7 +73,7 @@ function AnnouncementsList() {
               disabled={listQuery.isFetching}
             >
               <ArrowsClockwise size={14} className={cn(listQuery.isFetching && "animate-spin")} />
-              Refresh
+              {t("refresh")}
             </Button>
           </>
         }
@@ -82,18 +84,15 @@ function AnnouncementsList() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">Announcements could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the notification service and that your session still holds the platform admin
-                role.
-              </p>
+              <p className="font-medium">{t("error.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("error.description")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void listQuery.refetch()}
               >
-                Try again
+                {t("error.retry")}
               </Button>
             </div>
           </div>
@@ -111,10 +110,8 @@ function AnnouncementsList() {
               <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
                 <Megaphone size={20} weight="duotone" />
               </span>
-              <p className="mt-3 text-sm font-medium">Nothing has been announced yet</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Announcements sent from the platform appear here.
-              </p>
+              <p className="mt-3 text-sm font-medium">{t("empty.title")}</p>
+              <p className="mt-1 text-xs text-ink-muted">{t("empty.description")}</p>
             </div>
           </div>
         ) : (
@@ -130,12 +127,10 @@ function AnnouncementsList() {
 
       {totalPages > 1 ? (
         <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages} · {numberFormatter.format(total)} total
-          </span>
+          <span>{t("pagination.pageOf", { page, totalPages, total: numberFormatter.format(total) })}</span>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
-              Previous
+              {t("pagination.previous")}
             </Button>
             <Button
               variant="outline"
@@ -143,7 +138,7 @@ function AnnouncementsList() {
               disabled={page >= totalPages}
               onClick={() => goToPage(page + 1)}
             >
-              Next
+              {t("pagination.next")}
             </Button>
           </div>
         </div>
@@ -152,11 +147,7 @@ function AnnouncementsList() {
       {/* Compose goes through a review step rather than straight from the form. The send is
           irreversible — the service publishes delivery events onto a stream a live consumer is
           reading — so the confirmation naming the recipients is the design, not decoration. */}
-      <p className="mt-4 text-[12px] text-ink-muted">
-        An announcement is delivered once to the people it names and cannot be edited, recalled or
-        deleted afterwards. There is no &ldquo;everyone&rdquo; audience: the service accepts a
-        named list until a segment resolver is configured.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
 
       <AnnouncementComposer
         open={isComposing}

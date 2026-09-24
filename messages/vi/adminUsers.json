@@ -1,0 +1,152 @@
+{
+  "statusBadge": {
+    "active": "Đang hoạt động",
+    "locked": "Đã khóa",
+    "deactivated": "Đã vô hiệu hóa",
+    "unverified": "Chưa xác minh",
+    "deleted": "Đã xóa"
+  },
+  "list": {
+    "eyebrow": "Danh bạ nền tảng",
+    "title": "Tài khoản",
+    "description": "Mọi tài khoản trên nền tảng, không phụ thuộc vào việc là thành viên workspace nào.",
+    "refresh": "Làm mới",
+    "statusTabsLabel": "Trạng thái tài khoản",
+    "statusTabs": {
+      "all": "Tất cả",
+      "active": "Đang hoạt động",
+      "locked": "Đã khóa",
+      "unverified": "Chưa xác minh",
+      "deactivated": "Đã vô hiệu hóa",
+      "deleted": "Đã xóa"
+    },
+    "loading": "Đang tải…",
+    "accountCount": "{count, plural, other {# tài khoản}}",
+    "searchPlaceholder": "Tìm theo tên hoặc email…",
+    "searchAriaLabel": "Tìm kiếm người dùng",
+    "sortLabel": "Sắp xếp",
+    "sortOptions": {
+      "createdDesc": "Mới nhất",
+      "createdAsc": "Cũ nhất",
+      "lastLoginDesc": "Hoạt động gần đây",
+      "lastLoginAsc": "Ít hoạt động gần đây nhất",
+      "nameAsc": "Tên A–Z",
+      "nameDesc": "Tên Z–A"
+    },
+    "loadErrorTitle": "Không thể tải danh bạ người dùng.",
+    "loadErrorDescription": "Kiểm tra dịch vụ xác thực và đảm bảo phiên của bạn vẫn có vai trò quản trị nền tảng.",
+    "tryAgain": "Thử lại",
+    "emptyTitle": "Không có tài khoản nào khớp với bộ lọc này",
+    "emptyDescription": "Xóa nội dung tìm kiếm hoặc chọn tab trạng thái khác.",
+    "columns": {
+      "user": "Người dùng",
+      "status": "Trạng thái",
+      "roles": "Vai trò",
+      "sessions": "Phiên",
+      "lastLogin": "Lần đăng nhập gần nhất",
+      "actions": "Hành động"
+    },
+    "noRoles": "—",
+    "neverSignedIn": "Chưa từng đăng nhập",
+    "sessionCount": "{count, plural, other {# phiên}}",
+    "noActionsAvailable": "—",
+    "unlock": "Mở khóa",
+    "signOut": "Đăng xuất",
+    "reactivate": "Kích hoạt lại",
+    "deactivate": "Vô hiệu hóa",
+    "pagination": {
+      "pageOf": "Trang {page} / {totalPages}",
+      "previous": "Trước",
+      "next": "Sau"
+    }
+  },
+  "detail": {
+    "eyebrow": "Tài khoản nền tảng",
+    "backToDirectory": "Tài khoản",
+    "refresh": "Làm mới",
+    "unlock": "Mở khóa",
+    "endSessions": "Kết thúc phiên",
+    "deactivate": "Vô hiệu hóa",
+    "reactivate": "Kích hoạt lại",
+    "notFoundTitle": "Không tìm thấy tài khoản",
+    "notFoundDescription": "Không có tài khoản nào mang id này. Có thể tài khoản đã bị xóa vĩnh viễn, hoặc liên kết không đúng.",
+    "loadErrorTitle": "Không thể tải tài khoản này",
+    "loadErrorDescription": "Kiểm tra dịch vụ xác thực và đảm bảo phiên của bạn vẫn có vai trò quản trị nền tảng.",
+    "backToDirectoryButton": "Quay lại danh bạ",
+    "tryAgain": "Thử lại",
+    "identityHeading": "Thông tin định danh",
+    "facts": {
+      "status": "Trạng thái",
+      "platformRoles": "Vai trò nền tảng",
+      "lastSignedIn": "Lần đăng nhập gần nhất",
+      "accountCreated": "Ngày tạo tài khoản"
+    },
+    "noRoles": "—",
+    "neverSignedIn": "Chưa từng đăng nhập",
+    "accessHeading": "Quyền truy cập",
+    "emailConfirmed": {
+      "label": "Email đã xác nhận",
+      "hint": "Cho biết người dùng đã từng hoàn tất liên kết xác minh hay chưa.",
+      "confirmed": "Đã xác nhận",
+      "notConfirmed": "Chưa xác nhận"
+    },
+    "signInAllowed": {
+      "label": "Cho phép đăng nhập",
+      "hint": "Vô hiệu hóa cũng sẽ kết thúc mọi phiên đang mở.",
+      "allowed": "Được phép",
+      "deactivated": "Đã vô hiệu hóa"
+    },
+    "lockout": {
+      "label": "Khóa do đăng nhập sai",
+      "hintLocked": "Tự động gỡ khóa lúc {time}. Mở khóa không cần chờ đến lúc đó.",
+      "hintClear": "Khóa tạm thời và sẽ tự gỡ khi hết thời gian chờ.",
+      "locked": "Đang khóa",
+      "none": "Không có"
+    },
+    "sessionsHeading": "Phiên đăng nhập",
+    "sessionsOpenCount": "{count, plural, =0 {không có phiên nào đang mở} other {# phiên đang mở}}",
+    "sessionColumns": {
+      "device": "Thiết bị",
+      "ipAddress": "Địa chỉ IP",
+      "signedIn": "Đăng nhập lúc",
+      "expires": "Hết hạn"
+    },
+    "unknownDevice": "Thiết bị không xác định",
+    "noIpAddress": "—",
+    "noSessionsOpen": "Không có phiên nào đang mở. Tài khoản này hiện không đăng nhập ở đâu.",
+    "footerNote": "Dòng phiên không bao giờ chứa token hay mã băm của nó — quản trị viên chỉ cần biết phiên tồn tại, không cần sử dụng được nó. Kết thúc phiên không khóa tài khoản hay đổi mật khẩu: người dùng có thể đăng nhập lại ngay."
+  },
+  "actionDialog": {
+    "revokeSessions": {
+      "title": "Kết thúc mọi phiên đăng nhập?",
+      "description": "Đăng xuất tài khoản khỏi mọi nơi. Tài khoản không bị khóa và mật khẩu không đổi — người dùng có thể đăng nhập lại ngay.",
+      "confirm": "Kết thúc phiên",
+      "pending": "Đang kết thúc…"
+    },
+    "deactivate": {
+      "title": "Vô hiệu hóa tài khoản này?",
+      "description": "Người dùng sẽ không thể đăng nhập, và các phiên đang mở sẽ bị kết thúc. Không có gì bị xóa và có thể hoàn tác thao tác này.",
+      "confirm": "Vô hiệu hóa",
+      "pending": "Đang vô hiệu hóa…"
+    },
+    "reactivate": {
+      "title": "Kích hoạt lại tài khoản này?",
+      "description": "Cho phép đăng nhập trở lại. Các phiên đã kết thúc trước đó vẫn giữ nguyên — người dùng sẽ đăng nhập lại từ đầu.",
+      "confirm": "Kích hoạt lại",
+      "pending": "Đang kích hoạt…"
+    },
+    "unlock": {
+      "title": "Gỡ khóa tài khoản?",
+      "description": "Xóa khóa do đăng nhập sai và đặt lại bộ đếm số lần thử, để người dùng có thể thử lại ngay thay vì chờ hết thời gian khóa.",
+      "confirm": "Mở khóa",
+      "pending": "Đang mở khóa…"
+    },
+    "noSessionsOpen": "Hiện không có phiên nào đang mở.",
+    "sessionsWillEnd": "{count, plural, other {# phiên sẽ kết thúc.}}",
+    "reasonLabel": "Lý do",
+    "reasonPlaceholder": "Được ghi lại trong nhật ký kiểm toán của nền tảng, gắn với tài khoản của bạn.",
+    "reasonTooShort": "Nhập lý do ít nhất mười ký tự. Nội dung này sẽ được ghi vào nhật ký kiểm toán của nền tảng.",
+    "genericError": "Không có gì thay đổi — thao tác không thể hoàn tất.",
+    "back": "Quay lại"
+  }
+}

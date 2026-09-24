@@ -77,32 +77,69 @@ export interface EntitlementSourceLabel {
   detail: string;
 }
 
-export function describeSource(source: string | null | undefined): EntitlementSourceLabel {
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type EntitlementTranslator = (key: string, values?: Record<string, string>) => string;
+
+const DEFAULT_ENTITLEMENT_COPY: Record<string, (values?: Record<string, string>) => string> = {
+  "source.unknown.label": () => "Unknown",
+  "source.unknown.detail": () => "The source of this value was not reported.",
+  "source.plan.label": () => "Plan",
+  "source.plan.detail": (v) => `Set by the ${v!.name} plan.`,
+  "source.platformDefault.label": () => "Platform default",
+  "source.platformDefault.detail": () =>
+    "No active plan or contract sets this, so the platform default applies.",
+  "source.contract.label": () => "Contract",
+  "source.contract.detail": () => "Set by this workspace's negotiated contract.",
+  "source.workspaceOverride.label": () => "Workspace limit",
+  "source.workspaceOverride.detail": () => "A workspace owner lowered this below what the plan allows.",
+  "source.unknownNamed.detail": (v) => `Reported source: ${v!.source}.`,
+  "value.included": () => "Included",
+  "value.notIncluded": () => "Not included",
+  "value.unlimited": () => "Unlimited",
+};
+
+function defaultT(key: string, values?: Record<string, string>): string {
+  return DEFAULT_ENTITLEMENT_COPY[key]?.(values) ?? key;
+}
+
+export function describeSource(
+  source: string | null | undefined,
+  t: EntitlementTranslator = defaultT,
+): EntitlementSourceLabel {
   if (!source) {
-    return { kind: "unknown", label: "Unknown", detail: "The source of this value was not reported." };
+    return { kind: "unknown", label: t("source.unknown.label"), detail: t("source.unknown.detail") };
   }
   if (source.startsWith("plan:")) {
     const slug = source.slice("plan:".length);
     const name = slug && slug !== "unknown" ? humanize(slug) : "your plan";
-    return { kind: "plan", label: "Plan", detail: `Set by the ${name} plan.` };
+    return { kind: "plan", label: t("source.plan.label"), detail: t("source.plan.detail", { name }) };
   }
   switch (source) {
     case "platform_default":
       return {
         kind: "platform",
-        label: "Platform default",
-        detail: "No active plan or contract sets this, so the platform default applies.",
+        label: t("source.platformDefault.label"),
+        detail: t("source.platformDefault.detail"),
       };
     case "contract_override":
-      return { kind: "contract", label: "Contract", detail: "Set by this workspace's negotiated contract." };
+      return {
+        kind: "contract",
+        label: t("source.contract.label"),
+        detail: t("source.contract.detail"),
+      };
     case "workspace_override":
       return {
         kind: "workspace",
-        label: "Workspace limit",
-        detail: "A workspace owner lowered this below what the plan allows.",
+        label: t("source.workspaceOverride.label"),
+        detail: t("source.workspaceOverride.detail"),
       };
     default:
-      return { kind: "unknown", label: humanize(source), detail: `Reported source: ${source}.` };
+      return {
+        kind: "unknown",
+        label: humanize(source),
+        detail: t("source.unknownNamed.detail", { source }),
+      };
   }
 }
 
@@ -120,19 +157,24 @@ export function formatEntitlementValue(
   key: string,
   kind: WorkspaceEntitlementKind,
   value: string,
+  t: EntitlementTranslator = defaultT,
+  locale = "en-US",
 ): FormattedEntitlementValue {
   if (kind === "flag") {
     return value.toLowerCase() === "true"
-      ? { text: "Included", state: "included" }
-      : { text: "Not included", state: "excluded" };
+      ? { text: t("value.included"), state: "included" }
+      : { text: t("value.notIncluded"), state: "excluded" };
   }
   if (kind === "limit") {
     const parsed = Number.parseInt(value, 10);
     if (!Number.isFinite(parsed)) return { text: value, state: "text" };
-    if (parsed <= 0) return { text: "Unlimited", state: "unlimited" };
+    if (parsed <= 0) return { text: t("value.unlimited"), state: "unlimited" };
     const entry = ENTITLEMENT_CATALOG[key];
-    const count = parsed.toLocaleString("en-US");
+    const count = parsed.toLocaleString(locale);
     if (!entry?.unit) return { text: count, state: "limit" };
+    if (t !== defaultT) {
+      return { text: t(`catalog.${key}.unit`, { count: String(parsed) }), state: "limit" };
+    }
     const noun = parsed === 1 ? (entry.unitSingular ?? entry.unit) : entry.unit;
     return { text: `${count} ${noun}`, state: "limit" };
   }
@@ -156,7 +198,11 @@ export interface EntitlementSection {
   rows: EntitlementRow[];
 }
 
-export function buildEntitlementSections(entitlements: WorkspaceEntitlementDto[]): EntitlementSection[] {
+export function buildEntitlementSections(
+  entitlements: WorkspaceEntitlementDto[],
+  t: EntitlementTranslator = defaultT,
+  locale = "en-US",
+): EntitlementSection[] {
   const byGroup = new Map<EntitlementGroup, EntitlementRow[]>();
 
   for (const item of entitlements) {
@@ -165,15 +211,17 @@ export function buildEntitlementSections(entitlements: WorkspaceEntitlementDto[]
     const isOverride = item.source === "workspace_override";
     const row: EntitlementRow = {
       key: item.key,
-      label: entry?.label ?? humanize(item.key),
-      description: entry?.description ?? null,
-      value: formatEntitlementValue(item.key, item.kind, item.value),
-      source: describeSource(item.source),
+      label: entry ? (t !== defaultT ? t(`catalog.${item.key}.label`) : entry.label) : humanize(item.key),
+      description: entry
+        ? (t !== defaultT ? t(`catalog.${item.key}.description`) : entry.description)
+        : null,
+      value: formatEntitlementValue(item.key, item.kind, item.value, t, locale),
+      source: describeSource(item.source, t),
       ceiling:
         isOverride && item.ceiling != null
           ? {
-              value: formatEntitlementValue(item.key, item.kind, item.ceiling),
-              source: describeSource(item.ceilingSource),
+              value: formatEntitlementValue(item.key, item.kind, item.ceiling, t, locale),
+              source: describeSource(item.ceilingSource, t),
             }
           : null,
       ceilingUnknown: isOverride && item.ceiling == null,

@@ -30,6 +30,7 @@
 import { ArrowSquareOut, Spinner } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -63,12 +64,14 @@ const HIDDEN_ATTEMPT_CODES = new Set<string | number>([
   "FORBIDDEN",
 ]);
 
-function statusOf(invoice: { paidAt: string | null; status?: string | null }) {
-  if (invoice.paidAt) return { label: "Paid", tone: "paid" as const };
+type InvoicesT = ReturnType<typeof useTranslations>;
+
+function statusOf(invoice: { paidAt: string | null; status?: string | null }, t: InvoicesT) {
+  if (invoice.paidAt) return { label: t("status.paid"), tone: "paid" as const };
   if ((invoice.status ?? "").toLowerCase() === "void") {
-    return { label: "Void", tone: "void" as const };
+    return { label: t("status.void"), tone: "void" as const };
   }
-  return { label: "Unpaid", tone: "unpaid" as const };
+  return { label: t("status.unpaid"), tone: "unpaid" as const };
 }
 
 const shortDate = (value: string) => format(new Date(value), "MMM d, yyyy");
@@ -83,6 +86,7 @@ const TH = "whitespace-nowrap border-b border-hairline px-4 py-2.5 text-[12px] f
 const TD = "whitespace-nowrap px-4 py-3 first:pl-4 sm:first:pl-6 last:pr-4 sm:last:pr-6";
 
 export default function WorkspaceInvoicesPage() {
+  const t = useTranslations("settingsBillingInvoices");
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const workspaceId = activeWorkspaceId || "";
   const role = useWorkspaceRole();
@@ -110,7 +114,7 @@ export default function WorkspaceInvoicesPage() {
     checkout.mutate(invoiceId, {
       onError: (error) => {
         setPayingInvoiceId(null);
-        toast.error(getErrorMessage(error, "Could not start checkout for this invoice. Please try again."));
+        toast.error(getErrorMessage(error, t("checkoutError")));
       },
     });
   };
@@ -157,7 +161,7 @@ export default function WorkspaceInvoicesPage() {
   if (!canView) {
     return (
       <div className="px-4 py-4 text-[13px] text-ink-muted">
-        Only workspace Owners and Administrators can view invoices.
+        {t("accessDenied")}
       </div>
     );
   }
@@ -165,11 +169,11 @@ export default function WorkspaceInvoicesPage() {
   return (
     <div className="flex min-w-0 flex-col text-ink">
       <GridRow>
-        <h2 className="text-[14px] font-semibold leading-tight text-ink">Invoices</h2>
+        <h2 className="text-[14px] font-semibold leading-tight text-ink">{t("title")}</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
           {isLoading
-            ? "Loading…"
-            : `${total} invoice${total === 1 ? "" : "s"} issued to this workspace`}
+            ? t("loading")
+            : t("countIssued", { count: total })}
         </p>
       </GridRow>
 
@@ -177,20 +181,20 @@ export default function WorkspaceInvoicesPage() {
           side from sm, where that rule becomes the vertical one. */}
       <div className="grid sm:grid-cols-2">
         <StatCell
-          label="Outstanding"
+          label={t("outstanding.label")}
           className="sm:border-r"
           value={formatMoney(summary.outstandingTotal, summary.currency)}
           tone={summary.outstandingCount > 0 ? "warn" : "default"}
           lines={[
             summary.outstandingCount > 0
-              ? `${summary.outstandingCount} invoice${summary.outstandingCount === 1 ? "" : "s"} awaiting payment`
-              : "Nothing awaiting payment",
+              ? t("outstanding.awaitingPayment", { count: summary.outstandingCount })
+              : t("outstanding.nothing"),
           ]}
         />
         <StatCell
-          label="Paid to date"
+          label={t("paidToDate.label")}
           value={formatMoney(summary.paidTotal, summary.currency)}
-          lines={[`${summary.paidCount} invoice${summary.paidCount === 1 ? "" : "s"}`]}
+          lines={[t("paidToDate.count", { count: summary.paidCount })]}
         />
       </div>
 
@@ -200,27 +204,27 @@ export default function WorkspaceInvoicesPage() {
         </GridRow>
       ) : invoices.length === 0 ? (
         <GridRow className="py-10 text-center text-[13px] text-ink-muted">
-          No invoice has been issued for this workspace yet.
+          {t("noInvoices")}
         </GridRow>
       ) : (
         <div className="min-w-0 overflow-x-auto border-b border-hairline">
           <table className="w-full min-w-[760px] border-collapse text-left text-[13px]">
             <thead>
               <tr>
-                <th scope="col" className={TH}>Number</th>
-                <th scope="col" className={TH}>Period</th>
-                <th scope="col" className={TH}>Issued</th>
-                <th scope="col" className={TH}>Due</th>
-                <th scope="col" className={cn(TH, "text-right")}>Amount</th>
-                <th scope="col" className={TH}>Status</th>
+                <th scope="col" className={TH}>{t("table.number")}</th>
+                <th scope="col" className={TH}>{t("table.period")}</th>
+                <th scope="col" className={TH}>{t("table.issued")}</th>
+                <th scope="col" className={TH}>{t("table.due")}</th>
+                <th scope="col" className={cn(TH, "text-right")}>{t("table.amount")}</th>
+                <th scope="col" className={TH}>{t("table.status")}</th>
                 <th scope="col" className={TH}>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{t("table.actionsSr")}</span>
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline">
               {invoices.map((invoice) => {
-                const status = statusOf(invoice);
+                const status = statusOf(invoice, t);
                 return (
                   <tr key={invoice.id}>
                     <td className={cn(TD, "font-mono text-ink")}>{invoice.invoiceNumber}</td>
@@ -258,7 +262,7 @@ export default function WorkspaceInvoicesPage() {
                             {payingInvoiceId === invoice.id ? (
                               <Spinner className="h-3.5 w-3.5 animate-spin" />
                             ) : null}
-                            Pay
+                            {t("pay")}
                           </BillingButton>
                         ) : null}
                         {/* Only a real http(s) URL becomes a link. `pdfUrl` is nullable and has
@@ -271,7 +275,7 @@ export default function WorkspaceInvoicesPage() {
                             rel="noopener noreferrer"
                             className="inline-flex items-center gap-1 text-[12px] text-ink-muted transition-colors hover:text-ink"
                           >
-                            PDF
+                            {t("pdf")}
                             <ArrowSquareOut className="h-3.5 w-3.5" />
                           </a>
                         ) : (
@@ -290,7 +294,7 @@ export default function WorkspaceInvoicesPage() {
       {totalPages > 1 ? (
         <GridRow className="flex items-center justify-between gap-3 py-3">
           <p className="text-[12px] text-ink-muted">
-            Page {page} of {totalPages}
+            {t("pagination.pageOf", { page, totalPages })}
           </p>
           <div className="flex items-center gap-2">
             <BillingButton
@@ -299,7 +303,7 @@ export default function WorkspaceInvoicesPage() {
               disabled={page <= 1}
               onClick={() => setPage((current) => Math.max(1, current - 1))}
             >
-              Previous
+              {t("pagination.previous")}
             </BillingButton>
             <BillingButton
               tone="outline"
@@ -307,7 +311,7 @@ export default function WorkspaceInvoicesPage() {
               disabled={page >= totalPages}
               onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
             >
-              Next
+              {t("pagination.next")}
             </BillingButton>
           </div>
         </GridRow>
@@ -325,6 +329,7 @@ export default function WorkspaceInvoicesPage() {
  * from different endpoints, and a payment-history fault must not hide what was invoiced.
  */
 function PaymentAttempts({ workspaceId }: { workspaceId: string }) {
+  const t = useTranslations("settingsBillingInvoices");
   const { data, isError, error, refetch, isFetching } = useWorkspacePaymentHistory(
     workspaceId || null,
     1,
@@ -342,14 +347,14 @@ function PaymentAttempts({ workspaceId }: { workspaceId: string }) {
     if (code !== undefined && HIDDEN_ATTEMPT_CODES.has(code)) return null;
     return (
       <GridRow className="flex flex-wrap items-center justify-between gap-3 py-3">
-        <p className="text-[12px] text-ink-muted">Payment attempts could not be loaded.</p>
+        <p className="text-[12px] text-ink-muted">{t("paymentAttempts.loadError")}</p>
         <BillingButton
           tone="outline"
           className="w-auto px-3"
           disabled={isFetching}
           onClick={() => void refetch()}
         >
-          Try again
+          {t("paymentAttempts.tryAgain")}
         </BillingButton>
       </GridRow>
     );
@@ -361,9 +366,9 @@ function PaymentAttempts({ workspaceId }: { workspaceId: string }) {
     <div className="flex min-w-0 flex-col">
       <GridRow className="py-3">
         <h3 className="text-[14px] font-semibold leading-tight text-ink">
-          Payment attempts that did not go through
+          {t("paymentAttempts.title")}
         </h3>
-        <p className="mt-1 text-[12px] text-ink-muted">On the current subscription</p>
+        <p className="mt-1 text-[12px] text-ink-muted">{t("paymentAttempts.subtitle")}</p>
       </GridRow>
       {attempts.map((payment) => {
         const status = paymentStatusOf(payment.status);

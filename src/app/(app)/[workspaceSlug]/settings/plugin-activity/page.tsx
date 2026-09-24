@@ -27,7 +27,7 @@
  */
 
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
+import { useLocale, useTranslations } from "next-intl";
 import { Lock, PlugsConnected, Spinner, Warning } from "@phosphor-icons/react";
 
 import {
@@ -99,6 +99,8 @@ function CenteredNotice({
 }
 
 export default function WorkspacePluginActivityPage() {
+  const t = useTranslations("settingsPluginActivity");
+  const locale = useLocale();
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const role = useWorkspaceRole();
   const roleLoaded = useWorkspaceRoleLoaded();
@@ -127,8 +129,20 @@ export default function WorkspacePluginActivityPage() {
   const members = useMemo(() => membersQuery.data?.items ?? [], [membersQuery.data]);
   const plugins = useMemo(() => pluginsQuery.data ?? [], [pluginsQuery.data]);
   const rows = useMemo(
-    () => toPluginActivityRows(auditsQuery.data ?? [], members, plugins),
-    [auditsQuery.data, members, plugins],
+    () => toPluginActivityRows(auditsQuery.data ?? [], members, plugins, (key) => t(key)),
+    [auditsQuery.data, members, plugins, t],
+  );
+  const dateTimeFormat = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
+    [locale],
   );
 
   const resetPageAnd = (apply: () => void) => {
@@ -153,8 +167,8 @@ export default function WorkspacePluginActivityPage() {
     return (
       <CenteredNotice
         icon={<Lock className="h-6 w-6" />}
-        title="Access Denied"
-        description="Only workspace Owners and Administrators can view plugin activity."
+        title={t("accessDenied.title")}
+        description={t("accessDenied.description")}
       />
     );
   }
@@ -163,14 +177,14 @@ export default function WorkspacePluginActivityPage() {
     return (
       <CenteredNotice
         icon={<Warning className="h-6 w-6" />}
-        title="Couldn't load plugin activity"
-        description="Retry, and if it keeps failing check that the assistant service is reachable."
+        title={t("loadError.title")}
+        description={t("loadError.description")}
         action={
           <WorkspaceSecondaryButton
             onClick={() => auditsQuery.refetch()}
             disabled={auditsQuery.isFetching}
           >
-            {auditsQuery.isFetching ? "Retrying…" : "Retry"}
+            {auditsQuery.isFetching ? t("retrying") : t("retry")}
           </WorkspaceSecondaryButton>
         }
       />
@@ -196,14 +210,14 @@ export default function WorkspacePluginActivityPage() {
                 <SelectValue>
                   {(value) =>
                     value === ALL || !value
-                      ? "All plugins"
+                      ? t("allPlugins")
                       : selectedPlugin?.label || String(value)
                   }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL} className="text-xs">
-                  All plugins
+                  {t("allPlugins")}
                 </SelectItem>
                 {plugins.map((plugin) => (
                   <SelectItem key={plugin.key} value={plugin.key} className="text-xs">
@@ -220,14 +234,14 @@ export default function WorkspacePluginActivityPage() {
                 <SelectValue>
                   {(value) =>
                     value === ALL || !value
-                      ? "All members"
-                      : selectedMember?.fullName || selectedMember?.email || "Member"
+                      ? t("allMembers")
+                      : selectedMember?.fullName || selectedMember?.email || t("memberFallback")
                   }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL} className="text-xs">
-                  All members
+                  {t("allMembers")}
                 </SelectItem>
                 {members.map((member) => (
                   <SelectItem key={member.userId} value={member.userId} className="text-xs">
@@ -250,17 +264,17 @@ export default function WorkspacePluginActivityPage() {
             icon={<PlugsConnected className="h-6 w-6" weight="duotone" />}
             title={
               page > 0
-                ? "No more activity"
+                ? t("empty.noMoreTitle")
                 : filtered
-                  ? "No activity matches these filters"
-                  : "No plugin activity yet"
+                  ? t("empty.noMatchTitle")
+                  : t("empty.noActivityTitle")
             }
             description={
               page > 0
-                ? "That was the last page."
+                ? t("empty.noMoreDescription")
                 : filtered
-                  ? "Clear a filter to see more."
-                  : "When WarpBot runs a plugin tool for someone in this workspace, it is listed here."
+                  ? t("empty.noMatchDescription")
+                  : t("empty.noActivityDescription")
             }
           />
         ) : (
@@ -274,11 +288,11 @@ export default function WorkspacePluginActivityPage() {
               <table className="w-full min-w-[640px] text-left text-[13px]">
                 <thead>
                   <tr className="border-b border-hairline text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-                    <th className="px-4 py-2.5 font-semibold">Time</th>
-                    <th className="px-4 py-2.5 font-semibold">Member</th>
-                    <th className="px-4 py-2.5 font-semibold">Plugin</th>
-                    <th className="px-4 py-2.5 font-semibold">Tool</th>
-                    <th className="px-4 py-2.5 font-semibold">Result</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("table.time")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("table.member")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("table.plugin")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("table.tool")}</th>
+                    <th className="px-4 py-2.5 font-semibold">{t("table.result")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
@@ -288,12 +302,12 @@ export default function WorkspacePluginActivityPage() {
                         className="whitespace-nowrap px-4 py-3 tabular-nums text-ink-muted"
                         title={row.createdAt}
                       >
-                        {format(new Date(row.createdAt), "MMM d, yyyy HH:mm")}
+                        {dateTimeFormat.format(new Date(row.createdAt))}
                       </td>
                       <td className="max-w-[200px] px-4 py-3">
                         <span className="block truncate text-ink">{row.memberLabel}</span>
                         {row.isFormerMember ? (
-                          <span className="text-[11px] text-ink-subtle">No longer a member</span>
+                          <span className="text-[11px] text-ink-subtle">{t("noLongerMember")}</span>
                         ) : null}
                       </td>
                       <td className="px-4 py-3 text-ink">{row.pluginLabel}</td>
@@ -337,19 +351,19 @@ export default function WorkspacePluginActivityPage() {
 
         {page > 0 || hasNext ? (
           <div className="flex items-center justify-between gap-3 pt-3">
-            <p className="text-[12px] text-ink-muted">Page {page + 1}</p>
+            <p className="text-[12px] text-ink-muted">{t("page", { page: page + 1 })}</p>
             <div className="flex items-center gap-2">
               <WorkspaceSecondaryButton
                 onClick={() => setPage((current) => Math.max(0, current - 1))}
                 disabled={page === 0 || auditsQuery.isFetching}
               >
-                Previous
+                {t("previous")}
               </WorkspaceSecondaryButton>
               <WorkspaceSecondaryButton
                 onClick={() => setPage((current) => current + 1)}
                 disabled={!hasNext || auditsQuery.isFetching}
               >
-                Next
+                {t("next")}
               </WorkspaceSecondaryButton>
             </div>
           </div>

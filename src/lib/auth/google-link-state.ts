@@ -29,7 +29,18 @@ export type GoogleLinkState =
 export const UNLINK_NEEDS_PASSWORD_REASON =
   "Google is the only way you sign in. Set a password first (use Forgot password on the sign-in page), then you can unlink Google.";
 
-export function googleLinkState(methods: SignInMethods | null | undefined): GoogleLinkState {
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type GoogleLinkReasonTranslator = () => string;
+
+function defaultReasonT(): string {
+  return UNLINK_NEEDS_PASSWORD_REASON;
+}
+
+export function googleLinkState(
+  methods: SignInMethods | null | undefined,
+  t: GoogleLinkReasonTranslator = defaultReasonT,
+): GoogleLinkState {
   if (!methods || typeof methods.googleLinked !== "boolean") return { kind: "unknown" };
   if (!methods.googleLinked) return { kind: "not-linked" };
 
@@ -37,5 +48,5 @@ export function googleLinkState(methods: SignInMethods | null | undefined): Goog
   // if it ever does, refusing the button is the safe side: the server enforces the rule anyway,
   // and a disabled button costs nothing while a lockout costs the account.
   if (methods.hasPassword === true) return { kind: "linked", canUnlink: true };
-  return { kind: "linked", canUnlink: false, reason: UNLINK_NEEDS_PASSWORD_REASON };
+  return { kind: "linked", canUnlink: false, reason: t() };
 }

@@ -35,6 +35,7 @@ import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { FileArrowUp, Plus, Trash, MagnifyingGlass } from "@phosphor-icons/react";
 
 import {
@@ -77,7 +78,7 @@ import {
 // Called directly, not through a hook: the terms go into the glossary that was created a line
 // earlier, and a hook bound to an id can only be bound to one the component already had.
 import { WorkspaceService } from "@/services/workspace.service";
-import { initialTermsSchema, termRowsToImport } from "@/lib/glossary/initial-terms";
+import { getInitialTermsSchema, termRowsToImport } from "@/lib/glossary/initial-terms";
 import { InitialTermsField } from "@/components/glossary/initial-terms-field";
 import type { GlossaryDto } from "@/types/workspace";
 import {
@@ -94,28 +95,33 @@ import {
  */
 const DEFAULT_GLOSSARY_LANGUAGE = "en";
 
-const glossarySchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  description: z.string().optional(),
-  sourceLanguage: z.string().min(1, "Select the language people speak"),
-  targetLanguage: z.string().min(1, "Select the language it is translated into"),
-  // WT-558. The rule for what counts as a usable row lives in lib/glossary/initial-terms, so the
-  // schema and the field that renders the errors cannot disagree about a half-filled row.
-  initialTerms: initialTermsSchema,
-});
-type GlossaryForm = z.infer<typeof glossarySchema>;
+function getGlossarySchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z.string().min(2, t("validation.nameMin")),
+    description: z.string().optional(),
+    sourceLanguage: z.string().min(1, t("validation.sourceLanguageRequired")),
+    targetLanguage: z.string().min(1, t("validation.targetLanguageRequired")),
+    // WT-558. The rule for what counts as a usable row lives in lib/glossary/initial-terms, so the
+    // schema and the field that renders the errors cannot disagree about a half-filled row.
+    initialTerms: getInitialTermsSchema((key) => t(`initialTerms.${key}`)),
+  });
+}
+type GlossaryForm = z.infer<ReturnType<typeof getGlossarySchema>>;
 
-const termSchema = z.object({
-  sourceTerm: z.string().min(1, "The term is required"),
-  targetTerm: z.string().min(1, "The translation to use is required"),
-  domain: z.string().optional(),
-  partOfSpeech: z.string().optional(),
-  definition: z.string().optional(),
-  context: z.string().optional(),
-});
-type TermForm = z.infer<typeof termSchema>;
+function getTermSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    sourceTerm: z.string().min(1, t("validation.sourceTermRequired")),
+    targetTerm: z.string().min(1, t("validation.targetTermRequired")),
+    domain: z.string().optional(),
+    partOfSpeech: z.string().optional(),
+    definition: z.string().optional(),
+    context: z.string().optional(),
+  });
+}
+type TermForm = z.infer<ReturnType<typeof getTermSchema>>;
 
 export default function WorkspaceGlossaryPage() {
+  const t = useTranslations("glossary");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const role = useWorkspaceRole();
   // Owners and admins curate the terminology; a member reads it. The server is the real gate —
@@ -145,6 +151,9 @@ export default function WorkspaceGlossaryPage() {
   const addTerm = useAddGlossaryTerm(selected?.id ?? "");
   const deleteTerm = useDeleteGlossaryTerm(selected?.id ?? "");
   const bulkImport = useBulkImportGlossaryTerms(selected?.id ?? "");
+
+  const glossarySchema = useMemo(() => getGlossarySchema(t), [t]);
+  const termSchema = useMemo(() => getTermSchema(t), [t]);
 
   const glossaryForm = useForm<GlossaryForm>({
     resolver: zodResolver(glossarySchema),
@@ -238,15 +247,17 @@ export default function WorkspaceGlossaryPage() {
       const result = await bulkImport.mutateAsync(rows);
       const summary =
         result.skipped > 0
-          ? `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}, skipped ${result.skipped} already in this glossary.`
-          : `Imported ${result.imported} term${result.imported === 1 ? "" : "s"}.`;
+          ? t("toasts.importedSkipped", { count: result.imported, skipped: result.skipped })
+          : t("toasts.imported", { count: result.imported });
 
       toast.success(summary, {
         description:
           result.errors.length > 0
             ? [
                 ...result.errors.slice(0, 3),
-                result.errors.length > 3 ? `…and ${result.errors.length - 3} more.` : null,
+                result.errors.length > 3
+                  ? t("toasts.moreErrors", { count: result.errors.length - 3 })
+                  : null,
               ]
                 .filter(Boolean)
                 .join(" ")
@@ -254,7 +265,7 @@ export default function WorkspaceGlossaryPage() {
       });
       setImportDialogOpen(false);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not import the file."));
+      toast.error(getErrorMessage(error, t("toasts.importFailed")));
     }
   }
 
@@ -287,16 +298,14 @@ export default function WorkspaceGlossaryPage() {
           const result = await WorkspaceService.bulkImportTerms(created.id, rows);
           importedCount = result.imported;
         } catch (error) {
-          toast.error(
-            getErrorMessage(error, `Glossary created, but its terms could not be added.`),
-          );
+          toast.error(getErrorMessage(error, t("toasts.glossaryTermsFailed")));
         }
       }
 
       toast.success(
         importedCount > 0
-          ? `Glossary created with ${importedCount} term${importedCount === 1 ? "" : "s"}.`
-          : "Glossary created.",
+          ? t("toasts.glossaryCreatedWithTerms", { count: importedCount })
+          : t("toasts.glossaryCreated"),
       );
       setGlossaryDialogOpen(false);
       glossaryForm.reset();
@@ -328,7 +337,7 @@ export default function WorkspaceGlossaryPage() {
         setImportDialogOpen(true);
       }
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not create the glossary."));
+      toast.error(getErrorMessage(error, t("toasts.glossaryCreateFailed")));
     }
   }
 
@@ -343,11 +352,11 @@ export default function WorkspaceGlossaryPage() {
         definition: values.definition || null,
         context: values.context || null,
       });
-      toast.success("Term added.");
+      toast.success(t("toasts.termAdded"));
       setTermDialogOpen(false);
       termForm.reset();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not add the term."));
+      toast.error(getErrorMessage(error, t("toasts.termAddFailed")));
     }
   }
 
@@ -355,18 +364,18 @@ export default function WorkspaceGlossaryPage() {
     try {
       await deleteGlossary.mutateAsync(glossary.id);
       if (selectedId === glossary.id) setSelectedId(null);
-      toast.success("Glossary deleted.");
+      toast.success(t("toasts.glossaryDeleted"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not delete the glossary."));
+      toast.error(getErrorMessage(error, t("toasts.glossaryDeleteFailed")));
     }
   }
 
   async function removeTerm(termId: string) {
     try {
       await deleteTerm.mutateAsync(termId);
-      toast.success("Term removed.");
+      toast.success(t("toasts.termRemoved"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not remove the term."));
+      toast.error(getErrorMessage(error, t("toasts.termRemoveFailed")));
     }
   }
 
@@ -418,7 +427,7 @@ export default function WorkspaceGlossaryPage() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search terms"
+                  placeholder={t("searchPlaceholder")}
                   className="h-8 w-44 pl-8 text-[12px]"
                 />
               </div>
@@ -427,7 +436,7 @@ export default function WorkspaceGlossaryPage() {
               <>
                 <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
                   <Plus className="h-3.5 w-3.5" />
-                  New glossary
+                  {t("newGlossary")}
                 </WorkspacePrimaryButton>
                 {selected ? (
                   <>
@@ -436,11 +445,11 @@ export default function WorkspaceGlossaryPage() {
                         so the bulk path is the primary one for anyone setting a glossary up. */}
                     <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
                       <FileArrowUp className="h-3.5 w-3.5" />
-                      Import
+                      {t("import")}
                     </WorkspacePrimaryButton>
                     <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
                       <Plus className="h-3.5 w-3.5" />
-                      Add term
+                      {t("addTerm")}
                     </WorkspacePrimaryButton>
                   </>
                 ) : null}
@@ -454,14 +463,14 @@ export default function WorkspaceGlossaryPage() {
         {glossaries.length === 0 ? (
           <PagePlaceholder
             kind="glossary"
-            title="No glossary yet"
-            description="A glossary fixes how your terms are heard and translated during a meeting — product names, acronyms, and words whose meaning depends on your field. Terms here override the platform-wide glossary. Already have a list? Import a CSV or spreadsheet instead of typing it out."
+            title={t("emptyState.title")}
+            description={t("emptyState.description")}
             action={
               canManage ? (
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <WorkspacePrimaryButton onClick={() => setGlossaryDialogOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
-                    New glossary
+                    {t("newGlossary")}
                   </WorkspacePrimaryButton>
                   {/*
                     Import is offered from the empty state as well as from inside a glossary.
@@ -477,7 +486,7 @@ export default function WorkspaceGlossaryPage() {
                     }}
                   >
                     <FileArrowUp className="h-3.5 w-3.5" />
-                    Import terms
+                    {t("emptyState.importTerms")}
                   </WorkspacePrimaryButton>
                 </div>
               ) : undefined
@@ -488,12 +497,8 @@ export default function WorkspaceGlossaryPage() {
         ) : terms.length === 0 ? (
           <PagePlaceholder
             kind="glossary"
-            title={search ? "No term matches that search" : "This glossary has no terms yet"}
-            description={
-              search
-                ? undefined
-                : "Add the words this workspace wants heard and translated a particular way, or import a CSV or spreadsheet you already have."
-            }
+            title={search ? t("emptyTerms.titleSearch") : t("emptyTerms.titleEmpty")}
+            description={search ? undefined : t("emptyTerms.description")}
             action={
               // Offered here too, not only in the header bar. This is the screen someone lands on
               // straight after creating a glossary, and a vocabulary arrives as a spreadsheet far
@@ -502,11 +507,11 @@ export default function WorkspaceGlossaryPage() {
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <WorkspacePrimaryButton onClick={() => setImportDialogOpen(true)}>
                     <FileArrowUp className="h-3.5 w-3.5" />
-                    Import terms
+                    {t("emptyState.importTerms")}
                   </WorkspacePrimaryButton>
                   <WorkspacePrimaryButton onClick={() => setTermDialogOpen(true)}>
                     <Plus className="h-3.5 w-3.5" />
-                    Add term
+                    {t("addTerm")}
                   </WorkspacePrimaryButton>
                 </div>
               ) : undefined
@@ -520,7 +525,7 @@ export default function WorkspaceGlossaryPage() {
              use to a reader who arrives already knowing the word. */
           <div className="flex flex-col gap-3">
             {groupedTerms.length > 1 ? (
-              <nav className="flex flex-wrap gap-1" aria-label="Jump to letter">
+              <nav className="flex flex-wrap gap-1" aria-label={t("jumpToLetter")}>
                 {groupedTerms.map(([letter]) => (
                   <a
                     key={letter}
@@ -588,7 +593,7 @@ export default function WorkspaceGlossaryPage() {
                             onClick={() => removeTerm(term.id)}
                             disabled={deleteTerm.isPending}
                             className="grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink-subtle opacity-0 transition-opacity hover:bg-surface-2 hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100"
-                            title="Remove term"
+                            title={t("removeTermTitle")}
                           >
                             <Trash className="h-3.5 w-3.5" />
                           </button>
@@ -614,7 +619,7 @@ export default function WorkspaceGlossaryPage() {
               disabled={deleteGlossary.isPending}
               className="text-ink-subtle transition-colors hover:text-red-600"
             >
-              Delete this glossary
+              {t("deleteThisGlossary")}
             </button>
           </div>
         ) : null}
@@ -631,15 +636,14 @@ export default function WorkspaceGlossaryPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>New glossary</DialogTitle>
+            <DialogTitle>{t("dialogs.newGlossary.title")}</DialogTitle>
             <DialogDescription>
-              One glossary covers one direction of translation. Add another for a second language
-              pair.
+              {t("dialogs.newGlossary.description")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={glossaryForm.handleSubmit(submitGlossary)} className="space-y-3">
             <div>
-              <Input placeholder="Name" {...glossaryForm.register("name")} />
+              <Input placeholder={t("dialogs.newGlossary.namePlaceholder")} {...glossaryForm.register("name")} />
               {glossaryForm.formState.errors.name ? (
                 <p className="mt-1 text-[11px] text-red-600">
                   {glossaryForm.formState.errors.name.message}
@@ -647,7 +651,7 @@ export default function WorkspaceGlossaryPage() {
               ) : null}
             </div>
             <Input
-              placeholder="Description (optional)"
+              placeholder={t("dialogs.newGlossary.descriptionPlaceholder")}
               {...glossaryForm.register("description")}
             />
             <div className="grid grid-cols-2 gap-2">
@@ -658,7 +662,7 @@ export default function WorkspaceGlossaryPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Spoken language" />
+                  <SelectValue placeholder={t("dialogs.newGlossary.spokenLanguagePlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {languageOptions.map((language) => (
@@ -675,7 +679,7 @@ export default function WorkspaceGlossaryPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Translated into" />
+                  <SelectValue placeholder={t("dialogs.newGlossary.translatedIntoPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
                   {languageOptions.map((language) => (
@@ -688,7 +692,7 @@ export default function WorkspaceGlossaryPage() {
             </div>
             {glossaryForm.formState.errors.sourceLanguage ||
             glossaryForm.formState.errors.targetLanguage ? (
-              <p className="text-[11px] text-red-600">Choose both languages.</p>
+              <p className="text-[11px] text-red-600">{t("dialogs.newGlossary.chooseBothLanguages")}</p>
             ) : null}
 
             {/* WT-558 — the first terms, typed here rather than after the fact.
@@ -707,7 +711,7 @@ export default function WorkspaceGlossaryPage() {
 
             <DialogFooter>
               <WorkspacePrimaryButton type="submit" disabled={createGlossary.isPending}>
-                {createGlossary.isPending ? "Creating…" : "Create glossary"}
+                {createGlossary.isPending ? t("dialogs.newGlossary.creating") : t("dialogs.newGlossary.create")}
               </WorkspacePrimaryButton>
             </DialogFooter>
           </form>
@@ -717,16 +721,15 @@ export default function WorkspaceGlossaryPage() {
       <Dialog open={termDialogOpen} onOpenChange={setTermDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add term</DialogTitle>
+            <DialogTitle>{t("dialogs.addTerm.title")}</DialogTitle>
             <DialogDescription>
-              Applied live, to both speech recognition and translation, for every meeting in this
-              workspace.
+              {t("dialogs.addTerm.description")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={termForm.handleSubmit(submitTerm)} className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <Input placeholder="Term as spoken" {...termForm.register("sourceTerm")} />
+                <Input placeholder={t("dialogs.addTerm.termAsSpokenPlaceholder")} {...termForm.register("sourceTerm")} />
                 {termForm.formState.errors.sourceTerm ? (
                   <p className="mt-1 text-[11px] text-red-600">
                     {termForm.formState.errors.sourceTerm.message}
@@ -734,7 +737,7 @@ export default function WorkspaceGlossaryPage() {
                 ) : null}
               </div>
               <div>
-                <Input placeholder="Translate as" {...termForm.register("targetTerm")} />
+                <Input placeholder={t("dialogs.addTerm.translateAsPlaceholder")} {...termForm.register("targetTerm")} />
                 {termForm.formState.errors.targetTerm ? (
                   <p className="mt-1 text-[11px] text-red-600">
                     {termForm.formState.errors.targetTerm.message}
@@ -745,20 +748,20 @@ export default function WorkspaceGlossaryPage() {
             <div className="grid grid-cols-2 gap-2">
               {/* The field that makes this a WORKSPACE glossary: the same word means different
                   things in different industries, and this is where a workspace says which. */}
-              <Input placeholder="Field / domain (optional)" {...termForm.register("domain")} />
+              <Input placeholder={t("dialogs.addTerm.domainPlaceholder")} {...termForm.register("domain")} />
               <Input
-                placeholder="Part of speech (optional)"
+                placeholder={t("dialogs.addTerm.partOfSpeechPlaceholder")}
                 {...termForm.register("partOfSpeech")}
               />
             </div>
-            <Input placeholder="Definition (optional)" {...termForm.register("definition")} />
+            <Input placeholder={t("dialogs.addTerm.definitionPlaceholder")} {...termForm.register("definition")} />
             <Input
-              placeholder="Context — when this reading applies (optional)"
+              placeholder={t("dialogs.addTerm.contextPlaceholder")}
               {...termForm.register("context")}
             />
             <DialogFooter>
               <WorkspacePrimaryButton type="submit" disabled={addTerm.isPending}>
-                {addTerm.isPending ? "Adding…" : "Add term"}
+                {addTerm.isPending ? t("dialogs.addTerm.adding") : t("dialogs.addTerm.addTerm")}
               </WorkspacePrimaryButton>
             </DialogFooter>
           </form>

@@ -2,17 +2,16 @@
 
 import type { KeyboardEvent } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 
 import { GoogleMeetMark, isGoogleMeetMeeting } from "@/components/meeting/google-meet-mark";
 import { UserChip } from "@/components/user/user-chip";
 import { formatLanguageRouteShort } from "@/lib/language/languages";
 import type { TimedMeeting } from "@/lib/meeting/agenda-sections";
-import { meetingStateLabel } from "@/lib/meeting/meeting-display-state";
 import { cn } from "@/lib/utils";
+import { intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 
-import { MeetingStateIcon } from "./meeting-state-icon";
-
-const APP_CALENDAR_LOCALE = "en-GB";
+import { MeetingStateIcon, useMeetingStateLabel } from "./meeting-state-icon";
 
 /**
  * One meeting in the Agenda list: time, state, title, one line of who and how — and an action
@@ -44,11 +43,13 @@ export function AgendaRow({
   const isCancelled = meeting.status === "cancelled";
   const isLive = meeting.timeState === "live" && !isCancelled;
 
-  const time = formatTime(meeting.occursAt);
-  const relation = meeting.isHost ? "You host" : `Invited by ${meeting.hostName}`;
-  const stateLabel = meetingStateLabel(meeting);
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const stateLabel = useMeetingStateLabel()(meeting);
+  const time = formatTime(meeting.occursAt, locale);
+  const relation = meeting.isHost ? t("relation.youHost") : t("relation.invitedBy", { name: meeting.hostName });
   const onGoogleMeet = isGoogleMeetMeeting(meeting);
-  const people = describePeople(meeting.participantCount);
+  const people = describePeople(meeting.participantCount, t);
   // Short marks, "EN → VI", as the approved design draws them: the full names ("English →
   // Vietnamese") push the route off the end of a meta line that already carries the host and the
   // head count, and the route is the part a reader scans the column for.
@@ -73,7 +74,7 @@ export function AgendaRow({
       // Time, title, relation and state: everything a sighted reader gets from the row at a
       // glance. The visible text is split across columns and an icon, and read in DOM order it
       // would come out as "09:30 Weekly sync You host 4 people" with the state missing entirely.
-      aria-label={`${time}, ${meeting.title}${onGoogleMeet ? ", on Google Meet" : ""}, ${relation}, ${stateLabel}`}
+      aria-label={`${time}, ${meeting.title}${onGoogleMeet ? t("chip.onGoogleMeetSuffix") : ""}, ${relation}, ${stateLabel}`}
       onClick={onOpen}
       onKeyDown={onKeyDown}
       className={cn(
@@ -112,10 +113,10 @@ export function AgendaRow({
 
         <p className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] leading-4 text-ink-muted">
           {meeting.isHost ? (
-            <span className="shrink-0 font-semibold text-ink">You host</span>
+            <span className="shrink-0 font-semibold text-ink">{t("relation.youHost")}</span>
           ) : (
             <>
-              <span className="shrink-0">Invited by</span>
+              <span className="shrink-0">{t("relation.invitedByLabel")}</span>
               {/* A person's name opens their card, everywhere it appears (PR #463). The chip
                   swallows its own click, so opening the card does not also open the meeting. */}
               <span className="flex min-w-0 max-w-[45%] shrink-0">
@@ -143,10 +144,12 @@ export function AgendaRow({
           onClick={(event) => event.stopPropagation()}
           className="mt-0.5 flex h-6 shrink-0 items-center rounded-md bg-rose-500 px-2.5 text-[12px] font-medium text-white outline-none transition-colors hover:bg-rose-600 focus-visible:ring-2 focus-visible:ring-rose-500/40"
         >
-          Join
+          {t("chip.join")}
         </Link>
       ) : isCancelled ? (
-        <span className="shrink-0 pt-[3px] text-[12px] leading-4 text-ink-muted">Cancelled</span>
+        <span className="shrink-0 pt-[3px] text-[12px] leading-4 text-ink-muted">
+          {t("chip.cancelled")}
+        </span>
       ) : null}
     </div>
   );
@@ -158,16 +161,16 @@ export function AgendaRow({
  * A booked room nobody has joined yet counts zero participants, and "0 people" under a meeting
  * you were invited to reads as "nobody is coming", which is not what the number means.
  */
-function describePeople(count: number) {
+function describePeople(count: number, t: ReturnType<typeof useTranslations>) {
   if (!count || count < 0) return null;
-  return `${count} ${count === 1 ? "person" : "people"}`;
+  return t("counts.people", { count });
 }
 
 /** The page's `formatTime`, duplicated until the integrator moves both onto one helper. */
-function formatTime(value: string) {
+function formatTime(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, { hour: "2-digit", minute: "2-digit" }).format(
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(
     date,
   );
 }

@@ -17,18 +17,32 @@ const ARTIFACT_LABELS = {
   audio_sample: "Audio sample",
 } as const;
 
-export function artifactLabel(type: RoomHistoryArtifact["type"]): string {
-  return ARTIFACT_LABELS[type];
+/**
+ * `t` is optional so every existing caller — and every `node:test` pinning the English string —
+ * keeps working unchanged. A translated page passes its own `useTranslations("schedules")`
+ * lookup (e.g. `(type) => t(`artifactLabels.${type}`)`) instead of hard-coding English here.
+ */
+export function artifactLabel(
+  type: RoomHistoryArtifact["type"],
+  t?: (type: RoomHistoryArtifact["type"]) => string,
+): string {
+  return t ? t(type) : ARTIFACT_LABELS[type];
 }
 
 /**
  * Consent outranks status. A file that is technically ready but still needs consent must not
  * read as "Ready" — the download will stop and ask, and saying "Ready" first makes that look
  * like a failure rather than the policy working.
+ *
+ * `t` is optional for the same reason as `artifactLabel` above — see there.
  */
-export function artifactStatusLabel(artifact: RoomHistoryArtifact): string {
-  if (artifact.consentRequired) return "Consent required";
+export function artifactStatusLabel(
+  artifact: RoomHistoryArtifact,
+  t?: (key: "consentRequired" | RoomHistoryArtifact["status"]) => string,
+): string {
+  if (artifact.consentRequired) return t ? t("consentRequired") : "Consent required";
   const status = artifact.status ?? "";
+  if (t) return t(status);
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 

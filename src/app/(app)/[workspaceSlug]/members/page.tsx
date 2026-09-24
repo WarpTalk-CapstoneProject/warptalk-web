@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { useLocale, useTranslations } from "next-intl";
 import {
   UserMinus,
   Funnel,
@@ -35,7 +36,6 @@ import {
 import {
   buildMemberDirectory,
   filterMemberDirectory,
-  DIRECTORY_STATUS_LABELS,
   type DirectoryFilter,
   type DirectoryRow,
 } from "@/lib/workspace/member-directory";
@@ -57,6 +57,8 @@ import {
 } from "@/components/ui/dialog";
 
 export default function WorkspaceMembersPage() {
+  const t = useTranslations("members");
+  const locale = useLocale();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
   const currentRole = useWorkspaceRole();
@@ -178,15 +180,15 @@ export default function WorkspaceMembersPage() {
     label: string;
     count?: number;
   }[] = [
-    { key: "all", label: "All" },
-    { key: "owner", label: "Owner" },
-    { key: "admin", label: "Admin" },
-    { key: "member", label: "Member" },
+    { key: "all", label: t("filters.all") },
+    { key: "owner", label: t("filters.owner") },
+    { key: "admin", label: t("filters.admin") },
+    { key: "member", label: t("filters.member") },
     ...(isOwnerOrAdmin
-      ? ([
-          { key: "invited", label: "Invited", count: invitedCount },
-          { key: "requested", label: "Requests", count: requestedCount },
-        ] as const)
+      ? [
+          { key: "invited" as const, label: t("filters.invited"), count: invitedCount },
+          { key: "requested" as const, label: t("filters.requested"), count: requestedCount },
+        ]
       : []),
   ];
 
@@ -203,14 +205,14 @@ export default function WorkspaceMembersPage() {
       const worksheet = workbook.addWorksheet("Members");
 
       worksheet.columns = [
-        { header: "Full Name", key: "fullName", width: 25 },
-        { header: "Email", key: "email", width: 30 },
-        { header: "Role", key: "roleName", width: 15 },
-        { header: "Membership Type", key: "membershipType", width: 18 },
-        { header: "Status", key: "status", width: 12 },
-        { header: "Date", key: "joinedAt", width: 20 },
+        { header: t("export.columns.fullName"), key: "fullName", width: 25 },
+        { header: t("export.columns.email"), key: "email", width: 30 },
+        { header: t("export.columns.role"), key: "roleName", width: 15 },
+        { header: t("export.columns.membershipType"), key: "membershipType", width: 18 },
+        { header: t("export.columns.status"), key: "status", width: 12 },
+        { header: t("export.columns.date"), key: "joinedAt", width: 20 },
         {
-          header: "Host Meetings Permission",
+          header: t("export.columns.hostMeetingsPermission"),
           key: "canCreateMeetings",
           width: 22,
         },
@@ -227,18 +229,18 @@ export default function WorkspaceMembersPage() {
 
       filteredMembers.forEach((row) => {
         worksheet.addRow({
-          fullName: row.name || "N/A",
-          email: row.email || "N/A",
-          roleName: row.roleName || "Member",
-          membershipType: row.membershipType || "Internal",
-          status: DIRECTORY_STATUS_LABELS[row.status],
-          joinedAt: row.date ? new Date(row.date).toLocaleDateString() : "N/A",
+          fullName: row.name || t("export.notApplicable"),
+          email: row.email || t("export.notApplicable"),
+          roleName: row.roleName || t("export.defaultRole"),
+          membershipType: row.membershipType || t("export.defaultMembershipType"),
+          status: t(`statusLabels.${row.status}`),
+          joinedAt: row.date ? new Date(row.date).toLocaleDateString() : t("export.notApplicable"),
           // Only a joined member has this permission at all; an invitee has nothing to
           // export, and writing "No" would read as a decision somebody made.
           canCreateMeetings: row.member
             ? row.member.canCreateMeetings
-              ? "Yes"
-              : "No"
+              ? t("export.yes")
+              : t("export.no")
             : "—",
         });
       });
@@ -250,9 +252,9 @@ export default function WorkspaceMembersPage() {
       const dateStr = new Date().toISOString().split("T")[0];
       const fileName = `${activeWorkspaceName || "Workspace"}_Members_${dateStr}.xlsx`;
       saveAs(blob, fileName);
-      toast.success("Members list exported successfully!");
+      toast.success(t("toasts.exportSuccess"));
     } catch {
-      toast.error("Failed to export members list.");
+      toast.error(t("toasts.exportFailed"));
     } finally {
       setIsExporting(false);
     }
@@ -267,11 +269,11 @@ export default function WorkspaceMembersPage() {
         userId,
         canCreateMeetings: !currentVal,
       });
-      toast.success("Meeting host permission updated.");
+      toast.success(t("toasts.permissionUpdated"));
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
-        error?.response?.data?.error || "Failed to update meeting permission",
+        error?.response?.data?.error || t("toasts.permissionUpdateFailed"),
       );
     }
   };
@@ -280,11 +282,11 @@ export default function WorkspaceMembersPage() {
     if (!memberToRemove) return;
     try {
       await removeMemberMutation.mutateAsync(memberToRemove.id);
-      toast.success(`${memberToRemove.name} has been removed.`);
+      toast.success(t("toasts.memberRemoved", { name: memberToRemove.name }));
       setMemberToRemove(null);
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error?.response?.data?.error || "Failed to remove member");
+      toast.error(error?.response?.data?.error || t("toasts.removeFailed"));
     }
   };
 
@@ -293,12 +295,12 @@ export default function WorkspaceMembersPage() {
     try {
       setIsSubmittingLeave(true);
       await createLeaveRequest.mutateAsync();
-      toast.success("Leave request submitted. Awaiting Admin/Owner approval.");
+      toast.success(t("toasts.leaveRequestSubmitted"));
       setIsLeaveModalOpen(false);
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
-        error?.response?.data?.error || "Failed to submit leave request.",
+        error?.response?.data?.error || t("toasts.leaveRequestFailed"),
       );
     } finally {
       setIsSubmittingLeave(false);
@@ -309,12 +311,12 @@ export default function WorkspaceMembersPage() {
     if (!inviteToRevoke) return;
     try {
       await revokeMutation.mutateAsync(inviteToRevoke.id);
-      toast.success(`Invitation for ${inviteToRevoke.email} revoked.`);
+      toast.success(t("toasts.invitationRevoked", { email: inviteToRevoke.email }));
       setInviteToRevoke(null);
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
-        error?.response?.data?.error || "Failed to revoke invitation",
+        error?.response?.data?.error || t("toasts.revokeFailed"),
       );
     }
   };
@@ -323,11 +325,11 @@ export default function WorkspaceMembersPage() {
     if (status?.toUpperCase() === "LEAVE_REQUESTED") {
       try {
         await approveLeaveRequest.mutateAsync(inviteId);
-        toast.success("Leave request approved.");
+        toast.success(t("toasts.leaveRequestApproved"));
       } catch (err) {
         const error = err as { response?: { data?: { error?: string } } };
         toast.error(
-          error?.response?.data?.error || "Failed to approve leave request",
+          error?.response?.data?.error || t("toasts.leaveApproveFailed"),
         );
       }
       return;
@@ -343,13 +345,13 @@ export default function WorkspaceMembersPage() {
       });
       toast.success(
         result.approvalEmailStatus === "Failed"
-          ? "Member approved; approval email delivery failed."
-          : "Join request approved and email sent.",
+          ? t("toasts.memberApprovedEmailFailed")
+          : t("toasts.joinRequestApproved"),
       );
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
-        error?.response?.data?.error || "Failed to approve join request",
+        error?.response?.data?.error || t("toasts.approveFailed"),
       );
     }
   };
@@ -358,11 +360,11 @@ export default function WorkspaceMembersPage() {
     if (status?.toUpperCase() === "LEAVE_REQUESTED") {
       try {
         await rejectLeaveRequest.mutateAsync(invitationId);
-        toast.success("Leave request rejected.");
+        toast.success(t("toasts.leaveRequestRejected"));
       } catch (err) {
         const error = err as { response?: { data?: { error?: string } } };
         toast.error(
-          error?.response?.data?.error || "Failed to reject leave request",
+          error?.response?.data?.error || t("toasts.leaveRejectFailed"),
         );
       }
       return;
@@ -370,11 +372,11 @@ export default function WorkspaceMembersPage() {
 
     try {
       await rejectJoinRequest.mutateAsync(invitationId);
-      toast.success("Join request rejected.");
+      toast.success(t("toasts.joinRequestRejected"));
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(
-        error?.response?.data?.error || "Failed to reject join request",
+        error?.response?.data?.error || t("toasts.rejectFailed"),
       );
     }
   };
@@ -430,8 +432,8 @@ export default function WorkspaceMembersPage() {
               setQuery(value);
               setPage(1);
             }}
-            placeholder="Search people..."
-            ariaLabel="Search people"
+            placeholder={t("search.placeholder")}
+            ariaLabel={t("search.ariaLabel")}
             collapsedWidth={28}
             expandedWidth={220}
             className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
@@ -441,7 +443,7 @@ export default function WorkspaceMembersPage() {
           />
           <button
             className="relative flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Member filters"
+            title={t("toolbar.memberFiltersTitle")}
           >
             <Funnel weight="bold" size={13} />
             {filter !== "all" && (
@@ -450,7 +452,7 @@ export default function WorkspaceMembersPage() {
           </button>
           <button
             className="flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title={`${filteredMembers.length} people`}
+            title={t("toolbar.peopleCountTitle", { count: filteredMembers.length })}
           >
             <SlidersHorizontal weight="bold" size={13} />
           </button>
@@ -468,7 +470,7 @@ export default function WorkspaceMembersPage() {
               ) : (
                 <Download className="h-3.5 w-3.5 text-primary" />
               )}
-              <span>{isExporting ? "Exporting..." : "Export (.xlsx)"}</span>
+              <span>{isExporting ? t("toolbar.exporting") : t("toolbar.exportButton")}</span>
             </button>
 
             <button
@@ -476,7 +478,7 @@ export default function WorkspaceMembersPage() {
               className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Invite new member</span>
+              <span>{t("toolbar.inviteNewMember")}</span>
             </button>
             </>
           )}
@@ -488,10 +490,7 @@ export default function WorkspaceMembersPage() {
         {pendingLoadFailed && (
           <div className="mb-3 flex items-center gap-2 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-600">
             <Warning className="h-3.5 w-3.5 shrink-0" />
-            <span>
-              Pending invitations and join requests could not be loaded, so this
-              list shows joined members only.
-            </span>
+            <span>{t("pendingLoadFailed")}</span>
           </div>
         )}
         {membersQuery.isLoading ? (
@@ -504,29 +503,29 @@ export default function WorkspaceMembersPage() {
             className="min-h-[240px]"
             title={
               filter === "invited"
-                ? "No pending invitations"
+                ? t("empty.invitedTitle")
                 : filter === "requested"
-                  ? "No requests waiting"
-                  : "No people found"
+                  ? t("empty.requestedTitle")
+                  : t("empty.defaultTitle")
             }
             description={
               filter === "invited"
-                ? "Use Invite new member to send one."
+                ? t("empty.invitedDescription")
                 : filter === "requested"
-                  ? "Requests to join this workspace, and requests to leave it, will appear here."
-                  : "Try adjusting your search terms or filters."
+                  ? t("empty.requestedDescription")
+                  : t("empty.defaultDescription")
             }
           />
         ) : (
           <div className="min-w-[1000px] divide-y divide-hairline/40">
             {/* Header row */}
             <div className={`grid ${memberGridClass} items-center gap-4 px-2 py-2 text-[11px] font-semibold uppercase text-ink-muted`}>
-              <span>Name</span>
-              <span>Role</span>
-              <span>Membership Type</span>
-              <span>Status</span>
-              <span className="text-center">Host meetings</span>
-              <span className="text-right">Actions</span>
+              <span>{t("table.name")}</span>
+              <span>{t("table.role")}</span>
+              <span>{t("table.membershipType")}</span>
+              <span>{t("table.status")}</span>
+              <span className="text-center">{t("table.hostMeetings")}</span>
+              <span className="text-right">{t("table.actions")}</span>
             </div>
 
             {/* Data rows */}
@@ -573,7 +572,7 @@ export default function WorkspaceMembersPage() {
                         {row.name}
                         {isSelf && (
                           <span className="text-[10px] px-1 py-0.2 bg-primary/10 text-primary border border-primary/20 rounded font-normal">
-                            You
+                            {t("you")}
                           </span>
                         )}
                       </span>
@@ -598,12 +597,12 @@ export default function WorkspaceMembersPage() {
                       variant="outline"
                       title={
                         member && isExternal
-                          ? "External members always hold the Member role — it cannot be changed."
+                          ? t("externalRoleFixedTitle")
                           : undefined
                       }
                       className="max-w-full truncate whitespace-nowrap rounded-[4px] border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-semibold capitalize text-ink"
                     >
-                      {row.roleName}
+                      {t.has(`roleLabels.${memberRole}`) ? t(`roleLabels.${memberRole}`) : row.roleName}
                     </Badge>
                   </div>
 
@@ -625,22 +624,22 @@ export default function WorkspaceMembersPage() {
                           }))
                         }
                         disabled={reviewBusy}
-                        aria-label={`Access type for ${row.email}`}
+                        aria-label={t("accessTypeAria", { email: row.email })}
                         className="h-7 rounded-md border border-hairline bg-surface-2 px-2 text-[11px] text-ink disabled:opacity-60"
                       >
-                        <option value="Internal">Internal</option>
-                        <option value="External">External</option>
+                        <option value="Internal">{t("membershipOptions.internal")}</option>
+                        <option value="External">{t("membershipOptions.external")}</option>
                       </select>
                     ) : (
                       <Badge
                         variant="outline"
                         className={
                           isExternal
-                            ? "rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                            : "rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
+                            ? "max-w-full truncate whitespace-nowrap rounded-[4px] border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                            : "max-w-full truncate whitespace-nowrap rounded-[4px] border-sky-500/25 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
                         }
                       >
-                        {row.membershipType}
+                        {isExternal ? t("membershipOptions.external") : t("membershipOptions.internal")}
                       </Badge>
                     )}
                   </div>
@@ -651,10 +650,10 @@ export default function WorkspaceMembersPage() {
                       variant="outline"
                       title={
                         leaveRequest
-                          ? "This member has asked to leave and is waiting on your answer."
+                          ? t("leaveRequestPendingTitle")
                           : undefined
                       }
-                      className={`text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
+                      className={`max-w-full truncate whitespace-nowrap text-[10px] capitalize font-medium px-2 py-0.5 rounded ${
                         row.status === "joined"
                           ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/20"
                           : row.status === "invited"
@@ -664,14 +663,14 @@ export default function WorkspaceMembersPage() {
                               : "bg-sky-500/5 text-sky-500 border-sky-500/20"
                       }`}
                     >
-                      {DIRECTORY_STATUS_LABELS[row.status]}
+                      {t(`statusLabels.${row.status}`)}
                     </Badge>
                   </div>
 
                   {/* Joined, invited, or requested date — whichever this row is */}
                   <span className="text-xs text-ink-muted font-medium">
                     {row.date
-                      ? new Date(row.date).toLocaleDateString("en-US", {
+                      ? new Date(row.date).toLocaleDateString(locale, {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
@@ -716,8 +715,8 @@ export default function WorkspaceMembersPage() {
                             }
                             disabled={reviewBusy}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
-                            title="Approve leave request"
-                            aria-label={`Approve the leave request from ${row.name}`}
+                            title={t("actions.approveLeaveRequestTitle")}
+                            aria-label={t("actions.approveLeaveRequestAria", { name: row.name })}
                           >
                             <CheckCircle className="h-4 w-4" />
                           </button>
@@ -727,8 +726,8 @@ export default function WorkspaceMembersPage() {
                             }
                             disabled={reviewBusy}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
-                            title="Reject leave request"
-                            aria-label={`Reject the leave request from ${row.name}`}
+                            title={t("actions.rejectLeaveRequestTitle")}
+                            aria-label={t("actions.rejectLeaveRequestAria", { name: row.name })}
                           >
                             <XCircle className="h-4 w-4" />
                           </button>
@@ -747,8 +746,8 @@ export default function WorkspaceMembersPage() {
                             (isAdmin && memberRole === "admin")
                           }
                           className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ink-muted cursor-pointer"
-                          title="Remove from workspace"
-                          aria-label={`Remove ${row.name} from workspace`}
+                          title={t("actions.removeFromWorkspaceTitle")}
+                          aria-label={t("actions.removeFromWorkspaceAria", { name: row.name })}
                         >
                           <UserMinus className="h-4 w-4" />
                         </button>
@@ -761,8 +760,8 @@ export default function WorkspaceMembersPage() {
                             })
                           }
                           className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
-                          title="Revoke invitation"
-                          aria-label={`Revoke the invitation for ${row.email}`}
+                          title={t("actions.revokeInvitationTitle")}
+                          aria-label={t("actions.revokeInvitationAria", { email: row.email })}
                         >
                           <Trash className="h-4 w-4" />
                         </button>
@@ -780,14 +779,14 @@ export default function WorkspaceMembersPage() {
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors disabled:opacity-40 cursor-pointer"
                             title={
                               invite.status?.toUpperCase() === "LEAVE_REQUESTED"
-                                ? "Approve leave request"
-                                : "Approve join request"
+                                ? t("actions.approveLeaveRequestTitle")
+                                : t("actions.approveJoinRequestTitle")
                             }
-                            aria-label={`${
+                            aria-label={
                               invite.status?.toUpperCase() === "LEAVE_REQUESTED"
-                                ? "Approve leave request"
-                                : "Approve join request"
-                            } from ${row.email}`}
+                                ? t("actions.approveAriaLeave", { email: row.email })
+                                : t("actions.approveAriaJoin", { email: row.email })
+                            }
                           >
                             <CheckCircle className="h-4 w-4" />
                           </button>
@@ -799,14 +798,14 @@ export default function WorkspaceMembersPage() {
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors disabled:opacity-40 cursor-pointer"
                             title={
                               invite.status?.toUpperCase() === "LEAVE_REQUESTED"
-                                ? "Reject leave request"
-                                : "Reject join request"
+                                ? t("actions.rejectLeaveRequestTitle")
+                                : t("actions.rejectJoinRequestTitle")
                             }
-                            aria-label={`${
+                            aria-label={
                               invite.status?.toUpperCase() === "LEAVE_REQUESTED"
-                                ? "Reject leave request"
-                                : "Reject join request"
-                            } from ${row.email}`}
+                                ? t("actions.rejectAriaLeave", { email: row.email })
+                                : t("actions.rejectAriaJoin", { email: row.email })
+                            }
                           >
                             <XCircle className="h-4 w-4" />
                           </button>
@@ -817,9 +816,9 @@ export default function WorkspaceMembersPage() {
                         type="button"
                         onClick={() => setIsLeaveModalOpen(true)}
                         className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded-md border border-destructive/30 text-destructive bg-destructive/5 hover:bg-destructive/10 transition-colors cursor-pointer"
-                        title="Request to leave workspace"
+                        title={t("actions.leaveWorkspaceTitle")}
                       >
-                        <span>Leave</span>
+                        <span>{t("actions.leave")}</span>
                       </button>
                     ) : (
                       <span className="text-xs text-ink-muted">—</span>
@@ -839,17 +838,17 @@ export default function WorkspaceMembersPage() {
               disabled={page === 1}
               className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45 cursor-pointer font-medium"
             >
-              Previous
+              {t("pagination.previous")}
             </button>
             <span className="text-xs text-ink-muted font-medium">
-              Page {page}
+              {t("pagination.page", { page })}
             </span>
             <button
               onClick={() => setPage((p) => p + 1)}
               disabled={membersList.length < 10}
               className="px-2.5 py-1 text-xs border border-hairline rounded hover:bg-surface-2 disabled:opacity-45 cursor-pointer font-medium"
             >
-              Next
+              {t("pagination.next")}
             </button>
           </div>
         )}
@@ -875,15 +874,14 @@ export default function WorkspaceMembersPage() {
               <Warning className="h-5 w-5" />
             </div>
             <DialogTitle className="text-center font-bold text-base text-foreground">
-              Remove Member?
+              {t("removeDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Are you sure you want to remove{" "}
-              <span className="font-semibold text-ink">
-                {memberToRemove?.name}
-              </span>
-              ? They will instantly lose access to all meetings, documents, and
-              transcripts in this workspace.
+              {t.rich("removeDialog.description", {
+                name: () => (
+                  <span className="font-semibold text-ink">{memberToRemove?.name}</span>
+                ),
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -891,13 +889,13 @@ export default function WorkspaceMembersPage() {
               onClick={() => setMemberToRemove(null)}
               className="flex-1 h-9 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
             >
-              Cancel
+              {t("removeDialog.cancel")}
             </button>
             <button
               onClick={handleRemoveConfirm}
               className="flex-1 h-9 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition cursor-pointer"
             >
-              Remove
+              {t("removeDialog.confirm")}
             </button>
           </DialogFooter>
         </DialogContent>
@@ -914,15 +912,14 @@ export default function WorkspaceMembersPage() {
               <Warning className="h-5 w-5" />
             </div>
             <DialogTitle className="text-center font-bold text-base text-foreground">
-              Revoke Invitation?
+              {t("revokeDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Revoking the invitation for{" "}
-              <span className="font-semibold text-ink">
-                {inviteToRevoke?.email}
-              </span>{" "}
-              removes it entirely. They will no longer be able to accept it with
-              that email.
+              {t.rich("revokeDialog.description", {
+                email: () => (
+                  <span className="font-semibold text-ink">{inviteToRevoke?.email}</span>
+                ),
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2">
@@ -930,7 +927,7 @@ export default function WorkspaceMembersPage() {
               onClick={() => setInviteToRevoke(null)}
               className="flex-1 h-9 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
             >
-              Cancel
+              {t("revokeDialog.cancel")}
             </button>
             <button
               onClick={handleRevoke}
@@ -940,7 +937,7 @@ export default function WorkspaceMembersPage() {
               {revokeMutation.isPending ? (
                 <Spinner className="h-4 w-4 animate-spin" />
               ) : (
-                "Revoke"
+                t("revokeDialog.confirm")
               )}
             </button>
           </DialogFooter>
@@ -958,10 +955,14 @@ export default function WorkspaceMembersPage() {
               <Warning className="h-5 w-5" />
             </div>
             <DialogTitle className="text-center font-bold text-base text-foreground">
-              Request to Leave Workspace?
+              {t("leaveDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-ink-muted leading-normal">
-              Your request to leave <span className="font-semibold text-ink">{activeWorkspaceName}</span> will be submitted to the Workspace Administrator for approval.
+              {t.rich("leaveDialog.description", {
+                name: () => (
+                  <span className="font-semibold text-ink">{activeWorkspaceName}</span>
+                ),
+              })}
             </DialogDescription>
           </DialogHeader>
 
@@ -971,7 +972,7 @@ export default function WorkspaceMembersPage() {
               onClick={() => setIsLeaveModalOpen(false)}
               className="flex-1 h-9 rounded-md border border-hairline bg-surface-1 text-xs font-semibold hover:bg-surface-2 transition cursor-pointer"
             >
-              Cancel
+              {t("leaveDialog.cancel")}
             </button>
             <button
               type="button"
@@ -979,7 +980,7 @@ export default function WorkspaceMembersPage() {
               disabled={isSubmittingLeave}
               className="flex-1 h-9 rounded-md bg-destructive text-xs font-semibold text-white hover:bg-destructive/90 transition disabled:opacity-50 cursor-pointer"
             >
-              {isSubmittingLeave ? "Submitting..." : "Submit Request"}
+              {isSubmittingLeave ? t("leaveDialog.submitting") : t("leaveDialog.confirm")}
             </button>
           </DialogFooter>
         </DialogContent>

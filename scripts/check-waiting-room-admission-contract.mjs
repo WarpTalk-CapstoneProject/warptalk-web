@@ -14,7 +14,8 @@ const liveRoom = fs.readFileSync(
 
 assert.match(
   hooks,
-  /useTranslationRoomParticipants\(roomId: string, enabled = true\)/,
+  // The second argument is `enabled` as a bare boolean, or `{ enabled, poll }` (WT-701).
+  /useTranslationRoomParticipants\(\s*roomId: string,\s*options: boolean \| TranslationRoomPollOptions = true,?\s*\)/,
   "Participant polling hook must allow callers to defer protected participant requests.",
 );
 assert.match(

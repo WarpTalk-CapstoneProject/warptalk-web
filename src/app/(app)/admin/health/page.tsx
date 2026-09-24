@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import {
   ArrowsClockwise,
   Cpu,
@@ -33,10 +34,10 @@ function formatClock(value: string) {
   }).format(new Date(value));
 }
 
-function formatSince(value: string | null) {
+function formatSince(value: string | null, justNow: string) {
   if (!value) return "—";
   const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60_000);
-  if (minutes < 1) return "just now";
+  if (minutes < 1) return justNow;
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ${minutes % 60}m`;
@@ -64,21 +65,22 @@ function EmptyRow({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminHealthPage() {
+  const t = useTranslations("adminOps.health");
   const healthQuery = useAdminPlatformHealth();
   const health = healthQuery.data;
 
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Heartbeat size={14} weight="fill" />}
-        title="System health"
-        description="Read back out of the metrics store, not asked of each service. A service that has lost its Redis consumer group answers its own health check with a 200."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-3">
             {health ? (
               <span className="text-[12px] text-ink-muted">
-                as of {formatClock(health.observedAt)}
+                {t("asOf", { time: formatClock(health.observedAt) })}
               </span>
             ) : null}
             <Button
@@ -88,7 +90,7 @@ export default function AdminHealthPage() {
               disabled={healthQuery.isFetching}
             >
               <ArrowsClockwise size={14} className={cn(healthQuery.isFetching && "animate-spin")} />
-              Refresh
+              {t("refresh")}
             </Button>
           </div>
         }
@@ -99,18 +101,15 @@ export default function AdminHealthPage() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">System health could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the workspace service and that your session still holds the platform admin
-                role.
-              </p>
+              <p className="font-medium">{t("errorTitle")}</p>
+              <p className="mt-1 text-ink-muted">{t("errorDescription")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void healthQuery.refetch()}
               >
-                Try again
+                {t("tryAgain")}
               </Button>
             </div>
           </div>
@@ -135,19 +134,18 @@ export default function AdminHealthPage() {
  * being down, and a wall of zeroes would say the second thing.
  */
 function MonitoringUnavailable({ health }: { health: AdminPlatformHealthDto }) {
+  const t = useTranslations("adminOps.health");
   return (
     <AdminPanel className="mt-5 border-amber-500/30 bg-amber-500/5">
       <div className="flex items-start gap-3 px-4 py-8 text-sm">
         <Warning size={18} weight="duotone" className="mt-0.5 shrink-0 text-amber-600" />
         <div>
-          <p className="font-medium">Monitoring is unreadable right now.</p>
+          <p className="font-medium">{t("monitoringUnavailableTitle")}</p>
           <p className="mt-1 text-ink-muted">
-            {health.monitoringUnavailableReason ?? "The metrics store did not answer."}
+            {health.monitoringUnavailableReason ?? t("monitoringUnavailableFallbackReason")}
           </p>
           <p className="mt-3 max-w-xl text-[12px] text-ink-muted">
-            This screen is reporting that it cannot see, not that the platform is down. Nothing
-            below is being shown as zero, because zero would be a claim. Prometheus runs on the
-            infra host; if it is restarting, this clears on its own.
+            {t("monitoringUnavailableNote")}
           </p>
         </div>
       </div>
@@ -156,6 +154,7 @@ function MonitoringUnavailable({ health }: { health: AdminPlatformHealthDto }) {
 }
 
 function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
+  const t = useTranslations("adminOps.health");
   const downTargets = health.targets.filter((t) => !t.isUp);
   const missingWorkers = health.workers.filter((w) => w.replicas === 0);
   const busiestGroups = health.streamGroups.filter(
@@ -168,7 +167,7 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
       {health.warnings.length > 0 ? (
         <AdminPanel className="mt-5 border-amber-500/30 bg-amber-500/5">
           <div className="px-4 py-3 text-[12px]">
-            <p className="font-medium text-ink">Part of this screen could not be read.</p>
+            <p className="font-medium text-ink">{t("partialReadTitle")}</p>
             <ul className="mt-1 list-inside list-disc text-ink-muted">
               {health.warnings.map((warning) => (
                 <li key={warning}>{warning}</li>
@@ -180,35 +179,37 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile
-          label="Scrape targets down"
+          label={t("tileScrapeTargetsDown")}
           value={downTargets.length}
           total={health.targets.length}
           bad={downTargets.length > 0}
         />
         <SummaryTile
-          label="Worker classes at zero"
+          label={t("tileWorkerClassesAtZero")}
           value={missingWorkers.length}
           total={health.workers.length}
           bad={missingWorkers.length > 0}
         />
         <SummaryTile
-          label="Backed-up stream groups"
+          label={t("tileBackedUpStreamGroups")}
           value={busiestGroups.length}
           total={health.streamGroups.length}
           bad={busiestGroups.length > 0}
         />
         <SummaryTile
-          label="Dead-letter streams"
+          label={t("tileDeadLetterStreams")}
           value={nonEmptyDeadLetters.length}
           total={health.deadLetters.length}
           bad={nonEmptyDeadLetters.length > 0}
         />
       </div>
 
-      <SectionTitle note={`${health.alerts.length} active`}>Firing alerts</SectionTitle>
+      <SectionTitle note={t("activeCount", { count: health.alerts.length })}>
+        {t("firingAlerts")}
+      </SectionTitle>
       <AdminPanel>
         {health.alerts.length === 0 ? (
-          <EmptyRow>Nothing is firing.</EmptyRow>
+          <EmptyRow>{t("nothingFiring")}</EmptyRow>
         ) : (
           <ul>
             {health.alerts.map((alert) => (
@@ -220,10 +221,10 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
         )}
       </AdminPanel>
 
-      <SectionTitle note="down first">Scrape targets</SectionTitle>
+      <SectionTitle note={t("downFirst")}>{t("scrapeTargets")}</SectionTitle>
       <AdminPanel>
         {health.targets.length === 0 ? (
-          <EmptyRow>The metrics store reported no targets.</EmptyRow>
+          <EmptyRow>{t("noTargets")}</EmptyRow>
         ) : (
           <ul className="grid sm:grid-cols-2">
             {health.targets.map((target) => (
@@ -247,10 +248,10 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
         )}
       </AdminPanel>
 
-      <SectionTitle note="live heartbeat keys">AI workers</SectionTitle>
+      <SectionTitle note={t("liveHeartbeatKeys")}>{t("aiWorkers")}</SectionTitle>
       <AdminPanel>
         {health.workers.length === 0 ? (
-          <EmptyRow>No worker heartbeats are being reported.</EmptyRow>
+          <EmptyRow>{t("noWorkers")}</EmptyRow>
         ) : (
           <ul className="grid sm:grid-cols-2 lg:grid-cols-3">
             {health.workers.map((worker) => (
@@ -280,20 +281,20 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
         )}
       </AdminPanel>
 
-      <SectionTitle note={`${health.streamGroups.length} discovered`}>
-        Redis stream groups
+      <SectionTitle note={t("discoveredCount", { count: health.streamGroups.length })}>
+        {t("redisStreamGroups")}
       </SectionTitle>
       <AdminPanel>
         {health.streamGroups.length === 0 ? (
-          <EmptyRow>No consumer groups were reported.</EmptyRow>
+          <EmptyRow>{t("noConsumerGroups")}</EmptyRow>
         ) : (
           <>
             <div className="hidden border-b border-hairline/60 px-4 py-2 text-[11px] font-medium text-ink-muted md:flex">
-              <span className="flex-1">Stream</span>
-              <span className="w-[190px]">Group</span>
-              <span className="w-[80px] text-right">Lag</span>
-              <span className="w-[80px] text-right">Pending</span>
-              <span className="w-[90px] text-right">Consumers</span>
+              <span className="flex-1">{t("columnStream")}</span>
+              <span className="w-[190px]">{t("columnGroup")}</span>
+              <span className="w-[80px] text-right">{t("columnLag")}</span>
+              <span className="w-[80px] text-right">{t("columnPending")}</span>
+              <span className="w-[90px] text-right">{t("columnConsumers")}</span>
             </div>
             <ul>
               {health.streamGroups.map((group) => (
@@ -308,10 +309,10 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
-          <SectionTitle note="p95 over the last hour">Pipeline stage latency</SectionTitle>
+          <SectionTitle note={t("p95LastHour")}>{t("pipelineStageLatency")}</SectionTitle>
           <AdminPanel>
             {health.stageLatencies.length === 0 ? (
-              <EmptyRow>No stage has reported a latency observation.</EmptyRow>
+              <EmptyRow>{t("noStageLatency")}</EmptyRow>
             ) : (
               <ul>
                 {health.stageLatencies.map((stage) => (
@@ -336,10 +337,10 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
         </div>
 
         <div>
-          <SectionTitle>Dead-letter streams</SectionTitle>
+          <SectionTitle>{t("deadLetterStreams")}</SectionTitle>
           <AdminPanel>
             {health.deadLetters.length === 0 ? (
-              <EmptyRow>No dead-letter stream exists.</EmptyRow>
+              <EmptyRow>{t("noDeadLetterStream")}</EmptyRow>
             ) : (
               <ul>
                 {health.deadLetters.map((deadLetter) => (
@@ -368,10 +369,7 @@ function HealthBody({ health }: { health: AdminPlatformHealthDto }) {
         </div>
       </div>
 
-      <p className="mt-5 text-[12px] text-ink-muted">
-        Read-only. There is no restart, no scale and no alert silencing here — this screen reports
-        what the platform is doing, and acting on it belongs on the host.
-      </p>
+      <p className="mt-5 text-[12px] text-ink-muted">{t("footerNote")}</p>
     </>
   );
 }
@@ -387,6 +385,7 @@ function SummaryTile({
   total: number;
   bad: boolean;
 }) {
+  const t = useTranslations("adminOps.health");
   return (
     <div
       className={cn(
@@ -405,13 +404,14 @@ function SummaryTile({
           {value}
         </span>
         {/* The denominator is what stops "0" reading as "nothing is monitored". */}
-        <span className="text-[12px] text-ink-subtle">of {total}</span>
+        <span className="text-[12px] text-ink-subtle">{t("ofTotal", { total })}</span>
       </p>
     </div>
   );
 }
 
 function AlertRow({ alert }: { alert: AdminHealthAlertDto }) {
+  const t = useTranslations("adminOps.health");
   const critical = alert.severity.toLowerCase() === "critical";
 
   return (
@@ -438,13 +438,14 @@ function AlertRow({ alert }: { alert: AdminHealthAlertDto }) {
           it as firing would put a page-worthy label on something that may clear by itself. */}
       <div className="w-[80px] shrink-0 text-[12px] text-ink-muted">{alert.state}</div>
       <div className="w-[80px] shrink-0 text-[12px] text-ink-muted md:text-right">
-        {formatSince(alert.activeSince)}
+        {formatSince(alert.activeSince, t("justNow"))}
       </div>
     </div>
   );
 }
 
 function StreamGroupRow({ group }: { group: AdminHealthStreamGroupDto }) {
+  const t = useTranslations("adminOps.health");
   const lagging = group.lag >= LAG_ALERT_THRESHOLD;
   const stuck = group.pending >= PENDING_ALERT_THRESHOLD;
 
@@ -478,9 +479,7 @@ function StreamGroupRow({ group }: { group: AdminHealthStreamGroupDto }) {
           group.consumers === 0 ? "font-semibold text-amber-600" : "text-ink-muted",
         )}
         title={
-          group.consumers === 0
-            ? "No consumer has ever read this group"
-            : "Consumer names Redis has seen, not readers attached now"
+          group.consumers === 0 ? t("noConsumerTooltip") : t("consumerSeenTooltip")
         }
       >
         {group.consumers}

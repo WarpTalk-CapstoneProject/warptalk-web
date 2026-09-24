@@ -1,0 +1,77 @@
+{
+  "heading": "機能",
+  "subheading": "このワークスペースに含まれる内容と、各制限がプラン、契約、プラットフォームの既定値、またはワークスペースが設定した制限のどれに由来するかを示します。",
+  "upgradeInBilling": "請求でアップグレード",
+  "notMember": {
+    "title": "このワークスペースのメンバーではありません",
+    "body": "このワークスペースのメンバーのみが内容を確認できます。"
+  },
+  "loadError": {
+    "title": "機能を読み込めませんでした",
+    "body": "このワークスペースの機能を読み込む際に問題が発生しました。しばらくしてから再度お試しください。"
+  },
+  "notAvailable": {
+    "title": "機能はまだ利用できません",
+    "body": "このワークスペースのプランはまだ適用されていません。通常はプラン開始から数秒かかります。しばらくしてから確認してください。"
+  },
+  "noActivePlan": "このワークスペースには有効なプランがないため、プラットフォームの既定値が適用され、新しいミーティングを開始できません。",
+  "choosePlan": "プランを選択",
+  "groups": {
+    "Meetings": "ミーティング",
+    "AI and voice": "AIと音声",
+    "Other": "その他"
+  },
+  "ceilingAllows": "{source}が許可",
+  "loweredByOwner": "ワークスペースのオーナーによって引き下げられました",
+  "lastUpdated": "最終更新 {date}",
+  "entitlements": {
+    "value": {
+      "included": "含まれています",
+      "notIncluded": "含まれていません",
+      "unlimited": "無制限"
+    },
+    "source": {
+      "unknown": { "label": "不明", "detail": "この値の出所は報告されていません。" },
+      "plan": { "label": "プラン", "detail": "{name}プランによって設定されています。" },
+      "platformDefault": {
+        "label": "プラットフォームの既定値",
+        "detail": "有効なプランや契約がこれを設定していないため、プラットフォームの既定値が適用されます。"
+      },
+      "contract": { "label": "契約", "detail": "このワークスペースの合意済み契約によって設定されています。" },
+      "workspaceOverride": {
+        "label": "ワークスペースの制限",
+        "detail": "ワークスペースのオーナーがプランの許可範囲より低く設定しました。"
+      },
+      "unknownNamed": { "detail": "報告された出所: {source}。" }
+    },
+    "catalog": {
+      "max_active_rooms": {
+        "label": "アクティブなミーティング",
+        "description": "同時に実行できるミーティングの数です。",
+        "unit": "{count}件のミーティング"
+      },
+      "max_participants": {
+        "label": "ミーティングあたりの参加者数",
+        "description": "1回のミーティングに参加できる人数です。",
+        "unit": "{count}人の参加者"
+      },
+      "max_languages": {
+        "label": "ミーティングあたりの翻訳先言語数",
+        "description": "1回のミーティングで同時に翻訳できる言語数です。",
+        "unit": "{count}言語"
+      },
+      "voice_clone": {
+        "label": "音声クローン",
+        "description": "各話者自身の声で翻訳された音声を吹き替えます。"
+      },
+      "ai_assistant": {
+        "label": "AIアシスタント",
+        "description": "ミーティング中のWarpBotによる回答、要約、提案です。"
+      },
+      "glossary": {
+        "label": "カスタム用語集",
+        "description": "翻訳の一貫性を保つワークスペースの用語です。"
+      }
+    }
+  }
+}

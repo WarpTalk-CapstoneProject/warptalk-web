@@ -1,12 +1,11 @@
 "use client";
 
 import { useId, useMemo, useState, type ReactNode } from "react";
-import { enGB } from "date-fns/locale";
+import { useLocale, useTranslations } from "next-intl";
 import { CaretDown, CaretLeft, CaretRight, CaretUp } from "@phosphor-icons/react/dist/ssr";
 
 import { Calendar } from "@/components/ui/calendar";
 import {
-  AGENDA_CALENDAR_LOCALE,
   countMeetingsByDay,
   dayButtonLabel,
   isInMonth,
@@ -15,6 +14,7 @@ import {
   weekStepTarget,
 } from "@/lib/meeting/agenda-navigator";
 import { isSameDay, startOfDay, weekOf } from "@/lib/meeting/meeting-day";
+import { dateFnsCalendarLocale, intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { cn } from "@/lib/utils";
 
 /**
@@ -77,11 +77,19 @@ const HAS_MEETING_DOT =
  */
 const VISIBLE_DAY_RING = "rounded-(--cell-radius) ring-1 ring-inset ring-primary/50";
 
-const MONTH_LABEL = new Intl.DateTimeFormat(AGENDA_CALENDAR_LOCALE, {
-  month: "long",
-  year: "numeric",
-});
-const WEEKDAY = new Intl.DateTimeFormat(AGENDA_CALENDAR_LOCALE, { weekday: "short" });
+function monthLabelFormat(locale: string) {
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), { month: "long", year: "numeric" });
+}
+function weekdayFormat(locale: string) {
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), { weekday: "short" });
+}
+function dayNameFormat(locale: string) {
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
 
 const CARET_BUTTON =
   "grid size-6 cursor-pointer place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink";
@@ -115,11 +123,15 @@ function Stepper({
   onStep: (delta: -1 | 1) => void;
   className?: string;
 }) {
+  const t = useTranslations("schedules");
+  const previousLabel = unit === "month" ? t("navigator.previousMonth") : t("navigator.previousWeek");
+  const nextLabel = unit === "month" ? t("navigator.nextMonth") : t("navigator.nextWeek");
+
   return (
     <div className={cn("flex items-center gap-1", className)}>
       <button
         type="button"
-        aria-label={`Previous ${unit}`}
+        aria-label={previousLabel}
         onClick={() => onStep(-1)}
         className={CARET_BUTTON}
       >
@@ -132,7 +144,7 @@ function Stepper({
       </span>
       <button
         type="button"
-        aria-label={`Next ${unit}`}
+        aria-label={nextLabel}
         onClick={() => onStep(1)}
         className={CARET_BUTTON}
       >
@@ -166,11 +178,15 @@ function AgendaMonthCalendar({
   onPick: (day: Date) => void;
   onMonthChange: (month: Date) => void;
 }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const dayName = dayNameFormat(locale);
+
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface-1 p-1">
       <Calendar
         month={month}
-        locale={enGB}
+        locale={dateFnsCalendarLocale(locale)}
         weekStartsOn={1}
         // Undefined before hydration, which leaves DayPicker on its own clock — exactly what the
         // Week sidebar does today, so the two do not differ in the one frame they could.
@@ -184,7 +200,13 @@ function AgendaMonthCalendar({
         }}
         labels={{
           labelDayButton: (date, modifiers) =>
-            dayButtonLabel(date, counts.get(startOfDay(date)) ?? 0, { isToday: modifiers.today }),
+            dayButtonLabel(date, counts.get(startOfDay(date)) ?? 0, { isToday: modifiers.today }, (day, count, isToday) =>
+              t("navigator.dayButtonLabel", {
+                count,
+                today: isToday ? t("navigator.todayPrefix") : "",
+                day: dayName.format(day),
+              }),
+            ),
         }}
         modifiers={{
           hasMeeting: daysWithMeetings,
@@ -217,12 +239,14 @@ export function AgendaSidebarCalendar({
   className,
   children,
 }: AgendaNavigatorProps & { className?: string; children?: ReactNode }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const counts = useMemo(() => countMeetingsByDay(daysWithMeetings), [daysWithMeetings]);
   const pick = pickDayHandler(month, onPickDay, onMonthChange);
 
   return (
     <aside
-      aria-label="Agenda navigator"
+      aria-label={t("ariaLabels.agendaNavigator")}
       className={cn(
         // Matches the other left rail on this page — schedules/page.tsx renders one or the other,
         // and with only that one moved to `bg-panel` the rail changed colour depending on which
@@ -233,7 +257,7 @@ export function AgendaSidebarCalendar({
     >
       <div>
         <Stepper
-          label={MONTH_LABEL.format(month)}
+          label={monthLabelFormat(locale).format(month)}
           unit="month"
           onStep={(delta) => onMonthChange(shiftMonths(month, delta))}
           className="mb-2 justify-between px-1"
@@ -270,11 +294,21 @@ function WeekDayChip({
   isOutsideMonth: boolean;
   onPick: () => void;
 }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const dayName = dayNameFormat(locale);
+
   return (
     <button
       type="button"
       onClick={onPick}
-      aria-label={dayButtonLabel(day, count, { isToday })}
+      aria-label={dayButtonLabel(day, count, { isToday }, (dayArg, countArg, isTodayArg) =>
+        t("navigator.dayButtonLabel", {
+          count: countArg,
+          today: isTodayArg ? t("navigator.todayPrefix") : "",
+          day: dayName.format(dayArg),
+        }),
+      )}
       aria-current={isVisible ? "true" : undefined}
       className={cn(
         "flex min-w-0 cursor-pointer flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors",
@@ -282,7 +316,7 @@ function WeekDayChip({
       )}
     >
       <span className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
-        {WEEKDAY.format(day)}
+        {weekdayFormat(locale).format(day)}
       </span>
       {/* Today in MeetingDayStrip's today colour, NOT its filled selection circle: nothing is
           selected here, and a filled circle on the visible day would outshout today itself. */}
@@ -330,6 +364,8 @@ export function AgendaWeekStrip({
   onMonthChange,
   className,
 }: AgendaNavigatorProps & { className?: string }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const [expanded, setExpanded] = useState(false);
   const regionId = useId();
   const counts = useMemo(() => countMeetingsByDay(daysWithMeetings), [daysWithMeetings]);
@@ -348,7 +384,7 @@ export function AgendaWeekStrip({
             expanded. The label stays the month either way — a week that straddles two months still
             belongs to the one the list below is showing. */}
         <Stepper
-          label={MONTH_LABEL.format(month)}
+          label={monthLabelFormat(locale).format(month)}
           unit={expanded ? "month" : "week"}
           onStep={(delta) =>
             expanded
@@ -364,7 +400,7 @@ export function AgendaWeekStrip({
           onClick={() => setExpanded((open) => !open)}
           className="flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12px] font-medium text-ink-muted hover:bg-surface-2 hover:text-ink"
         >
-          {expanded ? "Week" : "Month"}
+          {expanded ? t("navigator.toggleWeek") : t("navigator.toggleMonth")}
           {expanded ? <CaretUp size={12} weight="bold" /> : <CaretDown size={12} weight="bold" />}
         </button>
       </div>
@@ -388,7 +424,7 @@ export function AgendaWeekStrip({
             />
           </div>
         ) : (
-          <div role="group" aria-label="Week" className="grid grid-cols-7 gap-1">
+          <div role="group" aria-label={t("navigator.weekGroup")} className="grid grid-cols-7 gap-1">
             {week.map((day) => (
               <WeekDayChip
                 key={day.toISOString()}

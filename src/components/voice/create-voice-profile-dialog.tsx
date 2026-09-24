@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle, Microphone, Pause, Play, Stop } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { LanguageLabel, languageLabelText } from "@/components/language/language-label";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,11 @@ const MAX_SAMPLE_SIZE_BYTES = 20 * 1024 * 1024;
  * "I confirm this is my own voice sample." and did exactly that.
  *
  * Change a sentence here only together with the constant on the server.
+ *
+ * NOT ROUTED THROUGH i18n, DELIBERATELY. Translating these labels would mean the record of what
+ * a person agreed to no longer matches the hash the server verifies against — see the file
+ * header. These five strings stay English-only regardless of the UI locale; only the chrome
+ * around them (the dialog title, buttons, other fields) is translated.
  */
 const CONSENT_ITEMS = [
   { key: "ownVoiceConfirmed", label: "This is my own voice." },
@@ -102,6 +108,7 @@ export function CreateVoiceProfileDialog({
    */
   languages?: readonly SupportedLanguage[];
 }) {
+  const t = useTranslations("voiceProfiles.createDialog");
   const createProfile = useCreateVoiceProfile();
 
   const [displayName, setDisplayName] = useState("");
@@ -245,7 +252,7 @@ export function CreateVoiceProfileDialog({
       return false;
     }
     if (file.size > MAX_SAMPLE_SIZE_BYTES) {
-      toast.error("Audio sample must be under 20 MB.");
+      toast.error(t("toasts.sampleTooLarge"));
       setSampleFile(null);
       setSampleAssessment(null);
       setSampleAccepted(false);
@@ -281,7 +288,7 @@ export function CreateVoiceProfileDialog({
 
   async function startRecording() {
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      toast.error("This browser does not support direct audio recording.");
+      toast.error(t("toasts.recordingUnsupported"));
       return;
     }
 
@@ -316,9 +323,9 @@ export function CreateVoiceProfileDialog({
       recorder.start(250);
       setIsRecording(true);
       setSampleAccepted(false);
-      setSampleAssessment("Recording… read the sentence below in a quiet room.");
+      setSampleAssessment(t("recordingHint"));
     } catch {
-      toast.error("Microphone access was denied or unavailable.");
+      toast.error(t("toasts.micDenied"));
     }
   }
 
@@ -329,15 +336,15 @@ export function CreateVoiceProfileDialog({
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (!displayName.trim()) {
-      toast.error("Give the profile a name.");
+      toast.error(t("toasts.nameRequired"));
       return;
     }
     if (!sampleFile) {
-      toast.error("Record or upload a clear voice sample first.");
+      toast.error(t("toasts.sampleRequired"));
       return;
     }
     if (outstandingConsent > 0) {
-      toast.error("Confirm all five statements to continue.");
+      toast.error(t("toasts.consentRequired"));
       return;
     }
 
@@ -348,11 +355,11 @@ export function CreateVoiceProfileDialog({
         sample: sampleFile,
         ...consent,
       });
-      toast.success("Voice profile saved. Cloning it now — usually under a minute.");
+      toast.success(t("toasts.created"));
       onOpenChange(false);
       resetForm();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Failed to create voice profile"));
+      toast.error(getErrorMessage(error, t("toasts.createFailed")));
     }
   }
 
@@ -366,21 +373,21 @@ export function CreateVoiceProfileDialog({
     >
       <DialogContent className="hide-scrollbar flex max-h-[90vh] flex-col overflow-y-auto sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>Create voice profile</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
           <DialogDescription>
-            Name it, pick the language it speaks, and give one clear sample of you talking.
+            {t("description")}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col">
           <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-3 border-b border-border py-3">
             <Label htmlFor="displayName" className="text-[12.5px] font-normal text-ink-muted">
-              Name
+              {t("nameLabel")}
             </Label>
             <Input
               id="displayName"
               className="h-8 text-[12.5px]"
-              placeholder="My presenting voice"
+              placeholder={t("namePlaceholder")}
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
               autoFocus
@@ -388,11 +395,11 @@ export function CreateVoiceProfileDialog({
           </div>
 
           <div className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-3 border-b border-border py-3">
-            <Label className="text-[12.5px] font-normal text-ink-muted">Language</Label>
+            <Label className="text-[12.5px] font-normal text-ink-muted">{t("languageLabel")}</Label>
             <Select value={language} onValueChange={(value) => setLanguage(value || defaultLanguage)}>
               <SelectTrigger className="h-8 w-full text-[12.5px]">
                 <SelectValue>
-                  {(value) => (value ? <LanguageLabel value={String(value)} /> : "Select language…")}
+                  {(value) => (value ? <LanguageLabel value={String(value)} /> : t("selectLanguage"))}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -407,7 +414,7 @@ export function CreateVoiceProfileDialog({
 
           <div className="grid grid-cols-[104px_minmax(0,1fr)] gap-3 border-b border-border py-3">
             <Label htmlFor="sample" className="pt-1.5 text-[12.5px] font-normal text-ink-muted">
-              Sample
+              {t("sampleLabel")}
             </Label>
             <div className="flex flex-col gap-2">
               <div className="flex gap-2">
@@ -420,7 +427,7 @@ export function CreateVoiceProfileDialog({
                   disabled={isCheckingSample}
                 >
                   {isRecording ? <Stop size={13} weight="fill" /> : <Microphone size={13} />}
-                  {isRecording ? "Stop" : "Record"}
+                  {isRecording ? t("stop") : t("record")}
                 </Button>
                 <Button
                   type="button"
@@ -430,7 +437,7 @@ export function CreateVoiceProfileDialog({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={isCheckingSample || isRecording}
                 >
-                  Upload a file
+                  {t("uploadFile")}
                 </Button>
                 {/*
                   WT-632 — hearing what was just recorded, before it is sent anywhere.
@@ -467,9 +474,7 @@ export function CreateVoiceProfileDialog({
                 onChange={handleFileChange}
               />
               <p className="text-[11px] leading-[1.55] text-ink-subtle">
-                Read this in your normal voice: &ldquo;WarpTalk helps my team understand every
-                conversation clearly.&rdquo; One speaker, quiet room, 5&ndash;120 seconds, up to
-                20&nbsp;MB.
+                {t("sampleInstructions")}
               </p>
               {sampleAssessment ? (
                 <p
@@ -489,8 +494,7 @@ export function CreateVoiceProfileDialog({
 
           <div className="border-b border-border py-2">
             <p className="pb-1 text-[11px] leading-[1.55] text-ink-subtle">
-              Consent for this recording. Separate from allowing a meeting to clone you live,
-              which stays off unless you switch it on yourself.
+              {t("consentIntro")}
             </p>
             {CONSENT_ITEMS.map((item) => (
               <label
@@ -512,8 +516,8 @@ export function CreateVoiceProfileDialog({
           <DialogFooter className="items-center justify-between gap-3 pt-4 sm:justify-between">
             <span className="text-[11px] text-ink-subtle">
               {outstandingConsent === 0
-                ? "All five confirmed."
-                : `${outstandingConsent} of 5 left to confirm.`}
+                ? t("allFiveConfirmed")
+                : t("leftToConfirm", { count: outstandingConsent })}
             </span>
             <Button
               type="submit"
@@ -521,7 +525,7 @@ export function CreateVoiceProfileDialog({
               className="h-8 text-[12.5px]"
               disabled={createProfile.isPending || !canSave}
             >
-              {createProfile.isPending ? "Saving…" : "Agree & save"}
+              {createProfile.isPending ? t("saving") : t("agreeAndSave")}
             </Button>
           </DialogFooter>
         </form>

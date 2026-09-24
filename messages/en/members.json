@@ -1,0 +1,137 @@
+{
+  "filters": {
+    "all": "All",
+    "owner": "Owner",
+    "admin": "Admin",
+    "member": "Member",
+    "invited": "Invited",
+    "requested": "Requests"
+  },
+  "roleLabels": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "member": "Member"
+  },
+  "search": {
+    "placeholder": "Search people...",
+    "ariaLabel": "Search people"
+  },
+  "toolbar": {
+    "memberFiltersTitle": "Member filters",
+    "peopleCountTitle": "{count} people",
+    "exporting": "Exporting...",
+    "exportButton": "Export (.xlsx)",
+    "inviteNewMember": "Invite new member"
+  },
+  "table": {
+    "name": "Name",
+    "role": "Role",
+    "membershipType": "Membership Type",
+    "status": "Status",
+    "hostMeetings": "Host meetings",
+    "actions": "Actions"
+  },
+  "you": "You",
+  "externalRoleFixedTitle": "External members always hold the Member role — it cannot be changed.",
+  "accessTypeAria": "Access type for {email}",
+  "membershipOptions": {
+    "internal": "Internal",
+    "external": "External"
+  },
+  "statusLabels": {
+    "requested": "Requested",
+    "leaving": "Leaving",
+    "invited": "Invited",
+    "joined": "Joined"
+  },
+  "leaveRequestPendingTitle": "This member has asked to leave and is waiting on your answer.",
+  "pendingLoadFailed": "Pending invitations and join requests could not be loaded, so this list shows joined members only.",
+  "empty": {
+    "invitedTitle": "No pending invitations",
+    "invitedDescription": "Use Invite new member to send one.",
+    "requestedTitle": "No requests waiting",
+    "requestedDescription": "Requests to join this workspace, and requests to leave it, will appear here.",
+    "defaultTitle": "No people found",
+    "defaultDescription": "Try adjusting your search terms or filters."
+  },
+  "actions": {
+    "approveLeaveRequestTitle": "Approve leave request",
+    "approveLeaveRequestAria": "Approve the leave request from {name}",
+    "rejectLeaveRequestTitle": "Reject leave request",
+    "rejectLeaveRequestAria": "Reject the leave request from {name}",
+    "removeFromWorkspaceTitle": "Remove from workspace",
+    "removeFromWorkspaceAria": "Remove {name} from workspace",
+    "revokeInvitationTitle": "Revoke invitation",
+    "revokeInvitationAria": "Revoke the invitation for {email}",
+    "approveJoinRequestTitle": "Approve join request",
+    "rejectJoinRequestTitle": "Reject join request",
+    "approveAriaJoin": "Approve join request from {email}",
+    "approveAriaLeave": "Approve leave request from {email}",
+    "rejectAriaJoin": "Reject join request from {email}",
+    "rejectAriaLeave": "Reject leave request from {email}",
+    "leaveWorkspaceTitle": "Request to leave workspace",
+    "leave": "Leave"
+  },
+  "pagination": {
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}"
+  },
+  "removeDialog": {
+    "title": "Remove Member?",
+    "description": "Are you sure you want to remove <name></name>? They will instantly lose access to all meetings, documents, and transcripts in this workspace.",
+    "cancel": "Cancel",
+    "confirm": "Remove"
+  },
+  "revokeDialog": {
+    "title": "Revoke Invitation?",
+    "description": "Revoking the invitation for <email></email> removes it entirely. They will no longer be able to accept it with that email.",
+    "cancel": "Cancel",
+    "confirm": "Revoke"
+  },
+  "leaveDialog": {
+    "title": "Request to Leave Workspace?",
+    "description": "Your request to leave <name></name> will be submitted to the Workspace Administrator for approval.",
+    "cancel": "Cancel",
+    "confirm": "Submit Request",
+    "submitting": "Submitting..."
+  },
+  "toasts": {
+    "exportSuccess": "Members list exported successfully!",
+    "exportFailed": "Failed to export members list.",
+    "permissionUpdated": "Meeting host permission updated.",
+    "permissionUpdateFailed": "Failed to update meeting permission",
+    "memberRemoved": "{name} has been removed.",
+    "removeFailed": "Failed to remove member",
+    "leaveRequestSubmitted": "Leave request submitted. Awaiting Admin/Owner approval.",
+    "leaveRequestFailed": "Failed to submit leave request.",
+    "invitationRevoked": "Invitation for {email} revoked.",
+    "revokeFailed": "Failed to revoke invitation",
+    "leaveRequestApproved": "Leave request approved.",
+    "leaveApproveFailed": "Failed to approve leave request",
+    "leaveRequestRejected": "Leave request rejected.",
+    "leaveRejectFailed": "Failed to reject leave request",
+    "memberApprovedEmailFailed": "Member approved; approval email delivery failed.",
+    "joinRequestApproved": "Join request approved and email sent.",
+    "approveFailed": "Failed to approve join request",
+    "joinRequestRejected": "Join request rejected.",
+    "rejectFailed": "Failed to reject join request"
+  },
+  "export": {
+    "columns": {
+      "fullName": "Full Name",
+      "email": "Email",
+      "role": "Role",
+      "membershipType": "Membership Type",
+      "status": "Status",
+      "date": "Date",
+      "hostMeetingsPermission": "Host Meetings Permission"
+    },
+    "notApplicable": "N/A",
+    "defaultRole": "Member",
+    "defaultMembershipType": "Internal",
+    "yes": "Yes",
+    "no": "No",
+    "workspaceFallback": "Workspace"
+  }
+}

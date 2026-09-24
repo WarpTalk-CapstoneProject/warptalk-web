@@ -1,0 +1,43 @@
+{
+  "accessDenied": {
+    "title": "アクセス拒否",
+    "description": "ワークスペースのオーナーと管理者のみがプラグインの活動を表示できます。"
+  },
+  "loadError": {
+    "title": "プラグインの活動を読み込めませんでした",
+    "description": "再試行してください。それでも失敗する場合は、アシスタントサービスに到達できるか確認してください。"
+  },
+  "retrying": "再試行中…",
+  "retry": "再試行",
+  "allPlugins": "すべてのプラグイン",
+  "allMembers": "すべてのメンバー",
+  "memberFallback": "メンバー",
+  "empty": {
+    "noMoreTitle": "これ以上の活動はありません",
+    "noMoreDescription": "これが最後のページでした。",
+    "noMatchTitle": "このフィルターに一致する活動はありません",
+    "noMatchDescription": "フィルターを解除するとさらに表示されます。",
+    "noActivityTitle": "まだプラグインの活動はありません",
+    "noActivityDescription": "WarpBotがこのワークスペースの誰かのためにプラグインツールを実行すると、ここに表示されます。"
+  },
+  "table": {
+    "time": "時刻",
+    "member": "メンバー",
+    "plugin": "プラグイン",
+    "tool": "ツール",
+    "result": "結果"
+  },
+  "noLongerMember": "メンバーではなくなりました",
+  "page": "ページ {page}",
+  "previous": "前へ",
+  "next": "次へ",
+  "outcome": {
+    "succeeded": "成功",
+    "blocked": "ブロック済み",
+    "awaitingConfirmation": "確認待ち",
+    "needsSetup": "設定が必要",
+    "providerError": "プロバイダーエラー",
+    "failed": "失敗"
+  },
+  "formerMember": "元メンバー"
+}

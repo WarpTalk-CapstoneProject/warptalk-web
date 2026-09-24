@@ -1,0 +1,59 @@
+{
+  "accessDenied": {
+    "title": "Từ chối truy cập",
+    "description": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem nhật ký kiểm toán."
+  },
+  "filters": {
+    "actionLabel": "Hành động",
+    "targetLabel": "Đối tượng",
+    "fromDate": "Từ ngày",
+    "toDate": "Đến ngày",
+    "to": "đến",
+    "clear": "Xóa bộ lọc"
+  },
+  "loading": "Đang tải…",
+  "entryCount": "{formatted} {count, plural, other {mục}}",
+  "refresh": "Làm mới",
+  "table": {
+    "time": "Thời gian",
+    "actor": "Người thực hiện",
+    "action": "Hành động",
+    "target": "Đối tượng",
+    "details": "Chi tiết"
+  },
+  "invalidRange": {
+    "title": "Ngày bắt đầu sau ngày kết thúc",
+    "description": "Hãy chọn ngày bắt đầu trước hoặc trùng ngày kết thúc."
+  },
+  "loadError": "Không thể tải nhật ký kiểm toán",
+  "tryAgain": "Thử lại",
+  "empty": {
+    "noMatchTitle": "Không có mục nào khớp với bộ lọc này",
+    "noMatchDescription": "Xóa bộ lọc để xem mọi mục đã ghi nhận.",
+    "noEntriesTitle": "Chưa có mục kiểm toán nào",
+    "noEntriesDescription": "Các hành động của nhân viên WarpTalk trên không gian làm việc này — như tạm ngưng hoặc điều chỉnh tín dụng — sẽ xuất hiện ở đây."
+  },
+  "pageOf": "Trang {page} / {totalPages}",
+  "previous": "Trước",
+  "next": "Sau",
+  "action": {
+    "suspend": "Không gian làm việc bị tạm ngưng",
+    "reactivate": "Không gian làm việc được kích hoạt lại",
+    "delete": "Không gian làm việc bị xóa"
+  },
+  "entity": {
+    "workspace": "Không gian làm việc",
+    "credit_adjustment": "Tín dụng"
+  },
+  "actionOption": {
+    "all": "Tất cả hành động",
+    "suspend": "Không gian làm việc bị tạm ngưng",
+    "reactivate": "Không gian làm việc được kích hoạt lại",
+    "delete": "Không gian làm việc bị xóa"
+  },
+  "entityOption": {
+    "all": "Tất cả đối tượng",
+    "workspace": "Không gian làm việc",
+    "credit_adjustment": "Tín dụng"
+  }
+}

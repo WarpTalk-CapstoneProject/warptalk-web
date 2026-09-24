@@ -1,0 +1,70 @@
+{
+  "header": {
+    "title": "設定",
+    "subtitle": "個人の言語設定、クライアントの音声設定、レイアウト設定を構成します。"
+  },
+  "error": {
+    "message": "個人設定を読み込めませんでした。",
+    "hint": "バックエンドサービスが実行されていることを確認してください。",
+    "retry": "再試行"
+  },
+  "toasts": {
+    "saveFailed": "設定の更新に失敗しました"
+  },
+  "sections": {
+    "translationLanguages": "翻訳と言語",
+    "audioSuppression": "音声とノイズ抑制",
+    "meetingPresets": "ミーティングのデフォルト設定",
+    "appearanceTheme": "外観とテーマ"
+  },
+  "fields": {
+    "speakLanguage": {
+      "label": "デフォルトの話す言語",
+      "hint": "翻訳セッション中にあなたが話すデフォルトの言語です。",
+      "placeholder": "言語を選択..."
+    },
+    "listenLanguage": {
+      "label": "デフォルトの聞く言語",
+      "hint": "翻訳された文字起こしを聞いたり見たりしたい言語です。",
+      "placeholder": "言語を選択..."
+    },
+    "voiceClone": {
+      "label": "音声クローンを有効にする",
+      "hint": "承認済みの音声プロファイルを使用して翻訳を合成します。"
+    },
+    "noiseSuppression": {
+      "label": "マイクのノイズ抑制",
+      "hint": "翻訳通話中の背景雑音をフィルタリングします。"
+    },
+    "roomType": {
+      "label": "デフォルトのルーム接続タイプ",
+      "hint": "ルームで使用する優先ストリーミングプロトコルです。",
+      "placeholder": "タイプを選択...",
+      "instant": "インスタントルーム",
+      "scheduled": "予約ルーム"
+    },
+    "autoRecord": {
+      "label": "翻訳ルームを自動録画",
+      "hint": "ミーティング開始時に音声ストリームを自動的に録音・保存します。"
+    },
+    "autoSummary": {
+      "label": "AI要約を自動生成",
+      "hint": "ミーティング終了時に即座にAI要約と文字起こしをトリガーします。"
+    },
+    "maxParticipants": {
+      "label": "デフォルトの最大参加人数",
+      "hint": "あなたが作成するルームのデフォルトの定員上限を設定します。"
+    },
+    "theme": {
+      "label": "インターフェースのテーマ",
+      "hint": "個人用のデフォルト表示スタイルを選択します。",
+      "placeholder": "テーマを選択...",
+      "light": "ライトモード",
+      "dark": "ダークモード",
+      "system": "システムに従う"
+    }
+  },
+  "audioBridge": {
+    "label": "この端末"
+  }
+}

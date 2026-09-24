@@ -1,0 +1,120 @@
+{
+  "filters": {
+    "ariaLabel": "Lọc tài liệu theo danh mục",
+    "all": "Tất cả",
+    "published": "Đã xuất bản",
+    "pendingApproval": "Chờ duyệt",
+    "rejected": "Bị từ chối",
+    "aiContext": "Ngữ cảnh AI",
+    "administrative": "Hành chính",
+    "restricted": "Hạn chế",
+    "archived": "Đã lưu trữ"
+  },
+  "searchPlaceholder": "Tìm tài liệu...",
+  "searchAriaLabel": "Tìm tài liệu",
+  "filterOptions": "Tùy chọn lọc",
+  "displayOptions": "Tùy chọn hiển thị",
+  "new": "Mới",
+  "gridView": "Xem dạng lưới",
+  "listView": "Xem dạng danh sách",
+  "empty": {
+    "title": "Không tìm thấy tài liệu",
+    "descriptionCanUpload": "Dùng nút Mới ở trên để tải lên một tài liệu tham khảo.",
+    "descriptionCannotUpload": "Chưa có tài liệu tham khảo nào được tải lên không gian làm việc này."
+  },
+  "table": {
+    "name": "Tên",
+    "uploadedBy": "Người tải lên",
+    "approvedBy": "Người duyệt",
+    "status": "Trạng thái",
+    "modified": "Sửa đổi",
+    "size": "Kích thước",
+    "actions": "Thao tác"
+  },
+  "status": {
+    "rejected": "Bị từ chối",
+    "pendingApproval": "Chờ duyệt",
+    "administrative": "Hành chính",
+    "aiReady": "AI sẵn sàng",
+    "aiFailed": "AI thất bại",
+    "aiIngestionFailed": "Nạp AI thất bại",
+    "processingAi": "Đang xử lý AI...",
+    "aiContext": "Ngữ cảnh AI"
+  },
+  "actions": {
+    "viewDetails": "Xem chi tiết",
+    "restoreDocument": "Khôi phục tài liệu",
+    "archiveDocument": "Lưu trữ tài liệu",
+    "deletePermanently": "Xóa vĩnh viễn"
+  },
+  "grid": {
+    "uploader": "Người tải lên",
+    "approver": "Người duyệt",
+    "unavailable": "Không có {label}"
+  },
+  "pagination": {
+    "previous": "Trước",
+    "next": "Sau",
+    "page": "Trang {page}"
+  },
+  "uploadDialog": {
+    "title": "Tải lên tài liệu mới",
+    "description": "Thêm tài liệu tham khảo vào thư viện không gian làm việc. Cấu hình ngữ cảnh tìm kiếm AI và quyền truy cập của thành viên.",
+    "step1Label": "1. Chọn file tham khảo",
+    "supportedFormats": "Hỗ trợ: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP, GIF (Tối đa 10MB)",
+    "dropzoneTitle": "Nhấn hoặc kéo thả file để tải lên từ máy tính",
+    "dropzoneHint": "Kích thước tối đa: 10MB",
+    "imageAdminNotice": "File ảnh sẽ được lưu dưới dạng tệp đính kèm hành chính",
+    "changeFile": "Đổi file",
+    "nameLabel": "Tên hiển thị tài liệu",
+    "namePlaceholder": "vd. Thuật ngữ pháp lý 2026",
+    "aiAllowLabelApprover": "Cho phép AI Assistant lập chỉ mục",
+    "aiAllowLabelMember": "Yêu cầu AI Assistant lập chỉ mục",
+    "aiAllowDescApprover": "Bật tìm kiếm ngữ cảnh RAG sau khi xử lý bảo mật.",
+    "aiAllowDescMember": "Xử lý AI chỉ bắt đầu sau khi Chủ sở hữu hoặc Quản trị viên không gian làm việc duyệt tài liệu này.",
+    "imageSkipNotice": "File ảnh được lưu dưới dạng tệp đính kèm hành chính. Việc nạp AI sẽ tự động được bỏ qua.",
+    "policyApprover": "Là Chủ sở hữu/Quản trị viên không gian làm việc, tài liệu bạn tải lên sẽ tự động được xuất bản.",
+    "policyMember": "Tài liệu của bạn sẽ vào trạng thái Chờ duyệt. Xử lý bảo mật và AI chỉ bắt đầu sau khi Chủ sở hữu hoặc Quản trị viên không gian làm việc duyệt.",
+    "cancel": "Hủy",
+    "upload": "Tải lên tài liệu"
+  },
+  "toasts": {
+    "fileTooLarge": "Kích thước file vượt quá giới hạn 10MB.",
+    "imageIndexingDisabled": "Đã chọn file ảnh: lập chỉ mục AI bị tắt.",
+    "selectFile": "Vui lòng chọn một file để tải lên.",
+    "uploadedPending": "Đã tải lên tài liệu! Đã gửi để chờ duyệt.",
+    "uploadedPublished": "Tải lên và xuất bản tài liệu thành công!",
+    "uploadedSuccess": "Tải lên tài liệu thành công.",
+    "sessionExpired": "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại.",
+    "noPermission": "Bạn không có quyền tải tài liệu lên không gian làm việc này.",
+    "uploadFailed": "Tải lên tài liệu thất bại.",
+    "archived": "Đã lưu trữ tài liệu.",
+    "archiveFailed": "Lưu trữ tài liệu thất bại.",
+    "restored": "Đã khôi phục tài liệu.",
+    "restoreFailed": "Khôi phục tài liệu thất bại.",
+    "deleted": "Đã xóa tài liệu.",
+    "deleteFailed": "Xóa tài liệu thất bại."
+  },
+  "validation": {
+    "nameMin": "Tên tài liệu phải có ít nhất 2 ký tự",
+    "nameMax": "Tên tài liệu không được vượt quá {max} ký tự"
+  },
+  "deleteDialog": {
+    "title": "Xóa tài liệu?",
+    "description": "Bạn có chắc muốn xóa <name></name>? Thao tác này sẽ xóa nội dung file, ngữ cảnh AI, và các chính sách truy cập khỏi không gian làm việc.",
+    "cancel": "Hủy",
+    "delete": "Xóa"
+  },
+  "duplicateDialog": {
+    "title": "File này đã có sẵn",
+    "descriptionKnown": "File giống hệt đã được tải lên với tên <name></name> vào {date}. Chưa có gì được lưu.",
+    "descriptionUnknown": "Một file giống hệt đã có trong không gian làm việc này, trong một tài liệu bạn không có quyền truy cập. Chưa có gì được lưu.",
+    "keepExisting": "Giữ tài liệu hiện có",
+    "keepExistingDetail": "Hủy lượt tải lên này và mở {name}.",
+    "replace": "Thay thế file bằng file này",
+    "replaceDetail": "Giữ {name} và lịch sử của nó, và gửi lại để chờ duyệt.",
+    "uploadAnyway": "Vẫn tải lên",
+    "uploadAnywayDetail": "Tạo một tài liệu thứ hai, riêng biệt với cùng nội dung.",
+    "cancel": "Hủy"
+  }
+}

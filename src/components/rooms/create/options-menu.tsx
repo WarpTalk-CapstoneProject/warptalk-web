@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Calendar as CalendarIcon,
@@ -70,6 +71,7 @@ export function OptionsMenu({
   saveTranscript?: boolean;
   onSaveTranscriptChange?: (value: boolean) => void;
 }) {
+  const t = useTranslations("rooms.create.options");
   const now = new Date();
   const isDaily = !!daily;
   const problem = daily ? validateDailyDraft(daily, now) : null;
@@ -163,7 +165,7 @@ export function OptionsMenu({
             className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-ink hover:bg-surface-2"
           >
             <CalendarIcon weight="duotone" size={14} />
-            Date &amp; Time
+            {t("dateAndTime")}
           </button>
         )}
 
@@ -177,14 +179,14 @@ export function OptionsMenu({
                 className="flex flex-1 cursor-pointer items-center gap-2 text-left text-[13px]"
               >
                 <Repeat weight="duotone" size={16} className="shrink-0" />
-                <span className="font-medium whitespace-nowrap text-ink">Repeat</span>
+                <span className="font-medium whitespace-nowrap text-ink">{t("repeat")}</span>
               </button>
 
               {/* Beside the label, not behind a button that opens somewhere else. */}
               {isDaily && (
                 <TimeField
                   data-testid="daily-time-input"
-                  label="Time each day"
+                  label={t("timeEachDay")}
                   value={daily.time}
                   onChange={changeTime}
                 />
@@ -193,7 +195,7 @@ export function OptionsMenu({
               <button
                 type="button"
                 onClick={toggleDaily}
-                aria-label={isDaily ? "Turn off daily repeat" : "Turn on daily repeat"}
+                aria-label={isDaily ? t("turnOffDaily") : t("turnOnDaily")}
                 className="flex shrink-0 cursor-pointer items-center"
               >
                 {isDaily ? (
@@ -227,7 +229,7 @@ export function OptionsMenu({
                           : "border-border/60 bg-surface-2 text-ink-muted hover:text-ink"
                       }`}
                     >
-                      {type.toLowerCase()}
+                      {t(`cadence.${type.toLowerCase()}` as never)}
                     </button>
                   ))}
                 </div>
@@ -269,13 +271,13 @@ export function OptionsMenu({
                     the meeting to a different day in every short month. */}
                 {cadence === "MONTHLY" && (
                   <label className="flex items-center gap-2">
-                    <span className="flex-1 text-[12px] text-ink-muted">Day of month</span>
+                    <span className="flex-1 text-[12px] text-ink-muted">{t("dayOfMonth")}</span>
                     <input
                       type="number"
                       min={1}
                       max={31}
                       data-testid="recurrence-month-day-input"
-                      aria-label="Day of the month"
+                      aria-label={t("dayOfMonthAria")}
                       value={daily.byMonthDay ?? ""}
                       placeholder="1–31"
                       onChange={(e) => changeMonthDay(e.target.value)}
@@ -287,16 +289,15 @@ export function OptionsMenu({
 
                 {cadence === "MONTHLY" && (daily.byMonthDay ?? 0) > 28 && (
                   <p className="text-[11px] leading-snug text-ink-muted">
-                    Months without a {daily.byMonthDay}
-                    {(daily.byMonthDay ?? 0) === 31 ? "st" : "th"} are skipped.
+                    {t("monthSkipped", { day: daily.byMonthDay ?? 0 })}
                   </p>
                 )}
 
                 <label className="flex items-center gap-2">
-                  <span className="flex-1 text-[12px] text-ink-muted">Repeat until</span>
+                  <span className="flex-1 text-[12px] text-ink-muted">{t("repeatUntil")}</span>
                   <DateField
                     data-testid="daily-end-date-input"
-                    label="Repeat until"
+                    label={t("repeatUntil")}
                     value={daily.endDate}
                     min={toLocalDateString(now)}
                     onChange={(endDate) => onDailyChange({ ...daily, endDate })}
@@ -332,7 +333,7 @@ export function OptionsMenu({
                 className="flex flex-1 cursor-pointer items-center gap-2 text-left text-[13px]"
               >
                 <ShieldCheck weight="duotone" size={16} className="shrink-0" />
-                <span className="font-medium whitespace-nowrap text-ink">Require approval</span>
+                <span className="font-medium whitespace-nowrap text-ink">{t("requireApproval")}</span>
               </button>
 
               <button
@@ -340,8 +341,8 @@ export function OptionsMenu({
                 onClick={() => onRequiresApprovalChange(!requiresApproval)}
                 aria-label={
                   requiresApproval
-                    ? "Turn off approval to join"
-                    : "Turn on approval to join"
+                    ? t("turnOffApproval")
+                    : t("turnOnApproval")
                 }
                 className="flex shrink-0 cursor-pointer items-center"
               >
@@ -377,7 +378,7 @@ export function OptionsMenu({
               >
                 <Translate weight="duotone" size={16} className="shrink-0" />
                 <span className="font-medium whitespace-nowrap text-ink">
-                  Anyone can start translation
+                  {t("anyoneCanStartTranslation")}
                 </span>
               </button>
 
@@ -388,8 +389,8 @@ export function OptionsMenu({
                 }
                 aria-label={
                   participantsCanStartTranslation
-                    ? "Only the host may start translation"
-                    : "Let anyone in the room start translation"
+                    ? t("onlyHostCanStart")
+                    : t("letAnyoneStart")
                 }
                 className="flex shrink-0 cursor-pointer items-center"
               >
@@ -427,12 +428,11 @@ export function OptionsMenu({
                 <FileText weight="duotone" size={16} className="mt-0.5 shrink-0" />
                 <span className="min-w-0">
                   <span className="block font-medium whitespace-nowrap text-ink">
-                    Save the meeting transcript
+                    {t("saveTranscript")}
                   </span>
                   {!saveTranscript && (
                     <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle">
-                      Subtitles and translation still work. This meeting will have no transcript,
-                      summary or minutes afterwards.
+                      {t("saveTranscriptHint")}
                     </span>
                   )}
                 </span>
@@ -443,8 +443,8 @@ export function OptionsMenu({
                 onClick={() => onSaveTranscriptChange(!saveTranscript)}
                 aria-label={
                   saveTranscript
-                    ? "Do not keep a record of this meeting"
-                    : "Keep a transcript of this meeting"
+                    ? t("dontKeepTranscript")
+                    : t("keepTranscript")
                 }
                 className="mt-0.5 flex shrink-0 cursor-pointer items-center"
               >

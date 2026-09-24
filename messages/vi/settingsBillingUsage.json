@@ -1,0 +1,162 @@
+{
+  "accessDenied": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem mức sử dụng.",
+  "header": {
+    "title": "Mức sử dụng",
+    "filterByMember": "Lọc theo thành viên",
+    "allMembers": "Tất cả thành viên",
+    "selectedMember": "Thành viên đã chọn",
+    "cycleRangeElapsed": "{range} · đã qua {days} ngày",
+    "thisBillingCycle": "Chu kỳ thanh toán này",
+    "refresh": "Làm mới",
+    "exportCsv": "Xuất CSV"
+  },
+  "chart": {
+    "creditsSpent": "Credit đã dùng",
+    "groupBy": "Nhóm theo:",
+    "service": "Dịch vụ",
+    "bucketSizeAria": "Kích thước khoảng thời gian",
+    "day": "1n",
+    "week": "1t",
+    "creditsHeadline": "{amount} credit",
+    "avgPerBucket": "TB {amount} / {bucket}",
+    "workspacePrefix": "Không gian làm việc ",
+    "inOverageSince": "đã vượt hạn mức từ {date}",
+    "projectedOverageOn": "dự kiến vượt hạn mức vào {date}",
+    "noDatesToChart": "Chu kỳ này không có dữ liệu để vẽ biểu đồ.",
+    "noSpendMember": "Thành viên này chưa dùng credit nào.",
+    "noSpendWorkspace": "Chưa có credit nào được dùng trong chu kỳ này.",
+    "spendingAppearsHere": "Mức sử dụng sẽ hiển thị ở đây theo từng {bucket} khi các cuộc họp được dịch."
+  },
+  "rail": {
+    "cycleCredits": "Credit chu kỳ",
+    "spentByMember": "{member} đã dùng",
+    "spent": "Đã dùng",
+    "spentOfAvailable": "{spent} / {available}",
+    "progressAria": "Credit đã dùng trên tổng khả dụng",
+    "pointToday": "Vị trí nếu dùng đều đến hôm nay",
+    "granted": "Được cấp",
+    "adjustments": "Điều chỉnh",
+    "carriedOver": "Chuyển từ kỳ trước",
+    "toppedUp": "Đã nạp thêm",
+    "remaining": "Còn lại",
+    "paceNote": {
+      "inOverageSince": "Đã vượt hạn mức từ <date></date>.",
+      "projectedOverageStarts": "Với tốc độ này, sẽ vượt hạn mức từ <date></date>.",
+      "noAllowance": "Không có hạn mức trong chu kỳ này.",
+      "tooEarly": "Còn quá sớm trong chu kỳ để dự đoán tốc độ dùng.",
+      "lastsWholeCycle": "Với tốc độ này, <b>hạn mức đủ dùng cho cả chu kỳ</b>",
+      "aheadOfEvenSpend": " · nhanh hơn {delta}% so với mức dùng đều"
+    },
+    "settlements": "Lần thanh toán",
+    "settlementsPerBucket": "Lần thanh toán theo {bucket}",
+    "settlementsDetail": "Số lần credit bị trừ",
+    "meetingsBilled": "Cuộc họp đã tính phí",
+    "meetingsBilledPerBucket": "Cuộc họp đã tính phí theo {bucket}",
+    "busiestBucket": "{bucket} nhiều nhất",
+    "busiestValue": "{date} · {amount} credit",
+    "noValue": "—"
+  },
+  "tabs": {
+    "spendingDetail": "Chi tiết sử dụng",
+    "aiServices": "Dịch vụ AI",
+    "movements": "Nạp thêm & điều chỉnh",
+    "spendingBy": "Sử dụng theo",
+    "members": "Thành viên",
+    "meetings": "Cuộc họp"
+  },
+  "serviceCards": {
+    "empty": "Không có dữ liệu sử dụng AI nào trong chu kỳ này.",
+    "credits": "{amount} credit",
+    "uses": "{amount} lần dùng",
+    "perUse": "{value} / lần",
+    "noValue": "—",
+    "creditsPerBucket": "{label} credit theo {bucket}"
+  },
+  "movements": {
+    "empty": "Không có lần nạp thêm, hoàn tiền hoặc điều chỉnh nào trong chu kỳ này."
+  },
+  "rankedList": {
+    "noMembers": "Chưa có thành viên nào dùng credit trong chu kỳ này.",
+    "noMeetings": "Chưa có cuộc họp nào được tính phí trong chu kỳ này.",
+    "meetingSub": "{date} · {count, plural, other {# lần thanh toán}}",
+    "meetingsFootnote": "Được khớp theo thời gian cuộc họp: một khoản phí ghi nhận đoạn bản ghi nó thanh toán, không phải phòng họp."
+  },
+  "overagePanel": {
+    "noAllowance": {
+      "title": "Sắp hết credit",
+      "description": "Điều gì xảy ra khi hết credit",
+      "body": "Cuộc họp dừng dịch khi không gian làm việc này hết credit. Gói này không có hạn mức vượt mức — liên hệ WarpTalk để thêm."
+    },
+    "control": {
+      "title": "Tiếp tục cuộc họp sau khi hết credit",
+      "description": "Thay vì ngắt việc dịch giữa chừng",
+      "switchAria": "Tiếp tục cuộc họp sau khi hết credit",
+      "enabledBody": "Một cuộc họp hết credit sẽ tiếp tục dịch theo hình thức ghi nợ, tối đa <cap></cap> credit trong chu kỳ này. Sau đó cuộc họp dừng và không gian làm việc bị tạm ngưng cho đến khi nạp thêm.",
+      "disabledBody": "Việc dịch dừng ngay khi hết credit, giữa cuộc họp. Gói của bạn cho phép tối đa <cap></cap> credit vượt mức nếu bạn bật tính năng này.",
+      "usedOfCap": "Đã dùng {used}/{cap} credit vượt mức trong chu kỳ này"
+    },
+    "toasts": {
+      "enabled": "Cuộc họp sẽ tiếp tục chạy sau khi hết credit.",
+      "disabled": "Cuộc họp sẽ dừng khi hết credit.",
+      "failed": "Không thể thay đổi thiết lập vượt hạn mức."
+    }
+  },
+  "topUpModal": {
+    "title": "Mua credit",
+    "description": "Credit sẽ được thêm vào không gian làm việc này ngay khi thanh toán hoàn tất.",
+    "orEnterAmount": "Hoặc nhập số lượng",
+    "minimumPlaceholder": "Tối thiểu {min}",
+    "credits": "Credit",
+    "estimatedTotal": "Tổng ước tính",
+    "estimatedHint": "Số tiền cuối cùng do máy chủ tính khi thanh toán.",
+    "belowMinimum": "Số lượng tối thiểu là {min} credit — Stripe từ chối khoản thanh toán dưới {amount}.",
+    "startingCheckout": "Đang bắt đầu thanh toán…",
+    "continueToPayment": "Tiếp tục thanh toán",
+    "noWorkspaceError": "Hãy mở một không gian làm việc trước khi mua credit — credit thuộc về một không gian làm việc.",
+    "checkoutFailed": "Không thể bắt đầu thanh toán. Vui lòng thử lại."
+  },
+  "serviceUsageTable": {
+    "empty": "Không có dữ liệu sử dụng AI nào trong khoảng thời gian này.",
+    "headers": {
+      "service": "Dịch vụ",
+      "uses": "Lượt dùng",
+      "creditsPerUse": "Credit / lượt",
+      "credits": "Credit",
+      "share": "Tỷ lệ"
+    }
+  },
+  "burnupChart": {
+    "ariaLabel": "Credit đã dùng trong chu kỳ này: {spent}/{available} khả dụng",
+    "today": "HÔM NAY",
+    "projected": "dự kiến",
+    "notForecast": "Chưa có dự đoán cho thời điểm này.",
+    "spent": "Đã dùng",
+    "thatWeek": "Tuần đó",
+    "thatDay": "Ngày đó",
+    "available": "Khả dụng",
+    "vsEvenPace": "so với mức dùng đều",
+    "legend": {
+      "creditsAvailable": "Credit khả dụng",
+      "spentCumulative": "Đã dùng, lũy kế",
+      "evenPaceWithRate": "Mức đều · {rate}/{bucket}",
+      "evenPace": "Mức đều",
+      "notYetSpent": "Chưa dùng"
+    }
+  },
+  "cycleSpendChart": {
+    "emptyTitle": "Chưa có credit nào được dùng trong chu kỳ này.",
+    "emptyDetail": "Mức sử dụng sẽ hiển thị ở đây theo từng {bucket} khi các cuộc họp được dịch.",
+    "weekOf": "Tuần của {date}",
+    "creditsSuffix": "{value} credit",
+    "spent": "Đã dùng",
+    "added": "Đã thêm",
+    "evenPaceWithRate": "Mức đều · {rate}/{bucket}"
+  },
+  "usageSpendChart": {
+    "ariaLabel": "Credit đã dùng theo {bucket}, xếp chồng theo dịch vụ AI",
+    "otherServices": "Dịch vụ khác",
+    "average": "Trung bình",
+    "weekOf": "Tuần của {date}",
+    "total": "Tổng"
+  }
+}

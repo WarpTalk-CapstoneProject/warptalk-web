@@ -21,6 +21,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { SignOut, Spinner, Warning } from "@phosphor-icons/react";
 
 import { WorkspacePage } from "@/components/workspace/page-chrome";
@@ -46,6 +47,7 @@ type PendingConfirm =
   | { kind: "revoke-others"; count: number };
 
 export default function SessionsPage() {
+  const t = useTranslations("settingsSessions");
   const logout = useAuthStore((s) => s.logout);
   const sessionsQuery = useMySessions();
   const revokeSession = useRevokeSession();
@@ -69,14 +71,14 @@ export default function SessionsPage() {
     try {
       if (pending.kind === "revoke") {
         await revokeSession.mutateAsync(pending.session.id);
-        toast.success("Session signed out.");
+        toast.success(t("toasts.sessionSignedOut"));
       } else {
         await revokeOthers.mutateAsync();
-        toast.success("Signed out of all other sessions.");
+        toast.success(t("toasts.othersSignedOut"));
       }
       setPending(null);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not sign out that session."));
+      toast.error(getErrorMessage(error, t("toasts.signOutFailed")));
     }
   }
 
@@ -86,7 +88,7 @@ export default function SessionsPage() {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 text-ink">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-ink-muted">
-              Devices and browsers currently signed in to your account.
+              {t("subheading")}
             </p>
             {/*
               Offered only when the current session was identified: without it, "all others" has
@@ -100,7 +102,7 @@ export default function SessionsPage() {
                 onClick={() => setPending({ kind: "revoke-others", count: others.length })}
               >
                 <SignOut size={14} />
-                Sign out of all other sessions
+                {t("signOutAllOthers")}
               </Button>
             )}
           </div>
@@ -113,15 +115,15 @@ export default function SessionsPage() {
             <div className="flex flex-col items-center gap-3 rounded-lg border border-hairline bg-surface-1 px-4 py-8 text-center shadow-linear">
               <Warning className="h-5 w-5 text-destructive" />
               <p className="text-xs text-ink-muted">
-                {getErrorMessage(sessionsQuery.error, "Could not load your sessions.")}
+                {getErrorMessage(sessionsQuery.error, t("loadFailed"))}
               </p>
               <Button variant="outline" size="sm" onClick={() => sessionsQuery.refetch()}>
-                Retry
+                {t("retry")}
               </Button>
             </div>
           ) : sessions.length === 0 ? (
             <div className="rounded-lg border border-hairline bg-surface-1 px-4 py-8 text-center text-xs text-ink-muted shadow-linear">
-              No active sessions.
+              {t("noActiveSessions")}
             </div>
           ) : (
             <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-linear">
@@ -142,7 +144,7 @@ export default function SessionsPage() {
                         disabled={isWorking}
                         onClick={() => setPending({ kind: "sign-out-current" })}
                       >
-                        Sign out
+                        {t("signOut")}
                       </Button>
                     ) : (
                       <Button
@@ -151,7 +153,7 @@ export default function SessionsPage() {
                         disabled={isWorking}
                         onClick={() => setPending({ kind: "revoke", session })}
                       >
-                        Revoke
+                        {t("revoke")}
                       </Button>
                     )
                   }
@@ -162,8 +164,7 @@ export default function SessionsPage() {
 
           {!sessionsQuery.isLoading && !sessionsQuery.isError && sessions.length > 0 && !hasCurrent && (
             <p className="text-[11px] text-ink-muted">
-              This device could not be matched to a session. Sign out and sign in again to manage
-              other sessions from here.
+              {t("couldNotMatchDevice")}
             </p>
           )}
         </div>
@@ -174,28 +175,31 @@ export default function SessionsPage() {
           <DialogHeader>
             <DialogTitle>
               {pending?.kind === "revoke"
-                ? "Revoke this session?"
+                ? t("dialog.revokeTitle")
                 : pending?.kind === "revoke-others"
-                  ? "Sign out of all other sessions?"
-                  : "Sign out of this device?"}
+                  ? t("dialog.signOutOthersTitle")
+                  : t("dialog.signOutDeviceTitle")}
             </DialogTitle>
             <DialogDescription>
               {pending?.kind === "revoke"
-                ? `${describeSessionDevice(pending.session.deviceInfo).label}${
-                    pending.session.ipAddress ? ` (${pending.session.ipAddress})` : ""
-                  } will be signed out and will need to sign in again.`
+                ? t("dialog.revokeDescription", {
+                    device: describeSessionDevice(pending.session.deviceInfo, (key, values) =>
+                      t(`deviceLabel.${key}`, values),
+                    ).label,
+                    ip: pending.session.ipAddress ? ` (${pending.session.ipAddress})` : "",
+                  })
                 : pending?.kind === "revoke-others"
-                  ? `${pending.count} other session${pending.count === 1 ? "" : "s"} will be signed out. This device stays signed in.`
-                  : "You will be signed out here and returned to the sign-in page."}
+                  ? t("dialog.signOutOthersDescription", { count: pending.count })
+                  : t("dialog.signOutDeviceDescription")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" size="sm" disabled={isWorking} onClick={() => setPending(null)}>
-              Cancel
+              {t("cancel")}
             </Button>
             <Button variant="destructive" size="sm" disabled={isWorking} onClick={confirm}>
               {isWorking ? <Spinner className="h-3.5 w-3.5 animate-spin" /> : null}
-              {pending?.kind === "revoke" ? "Revoke" : "Sign out"}
+              {pending?.kind === "revoke" ? t("revoke") : t("signOut")}
             </Button>
           </DialogFooter>
         </DialogContent>

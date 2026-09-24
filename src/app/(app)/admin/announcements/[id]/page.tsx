@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -57,12 +58,16 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-async function copyText(value: string, label: string) {
+async function copyText(
+  value: string,
+  label: string,
+  t: (key: string, values?: Record<string, string>) => string,
+) {
   try {
     await navigator.clipboard.writeText(value);
-    toast.success(`${label} copied`);
+    toast.success(t("toasts.copied", { label }));
   } catch {
-    toast.error(`Could not copy the ${label.toLowerCase()}`);
+    toast.error(t("toasts.copyFailed", { label: label.toLowerCase() }));
   }
 }
 
@@ -95,6 +100,7 @@ function Muted({ children }: { children: React.ReactNode }) {
 }
 
 export default function AdminAnnouncementDetailPage() {
+  const t = useTranslations("adminAnnouncements.detail");
   const params = useParams<{ id: string }>();
   const id = typeof params?.id === "string" ? params.id : undefined;
   const detailQuery = useAdminAnnouncement(id);
@@ -122,7 +128,7 @@ export default function AdminAnnouncementDetailPage() {
       className="mb-4 inline-flex items-center gap-1.5 text-[12px] text-ink-muted hover:text-ink"
     >
       <ArrowLeft size={12} />
-      Announcements
+      {t("back")}
     </Link>
   );
 
@@ -136,12 +142,12 @@ export default function AdminAnnouncementDetailPage() {
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
               <p className="font-medium">
-                {notFound ? "This announcement does not exist." : "The announcement could not be loaded."}
+                {notFound ? t("notFound.title") : t("loadError.title")}
               </p>
               <p className="mt-1 text-ink-muted">
                 {notFound
-                  ? "It may have been addressed by a stale link."
-                  : getErrorMessage(detailQuery.error, "Check the notification service and try again.")}
+                  ? t("notFound.description")
+                  : getErrorMessage(detailQuery.error, t("loadError.description"))}
               </p>
               {notFound ? null : (
                 <Button
@@ -150,7 +156,7 @@ export default function AdminAnnouncementDetailPage() {
                   className="mt-3"
                   onClick={() => void detailQuery.refetch()}
                 >
-                  Try again
+                  {t("retry")}
                 </Button>
               )}
             </div>
@@ -179,27 +185,33 @@ export default function AdminAnnouncementDetailPage() {
     const severity = asString(payload.severity);
     if (imageUrl)
       payloadEntries.push([
-        "Image",
+        t("payloadFields.image"),
         <a key="image" href={imageUrl} target="_blank" rel="noreferrer" className="break-all underline-offset-2 hover:underline">
           {imageUrl}
         </a>,
       ]);
     if (ctaLink)
       payloadEntries.push([
-        "Call to action",
+        t("payloadFields.cta"),
         <a key="cta" href={ctaLink} target="_blank" rel="noreferrer" className="break-all underline-offset-2 hover:underline">
           {ctaLink}
         </a>,
       ]);
     if (discountCode)
-      payloadEntries.push(["Discount code", <span key="code" className="font-mono">{discountCode}</span>]);
-    if (severity) payloadEntries.push(["Severity", severity]);
+      payloadEntries.push([t("payloadFields.discountCode"), <span key="code" className="font-mono">{discountCode}</span>]);
+    if (severity) payloadEntries.push([t("payloadFields.severity"), severity]);
     if (typeof payload.actionRequired === "boolean")
-      payloadEntries.push(["Action required", payload.actionRequired ? "Yes" : "No"]);
+      payloadEntries.push([
+        t("payloadFields.actionRequired"),
+        payload.actionRequired ? t("payloadFields.yes") : t("payloadFields.no"),
+      ]);
     if (asString(payload.downtimeStart) || asString(payload.downtimeEnd))
       payloadEntries.push([
-        "Downtime window",
-        `${formatWhen(asString(payload.downtimeStart))} → ${formatWhen(asString(payload.downtimeEnd))}`,
+        t("payloadFields.downtimeWindow"),
+        t("payloadFields.downtimeRange", {
+          start: formatWhen(asString(payload.downtimeStart)),
+          end: formatWhen(asString(payload.downtimeEnd)),
+        }),
       ]);
   }
 
@@ -207,10 +219,13 @@ export default function AdminAnnouncementDetailPage() {
     <AdminPage>
       {backLink}
       <AdminPageHeader
-        eyebrow="Operations · Announcement"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Megaphone size={14} weight="fill" />}
         title={announcement.title}
-        description={`${announcement.type} · created ${formatWhen(announcement.createdAt)}`}
+        description={t("headerDescription", {
+          type: announcement.type,
+          date: formatWhen(announcement.createdAt),
+        })}
         actions={
           <>
             <span
@@ -228,27 +243,27 @@ export default function AdminAnnouncementDetailPage() {
               disabled={detailQuery.isFetching}
             >
               <ArrowsClockwise size={14} className={cn(detailQuery.isFetching && "animate-spin")} />
-              Refresh
+              {t("refresh")}
             </Button>
           </>
         }
       />
 
-      <SectionTitle>Message</SectionTitle>
+      <SectionTitle>{t("sections.message")}</SectionTitle>
       <AdminPanel>
         <p className="whitespace-pre-wrap break-words px-4 py-4 text-[13px] leading-relaxed text-ink">
           {announcement.content}
         </p>
       </AdminPanel>
 
-      <SectionTitle>Record</SectionTitle>
+      <SectionTitle>{t("sections.record")}</SectionTitle>
       <AdminPanel>
         <dl>
-          <Field label="Type">
+          <Field label={t("fields.type")}>
             <span className="font-mono text-[12px]">{announcement.type}</span>
           </Field>
-          <Field label="Status">{announcement.status}</Field>
-          <Field label="Author">
+          <Field label={t("fields.status")}>{announcement.status}</Field>
+          <Field label={t("fields.author")}>
             {author ? (
               <span>
                 {author.fullName || author.email}
@@ -257,16 +272,16 @@ export default function AdminAnnouncementDetailPage() {
             ) : (
               <span className="font-mono text-[12px]">
                 {announcement.createdBy}
-                {authorQuery.isPending ? <Muted> · resolving…</Muted> : null}
+                {authorQuery.isPending ? <Muted> {t("resolving")}</Muted> : null}
               </span>
             )}
           </Field>
-          <Field label="Created">{formatWhen(announcement.createdAt)}</Field>
-          <Field label="Last updated">{formatWhen(announcement.updatedAt)}</Field>
-          <Field label="Announcement id">
+          <Field label={t("fields.created")}>{formatWhen(announcement.createdAt)}</Field>
+          <Field label={t("fields.lastUpdated")}>{formatWhen(announcement.updatedAt)}</Field>
+          <Field label={t("fields.announcementId")}>
             <button
               type="button"
-              onClick={() => void copyText(announcement.id, "Announcement id")}
+              onClick={() => void copyText(announcement.id, t("fields.announcementId"), t)}
               className="inline-flex items-center gap-1.5 break-all text-left font-mono text-[12px] text-ink-muted hover:text-ink"
             >
               {announcement.id}
@@ -276,14 +291,14 @@ export default function AdminAnnouncementDetailPage() {
         </dl>
       </AdminPanel>
 
-      <SectionTitle>Audience</SectionTitle>
+      <SectionTitle>{t("sections.audience")}</SectionTitle>
       <AdminPanel>
         <dl>
-          <Field label="Mode">
+          <Field label={t("fields.mode")}>
             <span className="font-mono text-[12px]">{announcement.targetAudienceMode}</span>
           </Field>
           {audience === null ? (
-            <Field label="Raw targeting">
+            <Field label={t("fields.rawTargeting")}>
               <pre className="whitespace-pre-wrap break-all font-mono text-[11px] text-ink-muted">
                 {announcement.targetAudienceData}
               </pre>
@@ -291,16 +306,16 @@ export default function AdminAnnouncementDetailPage() {
           ) : (
             <>
               {segmentId ? (
-                <Field label="Segment">
+                <Field label={t("fields.segment")}>
                   <span className="font-mono text-[12px]">{segmentId}</span>
                 </Field>
               ) : null}
-              <Field label="Named recipients">
+              <Field label={t("fields.namedRecipients")}>
                 {recipientIds.length === 0 ? (
-                  <Muted>None listed</Muted>
+                  <Muted>{t("recipients.none")}</Muted>
                 ) : (
                   <div>
-                    <p>{numberFormatter.format(recipientIds.length)} user ids</p>
+                    <p>{t("recipients.count", { count: recipientIds.length })}</p>
                     <ul className="mt-2 grid gap-1 sm:grid-cols-2">
                       {visibleRecipients.map((userId) => (
                         <li key={userId} className="truncate font-mono text-[11px] text-ink-muted" title={userId}>
@@ -316,8 +331,8 @@ export default function AdminAnnouncementDetailPage() {
                         onClick={() => setShowAllRecipients((value) => !value)}
                       >
                         {showAllRecipients
-                          ? "Show fewer"
-                          : `Show all ${numberFormatter.format(recipientIds.length)}`}
+                          ? t("recipients.showFewer")
+                          : t("recipients.showAll", { count: numberFormatter.format(recipientIds.length) })}
                       </Button>
                     ) : null}
                   </div>
@@ -328,14 +343,14 @@ export default function AdminAnnouncementDetailPage() {
         </dl>
       </AdminPanel>
 
-      <SectionTitle>Payload</SectionTitle>
+      <SectionTitle>{t("sections.payload")}</SectionTitle>
       <AdminPanel>
         {payload === null ? (
           <pre className="whitespace-pre-wrap break-all px-4 py-3 font-mono text-[11px] text-ink-muted">
             {announcement.payload}
           </pre>
         ) : payloadEntries.length === 0 ? (
-          <p className="px-4 py-4 text-[12px] text-ink-muted">No image, link, code or downtime window.</p>
+          <p className="px-4 py-4 text-[12px] text-ink-muted">{t("payloadFields.empty")}</p>
         ) : (
           <dl>
             {payloadEntries.map(([label, value]) => (
@@ -349,10 +364,7 @@ export default function AdminAnnouncementDetailPage() {
 
       {/* Stated because a reader will look for them: the record the service returns has no
           sent-at time and no per-recipient delivery counts. */}
-      <p className="mt-4 text-[12px] text-ink-muted">
-        The notification service does not record a delivery time or delivery counts for an
-        announcement, so neither is shown here.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
     </AdminPage>
   );
 }

@@ -31,7 +31,10 @@ export type AdminPluginKind = "native" | "mcp";
  * `unresolved` is the honest state of a row nobody has connected yet — the ladder chooses on the
  * first connect. `preregistered` is the only source that asserts the row itself holds a client id.
  */
-export type AdminPluginOAuthClientSource = "unresolved" | "preregistered" | "cimd" | "dcr";
+export type AdminPluginOAuthClientSource = "unresolved" | "preregistered" | "cimd" | "dcr" | "api_key";
+
+/** `api_key`: no OAuth at all — each user pastes a key of their own, sent as a Bearer token. */
+export type AdminPluginAuthMode = "oauth" | "api_key";
 
 /**
  * One tool in a row's manifest, as `tools_json` stores it.
@@ -158,6 +161,8 @@ export interface CreateAdminMcpPluginRequest {
    * `oAuthClientSource` on the way back produces `oAuth` on the way in.
    */
   oAuth?: CreateAdminMcpPluginOAuthRequest;
+  /** Omitted means oauth. `api_key` cannot be combined with oAuth; the server refuses it. */
+  authMode?: AdminPluginAuthMode;
 }
 
 /**
@@ -200,6 +205,8 @@ export interface UpdateAdminPluginRequest {
   sortOrder?: number;
   /** Empty string clears it. */
   category?: string;
+  /** Switching mode ends every user's connection to the row: their credential no longer applies. */
+  authMode?: AdminPluginAuthMode;
 }
 
 /**

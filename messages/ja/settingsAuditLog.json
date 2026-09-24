@@ -1,0 +1,59 @@
+{
+  "accessDenied": {
+    "title": "アクセス拒否",
+    "description": "ワークスペースのオーナーと管理者のみが監査ログを表示できます。"
+  },
+  "filters": {
+    "actionLabel": "操作",
+    "targetLabel": "対象",
+    "fromDate": "開始日",
+    "toDate": "終了日",
+    "to": "〜",
+    "clear": "クリア"
+  },
+  "loading": "読み込み中…",
+  "entryCount": "{formatted}件",
+  "refresh": "更新",
+  "table": {
+    "time": "時刻",
+    "actor": "実行者",
+    "action": "操作",
+    "target": "対象",
+    "details": "詳細"
+  },
+  "invalidRange": {
+    "title": "開始日が終了日より後になっています",
+    "description": "終了日以前の開始日を選択してください。"
+  },
+  "loadError": "監査ログを読み込めませんでした",
+  "tryAgain": "再試行",
+  "empty": {
+    "noMatchTitle": "このフィルターに一致する項目はありません",
+    "noMatchDescription": "フィルターを解除するとすべての記録項目が表示されます。",
+    "noEntriesTitle": "まだ監査項目はありません",
+    "noEntriesDescription": "WarpTalkスタッフがこのワークスペースに対して行った操作(一時停止やクレジットの調整など)がここに表示されます。"
+  },
+  "pageOf": "ページ {page} / {totalPages}",
+  "previous": "前へ",
+  "next": "次へ",
+  "action": {
+    "suspend": "ワークスペースが一時停止されました",
+    "reactivate": "ワークスペースが再有効化されました",
+    "delete": "ワークスペースが削除されました"
+  },
+  "entity": {
+    "workspace": "ワークスペース",
+    "credit_adjustment": "クレジット"
+  },
+  "actionOption": {
+    "all": "すべての操作",
+    "suspend": "ワークスペースが一時停止されました",
+    "reactivate": "ワークスペースが再有効化されました",
+    "delete": "ワークスペースが削除されました"
+  },
+  "entityOption": {
+    "all": "すべての対象",
+    "workspace": "ワークスペース",
+    "credit_adjustment": "クレジット"
+  }
+}

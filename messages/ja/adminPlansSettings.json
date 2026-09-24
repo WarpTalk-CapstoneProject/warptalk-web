@@ -1,0 +1,277 @@
+{
+  "plans": {
+    "eyebrow": "収益",
+    "title": "プランと価格",
+    "description": "プラットフォームが販売するものと、各単位を提供するのにかかるコスト。",
+    "newPlan": "新規プラン",
+    "editConfiguration": "設定を編集",
+    "refresh": "更新",
+    "filterLabel": "価格ビュー",
+    "tabs": {
+      "plans": "プラン",
+      "rateCards": "料金カード",
+      "configuration": "設定"
+    },
+    "loading": "読み込み中…",
+    "planCount": "プラン {count} 件",
+    "rateCardCount": "料金カード {count} 件",
+    "platformWide": "プラットフォーム全体",
+    "rateCardsNote": "利益率は料金カードに記録された倍率から算出されます。販売価格とプロバイダーコストが異なる通貨の場合、利益率は表示されません — そのまま割ると為替レート分だけずれた数値になってしまうためです。",
+    "errorHint": "課金サービスを確認し、セッションにまだプラットフォーム管理者権限があるかご確認ください。",
+    "tryAgain": "再試行",
+    "plansError": "プランを読み込めませんでした。",
+    "plansEmpty": "カタログにプランがありません。",
+    "rateCardsError": "料金カードを読み込めませんでした。",
+    "rateCardsEmpty": "料金カードが設定されていません。",
+    "configError": "価格設定を読み込めませんでした。",
+    "configEmpty": "保存された価格設定がありません。",
+    "footerNote": "APIが許す範囲で編集できます。ここでは何も削除されません。プランは発行済みのすべての請求書に名前が残るため、有効/無効の切り替えで運用終了します。料金カードは確定済みの請求がそれを参照しているため、無効化によって運用終了します。新しい料金カードの識別情報は、それを登録するマイグレーションによってのみ追加されます。",
+    "deactivateToast": "料金カード「{chargeType}」を無効化しました。",
+    "planRow": {
+      "active": "有効",
+      "hidden": "非表示",
+      "edit": "編集"
+    },
+    "rateCardRow": {
+      "edit": "編集",
+      "deactivate": "無効化",
+      "from": "{date} から",
+      "marginDerivedTooltip": "価格とコスト（いずれもUSD）から算出",
+      "marginRecordedTooltip": "料金カードに記録された値のとおり"
+    },
+    "configRows": {
+      "fxRate": "為替レート USD→VND",
+      "creditValue": "クレジット単価（VND）",
+      "minimumPricePerCredit": "クレジットあたりの最低価格（VND）",
+      "minimumContractPrice": "最低契約価格",
+      "salesWeightUsage": "販売ウェイト・利用量",
+      "salesWeightMembers": "販売ウェイト・メンバー数",
+      "salesWeightLanguages": "販売ウェイト・言語数",
+      "salesWeightAiServices": "販売ウェイト・AIサービス",
+      "defaultOverageCapRatio": "デフォルトの超過上限比率",
+      "defaultInvoiceTerms": "デフォルトの請求書支払期限",
+      "defaultInvoiceTermsValue": "{days} 日",
+      "defaultInvoiceGrace": "デフォルトの請求書猶予期間",
+      "defaultInvoiceGraceValue": "{hours} 時間",
+      "formula": "計算式（自動算出）",
+      "resolverKey": "リゾルバーキー（自動算出）"
+    }
+  },
+  "settings": {
+    "eyebrow": "設定",
+    "title": "プラットフォーム設定",
+    "description": "プラットフォームを動かしているすべての要素を、操作できる順に並べています。変更できるスイッチが先、参照専用のデータが後です。",
+    "refresh": "更新",
+    "bandKnobs": {
+      "title": "操作できるスイッチ",
+      "note": "このページから保存され、プラットフォーム全体に適用され、あなたのアカウントとともに記録されます。"
+    },
+    "bandReference": {
+      "title": "参照データ",
+      "note": "ここでは参照のみ — これらの変更はマイグレーションによって行われます。"
+    },
+    "billingPolicyHeading": "課金ポリシー",
+    "pricingEconomicsHeading": "価格エコノミクス",
+    "pricingEconomicsSubnote": "プラン検証と料金カードの利益率算出が参照するのと同じ設定です。プランと価格ページからもアクセスできます。",
+    "languageCatalogHeading": "言語カタログ",
+    "voiceConsentHeading": "音声クローン同意",
+    "voiceConsentCount": "{count} 件の決定を記録済み",
+    "explainer": "<strong>なぜ以下には何も操作できるものがないのか。</strong> このデータの背後にあるどちらのサービスも、誰が変更したかを記録できません。ここにスイッチを置くと、変更に対して名前が残らないまま、すべての会議が検証する基準を誰でも変えられてしまいます。そのため、これらの項目はレビューを経て担当者が明確になるマイグレーションによってのみ変更されます。",
+    "footerNote": "件数のみを表示しています。これは省略ではなく境界線です。クローンされた音声は生体データであり、誰が同意したかの一覧は生体認証の同意登録簿そのものになってしまいます。この画面のどの項目も、特定の個人に対して操作を行うものではありません。",
+    "panelError": {
+      "message": "{what}を読み込めませんでした。",
+      "hint": "サービスを確認し、セッションにまだプラットフォーム管理者権限があるかご確認ください。",
+      "tryAgain": "再試行"
+    },
+    "billingPolicy": {
+      "vatLabel": "VAT率",
+      "vatHint": "プラットフォームが発行するすべての請求書に適用されます。小数で指定します：0.1は10%です。",
+      "vatAriaLabel": "VAT率",
+      "save": "保存",
+      "saving": "保存中…",
+      "saveSuccessToast": "課金ポリシーを保存しました。",
+      "saveErrorToast": "課金ポリシーを保存できませんでした。",
+      "errorWhat": "課金ポリシー"
+    },
+    "pricingEconomics": {
+      "errorWhat": "価格設定",
+      "fxRateLabel": "為替レート（USD → VND）",
+      "fxRateHint": "USD建てのプロバイダーコストをVND換算で読み取ります。",
+      "creditValueLabel": "クレジット単価",
+      "creditValueHint": "顧客が1クレジットあたりに支払う金額（VND）。",
+      "minimumPricePerCreditLabel": "クレジットあたりの最低価格",
+      "minimumPricePerCreditHint": "プラン検証時の価格下限です — VND建てのプランはこれを下回る価格でクレジットを販売できません。",
+      "minimumContractPriceLabel": "最低契約価格",
+      "minimumContractPriceHint": "プランが有効と判定される前の、1サイクルあたりの金額。",
+      "minimumContractPriceValue": "{vnd} ₫ ・ {usd} $",
+      "defaultInvoiceTermsLabel": "デフォルトの請求書支払期限",
+      "defaultInvoiceTermsHint": "個別に設定していないプランに適用される、支払までの日数とその後の猶予期間。",
+      "defaultInvoiceTermsValue": "{days} 日・猶予 {hours} 時間",
+      "editButton": "価格エコノミクスを編集"
+    },
+    "languageCatalog": {
+      "errorWhat": "言語カタログ",
+      "empty": "カタログが空です — どの言語でもルームを作成できません。",
+      "driftTitle": "会議選択画面には、このカタログが拒否する言語が {count} 件表示されています。",
+      "driftBody": "{names} — これらを選択すると「Source language is not supported.」というエラーになります。該当する行を登録するか、選択肢から外してください。",
+      "columns": {
+        "code": "コード",
+        "name": "名前",
+        "native": "現地語表記",
+        "rooms": "ルーム",
+        "inThisApp": "このアプリでの対応"
+      },
+      "badgeAllowed": "許可",
+      "badgeOff": "オフ",
+      "shippedOffered": "提供中",
+      "shippedKnown": "認識のみ",
+      "shippedAsCode": "コードのまま表示",
+      "footnote": "これは <code1>translation_room.supported_languages</code1> であり、ルームの検証が参照するテーブルです。<code2>platform.supported_languages</code2> ではありません。こちらはシード スクリプトが今も書き込んでいますが、マイグレーション036以降どこからも検証されていません。"
+    },
+    "voiceConsent": {
+      "errorWhat": "音声同意データ",
+      "nobodyAsked": "まだ誰にも音声クローンの同意を求めていません。",
+      "peopleCurrentDecision": "人・現在の決定",
+      "liveGrantsHeading": "同意した文言ごとの有効な許可件数",
+      "current": "最新",
+      "superseded": "旧版",
+      "outdatedNotice": "その後差し替えられた文言のもとで得られた有効な同意が {count} 件あります。同意はその時点の文言に対して有効なままです — これは、変更が重大な場合に再確認すべき件数です。"
+    }
+  },
+  "pricingEditors": {
+    "planForm": {
+      "sections": {
+        "identity": "基本情報",
+        "price": "価格",
+        "creditsOverage": "クレジットと超過分",
+        "invoicing": "請求",
+        "limits": "上限",
+        "entitlements": "権限"
+      },
+      "fields": {
+        "name": "名前",
+        "slug": "スラッグ",
+        "slugHint": "小文字、数字、ハイフンのみ。",
+        "tier": "ティア",
+        "sortOrder": "並び順",
+        "sortOrderHint": "価格ページ上での表示位置。",
+        "active": "有効",
+        "activeHint": "非表示にしたプランも過去の請求書には残ります。プランを運用終了するにはこの方法を使います — 削除機能はありません。",
+        "price": "価格",
+        "currency": "通貨",
+        "billingCycle": "請求サイクル",
+        "billingCycleHint": "月次のみ — 更新用エンドポイントは他の値を受け付けません。",
+        "creditsPerCycle": "サイクルあたりのクレジット数",
+        "overageCap": "超過上限（クレジット）",
+        "overageCapHint": "0の場合、そのプランは超過を許可しません。",
+        "overagePrice": "超過クレジットあたりの価格",
+        "lowBalance": "残高低下しきい値",
+        "lowBalanceHint": "超過上限より高い値にしてください。そうしないと、課金が始まってから警告が出ることになります。",
+        "rolloverCap": "繰越上限（クレジット）",
+        "invoiceTerms": "支払期限（日）",
+        "invoiceGrace": "猶予期間（時間）",
+        "maxParticipants": "最大参加人数",
+        "maxLanguages": "最大言語数",
+        "maxLanguagesHint": "1から3の間で指定します。",
+        "voiceCloning": "音声クローン",
+        "aiAssistant": "AIアシスタント",
+        "glossary": "用語集",
+        "dedicatedGpu": "専用GPU",
+        "features": "機能",
+        "featuresHint": "価格ページが読み取るJSONデータです。配列またはオブジェクトを指定します。"
+      },
+      "editDialog": {
+        "title": "プランを編集",
+        "description": "保存するとプラン全体が置き換わります。加入中のメンバーはサブスクリプションを維持したまま、新しい条件は次のサイクルから適用されます。"
+      },
+      "createDialog": {
+        "title": "新規プラン",
+        "description": "カタログに新しい項目を作成します。サブスクリプションが移行されるか、チェックアウトで購入されるまでは誰も加入しません。準備段階として非表示のままにしておくこともできます。"
+      },
+      "cancel": "キャンセル",
+      "save": "プランを保存",
+      "saving": "保存中…",
+      "saveError": "プランを保存できませんでした。"
+    },
+    "rateCard": {
+      "editDialog": {
+        "title": "料金カードを編集",
+        "description": "この単位の販売価格と提供コストです。課金種別・プロバイダー・モデルはカードの識別情報であり、ここでは再入力できません — 新しい課金識別情報は、それを登録するマイグレーションによってのみ追加されます。"
+      },
+      "perUnit": "{unit} あたり",
+      "fields": {
+        "unitPrice": "単価",
+        "currency": "通貨",
+        "providerCost": "プロバイダーコスト（USD）",
+        "providerCostHint": "空欄はコストが未記録であることを意味します。0とは異なります。",
+        "markup": "マークアップ倍率",
+        "markupHint": "利益率列に表示される値です。空欄にすると自動算出されるか、未確定のままになります。",
+        "active": "有効",
+        "activeHint": "無効なカードは新規の課金対象にはなりません。行自体は、それを使った請求書のために残ります。"
+      },
+      "preview": {
+        "heading": "価格プレビュー",
+        "hintReady": "保存済みの為替レートとクレジット単価をもとに、このコストとマークアップで1単位分の価格を試算します。何も公開されません。",
+        "hintNotReady": "プレビューするにはプロバイダーコストとマークアップの両方を入力してください。",
+        "button": "プレビュー",
+        "pricing": "計算中…",
+        "creditsPerUnit": "単位あたりのクレジット",
+        "customerPrice": "顧客価格",
+        "providerCost": "プロバイダーコスト",
+        "margin": "利益率",
+        "formulaLine": "{formula} ・ 為替 {fx} ・ クレジット単価 {credit} VND",
+        "vndSuffix": "（VND）"
+      },
+      "errors": {
+        "previewStale": "プレビュー後にコストまたはマークアップが変更されました。保存する前にもう一度プレビューしてください。",
+        "previewRequired": "コストまたはマークアップの変更を保存する前に、新しい価格をプレビューしてください。",
+        "unitPriceInvalid": "単価は正の数で入力してください。",
+        "providerCostInvalid": "プロバイダーコストはUSDの正の数で入力するか、空欄にしてください。",
+        "markupInvalid": "マークアップ倍率は0より大きい値にするか、空欄にしてください。",
+        "saveFailed": "料金カードを保存できませんでした。",
+        "previewFailed": "価格プレビューを計算できませんでした。"
+      },
+      "cancel": "キャンセル",
+      "save": "料金カードを保存",
+      "saving": "保存中…"
+    },
+    "deactivate": {
+      "title": "この料金カードを無効化しますか？",
+      "description": "無効化すると即座に新規利用への価格設定が停止し、この一覧から外れます — この画面から再度有効化することはできません。この識別情報に対応する新しい料金が公開されるまで、対象となる利用分は課金されません。確定済みの請求がこの行を参照しているため、行自体は残ります。",
+      "confirmLabel": "確認のため {chargeType} と入力してください",
+      "back": "戻る",
+      "confirm": "無効化",
+      "deactivating": "無効化中…",
+      "error": "料金カードを無効化できませんでした。"
+    },
+    "config": {
+      "dialog": {
+        "title": "価格設定を編集",
+        "description": "プラットフォーム全体に適用されます。すべてのプランはこれらの下限値・レートに基づいて検証され、すべての見積もりもここから作成されるため、ここでの変更によって既存プランが次回編集時に無効になる可能性があります。"
+      },
+      "fields": {
+        "fxRateUsdVnd": { "label": "為替レート USD→VND", "hint": "USD建てのプロバイダーコストをVNDとして読み取る際に使用します。" },
+        "creditValueVnd": { "label": "クレジット単価（VND）" },
+        "minimumPricePerCreditVnd": {
+          "label": "クレジットあたりの最低価格（VND）",
+          "hint": "VND建てプランの「価格 ÷ クレジット数」がこの値を下回っていないか確認する下限です。"
+        },
+        "minimumContractPriceVnd": { "label": "最低契約価格（VND）" },
+        "minimumContractPriceUsd": { "label": "最低契約価格（USD）" },
+        "salesUsageWeight": { "label": "販売ウェイト・利用量" },
+        "salesMembersWeight": { "label": "販売ウェイト・メンバー数" },
+        "salesLanguagesWeight": { "label": "販売ウェイト・言語数" },
+        "salesAiServicesWeight": { "label": "販売ウェイト・AIサービス" },
+        "defaultOverageCapRatio": { "label": "デフォルトの超過上限比率" },
+        "defaultInvoiceTermsDays": { "label": "デフォルトの請求書支払期限（日）" },
+        "defaultInvoiceGraceHours": { "label": "デフォルトの請求書猶予期間（時間）" }
+      },
+      "cancel": "キャンセル",
+      "save": "設定を保存",
+      "saving": "保存中…",
+      "numberError": "{label}は数値で入力してください。",
+      "negativeError": "{label}に負の値は指定できません。",
+      "saveError": "価格設定を保存できませんでした。"
+    }
+  }
+}

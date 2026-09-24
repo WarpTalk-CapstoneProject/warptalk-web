@@ -9,6 +9,7 @@ import { authService } from "@/services/auth.service";
 import { Input } from "@/components/ui/input";
 import { Spinner, PencilSimple } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -25,6 +26,7 @@ import { LanguageLabel } from "@/components/language/language-label";
 import { describeTimeZone, isSameTimeZone } from "@/lib/format/time-zones";
 
 export default function SettingsPage() {
+  const t = useTranslations("settingsProfile");
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -36,10 +38,10 @@ export default function SettingsPage() {
   } = useWorkspaceStore();
   const displayRole = role
     ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}`
-    : "Member";
+    : t("workspaceAccess.roleFallback");
   const displayMembershipType = membershipType
     ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-    : "Internal";
+    : t("workspaceAccess.membershipTypeFallback");
 
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -68,9 +70,9 @@ export default function SettingsPage() {
     try {
       const { data } = await authService.uploadAvatar(file);
       setStoredUser(data);
-      toast.success("Profile picture updated.");
+      toast.success(t("toasts.avatarUpdated"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not update your profile picture."));
+      toast.error(getErrorMessage(error, t("toasts.avatarUpdateFailed")));
     } finally {
       setAvatarUploading(false);
     }
@@ -129,14 +131,14 @@ export default function SettingsPage() {
           loadedUserRef.current = userId;
         }
       } catch {
-        toast.error("Failed to load user profile");
+        toast.error(t("toasts.loadFailed"));
       } finally {
         setLoading(false);
       }
     }
 
     loadProfile();
-  }, [mounted, isAuthenticated, user]);
+  }, [mounted, isAuthenticated, user, t]);
 
   const saveProfile = useCallback(async (patch: UpdateProfileRequest) => {
     const { data } = await authService.updateProfile(patch);
@@ -153,7 +155,7 @@ export default function SettingsPage() {
     save: saveProfile,
     onError: (error) => {
       const errorMsg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to update profile";
+        || t("toasts.saveFailed");
       setProfileError(errorMsg);
       toast.error(errorMsg);
     },
@@ -167,7 +169,7 @@ export default function SettingsPage() {
   const queueProfileField = (field: keyof UpdateProfileRequest, value: string) => {
     const normalizedValue = field === "fullName" || field === "phone" ? value.trim() : value;
     if (field === "fullName" && !normalizedValue) {
-      setProfileError("Full name is required");
+      setProfileError(t("toasts.fullNameRequired"));
       return;
     }
     setProfileError(null);
@@ -205,11 +207,11 @@ export default function SettingsPage() {
     <div className="w-full max-w-2xl mx-auto py-8 px-4 flex flex-col gap-8 text-ink">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
-        <h1 className="text-xl font-bold tracking-tight text-ink">Profile</h1>
+        <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
         <AutoSaveStatusBadge
           status={profileError ? "error" : autoSave.status}
           invalid={Boolean(profileError)}
-          onRetry={profileError === "Full name is required" ? undefined : retryProfileSave}
+          onRetry={profileError === t("toasts.fullNameRequired") ? undefined : retryProfileSave}
         />
       </div>
 
@@ -222,7 +224,7 @@ export default function SettingsPage() {
             {/* Profile Picture */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Profile picture</span>
+                <span className="text-xs font-semibold text-ink">{t("avatar.label")}</span>
               </div>
               <div className="flex items-center gap-3">
                 <Avatar className="size-8 rounded-full border border-border">
@@ -253,7 +255,7 @@ export default function SettingsPage() {
                   disabled={avatarUploading}
                   onClick={() => avatarInputRef.current?.click()}
                 >
-                  {avatarUploading ? "Uploading…" : user?.avatarUrl ? "Change" : "Upload"}
+                  {avatarUploading ? t("avatar.uploading") : user?.avatarUrl ? t("avatar.change") : t("avatar.upload")}
                 </Button>
               </div>
             </div>
@@ -261,7 +263,7 @@ export default function SettingsPage() {
             {/* Email Address */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Email</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.email.label")}</span>
               </div>
               <div className="relative flex items-center w-[160px] md:w-[240px]">
                 <Input
@@ -271,7 +273,7 @@ export default function SettingsPage() {
                   disabled
                   className="h-8 text-xs bg-surface-2/20 border-hairline font-mono opacity-60 w-full pr-8"
                 />
-                <span className="absolute right-2.5 text-ink-muted/50 cursor-not-allowed" title="Email cannot be changed">
+                <span className="absolute right-2.5 text-ink-muted/50 cursor-not-allowed" title={t("fields.email.cannotChange")}>
                   <PencilSimple size={12} />
                 </span>
               </div>
@@ -280,7 +282,7 @@ export default function SettingsPage() {
             {/* Full Name */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Full name</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.fullName.label")}</span>
               </div>
               {/*
                 WT-550. The message belongs in the input's OWN column, not beside it.
@@ -294,7 +296,7 @@ export default function SettingsPage() {
               <div className="flex w-[160px] shrink-0 flex-col items-end gap-1 md:w-[240px]">
                 <Input
                   id="fullName"
-                  placeholder="Your full name"
+                  placeholder={t("fields.fullName.placeholder")}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   onBlur={(e) => commitTextField("fullName", e.currentTarget.value)}
@@ -305,10 +307,10 @@ export default function SettingsPage() {
                       e.currentTarget.blur();
                     }
                   }}
-                  aria-invalid={profileError === "Full name is required"}
+                  aria-invalid={profileError === t("toasts.fullNameRequired")}
                   className="h-8 w-full text-xs bg-surface-2 border-hairline focus-visible:ring-1 focus-visible:ring-primary"
                 />
-                {profileError === "Full name is required" && (
+                {profileError === t("toasts.fullNameRequired") && (
                   <span className="w-full text-right text-[11px] text-destructive">
                     {profileError}
                   </span>
@@ -319,11 +321,11 @@ export default function SettingsPage() {
             {/* Phone Number */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Phone number</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.phone.label")}</span>
               </div>
               <Input
                 id="phone"
-                placeholder="e.g. +84 987654321"
+                placeholder={t("fields.phone.placeholder")}
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 onBlur={(e) => commitTextField("phone", e.currentTarget.value)}
@@ -341,7 +343,7 @@ export default function SettingsPage() {
             {/* Preferred language */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Preferred language</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.preferredLanguage.label")}</span>
               </div>
               <Select
                 value={preferredLanguage}
@@ -355,7 +357,7 @@ export default function SettingsPage() {
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px]">
                   <SelectValue>
                     {(value) =>
-                      value ? <LanguageLabel value={String(value)} /> : "Select language"
+                      value ? <LanguageLabel value={String(value)} /> : t("fields.preferredLanguage.placeholder")
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -372,7 +374,7 @@ export default function SettingsPage() {
             {/* Timezone */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Timezone</span>
+                <span className="text-xs font-semibold text-ink">{t("fields.timezone.label")}</span>
               </div>
               <Select
                 value={timezone}
@@ -385,7 +387,7 @@ export default function SettingsPage() {
               >
                 <SelectTrigger className="h-8 text-xs bg-surface-2 border-hairline w-[160px] md:w-[240px]">
                   <SelectValue>
-                    {(value) => (value ? describeTimeZone(String(value)) : "Select timezone")}
+                    {(value) => (value ? describeTimeZone(String(value)) : t("fields.timezone.placeholder"))}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -404,23 +406,23 @@ export default function SettingsPage() {
         {/* Section 2: Workspace Access */}
         <div className="flex flex-col gap-3">
           <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
-            Workspace access
+            {t("workspaceAccess.sectionTitle")}
           </div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <span className="text-xs font-semibold text-ink">Workspace</span>
+              <span className="text-xs font-semibold text-ink">{t("workspaceAccess.workspace")}</span>
               <span className="max-w-[240px] truncate text-xs font-medium text-ink-muted">
-                {activeWorkspaceName || "Current workspace"}
+                {activeWorkspaceName || t("workspaceAccess.workspaceFallback")}
               </span>
             </div>
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <span className="text-xs font-semibold text-ink">Workspace role</span>
+              <span className="text-xs font-semibold text-ink">{t("workspaceAccess.role")}</span>
               <span className="rounded-[4px] border border-hairline bg-surface-2 px-2 py-1 text-[11px] font-semibold text-ink">
                 {displayRole}
               </span>
             </div>
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
-              <span className="text-xs font-semibold text-ink">Membership type</span>
+              <span className="text-xs font-semibold text-ink">{t("workspaceAccess.membershipType")}</span>
               <span className="rounded-[4px] border border-primary/20 bg-primary/5 px-2 py-1 text-[11px] font-semibold text-primary">
                 {displayMembershipType}
               </span>

@@ -1,0 +1,137 @@
+{
+  "filters": {
+    "all": "すべて",
+    "owner": "オーナー",
+    "admin": "管理者",
+    "member": "メンバー",
+    "invited": "招待済み",
+    "requested": "リクエスト"
+  },
+  "roleLabels": {
+    "owner": "オーナー",
+    "admin": "管理者",
+    "member": "メンバー"
+  },
+  "search": {
+    "placeholder": "メンバーを検索...",
+    "ariaLabel": "メンバーを検索"
+  },
+  "toolbar": {
+    "memberFiltersTitle": "メンバーの絞り込み",
+    "peopleCountTitle": "{count}人",
+    "exporting": "エクスポート中...",
+    "exportButton": "エクスポート (.xlsx)",
+    "inviteNewMember": "新しいメンバーを招待"
+  },
+  "table": {
+    "name": "名前",
+    "role": "役割",
+    "membershipType": "メンバーシップ種別",
+    "status": "ステータス",
+    "hostMeetings": "会議の主催",
+    "actions": "操作"
+  },
+  "you": "あなた",
+  "externalRoleFixedTitle": "外部メンバーは常にメンバー役割です — 変更できません。",
+  "accessTypeAria": "{email}のアクセス種別",
+  "membershipOptions": {
+    "internal": "内部",
+    "external": "外部"
+  },
+  "statusLabels": {
+    "requested": "リクエスト済み",
+    "leaving": "退出中",
+    "invited": "招待済み",
+    "joined": "参加済み"
+  },
+  "leaveRequestPendingTitle": "このメンバーは退出をリクエストしており、あなたの回答を待っています。",
+  "pendingLoadFailed": "保留中の招待と参加リクエストを読み込めなかったため、このリストには参加済みメンバーのみが表示されています。",
+  "empty": {
+    "invitedTitle": "保留中の招待はありません",
+    "invitedDescription": "「新しいメンバーを招待」から送信してください。",
+    "requestedTitle": "保留中のリクエストはありません",
+    "requestedDescription": "このワークスペースへの参加リクエストと退出リクエストがここに表示されます。",
+    "defaultTitle": "該当するメンバーが見つかりません",
+    "defaultDescription": "検索キーワードやフィルターを調整してみてください。"
+  },
+  "actions": {
+    "approveLeaveRequestTitle": "退出リクエストを承認",
+    "approveLeaveRequestAria": "{name}さんの退出リクエストを承認",
+    "rejectLeaveRequestTitle": "退出リクエストを却下",
+    "rejectLeaveRequestAria": "{name}さんの退出リクエストを却下",
+    "removeFromWorkspaceTitle": "ワークスペースから削除",
+    "removeFromWorkspaceAria": "{name}をワークスペースから削除",
+    "revokeInvitationTitle": "招待を取り消す",
+    "revokeInvitationAria": "{email}への招待を取り消す",
+    "approveJoinRequestTitle": "参加リクエストを承認",
+    "rejectJoinRequestTitle": "参加リクエストを却下",
+    "approveAriaJoin": "{email}からの参加リクエストを承認",
+    "approveAriaLeave": "{email}からの退出リクエストを承認",
+    "rejectAriaJoin": "{email}からの参加リクエストを却下",
+    "rejectAriaLeave": "{email}からの退出リクエストを却下",
+    "leaveWorkspaceTitle": "ワークスペースからの退出をリクエスト",
+    "leave": "退出"
+  },
+  "pagination": {
+    "previous": "前へ",
+    "next": "次へ",
+    "page": "ページ {page}"
+  },
+  "removeDialog": {
+    "title": "メンバーを削除しますか？",
+    "description": "<name></name>を削除してもよろしいですか？このワークスペース内のすべての会議、ドキュメント、文字起こしへのアクセス権が即座に失われます。",
+    "cancel": "キャンセル",
+    "confirm": "削除"
+  },
+  "revokeDialog": {
+    "title": "招待を取り消しますか？",
+    "description": "<email></email>への招待を取り消すと完全に削除されます。このメールアドレスでは招待を承諾できなくなります。",
+    "cancel": "キャンセル",
+    "confirm": "取り消す"
+  },
+  "leaveDialog": {
+    "title": "ワークスペースからの退出をリクエストしますか？",
+    "description": "<name></name>からの退出リクエストは、ワークスペース管理者の承認のために送信されます。",
+    "cancel": "キャンセル",
+    "confirm": "リクエストを送信",
+    "submitting": "送信中..."
+  },
+  "toasts": {
+    "exportSuccess": "メンバーリストのエクスポートに成功しました！",
+    "exportFailed": "メンバーリストのエクスポートに失敗しました。",
+    "permissionUpdated": "会議主催権限を更新しました。",
+    "permissionUpdateFailed": "会議権限の更新に失敗しました",
+    "memberRemoved": "{name}を削除しました。",
+    "removeFailed": "メンバーの削除に失敗しました",
+    "leaveRequestSubmitted": "退出リクエストを送信しました。管理者/オーナーの承認をお待ちください。",
+    "leaveRequestFailed": "退出リクエストの送信に失敗しました。",
+    "invitationRevoked": "{email}への招待を取り消しました。",
+    "revokeFailed": "招待の取り消しに失敗しました",
+    "leaveRequestApproved": "退出リクエストを承認しました。",
+    "leaveApproveFailed": "退出リクエストの承認に失敗しました",
+    "leaveRequestRejected": "退出リクエストを却下しました。",
+    "leaveRejectFailed": "退出リクエストの却下に失敗しました",
+    "memberApprovedEmailFailed": "メンバーを承認しましたが、承認メールの送信に失敗しました。",
+    "joinRequestApproved": "参加リクエストを承認し、メールを送信しました。",
+    "approveFailed": "参加リクエストの承認に失敗しました",
+    "joinRequestRejected": "参加リクエストを却下しました。",
+    "rejectFailed": "参加リクエストの却下に失敗しました"
+  },
+  "export": {
+    "columns": {
+      "fullName": "氏名",
+      "email": "メール",
+      "role": "役割",
+      "membershipType": "メンバーシップ種別",
+      "status": "ステータス",
+      "date": "日付",
+      "hostMeetingsPermission": "会議主催権限"
+    },
+    "notApplicable": "該当なし",
+    "defaultRole": "メンバー",
+    "defaultMembershipType": "内部",
+    "yes": "はい",
+    "no": "いいえ",
+    "workspaceFallback": "ワークスペース"
+  }
+}

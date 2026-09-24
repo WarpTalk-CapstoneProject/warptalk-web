@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Check, Prohibit } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -9,6 +12,13 @@ import { cn } from "@/lib/utils";
 import type { MeetingTimeState } from "@/types/myMeetings";
 
 export { meetingStateLabel };
+
+/** Bridges `meetingStateLabel`'s optional translator to the `schedules` catalog's `states.*` keys. */
+export function useMeetingStateLabel() {
+  const t = useTranslations("schedules");
+  return (meeting: { status: string; timeState: MeetingTimeState }) =>
+    meetingStateLabel(meeting, (state) => t(`states.${state}`));
+}
 
 /**
  * A meeting's state as one small glyph — the Agenda row's only colour, and the Month chip's.
@@ -38,14 +48,15 @@ export function MeetingStateIcon({
   className?: string;
 }) {
   const state = meetingDisplayState(meeting);
+  const label = useMeetingStateLabel();
   const a11y = labelled
-    ? { role: "img" as const, "aria-label": meetingStateLabel(meeting) }
+    ? { role: "img" as const, "aria-label": label(meeting) }
     : { "aria-hidden": true as const };
 
   return (
     <span
       {...a11y}
-      title={labelled ? meetingStateLabel(meeting) : undefined}
+      title={labelled ? label(meeting) : undefined}
       className={cn("inline-grid shrink-0 place-items-center", className)}
       style={{ width: size, height: size }}
     >

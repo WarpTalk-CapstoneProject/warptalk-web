@@ -16,6 +16,7 @@
  */
 
 import { Spinner } from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -52,6 +53,7 @@ export function TopUpModal({
   onOpenChange: (open: boolean) => void;
   workspaceId: string;
 }) {
+  const t = useTranslations("settingsBillingUsage");
   const user = useAuthStore((state) => state.user);
   const [credits, setCredits] = useState<number>(TOP_UP_PACKAGES[0]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -66,7 +68,7 @@ export function TopUpModal({
     // workspace; without one there is nothing to charge, and saying so beats sending an id that
     // passes every validation and then fails on a foreign key inside the webhook.
     if (!workspaceId) {
-      toast.error("Open a workspace before buying credits — credits belong to a workspace.");
+      toast.error(t("topUpModal.noWorkspaceError"));
       return;
     }
 
@@ -82,7 +84,7 @@ export function TopUpModal({
       });
       if (url) window.location.assign(url);
     } catch {
-      toast.error("Failed to start checkout. Please try again.");
+      toast.error(t("topUpModal.checkoutFailed"));
     } finally {
       setIsProcessing(false);
     }
@@ -92,9 +94,9 @@ export function TopUpModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[460px] rounded-[14px] border-border bg-surface-1 p-0 shadow-none">
         <DialogHeader className="px-5 pt-5">
-          <DialogTitle className="text-[16px] font-semibold text-ink">Buy credits</DialogTitle>
+          <DialogTitle className="text-[16px] font-semibold text-ink">{t("topUpModal.title")}</DialogTitle>
           <DialogDescription className="text-[12px] text-ink-muted">
-            Credits are added to this workspace as soon as the payment clears.
+            {t("topUpModal.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,7 +132,7 @@ export function TopUpModal({
               htmlFor="topup-credits"
               className="text-[12px] font-medium text-ink-muted"
             >
-              Or enter an amount
+              {t("topUpModal.orEnterAmount")}
             </label>
             <Input
               id="topup-credits"
@@ -140,26 +142,28 @@ export function TopUpModal({
               onChange={(event) =>
                 setCredits(Math.max(0, parseInt(event.target.value, 10) || 0))
               }
-              placeholder={`${TOP_UP_MINIMUM_CREDITS.toLocaleString()} minimum`}
+              placeholder={t("topUpModal.minimumPlaceholder", { min: TOP_UP_MINIMUM_CREDITS.toLocaleString() })}
               className="mt-1.5 h-9 rounded-[8px] border-border bg-surface-1 text-[13px] shadow-none"
             />
           </div>
 
           <Section className="mt-4 bg-surface-2/40">
             <RowGroup>
-              <Row label="Credits" value={formatAmount(credits)} />
+              <Row label={t("topUpModal.credits")} value={formatAmount(credits)} />
               <Row
-                label="Estimated total"
+                label={t("topUpModal.estimatedTotal")}
                 value={formatMoney(estimate, "VND")}
-                hint="The final amount is priced by the server at checkout."
+                hint={t("topUpModal.estimatedHint")}
               />
             </RowGroup>
           </Section>
 
           {belowMinimum ? (
             <p className="mt-3 text-[12px] text-amber-500">
-              The minimum is {formatAmount(TOP_UP_MINIMUM_CREDITS)} credits — Stripe refuses a
-              charge below {formatMoney(TOP_UP_MINIMUM_CREDITS * DOCUMENTED_VND_PER_CREDIT, "VND")}.
+              {t("topUpModal.belowMinimum", {
+                min: formatAmount(TOP_UP_MINIMUM_CREDITS),
+                amount: formatMoney(TOP_UP_MINIMUM_CREDITS * DOCUMENTED_VND_PER_CREDIT, "VND"),
+              })}
             </p>
           ) : null}
 
@@ -172,10 +176,10 @@ export function TopUpModal({
             {isProcessing ? (
               <>
                 <Spinner className="h-3.5 w-3.5 animate-spin" />
-                Starting checkout…
+                {t("topUpModal.startingCheckout")}
               </>
             ) : (
-              "Continue to payment"
+              t("topUpModal.continueToPayment")
             )}
           </BillingButton>
         </div>

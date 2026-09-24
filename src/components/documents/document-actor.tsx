@@ -1,9 +1,11 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import { UserChip } from "@/components/user/user-chip";
 
 interface DocumentActorProps {
-  label: "Uploader" | "Approver";
+  kind: "uploader" | "approver";
   /**
    * Null when there is nobody to name — the actor left the workspace, or is past the page of
    * members the caller fetched. Both are normal, and the `!member` branch below is the whole
@@ -18,10 +20,13 @@ interface DocumentActorProps {
   } | null;
 }
 
-export function DocumentActor({ label, member }: DocumentActorProps) {
+export function DocumentActor({ kind, member }: DocumentActorProps) {
+  const t = useTranslations("documents.grid");
+  const label = t(kind);
+
   if (!member) {
     return (
-      <span className="text-[10px] text-ink-muted" title={`${label} unavailable`}>
+      <span className="text-[10px] text-ink-muted" title={t("unavailable", { label })}>
         {label}: —
       </span>
     );

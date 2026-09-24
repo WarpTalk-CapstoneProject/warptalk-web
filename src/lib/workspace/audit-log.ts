@@ -37,12 +37,31 @@ function humanize(value: string) {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
-export function auditActionLabel(action: string) {
-  return ACTION_LABELS[action] ?? humanize(action);
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type AuditLogTranslator = (key: string) => string | undefined;
+
+export function auditActionLabel(action: string, t: AuditLogTranslator = () => undefined) {
+  return t(`action.${action}`) ?? ACTION_LABELS[action] ?? humanize(action);
 }
 
-export function auditEntityLabel(entityType: string) {
-  return ENTITY_LABELS[entityType] ?? humanize(entityType);
+export function auditEntityLabel(entityType: string, t: AuditLogTranslator = () => undefined) {
+  return t(`entity.${entityType}`) ?? ENTITY_LABELS[entityType] ?? humanize(entityType);
+}
+
+/** Translated filter options, same value set and order as the untranslated constants above. */
+export function getAuditActionOptions(t: AuditLogTranslator) {
+  return AUDIT_ACTION_OPTIONS.map((option) => ({
+    value: option.value,
+    label: t(`actionOption.${option.value}`) ?? option.label,
+  }));
+}
+
+export function getAuditEntityOptions(t: AuditLogTranslator) {
+  return AUDIT_ENTITY_OPTIONS.map((option) => ({
+    value: option.value,
+    label: t(`entityOption.${option.value}`) ?? option.label,
+  }));
 }
 
 const DATE_INPUT = /^(\d{4})-(\d{2})-(\d{2})$/;
