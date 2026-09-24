@@ -308,6 +308,8 @@
     "position": "{current} / {total}",
     "dismiss": "閉じる",
     "dontShowAgain": "今後表示しない",
+    "close": "閉じる",
+    "badge": "お知らせ",
     "types": {
       "ANNOUNCEMENT": "お知らせ",
       "FEATURE": "新機能",

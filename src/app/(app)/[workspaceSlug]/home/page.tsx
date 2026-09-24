@@ -21,6 +21,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { MeetingDayPanel } from "@/components/home/meeting-day-panel";
+import { DashboardAnnouncements } from "@/components/announcements/announcement-feeds";
 
 type QuickAction = {
   title: string;
@@ -170,6 +171,10 @@ export default function WorkspaceHomePage() {
         {/* First, because it is the only thing here that answers a question rather than
             offering a destination: "what am I in today?". The shortcut grid below used to be
             the whole page, so the answer took a click to reach. */}
+        {/* Announcements an admin placed on the home page (admin → Announcements → Dashboard
+            card). Renders nothing when there are none. */}
+        <DashboardAnnouncements />
+
         <MeetingDayPanel />
 
         <div className="mt-2">

@@ -308,6 +308,8 @@
     "position": "{current}/{total}",
     "dismiss": "Đóng",
     "dontShowAgain": "Không hiển thị lại",
+    "close": "Đóng",
+    "badge": "Thông báo",
     "types": {
       "ANNOUNCEMENT": "Thông báo",
       "FEATURE": "Tính năng mới",

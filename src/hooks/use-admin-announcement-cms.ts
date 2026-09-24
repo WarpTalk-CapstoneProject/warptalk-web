@@ -2,9 +2,12 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { CMS_AUDIT_KEYS } from "@/hooks/use-cms-audit";
+
 import { adminAnnouncementCmsService } from "@/services/admin-announcement-cms.service";
 import type {
   AdminAnnouncementCmsQuery,
+  AnnouncementBulkAction,
   PublishAnnouncementRequest,
   UpsertAnnouncementRequest,
 } from "@/types/admin-cms";
@@ -13,6 +16,7 @@ export const ADMIN_ANNOUNCEMENT_CMS_KEYS = {
   all: ["admin-announcement-cms"] as const,
   list: (query: AdminAnnouncementCmsQuery) => ["admin-announcement-cms", "list", query] as const,
   detail: (id: string) => ["admin-announcement-cms", "detail", id] as const,
+  analytics: (id: string, days: number) => ["admin-announcement-cms", "analytics", id, days] as const,
 };
 
 export function useAdminAnnouncementCmsList(query: AdminAnnouncementCmsQuery) {
@@ -33,6 +37,15 @@ export function useAdminAnnouncementCms(id: string | undefined) {
   });
 }
 
+export function useAnnouncementAnalytics(id: string | undefined, days: number) {
+  return useQuery({
+    queryKey: ADMIN_ANNOUNCEMENT_CMS_KEYS.analytics(id ?? "", days),
+    queryFn: () => adminAnnouncementCmsService.analytics(id!, days),
+    enabled: Boolean(id),
+    staleTime: 60_000,
+  });
+}
+
 /**
  * Every write invalidates the whole CMS cache and the viewer feed: a publish changes counts on
  * every tab and what the admin themself sees in the app banner.
@@ -45,6 +58,7 @@ function useCmsMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ADMIN_ANNOUNCEMENT_CMS_KEYS.all }),
         queryClient.invalidateQueries({ queryKey: ["announcements", "active"] }),
+        queryClient.invalidateQueries({ queryKey: CMS_AUDIT_KEYS.all }),
       ]),
   });
 }
@@ -79,4 +93,15 @@ export function useDuplicateAnnouncement() {
 
 export function useDeleteAnnouncement() {
   return useCmsMutation((id: string) => adminAnnouncementCmsService.remove(id));
+}
+
+export function useAnnouncementBulk() {
+  return useCmsMutation(({ action, ids }: { action: AnnouncementBulkAction; ids: string[] }) =>
+    adminAnnouncementCmsService.bulk(action, ids),
+  );
+}
+
+/** An image for the hero or the body. Returns a server path; see `assetUrl`. */
+export function useUploadAnnouncementAsset() {
+  return useMutation({ mutationFn: (file: File) => adminAnnouncementCmsService.uploadAsset(file) });
 }
