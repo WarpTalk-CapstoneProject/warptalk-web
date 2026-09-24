@@ -183,7 +183,8 @@ test("the CSV text is RFC 4180 with CRLF", () => {
 const links: AttentionInputs["links"] = {
   health: "/admin/health",
   suspendedWorkspaces: "/admin/workspaces?status=suspended",
-  deadLetters: "/admin/outbox",
+  // The Event outbox page was retired (2026-09-24); the item keeps its count and has no link.
+  deadLetters: null,
   newSalesLeads: "/admin/sales-leads?status=new",
   subscriptions: "/admin/subscriptions",
   workspace: (id) => `/admin/workspaces/${id}`,
@@ -249,6 +250,7 @@ test("needs attention is assembled from every live source, most severe first", (
   assert.equal(result.items[0].detail, "Oldest: Acme Translation Co · 12 days");
   assert.equal(result.items[2].href, "/admin/workspaces?status=suspended");
   assert.equal(result.items[3].detail, "workspace.member_joined · 5 attempts");
+  assert.equal(result.items[3].href, null, "dead letters are counted, not linked");
   assert.equal(result.items[4].detail, "312,400 credits in 24h");
   assert.equal(result.items[4].href, "/admin/workspaces/w1");
 });

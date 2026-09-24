@@ -10,6 +10,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { useAdminPlatformHealth } from "@/hooks/use-admin-platform-health";
 import { cn } from "@/lib/utils";
@@ -473,17 +474,16 @@ function StreamGroupRow({ group }: { group: AdminHealthStreamGroupDto }) {
       </span>
       {/* Zero here means nothing was ever wired to read this group — Redis keeps a consumer
           registered after its process exits, so this cannot report a worker that died. */}
-      <span
-        className={cn(
-          "w-[90px] shrink-0 tabular-nums md:text-right",
-          group.consumers === 0 ? "font-semibold text-amber-600" : "text-ink-muted",
-        )}
-        title={
-          group.consumers === 0 ? t("noConsumerTooltip") : t("consumerSeenTooltip")
-        }
-      >
-        {group.consumers}
-      </span>
+      <Tooltip content={group.consumers === 0 ? t("noConsumerTooltip") : t("consumerSeenTooltip")}>
+        <span
+          className={cn(
+            "w-[90px] shrink-0 tabular-nums md:text-right",
+            group.consumers === 0 ? "font-semibold text-amber-600 dark:text-amber-400" : "text-ink-muted",
+          )}
+        >
+          {group.consumers}
+        </span>
+      </Tooltip>
     </div>
   );
 }

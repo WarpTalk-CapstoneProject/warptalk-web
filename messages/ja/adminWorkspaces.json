@@ -132,7 +132,7 @@
       "membersBilledHint": "利用実績のある個別アカウント数",
       "dailyConsumption": "日次消費量",
       "noBillableUsage": "この期間に課金対象の利用はありません。",
-      "tooltip": "{date} · {credits} cr · {events} イベント",
+      "tooltipEvents": "{events} イベント",
       "byService": "サービス別",
       "nothingBilled": "この期間に課金対象のものはありません。",
       "events": "{count} イベント",
