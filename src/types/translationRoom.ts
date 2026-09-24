@@ -212,6 +212,12 @@ export interface CreateTranslationRoomRequest {
   externalMeetingUrl?: string;
   externalCalendarEventId?: string;
   externalCalendarEventUrl?: string;
+  /**
+   * EXTERNAL_BRIDGE only: what the other side of the external call speaks — the language of the
+   * "External Meeting" stand-in. Omitted, the server takes the first target that is not the
+   * source. See lib/meeting/bridge-far-side-language.ts.
+   */
+  externalMeetingLanguage?: string;
 }
 
 /**
