@@ -1,7 +1,7 @@
 {
   "header": {
-    "title": "Plugin",
-    "subtitle": "Làm việc cùng WarpBot trên các công cụ bạn yêu thích."
+    "title": "Kết nối của tôi",
+    "subtitle": "Các tài khoản của riêng bạn mà WarpBot có thể dùng — kết nối những plugin workspace của bạn cung cấp."
   },
   "search": {
     "placeholder": "Lọc plugin"

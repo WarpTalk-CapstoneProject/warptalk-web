@@ -18,9 +18,13 @@
  * buttons follow it (see `canManageWorkspacePlugins` for a response without it). An Admin gets the
  * same page with every action taken away, including the request buttons and the sidebar's count.
  *
- * TRANSITION: a workspace that never touched this list is still on the old "Allow personal plugins"
- * default, so the server reports every marketplace plugin as added (or none, if the switch was off).
- * The first change here turns that into an explicit list without taking any other plugin away.
+ * TRANSITION: a workspace that never touched this list keeps only the marketplace plugins its
+ * members already use there (none, if the old "Allow personal plugins" switch is off). It used to be
+ * shown EVERY marketplace plugin as "in this workspace", over a list nobody had chosen — the owner
+ * called it fake. The first change here turns what is carried over into an explicit list.
+ *
+ * MANAGE shows who in the workspace has the plugin connected — name, face, when they connected and
+ * when they last used it here — from the server's member endpoint (connection metadata only).
  */
 
 import { useId, useMemo, useState } from "react";
@@ -33,12 +37,14 @@ import {
   SquaresFour,
   Spinner,
   Trash,
+  UsersThree,
   Warning,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -56,6 +62,8 @@ import {
   useRemoveWorkspacePlugin,
   useUpdatePrivatePlugin,
   useWorkspaceMemberNames,
+  useWorkspaceMemberProfiles,
+  useWorkspacePluginMembers,
   useWorkspacePlugins,
 } from "@/hooks/use-workspace-plugins";
 import {
@@ -65,6 +73,7 @@ import {
   privatePluginUpdateRequest,
   validatePrivatePluginDraft,
   workspacePluginFacts,
+  workspacePluginMemberRows,
   workspacePluginSubtitle,
   workspacePluginsTransitionNote,
   type PrivatePluginDraft,
@@ -217,7 +226,9 @@ function RequestRow({
       data-testid="plugin-request-row"
       className="grid grid-cols-[40px_minmax(0,1fr)] items-start gap-3 px-1 py-2.5 sm:grid-cols-[40px_minmax(0,1fr)_auto]"
     >
-      <PluginGlyph plugin={{ label: request.pluginLabel, avatarUrl: request.pluginAvatarUrl }} />
+      <PluginGlyph
+        plugin={{ label: request.pluginLabel, avatarUrl: request.pluginAvatarUrl, pluginKey: request.pluginKey }}
+      />
       <div className="min-w-0">
         <p className="text-sm text-ink">
           <span className="font-semibold">{requesterName}</span>{" "}
@@ -427,8 +438,91 @@ function PrivatePluginForm({
   );
 }
 
+/**
+ * Who in this workspace has the plugin connected: name, face, when they connected, and when they
+ * last used it here. Owner and Admin only — the server refuses anyone else — and it is connection
+ * metadata only: the server never sends a token or the member's account at the provider.
+ */
+function PluginMembersSection({ workspaceId, pluginKey }: { workspaceId: string | null; pluginKey: string }) {
+  const t = useTranslations("workspacePlugins.members");
+  const locale = useLocale();
+  const membersQuery = useWorkspacePluginMembers(workspaceId, pluginKey, true);
+  const userIds = useMemo(() => (membersQuery.data ?? []).map((member) => member.userId), [membersQuery.data]);
+  const profilesQuery = useWorkspaceMemberProfiles(workspaceId, userIds, userIds.length > 0);
+  const rows = workspacePluginMemberRows(membersQuery.data, profilesQuery.data ?? {});
+
+  let body: React.ReactNode;
+  if (membersQuery.isLoading) {
+    body = (
+      <p className="flex items-center gap-2 py-2 text-xs text-ink-muted">
+        <Spinner className="animate-spin" size={14} />
+        {t("loading")}
+      </p>
+    );
+  } else if (membersQuery.isError) {
+    body = (
+      <div className="flex items-center justify-between gap-3 py-1">
+        <span className="text-xs text-destructive">{t("loadError")}</span>
+        <Button type="button" size="sm" variant="ghost" onClick={() => void membersQuery.refetch()}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  } else if (rows.length === 0) {
+    body = <p className="py-2 text-xs text-ink-muted">{t("empty")}</p>;
+  } else {
+    body = (
+      <ul className="flex max-h-[240px] flex-col divide-y divide-hairline overflow-y-auto" data-testid="plugin-members-list">
+        {rows.map((row) => {
+          const name = row.name ?? t("formerMember");
+          return (
+            <li key={row.userId} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 py-2">
+              <Avatar className="size-7 shrink-0 bg-primary/10" title={name}>
+                {/* No <AvatarImage> without a URL: an empty src resolves against the page. */}
+                {row.avatarUrl ? <AvatarImage src={row.avatarUrl} alt="" /> : null}
+                <AvatarFallback className="bg-transparent text-[11px] font-semibold uppercase text-primary">
+                  {name.charAt(0) || "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-ink">{name}</div>
+                <div className="truncate text-xs text-ink-muted">
+                  {t("connectedAgo", { when: timeAgo(row.connectedAt, locale) })}
+                  {" · "}
+                  {row.lastUsedAt
+                    ? t("lastUsedAgo", { when: timeAgo(row.lastUsedAt, locale) })
+                    : t("notUsedHereYet")}
+                </div>
+              </div>
+              {row.connectionStatus === "connected" ? null : (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-muted">
+                  {row.connectionStatus === "expired" ? t("status.expired") : t("status.revoked")}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <section className="mt-5 flex flex-col gap-1" aria-label={t("title")}>
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <UsersThree size={15} />
+          {t("title")}
+        </h3>
+        {rows.length ? <span className="text-xs text-ink-muted">{t("count", { count: rows.length })}</span> : null}
+      </div>
+      {body}
+    </section>
+  );
+}
+
 function ManageDialog({
   plugin,
+  workspaceId,
   workspaceName,
   addedByName,
   canManage,
@@ -439,6 +533,7 @@ function ManageDialog({
   onClose,
 }: {
   plugin: WorkspacePluginItemDto;
+  workspaceId: string | null;
   workspaceName: string;
   addedByName: string | null;
   canManage: boolean;
@@ -466,6 +561,10 @@ function ManageDialog({
           </p>
         </div>
       </div>
+
+      {/* Owner and Admin both reach this dialog (the page refuses everyone else), and both may see
+          who uses a plugin; only the Owner may change it. */}
+      <PluginMembersSection workspaceId={workspaceId} pluginKey={plugin.key} />
 
       {isPrivate && canManage ? (
         <PrivatePluginForm
@@ -841,6 +940,7 @@ export function WorkspacePluginsPage() {
         <ManageDialog
           key={managed.key}
           plugin={managed}
+          workspaceId={workspaceId}
           workspaceName={workspaceName}
           addedByName={pluginAddedByName(managed, memberNames)}
           canManage={canManage}

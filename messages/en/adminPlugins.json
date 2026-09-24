@@ -1,8 +1,8 @@
 {
   "list": {
     "eyebrow": "Configuration",
-    "title": "Plugin catalog",
-    "description": "The marketplace, retired rows included. Workspace owners add these to their workspace; members connect with their own accounts. Private plugins a workspace creates for itself are not listed here.",
+    "title": "Plugin marketplace",
+    "description": "The marketplace every workspace draws from, retired rows included. Workspace owners add these plugins to their workspace; members connect them with their own accounts. Private plugins a workspace creates for itself are not listed here.",
     "refresh": "Refresh",
     "createPlugin": "Create plugin",
     "withMcp": "With MCP",
@@ -30,8 +30,8 @@
       "provider": "Provider",
       "state": "State",
       "oauthClient": "OAuth client",
-      "workspaces": "Workspaces",
-      "installs": "Installs",
+      "workspaces": "Workspaces using it",
+      "installs": "Installed by",
       "tools": "Tools"
     },
     "state": {
@@ -54,7 +54,7 @@
     "missingClientIdExplanation": "This row is marked pre-registered but holds no OAuth client id, so a connect attempt builds a consent URL with an empty client_id and the provider refuses it. Set the client id below.",
     "featuredBadge": "featured",
     "workspaceCount": "{count, plural, =0 {no workspaces} one {# workspace} other {# workspaces}}",
-    "footerNote": "A native row is served by compiled-in code and takes its OAuth client from service configuration, not from the catalog — so this screen can neither set nor vouch for one.",
+    "footerNote": "Workspaces: those whose list holds the plugin, plus those that never edited their list and whose members already use it. Installed by: members who have it installed now. A native row is served by compiled-in code and takes its OAuth client from service configuration, not from the catalog — so this screen can neither set nor vouch for one.",
     "dialog": {
       "title": "Add an MCP app",
       "intro": "The row appears in every user's plugin list as soon as it is saved — no deploy and no restart. It is created as an MCP row that takes its key as its OAuth provider, with no tools: those arrive from the server's own tools/list on the first connect, and can be written by hand from the row's page.",

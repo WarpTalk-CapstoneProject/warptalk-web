@@ -123,6 +123,8 @@
       "notifications": "通知",
       "connectedAccounts": "連携アカウント",
       "sessionsDevices": "セッションとデバイス",
+      "myConnections": "マイ接続",
+      "workspacePlugins": "ワークスペースのプラグイン",
       "plugins": "プラグイン",
       "workspaceSettingsCollapsed": "ワークスペース設定",
       "workspaceSettingsExpanded": "ワークスペース設定",

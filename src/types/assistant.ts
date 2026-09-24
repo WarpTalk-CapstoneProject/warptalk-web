@@ -245,13 +245,28 @@ export interface WorkspacePluginRequestDto {
   decidedAt?: string | null;
 }
 
+/**
+ * GET /assistant/workspaces/{id}/plugins/{key}/members — Owner or Admin. One member who has the
+ * plugin connected. Connection metadata only: no token, no provider account. Name and avatar come
+ * from the workspace's member list (`useWorkspaceMemberProfiles`).
+ */
+export interface WorkspacePluginMemberDto {
+  userId: string;
+  /** `connected`, `expired` or `revoked`. */
+  connectionStatus: "connected" | "expired" | "revoked" | string;
+  connectedAt: string;
+  /** Their last successful tool call through it in this workspace; null when they never made one here. */
+  lastUsedAt?: string | null;
+  toolCallCount: number;
+}
+
 /** GET /assistant/workspaces/{id}/plugins — Owner or Admin. */
 export interface WorkspacePluginsOverviewDto {
   workspaceId: string;
   /**
-   * False while the workspace is still on the pre-marketplace "Allow personal plugins" default:
-   * every marketplace plugin then reads as added (or none does, if the switch was off), and the
-   * Owner's first change turns that into an explicit list.
+   * False while the Owner has never edited the list. Such a workspace has the marketplace plugins
+   * its members already use there (while the old "Allow personal plugins" switch is on) and no
+   * others; the Owner's first change turns that into an explicit list.
    */
   isCurated: boolean;
   /**

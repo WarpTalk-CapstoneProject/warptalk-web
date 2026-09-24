@@ -123,6 +123,8 @@
       "notifications": "Notifications",
       "connectedAccounts": "Connected accounts",
       "sessionsDevices": "Sessions & devices",
+      "myConnections": "My connections",
+      "workspacePlugins": "Workspace plugins",
       "plugins": "Plugins",
       "workspaceSettingsCollapsed": "Workspace settings",
       "workspaceSettingsExpanded": "Workspace Settings",
