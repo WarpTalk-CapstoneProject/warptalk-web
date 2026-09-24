@@ -11,7 +11,6 @@
     "filterAria": "行が有効かどうかでカタログを絞り込む",
     "trailingCount": "{total}件中{visible}件",
     "searchPlaceholder": "表示名、キー、またはプロバイダーで検索",
-    "searchAria": "プラグインカタログを検索",
     "tabs": {
       "all": "すべて",
       "active": "有効",
@@ -122,6 +121,20 @@
         "problemCount": "{count, plural, other {# 個}}の項目に修正が必要です。まだ送信されていません。",
         "success": "{key} がカタログに追加されました。デプロイ不要で、すぐに全ユーザーに反映されます。",
         "errorFallback": "プラグインをカタログに追加できませんでした。"
+      }
+    },
+    "listControls": {
+      "filters": {
+        "kind": "種類",
+        "provider": "プロバイダー",
+        "category": "カテゴリ",
+        "featured": "おすすめ",
+        "oauthClient": "OAuth クライアント ID あり"
+      },
+      "sortFields": {
+        "order": "カタログ順",
+        "label": "名前",
+        "installs": "インストール数"
       }
     }
   },
