@@ -103,10 +103,10 @@ jobs:
           WARPTALK_BACKEND_ROOT: ${{ github.workspace }}/.realtime-contract/warptalk-backend
         run: |
           node .realtime-contract/warptalk-infrastructure/scripts/check-realtime-event-contract.mjs
-      - name: Admin email catalog matches the backend
+      - name: Admin CMS routes and email senders exist on the backend
         env:
           WARPTALK_BACKEND_ROOT: ${{ github.workspace }}/.realtime-contract/warptalk-backend
-        run: node scripts/check-admin-email-catalog.mjs
+        run: node scripts/check-admin-cms-backend.mjs
       # Presence is asked for over the notification hub (QueryPresence). A client->server
       # method name has no emitter/handler pair for the realtime event contract to diff, so
       # this checks every notification-hub invoke against the backend's NotificationHub.
