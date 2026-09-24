@@ -17,6 +17,7 @@ import {
   CaretLeft,
   CaretRight,
   DownloadSimple,
+  Info,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -69,6 +70,7 @@ import {
   type ResolvedInsightsPeriod,
 } from "@/lib/admin/insights-period";
 import { usageServiceOf } from "@/lib/billing/usage-labels";
+import { Tooltip } from "@/components/ui/tooltip";
 import { formatMoney } from "@/lib/format/currency";
 import { downloadBlob } from "@/lib/ui/download-blob";
 import { cn } from "@/lib/utils";
@@ -296,6 +298,34 @@ function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A card's label, with its fine print behind an info icon. The server's notes run to a paragraph
+ * (coverage, pro-rating, FX); printed in the card they pushed every card in the row to their
+ * height. The icon sits inside a card that is itself a link, so a click on it must not navigate.
+ */
+function CardLabel({ label, note }: { label: ReactNode; note?: string | null }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <Eyebrow>{label}</Eyebrow>
+      {note ? (
+        <Tooltip content={note} side="bottom" className="max-w-[320px]">
+          <span
+            role="img"
+            aria-label={note}
+            className="-m-1 inline-flex shrink-0 cursor-help rounded p-1 text-ink-subtle outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <Info size={13} weight="bold" aria-hidden />
+          </span>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
+}
+
 function PeriodCards({ props }: { props: InsightsDashboardProps }) {
   const sources = {
     billing: dataOf(props.billing),
@@ -315,7 +345,7 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             href={metricHref(spec.id)}
             className={cn(state.status === "ready" && state.refreshing && "opacity-60")}
           >
-            <Eyebrow>{spec.label}</Eyebrow>
+            <CardLabel label={spec.label} note={loading ? null : view.note} />
             <div
               className={cn(
                 "mt-2 truncate text-[21px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
@@ -334,7 +364,6 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             {!loading && spec.id === "aiProviderCost" ? (
               <AiCostBasisLine basis={sources.billing?.aiProviderCostBasis} />
             ) : null}
-            {!loading && view.note ? <div className="mt-1.5 text-[11px] text-ink-muted">{view.note}</div> : null}
           </CardShell>
         );
       })}
@@ -680,7 +709,7 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {cards.map((card) => (
           <div key={card.id} className={cn(CARD, state.status === "ready" && state.refreshing && "opacity-60")}>
-            <Eyebrow>{card.label}</Eyebrow>
+            <CardLabel label={card.label} note={loading ? null : card.note} />
             <div
               className={cn(
                 "mt-2 truncate text-[21px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
@@ -696,7 +725,6 @@ function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
                 <span>last period {card.previous}</span>
               </div>
             ) : null}
-            {!loading && card.note ? <div className="mt-1.5 line-clamp-3 text-[11px] text-ink-muted" title={card.note}>{card.note}</div> : null}
           </div>
         ))}
       </div>
