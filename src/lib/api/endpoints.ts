@@ -488,6 +488,12 @@ export const API = {
     deactivate: (id: string) => `/admin/users/${id}/deactivate`,
     reactivate: (id: string) => `/admin/users/${id}/reactivate`,
     unlock: (id: string) => `/admin/users/${id}/unlock`,
+    /**
+     * POST `{ userIds, reason }`. Force sign-out from the admin workspace page — one member or all
+     * of them. Each account gets the same audited revoke as `revokeSessions`, filed under the
+     * workspace in the route so it appears on that workspace's timeline.
+     */
+    workspaceSignOut: (workspaceId: string) => `/admin/users/workspaces/${workspaceId}/revoke-sessions`,
   },
   /** Platform subscription directory and revenue summary (billing service). Read-only. */
   /**
@@ -616,8 +622,13 @@ export const API = {
    */
   adminInvoices: {
     workspace: (workspaceId: string) => `/invoices/workspace/${workspaceId}`,
-    /** POST, no body. Marks the invoice and its payment paid. Idempotent on a paid invoice. */
-    markPaid: (invoiceId: string) => `/invoices/${invoiceId}/mark-paid`,
+    /**
+     * POST `{ reason }`. The audited door to mark-paid: system-admin POLICY (not the role string
+     * the bare `/invoices/{id}/mark-paid` still carries), scoped to the workspace in the route, and
+     * recorded in the platform audit log before the invoice and its payment are settled.
+     */
+    markPaid: (workspaceId: string, invoiceId: string) =>
+      `/admin/billing/workspaces/${workspaceId}/invoices/${invoiceId}/mark-paid`,
   },
   /**
    * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under
@@ -632,6 +643,23 @@ export const API = {
     analytics: (id: string) => `/admin/billing/workspaces/${id}/analytics`,
     creditTransactions: (id: string) => `/admin/billing/workspaces/${id}/credit-transactions`,
   },
+  /**
+   * The admin workspace page's billing half (billing `AdminWorkspaceBillingController`): the money
+   * overview the page leads with, and its money actions. Every write takes a reason and is recorded
+   * in the platform audit log before it is saved.
+   */
+  adminWorkspaceBilling: {
+    /** GET `?from&to` (default the last 30 days): revenue, credits + burn, plan, invoices, AI cost, P&L. */
+    overview: (id: string) => `/admin/billing/workspaces/${id}/overview`,
+    /** POST `{ amount, reason }`. Wired to CreditService; negative deducts; the ledger row is returned. */
+    adjustCredits: (id: string) => `/admin/billing/workspaces/${id}/credits/adjust`,
+    changePlan: (id: string) => `/admin/billing/workspaces/${id}/subscription/change-plan`,
+    extendTrial: (id: string) => `/admin/billing/workspaces/${id}/subscription/extend-trial`,
+    /** POST `{ periods, reason }`. Free months: paid-through date and credits, no invoice. */
+    comp: (id: string) => `/admin/billing/workspaces/${id}/subscription/comp`,
+    /** PUT `{ overrides, reason }`: contract entitlement overrides; null clears a key. */
+    entitlements: (id: string) => `/admin/billing/workspaces/${id}/subscription/entitlements`,
+  },
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
@@ -644,6 +672,13 @@ export const API = {
     // Membership facts only. The knowledge route that used to sit beside these is gone:
     // tenant content stays out of the admin portal (2026-08-17).
     members: (id: string) => `/admin/workspaces/${id}/members`,
+    // The admin workspace page's workspace-service actions. Each is audited; the export is a POST
+    // because it carries a reason and is itself a recorded action.
+    transferOwnership: (id: string) => `/admin/workspaces/${id}/transfer-ownership`,
+    notices: (id: string) => `/admin/workspaces/${id}/notices`,
+    notes: (id: string) => `/admin/workspaces/${id}/notes`,
+    timeline: (id: string) => `/admin/workspaces/${id}/timeline`,
+    export: (id: string) => `/admin/workspaces/${id}/export`,
   },
   /**
    * A workspace's own payments and invoices (billing service; gateway routes `/payments/**` and

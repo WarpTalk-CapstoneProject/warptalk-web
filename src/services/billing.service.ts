@@ -239,12 +239,10 @@ export const billingService = {
     workspaceId: string,
     amount: number,
     reason: string,
-  ): Promise<CreditTransactionDto> => {
-    const { data } = await apiClient.post<CreditTransactionDto>(
-      `/credits/workspace/${workspaceId}/adjust`,
-      { amount, reason },
-    );
-    return data;
+  ): Promise<void> => {
+    // The audited admin route. The old `/credits/workspace/{id}/adjust` authorized off a role string
+    // and wrote nothing to the platform audit log; it is gone.
+    await apiClient.post(API.adminWorkspaceBilling.adjustCredits(workspaceId), { amount, reason });
   },
 
   /**

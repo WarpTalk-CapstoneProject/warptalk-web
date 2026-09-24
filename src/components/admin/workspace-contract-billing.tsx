@@ -66,6 +66,7 @@ import {
   type ContractTermsDraft,
   type ContractTermsValues,
 } from "@/lib/billing/contract-billing";
+import { ADMIN_REASON_MAX, validateReason } from "@/lib/admin/workspace-actions";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { AdminContractSubscriptionDto } from "@/types/admin-contract-billing";
@@ -725,6 +726,7 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
 
       <MarkInvoicePaidDialog
         invoice={settling}
+        workspaceId={workspaceId}
         workspaceName={workspaceName}
         onOpenChange={(open) => {
           if (!open) setSettling(null);
@@ -736,15 +738,17 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
 
 function MarkInvoicePaidDialog({
   invoice,
+  workspaceId,
   workspaceName,
   onOpenChange,
 }: {
   invoice: InvoiceDto | null;
+  workspaceId: string;
   workspaceName: string;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("adminWorkspaces.contractBilling");
-  const markPaid = useMarkAdminInvoicePaid();
+  const markPaid = useMarkAdminInvoicePaid(workspaceId);
 
   return (
     <Dialog open={invoice !== null} onOpenChange={(next) => (markPaid.isPending ? undefined : onOpenChange(next))}>
@@ -756,8 +760,8 @@ function MarkInvoicePaidDialog({
             workspaceName={workspaceName}
             isSaving={markPaid.isPending}
             onCancel={() => onOpenChange(false)}
-            onConfirm={async () => {
-              await markPaid.mutateAsync(invoice.id);
+            onConfirm={async (reason) => {
+              await markPaid.mutateAsync({ invoiceId: invoice.id, reason });
               toast.success(t("toastInvoicePaid", { invoiceNumber: invoice.invoiceNumber }));
               onOpenChange(false);
             }}
@@ -779,19 +783,22 @@ function MarkPaidForm({
   workspaceName: string;
   isSaving: boolean;
   onCancel: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (reason: string) => Promise<void>;
 }) {
   const t = useTranslations("adminWorkspaces.contractBilling");
   const [typed, setTyped] = useState("");
+  // The audit reason — in practice the bank-transfer reference. Required by the server as well.
+  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const matches = invoiceConfirmationMatches(invoice, typed);
+  const reasonOk = validateReason(reason) === null;
   const amount = spellMoney({ amount: invoice.total, currency: invoice.currency });
 
   const handleConfirm = async () => {
-    if (!matches) return;
+    if (!matches || !reasonOk) return;
     try {
       setError(null);
-      await onConfirm();
+      await onConfirm(reason.trim());
     } catch (err) {
       setError(getErrorMessage(err, t("errorMarkPaid")));
     }
@@ -834,6 +841,22 @@ function MarkPaidForm({
           />
         </div>
 
+        <div>
+          <Label htmlFor="mark-paid-reason" className="text-[12px] text-ink-muted">
+            {t("markPaidReasonLabel")} <span className="text-destructive">*</span>
+          </Label>
+          <Textarea
+            id="mark-paid-reason"
+            className="mt-1.5"
+            rows={2}
+            maxLength={ADMIN_REASON_MAX}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder={t("markPaidReasonPlaceholder")}
+            disabled={isSaving}
+          />
+        </div>
+
         <ErrorLine message={error} />
       </div>
 
@@ -841,7 +864,7 @@ function MarkPaidForm({
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
           {t("back")}
         </Button>
-        <Button onClick={() => void handleConfirm()} disabled={!matches || isSaving}>
+        <Button onClick={() => void handleConfirm()} disabled={!matches || !reasonOk || isSaving}>
           <CheckCircle size={14} />
           {isSaving ? t("recording") : t("markPaidWithAmount", { amount })}
         </Button>

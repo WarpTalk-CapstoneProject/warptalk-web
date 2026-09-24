@@ -72,9 +72,16 @@ export const adminContractBillingService = {
     return data;
   },
 
-  /** No body: the endpoint records neither who nor which bank reference. */
-  markInvoicePaid: async (invoiceId: string): Promise<InvoiceDto> => {
-    const { data } = await apiClient.post<InvoiceDto>(API.adminInvoices.markPaid(invoiceId));
-    return data;
+  /**
+   * Settles the invoice through the audited admin route: the reason (typically the bank-transfer
+   * reference) is recorded in the platform audit log before the invoice and its payment are marked
+   * paid. The route names the workspace, so an invoice of another tenant is refused as not found.
+   */
+  markInvoicePaid: async (workspaceId: string, invoiceId: string, reason: string): Promise<InvoiceDto> => {
+    const { data } = await apiClient.post<{ invoice: InvoiceDto }>(
+      API.adminInvoices.markPaid(workspaceId, invoiceId),
+      { reason },
+    );
+    return data.invoice;
   },
 };
