@@ -509,7 +509,7 @@ export default function AdminGlobalGlossaryPage() {
 
           <form
             onSubmit={handleSubmit(handleCreate)}
-            className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
+            className="flex flex-col gap-3 my-2"
           >
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">{t("fields.term")}</label>
@@ -655,7 +655,7 @@ export default function AdminGlobalGlossaryPage() {
 
           <form
             onSubmit={editForm.handleSubmit(handleUpdate)}
-            className="flex flex-col gap-3 my-2 max-h-[60vh] overflow-y-auto pr-1"
+            className="flex flex-col gap-3 my-2"
           >
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold">{t("fields.term")}</label>
