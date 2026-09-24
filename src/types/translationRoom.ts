@@ -72,14 +72,6 @@ export interface TranslationRoomDto {
   externalCalendarEventUrl?: string | null;
   isHost?: boolean;
   /**
-   * WT-703: the languages this finished meeting's summary renderings and minutes translations may
-   * be GENERATED in — its own languages narrowed by the workspace whitelist and the catalog,
-   * exactly what the server will accept. Sent by the room detail read once the meeting is over;
-   * absent or null otherwise, which the pickers read as "not known" (offer everything; the server
-   * still enforces). See artifact-language-options.ts.
-   */
-  artifactLanguages?: { generatable: string[] } | null;
-  /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
    * An occurrence is an ORDINARY meeting in every other respect — its own code, transcript,
    * artifacts and billing — so this is only ever used to say "this repeats" in the UI.
@@ -91,6 +83,25 @@ export interface TranslationRoomDto {
    * mistake "one occurrence of many" for "the whole booking".
    */
   series?: SeriesListSummary | null;
+  /**
+   * WT-703: the languages new post-meeting content (summary renderings, minutes translations)
+   * may be GENERATED in — the meeting's L2 snapshot narrowed by the workspace's current L1
+   * policy and the active catalog, computed server-side in one place and exactly what the
+   * server will accept. Sent by the room detail read once the meeting is over. Reading content
+   * that already exists is never filtered by this.
+   *
+   * - `undefined` — an older backend that does not send the field.
+   * - `null` — the room has not finished yet, or the server could not compute the set.
+   *
+   * See lib/meeting/artifact-language-options.ts for how each of those is read.
+   */
+  artifactLanguages?: RoomArtifactLanguagesDto | null;
+}
+
+/** WT-703: server-computed language set for a finished room's artifacts. */
+export interface RoomArtifactLanguagesDto {
+  /** Language codes new artifact content may be generated in. Never includes "as spoken". */
+  generatable: string[];
 }
 
 /** One Start→Pause (or Start→End) window — "Translation N" in the transcript is this
