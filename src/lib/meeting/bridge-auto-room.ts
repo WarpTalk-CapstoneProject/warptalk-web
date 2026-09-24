@@ -18,8 +18,17 @@
  * WHY THE LANGUAGES ARE RESOLVED HERE
  *   The server refuses a room whose languages the workspace does not allow (403, "... is not
  *   allowed by the workspace policy"), and an automatic create has no form to show that on. So the
- *   defaults are taken from what the user already told us (their settings, then their browser
- *   locale) and narrowed to the workspace's list before the request is sent. The dock can change it.
+ *   host's language is taken from what the user already told us (their settings, then their
+ *   browser locale) and narrowed to the workspace's list before the request is sent. The dock can
+ *   change it.
+ *
+ * AND WHY THE FAR SIDE IS NAMED EXPLICITLY
+ *   The room's second seat — the "External Meeting" stand-in — needs a language that is NOT the
+ *   host's, or there is nothing to translate in either direction. This used to send
+ *   `targetLanguages: [speak, listen]` and let the server seed the stand-in from the first entry,
+ *   which was the host's own language: every automatic room was dead on arrival. The far side is now
+ *   `bridge-far-side-language.ts`'s default, sent as `externalMeetingLanguage` and listed first.
+ *   The popup's "They speak" picker changes it mid-call.
  *
  * Pure, so every rule above is testable without a desktop build.
  */
@@ -27,6 +36,7 @@
 import { extractMeetCodeFromUrl } from "./bridge-trigger.ts";
 import { isExternalBridge, EXTERNAL_BRIDGE_TYPE } from "./meeting-types.ts";
 import { suggestLanguageProfile, normalizeLanguage } from "../language/language-profile.ts";
+import { planBridgeRoomLanguages } from "./bridge-far-side-language.ts";
 
 export interface BridgeAutoRoomCandidate {
   id: string;
@@ -54,7 +64,10 @@ export interface BridgeAutoRoomRequest {
   title: string;
   translationRoomType: typeof EXTERNAL_BRIDGE_TYPE;
   sourceLanguage: string;
+  /** The far side's language first, so a server that predates `externalMeetingLanguage` agrees. */
   targetLanguages: string[];
+  /** What the other side of the call speaks: the stand-in participant's language. */
+  externalMeetingLanguage: string;
   externalProvider: "GOOGLE_MEET";
   externalMeetingUrl: string;
 }
@@ -62,7 +75,15 @@ export interface BridgeAutoRoomRequest {
 export type BridgeAutoRoomPlan =
   | { kind: "wait" }
   | { kind: "reuse"; roomId: string }
-  | { kind: "create"; request: BridgeAutoRoomRequest }
+  | {
+      kind: "create";
+      request: BridgeAutoRoomRequest;
+      /**
+       * False when the workspace allows only the host's language, so both seats share it and the
+       * room will translate nothing. The room is still made; the popup says why.
+       */
+      translatable: boolean;
+    }
   | { kind: "refuse"; reason: string };
 
 const MEET_CODE = /^[a-z]{3,4}-[a-z]{3,4}-[a-z]{3,4}$/;
@@ -102,16 +123,21 @@ export function planBridgeAutoRoom(input: BridgeAutoRoomInput): BridgeAutoRoomPl
   // to languages that exclude English must not be sent English: fall back to its own first language.
   const isAllowed = (language: string) => allowed.length === 0 || allowed.includes(language);
   const speak = isAllowed(profile.speak) ? profile.speak : allowed[0];
-  const listen = isAllowed(profile.listen) ? profile.listen : speak;
+
+  // Not the user's own listen setting: that says what THEY like to hear, which in a bridge room is
+  // their own language (the host hears the far side translated into what they speak). It says
+  // nothing about what the people in this particular call speak.
+  const languages = planBridgeRoomLanguages({ speak, allowedLanguages: allowed });
 
   return {
     kind: "create",
+    translatable: languages.translatable,
     request: {
       title: "Google Meet call",
       translationRoomType: EXTERNAL_BRIDGE_TYPE,
-      sourceLanguage: speak,
-      // The create dialog's shape: the source is one of the targets.
-      targetLanguages: Array.from(new Set([speak, listen])),
+      sourceLanguage: languages.sourceLanguage,
+      targetLanguages: languages.targetLanguages,
+      externalMeetingLanguage: languages.externalMeetingLanguage,
       externalProvider: "GOOGLE_MEET",
       externalMeetingUrl: `https://meet.google.com/${meetCode}`,
     },

@@ -111,6 +111,7 @@ export type BridgeWidgetState = {
    *   hub.invoke("SetSpeakLanguage", roomId, code)
    *   hub.invoke("SetListenLanguage", roomId, code)
    *   hub.invoke("SetVoicePreference", roomId, voiceId)
+   *   hub.invoke("SetExternalMeetingLanguage", roomId, code)   host only: what the far side speaks
    *
    * Null until the first successful start, and again once the connection has closed for good.
    * Invoke only while `connectionState === "live"` — during "reconnecting" the object is still
@@ -144,6 +145,19 @@ export type BridgeWidgetState = {
    * SetListenLanguage / SetSpeakLanguage on `hub` itself. Normalized to a bare code ("vi").
    */
   setReaderLanguage: (code: string) => void;
+
+  /**
+   * What the other side of the external call speaks — the "External Meeting" stand-in's language,
+   * normalized ("en"). Null while the participant read has not answered, or the room has no
+   * stand-in. It is what the host's speech is translated into and what the far side's speech is
+   * translated from; when it equals the host's own language nothing is translated at all.
+   */
+  farSideLanguage: string | null;
+  /**
+   * Record a "They speak" pick in this window, at once. Local only, like `setReaderLanguage`: the
+   * caller invokes `SetExternalMeetingLanguage` on `hub`, which persists it and re-routes.
+   */
+  setFarSideLanguage: (code: string) => void;
 
   /**
    * True once this window has ended the session (t3's End flow calls `markEnded`). The shell then
