@@ -57,6 +57,7 @@ import {
   useLoadAssistantConversation,
   usePluginConnectUrl,
   useSendAssistantMessage,
+  useUpdatePluginToolPolicy,
 } from "@/hooks/use-assistant";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -105,9 +106,11 @@ import { mentionCompletion } from "@/lib/assistant/mention-completion";
 import { parseMessageMentions } from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import {
+  pluginWritesAlwaysAllowed,
   readDisabledPluginKeys,
   togglePluginKey,
   writeDisabledPluginKeys,
+  writeToolPolicyUpdate,
   type KeyValueStore,
 } from "@/lib/assistant/tool-policy";
 import { cn } from "@/lib/utils";
@@ -582,6 +585,19 @@ export function GlobalChatbot() {
     useAssistantPlugins(activeWorkspaceId ?? undefined);
   const installPlugin = useInstallAssistantPlugin();
   const connectPlugin = usePluginConnectUrl();
+  const updateToolPolicy = useUpdatePluginToolPolicy();
+  // Always allow for a whole plugin: its write tools stop showing the Allow / Always allow card.
+  // The catalog refetch the hook triggers brings the resolved choice back to the checkbox.
+  const setPluginAlwaysAllow = async (plugin: AssistantPluginCatalogItemDto, alwaysAllow: boolean) => {
+    try {
+      await updateToolPolicy.mutateAsync({
+        pluginKey: plugin.key,
+        tools: writeToolPolicyUpdate(plugin.tools, alwaysAllow),
+      });
+    } catch {
+      toast.error(t("pluginPermissionSaveFailed", { label: plugin.label }));
+    }
+  };
   const [skillsMenuOpen, setSkillsMenuOpen] = useState(false);
   const [historyMenuOpen, setHistoryMenuOpen] = useState(false);
   // Read through the same helper the Plugins settings page uses, so the Ready/Connect chip below
@@ -2244,6 +2260,7 @@ export function GlobalChatbot() {
                               <ul className="flex flex-col gap-1">
                                 {installedAssistantPlugins.map((plugin) => {
                                   const connected = plugin.connectionStatus === "connected";
+                                  const alwaysAllowed = pluginWritesAlwaysAllowed(plugin.tools);
                                   return (
                                     <li
                                       key={plugin.key}
@@ -2261,6 +2278,18 @@ export function GlobalChatbot() {
                                               ? t("offInThisChat")
                                               : t("connected")}
                                         </div>
+                                        {connected && alwaysAllowed !== null ? (
+                                          <label className="mt-1 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] text-ink-muted">
+                                            <input
+                                              type="checkbox"
+                                              checked={alwaysAllowed}
+                                              disabled={updateToolPolicy.isPending}
+                                              onChange={(event) => void setPluginAlwaysAllow(plugin, event.target.checked)}
+                                              className="size-3 accent-primary"
+                                            />
+                                            {t("alwaysAllowChanges")}
+                                          </label>
+                                        ) : null}
                                       </div>
                                       {connected ? (
                                         // WT-687: on or off for this conversation, as in Claude's

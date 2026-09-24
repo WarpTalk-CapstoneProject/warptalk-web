@@ -208,6 +208,8 @@
     "showPageContext": "Hiện ngữ cảnh trang",
     "attachFiles": "Đính kèm ảnh hoặc tài liệu",
     "offInThisChat": "Đã tắt trong cuộc trò chuyện này",
+    "alwaysAllowChanges": "Luôn cho phép thay đổi",
+    "pluginPermissionSaveFailed": "Không lưu được quyền của WarpBot cho {label}.",
     "sendMessage": "Gửi tin nhắn",
     "thinking": "Đang suy nghĩ...",
     "stillWorking": "Vẫn đang xử lý — việc này mất chút thời gian.",

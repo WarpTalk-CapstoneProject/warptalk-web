@@ -91,6 +91,25 @@ export function trustsAWriteTool(tools: readonly McpToolDescriptorDto[]): boolea
   return tools.some((tool) => tool.effect === "write" && toolPolicyOf(tool) === "allow");
 }
 
+/**
+ * The WarpBot chat's one per-plugin permission: whether this plugin's write tools run without the
+ * Allow / Always allow card. Null when the plugin has no write tools, so there is nothing to ask.
+ */
+export function pluginWritesAlwaysAllowed(tools: readonly McpToolDescriptorDto[]): boolean | null {
+  const writes = tools.filter((tool) => tool.effect === "write");
+  if (writes.length === 0) return null;
+  return writes.every((tool) => toolPolicyOf(tool) === "allow");
+}
+
+/** The tool-policy update that sets every write tool to allow, or back to asking. */
+export function writeToolPolicyUpdate(
+  tools: readonly McpToolDescriptorDto[],
+  alwaysAllow: boolean,
+): Record<string, PluginToolPolicy> {
+  const policy: PluginToolPolicy = alwaysAllow ? "allow" : "approval";
+  return Object.fromEntries(tools.filter((tool) => tool.effect === "write").map((tool) => [tool.name, policy]));
+}
+
 /* ---------------------------------------------------------------------------------------------
  * PLUGINS SWITCHED OFF FOR ONE CONVERSATION (WT-687)
  *
