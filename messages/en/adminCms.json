@@ -1,0 +1,333 @@
+{
+  "common": {
+    "editedBy": "Edited {date} by {name}",
+    "editedAt": "Edited {date}"
+  },
+  "emailTemplates": {
+    "eyebrow": "Operations",
+    "title": "Email templates",
+    "description": "Every email the platform sends. Edit the subject, heading and body; the service that sends it reads your saved version on its next email.",
+    "refresh": "Refresh",
+    "filterAria": "Filter emails",
+    "providersNote": "Auth, workspace and notification emails go out through Resend; meeting emails through SMTP. Both read the saved template.",
+    "filters": {
+      "all": "All",
+      "live": "Live",
+      "dormant": "Dormant",
+      "customized": "Customized"
+    },
+    "error": {
+      "title": "The email templates could not be loaded.",
+      "description": "Check the notification service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "emptyFilter": "No email matches this filter.",
+    "status": {
+      "live": "Live",
+      "dormant": "Dormant",
+      "customized": "Customized · v{version}",
+      "default": "Built-in wording"
+    },
+    "card": {
+      "subject": "Subject",
+      "service": "Sent by",
+      "provider": "Provider",
+      "builtIn": "Using the built-in wording — never edited"
+    },
+    "actions": {
+      "edit": "Edit",
+      "preview": "Preview",
+      "sendTest": "Send test",
+      "sending": "Sending…",
+      "reset": "Reset",
+      "resetDisabled": "Already the built-in wording"
+    },
+    "toasts": {
+      "testSent": "Test email sent to {email}",
+      "testFailed": "The test email could not be sent.",
+      "reset": "“{name}” is back to the built-in wording.",
+      "resetFailed": "The template could not be reset."
+    },
+    "preview": {
+      "description": "Rendered by the server with sample values — exactly what a recipient gets.",
+      "viewAria": "Preview format",
+      "html": "Email",
+      "text": "Plain text",
+      "error": "The preview could not be rendered.",
+      "subject": "Subject"
+    },
+    "resetDialog": {
+      "title": "Reset “{name}” to the built-in wording?",
+      "description": "Senders go back to the default subject and body within about 30 seconds. The customized version stays in the history and can be restored.",
+      "cancel": "Cancel",
+      "confirm": "Reset to default"
+    },
+    "editor": {
+      "back": "Email templates",
+      "notFound": "The platform sends no email by this name.",
+      "loadError": "The email template could not be loaded.",
+      "retry": "Try again",
+      "eyebrow": "{service} · sent via {provider}",
+      "discard": "Discard changes",
+      "resetToDefault": "Reset to default",
+      "sendTest": "Send test to me",
+      "sending": "Sending…",
+      "save": "Save",
+      "saving": "Saving…",
+      "unsaved": "Unsaved changes",
+      "fields": {
+        "subject": "Subject",
+        "heading": "Heading",
+        "body": "Body (HTML)",
+        "bodyHint": "Shown inside the WarpTalk email layout. Values are HTML-escaped when sent.",
+        "note": "Change note (optional)",
+        "notePlaceholder": "What changed and why — shown in the history"
+      },
+      "issuesTitle": "Fix these before saving:",
+      "issues": {
+        "UNKNOWN_VARIABLE": "“{name}” is not a variable this email has.",
+        "MISSING_REQUIRED_VARIABLE": "“{name}” must appear in the email — it is what the email exists to deliver.",
+        "REQUIRED": "The subject and the body are required.",
+        "LINE_BREAK": "The subject must be a single line."
+      },
+      "variables": {
+        "title": "Variables",
+        "description": "Click one to insert it into the {field} at the cursor.",
+        "fields": {
+          "subject": "subject",
+          "heading": "heading",
+          "bodyHtml": "body"
+        },
+        "insert": "Insert at the cursor",
+        "required": "Required",
+        "sample": "Sample: {value}"
+      },
+      "history": {
+        "title": "Version history",
+        "loading": "Loading history…",
+        "empty": "No saved versions yet. The first save starts the history.",
+        "error": "The history could not be loaded.",
+        "load": "Load into editor",
+        "restore": "Restore",
+        "current": "Current",
+        "restored": "Version {version} restored as the current template.",
+        "restoreFailed": "That version could not be restored.",
+        "loaded": "Version {version} loaded into the editor. Save to use it.",
+        "actions": {
+          "SAVED": "Saved",
+          "RESTORED": "Restored v{from}",
+          "RESET": "Reset to default"
+        }
+      },
+      "previewViewAria": "Preview format",
+      "previewHtml": "Email",
+      "previewText": "Plain text",
+      "previewError": "The preview could not be rendered.",
+      "previewTitle": "Email preview",
+      "previewNote": "Live preview of the unsaved draft, rendered by the same code that sends it, filled with sample values.",
+      "toasts": {
+        "saved": "Saved. Senders use it on their next email.",
+        "saveFailed": "The template could not be saved.",
+        "testSent": "Test email sent to {email}",
+        "testFailed": "The test email could not be sent.",
+        "reset": "Back to the built-in wording.",
+        "resetFailed": "The template could not be reset."
+      },
+      "resetDialog": {
+        "title": "Reset to the built-in wording?",
+        "description": "Senders go back to the default subject and body within about 30 seconds. This version stays in the history and can be restored.",
+        "cancel": "Cancel",
+        "confirm": "Reset to default"
+      }
+    }
+  },
+  "announcements": {
+    "eyebrow": "Operations",
+    "title": "Announcements",
+    "description": "News shown inside the app — feature launches, maintenance windows, offers. Draft, preview, publish now or schedule, and archive when it is done.",
+    "inboxBroadcast": "Inbox broadcast",
+    "new": "New announcement",
+    "viewAria": "Announcements or inbox broadcasts",
+    "views": {
+      "cms": "Announcements",
+      "broadcasts": "Inbox broadcasts"
+    },
+    "statusAria": "Filter by status",
+    "statuses": {
+      "ALL": "All",
+      "DRAFT": "Draft",
+      "SCHEDULED": "Scheduled",
+      "PUBLISHED": "Published",
+      "ENDED": "Ended",
+      "ARCHIVED": "Archived"
+    },
+    "searchPlaceholder": "Search titles",
+    "refresh": "Refresh",
+    "error": {
+      "title": "Announcements could not be loaded.",
+      "description": "Check the notification service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No announcements yet",
+      "filteredTitle": "Nothing matches this filter",
+      "description": "Announcements you publish appear at the top of the app for the people they are for."
+    },
+    "pageOf": "Page {page} of {totalPages}",
+    "previous": "Previous",
+    "next": "Next",
+    "audience": {
+      "all": "All users",
+      "plans": "Plans: {plans}",
+      "workspaces": "{count, plural, one {# workspace} other {# workspaces}}"
+    },
+    "window": {
+      "scheduled": "Starts {date}",
+      "liveUntil": "Live until {date}",
+      "liveSince": "Live since {date}",
+      "ended": "Ended {date}",
+      "archived": "Archived {date}",
+      "draftWindow": "Window: {start} → {end}",
+      "onPublish": "on publish",
+      "noEnd": "no end",
+      "notPublished": "Not published yet"
+    },
+    "card": {
+      "audience": "Audience",
+      "window": "Window",
+      "cta": "Button"
+    },
+    "actions": {
+      "edit": "Edit",
+      "preview": "Preview",
+      "publishNow": "Publish now",
+      "schedule": "Schedule…",
+      "unpublish": "Move back to draft",
+      "restore": "Restore to draft",
+      "duplicate": "Duplicate",
+      "archive": "Archive",
+      "delete": "Delete draft",
+      "more": "More actions"
+    },
+    "toasts": {
+      "failed": "That did not work. Try again.",
+      "saved": "Saved.",
+      "published": "Published. It is showing to its audience now.",
+      "scheduled": "Scheduled.",
+      "unpublished": "Moved back to draft. It is no longer shown.",
+      "restored": "Restored to draft.",
+      "duplicated": "Duplicated as a new draft.",
+      "archived": "Archived. It is no longer shown.",
+      "deleted": "Draft deleted."
+    },
+    "deleteDialog": {
+      "title": "Delete this draft?",
+      "description": "“{title}” will be removed permanently. Published announcements cannot be deleted — archive them instead.",
+      "cancel": "Cancel",
+      "confirm": "Delete draft"
+    },
+    "preview": {
+      "title": "Preview as users will see it",
+      "description": "The strip at the top of the app, and the card that opens from “Read more”.",
+      "strip": "Announcement strip",
+      "card": "Read more"
+    },
+    "errors": {
+      "titleRequired": "A title is required.",
+      "titleTooLong": "The title must be 200 characters or fewer.",
+      "bodyRequired": "The body is required.",
+      "bodyTooLong": "The body must be 20,000 characters or fewer.",
+      "plansRequired": "Choose at least one plan.",
+      "workspacesRequired": "Choose at least one workspace.",
+      "tooManyAudience": "Choose 200 plans or workspaces at most.",
+      "labelWithoutLink": "A button label needs a link.",
+      "linkWithoutLabel": "A link needs a button label.",
+      "labelTooLong": "The button label must be 60 characters or fewer.",
+      "linkInvalid": "The link must be an https:// or http:// address, or a path in the app starting with /.",
+      "windowInverted": "The end of the window must be after its start."
+    },
+    "editor": {
+      "back": "Announcements",
+      "notFound": "This announcement does not exist.",
+      "loadError": "The announcement could not be loaded.",
+      "retry": "Try again",
+      "newTitle": "New announcement",
+      "description": "Write it, choose who sees it and when, and check the preview before it goes live.",
+      "save": "Save changes",
+      "saveDraft": "Save draft",
+      "saveAndPublish": "Save & publish now",
+      "archivedNotice": "This announcement is archived and read-only. Restore it to a draft to edit or publish it again.",
+      "fields": {
+        "type": "Type",
+        "title": "Title",
+        "titlePlaceholder": "Live captions now in 40 languages",
+        "body": "Body",
+        "bodyHint": "Markdown: **bold**, lists, links",
+        "bodyPlaceholder": "What changed, who it is for, and what to do next.",
+        "ctaLabel": "Button label (optional)",
+        "ctaLabelPlaceholder": "Try it",
+        "ctaUrl": "Button link",
+        "ctaUrlPlaceholder": "/settings or https://…",
+        "audience": "Who sees it",
+        "window": "When it shows",
+        "windowHint": "Leave the start empty to show it from the moment it is published, and the end empty to show it until it is archived.",
+        "startsAt": "Starts",
+        "endsAt": "Ends"
+      },
+      "types": {
+        "ANNOUNCEMENT": {
+          "label": "Announcement",
+          "hint": "General news about the platform."
+        },
+        "FEATURE": {
+          "label": "New feature",
+          "hint": "Something new people can use."
+        },
+        "MAINTENANCE": {
+          "label": "Maintenance",
+          "hint": "Planned downtime or degraded service."
+        },
+        "PROMOTION": {
+          "label": "Offer",
+          "hint": "A plan upgrade, discount or campaign."
+        }
+      },
+      "audienceModes": {
+        "ALL": {
+          "label": "Everyone",
+          "hint": "Every signed-in user."
+        },
+        "PLANS": {
+          "label": "Plans",
+          "hint": "Members of workspaces on these plans."
+        },
+        "WORKSPACES": {
+          "label": "Workspaces",
+          "hint": "Members of these workspaces."
+        }
+      },
+      "schedule": "Schedule for the start time",
+      "scheduleHint": "It goes live at the start time on its own — no need to come back.",
+      "scheduleNeedsFuture": "Set a start time in the future to schedule it.",
+      "lifecycle": "Status",
+      "previewTitle": "Preview",
+      "previewDescription": "Exactly what the people it is for will see, drawn by the app's own components.",
+      "previewPlaceholderTitle": "Your title",
+      "previewPlaceholderBody": "Your announcement text appears here.",
+      "plans": {
+        "label": "Members of any workspace on the selected plans see it.",
+        "loading": "Loading plans…",
+        "error": "The plan catalogue could not be loaded.",
+        "retired": "Not in the current plan catalogue"
+      },
+      "workspaces": {
+        "searchPlaceholder": "Search workspaces by name",
+        "searching": "Searching…",
+        "error": "The workspace directory could not be searched.",
+        "noMatch": "No workspace matches.",
+        "added": "Added",
+        "memberCount": "{count, plural, one {# member} other {# members}}"
+      }
+    }
+  }
+}
