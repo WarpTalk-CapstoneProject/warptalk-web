@@ -68,7 +68,8 @@
       "members": "Members",
       "usage": "Usage",
       "billing": "Billing",
-      "audit": "Timeline"
+      "audit": "Timeline",
+      "plugins": "Plugins"
     },
     "toasts": {
       "suspended": "Workspace suspended.",

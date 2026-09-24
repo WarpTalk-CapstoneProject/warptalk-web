@@ -36,7 +36,8 @@
     "addedByWorkspace": "ワークスペースによって追加されました",
     "notAddedYet": "まだ{workspaceName}に追加されていません",
     "waitingForOwner": "ワークスペースのオーナーの承認待ちです",
-    "thisWorkspace": "このワークスペース"
+    "thisWorkspace": "このワークスペース",
+    "disabledByPlatform": "WarpTalkがこのワークスペースでこのプラグインをオフにしました。接続は保持されますが、WarpBotはここでは使用しません。"
   },
   "consentNotice": {
     "awaitingHeadline": "ブラウザで{label}の接続を完了してください",

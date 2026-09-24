@@ -130,5 +130,10 @@
       "expired": "期限切れ",
       "revoked": "切断済み"
     }
+  },
+  "disabledByPlatform": {
+    "title": "WarpTalkがオフにしました",
+    "note": "現在このワークスペースでは利用できません",
+    "row": "WarpTalkがこのワークスペースでこのプラグインをオフにしました。メンバーの接続は保持されますが、WarpBotはここでは使用しません。"
   }
 }

@@ -85,12 +85,22 @@ export interface AdminPluginCatalogListItemDto {
   /** Users who have it installed now; a removed installation is not counted. */
   installationCount: number;
   /**
-   * How many workspaces have this plugin available, by the rule the server enforces: those whose
-   * list holds it, plus those that never edited their list and whose members already use it there.
-   * Optional because a server older than the marketplace does not send it.
+   * "Workspaces using it": workspaces the platform lets have the plugin AND that have it — on the
+   * Owner's list, or connected by at least one active member. Null when the workspace service could
+   * not be reached (render "—", never "no workspaces"). Optional for an older server.
    */
-  workspaceCount?: number;
+  workspaceCount?: number | null;
+  /** The platform default. Optional for a server older than per-workspace availability. */
+  workspaceDefault?: AdminPluginWorkspaceDefault;
+  /** The plan rule; null means every plan. */
+  allowedPlans?: string[] | null;
 }
+
+/**
+ * Which workspaces a marketplace plugin reaches by default. `retired` is `isActive: false`;
+ * `opt_in` hides it from every workspace a platform admin has not enabled it for.
+ */
+export type AdminPluginWorkspaceDefault = "available" | "opt_in" | "retired";
 
 /** One row in full, with the tool manifest `PUT .../tools` replaces. */
 export interface AdminPluginCatalogDetailDto {
@@ -134,6 +144,10 @@ export interface AdminPluginCatalogDetailDto {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The platform default. Optional for a server older than per-workspace availability. */
+  workspaceDefault?: AdminPluginWorkspaceDefault;
+  /** The plan rule; null means every plan. */
+  allowedPlans?: string[] | null;
 }
 
 /**

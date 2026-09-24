@@ -52,6 +52,7 @@ const DEFAULT_MEMBER_ACTION_COPY: Record<string, (values?: Record<string, string
   addedByWorkspace: () => "Added by your workspace",
   notAddedYet: (v) => `Not added to ${v!.workspaceName} yet`,
   waitingForOwner: () => "Waiting for your workspace owner",
+  disabledByPlatform: () => "Turned off for this workspace by WarpTalk. Your connection is kept, but WarpBot won't use it here.",
   thisWorkspace: () => "this workspace",
 };
 
@@ -82,6 +83,12 @@ export function memberPluginAction(
 
   if (availability === "private") {
     return { kind: "connect", caption: null, subtitle: t("addedByWorkspace") };
+  }
+
+  // Only ever listed for a member who installed it: Connect/Manage stays, because that dialog is
+  // where they disconnect a grant this workspace can no longer use.
+  if (availability === "platform_disabled") {
+    return { kind: "connect", caption: t("disabledByPlatform"), subtitle: null };
   }
 
   if (availability !== "not_added") {
@@ -116,7 +123,7 @@ export function memberPluginAction(
 export function isOfferedInWorkspaceChat(
   plugin: Pick<AssistantPluginCatalogItemDto, "workspaceAvailability">,
 ): boolean {
-  return plugin.workspaceAvailability !== "not_added";
+  return plugin.workspaceAvailability !== "not_added" && plugin.workspaceAvailability !== "platform_disabled";
 }
 
 /**
