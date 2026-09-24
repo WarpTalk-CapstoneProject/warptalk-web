@@ -87,7 +87,37 @@ export interface BillingInsightsDto extends PeriodEnvelope {
   creditsByService: { usageType: string; credits: number }[];
   /** Top 5 by credits consumed in range. `workspaceName` is null when workspace-service could not resolve it. */
   topWorkspaces: { workspaceId: string; workspaceName: string | null; credits: number }[];
+  /**
+   * How this period's `aiProviderCost` priced dubbing. Null from a backend that predates the
+   * Cartesia usage sync — the card then says nothing about the basis rather than claiming one.
+   */
+  aiProviderCostBasis?: AiProviderCostBasisDto | null;
+  /**
+   * WT-692: workspaces with at least one credit consumption in each of the same six months as
+   * `revenueByMonth` — used the product, paid or not. Absent from an older backend.
+   */
+  activeWorkspacesByMonth?: { month: string; activeWorkspaces: number }[] | null;
 }
+
+/**
+ * `basis` is `measured` (every UTC day of the period had synced Cartesia usage), `mixed` (some did)
+ * or `estimated` (none did: rate-card seconds × an assumed 12.5 characters/s). `cartesiaCredits`
+ * are the measured dubbing credits inside the period, UTC days at its edges pro-rated by hours.
+ */
+export interface AiProviderCostBasisDto {
+  basis: "measured" | "mixed" | "estimated";
+  measuredDays: number;
+  estimatedDays: number;
+  cartesiaCredits: number;
+  cartesiaUsdPerCredit: number;
+  syncStatus: CartesiaSyncStatus;
+}
+
+/**
+ * `ok` · `disabled` (no admin key configured) · `error` (the last attempt failed) · `pending`
+ * (configured, first sync since start not finished).
+ */
+export type CartesiaSyncStatus = "ok" | "disabled" | "error" | "pending";
 
 // ── 2 · Billing, snapshot ("right now") ──────────────────────────────────────
 
@@ -154,6 +184,30 @@ export interface BillingSnapshotDto {
     cancelAtPeriodEnd: boolean;
   }[];
   highUsageAlerts: { workspaceId: string; workspaceName: string | null; credits24h: number }[];
+  /** Cartesia, measured by billing's usage sync. Absent from a backend that predates the sync. */
+  cartesia?: CartesiaUsageDto | null;
+}
+
+/**
+ * What billing's Cartesia usage sync has read from Cartesia's admin usage API.
+ *
+ * Cartesia buckets usage by UTC day, so "this month" and "today" are the UTC calendar month and day,
+ * not the admin's tz. Both are null when nothing was synced for them. `remainingCredits` is always
+ * null today: Cartesia's API reports usage only, never the balance — `remainingCreditsNote` says so.
+ * `filteredToApiKey`: only the production TTS key is counted, not every key on the account.
+ */
+export interface CartesiaUsageDto {
+  status: CartesiaSyncStatus;
+  /** Why, for `disabled` / `error`. Never contains a key. */
+  statusNote: string | null;
+  filteredToApiKey: boolean;
+  creditsThisMonth: number | null;
+  creditsToday: number | null;
+  remainingCredits: number | null;
+  remainingCreditsNote: string | null;
+  lastSyncedAt: string | null;
+  lastAttemptAt: string | null;
+  usdPerCredit: number;
 }
 
 // ── 3 · Auth ─────────────────────────────────────────────────────────────────
@@ -161,12 +215,21 @@ export interface BillingSnapshotDto {
 export interface UsersInsightsDto extends PeriodEnvelope {
   /** Local days of `tz`, zero-filled. */
   newUsersByDay: { date: string; count: number }[];
+  /**
+   * WT-692: the six local months ending with the month of `to`. `totalUsers` = accounts existing
+   * at the month's end; `activeUsers` = signed in or refreshed a session that month. Absent from an
+   * older backend.
+   */
+  usersByMonth?: { month: string; newUsers: number; totalUsers: number; activeUsers: number }[] | null;
+  usersByMonthNote?: string | null;
 }
 
 // ── 4 · Workspace ────────────────────────────────────────────────────────────
 
 export interface WorkspacesInsightsDto extends PeriodEnvelope {
   suspendedNow: number;
+  /** WT-692: six local months; `totalWorkspaces` = existing at the month's end (suspended included). */
+  workspacesByMonth?: { month: string; newWorkspaces: number; totalWorkspaces: number }[] | null;
 }
 
 // ── 5 · Translation-room ─────────────────────────────────────────────────────

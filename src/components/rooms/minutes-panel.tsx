@@ -85,7 +85,7 @@ import {
   printDocument,
   type MinutesEditHandlers,
 } from "@/components/rooms/minutes-document";
-import { getLanguageName } from "@/lib/language/languages";
+import { getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
 import {
   artifactLanguageGroups,
   resolveGeneratableLanguages,
@@ -248,9 +248,11 @@ export function MinutesPanel({
         } catch (error) {
           setReadingLanguage(null);
           setFetched(null);
-          // WT-703: a 400 says why (e.g. the language is no longer allowed here); say that.
+          // The server's own sentence. WT-703 refuses a language the meeting does not offer with
+          // one that names the languages it does — replacing it with a generic apology is what
+          // made this picker look broken rather than bounded.
           toast.error(
-            (await validationMessageOf(error)) ?? "Could not read this record in that language.",
+            await readableErrorMessage(error, "Could not read this record in that language."),
           );
           return true;
         }
@@ -456,7 +458,7 @@ export function MinutesPanel({
       toast.error(
         status === 503
           ? "PDF conversion is unavailable here. The Word file still downloads."
-          : ((await validationMessageOf(error)) ?? "Could not download the minutes."),
+          : await readableErrorMessage(error, "Could not download the minutes."),
       );
     } finally {
       setDownloading(null);
@@ -517,6 +519,7 @@ export function MinutesPanel({
               half-typed correction is a document nobody is reading. */}
           <ReadingLanguagePicker
             carried={carriedLanguages}
+            primaryLanguage={stored?.primaryLanguage}
             generatable={generatable}
             reading={readingLanguage}
             busy={fetched?.status === "generating"}
@@ -824,6 +827,7 @@ function SecretaryPicker({
  */
 function ReadingLanguagePicker({
   carried,
+  primaryLanguage,
   generatable,
   reading,
   busy,
@@ -831,22 +835,30 @@ function ReadingLanguagePicker({
   onChange,
 }: {
   carried: string[];
+  /** The language the record was drawn up in — "As drawn up" already is that reading. */
+  primaryLanguage?: string | null;
   /** WT-705: the languages a new translation may be written in (meeting L2 ∩ workspace L1). */
-  generatable: string[];
+  generatable: readonly string[];
   reading: string | null;
   busy: boolean;
   disabled: boolean;
   onChange: (language: string) => void;
 }) {
-  // What is carried is always offered, unfiltered; only what would be WRITTEN is narrowed.
+  // What is carried is always offered, unfiltered; only what would be WRITTEN is narrowed to the
+  // meeting's own languages — anything else is refused by the server, and a choice that can only
+  // fail is not a choice.
   const groups = artifactLanguageGroups(carried, generatable);
+  // The language the record was drawn up in is already the "As drawn up" reading, so listing it
+  // again under "Written on request" would offer to pay for a translation into itself.
+  const primary = normalizeLanguageCode(primaryLanguage ?? "");
+  const writable = groups.generatable.filter((code) => code !== primary);
   // A reading fetched before the policy changed must still show as selected, or the select
   // would silently snap back to "As drawn up" while the page shows the translation.
   const orphanReading =
     reading &&
     !carried.includes(reading) &&
     !groups.existing.includes(reading) &&
-    !groups.generatable.includes(reading)
+    !writable.includes(reading)
       ? reading
       : null;
 
@@ -870,9 +882,9 @@ function ReadingLanguagePicker({
             ))}
           </optgroup>
         ) : null}
-        {groups.generatable.length > 0 ? (
+        {writable.length > 0 ? (
           <optgroup label="Written on request">
-            {groups.generatable.map((code) => (
+            {writable.map((code) => (
               <option key={code} value={code}>
                 {getLanguageName(code)}
               </option>
@@ -889,22 +901,35 @@ function ReadingLanguagePicker({
 }
 
 /**
- * WT-703: the server's reason for refusing a reading, when it gave one. Only a 400 carries a
- * sentence meant for the reader; anything else falls back to the caller's generic message.
- * File downloads ask for a Blob, so an error body arrives as a Blob too and is read here.
+ * The server's own sentence for a refusal, falling back to the caller's generic message.
+ *
+ * WT-703 refuses a language this meeting does not offer with a sentence that names the ones it
+ * does, so `getErrorMessage` does the reading — replacing it with a generic apology is what made
+ * this picker look broken rather than bounded. Downloads ask axios for a Blob, so THEIR error
+ * body arrives as a Blob rather than parsed JSON and `getErrorMessage` would see nothing in it;
+ * that one case is read as text and parsed here first.
  */
-async function validationMessageOf(error: unknown): Promise<string | null> {
-  if (!isAxiosError(error) || error.response?.status !== 400) return null;
-  let data: unknown = error.response.data;
-  if (typeof Blob !== "undefined" && data instanceof Blob) {
-    try {
-      data = JSON.parse(await data.text());
-    } catch {
-      return null;
-    }
+async function readableErrorMessage(error: unknown, fallback: string): Promise<string> {
+  return (await blobErrorMessage(error)) ?? getErrorMessage(error, fallback);
+}
+
+/** The `message` of a JSON error body that arrived as a Blob, or null if it is not one. */
+async function blobErrorMessage(error: unknown): Promise<string | null> {
+  if (!isAxiosError(error)) return null;
+  const body: unknown = error.response?.data;
+  if (typeof Blob === "undefined" || !(body instanceof Blob)) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(await body.text());
+  } catch {
+    // Not JSON: a real file, or an empty body. Nothing readable in it.
+    return null;
   }
   const message =
-    data && typeof data === "object" ? (data as { message?: unknown }).message : undefined;
+    data && typeof data === "object"
+      ? ((data as { message?: unknown; Message?: unknown }).message ??
+        (data as { Message?: unknown }).Message)
+      : undefined;
   return typeof message === "string" && message.trim() ? message : null;
 }
 

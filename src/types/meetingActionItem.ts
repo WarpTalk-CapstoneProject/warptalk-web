@@ -16,7 +16,8 @@ export interface MeetingActionItemDto {
   translationRoomId: string;
   /** Present on the cross-meeting list, where a task means nothing without its meeting. */
   roomTitle?: string | null;
-  sourceMinutesId: string;
+  /** Null for a task somebody asked WarpBot for — it came from no minutes. See `source`. */
+  sourceMinutesId?: string | null;
   task: string;
   ownerName?: string | null;
   ownerParticipantId?: string | null;
@@ -26,6 +27,8 @@ export interface MeetingActionItemDto {
   dueDate?: string | null;
   closedAt?: string | null;
   createdAt: string;
+  /** MINUTES: from an approved biên bản. ASSISTANT: asked for in chat and saved by WarpBot. */
+  source?: "MINUTES" | "ASSISTANT";
 }
 
 /** Whether this task is still outstanding. DROPPED is closed too — decided against, not done. */

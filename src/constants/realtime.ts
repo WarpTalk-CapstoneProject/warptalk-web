@@ -48,6 +48,8 @@ export const SIGNALR_EVENTS = {
   PARTICIPANT_ADMITTED: "ParticipantAdmitted",
   // WT-428: the knock — somebody just landed in the waiting room. Only hosts act on it.
   PARTICIPANT_WAITING: "ParticipantWaiting",
+  // WT-699 / TC2402: the host declined a knock. Sent to the lobby group; only the named user acts.
+  PARTICIPANT_REJECTED: "ParticipantRejected",
 } as const;
 
 export const QUERY_KEYS = {

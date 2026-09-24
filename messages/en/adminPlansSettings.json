@@ -41,8 +41,6 @@
     },
     "configRows": {
       "fxRate": "FX rate USD→VND",
-      "creditValue": "Credit value (VND)",
-      "minimumPricePerCredit": "Minimum price per credit (VND)",
       "minimumContractPrice": "Minimum contract price",
       "salesWeightUsage": "Sales weight · usage",
       "salesWeightMembers": "Sales weight · members",
@@ -68,15 +66,15 @@
     },
     "bandReference": {
       "title": "Reference data",
-      "note": "Read-only here — these change by migration."
+      "note": "The language catalog is audited; voice consent is read-only."
     },
     "billingPolicyHeading": "Billing policy",
     "pricingEconomicsHeading": "Pricing economics",
-    "pricingEconomicsSubnote": "The same configuration the plan validator and the rate-card margin reader consult — also reachable from Plans & pricing.",
+    "pricingEconomicsSubnote": "The same configuration the plan validator and the rate-card margin reader consult — also reachable from Plans & pricing. Customer prices live in Stripe, so the credit value and the per-credit price floor are no longer edited here; they change by migration.",
     "languageCatalogHeading": "Language catalog",
     "voiceConsentHeading": "Voice clone consent",
     "voiceConsentCount": "{count, plural, one {# decision recorded} other {# decisions recorded}}",
-    "explainer": "<strong>Why there is nothing to click below.</strong> Neither service behind this data can record who changed it. A switch here would let someone alter what every meeting validates against with no name against the change, so these move by migration, where the change is reviewed and has an author.",
+    "explainer": "<strong>What you can change here, and what you cannot.</strong> The language catalog is editable: every add, rename or switch is written to the platform audit log first, and refused if it cannot be recorded, so each change has a name against it. The voice-consent ledger stays read-only — its service cannot record who changed it.",
     "footerNote": "Counts only, and that is a boundary rather than a shortcut. A cloned voice is biometric data; a list of who agreed to it would be a register of biometric permissions, and nothing on this screen acts on a person.",
     "panelError": {
       "message": "{what} could not be loaded.",
@@ -97,10 +95,9 @@
       "errorWhat": "The pricing configuration",
       "fxRateLabel": "FX rate (USD → VND)",
       "fxRateHint": "Reads a USD provider cost in VND terms.",
-      "creditValueLabel": "Credit value",
-      "creditValueHint": "What one credit costs a customer, in VND.",
-      "minimumPricePerCreditLabel": "Minimum price per credit",
-      "minimumPricePerCreditHint": "The plan validator's price floor — a VND plan cannot sell credits below this.",
+      "cartesiaUsdPerCreditLabel": "Cartesia USD per credit",
+      "cartesiaUsdPerCreditHint": "What one Cartesia credit costs WarpTalk. Insights price dubbing as measured Cartesia credits × this × the FX rate. The account spends credits bought earlier, so enter what they cost, not the Free plan's marginal 0. Default: Startup plan, $49 / 1,250,000.",
+      "cartesiaUsdPerCreditValue": "${price} per credit",
       "minimumContractPriceLabel": "Minimum contract price",
       "minimumContractPriceHint": "Per cycle, before a plan is valid.",
       "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
@@ -110,6 +107,61 @@
       "editButton": "Edit pricing economics"
     },
     "languageCatalog": {
+      "manage": {
+        "add": "Add language",
+        "edit": "Edit",
+        "disable": "Disable",
+        "enable": "Enable",
+        "columns": {
+          "usage": "In use",
+          "actions": ""
+        },
+        "usageNone": "—",
+        "usageLive": "{count} live",
+        "usageUpcoming": "{count} scheduled",
+        "form": {
+          "addTitle": "Add a language",
+          "editTitle": "Edit {code}",
+          "description": "Room validation accepts it as soon as it is enabled. The meeting pickers in this app only offer languages the app ships; a new one shows as “renders as a code” until it does.",
+          "codeLabel": "Code",
+          "codeHint": "ISO 639 language, optional region — e.g. de or de-DE.",
+          "nameLabel": "Name",
+          "nativeNameLabel": "Native name",
+          "enabledLabel": "Enable for new rooms now",
+          "cancel": "Cancel",
+          "save": "Save",
+          "create": "Add language",
+          "saving": "Saving…",
+          "createdToast": "{code} added to the catalog.",
+          "savedToast": "{code} updated.",
+          "genericError": "Nothing was changed. The catalog was not updated, or the change could not be recorded in the audit log.",
+          "errors": {
+            "codeInvalid": "Use a language code like de or de-DE.",
+            "codeTaken": "That language is already in the catalog.",
+            "codeCovered": "Already covered by {code} — rooms match on the language, not the region.",
+            "nameRequired": "Name is required.",
+            "nameTooLong": "Name must be at most 100 characters.",
+            "nativeNameTooLong": "Native name must be at most 100 characters."
+          }
+        },
+        "toggle": {
+          "disableTitle": "Disable {name}?",
+          "enableTitle": "Enable {name}?",
+          "disableDescription": "Soft switch: the row stays, and past meetings keep naming it. New rooms in {code} are refused until it is enabled again.",
+          "enableDescription": "New rooms in {code} will be accepted again.",
+          "blocked": "{count, plural, one {# live meeting uses this language.} other {# live meetings use this language.}} It can be disabled once they end.",
+          "last": "This is the only enabled language. Disabling it would stop every room from being created.",
+          "confirmUpcoming": "{count, plural, one {# scheduled meeting uses this language} other {# scheduled meetings use this language}}. Anyone editing or joining it in {code} will be refused.",
+          "confirmCheckbox": "I understand — disable it anyway",
+          "cancel": "Cancel",
+          "confirmDisable": "Disable",
+          "confirmEnable": "Enable",
+          "pending": "Working…",
+          "disabledToast": "{code} disabled for new rooms.",
+          "enabledToast": "{code} enabled.",
+          "genericError": "Nothing was changed."
+        }
+      },
       "errorWhat": "The language catalog",
       "empty": "The catalog is empty — no room in any language can be created.",
       "driftTitle": "{count, plural, one {The meeting picker offers # language this catalog will reject.} other {The meeting picker offers # languages this catalog will reject.}}",
@@ -233,7 +285,21 @@
       },
       "cancel": "Cancel",
       "save": "Save rate card",
-      "saving": "Saving…"
+      "saving": "Saving…",
+      "creditCost": {
+        "title": "Provider cost",
+        "description": "What the provider charges WarpTalk per unit on a credit-unit (CRD) card — the card usage is actually settled on. Its credit price is set separately and does not change here. Admin Insights reads this cost to compute AI provider cost.",
+        "field": "Provider cost (USD per {unit})",
+        "hint": "In USD for one {unit} of usage, as the provider bills it. Must be above zero.",
+        "noUnit": "unit",
+        "effectBackfill": "This card has no provider cost yet. The value will also apply to the usage already settled on it, so past periods in Insights gain a cost.",
+        "effectSupersede": "This card already has a cost. A new version of the card takes effect now; usage already settled keeps the cost that applied to it.",
+        "save": "Save provider cost",
+        "errors": {
+          "invalid": "Enter a positive amount in USD, for example 0.00049.",
+          "noUnit": "This card has no unit, so a per-unit cost cannot be applied to it."
+        }
+      }
     },
     "deactivate": {
       "title": "Deactivate this rate card?",
@@ -251,11 +317,6 @@
       },
       "fields": {
         "fxRateUsdVnd": { "label": "FX rate USD→VND", "hint": "How a USD provider cost is read in VND." },
-        "creditValueVnd": { "label": "Credit value (VND)" },
-        "minimumPricePerCreditVnd": {
-          "label": "Minimum price per credit (VND)",
-          "hint": "The floor a VND plan's price ÷ credits is checked against."
-        },
         "minimumContractPriceVnd": { "label": "Minimum contract price (VND)" },
         "minimumContractPriceUsd": { "label": "Minimum contract price (USD)" },
         "salesUsageWeight": { "label": "Sales weight · usage" },
@@ -264,7 +325,8 @@
         "salesAiServicesWeight": { "label": "Sales weight · AI services" },
         "defaultOverageCapRatio": { "label": "Default overage cap ratio" },
         "defaultInvoiceTermsDays": { "label": "Default invoice terms (days)" },
-        "defaultInvoiceGraceHours": { "label": "Default invoice grace (hours)" }
+        "defaultInvoiceGraceHours": { "label": "Default invoice grace (hours)" },
+        "cartesiaUsdPerCredit": { "label": "Cartesia USD per credit", "hint": "Measured Cartesia credits × this × FX is the dubbing cost in Insights. Leave blank to keep the stored value." }
       },
       "cancel": "Cancel",
       "save": "Save configuration",

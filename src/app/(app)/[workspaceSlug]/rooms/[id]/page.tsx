@@ -101,6 +101,7 @@ import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-displa
 import {
   countPlayableRecordings,
   findPlayableRecording,
+  recordingFailureText,
   unplayableRecordingState,
 } from "@/lib/meeting/meeting-artifacts";
 import { resolveCitationRowId } from "@/lib/meeting/citation-target";
@@ -1142,6 +1143,7 @@ export default function RoomInformationPage() {
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
                 speakerDirectory={speakerDirectory}
+                generatableLanguages={room.artifactLanguages?.generatable}
                 transcript={
                   <MeetingTranscriptArtifact
                     segments={transcriptSegments}
@@ -1367,6 +1369,7 @@ function MeetingRecordSection({
   recordingUnavailableReason,
   recordingFailure,
   speakerDirectory,
+  generatableLanguages,
   tab,
   onTabChange,
   expanded,
@@ -1442,6 +1445,8 @@ function MeetingRecordSection({
   /** WT-588: whether the record has the page to itself, with the right rail dropped. */
   expanded?: boolean;
   onToggleExpanded?: () => void;
+  /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
+  generatableLanguages?: readonly string[] | null;
 }) {
   const { busyArtifactId, downloadArtifact } =
     useArtifactDownload(onRecordChanged);
@@ -1924,6 +1929,15 @@ function MeetingRecordSection({
           className="mb-3 rounded-[8px] border border-border bg-surface-2 px-3.5 py-2.5 text-[12.5px] leading-relaxed text-ink-muted"
         >
           {RECORDING_FAILURE_MESSAGES[recordingFailure]}
+          {/* WT-824: and why, when the backend kept LiveKit's reason. */}
+          {(endedRecord?.artifacts ?? []).map((artifact) => {
+            const text = recordingFailureText(artifact);
+            return text ? (
+              <span key={artifact.id} className="mt-1 block text-ink">
+                {text}
+              </span>
+            ) : null;
+          })}
         </div>
       ) : null}
       {activeTab === "recap" ? (
@@ -1964,6 +1978,7 @@ function MeetingRecordSection({
             rewriteFailure={rewriteFailure}
             rendering={rendering}
             onSelectRendering={endedRecord ? selectRendering : undefined}
+            generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
           />
         ) : (

@@ -80,5 +80,31 @@
     "justNow": "just now",
     "noConsumerTooltip": "No consumer has ever read this group",
     "consumerSeenTooltip": "Consumer names Redis has seen, not readers attached now"
+  },
+  "insights": {
+    "aiCostBasis": {
+      "measured": "Dubbing measured from Cartesia usage",
+      "mixed": "Dubbing measured on {measured} of {total} days, estimated on the rest",
+      "estimated": "Dubbing estimated (12.5 characters/s)"
+    },
+    "cartesia": {
+      "title": "Cartesia",
+      "status": {
+        "ok": "Synced",
+        "pending": "Waiting for the first sync",
+        "disabled": "Sync disabled",
+        "error": "Sync failing",
+        "stale": "Sync stale"
+      },
+      "thisMonth": "{credits} credits this month (UTC)",
+      "monthUnknown": "no usage synced this month",
+      "today": "{credits} today",
+      "remaining": "{credits} remaining",
+      "remainingUnknown": "remaining: not reported by Cartesia's API",
+      "syncedAgo": "{minutes, plural, =0 {synced just now} one {synced # min ago} other {synced # min ago}}",
+      "neverSynced": "never synced",
+      "allKeys": "all API keys",
+      "price": "${price} per credit"
+    }
   }
 }

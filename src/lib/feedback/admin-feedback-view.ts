@@ -6,7 +6,10 @@
  * denominator means. Those are the parts worth pinning with tests.
  */
 
-import type { AdminFeedbackDimensionDto } from "@/types/admin-feedback";
+import type {
+  AdminFeedbackConfidence,
+  AdminFeedbackDimensionDto,
+} from "@/types/admin-feedback";
 
 export const DIMENSION_LABELS: Record<string, string> = {
   overallRating: "Overall",
@@ -74,4 +77,40 @@ export function ratingTone(rating: number): "bad" | "neutral" | "good" {
   if (rating <= 2) return "bad";
   if (rating === 3) return "neutral";
   return "good";
+}
+
+/**
+ * WT-694: how far to trust a dimension. The server decides (n, response rate, share of
+ * respondents); a backend that predates the field falls back to the old thin-sample rule, and
+ * nobody answering is always `none` — "no data", never a score.
+ */
+export function confidenceOf(dimension: AdminFeedbackDimensionDto): AdminFeedbackConfidence {
+  if (dimension.responseCount === 0) return "none";
+  if (dimension.confidence) return dimension.confidence;
+  return isThinSample(dimension) ? "low" : "ok";
+}
+
+/**
+ * The trend against the previous window, as the server computed it: "+0.3", "−0.2", "±0.0", or
+ * null when either side had no answers (a trend from nothing is not a trend).
+ */
+export function formatAverageDelta(delta: number | null | undefined): string | null {
+  if (delta == null) return null;
+  // Rounded on the magnitude, so −0.25 and +0.25 round the same way (Math.round is not symmetric).
+  const magnitude = Math.round(Math.abs(delta) * 10) / 10;
+  if (magnitude === 0) return "±0.0";
+  return `${delta > 0 ? "+" : "−"}${magnitude.toFixed(1)}`;
+}
+
+/** Up is good for every rating dimension. A move under 0.1 is flat, not a signal. */
+export function deltaTone(delta: number | null | undefined): "good" | "bad" | "flat" | null {
+  if (delta == null) return null;
+  if (Math.abs(delta) < 0.1) return "flat";
+  return delta > 0 ? "good" : "bad";
+}
+
+/** A 0..1 share as a whole percent, or an em dash when there is none. */
+export function formatShare(share: number | null | undefined): string {
+  if (share == null) return "—";
+  return `${Math.round(share * 100)}%`;
 }

@@ -8,10 +8,9 @@
  * the request returns the delivery events are already on the stream. A single Send button beside a
  * form is the shape this deliberately is not.
  *
- * The audience is always a named list. `CreateAdminNotificationValidator` refuses BROADCAST and
- * SEGMENT — "Only SPECIFIC_USERS is supported until a production user/segment resolver is
- * configured" — so there is no "everyone" control to hunt for, and the composer says why rather
- * than leaving the reader to conclude one is missing.
+ * The audience is a named list, one workspace's members, or everyone (WT-699 / TC4104). The last
+ * two are resolved to people by the notification service when the announcement is created, so the
+ * confirmation names the audience rather than a head count it cannot know in advance.
  */
 
 import { useMemo, useState } from "react";
@@ -33,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAdminUserDirectory } from "@/hooks/use-admin-users";
 import { getErrorMessage } from "@/lib/api/errors";
 import {
+  ANNOUNCEMENT_AUDIENCES,
   ANNOUNCEMENT_TYPES,
   buildCreateRequest,
   emptyAnnouncementDraft,
@@ -44,6 +44,8 @@ import {
 } from "@/lib/notifications/announcement-draft";
 import { cn } from "@/lib/utils";
 import type { AdminUserSummaryDto } from "@/types/admin-user";
+import type { AdminWorkspaceSummaryDto } from "@/types/admin-workspace";
+import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
 
 export function AnnouncementComposer({
   open,
@@ -88,6 +90,7 @@ function ComposerForm({
   const t = useTranslations("adminAnnouncements.composer");
   const [draft, setDraft] = useState<AnnouncementDraft>(() => emptyAnnouncementDraft());
   const [recipients, setRecipients] = useState<AdminUserSummaryDto[]>([]);
+  const [segment, setSegment] = useState<AdminWorkspaceSummaryDto | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,8 +100,12 @@ function ComposerForm({
   // The picker holds the whole user so the confirmation can name people rather than ids; the
   // request only ever carries the ids.
   const withRecipients = useMemo(
-    () => ({ ...draft, recipientIds: recipients.map((user) => user.id) }),
-    [draft, recipients],
+    () => ({
+      ...draft,
+      recipientIds: recipients.map((user) => user.id),
+      segmentId: segment?.id ?? "",
+    }),
+    [draft, recipients, segment],
   );
 
   const handleReview = () => {
@@ -136,6 +143,7 @@ function ComposerForm({
       <ConfirmStep
         draft={withRecipients}
         recipients={recipients}
+        segment={segment}
         error={error}
         isSending={isSending}
         onBack={() => setIsConfirming(false)}
@@ -284,6 +292,41 @@ function ComposerForm({
           </div>
         ) : null}
 
+        <div>
+          <Label className="text-[12px] text-ink-muted">{t("audience.label")}</Label>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+            {ANNOUNCEMENT_AUDIENCES.map((audience) => (
+              <button
+                key={audience}
+                type="button"
+                aria-pressed={draft.audience === audience}
+                onClick={() => set("audience", audience)}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-left transition-colors",
+                  draft.audience === audience
+                    ? "border-ink bg-ink text-surface-1"
+                    : "border-hairline/60 hover:bg-surface-2",
+                )}
+              >
+                <span className="block text-[13px] font-medium">{t(`audience.${audience}.label`)}</span>
+                <span
+                  className={cn(
+                    "mt-0.5 block text-[11px]",
+                    draft.audience === audience ? "text-surface-1/70" : "text-ink-subtle",
+                  )}
+                >
+                  {t(`audience.${audience}.hint`)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {draft.audience === "SEGMENT" ? (
+          <WorkspacePicker selected={segment} onSelect={setSegment} />
+        ) : null}
+
+        {draft.audience === "SPECIFIC_USERS" ? (
         <RecipientPicker
           selected={recipients}
           onToggle={(user) =>
@@ -295,6 +338,7 @@ function ComposerForm({
           }
           onClear={() => setRecipients([])}
         />
+        ) : null}
 
         {error ? (
           <p
@@ -315,6 +359,86 @@ function ComposerForm({
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+/** WT-699 / TC4104: SEGMENT is one workspace; its active members receive the announcement. */
+function WorkspacePicker({
+  selected,
+  onSelect,
+}: {
+  selected: AdminWorkspaceSummaryDto | null;
+  onSelect: (workspace: AdminWorkspaceSummaryDto | null) => void;
+}) {
+  const t = useTranslations("adminAnnouncements.composer.segment");
+  const [search, setSearch] = useState("");
+  const query = useMemo(() => ({ page: 1, pageSize: 10, search: search.trim() }), [search]);
+  const directory = useAdminWorkspaceDirectory(query, { enabled: Boolean(search.trim()) });
+  const results = search.trim() ? (directory.data?.items ?? []) : [];
+
+  return (
+    <div>
+      <Label htmlFor="announcement-segment" className="text-[12px] text-ink-muted">
+        {t("label")}
+      </Label>
+      {selected ? (
+        <div className="mt-1.5 flex items-center justify-between gap-3 rounded-lg border border-hairline/60 px-3 py-2">
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] text-ink">{selected.name}</span>
+            <span className="block text-[11px] text-ink-subtle">
+              {t("memberCount", { count: selected.memberCount })}
+            </span>
+          </span>
+          <Button variant="outline" size="sm" onClick={() => onSelect(null)}>
+            {t("change")}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="relative mt-1.5">
+            <MagnifyingGlass
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle"
+            />
+            <Input
+              id="announcement-segment"
+              className="pl-8"
+              placeholder={t("searchPlaceholder")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          {search.trim() ? (
+            <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-hairline/60">
+              {directory.isPending ? (
+                <p className="px-3 py-3 text-[12px] text-ink-muted">{t("searching")}</p>
+              ) : directory.isError ? (
+                <p className="px-3 py-3 text-[12px] text-destructive">{t("directoryError")}</p>
+              ) : results.length === 0 ? (
+                <p className="px-3 py-3 text-[12px] text-ink-muted">{t("noMatch")}</p>
+              ) : (
+                <ul>
+                  {results.map((workspace) => (
+                    <li key={workspace.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(workspace)}
+                        className="flex w-full items-center justify-between gap-3 border-b border-hairline/60 px-3 py-2 text-left last:border-b-0 hover:bg-surface-2"
+                      >
+                        <span className="truncate text-[13px] text-ink">{workspace.name}</span>
+                        <span className="shrink-0 text-[11px] text-ink-subtle">
+                          {t("memberCount", { count: workspace.memberCount })}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -446,6 +570,7 @@ function RecipientPicker({
 function ConfirmStep({
   draft,
   recipients,
+  segment,
   error,
   isSending,
   onBack,
@@ -453,6 +578,7 @@ function ConfirmStep({
 }: {
   draft: AnnouncementDraft;
   recipients: AdminUserSummaryDto[];
+  segment: AdminWorkspaceSummaryDto | null;
   error: string | null;
   isSending: boolean;
   onBack: () => void;
@@ -482,13 +608,23 @@ function ConfirmStep({
         </div>
 
         <div className="rounded-lg border border-hairline/60 p-3">
-          <p className="text-[12px] font-medium text-ink">
-            {t("confirm.recipientCount", { count: recipients.length })}
-          </p>
-          <p className="mt-1.5 text-[12px] leading-5 text-ink-muted">
-            {named.map((user) => user.email).join(", ")}
-            {remaining > 0 ? ` ${t("confirm.andMore", { count: remaining })}` : ""}
-          </p>
+          {draft.audience === "BROADCAST" ? (
+            <p className="text-[12px] font-medium text-ink">{t("confirm.everyone")}</p>
+          ) : draft.audience === "SEGMENT" ? (
+            <p className="text-[12px] font-medium text-ink">
+              {t("confirm.segment", { name: segment?.name ?? "", count: segment?.memberCount ?? 0 })}
+            </p>
+          ) : (
+            <>
+              <p className="text-[12px] font-medium text-ink">
+                {t("confirm.recipientCount", { count: recipients.length })}
+              </p>
+              <p className="mt-1.5 text-[12px] leading-5 text-ink-muted">
+                {named.map((user) => user.email).join(", ")}
+                {remaining > 0 ? ` ${t("confirm.andMore", { count: remaining })}` : ""}
+              </p>
+            </>
+          )}
         </div>
 
         {error ? (
@@ -508,7 +644,11 @@ function ConfirmStep({
         </Button>
         <Button onClick={onSend} disabled={isSending}>
           <PaperPlaneTilt size={14} weight="fill" />
-          {isSending ? t("confirm.sending") : t("confirm.send", { count: recipients.length })}
+          {isSending
+            ? t("confirm.sending")
+            : draft.audience === "SPECIFIC_USERS"
+              ? t("confirm.send", { count: recipients.length })
+              : t("confirm.sendAudience")}
         </Button>
       </DialogFooter>
     </>

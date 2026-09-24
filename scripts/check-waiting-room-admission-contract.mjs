@@ -60,4 +60,32 @@ assert.match(
   "ParticipantAdmitted must re-run the meeting join, not merely refetch the room.",
 );
 
+// WT-699 / TC1806: a knocking connection now sits in the room's LOBBY group, not the room group.
+// Admission must re-run the hub join, or the admitted guest never receives the meeting's events.
+assert.match(
+  liveRoom,
+  /"ParticipantAdmitted"[\s\S]{0,700}?joinCurrentRoom\(\)/,
+  "ParticipantAdmitted must re-invoke JoinTranslationRoom so the connection leaves the lobby group for the room group.",
+);
+// The hub may refuse a join that races the REST roster write; it must be retried, not swallowed.
+assert.doesNotMatch(
+  liveRoom,
+  /"JoinTranslationRoom",[\s\S]{0,1600}?\.catch\(\(\) => undefined\);/,
+  "A refused JoinTranslationRoom must be retried, not swallowed once.",
+);
+
+// WT-699 / TC2402: the lobby's "no" has to reach the person who knocked.
+assert.match(
+  liveRoom,
+  /connection\.on\(\s*"ParticipantRejected",\s*\(rejectedUserId: string\) => \{\s*if \(!rejectedUserId \|\| rejectedUserId !== currentUserIdRef\.current\) return;/,
+  "The meeting session must handle ParticipantRejected for its own user only.",
+);
+
+// A kick is broadcast to the room with the kicked user's id; only that user may leave.
+assert.match(
+  liveRoom,
+  /connection\.on\("ParticipantKicked", \(kickedUserId\?: string\) => \{\s*if \(kickedUserId && kickedUserId !== currentUserIdRef\.current\) return;/,
+  "ParticipantKicked must only close the meeting for the participant who was kicked.",
+);
+
 console.log("Waiting-room admission frontend contract: PASS");

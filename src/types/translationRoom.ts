@@ -84,13 +84,16 @@ export interface TranslationRoomDto {
    */
   series?: SeriesListSummary | null;
   /**
-   * WT-703: the languages new post-meeting content (summary, minutes, translation) may be
-   * GENERATED in — the meeting's L2 snapshot narrowed by the workspace's current L1 policy,
-   * computed server-side in one place. Reading content that already exists is never filtered
-   * by this.
+   * WT-703: the languages new post-meeting content (summary renderings, minutes translations)
+   * may be GENERATED in — the meeting's L2 snapshot narrowed by the workspace's current L1
+   * policy and the active catalog, computed server-side in one place and exactly what the
+   * server will accept. Sent by the room detail read once the meeting is over. Reading content
+   * that already exists is never filtered by this.
    *
    * - `undefined` — an older backend that does not send the field.
    * - `null` — the room has not finished yet, or the server could not compute the set.
+   *
+   * See artifact-languages.ts for how each of those is read.
    */
   artifactLanguages?: RoomArtifactLanguagesDto | null;
 }
@@ -433,6 +436,8 @@ export interface TranslationRoomArtifactDto {
   updatedAt?: string | null;
   /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
   recordingStartedAt?: string | null;
+  /** WT-824: why a FAILED recording has no file (host-facing reason + LiveKit status/error). */
+  failureReason?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

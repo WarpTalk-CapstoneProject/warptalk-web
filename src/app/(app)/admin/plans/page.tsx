@@ -32,6 +32,7 @@ import {
   useAdminRateCards,
   useCreateAdminPlan,
   useDeactivateAdminRateCard,
+  useSetAdminRateCardProviderCost,
   useUpdateAdminPlan,
   useUpdateAdminPricingConfig,
   useUpsertAdminRateCard,
@@ -267,6 +268,7 @@ export default function AdminPlansPage() {
   const createPlan = useCreateAdminPlan();
   const upsertRateCard = useUpsertAdminRateCard();
   const deactivateRateCard = useDeactivateAdminRateCard();
+  const setRateCardProviderCost = useSetAdminRateCardProviderCost();
   const updateConfig = useUpdateAdminPricingConfig();
 
   /**
@@ -398,14 +400,6 @@ export default function AdminPlansPage() {
                   value={numberFormatter.format(config.fxRateUsdVnd)}
                 />
                 <ConfigRow
-                  label={t("configRows.creditValue")}
-                  value={numberFormatter.format(config.creditValueVnd)}
-                />
-                <ConfigRow
-                  label={t("configRows.minimumPricePerCredit")}
-                  value={numberFormatter.format(config.minimumPricePerCreditVnd)}
-                />
-                <ConfigRow
                   label={t("configRows.minimumContractPrice")}
                   value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
                 />
@@ -481,7 +475,10 @@ export default function AdminPlansPage() {
           if (!open) setEditingCard(null);
         }}
         onSubmit={(request) => upsertRateCard.mutateAsync(request)}
-        isSaving={upsertRateCard.isPending}
+        onSetProviderCost={(id, providerUnitCostUsd) =>
+          setRateCardProviderCost.mutateAsync({ id, request: { providerUnitCostUsd } })
+        }
+        isSaving={upsertRateCard.isPending || setRateCardProviderCost.isPending}
       />
 
       <RateCardDeactivateDialog

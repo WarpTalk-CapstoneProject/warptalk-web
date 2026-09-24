@@ -109,26 +109,44 @@
       "responses": "回答数",
       "meetingsRated": "評価されたミーティング",
       "ofEnded": "終了{count}件中",
-      "responseRate": "回答率"
+      "responseRate": "回答率",
+      "previous": "前期間: {value}"
     },
     "dimensions": {
       "title": "項目別評価",
       "empty": "この期間に送信された評価はありません。",
       "ratedCount": "{count}件が評価",
-      "thinSample": "・サンプル数が少数",
-      "ratingTooltip": "{rating}★ — {count, plural, other {回答 #件}}"
+      "ratingTooltip": "{rating}★ — {count, plural, other {回答 #件}}",
+      "noData": "データなし",
+      "noDataHint": "この期間に評価はありません — 表示するスコアはありません。",
+      "share": "回答者の {share}",
+      "lowConfidence": "信頼度低",
+      "noTrend": "推移なし",
+      "previousTooltip": "前期間: {average}（{count, plural, other {# 件の回答}}）"
     },
     "comments": {
       "title": "コメント",
       "error": "コメントを読み込めませんでした。",
-      "empty": "この期間に書かれたコメントはありません。"
+      "empty": "この期間に書かれたコメントはありません。",
+      "sortRecent": "新しい順",
+      "sortLowest": "低評価順",
+      "sortAria": "コメントの並び順"
     },
     "pagination": {
       "pageOf": "{page} / {totalPages} ページ",
       "previous": "前へ",
       "next": "次へ"
     },
-    "footerNote": "閲覧専用で、構造上匿名です — APIはコメントの投稿者情報を送信しません。管理者が編集・削除できる評価では、読む価値がなくなってしまいます。"
+    "footerNote": "閲覧専用で、構造上匿名です — APIはコメントの投稿者情報を送信しません。管理者が編集・削除できる評価では、読む価値がなくなってしまいます。",
+    "insights": {
+      "lowestTitle": "最もスコアの低い項目",
+      "lowestDetail": "{count} 件の評価",
+      "vsPrevious": "前期間比 {delta}",
+      "lowConfidenceTitle": "信頼度が低い — 結論ではなく兆候として読んでください。",
+      "lowConfidenceRule": "回答が {min} 件未満、または回答率が {rate} 未満の数値は信頼度低として表示されます。",
+      "noDataTitle": "{count, plural, other {# 項目にデータがありません}}",
+      "noDataBody": "{names}: この期間に評価はありません。"
+    }
   },
   "audit": {
     "eyebrow": "オペレーション",

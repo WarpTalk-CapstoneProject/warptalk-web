@@ -7,8 +7,9 @@
  * the rules about what may and may not be retyped differ per form:
  *
  *   PlanEditDialog        every column, laid over the stored plan so nothing unseen is reset
- *   RateCardEditDialog    price and margin only — the identity columns are the upsert key
- *   PricingConfigDialog   the twelve knobs the endpoint accepts, not the two it computes
+ *   RateCardEditDialog    price and margin only — the identity columns are the upsert key;
+ *                         on a credit-unit (CRD) card, the provider cost alone
+ *   PricingConfigDialog   the editable knobs (not credit value / price floor — WT-690)
  *
  * PlanCreateDialog is the one creator: POST /plans exists as of 2026-08-17, with the same
  * validation as the PUT. Rate-card identities still arrive by migration; a retired plan is
@@ -34,6 +35,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePreviewAdminRateCard } from "@/hooks/use-admin-pricing";
 import { getErrorMessage } from "@/lib/api/errors";
 import { formatAdminMoney } from "@/lib/billing/admin-money";
+import {
+  isCreditRateCard,
+  parseProviderCostUsd,
+  providerCostEffect,
+} from "@/lib/billing/rate-card-margin";
 import {
   canSaveRateCard,
   formatMarginRatio,
@@ -611,24 +617,39 @@ export function RateCardEditDialog({
   open,
   onOpenChange,
   onSubmit,
+  onSetProviderCost,
   isSaving,
 }: {
   card: UsageRateCardDto | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (request: UpsertUsageRateCardRequest) => Promise<unknown>;
+  /** Credit-unit (CRD) cards only: records the provider cost and nothing else. */
+  onSetProviderCost: (id: string, providerUnitCostUsd: number) => Promise<unknown>;
   isSaving: boolean;
 }) {
   const t = useTranslations("adminPlansSettings.pricingEditors.rateCard");
+  const isCredit = card ? isCreditRateCard(card) : false;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-0 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t("editDialog.title")}</DialogTitle>
-          <DialogDescription>{t("editDialog.description")}</DialogDescription>
+          <DialogTitle>{isCredit ? t("creditCost.title") : t("editDialog.title")}</DialogTitle>
+          <DialogDescription>
+            {isCredit ? t("creditCost.description") : t("editDialog.description")}
+          </DialogDescription>
         </DialogHeader>
 
-        {card ? (
+        {card && isCredit ? (
+          <CreditRateCardCostForm
+            key={card.id}
+            card={card}
+            onCancel={() => onOpenChange(false)}
+            onSubmit={onSetProviderCost}
+            onSaved={() => onOpenChange(false)}
+            isSaving={isSaving}
+          />
+        ) : card ? (
           <RateCardEditForm
             key={card.id}
             card={card}
@@ -889,6 +910,100 @@ function RateCardEditForm({
 }
 
 /**
+ * The provider cost of a credit-unit (CRD) card, and nothing else.
+ *
+ * These are the cards usage is actually settled on, and the only ones admin Insights can compute AI
+ * provider cost from. Their credit price is set by hand rather than derived from cost × markup, so
+ * the full form above — whose preview and save gate reprice the card from its cost — does not apply.
+ * What saving does to history depends on whether the card already had a cost; the form says which
+ * before the admin commits, because "applies to all past usage" is not something to learn afterwards.
+ */
+function CreditRateCardCostForm({
+  card,
+  onCancel,
+  onSubmit,
+  onSaved,
+  isSaving,
+}: {
+  card: UsageRateCardDto;
+  onCancel: () => void;
+  onSubmit: (id: string, providerUnitCostUsd: number) => Promise<unknown>;
+  onSaved: () => void;
+  isSaving: boolean;
+}) {
+  const t = useTranslations("adminPlansSettings.pricingEditors.rateCard");
+  const [draft, setDraft] = useState(
+    card.providerUnitCostUsd == null ? "" : String(card.providerUnitCostUsd),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const unit = card.unit || t("creditCost.noUnit");
+  const cost = parseProviderCostUsd(draft);
+  const effect = cost == null ? null : providerCostEffect(card, cost);
+
+  const handleSave = async () => {
+    if (!card.unit) {
+      setError(t("creditCost.errors.noUnit"));
+      return;
+    }
+    if (cost == null) {
+      setError(t("creditCost.errors.invalid"));
+      return;
+    }
+    if (effect === "unchanged") {
+      onSaved();
+      return;
+    }
+    try {
+      setError(null);
+      await onSubmit(card.id, cost);
+      onSaved();
+    } catch (err) {
+      setError(getErrorMessage(err, t("errors.saveFailed")));
+    }
+  };
+
+  return (
+    <>
+      <div className="mt-4 grid gap-4">
+        <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 font-mono text-[11px] text-ink-muted">
+          {card.chargeType} · {t("perUnit", { unit })} · {card.unitPrice} {card.currency}
+        </p>
+
+        <Field
+          label={t("creditCost.field", { unit })}
+          htmlFor="credit-card-cost"
+          hint={t("creditCost.hint", { unit })}
+        >
+          <Input
+            id="credit-card-cost"
+            inputMode="decimal"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        </Field>
+
+        {effect && effect !== "unchanged" ? (
+          <p className="rounded-lg border border-hairline/60 px-3 py-2 text-[12px] text-ink-muted">
+            {effect === "backfill" ? t("creditCost.effectBackfill") : t("creditCost.effectSupersede")}
+          </p>
+        ) : null}
+
+        <FormError message={error} />
+      </div>
+
+      <DialogFooter className="mt-5">
+        <Button variant="outline" onClick={onCancel} disabled={isSaving}>
+          {t("cancel")}
+        </Button>
+        <Button onClick={() => void handleSave()} disabled={isSaving || cost == null || !card.unit}>
+          {isSaving ? t("saving") : t("creditCost.save")}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
+
+/**
  * Retiring a rate card. Typed confirmation, because it is the least reversible write on the page:
  * the card leaves the active list the moment it is retired, and this screen reads only that list,
  * so nothing here can bring it back. Until a new rate is published for the identity, usage that
@@ -993,15 +1108,17 @@ function RateCardDeactivateForm({
 /* ── pricing config ──────────────────────────────────────────────────────── */
 
 /**
- * The twelve knobs the endpoint accepts, in the order they are read on screen.
+ * The knobs this dialog edits, in the order they are read on screen.
+ *
+ * WT-690: `creditValueVnd` and `minimumPricePerCreditVnd` are deliberately absent. Stripe owns
+ * customer pricing; billing still reads both (top-up pricing and the plan/contract price floor),
+ * so the request omits them and the backend keeps the stored values.
  *
  * `formula` and `resolverKey` are on the DTO and not here on purpose: they describe how the config
  * was resolved rather than what it holds, and `UpdatePricingConfigRequest` has no room for them.
  */
 const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
   "fxRateUsdVnd",
-  "creditValueVnd",
-  "minimumPricePerCreditVnd",
   "minimumContractPriceVnd",
   "minimumContractPriceUsd",
   "salesUsageWeight",
@@ -1011,7 +1128,15 @@ const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
   "defaultOverageCapRatio",
   "defaultInvoiceTermsDays",
   "defaultInvoiceGraceHours",
+  "cartesiaUsdPerCredit",
 ];
+
+/**
+ * Fields a blank may leave alone: the request omits them and the backend keeps the stored value.
+ * Only the Cartesia price, which a backend that predates it does not return — requiring a value
+ * there would block every other save against that backend.
+ */
+const OPTIONAL_CONFIG_KEYS: ReadonlySet<keyof UpdatePricingConfigRequest> = new Set(["cartesiaUsdPerCredit"]);
 
 function useConfigFields(
   t: ReturnType<typeof useTranslations>,
@@ -1078,13 +1203,14 @@ function PricingConfigForm({
   const t = useTranslations("adminPlansSettings.pricingEditors.config");
   const configFields = useConfigFields(t);
   const [draft, setDraft] = useState<Record<string, string>>(() =>
-    Object.fromEntries(configFields.map(({ key }) => [key, String(config[key])])),
+    Object.fromEntries(configFields.map(({ key }) => [key, config[key] == null ? "" : String(config[key])])),
   );
   const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
     const parsed: Partial<UpdatePricingConfigRequest> = {};
     for (const { key, label } of configFields) {
+      if (OPTIONAL_CONFIG_KEYS.has(key) && (draft[key] ?? "").trim() === "") continue;
       const value = toNumber(draft[key] ?? "");
       if (!Number.isFinite(value)) {
         setError(t("numberError", { label }));

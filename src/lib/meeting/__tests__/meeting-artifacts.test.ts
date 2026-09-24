@@ -11,6 +11,7 @@ import {
   unplayableRecordingState,
   ARTIFACT_OUTPUT_WINDOW_MS,
   pendingOutputs,
+  recordingFailureText,
 } from "../meeting-artifacts.ts";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
@@ -84,6 +85,54 @@ test("consent outranks status in the label", () => {
   assert.equal(
     artifactStatusLabel(artifact({ status: "processing" })),
     "Processing",
+  );
+});
+
+test("WT-824: a recording with no file yet says so, not 'Consent required'", () => {
+  // Every recording row is written consent-required from the moment recording starts, so
+  // consent-first labelled a recording still being written — or one that failed — as a permission
+  // problem, and the download then said "not ready". The row was telling the wrong story.
+  assert.equal(
+    artifactStatusLabel(
+      artifact({ type: "recording", status: "processing", consentRequired: true }),
+    ),
+    "Processing",
+  );
+  assert.equal(
+    artifactStatusLabel(artifact({ type: "recording", status: "failed", consentRequired: true })),
+    "Failed",
+  );
+  // A translated page gets the status key, never the consent key, for the same row.
+  assert.equal(
+    artifactStatusLabel(
+      artifact({ type: "recording", status: "processing", consentRequired: true }),
+      (key) => `t:${key}`,
+    ),
+    "t:processing",
+  );
+});
+
+test("WT-824: a failed recording says why, in the words the backend stored", () => {
+  assert.equal(
+    recordingFailureText(
+      artifact({
+        type: "recording",
+        status: "failed",
+        failureReason: "The recording failed and no file was saved. (LiveKit EGRESS_FAILED: upload refused)",
+      }),
+    ),
+    "Recording failed: The recording failed and no file was saved. (LiveKit EGRESS_FAILED: upload refused)",
+  );
+  // No stored reason (every row before the column) — nothing to add to the bare failed state.
+  assert.equal(recordingFailureText(artifact({ type: "recording", status: "failed" })), null);
+  // Only failures: a reason must never decorate a recording that worked.
+  assert.equal(
+    recordingFailureText(artifact({ type: "recording", status: "ready", failureReason: "stale" })),
+    null,
+  );
+  assert.equal(
+    recordingFailureText(artifact({ type: "summary_export", status: "failed", failureReason: "x" })),
+    null,
   );
 });
 
