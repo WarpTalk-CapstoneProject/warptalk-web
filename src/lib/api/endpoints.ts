@@ -546,6 +546,13 @@ export const API = {
     users: "/admin/users/insights",
     workspaces: "/admin/workspaces/insights",
     meetings: "/admin/meetings/insights",
+    pnl: "/admin/billing/insights/pnl",
+  },
+  /** The USD→VND rate: Stripe's by default, recorded daily, overridable. System admin only. */
+  adminFx: {
+    status: "/admin/billing/fx",
+    refresh: "/admin/billing/fx/refresh",
+    override: "/admin/billing/fx/override",
   },
   /**
    * The platform's own vitals, read back out of the metrics store. Query-only: nothing behind
