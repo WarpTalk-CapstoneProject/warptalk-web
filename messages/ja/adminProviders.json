@@ -1,0 +1,162 @@
+{
+  "page": {
+    "eyebrow": "運用",
+    "title": "プロバイダー",
+    "description": "WarpTalk が料金を支払う外部サービスの一覧です。何に使い、いくらかかり、こちらからの呼び出しがどうだったかを示します。稼働率はその呼び出しから算出し、プロバイダーのステータスページも併記します。",
+    "asOf": "{time} 時点",
+    "refresh": "更新"
+  },
+  "controls": {
+    "period": "期間",
+    "periods": {
+      "today": "今日",
+      "7d": "7日間",
+      "30d": "30日間",
+      "90d": "90日間",
+      "custom": "カスタム"
+    },
+    "from": "開始",
+    "to": "終了",
+    "apply": "適用",
+    "granularity": "粒度",
+    "day": "日別",
+    "hour": "時間別",
+    "hourlyLimit": "時間別は14日以内の期間でのみ利用できます",
+    "currency": "通貨",
+    "search": "プロバイダーを検索",
+    "sort": "並び替え",
+    "sorts": {
+      "status": "状態（悪い順）",
+      "cost": "今日のコスト",
+      "name": "名前",
+      "uptime": "稼働率（低い順）"
+    }
+  },
+  "status": {
+    "operational": "正常",
+    "degraded": "低下",
+    "partial_outage": "一部障害",
+    "major_outage": "重大な障害",
+    "unknown": "不明",
+    "no_data": "データなし"
+  },
+  "statusSource": {
+    "calls": "当社の呼び出しに基づく",
+    "statusPage": "プロバイダーのステータスページに基づく",
+    "both": "当社の呼び出しとステータスページに基づく",
+    "none": "まだシグナルなし"
+  },
+  "stats": {
+    "usageToday": "今日の使用量",
+    "costToday": "今日のコスト",
+    "liveRate": "成功率（24時間）",
+    "errorRate": "エラー率（24時間）",
+    "latency": "p50 / p95（24時間）",
+    "notTracked": "未計測",
+    "notMeasured": "未測定",
+    "calls": "{count} 件の呼び出し"
+  },
+  "units": {
+    "credits": "クレジット",
+    "providerCredits": "Cartesia クレジット",
+    "participantMinutes": "参加者分",
+    "payments": "件の支払い"
+  },
+  "metrics": {
+    "usage": "使用量",
+    "billedCredits": "請求クレジット",
+    "costUsd": "コスト",
+    "costVnd": "コスト",
+    "calls": "呼び出し",
+    "failures": "失敗",
+    "errorRate": "エラー率",
+    "p50Ms": "レイテンシ p50",
+    "p95Ms": "レイテンシ p95",
+    "roomMinutes": "ルーム分",
+    "recordings": "録画",
+    "failedPayments": "失敗した支払い",
+    "volumeVnd": "支払い額"
+  },
+  "chart": {
+    "metricsLabel": "表示する指標",
+    "aria": "期間中の {provider} の指標",
+    "indexed": "単位の異なる線は期間内のそれぞれの最大値を基準に表示しています。実際の値はホバーで確認できます。",
+    "indexedAxis": "最大値に対する%",
+    "empty": "期間中、このプロバイダーの使用は記録されていません。",
+    "pickMetric": "表示する指標を1つ以上選んでください。",
+    "stillToCome": "未到来",
+    "notTracked": "未計測",
+    "loadFailed": "このグラフを読み込めませんでした。"
+  },
+  "uptime": {
+    "aria": "過去 {days} 日間の {provider} の日別状態",
+    "start": "{days} 日前",
+    "end": "今日",
+    "percent": "稼働率 {percent}",
+    "notTracked": "稼働率は未計測",
+    "trackedSince": "{date} から呼び出しを計測しています。それ以前はステータスページのみです。",
+    "basis": {
+      "calls": "当社の呼び出しから計測",
+      "statusPage": "プロバイダーのステータスページから",
+      "none": "シグナルなし"
+    },
+    "calls": "呼び出し",
+    "failed": "失敗",
+    "succeeded": "成功",
+    "p95": "p95",
+    "noCalls": "呼び出しの記録なし",
+    "incident": "{impact} のインシデント: {name}",
+    "loadFailed": "稼働率の行を読み込めませんでした。"
+  },
+  "detail": {
+    "expand": "詳細を表示",
+    "collapse": "詳細を閉じる",
+    "share": "期間内の内訳",
+    "by": {
+      "workspace": "ワークスペース",
+      "service": "サービス",
+      "model": "モデル",
+      "operation": "処理",
+      "errorClass": "エラー種別"
+    },
+    "perBucket": "区間ごと",
+    "latency": "期間内のレイテンシ",
+    "p50": "p50",
+    "p95": "p95",
+    "p99": "p99",
+    "successRate": "成功率",
+    "clientErrors": "当社側の誤ったリクエスト",
+    "failures": "種別ごとの失敗",
+    "noFailures": "期間中に失敗した呼び出しはありません。",
+    "topWorkspaces": "上位ワークスペース",
+    "workspace": "ワークスペース",
+    "value": "使用量",
+    "cost": "コスト",
+    "incidents": "ステータスページのインシデント",
+    "noIncidents": "過去90日間、プロバイダーからのインシデント報告はありません。",
+    "noStatusPage": "このプロバイダーにはステータスページ API が設定されていません。",
+    "ongoing": "継続中",
+    "resolved": "{time} に解決",
+    "openStatusPage": "ステータスページを開く",
+    "config": "設定",
+    "configHint": "設定済みかどうかのみを示し、値は表示しません。",
+    "unavailable": "このプロバイダーでは利用できません",
+    "total": "合計"
+  },
+  "errorClasses": {
+    "quota": "クォータ／クレジット (402)",
+    "rate_limited": "レート制限 (429)",
+    "auth": "認証 (401/403)",
+    "server_error": "サーバーエラー (5xx)",
+    "timeout": "タイムアウト",
+    "network_error": "ネットワーク",
+    "error": "未分類",
+    "client_error": "当社のリクエスト (4xx)"
+  },
+  "errors": {
+    "loadTitle": "プロバイダーを読み込めませんでした。",
+    "loadDescription": "billing サービスと、セッションがプラットフォーム管理者権限を保持しているかを確認してください。",
+    "retry": "再試行",
+    "noMatch": "検索に一致するプロバイダーはありません。"
+  }
+}

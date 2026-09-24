@@ -1,0 +1,162 @@
+{
+  "page": {
+    "eyebrow": "Vận hành",
+    "title": "Nhà cung cấp",
+    "description": "Mọi dịch vụ bên ngoài WarpTalk trả tiền: dùng vào việc gì, tốn bao nhiêu, và các lệnh gọi của chính chúng ta tới đó ra sao. Thời gian hoạt động được đo từ các lệnh gọi đó, kèm trang trạng thái của nhà cung cấp.",
+    "asOf": "lúc {time}",
+    "refresh": "Làm mới"
+  },
+  "controls": {
+    "period": "Khoảng thời gian",
+    "periods": {
+      "today": "Hôm nay",
+      "7d": "7 ngày",
+      "30d": "30 ngày",
+      "90d": "90 ngày",
+      "custom": "Tùy chọn"
+    },
+    "from": "Từ",
+    "to": "Đến",
+    "apply": "Áp dụng",
+    "granularity": "Độ chi tiết",
+    "day": "Theo ngày",
+    "hour": "Theo giờ",
+    "hourlyLimit": "Chỉ xem theo giờ được cho khoảng 14 ngày trở xuống",
+    "currency": "Tiền tệ",
+    "search": "Tìm nhà cung cấp",
+    "sort": "Sắp xếp",
+    "sorts": {
+      "status": "Trạng thái (tệ nhất trước)",
+      "cost": "Chi phí hôm nay",
+      "name": "Tên",
+      "uptime": "Thời gian hoạt động (thấp nhất trước)"
+    }
+  },
+  "status": {
+    "operational": "Hoạt động bình thường",
+    "degraded": "Suy giảm",
+    "partial_outage": "Gián đoạn một phần",
+    "major_outage": "Gián đoạn nghiêm trọng",
+    "unknown": "Chưa rõ",
+    "no_data": "Không có dữ liệu"
+  },
+  "statusSource": {
+    "calls": "theo lệnh gọi của chúng ta",
+    "statusPage": "theo trang trạng thái của nhà cung cấp",
+    "both": "theo lệnh gọi của chúng ta và trang trạng thái",
+    "none": "chưa có tín hiệu"
+  },
+  "stats": {
+    "usageToday": "Mức dùng hôm nay",
+    "costToday": "Chi phí hôm nay",
+    "liveRate": "Tỉ lệ thành công (24 giờ)",
+    "errorRate": "Tỉ lệ lỗi (24 giờ)",
+    "latency": "p50 / p95 (24 giờ)",
+    "notTracked": "Chưa theo dõi",
+    "notMeasured": "Chưa đo",
+    "calls": "{count} lệnh gọi"
+  },
+  "units": {
+    "credits": "credit",
+    "providerCredits": "credit Cartesia",
+    "participantMinutes": "phút người tham gia",
+    "payments": "giao dịch"
+  },
+  "metrics": {
+    "usage": "Mức dùng",
+    "billedCredits": "Credit đã tính phí",
+    "costUsd": "Chi phí",
+    "costVnd": "Chi phí",
+    "calls": "Lệnh gọi",
+    "failures": "Lỗi",
+    "errorRate": "Tỉ lệ lỗi",
+    "p50Ms": "Độ trễ p50",
+    "p95Ms": "Độ trễ p95",
+    "roomMinutes": "Phút phòng",
+    "recordings": "Bản ghi",
+    "failedPayments": "Thanh toán thất bại",
+    "volumeVnd": "Giá trị thanh toán"
+  },
+  "chart": {
+    "metricsLabel": "Chỉ số hiển thị",
+    "aria": "Chỉ số của {provider} trong khoảng thời gian",
+    "indexed": "Các đường khác đơn vị được quy về đỉnh của chính nó trong kỳ; di chuột để xem giá trị thật.",
+    "indexedAxis": "% so với đỉnh",
+    "empty": "Không ghi nhận mức dùng nào của nhà cung cấp này trong kỳ.",
+    "pickMetric": "Chọn ít nhất một chỉ số để vẽ.",
+    "stillToCome": "Chưa tới",
+    "notTracked": "Chưa theo dõi",
+    "loadFailed": "Không tải được biểu đồ này."
+  },
+  "uptime": {
+    "aria": "Trạng thái theo ngày của {provider} trong {days} ngày qua",
+    "start": "{days} ngày trước",
+    "end": "Hôm nay",
+    "percent": "{percent} thời gian hoạt động",
+    "notTracked": "chưa theo dõi thời gian hoạt động",
+    "trackedSince": "Lệnh gọi được theo dõi từ {date}; các ngày trước chỉ có trang trạng thái.",
+    "basis": {
+      "calls": "đo từ lệnh gọi của chúng ta",
+      "statusPage": "theo trang trạng thái của nhà cung cấp",
+      "none": "không có tín hiệu"
+    },
+    "calls": "lệnh gọi",
+    "failed": "lỗi",
+    "succeeded": "thành công",
+    "p95": "p95",
+    "noCalls": "không có lệnh gọi nào",
+    "incident": "Sự cố {impact}: {name}",
+    "loadFailed": "Không tải được hàng thời gian hoạt động."
+  },
+  "detail": {
+    "expand": "Xem chi tiết",
+    "collapse": "Ẩn chi tiết",
+    "share": "Tỉ trọng trong kỳ",
+    "by": {
+      "workspace": "Workspace",
+      "service": "Dịch vụ",
+      "model": "Mô hình",
+      "operation": "Tác vụ",
+      "errorClass": "Loại lỗi"
+    },
+    "perBucket": "Theo từng mốc",
+    "latency": "Độ trễ trong kỳ",
+    "p50": "p50",
+    "p95": "p95",
+    "p99": "p99",
+    "successRate": "Tỉ lệ thành công",
+    "clientErrors": "Yêu cầu do phía ta sai",
+    "failures": "Lỗi theo loại",
+    "noFailures": "Không có lệnh gọi lỗi nào trong kỳ.",
+    "topWorkspaces": "Workspace dùng nhiều nhất",
+    "workspace": "Workspace",
+    "value": "Mức dùng",
+    "cost": "Chi phí",
+    "incidents": "Sự cố trên trang trạng thái",
+    "noIncidents": "Nhà cung cấp không báo sự cố nào trong 90 ngày qua.",
+    "noStatusPage": "Nhà cung cấp này chưa được cấu hình API trang trạng thái.",
+    "ongoing": "đang diễn ra",
+    "resolved": "đã xử lý {time}",
+    "openStatusPage": "Mở trang trạng thái",
+    "config": "Cấu hình",
+    "configHint": "Chỉ cho biết đã thiết lập hay chưa, không bao giờ hiển thị giá trị.",
+    "unavailable": "Không áp dụng cho nhà cung cấp này",
+    "total": "tổng"
+  },
+  "errorClasses": {
+    "quota": "Hết hạn mức / credit (402)",
+    "rate_limited": "Bị giới hạn tốc độ (429)",
+    "auth": "Xác thực (401/403)",
+    "server_error": "Lỗi máy chủ (5xx)",
+    "timeout": "Quá thời gian",
+    "network_error": "Mạng",
+    "error": "Chưa phân loại",
+    "client_error": "Yêu cầu của ta (4xx)"
+  },
+  "errors": {
+    "loadTitle": "Không tải được danh sách nhà cung cấp.",
+    "loadDescription": "Kiểm tra billing service và phiên của bạn còn quyền quản trị nền tảng.",
+    "retry": "Thử lại",
+    "noMatch": "Không có nhà cung cấp nào khớp tìm kiếm."
+  }
+}
