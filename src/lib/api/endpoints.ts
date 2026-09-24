@@ -554,6 +554,33 @@ export const API = {
     detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
   },
   /**
+   * The announcements CMS (notification service). Nested under /admin/notifications so it rides
+   * the gateway route that already exists rather than widening the approved admin surface.
+   */
+  adminAnnouncementCms: {
+    base: "/admin/notifications/announcements",
+    detail: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}`,
+    publish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/publish`,
+    unpublish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/unpublish`,
+    archive: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/archive`,
+    duplicate: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/duplicate`,
+  },
+  /** The email template CMS (notification service). Every sender reads what is saved here. */
+  adminEmailTemplates: {
+    base: "/admin/notifications/email-templates",
+    detail: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}`,
+    preview: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/preview`,
+    test: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/test`,
+    versions: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/versions`,
+    restore: (key: string, version: number) =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/versions/${version}/restore`,
+  },
+  /** Announcements as the signed-in user sees them: live, meant for them, not dismissed. */
+  announcements: {
+    active: "/notifications/announcements",
+    dismiss: (id: string) => `/notifications/announcements/${encodeURIComponent(id)}/dismiss`,
+  },
+  /**
    * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
    * controller lives on the workspace service's own prefix and is gated there. Other services'
    * outboxes are not reachable from here.

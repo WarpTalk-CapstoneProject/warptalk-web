@@ -135,30 +135,5 @@
       "previous": "Previous",
       "next": "Next"
     }
-  },
-  "emailTemplates": {
-    "eyebrow": "Operations",
-    "title": "Email templates",
-    "description": "Every email the platform sends, where its content lives, and what fills it in.",
-    "notEditableNotice": "These emails are composed in code by the service that sends them, so they are not editable here. Changing a subject or body is a code change in that service.",
-    "tabs": {
-      "all": "All",
-      "live": "Live",
-      "dormant": "Dormant"
-    },
-    "filterAria": "Filter emails by status",
-    "emailCount": "{count, plural, one {# email} other {# emails}}",
-    "statusLive": "Live",
-    "statusDormant": "Dormant",
-    "detail": {
-      "whyDormant": "Why dormant",
-      "subject": "Subject",
-      "sentWhen": "Sent when",
-      "sentBy": "Sent by",
-      "sentByValue": "{service} via {provider}",
-      "body": "Body",
-      "variables": "Variables",
-      "source": "Source"
-    }
   }
 }

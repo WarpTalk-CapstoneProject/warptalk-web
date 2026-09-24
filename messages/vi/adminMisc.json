@@ -135,30 +135,5 @@
       "previous": "Trước",
       "next": "Tiếp"
     }
-  },
-  "emailTemplates": {
-    "eyebrow": "Vận hành",
-    "title": "Mẫu email",
-    "description": "Mọi email nền tảng gửi đi, nội dung được lưu ở đâu và những gì điền vào đó.",
-    "notEditableNotice": "Các email này được soạn trong mã nguồn bởi dịch vụ gửi chúng, nên không thể chỉnh sửa tại đây. Muốn đổi tiêu đề hoặc nội dung cần thay đổi mã nguồn của dịch vụ đó.",
-    "tabs": {
-      "all": "Tất cả",
-      "live": "Đang dùng",
-      "dormant": "Ngừng dùng"
-    },
-    "filterAria": "Lọc email theo trạng thái",
-    "emailCount": "{count, plural, other {# email}}",
-    "statusLive": "Đang dùng",
-    "statusDormant": "Ngừng dùng",
-    "detail": {
-      "whyDormant": "Vì sao ngừng dùng",
-      "subject": "Tiêu đề",
-      "sentWhen": "Thời điểm gửi",
-      "sentBy": "Gửi bởi",
-      "sentByValue": "{service} qua {provider}",
-      "body": "Nội dung",
-      "variables": "Biến",
-      "source": "Nguồn"
-    }
   }
 }

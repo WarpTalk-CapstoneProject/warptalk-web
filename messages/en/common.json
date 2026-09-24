@@ -298,5 +298,21 @@
     "workspaceSettings": "Workspace settings",
     "billing": "Billing",
     "signOut": "Sign out"
+  },
+  "announcements": {
+    "regionLabel": "Announcements",
+    "readMore": "Read more",
+    "pagerLabel": "More announcements",
+    "previous": "Previous announcement",
+    "next": "Next announcement",
+    "position": "{current} of {total}",
+    "dismiss": "Dismiss",
+    "dontShowAgain": "Don't show this again",
+    "types": {
+      "ANNOUNCEMENT": "Announcement",
+      "FEATURE": "New feature",
+      "MAINTENANCE": "Maintenance",
+      "PROMOTION": "Offer"
+    }
   }
 }
