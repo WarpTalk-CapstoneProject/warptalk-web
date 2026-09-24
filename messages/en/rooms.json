@@ -142,7 +142,11 @@
       "saveTranscript": "Save the meeting transcript",
       "saveTranscriptHint": "Subtitles and translation still work. This meeting will have no transcript, summary or minutes afterwards.",
       "keepTranscript": "Keep a transcript of this meeting",
-      "dontKeepTranscript": "Do not keep a record of this meeting"
+      "dontKeepTranscript": "Do not keep a record of this meeting",
+      "autoShareRecord": "Share the record with participants automatically",
+      "autoShareRecordOffHint": "Only you will see the transcript, AI summary and recording until you publish them.",
+      "keepRecordPrivate": "Keep the record private until I publish it",
+      "shareRecordAutomatically": "Share the record with participants when the meeting ends"
     },
     "startTime": {
       "label": "Start time",

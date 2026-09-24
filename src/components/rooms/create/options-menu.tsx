@@ -10,6 +10,7 @@ import {
   Repeat,
   ShieldCheck,
   Translate,
+  UsersThree,
 } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -54,6 +55,8 @@ export function OptionsMenu({
   onParticipantsCanStartTranslationChange,
   saveTranscript,
   onSaveTranscriptChange,
+  autoShareRecord,
+  onAutoShareRecordChange,
 }: {
   hasScheduledAt?: boolean;
   onAddScheduledAt?: () => void;
@@ -70,6 +73,9 @@ export function OptionsMenu({
   /** WT-587: whether the meeting is written down at all. Omit to hide the row. */
   saveTranscript?: boolean;
   onSaveTranscriptChange?: (value: boolean) => void;
+  /** WT-826: whether the record is shared with participants when the meeting ends. Omit to hide the row. */
+  autoShareRecord?: boolean;
+  onAutoShareRecordChange?: (value: boolean) => void;
 }) {
   const t = useTranslations("rooms.create.options");
   const now = new Date();
@@ -449,6 +455,56 @@ export function OptionsMenu({
                 className="mt-0.5 flex shrink-0 cursor-pointer items-center"
               >
                 {saveTranscript ? (
+                  <CheckCircle weight="fill" size={16} color="#3b82f6" />
+                ) : (
+                  <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* WT-826. What happens to the record when the meeting ENDS — the transcript, the AI
+            summary and the recording, which one room setting governs together. On by default:
+            participants who sat through a meeting used to open its Recap and be told the host had
+            not shared it, because sharing waited on a click after the meeting that nobody made.
+
+            Hidden while the meeting keeps no record at all: there is nothing to share, and a
+            second switch about a record that will not exist reads as though it might.
+
+            Turning it off does not lock anything in — the host can still publish from the
+            meeting record afterwards, and unpublish an auto-shared one the same way. */}
+        {onAutoShareRecordChange && saveTranscript !== false && (
+          <div className="rounded-md">
+            <div className="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-surface-2">
+              <button
+                type="button"
+                onClick={() => onAutoShareRecordChange(!autoShareRecord)}
+                aria-pressed={!!autoShareRecord}
+                className="flex flex-1 cursor-pointer items-start gap-2 text-left text-[13px]"
+              >
+                <UsersThree weight="duotone" size={16} className="mt-0.5 shrink-0" />
+                <span className="min-w-0">
+                  <span className="block font-medium text-ink">
+                    {t("autoShareRecord")}
+                  </span>
+                  {!autoShareRecord && (
+                    <span className="mt-0.5 block text-[11px] leading-snug text-ink-subtle">
+                      {t("autoShareRecordOffHint")}
+                    </span>
+                  )}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onAutoShareRecordChange(!autoShareRecord)}
+                aria-label={
+                  autoShareRecord ? t("keepRecordPrivate") : t("shareRecordAutomatically")
+                }
+                className="mt-0.5 flex shrink-0 cursor-pointer items-center"
+              >
+                {autoShareRecord ? (
                   <CheckCircle weight="fill" size={16} color="#3b82f6" />
                 ) : (
                   <div className="h-4 w-4 rounded-full border border-border/60 transition-colors" />

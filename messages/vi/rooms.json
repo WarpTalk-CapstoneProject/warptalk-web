@@ -142,7 +142,11 @@
       "saveTranscript": "Lưu bản ghi cuộc họp",
       "saveTranscriptHint": "Phụ đề và bản dịch vẫn hoạt động. Cuộc họp này sẽ không có bản ghi, tóm tắt hay biên bản sau đó.",
       "keepTranscript": "Giữ bản ghi cho cuộc họp này",
-      "dontKeepTranscript": "Không lưu lại thông tin cuộc họp này"
+      "dontKeepTranscript": "Không lưu lại thông tin cuộc họp này",
+      "autoShareRecord": "Tự động chia sẻ hồ sơ cuộc họp với người tham gia",
+      "autoShareRecordOffHint": "Chỉ bạn xem được bản ghi, tóm tắt AI và bản ghi hình cho đến khi bạn công bố.",
+      "keepRecordPrivate": "Giữ hồ sơ ở chế độ riêng tư cho đến khi tôi công bố",
+      "shareRecordAutomatically": "Chia sẻ hồ sơ với người tham gia khi cuộc họp kết thúc"
     },
     "startTime": {
       "label": "Giờ bắt đầu",
