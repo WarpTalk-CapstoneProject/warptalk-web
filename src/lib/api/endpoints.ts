@@ -650,6 +650,16 @@ export const API = {
   adminPlatformHealth: {
     base: "/admin/platform-health",
   },
+  /**
+   * External providers (OpenAI, Cartesia, LiveKit, Stripe): usage, cost, our calls' success rate and
+   * a 90-day uptime row. Read-only; billing-service owns it, the gateway forwards the prefix.
+   */
+  adminProviders: {
+    base: "/admin/providers",
+    series: (key: string) => `/admin/providers/${encodeURIComponent(key)}/series`,
+    breakdown: (key: string) => `/admin/providers/${encodeURIComponent(key)}/breakdown`,
+    uptime: (key: string) => `/admin/providers/${encodeURIComponent(key)}/uptime`,
+  },
   /** Product feedback, aggregated. Read-only; comments carry no user id. */
   adminFeedback: {
     summary: "/admin/feedback/summary",

@@ -52,6 +52,7 @@ import {
   Globe,
   Handshake,
   Heartbeat,
+  Plugs,
   House,
   Keyboard,
   MagnifyingGlass,
@@ -495,6 +496,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         section: t("adminNav.sections.operations"),
         items: [
           { icon: Heartbeat, label: t("adminNav.items.systemHealth"), href: "/admin/health" },
+          { icon: Plugs, label: t("adminNav.items.providers"), href: "/admin/providers" },
           { icon: Star, label: t("adminNav.items.feedback"), href: "/admin/feedback" },
           { icon: Archive, label: t("adminNav.items.auditLog"), href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: t("adminNav.items.announcements"), href: "/admin/announcements" },
