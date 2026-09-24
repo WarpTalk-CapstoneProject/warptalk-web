@@ -4,6 +4,7 @@ import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
 import { AdminAlertsTab } from "@/components/admin/AdminAlertsTab";
 import { AdminInvoicesTab } from "@/components/admin/AdminInvoicesTab";
 import { AdminSubscriptionsTab } from "@/components/admin/AdminSubscriptionsTab";
+import { BillingGrowthOverview } from "@/components/admin/billing-growth-overview";
 import { FeatureBreakdownChart } from "@/components/admin/FeatureBreakdownChart";
 import { TopWorkspacesChart } from "@/components/admin/TopWorkspacesChart";
 import { UsageChart } from "@/components/admin/UsageChart";
@@ -69,11 +70,13 @@ import {
   Shield,
   User,
 } from "lucide-react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 export default function AdminBillingPage() {
+  const t = useTranslations("adminBillingLedger");
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -222,7 +225,7 @@ export default function AdminBillingPage() {
 
   const handleExport = async () => {
     if (!logs.length) {
-      alert("No data to export.");
+      alert(t("export.noDataAlert"));
       return;
     }
     setIsExporting(true);
@@ -392,10 +395,10 @@ export default function AdminBillingPage() {
   return (
     <AdminPage>
         <AdminPageHeader
-          eyebrow="Platform billing"
+          eyebrow={t("header.eyebrow")}
           eyebrowIcon={<Coins size={14} weight="fill" />}
-          title="Billing"
-          description="System-wide credits, consumption, and active workspaces."
+          title={t("header.title")}
+          description={t("header.description")}
           actions={
             <>
           <form
@@ -417,13 +420,11 @@ export default function AdminBillingPage() {
                   if (result.items && result.items.length > 0) {
                     router.push(`/billing/workspace/${result.items[0].id}`);
                   } else {
-                    alert(`No workspace found matching name "${term}"`);
+                    alert(t("search.noWorkspaceFound", { term }));
                   }
                 } catch (err) {
                   console.error("Workspace name lookup failed:", err);
-                  alert(
-                    "Could not perform workspace name search. Please use a valid Workspace ID.",
-                  );
+                  alert(t("search.searchFailed"));
                 }
               }
             }}
@@ -431,7 +432,7 @@ export default function AdminBillingPage() {
           >
             <Search className="absolute left-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Jump to name or ID..."
+              placeholder={t("search.placeholder")}
               value={searchWorkspaceId}
               onChange={(e) => setSearchWorkspaceId(e.target.value)}
               className="pl-9 w-[220px] h-9 bg-surface-2 border-hairline focus-visible:ring-primary-focus rounded-md text-sm"
@@ -442,48 +443,19 @@ export default function AdminBillingPage() {
             className="rounded-md h-9 px-4"
             onClick={() => setIsExportOpen(true)}
           >
-            <Download className="mr-2 h-4 w-4" weight="light" /> Export Report
+            <Download className="mr-2 h-4 w-4" weight="light" />{" "}
+            {t("actions.exportReport")}
           </Button>
           <Link href="/billing/plans">
             <Button variant="outline" className="rounded-md h-9 px-4">
-              <Settings className="mr-2 h-4 w-4 text-primary" /> Manage Plans
+              <Settings className="mr-2 h-4 w-4 text-primary" />{" "}
+              {t("actions.managePlans")}
             </Button>
           </Link>
           <AdjustCreditModal />
             </>
           }
         />
-
-      {/* Metrics */}
-      <section className="mt-5 grid gap-4 md:grid-cols-4">
-        <AdminMetric
-          icon={Coins}
-          label="Total Issued Credits"
-          value={metrics ? metrics.totalBalance.toLocaleString() : "..."}
-          detail="Circulating across workspaces"
-        />
-        <AdminMetric
-          icon={ChartLineUp}
-          label="Active Workspaces"
-          value={metrics ? `${metrics.activeWorkspaces}` : "..."}
-          detail="Workspaces using the platform"
-          isStatus
-        />
-        <AdminMetric
-          icon={FileText}
-          label="Monthly Consumption"
-          value={metrics ? metrics.monthlyUsage.toLocaleString() : "..."}
-          detail="Total credits consumed this month"
-        />
-        <AdminMetric
-          icon={Eye}
-          label="Transactions (30d)"
-          value={
-            metrics ? metrics.auditEventsLast30Days.toLocaleString() : "..."
-          }
-          detail="Credit transactions in the last 30 days"
-        />
-      </section>
 
       <Tabs defaultValue="overview" className="w-full mt-2">
         {/* Same shape as AdminFilterTabs on the other admin pages: ink fills the selected
@@ -494,36 +466,74 @@ export default function AdminBillingPage() {
             value="overview"
             className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
-            Economics & Analytics
+            {t("tabs.overview")}
           </TabsTrigger>
           <TabsTrigger
             value="ledger"
             className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
-            Global Transactions
+            {t("tabs.ledger")}
           </TabsTrigger>
           <TabsTrigger
             value="invoices"
             className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
-            Invoices
+            {t("tabs.invoices")}
           </TabsTrigger>
           <TabsTrigger
             value="subscriptions"
             className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
-            Subscriptions
+            {t("tabs.subscriptions")}
           </TabsTrigger>
           <TabsTrigger
             value="alerts"
             className="h-7 rounded-md px-3 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink data-[state=active]:bg-ink data-[state=active]:text-surface-1 data-[state=active]:shadow-none"
           >
-            Fraud Alerts
+            {t("tabs.alerts")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-6 space-y-6 outline-none">
-          {/* Charts */}
+          {/* WT-692: growth first — revenue, active accounts and workspaces, user growth — from the
+              same Insights endpoints /admin reads. Credit consumption follows as the secondary
+              view it is. */}
+          <BillingGrowthOverview />
+
+          <div className="pt-2">
+            <h2 className="text-[13px] font-semibold">{t("growth.usageHeading")}</h2>
+            <p className="mt-0.5 text-[12px] text-ink-muted">{t("growth.usageNote")}</p>
+          </div>
+          <section className="grid gap-4 md:grid-cols-4">
+            <AdminMetric
+              icon={Coins}
+              label={t("metrics.totalIssuedCredits.label")}
+              value={metrics ? metrics.totalBalance.toLocaleString() : "..."}
+              detail={t("metrics.totalIssuedCredits.detail")}
+            />
+            <AdminMetric
+              icon={ChartLineUp}
+              label={t("metrics.activeWorkspaces.label")}
+              value={metrics ? `${metrics.activeWorkspaces}` : "..."}
+              detail={t("metrics.activeWorkspaces.detail")}
+              isStatus
+            />
+            <AdminMetric
+              icon={FileText}
+              label={t("metrics.monthlyConsumption.label")}
+              value={metrics ? metrics.monthlyUsage.toLocaleString() : "..."}
+              detail={t("metrics.monthlyConsumption.detail")}
+            />
+            <AdminMetric
+              icon={Eye}
+              label={t("metrics.transactions30d.label")}
+              value={
+              metrics ? metrics.auditEventsLast30Days.toLocaleString() : "..."
+              }
+              detail={t("metrics.transactions30d.detail")}
+            />
+          </section>
+
           <section className="grid gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
               <UsageChart />
@@ -543,13 +553,15 @@ export default function AdminBillingPage() {
             <CardHeader className="p-4 border-b border-hairline bg-surface-1/50 flex-none">
               <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
-                  <CardTitle className="text-lg">Global Transactions</CardTitle>
+                  <CardTitle className="text-lg">{t("ledger.cardTitle")}</CardTitle>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-hairline">
                 <div className="flex flex-col gap-1">
-                  <Label className="text-xs text-muted-foreground">Type</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    {t("ledger.filters.typeLabel")}
+                  </Label>
                   <Select
                     value={historyTypeFilter}
                     onValueChange={(val) => {
@@ -558,20 +570,20 @@ export default function AdminBillingPage() {
                     }}
                   >
                     <SelectTrigger className="w-[140px] h-8 text-sm">
-                      <SelectValue placeholder="All types" />
+                      <SelectValue placeholder={t("ledger.filters.allTypesPlaceholder")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="ALL">All Types</SelectItem>
-                      <SelectItem value="top_up">Top Up</SelectItem>
-                      <SelectItem value="consume">Consumption</SelectItem>
-                      <SelectItem value="adjustment">Adjustment</SelectItem>
+                      <SelectItem value="ALL">{t("ledger.filters.allTypes")}</SelectItem>
+                      <SelectItem value="top_up">{t("ledger.filters.topUp")}</SelectItem>
+                      <SelectItem value="consume">{t("ledger.filters.consumption")}</SelectItem>
+                      <SelectItem value="adjustment">{t("ledger.filters.adjustment")}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">
-                    From date
+                    {t("ledger.filters.fromDate")}
                   </Label>
                   <Input
                     type="date"
@@ -586,7 +598,7 @@ export default function AdminBillingPage() {
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">
-                    To date
+                    {t("ledger.filters.toDate")}
                   </Label>
                   <Input
                     type="date"
@@ -601,11 +613,11 @@ export default function AdminBillingPage() {
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">
-                    Workspace ID
+                    {t("ledger.filters.workspaceId")}
                   </Label>
                   <Input
                     type="text"
-                    placeholder="Enter ID..."
+                    placeholder={t("ledger.filters.workspaceIdPlaceholder")}
                     className="h-8 text-sm w-[140px]"
                     value={filterWorkspaceId}
                     onChange={(e) => {
@@ -617,12 +629,12 @@ export default function AdminBillingPage() {
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">
-                    Min amount (cr)
+                    {t("ledger.filters.minAmount")}
                   </Label>
                   <Input
                     type="number"
                     min={0}
-                    placeholder="e.g. 10"
+                    placeholder={t("ledger.filters.minAmountPlaceholder")}
                     className="h-8 text-sm w-[110px]"
                     value={filterMinAmount}
                     onChange={(e) => {
@@ -636,12 +648,12 @@ export default function AdminBillingPage() {
 
                 <div className="flex flex-col gap-1">
                   <Label className="text-xs text-muted-foreground">
-                    Max amount (cr)
+                    {t("ledger.filters.maxAmount")}
                   </Label>
                   <Input
                     type="number"
                     min={0}
-                    placeholder="e.g. 1000"
+                    placeholder={t("ledger.filters.maxAmountPlaceholder")}
                     className="h-8 text-sm w-[110px]"
                     value={filterMaxAmount}
                     onChange={(e) => {
@@ -660,7 +672,7 @@ export default function AdminBillingPage() {
                     className="h-8 text-xs text-muted-foreground gap-1.5 self-end"
                     onClick={resetFilters}
                   >
-                    <span>Clear</span>
+                    <span>{t("ledger.filters.clear")}</span>
                     <Badge className="h-4 px-1 text-[10px] font-semibold rounded-full">
                       {activeFiltersCount}
                     </Badge>
@@ -673,13 +685,13 @@ export default function AdminBillingPage() {
               <Table>
                 <TableHeader className="bg-surface-2 sticky top-0 z-10">
                   <TableRow className="border-hairline hover:bg-transparent">
-                    <TableHead className="w-[180px]">Timestamp</TableHead>
-                    <TableHead>Workspace</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Reason</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Balance After</TableHead>
-                    <TableHead className="text-right pr-4">Action</TableHead>
+                    <TableHead className="w-[180px]">{t("ledger.table.timestamp")}</TableHead>
+                    <TableHead>{t("ledger.table.workspace")}</TableHead>
+                    <TableHead>{t("ledger.table.type")}</TableHead>
+                    <TableHead>{t("ledger.table.reason")}</TableHead>
+                    <TableHead className="text-right">{t("ledger.table.amount")}</TableHead>
+                    <TableHead className="text-right">{t("ledger.table.balanceAfter")}</TableHead>
+                    <TableHead className="text-right pr-4">{t("ledger.table.action")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -695,7 +707,7 @@ export default function AdminBillingPage() {
                         colSpan={7}
                         className="h-24 text-center text-muted-foreground"
                       >
-                        No transactions found
+                        {t("ledger.empty")}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -761,23 +773,20 @@ export default function AdminBillingPage() {
                             >
                               {isRaw
                                 ? log.type.replace("_", "-")
-                                : log.type
-                                    .split("_")
-                                    .map(
-                                      (word: string) =>
-                                        word.charAt(0).toUpperCase() +
-                                        word.slice(1).toLowerCase(),
-                                    )
-                                    .join("-")}
+                                : log.type === "top_up"
+                                  ? t("ledger.typeBadge.topUp")
+                                  : log.type === "consume"
+                                    ? t("ledger.typeBadge.consume")
+                                    : t("ledger.typeBadge.adjustment")}
                             </Badge>
                           </TableCell>
                           <TableCell
                             className={`text-sm ${!isRaw && "text-muted-foreground italic"}`}
                           >
                             {isGrouped || log.referenceType === "MeetingRoom"
-                              ? "Meeting Session"
+                              ? t("ledger.meetingSession")
                               : log.description ||
-                                (isRaw ? "N/A" : "System automatic")}
+                                (isRaw ? "N/A" : t("ledger.systemAutomatic"))}
                           </TableCell>
                           <TableCell
                             className={`text-right text-sm font-medium ${isPositive ? "text-semantic-success" : isRaw ? "text-muted-foreground" : "text-ink"}`}
@@ -806,7 +815,7 @@ export default function AdminBillingPage() {
                                 }
                                 className="text-primary hover:underline font-semibold h-7 px-2 cursor-pointer bg-transparent border-none"
                               >
-                                View
+                                {t("ledger.view")}
                               </Button>
                             )}
                           </TableCell>
@@ -821,15 +830,15 @@ export default function AdminBillingPage() {
             {/* Pagination */}
             <div className="p-4 border-t border-hairline flex items-center justify-between bg-surface-1">
               <p className="text-xs text-muted-foreground">
-                {data ? (
-                  <>
-                    Showing <strong>1–{displayedLogs.length}</strong> of{" "}
-                    <strong>{displayedLogs.length}</strong> grouped sessions
-                    (from <strong>{logs.length}</strong> transactions)
-                  </>
-                ) : (
-                  "Loading..."
-                )}
+                {data
+                  ? t.rich("ledger.pagination.showing", {
+                      strong: (chunks) => <strong>{chunks}</strong>,
+                      from: 1,
+                      to: displayedLogs.length,
+                      groups: displayedLogs.length,
+                      total: logs.length,
+                    })
+                  : t("ledger.pagination.loading")}
               </p>
               {totalPages > 1 && (
                 <div className="flex items-center gap-1">
@@ -912,36 +921,36 @@ export default function AdminBillingPage() {
         <DialogContent className="sm:max-w-[520px] bg-surface-1 border-hairline rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-medium">
-              Export Billing Report
+              {t("export.dialogTitle")}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Exports a 2-sheet Excel file: <strong>Summary</strong> (system
-              metrics + totals) and <strong>Audit Trail</strong> (all
-              transactions on this page with active filters).
+              {t.rich("export.dialogDescription", {
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Transactions</p>
+                <p className="text-xs text-muted-foreground">{t("export.stats.transactions")}</p>
                 <p className="text-lg font-semibold mt-1">
                   {totalCount.toLocaleString()}
                 </p>
               </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Net Top-Up</p>
+                <p className="text-xs text-muted-foreground">{t("export.stats.netTopUp")}</p>
                 <p className="text-lg font-semibold mt-1 text-semantic-success">
                   +{totalTopUp.toLocaleString()}
                 </p>
               </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Total Consumed</p>
+                <p className="text-xs text-muted-foreground">{t("export.stats.totalConsumed")}</p>
                 <p className="text-lg font-semibold mt-1 text-rose-500">
                   {totalConsumed.toLocaleString()}
                 </p>
               </div>
               <div className="rounded-lg border border-hairline bg-surface-2 p-3">
-                <p className="text-xs text-muted-foreground">Net Adjustments</p>
+                <p className="text-xs text-muted-foreground">{t("export.stats.netAdjustments")}</p>
                 <p
                   className={`text-lg font-semibold mt-1 ${totalAdjusted >= 0 ? "text-primary" : "text-rose-500"}`}
                 >
@@ -952,27 +961,27 @@ export default function AdminBillingPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="exportNoteAdmin" className="text-sm font-medium">
-                Add a note (optional)
+                {t("export.noteLabel")}
               </Label>
               <Textarea
                 id="exportNoteAdmin"
-                placeholder="e.g. Q2 2026 billing review for board meeting..."
+                placeholder={t("export.notePlaceholder")}
                 value={exportNote}
                 onChange={(e) => setExportNote(e.target.value)}
                 className="resize-none h-20 bg-surface-2 border-hairline"
               />
               <p className="text-xs text-muted-foreground">
-                This note will be printed at the top of the Summary sheet.
+                {t("export.noteHelper")}
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsExportOpen(false)}>
-              Cancel
+              {t("export.cancel")}
             </Button>
             <Button onClick={handleExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
-              {isExporting ? "Generating..." : "Download Excel"}
+              {isExporting ? t("export.generating") : t("export.download")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -985,10 +994,10 @@ export default function AdminBillingPage() {
         <DialogContent className="sm:max-w-[760px] w-[95vw] border border-hairline bg-surface-1 shadow-lg rounded-xl overflow-hidden p-0 text-ink">
           <div className="bg-gradient-to-br from-primary/10 via-canvas to-canvas px-6 pt-6 pb-4 border-b border-hairline relative">
             <h3 className="text-base font-extrabold text-ink tracking-tight flex items-center gap-2">
-              <span>📊 Transaction Details</span>
+              <span>📊 {t("transactionDetails.title")}</span>
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
-              Breakdown of variable AI service spend for this session
+              {t("transactionDetails.subtitle")}
             </p>
           </div>
 
@@ -999,7 +1008,7 @@ export default function AdminBillingPage() {
                 <div className="grid grid-cols-2 gap-4 bg-surface-2 p-4 rounded-lg border border-hairline text-xs text-ink">
                   <div>
                     <span className="text-[10px] text-muted-foreground block uppercase font-mono tracking-wider">
-                      Date
+                      {t("transactionDetails.date")}
                     </span>
                     <span className="font-bold mt-1 block text-sm">
                       {format(
@@ -1010,7 +1019,7 @@ export default function AdminBillingPage() {
                   </div>
                   <div>
                     <span className="text-[10px] text-muted-foreground block uppercase font-mono tracking-wider">
-                      Total Deducted
+                      {t("transactionDetails.totalDeducted")}
                     </span>
                     <span className="text-rose-600 dark:text-rose-400 font-extrabold mt-1 block text-sm">
                       {Math.abs(selectedTxGroup.amount).toLocaleString()} cr
@@ -1023,14 +1032,15 @@ export default function AdminBillingPage() {
                   {/* Left Column: Service Breakdown Summary */}
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-ink uppercase tracking-wider">
-                      Service Breakdown
+                      {t("transactionDetails.serviceBreakdown")}
                     </h4>
                     <div className="divide-y divide-hairline border border-hairline rounded-lg bg-surface-2/40 overflow-hidden">
                       {Object.entries(
                         selectedTxGroup.originalTx.reduce(
                           (acc: Record<string, UsageGroupSummary>, item) => {
                             const type = getLabelForUsage(
-                              item.referenceType || "Other",
+                              item.referenceType || t("usageLabels.other"),
+                              t,
                             );
                             const rawType = item.referenceType || "Other";
                             if (!acc[type]) {
@@ -1057,9 +1067,11 @@ export default function AdminBillingPage() {
                                 {service}
                               </span>
                               <span className="text-[10px] text-muted-foreground mt-1 block">
-                                {data.count}{" "}
-                                {data.count === 1 ? "call" : "calls"} ×{" "}
-                                {unitPriceVal} {suffix}
+                                {t("transactionDetails.callsSummary", {
+                                  count: data.count,
+                                  unitPrice: unitPriceVal,
+                                  suffix,
+                                })}
                               </span>
                             </div>
                             <span className="font-extrabold text-rose-600 dark:text-rose-400">
@@ -1074,7 +1086,7 @@ export default function AdminBillingPage() {
                   {/* Right Column: Itemized Events List */}
                   <div className="space-y-3">
                     <h4 className="text-xs font-bold text-ink uppercase tracking-wider">
-                      Activity Log Feed
+                      {t("transactionDetails.activityLogFeed")}
                     </h4>
                     <div className="h-[268px] overflow-y-auto border border-hairline rounded-lg divide-y divide-hairline text-xs bg-surface-1 text-ink font-sans p-3 space-y-0.5 select-text">
                       {selectedTxGroup.originalTx.map((item, idx) => (
@@ -1089,7 +1101,8 @@ export default function AdminBillingPage() {
                                 {format(new Date(item.createdAt), "HH:mm:ss")}
                               </span>
                               {getLabelForUsage(
-                                item.referenceType || "AI usage",
+                                item.referenceType || t("usageLabels.aiUsage"),
+                                t,
                               )}
                             </span>
                           </div>
@@ -1110,7 +1123,7 @@ export default function AdminBillingPage() {
               onClick={() => setSelectedTxGroup(null)}
               className="bg-primary hover:bg-primary-hover text-white cursor-pointer px-4 text-xs font-semibold rounded-md h-9"
             >
-              Close
+              {t("transactionDetails.close")}
             </Button>
           </div>
         </DialogContent>
@@ -1128,12 +1141,15 @@ function getUnitSuffixForUsage(usageType: string): string {
   return "cr";
 }
 
-function getLabelForUsage(usageType: string) {
+function getLabelForUsage(
+  usageType: string,
+  t: ReturnType<typeof useTranslations>,
+) {
   if (usageType === "translation" || usageType === "voice_translation")
-    return "Real-time Translation";
+    return t("usageLabels.translation");
   if (usageType === "summary" || usageType === "meeting_summary")
-    return "AI meeting insights";
-  if (usageType === "chat") return "AI workspace chat";
+    return t("usageLabels.summary");
+  if (usageType === "chat") return t("usageLabels.chat");
   return usageType;
 }
 
@@ -1148,6 +1164,7 @@ function IdBadge({
   type: "workspace" | "user" | "system" | "admin";
   name?: string | null;
 }) {
+  const t = useTranslations("adminBillingLedger");
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -1175,7 +1192,7 @@ function IdBadge({
       <div
         className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-surface-1 border border-border-dim border-b-border cursor-pointer hover:bg-surface-2 hover:border-border transition-colors group relative"
         onClick={handleCopy}
-        title={`Click to copy ID: ${id}`}
+        title={t("idBadge.copyTooltip", { id: id ?? "" })}
       >
         <span
           className={`text-xs font-mono font-medium ${type === "system" ? "text-blue-400" : type === "admin" ? "text-primary" : "text-foreground-muted"}`}

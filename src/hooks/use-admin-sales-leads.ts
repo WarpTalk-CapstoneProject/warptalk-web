@@ -10,13 +10,17 @@ export const ADMIN_SALES_LEAD_KEYS = {
   list: (query: SalesLeadQuery) => ["admin-sales-leads", "list", query] as const,
 };
 
-/** `placeholderData` keeps the previous page on screen while the next one loads. */
-export function useAdminSalesLeads(query: SalesLeadQuery) {
+/**
+ * `placeholderData` keeps the previous page on screen while the next one loads. `refetchInterval`
+ * is for Insights, which reads only `totalCount` and keeps it live.
+ */
+export function useAdminSalesLeads(query: SalesLeadQuery, options: { refetchInterval?: number } = {}) {
   return useQuery({
     queryKey: ADMIN_SALES_LEAD_KEYS.list(query),
     queryFn: () => adminSalesLeadService.list(query),
     placeholderData: (previous) => previous,
     staleTime: 30_000,
+    refetchInterval: options.refetchInterval,
   });
 }
 

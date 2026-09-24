@@ -72,18 +72,40 @@ const ALIASES: Record<string, KnownServiceKey> = {
   document_translation: "document_translation",
 };
 
+/**
+ * Optional i18n hook, defaulted to the English constants above so callers that have not
+ * migrated yet keep compiling and keep today's copy — same pattern as
+ * `getPlanDescription`/`buildFeatureList` in `src/lib/utils.ts`.
+ */
+type UsageLabelTranslator = (key: string) => string;
+
+/** Translation key for each canonical service, under the `usageLabels` namespace. */
+const SERVICE_LABEL_KEYS: Record<KnownServiceKey, string> = {
+  translation: "usageLabels.translation",
+  dubbing: "usageLabels.dubbing",
+  clone_dubbing: "usageLabels.cloneDubbing",
+  transcription: "usageLabels.transcription",
+  assistant: "usageLabels.assistant",
+  summary: "usageLabels.summary",
+  voice_cloning: "usageLabels.voiceCloning",
+  document_translation: "usageLabels.documentTranslation",
+};
+
 /** The service a raw charge type or usage type bills. Never returns nothing. */
-export function usageServiceOf(raw: string | null | undefined): UsageService {
+export function usageServiceOf(raw: string | null | undefined, t?: UsageLabelTranslator): UsageService {
   const name = (raw ?? "").trim();
   const known = ALIASES[name.toLowerCase()];
-  if (known) return { key: known, label: SERVICES[known], known: true };
-  if (!name) return { key: "raw:", label: "Other usage", known: false };
+  if (known) {
+    const label = t ? t(SERVICE_LABEL_KEYS[known]) : SERVICES[known];
+    return { key: known, label, known: true };
+  }
+  if (!name) return { key: "raw:", label: t ? t("usageLabels.otherUsage") : "Other usage", known: false };
   return { key: `raw:${name.toLowerCase()}`, label: name.replace(/_/g, " "), known: false };
 }
 
 /** Short enough for a table row or a legend. Falls back to the raw name, de-underscored. */
-export function usageTypeLabel(usageType: string): string {
-  return usageServiceOf(usageType).label;
+export function usageTypeLabel(usageType: string, t?: UsageLabelTranslator): string {
+  return usageServiceOf(usageType, t).label;
 }
 
 const AGGREGATED = /^Aggregated\s+(\S.*)$/;

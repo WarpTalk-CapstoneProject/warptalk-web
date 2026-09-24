@@ -59,12 +59,29 @@ for (const [label, handler] of [
 // Its wording is part of the contract now: the box is a client-side filter over the catalog the
 // page already fetched, and copy that reads as "we searched and found nothing" claims a
 // marketplace search that does not exist behind it.
-if (!page.includes("No plugin in this catalog matches")) {
+const pluginsMessagesEn = JSON.parse(
+  readFileSync(join(root, "messages/en/pluginsPage.json"), "utf8"),
+);
+
+if (!page.includes('t("empty.withQuery"')) {
   throw new Error("Plugins page must render an empty state when the filter matches nothing.");
 }
-if (!page.includes("It does not search a wider marketplace.")) {
+if (pluginsMessagesEn.empty.withQuery !== 'No plugin in this catalog matches "{query}".') {
+  throw new Error(
+    "The empty state's English copy must say no plugin in the catalog matches the query.",
+  );
+}
+if (!page.includes('t("empty.filterNote"')) {
   throw new Error(
     "The empty state must say the box only filters the fetched catalog. There is no marketplace search behind it, and the copy must not imply one.",
+  );
+}
+if (
+  pluginsMessagesEn.empty.filterNote !==
+  "This filters the plugins WarpTalk offers today. It does not search a wider marketplace."
+) {
+  throw new Error(
+    "The empty state's filter-note English copy must say it does not search a wider marketplace.",
   );
 }
 for (const token of ['placeholder="Search plugins"', "Clear search"]) {
@@ -353,12 +370,28 @@ if (/Skills only/i.test(workspacePage) || /Skills only/i.test(page)) {
 
 // The member's half. The action is decided in plugin-availability.ts, where it has node tests; the
 // page must go through it rather than branch on the availability string itself.
-if (!page.includes("memberPluginAction(plugin, workspaceName)")) {
+if (!page.includes("memberPluginAction(plugin, workspaceName,")) {
   throw new Error("The plugins page must decide Request/Requested/Connect through memberPluginAction.");
 }
-for (const token of ["Request", "Requested", "Send request", "RequestPluginDialog", "useRequestPlugin"]) {
+for (const token of [
+  't("actionLabels.request")',
+  't("actionLabels.requested")',
+  't("requestDialog.sendRequest")',
+  "RequestPluginDialog",
+  "useRequestPlugin",
+]) {
   if (!page.includes(token)) {
     throw new Error(`The plugins page must offer the request flow ('${token}').`);
+  }
+}
+for (const [key, expected] of [
+  ["actionLabels.request", "Request"],
+  ["actionLabels.requested", "Requested"],
+  ["requestDialog.sendRequest", "Send request"],
+]) {
+  const [group, prop] = key.split(".");
+  if (pluginsMessagesEn[group][prop] !== expected) {
+    throw new Error(`The plugins page's English copy for '${key}' must read '${expected}'.`);
   }
 }
 // A server that sends the new availability replaces the old block notice on the row; a server that

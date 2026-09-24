@@ -34,15 +34,32 @@ export interface SessionDeviceDescription {
   mobile: boolean;
 }
 
-export function describeSessionDevice(userAgent: string | null | undefined): SessionDeviceDescription {
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. Browser and OS names
+ * (Chrome, Windows, iPhone...) are product names and are never translated. */
+export type SessionDeviceTranslator = (key: "unknownDevice" | "browserOnSystem", values?: Record<string, string>) => string;
+
+const DEFAULT_SESSION_DEVICE_COPY = {
+  unknownDevice: () => "Unknown device",
+  browserOnSystem: (v?: Record<string, string>) => `${v!.browser} on ${v!.system}`,
+};
+
+function defaultT(key: "unknownDevice" | "browserOnSystem", values?: Record<string, string>): string {
+  return DEFAULT_SESSION_DEVICE_COPY[key](values);
+}
+
+export function describeSessionDevice(
+  userAgent: string | null | undefined,
+  t: SessionDeviceTranslator = defaultT,
+): SessionDeviceDescription {
   const raw = (userAgent ?? "").trim();
-  if (!raw) return { label: "Unknown device", mobile: false };
+  if (!raw) return { label: t("unknownDevice"), mobile: false };
 
   const browser = BROWSERS.find(([pattern]) => pattern.test(raw))?.[1];
   const system = SYSTEMS.find(([pattern]) => pattern.test(raw))?.[1];
   const mobile = system === "iPhone" || system === "iPad" || system === "Android" || /Mobile/.test(raw);
 
-  if (browser && system) return { label: `${browser} on ${system}`, mobile };
+  if (browser && system) return { label: t("browserOnSystem", { browser, system }), mobile };
   if (browser || system) return { label: (browser ?? system)!, mobile };
   return { label: raw.length > 60 ? `${raw.slice(0, 57)}...` : raw, mobile };
 }

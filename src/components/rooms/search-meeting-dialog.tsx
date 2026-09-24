@@ -5,6 +5,7 @@ import type { ElementType } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import {
   CalendarBlank,
   FileText,
@@ -40,6 +41,7 @@ type QuickSearchAction = {
 };
 
 export function SearchMeetingDialog() {
+  const t = useTranslations("rooms.searchDialog");
   const router = useRouter();
   const searchMeetingModalOpen = useUIStore((state) => state.searchMeetingModalOpen);
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
@@ -120,36 +122,36 @@ export function SearchMeetingDialog() {
     ...(canCreateMeetings
       ? [
           {
-            title: "Create room",
-            description: "Start a live translation room",
+            title: t("quickActions.createRoom.title"),
+            description: t("quickActions.createRoom.description"),
             icon: Plus,
             onSelect: () => closeAndRun(() => setCreateRoomModalOpen(true)),
           } satisfies QuickSearchAction,
         ]
       : []),
     {
-      title: "Join by code",
-      description: "Enter an invite or meeting code",
+      title: t("quickActions.joinByCode.title"),
+      description: t("quickActions.joinByCode.description"),
       icon: Keyboard,
       onSelect: () => closeAndRun(() => router.push("/join")),
     },
     {
-      title: "Open meetings",
+      title: t("quickActions.openMeetings.title"),
       // Not "scheduled and live rooms": that page lists finished and cancelled meetings too,
       // and the old wording was itself an argument that search could not reach them.
-      description: "Browse every meeting in this workspace",
+      description: t("quickActions.openMeetings.description"),
       icon: VideoCamera,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/rooms`)),
     },
     {
-      title: "Documents",
-      description: "Search workspace references",
+      title: t("quickActions.documents.title"),
+      description: t("quickActions.documents.description"),
       icon: FileText,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/documents`)),
     },
     {
-      title: "Members",
-      description: "Open the workspace directory",
+      title: t("quickActions.members.title"),
+      description: t("quickActions.members.description"),
       icon: Users,
       onSelect: () => closeAndRun(() => router.push(`/${slug}/members`)),
     },
@@ -181,7 +183,7 @@ export function SearchMeetingDialog() {
             <div className="flex h-12 items-center gap-3 rounded-full border border-border bg-surface-1 px-4 shadow-[0_16px_50px_rgba(0,0,0,0.10)]">
               <MagnifyingGlass size={18} weight="regular" className="shrink-0 text-ink-muted" />
               <CommandInput
-                placeholder="Search commands..."
+                placeholder={t("placeholder")}
                 value={searchQuery}
                 onValueChange={setSearchQuery}
                 autoFocus
@@ -198,7 +200,7 @@ export function SearchMeetingDialog() {
 
           <CommandList className="max-h-[460px] border-t border-border/70 px-2 pb-2 pt-1">
             {showQuickJoin && (
-              <CommandGroup heading="Join a meeting">
+              <CommandGroup heading={t("group.joinMeeting")}>
                 <CommandItem
                   value={`join-${pastedCode}`}
                   onSelect={() =>
@@ -211,17 +213,17 @@ export function SearchMeetingDialog() {
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-[13px] font-semibold text-foreground">
-                      Join meeting <span className="font-mono">{pastedCode}</span>
+                      {t("joinCode.title", { code: pastedCode })}
                     </span>
                     <span className="mt-0.5 truncate text-[12px] text-muted-foreground">
-                      Go straight to the room with this code
+                      {t("joinCode.description")}
                     </span>
                   </span>
                 </CommandItem>
               </CommandGroup>
             )}
 
-            <CommandGroup heading="Quick actions">
+            <CommandGroup heading={t("group.quickActions")}>
             {quickActions.map((action) => {
               const Icon = action.icon;
               return (
@@ -246,12 +248,15 @@ export function SearchMeetingDialog() {
           {isLoading && (
             <div className="flex items-center justify-center gap-3 p-4 text-sm text-muted-foreground">
               <LumidotSpinner />
-              <span>Searching meetings...</span>
+              <span>{t("searching")}</span>
             </div>
           )}
 
           {!isLoading && meetings.length > 0 && (
-            <CommandGroup heading={hasQuery ? "Meetings" : "Recent meetings"} className="mt-1">
+            <CommandGroup
+              heading={hasQuery ? t("group.meetings") : t("group.recentMeetings")}
+              className="mt-1"
+            >
               {meetings.map((meeting) => (
                 <CommandItem
                   key={meeting.id}
@@ -284,7 +289,7 @@ export function SearchMeetingDialog() {
 
           {!isLoading && hasQuery && meetings.length === 0 && (
             <div className="py-8 text-center text-[13px] text-muted-foreground">
-              No meetings found. Try a room title, code, or one of the quick actions above.
+              {t("empty")}
             </div>
           )}
           </CommandList>

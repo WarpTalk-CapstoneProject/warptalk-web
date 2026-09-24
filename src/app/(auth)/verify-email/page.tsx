@@ -27,6 +27,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Spinner } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
@@ -35,6 +36,7 @@ import { CinematicAuthShell } from "@/components/auth/cinematic-auth-shell";
 type State = "awaiting-inbox" | "loading" | "success" | "error";
 
 function VerifyEmailContent() {
+  const t = useTranslations("auth.verifyEmail");
   const params = useSearchParams();
   const token = params.get("token");
   const [state, setState] = useState<State>(token ? "loading" : "awaiting-inbox");
@@ -51,21 +53,21 @@ function VerifyEmailContent() {
 
   const heading =
     state === "awaiting-inbox"
-      ? "Check your email"
+      ? t("headingAwaitingInbox")
       : state === "loading"
-        ? "Verifying email…"
+        ? t("headingLoading")
         : state === "success"
-          ? "Email verified"
-          : "Verification failed";
+          ? t("headingSuccess")
+          : t("headingError");
 
   const detail =
     state === "awaiting-inbox"
-      ? "We sent a link to the address you signed up with. Open it to finish setting up your account — you can close this tab once you have."
+      ? t("detailAwaitingInbox")
       : state === "success"
-        ? "Your account is ready. You can sign in now."
+        ? t("detailSuccess")
         : state === "error"
-          ? "This link is invalid or expired. Send yourself a new one below."
-          : "Please wait while we verify your email address.";
+          ? t("detailError")
+          : t("detailLoading");
 
   return (
     <CinematicAuthShell>
@@ -84,7 +86,7 @@ function VerifyEmailContent() {
           href="/login"
           className="flex h-14 items-center justify-center rounded-xl bg-white font-semibold text-black"
         >
-          Go to login
+          {t("goToLogin")}
         </Link>
       )}
     </CinematicAuthShell>
@@ -102,6 +104,7 @@ function VerifyEmailContent() {
  * this an account-existence oracle for anyone who can load the page.
  */
 function ResendVerification() {
+  const t = useTranslations("auth.verifyEmail");
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -117,7 +120,7 @@ function ResendVerification() {
     } catch {
       // Only a failure to REACH us lands here; the server reports every outcome about the address
       // itself as success. So this is "try again", not "that address is wrong".
-      toast.error("Could not send the email just now. Please try again in a moment.");
+      toast.error(t("toasts.resendFailed"));
     } finally {
       setSending(false);
     }
@@ -126,8 +129,7 @@ function ResendVerification() {
   if (sent) {
     return (
       <p className="text-center text-sm text-white/50">
-        If that address needs verifying, a new link is on its way. It can take a minute to arrive —
-        check your spam folder too.
+        {t("resendSentMessage")}
       </p>
     );
   }
@@ -135,7 +137,7 @@ function ResendVerification() {
   return (
     <form onSubmit={resend} className="space-y-3">
       <label htmlFor="resend-email" className="block text-sm text-white/50">
-        Didn&apos;t get it? Send the link again
+        {t("resendLabel")}
       </label>
       <input
         id="resend-email"
@@ -144,7 +146,7 @@ function ResendVerification() {
         autoComplete="email"
         value={email}
         onChange={(event) => setEmail(event.target.value)}
-        placeholder="you@company.com"
+        placeholder={t("resendPlaceholder")}
         className="h-14 w-full rounded-xl border border-white/15 bg-white/5 px-4 text-white placeholder:text-white/30 focus:border-white/40 focus:outline-none"
       />
       <button
@@ -152,7 +154,7 @@ function ResendVerification() {
         disabled={sending}
         className="flex h-14 w-full items-center justify-center rounded-xl border border-white/20 font-semibold text-white transition hover:bg-white/10 disabled:opacity-50"
       >
-        {sending ? "Sending…" : "Resend verification email"}
+        {sending ? t("resendButtonSending") : t("resendButton")}
       </button>
     </form>
   );

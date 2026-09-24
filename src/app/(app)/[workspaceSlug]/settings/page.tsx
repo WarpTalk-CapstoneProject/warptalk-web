@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import {
   CaretRight,
@@ -38,39 +39,53 @@ import { parseIntegerInRange } from "@/lib/workspace/settings-validation";
 import { describeLanguageCeiling, describeRoomCeiling } from "@/lib/workspace/room-ceiling-notice";
 import { describeTimeZone, supportedTimeZones } from "@/lib/format/time-zones";
 
-const settingsSchema = z.object({
-  defaultLanguage: z.string().min(1, "Please select default language"),
-  timezone: z.string().min(1, "Please select timezone"),
-  maxActiveRooms: z.number().int("Must be a whole number").min(1, "Must be at least 1 room").max(50, "Max 50 rooms"),
-  artifactRetentionDays: z.number().int("Must be a whole number").min(0, "Retention must be 0 (indefinite) or positive").max(3650, "Max 3650 days"),
-  // Enumerated rather than free text, and spelled the way the backend spells them. The server
-  // compares ordinally and refuses an unrecognised value instead of rounding it to the nearest
-  // supported one, so a picker that can only emit these strings is what keeps the two ends
-  // agreeing — there is no casing this form could invent that the save would forgive.
-  minutesClassification: z.enum(["Internal", "Confidential", "Public"]),
-  minutesTemplate: z.enum(["vn-nd30", "global-en"]),
-  invitationExpiryDays: z.number().int("Must be a whole number").min(1, "Expiry must be at least 1 day").max(365, "Max 365 days"),
-  voiceCloningEnabled: z.boolean(),
-  isProfanityFilterEnabled: z.boolean(),
-  allowAnyPlugins: z.boolean(),
-  allowedTargetLanguages: z.array(z.string()),
-  verifiedDomains: z.array(z.string()),
-  allowExternalCollaboration: z.boolean(),
-  requireVerifiedDomainForInternal: z.boolean(),
-  aiUsagePolicy: z.object({
-    allowExternalLlm: z.boolean(),
-    useGlobalGlossary: z.boolean(),
-    redactPii: z.object({
-      enabled: z.boolean(),
+function getSettingsSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    defaultLanguage: z.string().min(1, t("validation.defaultLanguageRequired")),
+    timezone: z.string().min(1, t("validation.timezoneRequired")),
+    maxActiveRooms: z
+      .number()
+      .int(t("validation.wholeNumber"))
+      .min(1, t("validation.maxActiveRoomsMin"))
+      .max(50, t("validation.maxActiveRoomsMax")),
+    artifactRetentionDays: z
+      .number()
+      .int(t("validation.wholeNumber"))
+      .min(0, t("validation.retentionMin"))
+      .max(3650, t("validation.retentionMax")),
+    // Enumerated rather than free text, and spelled the way the backend spells them. The server
+    // compares ordinally and refuses an unrecognised value instead of rounding it to the nearest
+    // supported one, so a picker that can only emit these strings is what keeps the two ends
+    // agreeing — there is no casing this form could invent that the save would forgive.
+    minutesClassification: z.enum(["Internal", "Confidential", "Public"]),
+    minutesTemplate: z.enum(["vn-nd30", "global-en"]),
+    invitationExpiryDays: z
+      .number()
+      .int(t("validation.wholeNumber"))
+      .min(1, t("validation.invitationExpiryMin"))
+      .max(365, t("validation.invitationExpiryMax")),
+    voiceCloningEnabled: z.boolean(),
+    isProfanityFilterEnabled: z.boolean(),
+    allowAnyPlugins: z.boolean(),
+    allowedTargetLanguages: z.array(z.string()),
+    verifiedDomains: z.array(z.string()),
+    allowExternalCollaboration: z.boolean(),
+    requireVerifiedDomainForInternal: z.boolean(),
+    aiUsagePolicy: z.object({
+      allowExternalLlm: z.boolean(),
+      useGlobalGlossary: z.boolean(),
+      redactPii: z.object({
+        enabled: z.boolean(),
+      }),
+      dlp: z.object({
+        enabled: z.boolean(),
+        keywordsBlacklist: z.array(z.string()),
+      }),
     }),
-    dlp: z.object({
-      enabled: z.boolean(),
-      keywordsBlacklist: z.array(z.string()),
-    }),
-  }),
-});
+  });
+}
 
-type SettingsFormData = z.infer<typeof settingsSchema>;
+type SettingsFormData = z.infer<ReturnType<typeof getSettingsSchema>>;
 type ApiErrorLike = {
   response?: {
     status?: number;
@@ -84,21 +99,38 @@ const languages = languagesInScope("meeting").map((language) => ({
   label: language.name,
 }));
 
-// The classification values are already the words a reader wants, so they are their own labels —
-// wrapping "Internal" in a lookup that returns "Internal" would only invite the two to drift.
+// The classification values are filing-convention ids the backend stores and compares ordinally,
+// spelled in English the same way minutesTemplate's ids are — see getMinutesTemplateOptions. Only
+// the label an Owner reads is translated.
 const minutesClassificationOptions: MinutesClassification[] = ["Internal", "Confidential", "Public"];
 
-// The template values are not. "vn-nd30" and "global-en" are filing-convention ids the backend
-// stores and the document writer switches on; an Owner picking a house style should be reading
-// which convention it is. The Vietnamese decree is named in English here because the shipped UI
-// is English — the value underneath is what travels to the server, and it is unchanged.
-const minutesTemplateOptions: { value: MinutesTemplate; label: string }[] = [
-  { value: "vn-nd30", label: "Vietnamese (Decree 30/2020)" },
-  { value: "global-en", label: "International (English)" },
-];
+function getMinutesClassificationLabel(
+  t: ReturnType<typeof useTranslations>,
+  classification: MinutesClassification,
+): string {
+  switch (classification) {
+    case "Internal":
+      return t("general.minutesClassification.options.internal");
+    case "Confidential":
+      return t("general.minutesClassification.options.confidential");
+    case "Public":
+      return t("general.minutesClassification.options.public");
+    default:
+      return classification;
+  }
+}
 
-const describeMinutesTemplate = (value: string) =>
-  minutesTemplateOptions.find((option) => option.value === value)?.label ?? value;
+// The template values are not translated: "vn-nd30" and "global-en" are filing-convention ids the
+// backend stores and the document writer switches on, and the value underneath is what travels
+// to the server, unchanged. Only the labels an Owner reads are — see getMinutesTemplateOptions.
+function getMinutesTemplateOptions(
+  t: ReturnType<typeof useTranslations>,
+): { value: MinutesTemplate; label: string }[] {
+  return [
+    { value: "vn-nd30", label: t("general.minutesTemplate.optionVietnamese") },
+    { value: "global-en", label: t("general.minutesTemplate.optionInternational") },
+  ];
+}
 
 const DEFAULT_SETTINGS_FORM_DATA: SettingsFormData = {
   defaultLanguage: "en",
@@ -173,6 +205,7 @@ function toSettingsFormData(settings: WorkspaceSettingsDto): SettingsFormData {
 }
 
 export default function WorkspaceSettingsPage() {
+  const t = useTranslations("settingsWorkspace");
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const role = useWorkspaceStore((s) => s.role);
   const { setActiveWorkspace, activeWorkspaceSlug, membershipType, canCreateMeetings } =
@@ -184,6 +217,14 @@ export default function WorkspaceSettingsPage() {
   const patchSettingsMutation = usePatchWorkspaceSettings(activeWorkspaceId || "");
   const initializedWorkspaceRef = useRef<string | null>(null);
   const lastQueuedValuesRef = useRef<Record<string, string>>({});
+
+  const settingsSchema = useMemo(() => getSettingsSchema(t), [t]);
+  const minutesTemplateOptions = useMemo(() => getMinutesTemplateOptions(t), [t]);
+  const describeMinutesTemplate = useCallback(
+    (value: string) =>
+      minutesTemplateOptions.find((option) => option.value === value)?.label ?? value,
+    [minutesTemplateOptions],
+  );
 
   const {
     register,
@@ -208,6 +249,7 @@ export default function WorkspaceSettingsPage() {
     ceiling: planRoomCeiling,
     configured: watchedMaxActiveRooms,
     source: settings?.maxActiveRoomsCeilingSource,
+    t: (key, values) => t(`general.maxActiveRooms.ceiling.${key}`, values),
   }).message;
 
   // WT-500 — the plan's per-meeting language quota, which is enforced at meeting creation and
@@ -218,6 +260,7 @@ export default function WorkspaceSettingsPage() {
     ceiling: settings?.maxLanguagesCeiling,
     allowedCount: (watchAll.allowedTargetLanguages || []).length,
     source: settings?.maxLanguagesCeilingSource,
+    t: (key, values) => t(`general.allowedTargetLanguages.ceiling.${key}`, values),
   }).message;
 
   const saveWorkspacePatch = useCallback(async (patch: Partial<WorkspaceSettingsDto>) => {
@@ -244,7 +287,7 @@ export default function WorkspaceSettingsPage() {
     save: saveWorkspacePatch,
     onError: (error) => {
       const errorMsg = (error as { response?: { data?: { error?: string } } })?.response?.data?.error
-        || "Failed to save workspace settings.";
+        || t("toasts.saveFailed");
       toast.error(errorMsg);
     },
   });
@@ -288,9 +331,9 @@ export default function WorkspaceSettingsPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Lock className="h-6 w-6" />
             </div>
-            <CardTitle className="text-lg font-bold">Access Denied</CardTitle>
+            <CardTitle className="text-lg font-bold">{t("accessDenied.title")}</CardTitle>
             <CardDescription className="text-xs">
-              Only workspace Owners and Administrators can view or modify workspace configurations.
+              {t("accessDenied.description")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -310,11 +353,9 @@ export default function WorkspaceSettingsPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Warning className="h-6 w-6" />
             </div>
-            <CardTitle className="text-lg font-bold">Couldn&apos;t load workspace settings</CardTitle>
+            <CardTitle className="text-lg font-bold">{t("loadError.title")}</CardTitle>
             <CardDescription className="text-xs">
-              The current configuration could not be read, so nothing is shown here rather
-              than showing defaults that are not this workspace&apos;s. Retry, and if it keeps
-              failing check that the workspace service is reachable.
+              {t("loadError.description")}
             </CardDescription>
           </CardHeader>
           <button
@@ -323,7 +364,7 @@ export default function WorkspaceSettingsPage() {
             disabled={settingsQuery.isFetching}
             className="mx-auto mt-2 inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 px-4 text-xs font-semibold transition hover:bg-surface-3 disabled:opacity-60"
           >
-            {settingsQuery.isFetching ? "Retrying…" : "Retry"}
+            {settingsQuery.isFetching ? t("loadError.retrying") : t("loadError.retry")}
           </button>
         </Card>
       </div>
@@ -375,8 +416,8 @@ export default function WorkspaceSettingsPage() {
       {/* Page Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold tracking-tight text-ink">Settings</h1>
-          <p className="text-xs text-ink-muted">Workspace defaults for meetings, minutes and translation. Access and data protection live in Security.</p>
+          <h1 className="text-xl font-bold tracking-tight text-ink">{t("heading")}</h1>
+          <p className="text-xs text-ink-muted">{t("subheading")}</p>
         </div>
         <AutoSaveStatusBadge
           status={effectiveSaveStatus}
@@ -387,14 +428,14 @@ export default function WorkspaceSettingsPage() {
 
       {/* Workspace Link & Slug Card */}
       <div className="flex flex-col gap-3">
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">Workspace Info</div>
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">{t("workspaceInfo.heading")}</div>
         <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
 
           {/* Slug Row */}
           <div className="py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-ink">Workspace Slug</span>
-              <span className="text-[11px] text-ink-muted">The unique handle for identifying this workspace.</span>
+              <span className="text-xs font-semibold text-ink">{t("workspaceInfo.slugLabel")}</span>
+              <span className="text-[11px] text-ink-muted">{t("workspaceInfo.slugDescription")}</span>
             </div>
             <div className="relative flex items-center w-full sm:w-[240px]">
               <Input
@@ -407,11 +448,11 @@ export default function WorkspaceSettingsPage() {
                 onClick={() => {
                   if (workspaceQuery.data?.slug) {
                     navigator.clipboard.writeText(workspaceQuery.data.slug);
-                    toast.success("Workspace slug copied!");
+                    toast.success(t("toasts.slugCopied"));
                   }
                 }}
                 className="absolute right-2.5 text-ink-muted hover:text-ink transition-colors cursor-pointer"
-                title="Copy Slug"
+                title={t("workspaceInfo.copySlug")}
               >
                 <Copy size={14} />
               </button>
@@ -421,8 +462,8 @@ export default function WorkspaceSettingsPage() {
           {/* URL Row */}
           <div className="py-3 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-ink">Workspace URL</span>
-              <span className="text-[11px] text-ink-muted">The direct landing link for members to access this workspace.</span>
+              <span className="text-xs font-semibold text-ink">{t("workspaceInfo.urlLabel")}</span>
+              <span className="text-[11px] text-ink-muted">{t("workspaceInfo.urlDescription")}</span>
             </div>
             <div className="relative flex items-center w-full sm:w-[240px]">
               <Input
@@ -436,11 +477,11 @@ export default function WorkspaceSettingsPage() {
                   if (workspaceQuery.data?.slug) {
                     const url = `${window.location.origin}/${workspaceQuery.data.slug}`;
                     navigator.clipboard.writeText(url);
-                    toast.success("Workspace URL copied!");
+                    toast.success(t("toasts.urlCopied"));
                   }
                 }}
                 className="absolute right-2.5 text-ink-muted hover:text-ink transition-colors cursor-pointer"
-                title="Copy URL"
+                title={t("workspaceInfo.copyUrl")}
               >
                 <Copy size={14} />
               </button>
@@ -454,14 +495,14 @@ export default function WorkspaceSettingsPage() {
 
         {/* Section 1: General Workspace Defaults */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">General Workspace Defaults</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">{t("general.heading")}</div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
 
             {/* Default Language */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Default Language</span>
-                <span className="text-[11px] text-ink-muted">Default spoken language for new translation rooms.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.defaultLanguage.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.defaultLanguage.description")}</span>
               </div>
               <Select
                 value={watchAll.defaultLanguage}
@@ -471,7 +512,7 @@ export default function WorkspaceSettingsPage() {
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
                   <SelectValue>
                     {(value) =>
-                      value ? <LanguageLabel value={String(value)} /> : "Select language"
+                      value ? <LanguageLabel value={String(value)} /> : t("general.defaultLanguage.placeholder")
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -492,8 +533,8 @@ export default function WorkspaceSettingsPage() {
             {/* Timezone */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Timezone</span>
-                <span className="text-[11px] text-ink-muted">Timezone used for meeting schedules and audit timestamps.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.timezone.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.timezone.description")}</span>
               </div>
               <Select
                 value={watchAll.timezone}
@@ -503,7 +544,7 @@ export default function WorkspaceSettingsPage() {
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
                   <SelectValue>
                     {(value) =>
-                      value ? describeTimeZone(String(value)) : "Select timezone"
+                      value ? describeTimeZone(String(value)) : t("general.timezone.placeholder")
                     }
                   </SelectValue>
                 </SelectTrigger>
@@ -533,8 +574,8 @@ export default function WorkspaceSettingsPage() {
             {/* Max Active Rooms */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Max Active Rooms</span>
-                <span className="text-[11px] text-ink-muted">Maximum concurrent translation rooms allowed for this workspace.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.maxActiveRooms.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.maxActiveRooms.description")}</span>
                 {/* The number in the box is not always the number that applies.
                     A workspace may tighten its own cap and may never raise it above what the plan
                     sells, so meeting creation enforces the LOWER of the two. Saying so here is the
@@ -573,8 +614,8 @@ export default function WorkspaceSettingsPage() {
             {/* Artifact Retention Days */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Artifact Retention Days</span>
-                <span className="text-[11px] text-ink-muted">Days to retain meeting transcripts and recordings (0 = indefinite).</span>
+                <span className="text-xs font-semibold text-ink">{t("general.artifactRetentionDays.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.artifactRetentionDays.description")}</span>
               </div>
               <Input
                 type="number"
@@ -604,9 +645,9 @@ export default function WorkspaceSettingsPage() {
                 to assemble the workspace's records policy from three separate places. */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Minutes Classification</span>
+                <span className="text-xs font-semibold text-ink">{t("general.minutesClassification.label")}</span>
                 <span className="text-[11px] text-ink-muted">
-                  Default classification printed on new meeting minutes for this workspace.
+                  {t("general.minutesClassification.description")}
                 </span>
               </div>
               <Select
@@ -616,13 +657,17 @@ export default function WorkspaceSettingsPage() {
               >
                 <SelectTrigger className="w-[140px] h-8 text-xs bg-surface-2 border-hairline">
                   <SelectValue>
-                    {(value) => (value ? String(value) : "Select classification")}
+                    {(value) =>
+                      value
+                        ? getMinutesClassificationLabel(t, value as MinutesClassification)
+                        : t("general.minutesClassification.placeholder")
+                    }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {minutesClassificationOptions.map((classification) => (
                     <SelectItem key={classification} value={classification} className="text-xs">
-                      {classification}
+                      {getMinutesClassificationLabel(t, classification)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -632,10 +677,9 @@ export default function WorkspaceSettingsPage() {
             {/* Minutes Template */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Minutes Template</span>
+                <span className="text-xs font-semibold text-ink">{t("general.minutesTemplate.label")}</span>
                 <span className="text-[11px] text-ink-muted">
-                  Layout this workspace&apos;s minutes open in and export as. Neither template replaces
-                  the other — both present the same record.
+                  {t("general.minutesTemplate.description")}
                 </span>
               </div>
               <Select
@@ -645,7 +689,7 @@ export default function WorkspaceSettingsPage() {
               >
                 <SelectTrigger className="w-[200px] h-8 text-xs bg-surface-2 border-hairline">
                   <SelectValue>
-                    {(value) => (value ? describeMinutesTemplate(String(value)) : "Select template")}
+                    {(value) => (value ? describeMinutesTemplate(String(value)) : t("general.minutesTemplate.placeholder"))}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -664,8 +708,8 @@ export default function WorkspaceSettingsPage() {
             {/* Allowed Target Languages */}
             <div className="py-3.5 px-4 flex flex-col gap-2">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Allowed Target Translation Languages</span>
-                <span className="text-[11px] text-ink-muted">Languages available for live translation in meeting rooms.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.allowedTargetLanguages.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.allowedTargetLanguages.description")}</span>
                 {languageCeilingNotice ? (
                   <span className="text-[11px] text-amber-600">{languageCeilingNotice}</span>
                 ) : null}
@@ -698,8 +742,8 @@ export default function WorkspaceSettingsPage() {
             {/* Voice Cloning */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Voice Cloning Synthesis</span>
-                <span className="text-[11px] text-ink-muted">Synthesize translated speech using neural voice cloning of original speakers.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.voiceCloning.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.voiceCloning.description")}</span>
               </div>
               <Switch
                 checked={watchAll.voiceCloningEnabled}
@@ -711,8 +755,8 @@ export default function WorkspaceSettingsPage() {
             {/* Profanity Filter */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Profanity Filter</span>
-                <span className="text-[11px] text-ink-muted">Censor inappropriate or profane language in transcripts.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.profanityFilter.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.profanityFilter.description")}</span>
               </div>
               <Switch
                 checked={watchAll.isProfanityFilterEnabled}
@@ -729,14 +773,14 @@ export default function WorkspaceSettingsPage() {
                 the list — see WorkspacePluginAvailability in the assistant service. */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5 max-w-[70%]">
-                <span className="text-xs font-semibold text-ink">Plugins</span>
-                <span className="text-[11px] text-ink-muted">Choose which plugins members of this workspace can connect in WarpBot.</span>
+                <span className="text-xs font-semibold text-ink">{t("general.plugins.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("general.plugins.description")}</span>
               </div>
               <Link
                 href={`/${activeWorkspaceSlug}/settings/plugins`}
                 className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-border bg-surface-1 px-3 text-xs font-medium text-ink hover:bg-surface-2"
               >
-                Manage plugins
+                {t("general.plugins.managePlugins")}
                 <CaretRight size={12} weight="bold" />
               </Link>
             </div>
@@ -750,14 +794,14 @@ export default function WorkspaceSettingsPage() {
 
         {/* Section 2: AI & translation */}
         <div className="flex flex-col gap-3">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">AI &amp; Translation</div>
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">{t("aiTranslation.heading")}</div>
           <div className="border border-hairline bg-surface-1 rounded-lg overflow-hidden divide-y divide-hairline">
 
             {/* Global Glossary */}
             <div className="py-3.5 px-4 flex items-center justify-between gap-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Use global glossary</span>
-                <span className="text-[11px] text-ink-muted">Merge the global glossary into new transcript and translation prompts.</span>
+                <span className="text-xs font-semibold text-ink">{t("aiTranslation.useGlobalGlossary.label")}</span>
+                <span className="text-[11px] text-ink-muted">{t("aiTranslation.useGlobalGlossary.description")}</span>
               </div>
               <Switch
                 checked={watchAll.aiUsagePolicy?.useGlobalGlossary ?? true}

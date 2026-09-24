@@ -26,6 +26,7 @@ import {
   Info,
   List,
   Lock,
+  LockSimple,
   ShieldWarning,
   SlidersHorizontal,
   Sparkle,
@@ -36,10 +37,11 @@ import {
   Warning,
 } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -91,22 +93,21 @@ import {
  */
 const MAX_DOCUMENT_NAME_LENGTH = 255;
 
-const uploadSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(2, "Document name must be at least 2 characters")
-    .max(
-      MAX_DOCUMENT_NAME_LENGTH,
-      `Document name must be ${MAX_DOCUMENT_NAME_LENGTH} characters or fewer`,
-    ),
-  isAiAllowed: z.boolean(),
-});
+function getUploadSchema(t: ReturnType<typeof useTranslations>) {
+  return z.object({
+    name: z
+      .string()
+      .trim()
+      .min(2, t("validation.nameMin"))
+      .max(MAX_DOCUMENT_NAME_LENGTH, t("validation.nameMax", { max: MAX_DOCUMENT_NAME_LENGTH })),
+    isAiAllowed: z.boolean(),
+  });
+}
 
 const ACCEPTED_UPLOAD_EXTENSIONS =
   ".pdf,.docx,.xlsx,.md,.png,.jpg,.jpeg,.webp,.bmp,.gif";
 
-type UploadFormData = z.infer<typeof uploadSchema>;
+type UploadFormData = z.infer<ReturnType<typeof getUploadSchema>>;
 /**
  * The status tabs WT-633 asks for, and the three content filters that were already here.
  *
@@ -121,6 +122,7 @@ const STATUS_TABS: DocumentTab[] = [
   DOCUMENT_TAB.PUBLISHED,
   DOCUMENT_TAB.PENDING,
   DOCUMENT_TAB.REJECTED,
+  DOCUMENT_TAB.PRIVATE,
 ];
 
 function isStatusTab(category: FilterCategory): category is DocumentTab {
@@ -128,6 +130,8 @@ function isStatusTab(category: FilterCategory): category is DocumentTab {
 }
 
 export default function WorkspaceDocumentsPage() {
+  const t = useTranslations("documents");
+  const locale = useLocale();
   const router = useRouter();
   const params = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = params.workspaceSlug;
@@ -168,6 +172,7 @@ export default function WorkspaceDocumentsPage() {
   const archiveMutation = useArchiveWorkspaceDocument(activeWorkspaceId || "");
   const restoreMutation = useRestoreWorkspaceDocument(activeWorkspaceId || "");
 
+  const uploadSchema = useMemo(() => getUploadSchema(t), [t]);
   const {
     register,
     handleSubmit,
@@ -205,7 +210,7 @@ export default function WorkspaceDocumentsPage() {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       if (file.size > 10 * 1024 * 1024) {
-        toast.error("File size exceeds 10MB limit.");
+        toast.error(t("toasts.fileTooLarge"));
         e.target.value = "";
         setSelectedFile(null);
         setSelectedFileIsImage(false);
@@ -222,7 +227,7 @@ export default function WorkspaceDocumentsPage() {
       setValue("isAiAllowed", !isImg);
 
       if (isImg) {
-        toast.info("Image file selected: AI indexing disabled.");
+        toast.info(t("toasts.imageIndexingDisabled"));
       }
     }
   };
@@ -236,11 +241,11 @@ export default function WorkspaceDocumentsPage() {
     duplicateStrategy?: DuplicateStrategy,
   ) => {
     if (!selectedFile) {
-      toast.error("Please select a file to upload.");
+      toast.error(t("toasts.selectFile"));
       return;
     }
     if (selectedFile.size > 10 * 1024 * 1024) {
-      toast.error("File size exceeds 10MB limit.");
+      toast.error(t("toasts.fileTooLarge"));
       return;
     }
 
@@ -258,10 +263,10 @@ export default function WorkspaceDocumentsPage() {
       toast.success(
         uploadedDocument.status?.toLowerCase() ===
           WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL
-          ? "Document uploaded! Submitted for approval."
+          ? t("toasts.uploadedPending")
           : canApproveDocuments
-            ? "Document uploaded & published successfully!"
-            : "Document uploaded successfully.",
+            ? t("toasts.uploadedPublished")
+            : t("toasts.uploadedSuccess"),
       );
       setSelectedFile(null);
       setSelectedFileIsImage(false);
@@ -286,10 +291,10 @@ export default function WorkspaceDocumentsPage() {
       )?.response;
       const errorMsg =
         response?.status === 401
-          ? "Your session expired. Please sign in again."
+          ? t("toasts.sessionExpired")
           : response?.status === 403
-            ? "You do not have permission to upload documents to this workspace."
-            : response?.data?.error || "Failed to upload document.";
+            ? t("toasts.noPermission")
+            : response?.data?.error || t("toasts.uploadFailed");
       toast.error(errorMsg);
     }
   };
@@ -319,11 +324,11 @@ export default function WorkspaceDocumentsPage() {
   const handleArchive = async (docId: string) => {
     try {
       await archiveMutation.mutateAsync(docId);
-      toast.success("Document archived.");
+      toast.success(t("toasts.archived"));
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to archive document.";
+          ?.error || t("toasts.archiveFailed");
       toast.error(errorMsg);
     }
   };
@@ -331,11 +336,11 @@ export default function WorkspaceDocumentsPage() {
   const handleRestore = async (docId: string) => {
     try {
       await restoreMutation.mutateAsync(docId);
-      toast.success("Document restored.");
+      toast.success(t("toasts.restored"));
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to restore document.";
+          ?.error || t("toasts.restoreFailed");
       toast.error(errorMsg);
     }
   };
@@ -344,12 +349,12 @@ export default function WorkspaceDocumentsPage() {
     if (!docToDelete) return;
     try {
       await deleteMutation.mutateAsync(docToDelete.id);
-      toast.success("Document deleted.");
+      toast.success(t("toasts.deleted"));
       setDocToDelete(null);
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to delete document.";
+          ?.error || t("toasts.deleteFailed");
       toast.error(errorMsg);
     }
   };
@@ -362,24 +367,16 @@ export default function WorkspaceDocumentsPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i];
   };
 
+  const dateTimeFormat = new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    day: "numeric",
+    month: "short",
+  });
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
-    const d = new Date(dateString);
-    const months = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ];
-    return `${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")} ${d.getDate()} ${months[d.getMonth()]}`;
+    return dateTimeFormat.format(new Date(dateString));
   };
 
   const getFileIcon = (ext?: string) => {
@@ -407,6 +404,9 @@ export default function WorkspaceDocumentsPage() {
   // The chip is hidden at zero rather than shown empty: for most people it always will be.
   const rejectedCount = countIn(DOCUMENT_TAB.REJECTED);
   const archivedCount = countIn(DOCUMENT_TAB.ARCHIVED);
+  // A document taken back from the workspace. Only people who can still open one ever see a
+  // count here — the API filters the list per caller — so the chip hides at zero like Rejected.
+  const privateCount = countIn(DOCUMENT_TAB.PRIVATE);
 
   const filteredDocs = rawDocsList.filter((doc) => {
     if (isStatusTab(activeCategory)) {
@@ -442,9 +442,9 @@ export default function WorkspaceDocumentsPage() {
             icons are gone on purpose: they were only on five of the six chips, in five different
             colours, so a row of filters read as a row of unrelated actions. A count is the one
             thing worth carrying beside a label, and FilterChip has a slot for it. */}
-        <FilterChipGroup label="Filter documents by category">
+        <FilterChipGroup label={t("filters.ariaLabel")}>
           <FilterChip selected={activeCategory === "all"} onClick={() => setActiveCategory("all")}>
-            All
+            {t("filters.all")}
           </FilterChip>
           {/* WT-633 asks for Published / Pending / Rejected as first-class tabs.
               Pending is no longer gated on `canApproveDocuments`: a member who uploaded a
@@ -454,14 +454,14 @@ export default function WorkspaceDocumentsPage() {
             selected={activeCategory === DOCUMENT_TAB.PUBLISHED}
             onClick={() => setActiveCategory(DOCUMENT_TAB.PUBLISHED)}
           >
-            Published
+            {t("filters.published")}
           </FilterChip>
           <FilterChip
             selected={activeCategory === DOCUMENT_TAB.PENDING}
             onClick={() => setActiveCategory(DOCUMENT_TAB.PENDING)}
             badge={pendingCount > 0 ? pendingCount : undefined}
           >
-            Pending Approval
+            {t("filters.pendingApproval")}
           </FilterChip>
           {rejectedCount > 0 && (
             <FilterChip
@@ -469,23 +469,32 @@ export default function WorkspaceDocumentsPage() {
               onClick={() => setActiveCategory(DOCUMENT_TAB.REJECTED)}
               badge={rejectedCount}
             >
-              Rejected
+              {t("filters.rejected")}
+            </FilterChip>
+          )}
+          {privateCount > 0 && (
+            <FilterChip
+              selected={activeCategory === DOCUMENT_TAB.PRIVATE}
+              onClick={() => setActiveCategory(DOCUMENT_TAB.PRIVATE)}
+              badge={privateCount}
+            >
+              {t("filters.private")}
             </FilterChip>
           )}
           <FilterChip selected={activeCategory === "ai"} onClick={() => setActiveCategory("ai")}>
-            AI Context
+            {t("filters.aiContext")}
           </FilterChip>
           <FilterChip
             selected={activeCategory === "admin"}
             onClick={() => setActiveCategory("admin")}
           >
-            Administrative
+            {t("filters.administrative")}
           </FilterChip>
           <FilterChip
             selected={activeCategory === "sensitive"}
             onClick={() => setActiveCategory("sensitive")}
           >
-            Restricted
+            {t("filters.restricted")}
           </FilterChip>
           {archivedCount > 0 && (
             <FilterChip
@@ -493,7 +502,7 @@ export default function WorkspaceDocumentsPage() {
               onClick={() => setActiveCategory(DOCUMENT_TAB.ARCHIVED)}
               badge={archivedCount}
             >
-              Archived
+              {t("filters.archived")}
             </FilterChip>
           )}
         </FilterChipGroup>
@@ -506,8 +515,8 @@ export default function WorkspaceDocumentsPage() {
               setQuery(value);
               setPage(1);
             }}
-            placeholder="Search documents..."
-            ariaLabel="Search documents"
+            placeholder={t("searchPlaceholder")}
+            ariaLabel={t("searchAriaLabel")}
             collapsedWidth={28}
             expandedWidth={220}
             className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
@@ -517,7 +526,7 @@ export default function WorkspaceDocumentsPage() {
           />
           <button
             className="relative inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Filter options"
+            title={t("filterOptions")}
           >
             <Funnel className="h-3.5 w-3.5" />
             {activeCategory !== "all" && (
@@ -527,7 +536,7 @@ export default function WorkspaceDocumentsPage() {
 
           <button
             className="inline-flex h-[28px] w-[28px] items-center justify-center rounded-full border border-border/60 text-muted-foreground shadow-sm transition-colors hover:bg-surface-2 hover:text-foreground"
-            title="Display options"
+            title={t("displayOptions")}
           >
             <SlidersHorizontal className="h-3.5 w-3.5" />
           </button>
@@ -538,7 +547,7 @@ export default function WorkspaceDocumentsPage() {
             onClick={() => setIsUploadModalOpen(true)}
             className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90"
           >
-            <span>New</span>
+            <span>{t("new")}</span>
             <CaretDown className="h-3.5 w-3.5" />
           </button>
 
@@ -549,7 +558,7 @@ export default function WorkspaceDocumentsPage() {
                 ? "bg-surface-3 text-ink shadow-sm"
                 : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
-            title="Grid View"
+            title={t("gridView")}
           >
             <SquaresFour className="h-3.5 w-3.5" />
           </button>
@@ -560,7 +569,7 @@ export default function WorkspaceDocumentsPage() {
                 ? "bg-surface-3 text-ink shadow-sm"
                 : "text-muted-foreground hover:bg-surface-2 hover:text-foreground"
             }`}
-            title="List View"
+            title={t("listView")}
           >
             <List className="h-3.5 w-3.5" />
           </button>
@@ -576,11 +585,11 @@ export default function WorkspaceDocumentsPage() {
       ) : filteredDocs.length === 0 ? (
         <PagePlaceholder
           kind="documents"
-          title="No documents found"
+          title={t("empty.title")}
           description={
             canApproveDocuments
-              ? "Use New above to upload a reference document."
-              : "No reference documents have been uploaded to this workspace yet."
+              ? t("empty.descriptionCanUpload")
+              : t("empty.descriptionCannotUpload")
           }
         />
       ) : viewMode === "list" ? (
@@ -595,13 +604,13 @@ export default function WorkspaceDocumentsPage() {
                   three columns carrying two facts, and the widest thing in the row was the
                   repetition. */}
               <tr className="border-b border-hairline/40 text-[11px] font-medium tracking-wide text-ink-muted uppercase">
-                <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">Uploaded by</th>
-                <th className="px-4 py-2.5 font-medium">Approved by</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
-                <th className="px-4 py-2.5 font-medium">Modified</th>
-                <th className="px-4 py-2.5 font-medium">Size</th>
-                <th className="px-4 py-2.5 text-right font-medium">Actions</th>
+                <th className="px-4 py-2.5 font-medium">{t("table.name")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("table.uploadedBy")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("table.approvedBy")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("table.status")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("table.modified")}</th>
+                <th className="px-4 py-2.5 font-medium">{t("table.size")}</th>
+                <th className="px-4 py-2.5 text-right font-medium">{t("table.actions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-hairline/20">
@@ -688,43 +697,51 @@ export default function WorkspaceDocumentsPage() {
                       {documentMatchesTab(doc, DOCUMENT_TAB.REJECTED) ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
                           <Warning className="h-3 w-3" />
-                          <span>Rejected</span>
+                          <span>{t("status.rejected")}</span>
+                        </span>
+                      ) : documentMatchesTab(doc, DOCUMENT_TAB.PRIVATE) ? (
+                        // Before any AI branch: a private document's ingestion is `skipped` with
+                        // AI still allowed, which fell through to "AI Context" — the one thing
+                        // it no longer is.
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">
+                          <LockSimple className="h-3 w-3" />
+                          <span>{t("status.private")}</span>
                         </span>
                       ) : doc.status?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_STATUS.PENDING_APPROVAL ||
                       doc.status?.toLowerCase().includes("pending") ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
                           <Info className="h-3 w-3 text-amber-500" />
-                          <span>Pending Approval</span>
+                          <span>{t("status.pendingApproval")}</span>
                         </span>
                       ) : !doc.isAiAllowed ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-ink-muted bg-surface-3 border border-hairline px-2 py-0.5 rounded-full">
                           <FileText className="h-3 w-3" />
-                          <span>Administrative</span>
+                          <span>{t("status.administrative")}</span>
                         </span>
                       ) : doc.ingestionStatus?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
                           <Sparkle className="h-3 w-3 text-emerald-500" />
-                          <span>AI Ready</span>
+                          <span>{t("status.aiReady")}</span>
                         </span>
                       ) : doc.ingestionStatus?.toLowerCase() ===
                         WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-destructive bg-destructive/10 border border-destructive/20 px-2 py-0.5 rounded-full">
                           <ShieldWarning className="h-3 w-3" />
-                          <span>AI Failed</span>
+                          <span>{t("status.aiFailed")}</span>
                         </span>
                       ) : doc.ingestionStatus?.toLowerCase() ===
                           WORKSPACE_DOCUMENT_INGESTION_STATUS.PENDING ||
                         doc.ingestionStatus?.toLowerCase() ===
                           WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-500 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full animate-pulse">
-                          <span>Processing AI...</span>
+                          <span>{t("status.processingAi")}</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full">
                           <Brain className="h-3 w-3" />
-                          <span>AI Context</span>
+                          <span>{t("status.aiContext")}</span>
                         </span>
                       )}
                     </td>
@@ -750,7 +767,7 @@ export default function WorkspaceDocumentsPage() {
                             router.push(`/${workspaceSlug}/documents/${doc.id}`)
                           }
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-surface-3 hover:text-ink transition-colors cursor-pointer"
-                          title="View Details"
+                          title={t("actions.viewDetails")}
                         >
                           <Eye className="h-4 w-4" />
                         </button>
@@ -760,7 +777,7 @@ export default function WorkspaceDocumentsPage() {
                             <button
                               onClick={() => handleRestore(doc.id)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer"
-                              title="Restore Document"
+                              title={t("actions.restoreDocument")}
                             >
                               <ArrowCounterClockwise className="h-4 w-4" />
                             </button>
@@ -768,7 +785,7 @@ export default function WorkspaceDocumentsPage() {
                             <button
                               onClick={() => handleArchive(doc.id)}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-amber-500/10 hover:text-amber-500 transition-colors cursor-pointer"
-                              title="Archive Document"
+                              title={t("actions.archiveDocument")}
                             >
                               <Archive className="h-4 w-4" />
                             </button>
@@ -780,7 +797,7 @@ export default function WorkspaceDocumentsPage() {
                               setDocToDelete({ id: doc.id, name: doc.name })
                             }
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors cursor-pointer"
-                            title="Delete Permanently"
+                            title={t("actions.deletePermanently")}
                           >
                             <Trash className="h-4 w-4" />
                           </button>
@@ -811,14 +828,21 @@ export default function WorkspaceDocumentsPage() {
                 {documentMatchesTab(doc, DOCUMENT_TAB.REJECTED) ? (
                   <span
                     className="p-1 text-destructive bg-destructive/10 rounded-full"
-                    title="Rejected"
+                    title={t("status.rejected")}
                   >
                     <Warning className="h-3.5 w-3.5" />
+                  </span>
+                ) : documentMatchesTab(doc, DOCUMENT_TAB.PRIVATE) ? (
+                  <span
+                    className="p-1 text-ink-muted bg-surface-3 rounded-full"
+                    title={t("status.private")}
+                  >
+                    <LockSimple className="h-3.5 w-3.5" />
                   </span>
                 ) : !doc.isAiAllowed ? (
                   <span
                     className="p-1 text-ink-muted bg-surface-3 rounded-full"
-                    title="Administrative"
+                    title={t("status.administrative")}
                   >
                     <FileText className="h-3.5 w-3.5" />
                   </span>
@@ -826,7 +850,7 @@ export default function WorkspaceDocumentsPage() {
                   WORKSPACE_DOCUMENT_INGESTION_STATUS.COMPLETED ? (
                   <span
                     className="p-1 text-emerald-500 bg-emerald-500/10 rounded-full"
-                    title="AI Ready"
+                    title={t("status.aiReady")}
                   >
                     <Sparkle className="h-3.5 w-3.5 text-emerald-500" />
                   </span>
@@ -834,7 +858,7 @@ export default function WorkspaceDocumentsPage() {
                   WORKSPACE_DOCUMENT_INGESTION_STATUS.FAILED ? (
                   <span
                     className="p-1 text-destructive bg-destructive/10 rounded-full"
-                    title="AI Ingestion Failed"
+                    title={t("status.aiIngestionFailed")}
                   >
                     <ShieldWarning className="h-3.5 w-3.5" />
                   </span>
@@ -844,14 +868,14 @@ export default function WorkspaceDocumentsPage() {
                     WORKSPACE_DOCUMENT_INGESTION_STATUS.PROCESSING ? (
                   <span
                     className="p-1 text-amber-500 bg-amber-500/10 rounded-full"
-                    title="Processing AI..."
+                    title={t("status.processingAi")}
                   >
                     <Spinner className="h-3.5 w-3.5 animate-spin" />
                   </span>
                 ) : (
                   <span
                     className="p-1 text-primary bg-primary/10 rounded-full"
-                    title="AI Context"
+                    title={t("status.aiContext")}
                   >
                     <Brain className="h-3.5 w-3.5" />
                   </span>
@@ -874,11 +898,11 @@ export default function WorkspaceDocumentsPage() {
                 </div>
                 <div className="flex items-center gap-3 pt-1">
                   <DocumentActor
-                    label="Uploader"
+                    kind="uploader"
                     member={findDocumentActor(workspaceMembers, doc.uploadedBy)}
                   />
                   <DocumentActor
-                    label="Approver"
+                    kind="approver"
                     member={findDocumentActor(workspaceMembers, doc.approvedBy)}
                   />
                 </div>
@@ -897,17 +921,17 @@ export default function WorkspaceDocumentsPage() {
             disabled={page === 1}
             className="px-3 py-1.5 text-xs border border-hairline rounded-lg hover:bg-surface-2 disabled:opacity-45 font-medium"
           >
-            Previous
+            {t("pagination.previous")}
           </button>
           <span className="text-xs text-ink-muted font-medium">
-            Page {page}
+            {t("pagination.page", { page })}
           </span>
           <button
             onClick={() => setPage((p) => p + 1)}
             disabled={filteredDocs.length < 20}
             className="px-3 py-1.5 text-xs border border-hairline rounded-lg hover:bg-surface-2 disabled:opacity-45 font-medium"
           >
-            Next
+            {t("pagination.next")}
           </button>
         </div>
       )}
@@ -920,11 +944,10 @@ export default function WorkspaceDocumentsPage() {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Upload className="h-5 w-5" />
               </div>
-              <span>Upload New Document</span>
+              <span>{t("uploadDialog.title")}</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted mt-1">
-              Add reference documents to your workspace library. Configure AI
-              search context and member access permissions.
+              {t("uploadDialog.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -936,10 +959,9 @@ export default function WorkspaceDocumentsPage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-ink flex items-center justify-between">
-                  <span>1. Select Reference File</span>
+                  <span>{t("uploadDialog.step1Label")}</span>
                   <span className="text-[11px] font-normal text-ink-muted">
-                    Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP,
-                    GIF (Max 10MB)
+                    {t("uploadDialog.supportedFormats")}
                   </span>
                 </label>
 
@@ -950,10 +972,10 @@ export default function WorkspaceDocumentsPage() {
                         <Upload className="h-5 w-5" />
                       </div>
                       <p className="text-xs text-ink font-semibold mt-1">
-                        Click or drag a file to upload from your computer
+                        {t("uploadDialog.dropzoneTitle")}
                       </p>
                       <p className="text-[11px] text-ink-muted">
-                        Maximum file size: 10MB
+                        {t("uploadDialog.dropzoneHint")}
                       </p>
                     </div>
                     <input
@@ -988,14 +1010,13 @@ export default function WorkspaceDocumentsPage() {
                             className="mt-2 w-fit border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-700"
                           >
                             <Info className="mr-1 h-3 w-3" />
-                            Image files will be stored as administrative
-                            attachments
+                            {t("uploadDialog.imageAdminNotice")}
                           </Badge>
                         )}
                       </div>
                     </div>
                     <label className="h-8 px-3 rounded-lg border border-hairline bg-surface-1 text-xs font-semibold text-ink hover:bg-surface-2 transition cursor-pointer flex items-center shrink-0">
-                      Change File
+                      {t("uploadDialog.changeFile")}
                       <input
                         id="file-upload-input"
                         type="file"
@@ -1012,11 +1033,11 @@ export default function WorkspaceDocumentsPage() {
               {/* Document Display Name */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-ink">
-                  Document Display Name
+                  {t("uploadDialog.nameLabel")}
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g. Legal Glossaries 2026"
+                  placeholder={t("uploadDialog.namePlaceholder")}
                   maxLength={MAX_DOCUMENT_NAME_LENGTH}
                   className="h-10 border-hairline focus:ring-1 focus:ring-primary text-xs rounded-xl px-3"
                   {...register("name")}
@@ -1038,14 +1059,14 @@ export default function WorkspaceDocumentsPage() {
                     <Brain className="h-4 w-4 text-emerald-500" />
                     <span className="text-xs font-bold text-ink">
                       {canApproveDocuments
-                        ? "Allow AI Assistant indexing"
-                        : "Request AI Assistant indexing"}
+                        ? t("uploadDialog.aiAllowLabelApprover")
+                        : t("uploadDialog.aiAllowLabelMember")}
                     </span>
                   </div>
                   <span className="text-[11px] text-ink-muted leading-relaxed">
                     {canApproveDocuments
-                      ? "Enables RAG context search after security processing."
-                      : "AI processing starts only after a workspace Owner or Admin approves this document."}
+                      ? t("uploadDialog.aiAllowDescApprover")
+                      : t("uploadDialog.aiAllowDescMember")}
                   </span>
                 </div>
                 <Switch
@@ -1063,8 +1084,7 @@ export default function WorkspaceDocumentsPage() {
                   className="w-fit border-sky-500/20 bg-sky-500/10 px-3 py-1 text-[11px] font-semibold text-sky-700"
                 >
                   <Info className="mr-1 h-3.5 w-3.5" />
-                  Image files are stored as administrative attachments. AI
-                  ingestion will be automatically skipped.
+                  {t("uploadDialog.imageSkipNotice")}
                 </Badge>
               )}
 
@@ -1073,8 +1093,8 @@ export default function WorkspaceDocumentsPage() {
                 <Info className="h-4 w-4 shrink-0 mt-0.5" />
                 <p className="text-[11px] leading-relaxed">
                   {canApproveDocuments
-                    ? "As Workspace Owner/Admin, your upload will be automatically published."
-                    : "Your upload will enter Pending Approval. Security and AI processing start only after a workspace Owner or Admin approves it."}
+                    ? t("uploadDialog.policyApprover")
+                    : t("uploadDialog.policyMember")}
                 </p>
               </div>
             </div>
@@ -1085,7 +1105,7 @@ export default function WorkspaceDocumentsPage() {
                 onClick={() => setIsUploadModalOpen(false)}
                 className="h-10 px-5 rounded-xl border border-hairline bg-surface-1 text-xs font-semibold text-ink hover:bg-surface-2 transition"
               >
-                Cancel
+                {t("uploadDialog.cancel")}
               </button>
               <button
                 type="submit"
@@ -1097,7 +1117,7 @@ export default function WorkspaceDocumentsPage() {
                 ) : (
                   <>
                     <Upload className="h-4 w-4" />
-                    <span>Upload Document</span>
+                    <span>{t("uploadDialog.upload")}</span>
                   </>
                 )}
               </button>

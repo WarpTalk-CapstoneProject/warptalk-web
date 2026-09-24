@@ -1,0 +1,70 @@
+{
+  "header": {
+    "title": "Cài đặt",
+    "subtitle": "Cấu hình tùy chọn ngôn ngữ cá nhân, thiết lập âm thanh và bố cục giao diện của bạn."
+  },
+  "error": {
+    "message": "Không thể tải cài đặt cá nhân.",
+    "hint": "Vui lòng đảm bảo các dịch vụ backend đang hoạt động.",
+    "retry": "Thử lại"
+  },
+  "toasts": {
+    "saveFailed": "Không thể cập nhật tùy chọn"
+  },
+  "sections": {
+    "translationLanguages": "Dịch & Ngôn ngữ",
+    "audioSuppression": "Âm thanh & Khử tiếng ồn",
+    "meetingPresets": "Thiết lập mặc định cho cuộc họp",
+    "appearanceTheme": "Giao diện & Chủ đề"
+  },
+  "fields": {
+    "speakLanguage": {
+      "label": "Ngôn ngữ nói mặc định",
+      "hint": "Ngôn ngữ mặc định bạn sẽ nói trong các phiên dịch thuật.",
+      "placeholder": "Chọn ngôn ngữ..."
+    },
+    "listenLanguage": {
+      "label": "Ngôn ngữ nghe mặc định",
+      "hint": "Ngôn ngữ bạn muốn nghe hoặc xem bản dịch.",
+      "placeholder": "Chọn ngôn ngữ..."
+    },
+    "voiceClone": {
+      "label": "Bật nhân bản giọng nói",
+      "hint": "Tổng hợp bản dịch bằng các hồ sơ giọng nói đã được phê duyệt của bạn."
+    },
+    "noiseSuppression": {
+      "label": "Khử tiếng ồn micro",
+      "hint": "Lọc tiếng ồn nền tĩnh trong các cuộc gọi dịch thuật."
+    },
+    "roomType": {
+      "label": "Loại kết nối phòng mặc định",
+      "hint": "Giao thức truyền phát ưa thích cho các phòng của bạn.",
+      "placeholder": "Chọn loại...",
+      "instant": "Phòng tức thì",
+      "scheduled": "Phòng đã lên lịch"
+    },
+    "autoRecord": {
+      "label": "Tự động ghi âm phòng dịch thuật",
+      "hint": "Tự động ghi và lưu luồng âm thanh khi bắt đầu cuộc họp."
+    },
+    "autoSummary": {
+      "label": "Tự động tạo tóm tắt AI",
+      "hint": "Kích hoạt tóm tắt và bản ghi AI ngay khi cuộc họp kết thúc."
+    },
+    "maxParticipants": {
+      "label": "Số người tham gia tối đa mặc định",
+      "hint": "Đặt giới hạn sức chứa mặc định cho các phòng do bạn tạo."
+    },
+    "theme": {
+      "label": "Giao diện ứng dụng",
+      "hint": "Chọn kiểu hiển thị mặc định cá nhân của bạn.",
+      "placeholder": "Chọn chủ đề...",
+      "light": "Chế độ sáng",
+      "dark": "Chế độ tối",
+      "system": "Theo hệ thống"
+    }
+  },
+  "audioBridge": {
+    "label": "Thiết bị này"
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "filters": {
+    "ariaLabel": "Filter documents by category",
+    "all": "All",
+    "published": "Published",
+    "pendingApproval": "Pending Approval",
+    "rejected": "Rejected",
+    "private": "Private",
+    "aiContext": "AI Context",
+    "administrative": "Administrative",
+    "restricted": "Restricted",
+    "archived": "Archived"
+  },
+  "searchPlaceholder": "Search documents...",
+  "searchAriaLabel": "Search documents",
+  "filterOptions": "Filter options",
+  "displayOptions": "Display options",
+  "new": "New",
+  "gridView": "Grid View",
+  "listView": "List View",
+  "empty": {
+    "title": "No documents found",
+    "descriptionCanUpload": "Use New above to upload a reference document.",
+    "descriptionCannotUpload": "No reference documents have been uploaded to this workspace yet."
+  },
+  "table": {
+    "name": "Name",
+    "uploadedBy": "Uploaded by",
+    "approvedBy": "Approved by",
+    "status": "Status",
+    "modified": "Modified",
+    "size": "Size",
+    "actions": "Actions"
+  },
+  "status": {
+    "rejected": "Rejected",
+    "private": "Private",
+    "pendingApproval": "Pending Approval",
+    "administrative": "Administrative",
+    "aiReady": "AI Ready",
+    "aiFailed": "AI Failed",
+    "aiIngestionFailed": "AI Ingestion Failed",
+    "processingAi": "Processing AI...",
+    "aiContext": "AI Context"
+  },
+  "actions": {
+    "viewDetails": "View Details",
+    "restoreDocument": "Restore Document",
+    "archiveDocument": "Archive Document",
+    "deletePermanently": "Delete Permanently"
+  },
+  "grid": {
+    "uploader": "Uploader",
+    "approver": "Approver",
+    "unavailable": "{label} unavailable"
+  },
+  "pagination": {
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page}"
+  },
+  "uploadDialog": {
+    "title": "Upload New Document",
+    "description": "Add reference documents to your workspace library. Configure AI search context and member access permissions.",
+    "step1Label": "1. Select Reference File",
+    "supportedFormats": "Supported: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP, GIF (Max 10MB)",
+    "dropzoneTitle": "Click or drag a file to upload from your computer",
+    "dropzoneHint": "Maximum file size: 10MB",
+    "imageAdminNotice": "Image files will be stored as administrative attachments",
+    "changeFile": "Change File",
+    "nameLabel": "Document Display Name",
+    "namePlaceholder": "e.g. Legal Glossaries 2026",
+    "aiAllowLabelApprover": "Allow AI Assistant indexing",
+    "aiAllowLabelMember": "Request AI Assistant indexing",
+    "aiAllowDescApprover": "Enables RAG context search after security processing.",
+    "aiAllowDescMember": "AI processing starts only after a workspace Owner or Admin approves this document.",
+    "imageSkipNotice": "Image files are stored as administrative attachments. AI ingestion will be automatically skipped.",
+    "policyApprover": "As Workspace Owner/Admin, your upload will be automatically published.",
+    "policyMember": "Your upload will enter Pending Approval. Security and AI processing start only after a workspace Owner or Admin approves it.",
+    "cancel": "Cancel",
+    "upload": "Upload Document"
+  },
+  "toasts": {
+    "fileTooLarge": "File size exceeds 10MB limit.",
+    "imageIndexingDisabled": "Image file selected: AI indexing disabled.",
+    "selectFile": "Please select a file to upload.",
+    "uploadedPending": "Document uploaded! Submitted for approval.",
+    "uploadedPublished": "Document uploaded & published successfully!",
+    "uploadedSuccess": "Document uploaded successfully.",
+    "sessionExpired": "Your session expired. Please sign in again.",
+    "noPermission": "You do not have permission to upload documents to this workspace.",
+    "uploadFailed": "Failed to upload document.",
+    "archived": "Document archived.",
+    "archiveFailed": "Failed to archive document.",
+    "restored": "Document restored.",
+    "restoreFailed": "Failed to restore document.",
+    "deleted": "Document deleted.",
+    "deleteFailed": "Failed to delete document."
+  },
+  "validation": {
+    "nameMin": "Document name must be at least 2 characters",
+    "nameMax": "Document name must be {max} characters or fewer"
+  },
+  "deleteDialog": {
+    "title": "Delete Document?",
+    "description": "Are you sure you want to delete <name></name>? This will remove file content, AI context, and access policies from workspace.",
+    "cancel": "Cancel",
+    "delete": "Delete"
+  },
+  "duplicateDialog": {
+    "title": "This file is already here",
+    "descriptionKnown": "The same file was uploaded as <name></name> on {date}. Nothing has been stored yet.",
+    "descriptionUnknown": "An identical file is already in this workspace, in a document you do not have access to. Nothing has been stored yet.",
+    "keepExisting": "Keep the existing document",
+    "keepExistingDetail": "Cancels this upload and opens {name}.",
+    "replace": "Replace its file with this one",
+    "replaceDetail": "Keeps {name} and its history, and sends it back for approval.",
+    "uploadAnyway": "Upload it anyway",
+    "uploadAnywayDetail": "Creates a second, separate document with the same contents.",
+    "cancel": "Cancel"
+  }
+}

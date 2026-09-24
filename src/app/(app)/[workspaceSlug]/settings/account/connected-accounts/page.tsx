@@ -25,6 +25,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { useGoogleLogin } from "@react-oauth/google";
+import { useTranslations } from "next-intl";
 import { Key, Spinner, Warning } from "@phosphor-icons/react";
 
 import { WorkspacePage } from "@/components/workspace/page-chrome";
@@ -103,19 +104,20 @@ function MethodRow({
  * provider falls back to opens a popup Google rejects.
  */
 function LinkGoogleButton() {
+  const t = useTranslations("settingsConnectedAccounts");
   const linkMutation = useLinkGoogle();
 
   const openGoogle = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
         await linkMutation.mutateAsync(tokenResponse.access_token);
-        toast.success("Google account linked.");
+        toast.success(t("toasts.linked"));
       } catch (error) {
-        toast.error(getErrorMessage(error, "Couldn't link your Google account."));
+        toast.error(getErrorMessage(error, t("toasts.linkFailed")));
       }
     },
     onError: () => {
-      toast.error("Google authentication failed or the popup was closed.");
+      toast.error(t("toasts.authFailed"));
     },
   });
 
@@ -127,7 +129,7 @@ function LinkGoogleButton() {
       disabled={linkMutation.isPending}
     >
       {linkMutation.isPending && <Spinner size={12} className="animate-spin" />}
-      Link Google
+      {t("google.linkButton")}
     </button>
   );
 }
@@ -141,6 +143,8 @@ function GoogleActions({
   onUnlink: () => void;
   unlinking: boolean;
 }) {
+  const t = useTranslations("settingsConnectedAccounts");
+
   if (state.kind === "unknown") return null;
 
   if (state.kind === "not-linked") {
@@ -151,9 +155,9 @@ function GoogleActions({
         type="button"
         className={secondaryButton}
         disabled
-        title="Google sign-in is not configured for this deployment."
+        title={t("google.notConfiguredTitle")}
       >
-        Link Google
+        {t("google.linkButton")}
       </button>
     );
   }
@@ -167,12 +171,13 @@ function GoogleActions({
       title={state.canUnlink ? undefined : state.reason}
     >
       {unlinking && <Spinner size={12} className="animate-spin" />}
-      Unlink
+      {t("google.unlinkButton")}
     </button>
   );
 }
 
 export default function ConnectedAccountsPage() {
+  const t = useTranslations("settingsConnectedAccounts");
   const methodsQuery = useSignInMethods();
   const unlinkMutation = useUnlinkGoogle();
   const [confirmUnlinkOpen, setConfirmUnlinkOpen] = useState(false);
@@ -195,9 +200,9 @@ export default function ConnectedAccountsPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Warning className="h-6 w-6" />
             </div>
-            <p className="text-sm font-semibold text-ink">Couldn&apos;t load your sign-in methods</p>
+            <p className="text-sm font-semibold text-ink">{t("error.title")}</p>
             <p className="text-xs text-ink-muted">
-              Retry, and if it keeps failing check that the auth service is reachable.
+              {t("error.hint")}
             </p>
             <button
               type="button"
@@ -205,7 +210,7 @@ export default function ConnectedAccountsPage() {
               disabled={methodsQuery.isFetching}
               className="mt-2 inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 px-4 text-xs font-semibold transition hover:bg-surface-3 disabled:opacity-60"
             >
-              {methodsQuery.isFetching ? "Retrying…" : "Retry"}
+              {methodsQuery.isFetching ? t("error.retrying") : t("error.retry")}
             </button>
           </div>
         </div>
@@ -214,26 +219,26 @@ export default function ConnectedAccountsPage() {
   }
 
   const user = methodsQuery.data;
-  const google = googleLinkState(user);
+  const google = googleLinkState(user, () => t("google.unlinkNeedsPasswordReason"));
   const passwordKnown = typeof user.hasPassword === "boolean";
 
   const googleHint =
     google.kind === "unknown"
-      ? "Link status isn't available from the server yet."
+      ? t("google.hintUnknown")
       : google.kind === "not-linked"
-        ? `Sign in with the Google account for ${user.email}. Its email must match this account.`
+        ? t("google.hintNotLinked", { email: user.email })
         : google.canUnlink
-          ? `Sign in with Google as ${user.email}.`
+          ? t("google.hintLinked", { email: user.email })
           : google.reason;
 
   const handleUnlinkConfirm = async () => {
     try {
       await unlinkMutation.mutateAsync();
-      toast.success("Google account unlinked.");
+      toast.success(t("toasts.unlinked"));
       setConfirmUnlinkOpen(false);
     } catch (error) {
       // MIN_AUTH_METHOD_REQUIRED arrives here if the server disagrees with what the page read.
-      toast.error(getErrorMessage(error, "Couldn't unlink your Google account."));
+      toast.error(getErrorMessage(error, t("toasts.unlinkFailed")));
     }
   };
 
@@ -242,23 +247,23 @@ export default function ConnectedAccountsPage() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 text-ink">
           <div className="flex flex-col gap-1">
-            <h1 className="text-xl font-bold tracking-tight text-ink">Connected accounts</h1>
+            <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
             <p className="text-xs text-ink-muted">
-              The ways you can sign in to WarpTalk as {user.email}.
+              {t("header.subtitle", { email: user.email })}
             </p>
           </div>
 
           <div className="flex flex-col gap-3">
-            <SectionLabel>Sign-in methods</SectionLabel>
+            <SectionLabel>{t("signInMethods.sectionTitle")}</SectionLabel>
             <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-linear">
               <MethodRow
                 icon={<GoogleAuthIcon className="size-4" />}
                 title={
                   <>
-                    Google
+                    {t("google.title")}
                     {google.kind !== "unknown" && (
                       <StatusPill on={google.kind === "linked"}>
-                        {google.kind === "linked" ? "Connected" : "Not connected"}
+                        {google.kind === "linked" ? t("google.connected") : t("google.notConnected")}
                       </StatusPill>
                     )}
                   </>
@@ -277,20 +282,20 @@ export default function ConnectedAccountsPage() {
                 icon={<Key size={16} className="text-ink-muted" weight="duotone" />}
                 title={
                   <>
-                    Password
+                    {t("password.title")}
                     {passwordKnown && (
                       <StatusPill on={user.hasPassword === true}>
-                        {user.hasPassword ? "Set" : "Not set"}
+                        {user.hasPassword ? t("password.set") : t("password.notSet")}
                       </StatusPill>
                     )}
                   </>
                 }
                 hint={
                   !passwordKnown
-                    ? "Password status isn't available from the server yet."
+                    ? t("password.hintUnknown")
                     : user.hasPassword
-                      ? "Sign in with your email and password."
-                      : "No password yet. Use Forgot password on the sign-in page to set one."
+                      ? t("password.hintSet")
+                      : t("password.hintNotSet")
                 }
               />
             </div>
@@ -301,10 +306,9 @@ export default function ConnectedAccountsPage() {
       <Dialog open={confirmUnlinkOpen} onOpenChange={setConfirmUnlinkOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Unlink Google?</DialogTitle>
+            <DialogTitle>{t("unlinkDialog.title")}</DialogTitle>
             <DialogDescription>
-              You will no longer be able to sign in with Google. You can still sign in with your
-              email and password, and link Google again later.
+              {t("unlinkDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -314,7 +318,7 @@ export default function ConnectedAccountsPage() {
               onClick={() => setConfirmUnlinkOpen(false)}
               disabled={unlinkMutation.isPending}
             >
-              Cancel
+              {t("unlinkDialog.cancel")}
             </button>
             <button
               type="button"
@@ -323,7 +327,7 @@ export default function ConnectedAccountsPage() {
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-destructive px-3 text-xs font-semibold text-white transition hover:bg-destructive/90 disabled:opacity-60"
             >
               {unlinkMutation.isPending && <Spinner size={12} className="animate-spin" />}
-              Unlink Google
+              {t("unlinkDialog.confirm")}
             </button>
           </DialogFooter>
         </DialogContent>

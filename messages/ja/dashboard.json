@@ -1,0 +1,94 @@
+{
+  "billing": "請求",
+  "restricted": {
+    "title": "オーナーまたは管理者のみがこのダッシュボードを表示できます",
+    "description": "ワークスペース全体の支出とリソースを報告するため、管理する人に限定されています。"
+  },
+  "loading": "読み込み中…",
+  "hero": {
+    "noPlanTitle": "このワークスペースで翻訳を始める",
+    "noPlanDescription": "ミーティングはクレジット残高に基づいて翻訳されます。プランを選ぶとこのワークスペースにクレジットが付与され、すべてのミーティングでリアルタイム翻訳、文字起こし、AI要約が使えます。",
+    "hasPlanTitle": "ワークスペースの概要",
+    "hasPlanDescription": "クレジット、消費ペース、今後の予定 — このワークスペースが翻訳を続けられるかを左右するすべてを1ページで。",
+    "choosePlan": "プランを選ぶ",
+    "openBilling": "請求を開く",
+    "dismiss": "閉じる"
+  },
+  "creditsError": {
+    "title": "このワークスペースのクレジットを読み込めませんでした",
+    "detail": "請求サービスが応答しませんでした。ページの他の部分には影響ありません。"
+  },
+  "retry": "再試行",
+  "noPlan": {
+    "title": "このワークスペースにプランがありません",
+    "description": "ミーティングはクレジット残高に基づいて翻訳されますが、このワークスペースには残高がありません。",
+    "choosePlan": "プランを選ぶ",
+    "usageChartedOncePlan": "このワークスペースにプランが付くと利用状況がグラフ表示されます。",
+    "reasonNoDates": "このサイクルには日付が設定されていません。",
+    "reasonTooEarly": "サイクル開始直後のため、ペースを算出できません。",
+    "reasonNothingUsed": "このサイクルではまだ何も使用されていません。"
+  },
+  "cells": {
+    "creditsLeft": "残りクレジット",
+    "creditsLeftDetail": "{available}のうち{percent}%",
+    "usedThisCycle": "今サイクルの使用量",
+    "usedThisCycleDetail": "このサイクルのクレジットの{percent}%",
+    "burnRate": "消費ペース",
+    "perDay": "{value}/日",
+    "burnRateDetailAverage": "サイクル開始からの平均",
+    "runsOut": "枯渇予定",
+    "renews": "更新予定",
+    "runsOutDetail": "{count, plural, other {あと#日}} — サイクル終了前",
+    "lastsDetail": "このペースで残り{count}",
+    "renewsDetail": "{count, plural, other {あと#日}}",
+    "cyclePerUnit": "サイクル"
+  },
+  "usedPercentOfCredits": "クレジット使用",
+  "elapsedPercentOfCycle": "サイクル経過",
+  "cancelsAtPeriodEnd": "期間終了時に解約",
+  "cancelWarning": "このワークスペースの全員が{date}に翻訳を利用できなくなります。",
+  "usageCouldNotLoad": "利用状況を読み込めませんでした。",
+  "sections": {
+    "creditUsage": "クレジット使用状況",
+    "creditUsageDescription": "{year}年の月別、使用量と追加量の対比。",
+    "whereCreditsGo": "クレジットの使い道",
+    "whoIsSpending": "誰が使っているか",
+    "needsDecision": "対応が必要",
+    "comingUp": "今後の予定"
+  },
+  "usageEmptyForYear": "{year}年はクレジットの使用・追加がありません。",
+  "memberUsageError": "メンバーの利用状況を読み込めませんでした。",
+  "nothingWaiting": "対応が必要な項目はありません。",
+  "documentsWaitingApproval": "{count, plural, other {承認待ちのドキュメント#件}}",
+  "creditsAtPercent": "クレジット残り{percent}%",
+  "creditsAtPercentDetail": "残り{count} — なくなるとミーティングの翻訳が停止します。",
+  "planCancelling": "プランは解約予定です",
+  "planEndsOn": "{planName}は{date}に終了します。",
+  "noMeetingsScheduled": "予定されているミーティングはありません。",
+  "runningNow": "進行中",
+  "noTimeSet": "時間未設定",
+  "counts": { "members": "メンバー", "documents": "ドキュメント", "meetings": "ミーティング" },
+  "usageTrend": {
+    "consumed": "使用量",
+    "toppedUp": "追加量",
+    "tooltipConsumed": "使用",
+    "tooltipToppedUp": "追加"
+  },
+  "memberUsage": {
+    "empty": "この期間にクレジットを使用したメンバーはいません。",
+    "formerMember": "・退会済み",
+    "charges": "{count, plural, other {#件の利用}}"
+  },
+  "usageBreakdown": { "empty": "この期間は何も使用されていません。" },
+  "usageLabels": {
+    "translation": "リアルタイム翻訳",
+    "dubbing": "音声吹き替え",
+    "cloneDubbing": "クローン音声の吹き替え",
+    "transcription": "文字起こし",
+    "assistant": "AIアシスタント",
+    "summary": "ミーティング要約",
+    "voiceCloning": "音声クローン",
+    "documentTranslation": "ドキュメント翻訳",
+    "otherUsage": "その他の利用"
+  }
+}

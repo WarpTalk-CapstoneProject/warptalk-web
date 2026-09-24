@@ -4,8 +4,8 @@
  * must read the same way on both.
  */
 
-export function formatAuditWhen(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
+export function formatAuditWhen(value: string, locale = "en-US") {
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     hour: "numeric",

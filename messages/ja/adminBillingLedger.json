@@ -1,0 +1,153 @@
+{
+  "header": {
+    "eyebrow": "プラットフォーム請求",
+    "title": "請求",
+    "description": "全システムのクレジット、消費量、稼働中のワークスペース。"
+  },
+  "search": {
+    "placeholder": "名前またはIDで検索...",
+    "noWorkspaceFound": "名前 \"{term}\" に一致するワークスペースが見つかりません",
+    "searchFailed": "ワークスペース名での検索に失敗しました。有効なWorkspace IDを使用してください。"
+  },
+  "actions": {
+    "exportReport": "レポートを書き出す",
+    "managePlans": "プランを管理"
+  },
+  "metrics": {
+    "totalIssuedCredits": {
+      "label": "発行済みクレジット合計",
+      "detail": "全ワークスペースで流通中"
+    },
+    "activeWorkspaces": {
+      "label": "稼働中のワークスペース",
+      "detail": "プラットフォームを利用中のワークスペース"
+    },
+    "monthlyConsumption": {
+      "label": "月間消費量",
+      "detail": "今月消費されたクレジットの合計"
+    },
+    "transactions30d": {
+      "label": "取引数（30日間）",
+      "detail": "過去30日間のクレジット取引"
+    }
+  },
+  "tabs": {
+    "overview": "経済状況・分析",
+    "ledger": "全システム取引",
+    "invoices": "請求書",
+    "subscriptions": "サブスクリプション",
+    "alerts": "不正利用アラート"
+  },
+  "ledger": {
+    "cardTitle": "全システム取引",
+    "filters": {
+      "typeLabel": "種類",
+      "allTypesPlaceholder": "すべての種類",
+      "allTypes": "すべての種類",
+      "topUp": "チャージ",
+      "consumption": "消費",
+      "adjustment": "調整",
+      "fromDate": "開始日",
+      "toDate": "終了日",
+      "workspaceId": "Workspace ID",
+      "workspaceIdPlaceholder": "IDを入力...",
+      "minAmount": "最小金額 (cr)",
+      "minAmountPlaceholder": "例: 10",
+      "maxAmount": "最大金額 (cr)",
+      "maxAmountPlaceholder": "例: 1000",
+      "clear": "クリア"
+    },
+    "table": {
+      "timestamp": "日時",
+      "workspace": "ワークスペース",
+      "type": "種類",
+      "reason": "理由",
+      "amount": "金額",
+      "balanceAfter": "取引後残高",
+      "action": "操作"
+    },
+    "empty": "取引が見つかりません",
+    "meetingSession": "会議セッション",
+    "systemAutomatic": "システム自動処理",
+    "typeBadge": {
+      "topUp": "チャージ",
+      "consume": "消費",
+      "adjustment": "調整"
+    },
+    "view": "表示",
+    "pagination": {
+      "loading": "読み込み中...",
+      "showing": "<strong>{groups}</strong> 件のグループ化されたセッション中 <strong>{from}–{to}</strong> 件を表示（<strong>{total}</strong> 件の取引から）"
+    }
+  },
+  "export": {
+    "dialogTitle": "請求レポートを書き出す",
+    "dialogDescription": "2シート構成のExcelファイルを書き出します: <strong>Summary</strong>（システム指標と合計）と<strong>Audit Trail</strong>（現在の絞り込み条件でのこのページの全取引）。",
+    "stats": {
+      "transactions": "取引数",
+      "netTopUp": "チャージ純額",
+      "totalConsumed": "消費合計",
+      "netAdjustments": "調整純額"
+    },
+    "noteLabel": "メモを追加（任意）",
+    "notePlaceholder": "例: 取締役会向け2026年第2四半期請求レビュー...",
+    "noteHelper": "このメモはSummaryシートの先頭に印刷されます。",
+    "cancel": "キャンセル",
+    "download": "Excelをダウンロード",
+    "generating": "生成中...",
+    "noDataAlert": "書き出すデータがありません。"
+  },
+  "transactionDetails": {
+    "title": "取引の詳細",
+    "subtitle": "このセッションにおける変動AIサービス費用の内訳",
+    "date": "日付",
+    "totalDeducted": "控除合計",
+    "serviceBreakdown": "サービス別内訳",
+    "callsSummary": "{count}回 × {unitPrice} {suffix}",
+    "activityLogFeed": "アクティビティログ",
+    "close": "閉じる"
+  },
+  "usageLabels": {
+    "translation": "リアルタイム翻訳",
+    "summary": "AI会議要約",
+    "chat": "AIワークスペースチャット",
+    "other": "その他",
+    "aiUsage": "AI利用"
+  },
+  "idBadge": {
+    "copyTooltip": "クリックしてIDをコピー: {id}"
+  },
+  "growth": {
+    "usageHeading": "クレジット使用量",
+    "usageNote": "消費とチャージ — 成長指標の次に見るもので、下の台帳が明細です。",
+    "vsPrevious": "前6か月比 {delta}",
+    "monthGrowth": "{month}: {percent}",
+    "tiles": {
+      "revenue": "売上 · 6か月",
+      "sixMonths": "支払い済み、直近6か月",
+      "mrr": "MRR",
+      "activeSubscriptions": "有効なサブスクリプション {count} 件",
+      "activeWorkspaces": "アクティブなワークスペース · 6か月",
+      "activeWorkspacesDetail": "クレジットを1回以上使用",
+      "activeAccounts": "アクティブなアカウント · 6か月",
+      "activeAccountsDetail": "1回以上サインイン",
+      "totalUsers": "登録ユーザー",
+      "newUsers": "6か月で新規 {count}"
+    },
+    "revenueTitle": "月別売上",
+    "revenueNote": "VND建ての支払い済み金額。Stripe のチェックアウトとその初回請求書は1回として数えます。最新月は月初来です。",
+    "activeTitle": "アクティブなアカウントとワークスペース",
+    "activeNote": "月ごと: サインインしたアカウント、クレジットを使用したワークスペース。最新月は月初来です。",
+    "usersTitle": "ユーザーとワークスペースの成長",
+    "series": {
+      "activeAccounts": "アクティブなアカウント",
+      "activeWorkspaces": "アクティブなワークスペース",
+      "totalUsers": "登録ユーザー",
+      "totalWorkspaces": "ワークスペース",
+      "newUsers": "新規ユーザー"
+    },
+    "loading": "読み込み中…",
+    "noData": "この期間に支払い済みの売上はありません。",
+    "unavailable": "このバックエンドではまだ利用できません。"
+  }
+}

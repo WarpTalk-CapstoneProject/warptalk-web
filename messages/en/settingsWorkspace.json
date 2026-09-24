@@ -1,0 +1,115 @@
+{
+  "heading": "Settings",
+  "subheading": "Workspace defaults for meetings, minutes and translation. Access and data protection live in Security.",
+  "accessDenied": {
+    "title": "Access Denied",
+    "description": "Only workspace Owners and Administrators can view or modify workspace configurations."
+  },
+  "loadError": {
+    "title": "Couldn't load workspace settings",
+    "description": "The current configuration could not be read, so nothing is shown here rather than showing defaults that are not this workspace's. Retry, and if it keeps failing check that the workspace service is reachable.",
+    "retrying": "Retrying…",
+    "retry": "Retry"
+  },
+  "workspaceInfo": {
+    "heading": "Workspace Info",
+    "slugLabel": "Workspace Slug",
+    "slugDescription": "The unique handle for identifying this workspace.",
+    "copySlug": "Copy Slug",
+    "urlLabel": "Workspace URL",
+    "urlDescription": "The direct landing link for members to access this workspace.",
+    "copyUrl": "Copy URL"
+  },
+  "toasts": {
+    "slugCopied": "Workspace slug copied!",
+    "urlCopied": "Workspace URL copied!",
+    "saveFailed": "Failed to save workspace settings."
+  },
+  "general": {
+    "heading": "General Workspace Defaults",
+    "defaultLanguage": {
+      "label": "Default Language",
+      "description": "Default spoken language for new translation rooms.",
+      "placeholder": "Select language"
+    },
+    "timezone": {
+      "label": "Timezone",
+      "description": "Timezone used for meeting schedules and audit timestamps.",
+      "placeholder": "Select timezone"
+    },
+    "maxActiveRooms": {
+      "label": "Max Active Rooms",
+      "description": "Maximum concurrent translation rooms allowed for this workspace.",
+      "ceiling": {
+        "plan": "Your plan allows {ceiling} concurrent rooms, so {ceiling} is what applies. A higher number here has no effect — this setting can only lower the limit.",
+        "platformDefault": "Until this workspace has an active plan it is limited to {ceiling} concurrent rooms, so {ceiling} is what applies. A higher number here has no effect — this setting can only lower the limit.",
+        "workspaceOverride": "This workspace is limited to {ceiling} concurrent rooms, so {ceiling} is what applies. A higher number here has no effect — this setting can only lower the limit."
+      }
+    },
+    "artifactRetentionDays": {
+      "label": "Artifact Retention Days",
+      "description": "Days to retain meeting transcripts and recordings (0 = indefinite)."
+    },
+    "minutesClassification": {
+      "label": "Minutes Classification",
+      "description": "Default classification printed on new meeting minutes for this workspace.",
+      "placeholder": "Select classification",
+      "options": {
+        "internal": "Internal",
+        "confidential": "Confidential",
+        "public": "Public"
+      }
+    },
+    "minutesTemplate": {
+      "label": "Minutes Template",
+      "description": "Layout this workspace's minutes open in and export as. Neither template replaces the other — both present the same record.",
+      "placeholder": "Select template",
+      "optionVietnamese": "Vietnamese (Decree 30/2020)",
+      "optionInternational": "International (English)"
+    },
+    "allowedTargetLanguages": {
+      "label": "Allowed Target Translation Languages",
+      "description": "Languages available for live translation in meeting rooms.",
+      "ceiling": {
+        "plan": "Your plan allows {ceiling} target languages per meeting. You may permit more here — a single meeting simply cannot use more than {ceiling} at once.",
+        "platformDefault": "Until this workspace has an active plan it is limited to {ceiling} target languages per meeting. You may permit more here — a single meeting simply cannot use more than {ceiling} at once.",
+        "workspaceOverride": "This workspace is limited to {ceiling} target languages per meeting. You may permit more here — a single meeting simply cannot use more than {ceiling} at once."
+      }
+    },
+    "voiceCloning": {
+      "label": "Voice Cloning Synthesis",
+      "description": "Synthesize translated speech using neural voice cloning of original speakers."
+    },
+    "profanityFilter": {
+      "label": "Profanity Filter",
+      "description": "Censor inappropriate or profane language in transcripts."
+    },
+    "allowPersonalPlugins": {
+      "label": "Allow personal plugins",
+      "description": "Allow members to use their connected plugins in WarpBot conversations for this workspace."
+    },
+    "plugins": {
+      "label": "Plugins",
+      "description": "Choose which plugins members of this workspace can connect in WarpBot.",
+      "managePlugins": "Manage plugins"
+    }
+  },
+  "aiTranslation": {
+    "heading": "AI & Translation",
+    "useGlobalGlossary": {
+      "label": "Use global glossary",
+      "description": "Merge the global glossary into new transcript and translation prompts."
+    }
+  },
+  "validation": {
+    "defaultLanguageRequired": "Please select default language",
+    "timezoneRequired": "Please select timezone",
+    "wholeNumber": "Must be a whole number",
+    "maxActiveRoomsMin": "Must be at least 1 room",
+    "maxActiveRoomsMax": "Max 50 rooms",
+    "retentionMin": "Retention must be 0 (indefinite) or positive",
+    "retentionMax": "Max 3650 days",
+    "invitationExpiryMin": "Expiry must be at least 1 day",
+    "invitationExpiryMax": "Max 365 days"
+  }
+}

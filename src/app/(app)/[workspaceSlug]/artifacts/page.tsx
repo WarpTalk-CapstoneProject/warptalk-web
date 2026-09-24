@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { FileText, SpinnerGap, User, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -52,14 +53,11 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 
 type KindFilter = ArtifactKind | "all";
 
-const KIND_FILTERS: Array<{ value: KindFilter; label: string }> = [
-  { value: "all", label: "All records" },
-  { value: "transcript", label: "Transcripts" },
-  { value: "summary", label: "AI summaries" },
-  { value: "minutes", label: "Minutes" },
-];
+const KIND_FILTER_VALUES: KindFilter[] = ["all", "transcript", "summary", "minutes"];
 
 export default function ArtifactsPage() {
+  const t = useTranslations("artifacts");
+  const locale = useLocale();
   const params = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = params?.workspaceSlug ?? "";
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
@@ -103,18 +101,18 @@ export default function ArtifactsPage() {
     <WorkspacePage>
       <WorkspaceToolbar
         filters={
-          <FilterChipGroup label="Filter records by kind">
-            {KIND_FILTERS.map((item) => (
+          <FilterChipGroup label={t("filterByKindAria")}>
+            {KIND_FILTER_VALUES.map((value) => (
               <FilterChip
-                key={item.value}
-                selected={kind === item.value}
-                onClick={() => setKind(item.value)}
+                key={value}
+                selected={kind === value}
+                onClick={() => setKind(value)}
                 // filter-chip.tsx keeps the count in `badge` and nothing else beside the label:
                 // "the label is the filter". A count spliced into the children would be the
                 // second place in the app that answers where a number goes.
-                badge={item.value !== "all" && counts[item.value] ? counts[item.value] : undefined}
+                badge={value !== "all" && counts[value] ? counts[value] : undefined}
               >
-                {item.label}
+                {t(`filters.${value}`)}
               </FilterChip>
             ))}
           </FilterChipGroup>
@@ -124,13 +122,13 @@ export default function ArtifactsPage() {
             {/* Meetings, because meetings are what the grid lists now. Saying "202 records"
                 over 101 cards invited exactly one question — which card is the other 101? */}
             <span className="shrink-0 text-[12px] text-ink-subtle tabular-nums">
-              {groups.length} {groups.length === 1 ? "meeting" : "meetings"}
+              {t("meetingsCount", { count: groups.length })}
             </span>
             {/* Ownership is a second axis, so it gets its own control rather than a fifth chip in
                 a group that means "kind". Mixing the two in one row makes "Minutes" and "Mine"
                 look mutually exclusive, which they are not. */}
             <WorkspaceIconButton
-              title={mineOnly ? "Showing meetings you hosted" : "Only meetings you hosted"}
+              title={mineOnly ? t("mineOnly.on") : t("mineOnly.off")}
               onClick={() => setMineOnly((value) => !value)}
               dotted={mineOnly}
               disabled={!viewerId}
@@ -140,7 +138,7 @@ export default function ArtifactsPage() {
             <ExpandingSearchDock
               value={query}
               onValueChange={setQuery}
-              placeholder="Search records, meetings, or what was said"
+              placeholder={t("search.placeholder")}
               expandedWidth={340}
             />
           </>
@@ -154,18 +152,23 @@ export default function ArtifactsPage() {
             its label stay; only the decoration went. */}
         <section aria-label="Meeting records">
           {library.isLoading ? (
-            <LoadingState />
+            <LoadingState t={t} />
           ) : library.isError ? (
-            <ErrorState onRetry={library.refetch} />
+            <ErrorState t={t} onRetry={library.refetch} />
           ) : entries.length === 0 ? (
-            <EmptyState hasFilters={Boolean(query) || kind !== "all" || mineOnly} />
+            <EmptyState t={t} hasFilters={Boolean(query) || kind !== "all" || mineOnly} />
           ) : (
             /* One column, always. The second used to hold the reader; a record opens at its own
                URL now, so the grid gets the whole width back and the cards stop having two sets
                of proportions depending on whether something is selected. */
             <div className="grid gap-3.5 pb-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {groups.map((group) => (
-                <ArtifactCard key={group.roomId} group={group} workspaceSlug={workspaceSlug} />
+                <ArtifactCard
+                  key={group.roomId}
+                  group={group}
+                  workspaceSlug={workspaceSlug}
+                  locale={locale}
+                />
               ))}
             </div>
           )}
@@ -178,8 +181,8 @@ export default function ArtifactsPage() {
           <p className="mt-3 flex items-center gap-2 text-[11px] text-ink-subtle">
             <WarningCircle size={13} className="shrink-0" />
             {library.failedSource === "minutes"
-              ? "Minutes could not be loaded, so this list may be missing some records."
-              : "Meeting records could not be loaded, so this list may be missing transcripts and summaries."}
+              ? t("failedSource.minutes")
+              : t("failedSource.records")}
           </p>
         ) : null}
       </WorkspaceBody>
@@ -187,50 +190,46 @@ export default function ArtifactsPage() {
   );
 }
 
-function LoadingState() {
+type ArtifactsT = ReturnType<typeof useTranslations>;
+
+function LoadingState({ t }: { t: ArtifactsT }) {
   return (
     <div className="grid min-h-[420px] place-items-center">
       <div className="flex items-center gap-2 text-[11px] text-ink-muted">
         <SpinnerGap size={15} className="animate-spin" />
-        Loading meeting records
+        {t("loading")}
       </div>
     </div>
   );
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
+function ErrorState({ t, onRetry }: { t: ArtifactsT; onRetry: () => void }) {
   return (
     <div className="grid min-h-[420px] place-items-center text-center">
       <div>
         <WarningCircle size={22} className="mx-auto text-ink-muted" />
-        <p className="mt-3 text-[12px] font-medium">Records could not be loaded</p>
-        <p className="mt-1 text-[11px] text-ink-muted">
-          Check the translation-room service and try again.
-        </p>
+        <p className="mt-3 text-[12px] font-medium">{t("error.title")}</p>
+        <p className="mt-1 text-[11px] text-ink-muted">{t("error.description")}</p>
         <Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>
-          Retry
+          {t("error.retry")}
         </Button>
       </div>
     </div>
   );
 }
 
-function EmptyState({ hasFilters }: { hasFilters: boolean }) {
+function EmptyState({ t, hasFilters }: { t: ArtifactsT; hasFilters: boolean }) {
   return (
     <PagePlaceholder
       kind={hasFilters ? "no-results" : "documents"}
       className="min-h-[420px]"
-      title={hasFilters ? "No records match this search" : "No meeting records yet"}
-      description={
-        hasFilters
-          ? "Try a different word, or widen the filter to all records."
-          : "A transcript and an AI summary are written when a meeting ends. Minutes are drawn up from the meeting's own page."
-      }
+      title={hasFilters ? t("empty.noResultsTitle") : t("empty.emptyTitle")}
+      description={hasFilters ? t("empty.noResultsDescription") : t("empty.emptyDescription")}
       action={
         hasFilters ? null : (
           <span className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
             <FileText size={13} />
-            Everything WarpTalk writes down will appear here.
+            {t("empty.footerNote")}
           </span>
         )
       }

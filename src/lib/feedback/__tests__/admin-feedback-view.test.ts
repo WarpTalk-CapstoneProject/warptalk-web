@@ -3,7 +3,11 @@ import { describe, it } from "node:test";
 
 import {
   THIN_SAMPLE_THRESHOLD,
+  confidenceOf,
+  deltaTone,
   distributionShares,
+  formatAverageDelta,
+  formatShare,
   dimensionLabel,
   formatAverage,
   formatResponseRate,
@@ -113,5 +117,34 @@ describe("dimensionLabel", () => {
   it("falls back to the raw key rather than dropping an unknown dimension", () => {
     // A dimension added on the server should appear as something, not vanish from the report.
     assert.equal(dimensionLabel("prosodyNaturalness"), "prosodyNaturalness");
+  });
+});
+
+describe("WT-694 insights", () => {
+  it("nobody answering is 'none' whatever the server sent", () => {
+    assert.equal(confidenceOf(dimension({ responseCount: 0, averageRating: null, confidence: "ok" })), "none");
+  });
+
+  it("the server's confidence wins; an older backend falls back to the thin-sample rule", () => {
+    assert.equal(confidenceOf(dimension({ responseCount: 40, confidence: "low" })), "low");
+    assert.equal(confidenceOf(dimension({ responseCount: 4 })), "low");
+    assert.equal(confidenceOf(dimension({ responseCount: 40 })), "ok");
+  });
+
+  it("the trend is printed as the server computed it, and absent when it could not", () => {
+    assert.equal(formatAverageDelta(0.34), "+0.3");
+    assert.equal(formatAverageDelta(-0.25), "−0.3");
+    assert.equal(formatAverageDelta(0.02), "±0.0");
+    assert.equal(formatAverageDelta(null), null);
+    assert.equal(formatAverageDelta(undefined), null);
+    assert.equal(deltaTone(0.4), "good");
+    assert.equal(deltaTone(-0.4), "bad");
+    assert.equal(deltaTone(0.05), "flat");
+    assert.equal(deltaTone(null), null);
+  });
+
+  it("a share is a whole percent or a dash", () => {
+    assert.equal(formatShare(0.064), "6%");
+    assert.equal(formatShare(null), "—");
   });
 });

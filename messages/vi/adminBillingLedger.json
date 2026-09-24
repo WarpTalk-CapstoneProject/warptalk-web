@@ -1,0 +1,153 @@
+{
+  "header": {
+    "eyebrow": "Thanh toán nền tảng",
+    "title": "Thanh toán",
+    "description": "Tín dụng, mức tiêu thụ và không gian làm việc đang hoạt động trên toàn hệ thống."
+  },
+  "search": {
+    "placeholder": "Tìm theo tên hoặc ID...",
+    "noWorkspaceFound": "Không tìm thấy không gian làm việc khớp với tên \"{term}\"",
+    "searchFailed": "Không thể tìm kiếm theo tên không gian làm việc. Vui lòng dùng một Workspace ID hợp lệ."
+  },
+  "actions": {
+    "exportReport": "Xuất báo cáo",
+    "managePlans": "Quản lý gói"
+  },
+  "metrics": {
+    "totalIssuedCredits": {
+      "label": "Tổng tín dụng đã phát hành",
+      "detail": "Đang lưu hành trên các không gian làm việc"
+    },
+    "activeWorkspaces": {
+      "label": "Không gian làm việc đang hoạt động",
+      "detail": "Không gian làm việc đang sử dụng nền tảng"
+    },
+    "monthlyConsumption": {
+      "label": "Mức tiêu thụ trong tháng",
+      "detail": "Tổng tín dụng đã tiêu thụ trong tháng này"
+    },
+    "transactions30d": {
+      "label": "Giao dịch (30 ngày)",
+      "detail": "Giao dịch tín dụng trong 30 ngày qua"
+    }
+  },
+  "tabs": {
+    "overview": "Kinh tế & Phân tích",
+    "ledger": "Giao dịch toàn hệ thống",
+    "invoices": "Hóa đơn",
+    "subscriptions": "Gói đăng ký",
+    "alerts": "Cảnh báo gian lận"
+  },
+  "ledger": {
+    "cardTitle": "Giao dịch toàn hệ thống",
+    "filters": {
+      "typeLabel": "Loại",
+      "allTypesPlaceholder": "Tất cả loại",
+      "allTypes": "Tất cả loại",
+      "topUp": "Nạp tín dụng",
+      "consumption": "Tiêu thụ",
+      "adjustment": "Điều chỉnh",
+      "fromDate": "Từ ngày",
+      "toDate": "Đến ngày",
+      "workspaceId": "Workspace ID",
+      "workspaceIdPlaceholder": "Nhập ID...",
+      "minAmount": "Số tiền tối thiểu (cr)",
+      "minAmountPlaceholder": "vd: 10",
+      "maxAmount": "Số tiền tối đa (cr)",
+      "maxAmountPlaceholder": "vd: 1000",
+      "clear": "Xóa lọc"
+    },
+    "table": {
+      "timestamp": "Thời gian",
+      "workspace": "Không gian làm việc",
+      "type": "Loại",
+      "reason": "Lý do",
+      "amount": "Số tiền",
+      "balanceAfter": "Số dư sau",
+      "action": "Hành động"
+    },
+    "empty": "Không tìm thấy giao dịch nào",
+    "meetingSession": "Phiên họp",
+    "systemAutomatic": "Tự động bởi hệ thống",
+    "typeBadge": {
+      "topUp": "Nạp tín dụng",
+      "consume": "Tiêu thụ",
+      "adjustment": "Điều chỉnh"
+    },
+    "view": "Xem",
+    "pagination": {
+      "loading": "Đang tải...",
+      "showing": "Hiển thị <strong>{from}–{to}</strong> trên <strong>{groups}</strong> phiên đã gộp (từ <strong>{total}</strong> giao dịch)"
+    }
+  },
+  "export": {
+    "dialogTitle": "Xuất báo cáo thanh toán",
+    "dialogDescription": "Xuất file Excel gồm 2 sheet: <strong>Summary</strong> (chỉ số hệ thống + tổng hợp) và <strong>Audit Trail</strong> (toàn bộ giao dịch trên trang này theo bộ lọc đang áp dụng).",
+    "stats": {
+      "transactions": "Giao dịch",
+      "netTopUp": "Tổng nạp tín dụng",
+      "totalConsumed": "Tổng đã tiêu thụ",
+      "netAdjustments": "Tổng điều chỉnh"
+    },
+    "noteLabel": "Thêm ghi chú (không bắt buộc)",
+    "notePlaceholder": "vd: Rà soát thanh toán quý 2/2026 cho cuộc họp hội đồng...",
+    "noteHelper": "Ghi chú này sẽ được in ở đầu sheet Summary.",
+    "cancel": "Hủy",
+    "download": "Tải file Excel",
+    "generating": "Đang tạo file...",
+    "noDataAlert": "Không có dữ liệu để xuất."
+  },
+  "transactionDetails": {
+    "title": "Chi tiết giao dịch",
+    "subtitle": "Phân tích chi phí dịch vụ AI biến đổi trong phiên này",
+    "date": "Ngày",
+    "totalDeducted": "Tổng đã trừ",
+    "serviceBreakdown": "Phân tích theo dịch vụ",
+    "callsSummary": "{count, plural, other {# lượt gọi}} × {unitPrice} {suffix}",
+    "activityLogFeed": "Nhật ký hoạt động",
+    "close": "Đóng"
+  },
+  "usageLabels": {
+    "translation": "Dịch thuật thời gian thực",
+    "summary": "Tóm tắt cuộc họp bằng AI",
+    "chat": "Trò chuyện AI trong không gian làm việc",
+    "other": "Khác",
+    "aiUsage": "Sử dụng AI"
+  },
+  "idBadge": {
+    "copyTooltip": "Nhấn để sao chép ID: {id}"
+  },
+  "growth": {
+    "usageHeading": "Mức sử dụng credit",
+    "usageNote": "Tiêu thụ và nạp thêm — thứ yếu so với tăng trưởng, và là những gì sổ cái bên dưới liệt kê.",
+    "vsPrevious": "{delta} so với 6 tháng trước",
+    "monthGrowth": "{percent} trong {month}",
+    "tiles": {
+      "revenue": "Doanh thu · 6 tháng",
+      "sixMonths": "Các khoản đã thanh toán, 6 tháng gần nhất",
+      "mrr": "MRR",
+      "activeSubscriptions": "{count} gói đang hoạt động",
+      "activeWorkspaces": "Workspace hoạt động · 6 tháng",
+      "activeWorkspacesDetail": "Đã dùng credit ít nhất một lần",
+      "activeAccounts": "Tài khoản hoạt động · 6 tháng",
+      "activeAccountsDetail": "Đã đăng nhập ít nhất một lần",
+      "totalUsers": "Người dùng đã đăng ký",
+      "newUsers": "{count} mới trong 6 tháng"
+    },
+    "revenueTitle": "Doanh thu theo tháng",
+    "revenueNote": "Các khoản đã thanh toán, tính bằng VND; một lần checkout Stripe và hóa đơn đầu tiên của nó chỉ tính một lần. Tháng gần nhất là tính đến hôm nay.",
+    "activeTitle": "Tài khoản và workspace hoạt động",
+    "activeNote": "Theo tháng: tài khoản đã đăng nhập, workspace đã dùng credit. Tháng gần nhất là tính đến hôm nay.",
+    "usersTitle": "Tăng trưởng người dùng và workspace",
+    "series": {
+      "activeAccounts": "Tài khoản hoạt động",
+      "activeWorkspaces": "Workspace hoạt động",
+      "totalUsers": "Người dùng đã đăng ký",
+      "totalWorkspaces": "Workspace",
+      "newUsers": "Người dùng mới"
+    },
+    "loading": "Đang tải…",
+    "noData": "Không có khoản thanh toán nào trong các tháng này.",
+    "unavailable": "Backend này chưa hỗ trợ."
+  }
+}

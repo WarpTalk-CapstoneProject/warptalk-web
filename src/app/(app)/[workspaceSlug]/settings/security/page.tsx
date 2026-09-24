@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Lock, Plus, Spinner, Trash, Warning } from "@phosphor-icons/react";
 
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -102,6 +103,7 @@ function Row({
 }
 
 export default function WorkspaceSecurityPage() {
+  const t = useTranslations("settingsSecurity");
   const router = useRouter();
   const activeWorkspaceId = useWorkspaceStore((s) => s.activeWorkspaceId);
   const activeWorkspaceName = useWorkspaceStore((s) => s.activeWorkspaceName);
@@ -157,7 +159,7 @@ export default function WorkspaceSecurityPage() {
     onError: (error) => {
       const message =
         (error as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        "Failed to save security settings.";
+        t("toasts.saveFailed");
       toast.error(message);
     },
   });
@@ -213,9 +215,9 @@ export default function WorkspaceSecurityPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Lock className="h-6 w-6" />
             </div>
-            <CardTitle className="text-lg font-bold">Access Denied</CardTitle>
+            <CardTitle className="text-lg font-bold">{t("accessDenied.title")}</CardTitle>
             <CardDescription className="text-xs">
-              Only workspace Owners and Administrators can view security settings.
+              {t("accessDenied.description")}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -234,11 +236,10 @@ export default function WorkspaceSecurityPage() {
               <Warning className="h-6 w-6" />
             </div>
             <CardTitle className="text-lg font-bold">
-              Couldn&apos;t load security settings
+              {t("loadError.title")}
             </CardTitle>
             <CardDescription className="text-xs">
-              Nothing is shown rather than defaults that are not this workspace&apos;s. Retry, and
-              if it keeps failing check that the workspace service is reachable.
+              {t("loadError.description")}
             </CardDescription>
           </CardHeader>
           <button
@@ -247,7 +248,7 @@ export default function WorkspaceSecurityPage() {
             disabled={settingsQuery.isFetching}
             className="mx-auto mt-2 inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 px-4 text-xs font-semibold transition hover:bg-surface-3 disabled:opacity-60"
           >
-            {settingsQuery.isFetching ? "Retrying…" : "Retry"}
+            {settingsQuery.isFetching ? t("loadError.retrying") : t("loadError.retry")}
           </button>
         </Card>
       </div>
@@ -272,7 +273,7 @@ export default function WorkspaceSecurityPage() {
     const trimmed = newKeyword.trim();
     if (!trimmed || !policy) return;
     if (keywords.includes(trimmed)) {
-      toast.error("Keyword already in the list.");
+      toast.error(t("toasts.keywordExists"));
       return;
     }
     // `enabled` is written out rather than carried by the spread: DlpDto requires it, while
@@ -305,28 +306,28 @@ export default function WorkspaceSecurityPage() {
     if (!newOwnerId) return;
     try {
       await transferOwnershipMutation.mutateAsync(newOwnerId);
-      toast.success("Workspace ownership transferred successfully.");
+      toast.success(t("toasts.transferSuccess"));
       setIsTransferModalOpen(false);
       setNewOwnerId("");
       setTransferConfirmation("");
       router.push("/workspace");
     } catch {
-      toast.error("Failed to transfer ownership.");
+      toast.error(t("toasts.transferFailed"));
     }
   };
 
   const handleDeleteConfirm = async () => {
     if (deleteConfirmation !== activeWorkspaceName) {
-      toast.error("Confirmation name does not match workspace name.");
+      toast.error(t("toasts.confirmNameMismatch"));
       return;
     }
     try {
       await deleteWorkspaceMutation.mutateAsync(activeWorkspaceId);
-      toast.success("Workspace deleted successfully.");
+      toast.success(t("toasts.deleteSuccess"));
       setIsDeleteModalOpen(false);
       router.push("/workspace");
     } catch {
-      toast.error("Failed to delete workspace.");
+      toast.error(t("toasts.deleteFailed"));
     }
   };
 
@@ -334,10 +335,9 @@ export default function WorkspaceSecurityPage() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 text-ink">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold tracking-tight text-ink">Security</h1>
+          <h1 className="text-xl font-bold tracking-tight text-ink">{t("heading")}</h1>
           <p className="text-xs text-ink-muted">
-            Who can reach this workspace, who counts as one of your own people, and what leaves it
-            in a transcript.
+            {t("subheading")}
           </p>
         </div>
         <AutoSaveStatusBadge status={autoSave.status} onRetry={autoSave.retry} />
@@ -345,7 +345,7 @@ export default function WorkspaceSecurityPage() {
 
       {/* ── Membership ─────────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
-        <SectionLabel>Membership</SectionLabel>
+        <SectionLabel>{t("membership.heading")}</SectionLabel>
         <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1">
           {/*
             A status, not a switch. The value is derived from whether the workspace holds a
@@ -353,12 +353,12 @@ export default function WorkspaceSecurityPage() {
             workspace claim to require a domain while holding none.
           */}
           <Row
-            title="How internal membership is decided"
+            title={t("membership.howDecided")}
             align="start"
             hint={
               domains.length > 0
-                ? `Decided by verified domain — ${domains.join(", ")}. Only addresses on these domains can be invited as internal members.`
-                : "Assigned by hand. You choose internal or external for each person you invite."
+                ? t("membership.decidedByDomain", { domains: domains.join(", ") })
+                : t("membership.assignedByHand")
             }
           >
             <span
@@ -368,24 +368,23 @@ export default function WorkspaceSecurityPage() {
                   : "border-hairline bg-surface-2 text-ink-muted"
               }`}
             >
-              {domains.length > 0 ? "Domain-verified" : "Manual"}
+              {domains.length > 0 ? t("membership.domainVerified") : t("membership.manual")}
             </span>
           </Row>
 
           <div className="flex flex-col gap-3 px-4 py-3.5">
             <div className="flex flex-col gap-0.5">
               <span className="flex items-center gap-2 text-xs font-semibold text-ink">
-                Verified domains
+                {t("membership.verifiedDomains")}
                 {!isOwner && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
                     <Lock size={10} />
-                    Owner only
+                    {t("membership.ownerOnly")}
                   </span>
                 )}
               </span>
               <span className="text-[11px] text-ink-muted">
-                Anyone invited on one of these can be made an internal member. Removing the last one
-                puts membership back to being assigned by hand.
+                {t("membership.verifiedDomainsHint")}
               </span>
             </div>
 
@@ -402,7 +401,7 @@ export default function WorkspaceSecurityPage() {
               </ul>
             ) : (
               <p className="text-[11px] italic text-ink-muted">
-                No verified domains. Only the workspace owner can add one.
+                {t("membership.noVerifiedDomains")}
               </p>
             )}
           </div>
@@ -411,11 +410,11 @@ export default function WorkspaceSecurityPage() {
 
       {/* ── Access ─────────────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
-        <SectionLabel>Access</SectionLabel>
+        <SectionLabel>{t("access.heading")}</SectionLabel>
         <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1">
           <Row
-            title="Allow external collaboration"
-            hint="Let people outside this workspace join meeting rooms as guests."
+            title={t("access.allowExternalCollaboration.label")}
+            hint={t("access.allowExternalCollaboration.hint")}
           >
             <Switch
               checked={draft.allowExternalCollaboration ?? true}
@@ -426,8 +425,8 @@ export default function WorkspaceSecurityPage() {
           </Row>
 
           <Row
-            title="Invitation expiry"
-            hint="Days before a workspace invitation link expires (1 - 365 days)."
+            title={t("access.invitationExpiry.label")}
+            hint={t("access.invitationExpiry.hint")}
           >
             <Input
               type="number"
@@ -456,11 +455,11 @@ export default function WorkspaceSecurityPage() {
 
       {/* ── Data protection ────────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-3">
-        <SectionLabel>Data protection</SectionLabel>
+        <SectionLabel>{t("dataProtection.heading")}</SectionLabel>
         <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1">
           <Row
-            title="Redact personal information (PII)"
-            hint="Detect and mask sensitive identifiers — emails, phone numbers, ID numbers — before a transcript is stored or translated."
+            title={t("dataProtection.redactPii.label")}
+            hint={t("dataProtection.redactPii.hint")}
           >
             <Switch
               checked={policy?.redactPii?.enabled ?? false}
@@ -476,8 +475,8 @@ export default function WorkspaceSecurityPage() {
           </Row>
 
           <Row
-            title="Restricted keywords (DLP)"
-            hint="Flag or block designated terms while a meeting is being translated live."
+            title={t("dataProtection.restrictedKeywords.label")}
+            hint={t("dataProtection.restrictedKeywords.hint")}
           >
             <Switch
               checked={policy?.dlp?.enabled ?? false}
@@ -494,15 +493,15 @@ export default function WorkspaceSecurityPage() {
           {policy?.dlp?.enabled && (
             <div className="flex flex-col gap-3 bg-surface-2/50 px-4 py-4">
               <div className="flex flex-col gap-0.5">
-                <span className="text-xs font-semibold text-ink">Keyword list</span>
+                <span className="text-xs font-semibold text-ink">{t("dataProtection.keywordList.label")}</span>
                 <span className="text-[11px] text-ink-muted">
-                  Every word here is checked against each line as it is transcribed.
+                  {t("dataProtection.keywordList.hint")}
                 </span>
               </div>
               <div className="flex gap-2">
                 <Input
                   type="text"
-                  placeholder="Enter keyword (e.g., Confidential, Internal-Only)"
+                  placeholder={t("dataProtection.keywordList.placeholder")}
                   value={newKeyword}
                   onChange={(event) => setNewKeyword(event.target.value)}
                   onKeyDown={(event) => {
@@ -519,13 +518,13 @@ export default function WorkspaceSecurityPage() {
                   disabled={!newKeyword.trim()}
                   className="flex h-8 cursor-pointer items-center justify-center gap-1 rounded border border-hairline bg-surface-3 px-3 text-xs font-semibold text-ink transition hover:bg-surface-4 disabled:opacity-50"
                 >
-                  <Plus size={12} /> Add keyword
+                  <Plus size={12} /> {t("dataProtection.keywordList.addKeyword")}
                 </button>
               </div>
               <div className="mt-1 flex flex-wrap gap-2">
                 {keywords.length === 0 ? (
                   <span className="text-[10px] italic text-ink-muted">
-                    No restricted keywords configured.
+                    {t("dataProtection.keywordList.noKeywords")}
                   </span>
                 ) : (
                   keywords.map((keyword) => (
@@ -555,14 +554,13 @@ export default function WorkspaceSecurityPage() {
           answer is "you cannot", which the absence already gives. */}
       {isOwner && (
         <div className="flex flex-col gap-3">
-          <SectionLabel>Workspace management</SectionLabel>
+          <SectionLabel>{t("management.heading")}</SectionLabel>
           <div className="divide-y divide-destructive/15 overflow-hidden rounded-lg border border-destructive/25 bg-destructive/5">
             <div className="flex items-center justify-between gap-4 px-4 py-3.5">
               <div className="flex max-w-[70%] flex-col gap-0.5">
-                <span className="text-xs font-semibold text-destructive">Transfer ownership</span>
+                <span className="text-xs font-semibold text-destructive">{t("management.transferOwnership.label")}</span>
                 <span className="text-[11px] text-destructive/80">
-                  Hand this workspace to another internal member. You become an Admin, and cannot
-                  undo this yourself afterwards.
+                  {t("management.transferOwnership.hint")}
                 </span>
               </div>
               <button
@@ -570,16 +568,15 @@ export default function WorkspaceSecurityPage() {
                 onClick={() => setIsTransferModalOpen(true)}
                 className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-destructive px-4 text-sm font-semibold text-white transition hover:bg-destructive/90"
               >
-                Transfer
+                {t("management.transferOwnership.button")}
               </button>
             </div>
 
             <div className="flex items-center justify-between gap-4 px-4 py-3.5">
               <div className="flex max-w-[70%] flex-col gap-0.5">
-                <span className="text-xs font-semibold text-destructive">Delete workspace</span>
+                <span className="text-xs font-semibold text-destructive">{t("management.deleteWorkspace.label")}</span>
                 <span className="text-[11px] text-destructive/80">
-                  Ends every membership immediately. Meetings, documents and glossaries go with it.
-                  This cannot be undone.
+                  {t("management.deleteWorkspace.hint")}
                 </span>
               </div>
               <button
@@ -587,7 +584,7 @@ export default function WorkspaceSecurityPage() {
                 onClick={() => setIsDeleteModalOpen(true)}
                 className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-md bg-destructive px-4 text-sm font-semibold text-white transition hover:bg-destructive/90"
               >
-                Delete
+                {t("management.deleteWorkspace.button")}
               </button>
             </div>
           </div>
@@ -599,16 +596,15 @@ export default function WorkspaceSecurityPage() {
         <DialogContent className="max-w-md border-hairline bg-surface-1">
           <DialogHeader className="flex flex-col gap-1.5">
             <DialogTitle className="text-base font-bold text-foreground">
-              Transfer workspace ownership
+              {t("transferDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              Select a member to become the new owner. <strong>Warning:</strong> you will be demoted
-              to Admin and cannot undo this action.
+              {t.rich("transferDialog.description", { strong: (chunks) => <strong>{chunks}</strong> })}
             </DialogDescription>
           </DialogHeader>
 
           <div className="my-4 flex flex-col gap-2">
-            <label className="text-xs font-semibold text-ink">Select new owner</label>
+            <label className="text-xs font-semibold text-ink">{t("transferDialog.selectLabel")}</label>
             <Select
               value={newOwnerId}
               onValueChange={(value) => {
@@ -621,9 +617,9 @@ export default function WorkspaceSecurityPage() {
                     the raw value otherwise, and the value here is the member's GUID. */}
                 <SelectValue>
                   {(value) => {
-                    if (!value) return "Choose a member...";
+                    if (!value) return t("transferDialog.choosePlaceholder");
                     const member = membersList.find((m) => m.userId === value);
-                    return member ? `${member.fullName} (${member.email})` : "Choose a member...";
+                    return member ? `${member.fullName} (${member.email})` : t("transferDialog.choosePlaceholder");
                   }}
                 </SelectValue>
               </SelectTrigger>
@@ -645,8 +641,7 @@ export default function WorkspaceSecurityPage() {
             {selectedNewOwner && (
               <>
                 <p className="text-xs text-destructive/80">
-                  This person becomes Owner immediately; you become Admin. Type their full name to
-                  confirm.
+                  {t("transferDialog.confirmWarning")}
                 </p>
                 <Input
                   value={transferConfirmation}
@@ -667,7 +662,7 @@ export default function WorkspaceSecurityPage() {
               }}
               className="h-9 cursor-pointer rounded-md border border-hairline bg-surface-1 px-4 text-xs font-semibold transition hover:bg-surface-2"
             >
-              Cancel
+              {t("transferDialog.cancel")}
             </button>
             <button
               onClick={handleTransferConfirm}
@@ -682,7 +677,7 @@ export default function WorkspaceSecurityPage() {
               {transferOwnershipMutation.isPending ? (
                 <Spinner className="h-4 w-4 animate-spin text-white" />
               ) : (
-                "Confirm transfer"
+                t("transferDialog.confirm")
               )}
             </button>
           </DialogFooter>
@@ -694,17 +689,18 @@ export default function WorkspaceSecurityPage() {
         <DialogContent className="max-w-md border-destructive/20 bg-surface-1">
           <DialogHeader className="flex flex-col gap-1.5">
             <DialogTitle className="text-base font-bold text-destructive">
-              Delete workspace
+              {t("deleteDialog.title")}
             </DialogTitle>
             <DialogDescription className="text-xs text-ink-muted">
-              This cannot be undone. It permanently deletes <strong>{activeWorkspaceName}</strong>{" "}
-              and all associated data including documents, members and glossaries.
+              {t.rich("deleteDialog.description", {
+                name: () => <strong>{activeWorkspaceName}</strong>,
+              })}
             </DialogDescription>
           </DialogHeader>
 
           <div className="my-4 flex flex-col gap-2">
             <label className="text-xs font-semibold text-ink">
-              Please type <strong>{activeWorkspaceName}</strong> to confirm.
+              {t.rich("deleteDialog.confirmLabel", { name: () => <strong>{activeWorkspaceName}</strong> })}
             </label>
             <Input
               value={deleteConfirmation}
@@ -722,7 +718,7 @@ export default function WorkspaceSecurityPage() {
               }}
               className="h-9 cursor-pointer rounded-md border border-hairline bg-surface-1 px-4 text-xs font-semibold transition hover:bg-surface-2"
             >
-              Cancel
+              {t("deleteDialog.cancel")}
             </button>
             <button
               onClick={handleDeleteConfirm}
@@ -734,7 +730,7 @@ export default function WorkspaceSecurityPage() {
               {deleteWorkspaceMutation.isPending ? (
                 <Spinner className="h-4 w-4 animate-spin text-white" />
               ) : (
-                "Delete workspace"
+                t("deleteDialog.confirm")
               )}
             </button>
           </DialogFooter>

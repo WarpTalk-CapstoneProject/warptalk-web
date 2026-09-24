@@ -219,3 +219,32 @@ describe("buildCreateRequest", () => {
     assert.equal(request.content, "Body");
   });
 });
+
+
+// WT-699 / TC4104: the composer can reach everyone, or one workspace, not only a named list.
+describe("audiences beyond a named list", () => {
+  it("sends a broadcast with no list and no segment", () => {
+    const request = buildCreateRequest(draft({ audience: "BROADCAST", recipientIds: [RECIPIENT] }));
+    assert.equal(validateAnnouncementDraft(draft({ audience: "BROADCAST", recipientIds: [] })), null);
+    assert.equal(request.targetAudienceMode, "BROADCAST");
+    assert.deepEqual(request.specificUserIds, []);
+    assert.equal(request.segmentId, null);
+  });
+
+  it("sends a workspace segment with its id and no list", () => {
+    const workspaceId = "0b8e9d8e-9d1c-4a4e-8f55-6a3f2b1c0d9e";
+    const request = buildCreateRequest(
+      draft({ audience: "SEGMENT", segmentId: workspaceId, recipientIds: [RECIPIENT] }),
+    );
+    assert.equal(request.targetAudienceMode, "SEGMENT");
+    assert.equal(request.segmentId, workspaceId);
+    assert.deepEqual(request.specificUserIds, []);
+  });
+
+  it("refuses a segment with no workspace chosen", () => {
+    assert.match(
+      String(validateAnnouncementDraft(draft({ audience: "SEGMENT", segmentId: "", recipientIds: [] }))),
+      /workspace/,
+    );
+  });
+});

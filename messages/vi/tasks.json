@@ -1,0 +1,15 @@
+{
+  "filters": { "open": "Đang mở", "closed": "Đã đóng", "all": "Tất cả" },
+  "loading": "Đang tải…",
+  "empty": {
+    "openTitle": "Không có việc nào đang mở",
+    "otherTitle": "Chưa có công việc ở trạng thái này",
+    "openDescription": "Mọi công việc từ các cuộc họp của bạn đã hoàn tất.",
+    "otherDescription": "Công việc sẽ xuất hiện khi cuộc họp ghi nhận một hạng mục hành động."
+  },
+  "markDone": "Đánh dấu hoàn tất",
+  "reopen": "Mở lại",
+  "untitledMeeting": "Cuộc họp chưa đặt tên",
+  "drop": "Bỏ qua",
+  "toasts": { "updateFailed": "Không thể cập nhật mục này." }
+}

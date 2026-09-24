@@ -1,0 +1,136 @@
+{
+  "views": {
+    "agenda": "Agenda",
+    "month": "Month",
+    "week": "Week"
+  },
+  "filters": {
+    "all": "All",
+    "upcoming": "Upcoming",
+    "joined": "Joined"
+  },
+  "ariaLabels": {
+    "calendarView": "Calendar view",
+    "timelineFilters": "Timeline filters",
+    "chipLegend": "Chip legend",
+    "previousWeek": "Previous week",
+    "previousMonth": "Previous month",
+    "nextWeek": "Next week",
+    "nextMonth": "Next month",
+    "showAllMeetings": "{count, plural, one {Show all # meeting on {day}} other {Show all # meetings on {day}}}",
+    "closeDayDetails": "Close day details",
+    "meetingsOnDay": "Meetings on {day}",
+    "currentTime": "Current time, {time}",
+    "agendaNavigator": "Agenda navigator"
+  },
+  "search": {
+    "placeholder": "Search title, code, or description"
+  },
+  "legend": {
+    "youHost": "You host",
+    "youAreInvited": "You're invited"
+  },
+  "relation": {
+    "youHost": "You host",
+    "invited": "Invited",
+    "invitedBy": "Invited by {name}",
+    "invitedByLabel": "Invited by"
+  },
+  "monthView": {
+    "noMeetingsMatchSearch": "No meetings match this search.",
+    "nothingThisMonth": "Nothing on your timeline this month. Upcoming invites and meetings you joined appear here.",
+    "moreCount": "{count, plural, one {+# more} other {+# more}}"
+  },
+  "weekView": {
+    "nothingThisWeek": "Nothing on your timeline this week."
+  },
+  "agendaView": {
+    "thisWeek": "This week",
+    "weekOf": "Week of {label}",
+    "endOfMonth": "End of {month}",
+    "noMeetingsMatchFilter": "Nothing here matches this filter",
+    "noMeetings": "No meetings",
+    "now": "Now {time}"
+  },
+  "navigator": {
+    "toggleWeek": "Week",
+    "toggleMonth": "Month",
+    "weekGroup": "Week",
+    "previousMonth": "Previous month",
+    "previousWeek": "Previous week",
+    "nextMonth": "Next month",
+    "nextWeek": "Next week",
+    "todayPrefix": "today, ",
+    "dayButtonLabel": "{count, plural, =0 {Go to {today}{day}, no meetings} one {Go to {today}{day}, # meeting} other {Go to {today}{day}, # meetings}}"
+  },
+  "dayPanel": {
+    "nothingMatches": "Nothing on this day matches",
+    "nothingOnDay": "Nothing on this day",
+    "clearSearchHint": "Clear the search or switch back to All to see everything booked here.",
+    "meetingsShowUpHere": "Meetings you host or are invited to will show up here."
+  },
+  "counts": {
+    "meetings": "{count, plural, =0 {no meetings} one {# meeting} other {# meetings}}",
+    "people": "{count, plural, one {# person} other {# people}}"
+  },
+  "toasts": {
+    "downloadNotReady": "This output is not ready to download.",
+    "downloadFailed": "Could not download this output."
+  },
+  "notices": {
+    "partialWeek": "This week crosses two months and one of them failed to load, so some meetings may be missing.",
+    "truncated": "{total, plural, one {Showing {shown} of # meeting in {scope}. Narrow the search to see the rest.} other {Showing {shown} of # meetings in {scope}. Narrow the search to see the rest.}}",
+    "scopeWeek": "these weeks' months",
+    "scopeMonth": "this month"
+  },
+  "loading": {
+    "meetings": "Loading your meetings"
+  },
+  "error": {
+    "title": "Your meetings could not be loaded",
+    "description": "Check the translation-room service and try again.",
+    "retry": "Retry"
+  },
+  "chip": {
+    "googleMeet": "Google Meet",
+    "join": "Join",
+    "cancelled": "Cancelled",
+    "onGoogleMeetSuffix": ", on Google Meet"
+  },
+  "dialog": {
+    "pastMeeting": "Past meeting",
+    "noDescription": "Quick access to the room summary and retained artifacts.",
+    "when": "When",
+    "duration": "Duration",
+    "participants": "Participants",
+    "route": "Route",
+    "hostedBy": "Hosted by",
+    "artifacts": "Artifacts",
+    "noOutputs": "No outputs retained for this meeting.",
+    "openMeeting": "Open meeting",
+    "unknownTime": "Unknown time"
+  },
+  "states": {
+    "live": "Live",
+    "upcoming": "Upcoming",
+    "joined": "Joined",
+    "missed": "Missed",
+    "cancelled": "Cancelled"
+  },
+  "artifactLabels": {
+    "transcript_export": "Transcript",
+    "summary_export": "AI summary",
+    "recording": "Recording",
+    "debug_log": "Debug log",
+    "audio_sample": "Audio sample"
+  },
+  "artifactStatus": {
+    "consentRequired": "Consent required",
+    "ready": "Ready",
+    "processing": "Processing",
+    "expired": "Expired",
+    "missing": "Missing",
+    "failed": "Failed",
+    "deleted": "Deleted"
+  }
+}

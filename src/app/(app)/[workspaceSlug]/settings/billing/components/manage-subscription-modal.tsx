@@ -18,6 +18,7 @@
 import { ArrowSquareOut, CaretDown } from "@phosphor-icons/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -44,13 +45,15 @@ function formatDay(value: string | Date | null | undefined): string {
   return format(date, "MMM d, yyyy");
 }
 
+type BillingT = ReturnType<typeof useTranslations>;
+
 /** "monthly" | "year" | … → the noun a person reads. Both vocabularies exist on the wire. */
-function billingCycleLabel(cycle: string | null | undefined): string {
+function billingCycleLabel(cycle: string | null | undefined, t: BillingT): string {
   const value = (cycle ?? "").toLowerCase();
-  if (value === "yearly" || value === "year" || value === "annual") return "Yearly";
-  if (value === "semiannual") return "Semiannual";
-  if (value === "monthly" || value === "month") return "Monthly";
-  return "—";
+  if (value === "yearly" || value === "year" || value === "annual") return t("manageModal.billingCycle.yearly");
+  if (value === "semiannual") return t("manageModal.billingCycle.semiannual");
+  if (value === "monthly" || value === "month") return t("manageModal.billingCycle.monthly");
+  return t("manageModal.billingCycle.unknown");
 }
 
 export function ManageSubscriptionModal({
@@ -68,6 +71,7 @@ export function ManageSubscriptionModal({
   subscription: SubscriptionDto | null;
   plan: PlanDto | null;
 }) {
+  const t = useTranslations("settingsBilling");
   const queryClient = useQueryClient();
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
@@ -85,14 +89,14 @@ export function ManageSubscriptionModal({
       queryClient.invalidateQueries({ queryKey: ["billing"] });
       toast.success(
         next.enabled
-          ? "Meetings will keep running past zero credits, up to the plan's cap."
-          : "Meetings will stop when the credits run out.",
+          ? t("manageModal.toasts.overageOn")
+          : t("manageModal.toasts.overageOff"),
       );
     },
     // The server refuses `true` on a plan with no overage allowance rather than accepting it as a
     // no-op, so its own words are the useful message.
     onError: (error) =>
-      toast.error(getErrorMessage(error, "Could not change the overage setting.")),
+      toast.error(getErrorMessage(error, t("manageModal.toasts.overageFailed"))),
   });
 
   const cancelMutation = useMutation({
@@ -101,10 +105,10 @@ export function ManageSubscriptionModal({
       queryClient.invalidateQueries({ queryKey: ["billing"] });
       setConfirmingCancel(false);
       onOpenChange(false);
-      toast.success("Subscription cancelled. It stays active until the period ends.");
+      toast.success(t("manageModal.toasts.cancelled"));
     },
     onError: (error) =>
-      toast.error(getErrorMessage(error, "Could not cancel the subscription.")),
+      toast.error(getErrorMessage(error, t("manageModal.toasts.cancelFailed"))),
   });
 
   /**
@@ -122,12 +126,12 @@ export function ManageSubscriptionModal({
     mutationFn: () => billingService.reactivateSubscription(workspaceId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["billing"] });
-      toast.success("Renewal is back on. This plan will continue past the current period.");
+      toast.success(t("manageModal.toasts.reactivated"));
     },
     // The server's own words matter here: "period has already ended" sends the reader somewhere
     // else entirely than "not cancelled" does.
     onError: (error) =>
-      toast.error(getErrorMessage(error, "Could not reactivate the subscription.")),
+      toast.error(getErrorMessage(error, t("manageModal.toasts.reactivateFailed"))),
   });
 
   const cancelling = subscription?.cancelAtPeriodEnd === true;
@@ -137,20 +141,20 @@ export function ManageSubscriptionModal({
       <DialogContent className="max-w-[520px] rounded-[14px] border-border bg-surface-1 p-0 shadow-none">
         <DialogHeader className="px-5 pt-5">
           <DialogTitle className="text-[16px] font-semibold text-ink">
-            Manage subscription
+            {t("manageModal.title")}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            The current plan, its cycle, and the settings that change it.
+            {t("manageModal.description")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="px-5 pb-5">
           <Section className="bg-surface-2/40">
             <RowGroup>
-              <Row label="Current plan" value={subscription?.planName ?? "No active plan"} />
-              <Row label="Plan type" value={billingCycleLabel(plan?.billingCycle)} />
+              <Row label={t("manageModal.currentPlan")} value={subscription?.planName ?? t("manageModal.noPlan")} />
+              <Row label={t("manageModal.planType")} value={billingCycleLabel(plan?.billingCycle, t)} />
               <Row
-                label="Overage credits used"
+                label={t("manageModal.overageCreditsUsed")}
                 value={
                   isOverageLoading
                     ? "…"
@@ -158,21 +162,21 @@ export function ManageSubscriptionModal({
                 }
                 hint={
                   overage && overage.effectiveCapCredits > 0
-                    ? `Capped at ${formatAmount(overage.effectiveCapCredits)} this cycle`
+                    ? t("manageModal.cappedThisCycle", { cap: formatAmount(overage.effectiveCapCredits) })
                     : undefined
                 }
               />
               <Row
-                label="Next credit refresh"
+                label={t("manageModal.nextCreditRefresh")}
                 value={formatDay(subscription?.currentPeriodEnd)}
               />
               <Row
-                label="Next billing date"
+                label={t("manageModal.nextBillingDate")}
                 value={cancelling ? "—" : formatDay(subscription?.currentPeriodEnd)}
-                hint={cancelling ? "Cancelled — this plan will not renew" : undefined}
+                hint={cancelling ? t("manageModal.cancelledNoRenew") : undefined}
               />
               <Row
-                label="Next payment amount"
+                label={t("manageModal.nextPaymentAmount")}
                 value={
                   cancelling
                     ? formatMoney(0, plan?.currency)
@@ -187,8 +191,8 @@ export function ManageSubscriptionModal({
           <div className="mt-4 divide-y divide-hairline border-t border-hairline">
             <div className="flex items-center justify-between gap-4 py-3.5">
               <div className="flex items-center gap-2">
-                <span className="text-[13px] text-ink">Enable overages</span>
-                <Pill tone="accent">Recommended</Pill>
+                <span className="text-[13px] text-ink">{t("manageModal.enableOverages")}</span>
+                <Pill tone="accent">{t("manageModal.recommended")}</Pill>
               </div>
               <Switch
                 checked={overage?.enabled ?? false}
@@ -198,11 +202,11 @@ export function ManageSubscriptionModal({
             </div>
 
             <div className="flex items-center justify-between gap-4 py-3.5">
-              <span className="text-[13px] text-ink">Modify plan</span>
+              <span className="text-[13px] text-ink">{t("manageModal.modifyPlan")}</span>
               <div className="flex items-center gap-2">
                 <Link href={`/${workspaceSlug}/payment/plans`} className="shrink-0">
                   <BillingButton tone="outline" className="w-auto">
-                    Change plan
+                    {t("manageModal.changePlan")}
                     <CaretDown className="h-3 w-3" />
                   </BillingButton>
                 </Link>
@@ -217,7 +221,7 @@ export function ManageSubscriptionModal({
                     disabled={reactivateMutation.isPending}
                     onClick={() => reactivateMutation.mutate()}
                   >
-                    {reactivateMutation.isPending ? "Reactivating…" : "Resubscribe"}
+                    {reactivateMutation.isPending ? t("manageModal.reactivating") : t("manageModal.resubscribe")}
                   </BillingButton>
                 ) : confirmingCancel ? (
                   <BillingButton
@@ -226,7 +230,7 @@ export function ManageSubscriptionModal({
                     disabled={cancelMutation.isPending}
                     onClick={() => cancelMutation.mutate()}
                   >
-                    {cancelMutation.isPending ? "Cancelling…" : "Confirm cancel"}
+                    {cancelMutation.isPending ? t("manageModal.cancelling") : t("manageModal.confirmCancel")}
                   </BillingButton>
                 ) : (
                   <BillingButton
@@ -235,20 +239,20 @@ export function ManageSubscriptionModal({
                     disabled={!subscription}
                     onClick={() => setConfirmingCancel(true)}
                   >
-                    Cancel plan
+                    {t("manageModal.cancelPlan")}
                   </BillingButton>
                 )}
               </div>
             </div>
 
             <div className="flex items-center justify-between gap-4 py-3.5">
-              <span className="text-[13px] text-ink">Manage payments</span>
+              <span className="text-[13px] text-ink">{t("manageModal.managePayments")}</span>
               <Link
                 href={`/${workspaceSlug}/settings/billing/invoices`}
                 className="inline-flex items-center gap-1.5 text-[13px] text-ink-muted transition-colors hover:text-ink"
                 onClick={() => onOpenChange(false)}
               >
-                Invoices
+                {t("manageModal.invoices")}
                 <ArrowSquareOut className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -256,9 +260,7 @@ export function ManageSubscriptionModal({
 
           {cancelling && subscription ? (
             <p className="mt-4 text-[12px] text-amber-500">
-              Translation stops for this workspace on{" "}
-              {formatDay(subscription.currentPeriodEnd)}. Resubscribe before then to keep it
-              running — the current period is already paid for, so it costs nothing.
+              {t("manageModal.cancelledNotice", { date: formatDay(subscription.currentPeriodEnd) })}
             </p>
           ) : null}
         </div>

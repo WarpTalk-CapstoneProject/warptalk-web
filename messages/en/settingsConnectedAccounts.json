@@ -1,0 +1,48 @@
+{
+  "header": {
+    "title": "Connected accounts",
+    "subtitle": "The ways you can sign in to WarpTalk as {email}."
+  },
+  "error": {
+    "title": "Couldn't load your sign-in methods",
+    "hint": "Retry, and if it keeps failing check that the auth service is reachable.",
+    "retry": "Retry",
+    "retrying": "Retrying…"
+  },
+  "toasts": {
+    "linked": "Google account linked.",
+    "linkFailed": "Couldn't link your Google account.",
+    "authFailed": "Google authentication failed or the popup was closed.",
+    "unlinked": "Google account unlinked.",
+    "unlinkFailed": "Couldn't unlink your Google account."
+  },
+  "signInMethods": {
+    "sectionTitle": "Sign-in methods"
+  },
+  "google": {
+    "title": "Google",
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "linkButton": "Link Google",
+    "unlinkButton": "Unlink",
+    "notConfiguredTitle": "Google sign-in is not configured for this deployment.",
+    "hintUnknown": "Link status isn't available from the server yet.",
+    "hintNotLinked": "Sign in with the Google account for {email}. Its email must match this account.",
+    "hintLinked": "Sign in with Google as {email}.",
+    "unlinkNeedsPasswordReason": "Google is the only way you sign in. Set a password first (use Forgot password on the sign-in page), then you can unlink Google."
+  },
+  "password": {
+    "title": "Password",
+    "set": "Set",
+    "notSet": "Not set",
+    "hintUnknown": "Password status isn't available from the server yet.",
+    "hintSet": "Sign in with your email and password.",
+    "hintNotSet": "No password yet. Use Forgot password on the sign-in page to set one."
+  },
+  "unlinkDialog": {
+    "title": "Unlink Google?",
+    "description": "You will no longer be able to sign in with Google. You can still sign in with your email and password, and link Google again later.",
+    "cancel": "Cancel",
+    "confirm": "Unlink Google"
+  }
+}

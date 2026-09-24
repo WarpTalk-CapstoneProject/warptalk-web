@@ -20,6 +20,7 @@
  *   chart follows the theme like the rest of the page.
  */
 
+import { useTranslations } from "next-intl";
 import { useRef, useState } from "react";
 
 import {
@@ -77,6 +78,7 @@ export function UsageSpendChart({
   series: ChartSeries[];
   average: number;
 }) {
+  const t = useTranslations("settingsBillingUsage");
   const svgRef = useRef<SVGSVGElement>(null);
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -92,7 +94,7 @@ export function UsageSpendChart({
 
   const label = (bucket: ServiceBucket) =>
     bucketSize === "week"
-      ? `Week of ${SHORT_DATE.format(bucket.start)}`
+      ? t("usageSpendChart.weekOf", { date: SHORT_DATE.format(bucket.start) })
       : SHORT_DATE.format(bucket.start);
 
   /** Slot-ordered segments for one bucket, services outside the top five merged into Other. */
@@ -122,7 +124,7 @@ export function UsageSpendChart({
 
   const reading = hovered !== null && buckets[hovered] ? buckets[hovered] : null;
   const legendLabel = (slot: number) =>
-    slot === 0 ? "Other services" : (series.find((s) => s.slot === slot)?.label ?? "");
+    slot === 0 ? t("usageSpendChart.otherServices") : (series.find((s) => s.slot === slot)?.label ?? "");
 
   return (
     <div className="relative">
@@ -131,7 +133,7 @@ export function UsageSpendChart({
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full touch-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         role="img"
-        aria-label={`Credits spent per ${bucketSize}, stacked by AI service`}
+        aria-label={t("usageSpendChart.ariaLabel", { bucket: bucketSize })}
         tabIndex={0}
         onPointerMove={(event) => setHovered(indexFromClientX(event.clientX))}
         onPointerDown={(event) => setHovered(indexFromClientX(event.clientX))}
@@ -299,7 +301,7 @@ export function UsageSpendChart({
             ))}
           <div className="-mx-3 mt-2 h-px bg-hairline" />
           <div className="mt-2 flex items-baseline justify-between gap-4">
-            <span className="text-[11.5px] text-ink-muted">Total</span>
+            <span className="text-[11.5px] text-ink-muted">{t("usageSpendChart.total")}</span>
             <b className="text-[11.5px] font-semibold tabular-nums text-ink">
               {whole(reading.total)}
             </b>
@@ -313,7 +315,7 @@ export function UsageSpendChart({
         ))}
         <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted">
           <span aria-hidden className="h-0 w-3.5 border-t-[1.5px] border-dashed border-[var(--primary)]" />
-          Average
+          {t("usageSpendChart.average")}
         </span>
       </div>
     </div>

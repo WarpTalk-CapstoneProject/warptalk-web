@@ -16,6 +16,11 @@ export interface AdminAnnouncementSummaryDto {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** When the last delivery chunk was counted (backend#406). Null while Pending, and absent from
+   *  notification builds older than that. */
+  sentAt?: string | null;
+  /** How many recipient rows were written. Absent from builds older than backend#406. */
+  deliveredCount?: number | null;
 }
 
 /**
@@ -23,7 +28,7 @@ export interface AdminAnnouncementSummaryDto {
  *
  * `targetAudienceData` and `payload` are JSON serialized into strings by the server
  * (`AdminNotificationMapper.ToEntity`), not nested objects; parse them before reading.
- * There is no sent-at timestamp and no delivery count on this record.
+ * `sentAt` and `deliveredCount` arrived with backend#406 and are optional for older builds.
  */
 export interface AdminAnnouncementDetailDto {
   id: string;
@@ -39,6 +44,8 @@ export interface AdminAnnouncementDetailDto {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  sentAt?: string | null;
+  deliveredCount?: number | null;
 }
 
 export interface AdminAnnouncementPageDto {

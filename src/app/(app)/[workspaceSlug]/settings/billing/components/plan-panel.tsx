@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 import { ArrowUpRight, Check, Minus, Warning } from "@phosphor-icons/react";
+import { useTranslations } from "next-intl";
 
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import type { PlanDto, SubscriptionDto } from "@/types/billing";
@@ -65,7 +66,10 @@ export function PlanPanel({
   plan: PlanDto | null;
   plansHref: string;
 }) {
+  const t = useTranslations("settingsBilling");
   const cancelling = subscription?.cancelAtPeriodEnd === true;
+  const isYearly =
+    plan?.billingCycle?.toLowerCase() === "yearly" || plan?.billingCycle?.toLowerCase() === "year";
 
   return (
     // WT-430 (Linear): overflow-clip, not overflow-hidden — same corner clipping for the child
@@ -74,9 +78,9 @@ export function PlanPanel({
     <section className="overflow-clip rounded-[14px] border border-border bg-surface-1">
       <div className="flex items-start justify-between gap-3 border-b border-hairline px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[12px] text-ink-muted">Current plan</p>
+          <p className="text-[12px] text-ink-muted">{t("planPanel.currentPlan")}</p>
           <p className="mt-1 truncate text-[18px] font-semibold leading-tight text-ink">
-            {subscription?.planName ?? "No active plan"}
+            {subscription?.planName ?? t("planPanel.noPlan")}
           </p>
           <p className="mt-0.5 text-[12px] text-ink-muted">
             {subscription
@@ -84,29 +88,31 @@ export function PlanPanel({
                 // currency beside it. `plan` is already in scope for the billing cycle below,
                 // and formatMoney falls back to VND when it is absent — so a workspace whose
                 // plan has not loaded yet reads exactly as it did before.
-                `${formatMoney(subscription.price, plan?.currency)} / ${plan?.billingCycle?.toLowerCase() === "yearly" || plan?.billingCycle?.toLowerCase() === "year" ? "year" : "month"}`
-              : "Meetings translate against a credit balance."}
+                t(isYearly ? "planPanel.pricePerYear" : "planPanel.pricePerMonth", {
+                  price: formatMoney(subscription.price, plan?.currency),
+                })
+              : t("planPanel.noBalance")}
           </p>
         </div>
         <Link
           href={plansHref}
           className="inline-flex h-[28px] shrink-0 items-center gap-1 rounded-full border border-border px-3 text-[12px] font-medium text-ink transition hover:bg-surface-2"
         >
-          {subscription ? "Change" : "Choose"}
+          {subscription ? t("planPanel.change") : t("planPanel.choose")}
           <ArrowUpRight className="h-3 w-3" />
         </Link>
       </div>
 
       {subscription ? (
         <div className="space-y-2.5 border-b border-hairline px-4 py-3.5">
-          <Limit label="Credits per cycle" value={(formatAmount(plan?.creditsPerCycle ?? 0))} />
+          <Limit label={t("planPanel.creditsPerCycle")} value={(formatAmount(plan?.creditsPerCycle ?? 0))} />
           <Limit
-            label="Participants per meeting"
+            label={t("planPanel.participantsPerMeeting")}
             value={plan ? String(plan.maxParticipants) : "—"}
           />
-          <Limit label="Languages per meeting" value={plan ? String(plan.maxLanguages) : "—"} />
+          <Limit label={t("planPanel.languagesPerMeeting")} value={plan ? String(plan.maxLanguages) : "—"} />
           <Limit
-            label="Cycle"
+            label={t("planPanel.cycle")}
             value={`${formatDay(subscription.currentPeriodStart)} → ${formatDay(subscription.currentPeriodEnd)}`}
           />
         </div>
@@ -114,10 +120,10 @@ export function PlanPanel({
 
       {plan ? (
         <ul className="space-y-2 border-b border-hairline px-4 py-3.5">
-          <Entitlement label="Voice cloning" granted={plan.voiceCloneEnabled} />
-          <Entitlement label="AI assistant" granted={plan.aiAssistantEnabled} />
-          <Entitlement label="Custom glossary" granted={plan.glossaryEnabled} />
-          <Entitlement label="Dedicated GPU" granted={plan.dedicatedGpu} />
+          <Entitlement label={t("capabilities.voiceCloning")} granted={plan.voiceCloneEnabled} />
+          <Entitlement label={t("capabilities.aiAssistant")} granted={plan.aiAssistantEnabled} />
+          <Entitlement label={t("capabilities.customGlossary")} granted={plan.glossaryEnabled} />
+          <Entitlement label={t("capabilities.dedicatedGpu")} granted={plan.dedicatedGpu} />
         </ul>
       ) : null}
 
@@ -127,15 +133,14 @@ export function PlanPanel({
             <p className="flex items-start gap-1.5 text-[12px] text-amber-500">
               <Warning className="mt-px h-3.5 w-3.5 shrink-0" />
               <span>
-                Cancelled. Translation stops for this workspace on{" "}
-                {formatDay(subscription.currentPeriodEnd)}.
+                {t("planPanel.cancelled", { date: formatDay(subscription.currentPeriodEnd) })}
               </span>
             </p>
           ) : (
             <p className="text-[12px] text-ink-muted">
               {subscription.autoRenew
-                ? `Renews automatically on ${formatDay(subscription.currentPeriodEnd)}.`
-                : `Does not auto-renew — credits stop on ${formatDay(subscription.currentPeriodEnd)}.`}
+                ? t("planPanel.renewsAutomatically", { date: formatDay(subscription.currentPeriodEnd) })
+                : t("planPanel.doesNotAutoRenew", { date: formatDay(subscription.currentPeriodEnd) })}
             </p>
           )}
         </div>

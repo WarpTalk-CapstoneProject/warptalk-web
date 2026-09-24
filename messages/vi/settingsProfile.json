@@ -1,0 +1,49 @@
+{
+  "header": {
+    "title": "Hồ sơ"
+  },
+  "toasts": {
+    "avatarUpdated": "Đã cập nhật ảnh đại diện.",
+    "avatarUpdateFailed": "Không thể cập nhật ảnh đại diện của bạn.",
+    "loadFailed": "Không thể tải hồ sơ người dùng",
+    "fullNameRequired": "Họ và tên là bắt buộc",
+    "saveFailed": "Không thể cập nhật hồ sơ"
+  },
+  "avatar": {
+    "label": "Ảnh đại diện",
+    "uploading": "Đang tải lên…",
+    "change": "Thay đổi",
+    "upload": "Tải lên"
+  },
+  "fields": {
+    "email": {
+      "label": "Email",
+      "cannotChange": "Không thể thay đổi email"
+    },
+    "fullName": {
+      "label": "Họ và tên",
+      "placeholder": "Họ và tên của bạn"
+    },
+    "phone": {
+      "label": "Số điện thoại",
+      "placeholder": "vd: +84 987654321"
+    },
+    "preferredLanguage": {
+      "label": "Ngôn ngữ ưa thích",
+      "placeholder": "Chọn ngôn ngữ"
+    },
+    "timezone": {
+      "label": "Múi giờ",
+      "placeholder": "Chọn múi giờ"
+    }
+  },
+  "workspaceAccess": {
+    "sectionTitle": "Quyền truy cập không gian làm việc",
+    "workspace": "Không gian làm việc",
+    "workspaceFallback": "Không gian làm việc hiện tại",
+    "role": "Vai trò trong không gian làm việc",
+    "roleFallback": "Thành viên",
+    "membershipType": "Loại thành viên",
+    "membershipTypeFallback": "Nội bộ"
+  }
+}

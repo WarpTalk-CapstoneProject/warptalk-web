@@ -47,6 +47,7 @@ export function mapArtifact(artifact: TranslationRoomArtifactDto): EndedRoomHist
     createdAt: artifact.createdAt,
     updatedAt: artifact.updatedAt ?? null,
     recordingStartedAt: artifact.recordingStartedAt ?? null,
+    failureReason: artifact.failureReason ?? null,
     expiresAt: artifact.retentionUntil,
     consentRequired: artifact.consentRequired,
     // Not "granted". The DTO says consent is REQUIRED, never that it was given — see

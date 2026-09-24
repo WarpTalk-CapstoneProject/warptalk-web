@@ -69,6 +69,12 @@ export const API = {
      * about how good the clone is.
      */
     sample: (profileId: string) => `/auth/voice-profiles/${profileId}/sample`,
+    /**
+     * Clone a failed profile again from its STORED recording — for failures that were not the
+     * recording's fault (the provider account, an outage). Only valid while status is
+     * "clone_failed"; see lib/voice/clone-failure.ts for when the page offers it.
+     */
+    retryClone: (profileId: string) => `/auth/voice-profiles/${profileId}/clone/retry`,
   },
   // Consent to voice cloning. Separate from voiceProfiles because it is permission, not a
   // profile: it is given once for the product, outlives any single profile or meeting, and is
@@ -350,6 +356,10 @@ export const API = {
     documentDetail: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}`,
     documentExtractedText: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/extracted-text`,
     documentApprove: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/approve`,
+    /** Takes a published document back from the workspace: public → private. */
+    documentUnpublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/unpublish`,
+    /** Shares a private document again — directly for an owner/admin, back through approval for the uploader. */
+    documentPublish: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/publish`,
     /** Replaces a rejected document's file in place, keeping its id and its history. WT-633. */
     documentRevision: (workspaceId: string, docId: string) => `/workspaces/${workspaceId}/documents/${docId}/revision`,
     /** A document's approval and feedback history, newest first. WT-633. */
@@ -498,6 +508,8 @@ export const API = {
     rateCardDeactivate: (id: string) => `/usages/rate-card/${id}/deactivate`,
     /** POST. Read-only: prices a proposed cost and markup without publishing anything. */
     rateCardPreview: "/usages/rate-card/preview",
+    /** PUT. Records the provider cost of a credit-unit (CRD) card; its credit price stays. */
+    rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
     pricingConfig: "/usages/pricing-config",
   },
   /** Platform meeting directory (translation-room). Metadata only, read-only. */
@@ -524,6 +536,18 @@ export const API = {
     counts: "/admin/meetings/counts",
   },
   /**
+   * The Insights page (`/admin`). One period endpoint per owning service plus billing's "right now"
+   * snapshot; each rides its service's existing admin gateway route. Built alongside the page, so
+   * any of them may 404 on an older backend — the page shows that source as not available yet.
+   */
+  adminInsights: {
+    billing: "/admin/billing/insights",
+    billingSnapshot: "/admin/billing/insights/snapshot",
+    users: "/admin/users/insights",
+    workspaces: "/admin/workspaces/insights",
+    meetings: "/admin/meetings/insights",
+  },
+  /**
    * The platform's own vitals, read back out of the metrics store. Query-only: nothing behind
    * this path can silence an alert, restart a container or write a sample.
    */
@@ -537,10 +561,14 @@ export const API = {
   },
   /**
    * The catalog room validation reads — `translation_room.supported_languages`, inactive rows
-   * included. Read-only: translation-room has no bus, so a toggle could not be audited.
+   * included. Manageable since WT-691: each write is recorded in the platform audit log over gRPC
+   * before it is saved. No delete — disable is the soft switch.
    */
   adminLanguages: {
     base: "/admin/languages",
+    byCode: (code: string) => `/admin/languages/${encodeURIComponent(code)}`,
+    enable: (code: string) => `/admin/languages/${encodeURIComponent(code)}/enable`,
+    disable: (code: string) => `/admin/languages/${encodeURIComponent(code)}/disable`,
   },
   /** Voice-clone consent, counts only. No user ids cross this boundary. */
   adminVoiceConsent: {

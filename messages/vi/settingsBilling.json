@@ -1,0 +1,125 @@
+{
+  "accessDenied": {
+    "title": "Từ chối truy cập",
+    "description": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem cấu hình thanh toán và gói đăng ký."
+  },
+  "errorState": {
+    "title": "Không thể tải dữ liệu thanh toán",
+    "description": "Số dư và mức sử dụng hiện không khả dụng, nên không có số liệu nào được hiển thị thay vì một con số có thể sai. {message}",
+    "httpError": "Dịch vụ thanh toán phản hồi với HTTP {status}.",
+    "unexpected": "Đã xảy ra lỗi không mong muốn.",
+    "retry": "Thử lại"
+  },
+  "overages": {
+    "title": "Cho phép vượt hạn mức",
+    "badge": "Khuyến nghị",
+    "descriptionOn": "Cuộc họp tiếp tục dịch sau khi hết credit, lên đến {cap} credit trong chu kỳ này.",
+    "descriptionOff": "Cuộc họp dừng ngay khi hết credit. Bật tính năng này để cuộc họp tiếp tục trong giới hạn gói của bạn.",
+    "manage": "Quản lý",
+    "enable": "Bật"
+  },
+  "stats": {
+    "creditsRemaining": {
+      "label": "Credit còn lại",
+      "granted": "{total} được cấp trong chu kỳ này.",
+      "noAllowance": "Không có hạn mức trong chu kỳ này.",
+      "spent": "Đã dùng {used} kể từ đầu chu kỳ.",
+      "cycleEnds": "Chu kỳ kết thúc {date}."
+    },
+    "currentPlan": {
+      "label": "Gói hiện tại",
+      "noPlan": "Chưa có gói đang hoạt động",
+      "pricePerCycle": "{price} mỗi chu kỳ.",
+      "noBalance": "Cuộc họp được tính vào số dư credit.",
+      "limits": "{participants} người tham gia · {languages} ngôn ngữ mỗi cuộc họp.",
+      "limitsUnavailable": "Không có thông tin giới hạn gói.",
+      "cancelled": "Đã hủy — việc dịch dừng vào {date}. Đăng ký lại từ Quản lý gói đăng ký.",
+      "renews": "Gia hạn {date}."
+    }
+  },
+  "currentPlanRow": {
+    "label": "Gói hiện tại",
+    "renewsOn": "Gia hạn vào {date}",
+    "endsOn": "Kết thúc vào {date}"
+  },
+  "buyCredits": "Mua credit",
+  "manageSubscription": "Quản lý gói đăng ký",
+  "noSubscription": {
+    "title": "Chưa có gói đăng ký nào",
+    "description": "Không gian làm việc này chưa có gói thanh toán, nên chưa có số dư hoặc mức sử dụng để báo cáo. Chọn một gói để bắt đầu theo dõi credit và mức sử dụng AI.",
+    "choosePlan": "Chọn gói"
+  },
+  "capabilities": {
+    "voiceCloning": "Nhân bản giọng nói",
+    "aiAssistant": "Trợ lý AI",
+    "customGlossary": "Từ điển thuật ngữ tùy chỉnh",
+    "dedicatedGpu": "GPU riêng"
+  },
+  "planGrid": {
+    "mostPopular": "Phổ biến nhất",
+    "currentPlan": "Gói hiện tại",
+    "coveredByCurrentPlan": "Đã bao gồm trong gói hiện tại",
+    "upgrade": "Nâng cấp",
+    "choose": "Chọn",
+    "creditsPerCycle": "{credits} credit/chu kỳ",
+    "limits": "{participants} người tham gia · {languages} ngôn ngữ",
+    "everythingInPlus": "Tất cả tính năng của {name}, cùng với",
+    "moreCreditsAndLimits": "Thêm credit và giới hạn cao hơn"
+  },
+  "planPanel": {
+    "currentPlan": "Gói hiện tại",
+    "noPlan": "Chưa có gói đang hoạt động",
+    "noBalance": "Cuộc họp được tính vào số dư credit.",
+    "pricePerYear": "{price} / năm",
+    "pricePerMonth": "{price} / tháng",
+    "change": "Thay đổi",
+    "choose": "Chọn",
+    "creditsPerCycle": "Credit mỗi chu kỳ",
+    "participantsPerMeeting": "Người tham gia mỗi cuộc họp",
+    "languagesPerMeeting": "Ngôn ngữ mỗi cuộc họp",
+    "cycle": "Chu kỳ",
+    "cancelled": "Đã hủy. Việc dịch dừng cho không gian làm việc này vào {date}.",
+    "renewsAutomatically": "Tự động gia hạn vào {date}.",
+    "doesNotAutoRenew": "Không tự động gia hạn — credit dừng vào {date}."
+  },
+  "manageModal": {
+    "title": "Quản lý gói đăng ký",
+    "description": "Gói hiện tại, chu kỳ và các thiết lập có thể thay đổi.",
+    "currentPlan": "Gói hiện tại",
+    "noPlan": "Chưa có gói đang hoạt động",
+    "planType": "Loại gói",
+    "overageCreditsUsed": "Credit vượt hạn mức đã dùng",
+    "cappedThisCycle": "Giới hạn ở {cap} trong chu kỳ này",
+    "nextCreditRefresh": "Lần làm mới credit tiếp theo",
+    "nextBillingDate": "Ngày thanh toán tiếp theo",
+    "cancelledNoRenew": "Đã hủy — gói này sẽ không gia hạn",
+    "nextPaymentAmount": "Số tiền thanh toán tiếp theo",
+    "enableOverages": "Bật vượt hạn mức",
+    "recommended": "Khuyến nghị",
+    "modifyPlan": "Chỉnh sửa gói",
+    "changePlan": "Đổi gói",
+    "reactivating": "Đang kích hoạt lại…",
+    "resubscribe": "Đăng ký lại",
+    "cancelling": "Đang hủy…",
+    "confirmCancel": "Xác nhận hủy",
+    "cancelPlan": "Hủy gói",
+    "managePayments": "Quản lý thanh toán",
+    "invoices": "Hóa đơn",
+    "cancelledNotice": "Việc dịch dừng cho không gian làm việc này vào {date}. Hãy đăng ký lại trước thời điểm đó để tiếp tục sử dụng — chu kỳ hiện tại đã được thanh toán nên sẽ không mất thêm phí.",
+    "billingCycle": {
+      "yearly": "Hàng năm",
+      "semiannual": "Nửa năm",
+      "monthly": "Hàng tháng",
+      "unknown": "—"
+    },
+    "toasts": {
+      "overageOn": "Cuộc họp sẽ tiếp tục chạy sau khi hết credit, đến giới hạn của gói.",
+      "overageOff": "Cuộc họp sẽ dừng khi hết credit.",
+      "overageFailed": "Không thể thay đổi thiết lập vượt hạn mức.",
+      "cancelled": "Đã hủy gói đăng ký. Gói vẫn hoạt động đến hết chu kỳ.",
+      "cancelFailed": "Không thể hủy gói đăng ký.",
+      "reactivated": "Đã bật lại gia hạn. Gói này sẽ tiếp tục sau chu kỳ hiện tại.",
+      "reactivateFailed": "Không thể kích hoạt lại gói đăng ký."
+    }
+  }
+}

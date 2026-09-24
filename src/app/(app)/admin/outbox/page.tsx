@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
@@ -44,16 +45,17 @@ function formatWhen(value: string) {
   }).format(parsed);
 }
 
-async function copyText(value: string, label: string) {
+async function copyText(value: string, successMessage: string, failureMessage: string) {
   try {
     await navigator.clipboard.writeText(value);
-    toast.success(`${label} copied`);
+    toast.success(successMessage);
   } catch {
-    toast.error(`Could not copy the ${label.toLowerCase()}`);
+    toast.error(failureMessage);
   }
 }
 
 export default function AdminOutboxPage() {
+  const t = useTranslations("adminOps.outbox");
   const deadLettersQuery = useAdminOutboxDeadLetters(LIMIT);
   const replay = useReplayOutboxEvent();
   const [pending, setPending] = useState<WorkspaceOutboxDeadLetterDto | null>(null);
@@ -64,27 +66,27 @@ export default function AdminOutboxPage() {
     if (!pending) return;
     try {
       await replay.mutateAsync(pending.id);
-      toast.success(`${pending.eventType} queued for redelivery`);
+      toast.success(t("replaySuccess", { eventType: pending.eventType }));
       setPending(null);
     } catch (error) {
-      toast.error(getErrorMessage(error, "The event could not be replayed."));
+      toast.error(getErrorMessage(error, t("replayErrorFallback")));
     }
   };
 
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Tray size={14} weight="fill" />}
-        title="Event outbox"
-        description="Workspace service. Events it committed but could not publish after every retry. Replaying one resets its attempts and hands it back to the publisher."
+        title={t("title")}
+        description={t("description")}
         actions={
           <div className="flex items-center gap-3">
             {deadLettersQuery.data ? (
               <span className="text-[12px] text-ink-muted">
                 {items.length >= LIMIT
-                  ? `Latest ${numberFormatter.format(LIMIT)} shown`
-                  : `${numberFormatter.format(items.length)} dead-lettered`}
+                  ? t("latestShown", { limit: numberFormatter.format(LIMIT) })
+                  : t("deadLetteredCount", { count: numberFormatter.format(items.length) })}
               </span>
             ) : null}
             <Button
@@ -97,7 +99,7 @@ export default function AdminOutboxPage() {
                 size={14}
                 className={cn(deadLettersQuery.isFetching && "animate-spin")}
               />
-              Refresh
+              {t("refresh")}
             </Button>
           </div>
         }
@@ -108,12 +110,9 @@ export default function AdminOutboxPage() {
           <div className="flex items-start gap-3 px-4 py-10 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">The outbox could not be read.</p>
+              <p className="font-medium">{t("errorTitle")}</p>
               <p className="mt-1 text-ink-muted">
-                {getErrorMessage(
-                  deadLettersQuery.error,
-                  "Check the workspace service and that your session still holds the platform admin role.",
-                )}
+                {getErrorMessage(deadLettersQuery.error, t("errorFallback"))}
               </p>
               <Button
                 variant="outline"
@@ -121,7 +120,7 @@ export default function AdminOutboxPage() {
                 className="mt-3"
                 onClick={() => void deadLettersQuery.refetch()}
               >
-                Try again
+                {t("tryAgain")}
               </Button>
             </div>
           </div>
@@ -139,11 +138,8 @@ export default function AdminOutboxPage() {
               <span className="mx-auto grid size-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
                 <CheckCircle size={20} weight="duotone" />
               </span>
-              <p className="mt-3 text-sm font-medium">The outbox is healthy</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                No workspace event has exhausted its retries. Events still being retried do not
-                appear here.
-              </p>
+              <p className="mt-3 text-sm font-medium">{t("emptyTitle")}</p>
+              <p className="mt-1 text-xs text-ink-muted">{t("emptyDescription")}</p>
             </div>
           </div>
         ) : (
@@ -151,13 +147,13 @@ export default function AdminOutboxPage() {
             <table className="w-full min-w-[960px] text-left text-[13px]">
               <thead>
                 <tr className="border-b border-hairline text-[11px] font-medium text-ink-muted">
-                  <th className="px-4 py-2 font-medium">Dead-lettered</th>
-                  <th className="px-4 py-2 font-medium">Event</th>
-                  <th className="px-4 py-2 text-right font-medium">Attempts</th>
-                  <th className="px-4 py-2 font-medium">Workspace</th>
-                  <th className="px-4 py-2 font-medium">Last error</th>
-                  <th className="px-4 py-2 font-medium">Correlation</th>
-                  <th className="px-4 py-2" aria-label="Actions" />
+                  <th className="px-4 py-2 font-medium">{t("columnDeadLettered")}</th>
+                  <th className="px-4 py-2 font-medium">{t("columnEvent")}</th>
+                  <th className="px-4 py-2 text-right font-medium">{t("columnAttempts")}</th>
+                  <th className="px-4 py-2 font-medium">{t("columnWorkspace")}</th>
+                  <th className="px-4 py-2 font-medium">{t("columnLastError")}</th>
+                  <th className="px-4 py-2 font-medium">{t("columnCorrelation")}</th>
+                  <th className="px-4 py-2" aria-label={t("columnActions")} />
                 </tr>
               </thead>
               <tbody>
@@ -183,21 +179,18 @@ export default function AdminOutboxPage() {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Replay this event?</DialogTitle>
-            <DialogDescription>
-              It goes back to the publisher with its attempts reset to zero. If it fails again it
-              returns to this list once those attempts run out.
-            </DialogDescription>
+            <DialogTitle>{t("replayDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("replayDialogDescription")}</DialogDescription>
           </DialogHeader>
           {pending ? (
             <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 rounded-md border border-hairline bg-surface-2 px-3 py-2.5 text-[12px]">
-              <dt className="text-ink-muted">Event</dt>
+              <dt className="text-ink-muted">{t("dialogEventLabel")}</dt>
               <dd className="break-all font-mono text-ink">
                 {pending.eventType} v{pending.schemaVersion}
               </dd>
-              <dt className="text-ink-muted">Attempts</dt>
+              <dt className="text-ink-muted">{t("dialogAttemptsLabel")}</dt>
               <dd className="text-ink">{numberFormatter.format(pending.attemptCount)}</dd>
-              <dt className="text-ink-muted">Event id</dt>
+              <dt className="text-ink-muted">{t("dialogEventIdLabel")}</dt>
               <dd className="break-all font-mono text-ink">{pending.id}</dd>
             </dl>
           ) : null}
@@ -207,11 +200,11 @@ export default function AdminOutboxPage() {
               onClick={() => setPending(null)}
               disabled={replay.isPending}
             >
-              Cancel
+              {t("cancel")}
             </Button>
             <Button onClick={() => void confirmReplay()} disabled={replay.isPending}>
               <ArrowCounterClockwise size={14} />
-              {replay.isPending ? "Replaying…" : "Replay event"}
+              {replay.isPending ? t("replaying") : t("replayEvent")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -229,6 +222,7 @@ function DeadLetterRow({
   onReplay: () => void;
   isReplaying: boolean;
 }) {
+  const t = useTranslations("adminOps.outbox");
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -238,7 +232,9 @@ function DeadLetterRow({
       </td>
       <td className="px-4 py-3">
         <p className="font-mono text-[12px] text-ink">{item.eventType}</p>
-        <p className="text-[11px] text-ink-subtle">Schema v{item.schemaVersion}</p>
+        <p className="text-[11px] text-ink-subtle">
+          {t("schemaVersion", { version: item.schemaVersion })}
+        </p>
       </td>
       <td className="px-4 py-3 text-right tabular-nums text-ink">
         {numberFormatter.format(item.attemptCount)}
@@ -268,7 +264,7 @@ function DeadLetterRow({
               "block w-full text-left font-mono text-[11px] text-ink-muted hover:text-ink",
               expanded ? "whitespace-pre-wrap break-words" : "truncate",
             )}
-            title={expanded ? "Collapse" : "Show the full error"}
+            title={expanded ? t("collapseError") : t("showFullError")}
           >
             {item.lastError}
           </button>
@@ -280,7 +276,13 @@ function DeadLetterRow({
         {item.correlationId ? (
           <button
             type="button"
-            onClick={() => void copyText(item.correlationId!, "Correlation id")}
+            onClick={() =>
+              void copyText(
+                item.correlationId!,
+                t("copiedToast", { label: t("correlationIdLabel") }),
+                t("copyFailedToast", { label: t("correlationIdLabel").toLowerCase() }),
+              )
+            }
             className="inline-flex items-center gap-1.5 font-mono text-[11px] text-ink-muted hover:text-ink"
             title={item.correlationId}
           >
@@ -294,7 +296,7 @@ function DeadLetterRow({
       <td className="whitespace-nowrap px-4 py-3 text-right">
         <Button variant="outline" size="sm" onClick={onReplay} disabled={isReplaying}>
           <ArrowCounterClockwise size={14} />
-          Replay
+          {t("replay")}
         </Button>
       </td>
     </tr>

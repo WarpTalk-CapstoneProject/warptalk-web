@@ -1,0 +1,70 @@
+{
+  "header": {
+    "title": "Settings",
+    "subtitle": "Configure your personal language preferences, client audio setup, and layout settings."
+  },
+  "error": {
+    "message": "Failed to load personal settings.",
+    "hint": "Please make sure the backend services are running.",
+    "retry": "Retry"
+  },
+  "toasts": {
+    "saveFailed": "Failed to update preferences"
+  },
+  "sections": {
+    "translationLanguages": "Translation & Languages",
+    "audioSuppression": "Audio & Suppression",
+    "meetingPresets": "Meeting Presets",
+    "appearanceTheme": "Appearance & Theme"
+  },
+  "fields": {
+    "speakLanguage": {
+      "label": "Default Speak Language",
+      "hint": "The default language you will speak during translated sessions.",
+      "placeholder": "Select language..."
+    },
+    "listenLanguage": {
+      "label": "Default Listen Language",
+      "hint": "The language you wish to hear or see translated transcripts in.",
+      "placeholder": "Select language..."
+    },
+    "voiceClone": {
+      "label": "Enable Voice Cloning",
+      "hint": "Synthesize translations using your approved voice profiles."
+    },
+    "noiseSuppression": {
+      "label": "Microphone Noise Suppression",
+      "hint": "Filter background static noise during translation calls."
+    },
+    "roomType": {
+      "label": "Default Room Connection Type",
+      "hint": "Preferred streaming protocol for your rooms.",
+      "placeholder": "Select type...",
+      "instant": "Instant Room",
+      "scheduled": "Scheduled Room"
+    },
+    "autoRecord": {
+      "label": "Auto Record Translation Rooms",
+      "hint": "Automatically record and save audio stream inputs when starting a meeting."
+    },
+    "autoSummary": {
+      "label": "Auto Generate AI Summaries",
+      "hint": "Trigger AI summaries and transcripts immediately when meetings conclude."
+    },
+    "maxParticipants": {
+      "label": "Default Max Participants",
+      "hint": "Set the default capacity limit for rooms created by you."
+    },
+    "theme": {
+      "label": "Interface Theme",
+      "hint": "Select your personal default display style.",
+      "placeholder": "Select theme...",
+      "light": "Light Mode",
+      "dark": "Dark Mode",
+      "system": "System Default"
+    }
+  },
+  "audioBridge": {
+    "label": "This device"
+  }
+}

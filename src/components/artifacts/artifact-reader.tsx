@@ -24,6 +24,8 @@ import { KIND_LABELS, describeAbsence, relativeTime } from "@/lib/meeting/artifa
 import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { roomDetailPath } from "@/lib/workspace/workspace-routes";
+import { artifactPreviewMarkdown } from "@/lib/meeting/artifact-preview";
+import { SummaryMarkdown } from "@/components/markdown/document-markdown";
 
 /**
  * One record, read in place.
@@ -176,9 +178,13 @@ export function ArtifactRecordView({
         </div>
 
         {entry.body ? (
-          <pre className="whitespace-pre-wrap break-words rounded-md border border-border bg-surface-2 px-4 py-3.5 font-sans text-[11.5px] leading-[1.65] text-ink">
-            {entry.body}
-          </pre>
+          // Rendered, not printed: a transcript export is markdown, and a <pre> showed its room-id
+          // header, `**[Name (VI)]**:` markers and `__MEETING_END__` verbatim. Copy still copies
+          // the stored text. Same cleaning as the card preview, without its length budget.
+          <SummaryMarkdown className="break-words rounded-md border border-border bg-surface-2 px-4 py-3.5 text-[11.5px] leading-[1.65] text-ink">
+            {artifactPreviewMarkdown(entry.body, Number.POSITIVE_INFINITY)
+              || describeAbsence("empty", entry.kind)}
+          </SummaryMarkdown>
         ) : (
           <Unreadable entry={entry} />
         )}

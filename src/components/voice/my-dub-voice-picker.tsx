@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -62,6 +63,7 @@ export function MyDubVoicePicker({
   /** Bare ISO-639-1, from the page. Decides which library voices are on offer here. */
   language: string;
 }) {
+  const t = useTranslations("voiceProfiles.dubPicker");
   const { data: chosen, isLoading } = useDubVoice();
   const { data: catalog = [] } = useVoiceCatalog(language);
   const setDubVoice = useSetDubVoice();
@@ -75,16 +77,16 @@ export function MyDubVoicePicker({
   );
 
   const selectedVoiceName = useMemo(() => {
-    if (!chosen) return "Clone my voice live in the meeting";
+    if (!chosen) return t("cloneLiveOption");
     const ownMatch = profiles.find((profile) => profile.providerVoiceId === chosen);
-    if (ownMatch) return ownMatch.displayName || "My voice";
+    if (ownMatch) return ownMatch.displayName || t("myVoice");
     const catalogMatch = catalog.find((voice) => voice.id === chosen);
     if (catalogMatch) return catalogMatch.name;
     // WT-649: was `return chosen`, which rendered a raw provider UUID into the select. The
     // catalogue is empty while its query is in flight and stays empty for a language the TTS
     // worker has not warmed yet, so this branch is reached in normal use, not just on bad data.
-    return "A voice you picked";
-  }, [chosen, profiles, catalog]);
+    return t("voiceYouPicked");
+  }, [chosen, profiles, catalog, t]);
 
   function choose(value: string) {
     const voiceId = value === LIVE_CLONE ? null : value;
@@ -96,36 +98,36 @@ export function MyDubVoicePicker({
       {
         onSuccess: () =>
           toast.success(
-            voiceId ? "Saved. You will be dubbed in this voice." : "Back to cloning your voice live.",
+            voiceId ? t("toasts.savedDubbed") : t("toasts.backToLiveClone"),
           ),
         onError: (error) =>
-          toast.error(getErrorMessage(error, "Could not save the voice you are dubbed in.")),
+          toast.error(getErrorMessage(error, t("toasts.saveFailed"))),
       },
     );
   }
 
   return (
     <WorkspaceRailModule
-      title="You are dubbed in"
-      description="How you sound to people listening in another language."
+      title={t("title")}
+      description={t("description")}
     >
       <Select
         value={chosen ?? LIVE_CLONE}
         onValueChange={(value) => choose(value ?? LIVE_CLONE)}
         disabled={isLoading || setDubVoice.isPending}
       >
-        <SelectTrigger className="h-8 w-full text-[12.5px]" aria-label="The voice you are dubbed in">
+        <SelectTrigger className="h-8 w-full text-[12.5px]" aria-label={t("ariaLabel")}>
           <SelectValue>{selectedVoiceName}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={LIVE_CLONE}>Clone my voice live in the meeting</SelectItem>
+          <SelectItem value={LIVE_CLONE}>{t("cloneLiveOption")}</SelectItem>
 
           {usableProfiles.length > 0 && (
             <SelectGroup>
-              <SelectLabel>Your voices</SelectLabel>
+              <SelectLabel>{t("yourVoicesGroup")}</SelectLabel>
               {usableProfiles.map((profile) => (
                 <SelectItem key={profile.id} value={profile.providerVoiceId!}>
-                  {profile.displayName ?? "My voice"}
+                  {profile.displayName ?? t("myVoice")}
                 </SelectItem>
               ))}
             </SelectGroup>
@@ -133,7 +135,7 @@ export function MyDubVoicePicker({
 
           {catalog.length > 0 && (
             <SelectGroup>
-              <SelectLabel>Library voices · {getLanguageName(language)}</SelectLabel>
+              <SelectLabel>{t("libraryVoicesGroup", { language: getLanguageName(language) })}</SelectLabel>
               {catalog.map((voice) => (
                 <SelectItem key={voice.id} value={voice.id}>
                   {voice.name}
@@ -154,7 +156,7 @@ export function MyDubVoicePicker({
           <VoicePreviewButton
             voiceId={chosen}
             language={bareLanguage(language)}
-            label="the voice you are dubbed in"
+            label={t("ariaLabel")}
             variant="inline"
           />
           <Button
@@ -164,7 +166,7 @@ export function MyDubVoicePicker({
             onClick={() => choose(LIVE_CLONE)}
             disabled={setDubVoice.isPending}
           >
-            Clone me live instead
+            {t("cloneMeLiveInstead")}
           </Button>
         </div>
       ) : null}

@@ -11,6 +11,7 @@ import {
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import gsap from "gsap";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -49,8 +50,10 @@ import {
 import { markInstantMeetingStarted } from "@/lib/meeting/instant-meeting-handoff";
 import {
   type DailyRecurrenceDraft,
+  describeDailyDraftProblem,
   detectTimeZone,
   firstOccurrenceDate,
+  validateDailyDraft,
 } from "@/lib/meeting/daily-recurrence";
 import { describeRecurrenceSentence } from "@/lib/meeting/recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
@@ -68,6 +71,7 @@ function getDefaultStartTime() {
 }
 
 export function CreateRoomDialog() {
+  const t = useTranslations("rooms.create");
   const router = useRouter();
   const isOpen = useUIStore((state) => state.createRoomModalOpen);
   const setIsOpen = useUIStore((state) => state.setCreateRoomModalOpen);
@@ -77,7 +81,7 @@ export function CreateRoomDialog() {
     (state) => state.activeWorkspaceId,
   );
   const workspaceName =
-    useWorkspaceStore((state) => state.activeWorkspaceName) || "Workspace";
+    useWorkspaceStore((state) => state.activeWorkspaceName) || t("workspaceFallback");
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
@@ -234,9 +238,15 @@ export function CreateRoomDialog() {
   // three screens between the button and the meeting it promised.
   const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;
 
+  // WT-699: the repeat rule's own problem ("at most 365 days", a last date before the first
+  // meeting …) was shown in the options menu while this button stayed enabled, so the host could
+  // submit a draft the dialog had just called invalid and learn it from the server instead. The
+  // same verdict the menu prints now gates the submit.
+  const recurrenceProblem = dailyRecurrence ? validateDailyDraft(dailyRecurrence, new Date()) : null;
   const validation = {
     title: title.trim().length > 0,
     languages: meetingLanguages.length > 0,
+    recurrence: recurrenceProblem === null,
   };
   const canSubmit = Object.values(validation).every(Boolean);
   const inviteLink =
@@ -304,8 +314,12 @@ export function CreateRoomDialog() {
 
   async function handleSubmit() {
     setSubmitError(null);
+    if (recurrenceProblem) {
+      failSubmit(describeDailyDraftProblem(recurrenceProblem));
+      return;
+    }
     if (!canSubmit) {
-      failSubmit("Please complete all required fields.");
+      failSubmit(t("errors.requiredFields"));
       return;
     }
     try {
@@ -329,11 +343,11 @@ export function CreateRoomDialog() {
             invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
           },
         });
-        toast.success("Room updated successfully.");
+        toast.success(t("toasts.roomUpdated"));
         handleOpenChange(false);
       } else {
         if (!activeWorkspaceId) {
-          failSubmit("Please select a workspace before creating a room.");
+          failSubmit(t("errors.selectWorkspace"));
           return;
         }
         // Everything both paths send. `workspaceId` is deliberately NOT hoisted in here: it is
@@ -408,7 +422,11 @@ export function CreateRoomDialog() {
               : firstOccurrenceDate(dailyRecurrence.time, new Date()),
           );
           toast.success(
-            `${describeRecurrenceSentence(result.series)} at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
+            t("toasts.recurringCreated", {
+              sentence: describeRecurrenceSentence(result.series),
+              time: dailyRecurrence.time,
+              count: result.totalOccurrenceCount,
+            }),
           );
           return;
         }
@@ -442,7 +460,7 @@ export function CreateRoomDialog() {
             // completion screen this line switches to does not have. Reporting it there would be
             // reporting it nowhere.
             toast.error(
-              getErrorMessage(error, "Room created, but it could not be started."),
+              getErrorMessage(error, t("errors.startFailed")),
             );
             return;
           }
@@ -461,7 +479,7 @@ export function CreateRoomDialog() {
         setCreatedRoomCode(room.translationRoomCode);
         // Not instant, so `scheduledAt` is set — the time the host picked is the day to open.
         setCreatedRoomAt(scheduledAt);
-        toast.success("Room created successfully. Invites sent!");
+        toast.success(t("toasts.roomCreated"));
       }
     } catch (error) {
       // WT-270: the server explains itself — "Target language 'ko' is not allowed by the
@@ -472,7 +490,7 @@ export function CreateRoomDialog() {
       failSubmit(
         getErrorMessage(
           error,
-          `Failed to ${editRoomId ? "update" : "create"} room.`,
+          editRoomId ? t("errors.updateFailed") : t("errors.createFailed"),
         ),
       );
     }
@@ -480,7 +498,7 @@ export function CreateRoomDialog() {
 
   async function copyInviteLink() {
     await navigator.clipboard?.writeText(inviteLink);
-    toast.success("Invite link copied.");
+    toast.success(t("toasts.inviteLinkCopied"));
   }
 
   return (
@@ -498,10 +516,10 @@ export function CreateRoomDialog() {
         )}
       >
         <DialogTitle className="sr-only">
-          {editRoomId ? "Edit meeting" : "Create new meeting"}
+          {editRoomId ? t("editTitle") : t("createTitle")}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Configure and create a new translation room
+          {t("srDescription")}
         </DialogDescription>
 
         <div className="flex flex-col w-full relative h-full">
@@ -530,7 +548,7 @@ export function CreateRoomDialog() {
                 <button
                   onClick={() => setIsExpanded(!isExpanded)}
                   className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors mr-6"
-                  title={isExpanded ? "Collapse" : "Expand"}
+                  title={isExpanded ? t("collapse") : t("expand")}
                 >
                   {isExpanded ? (
                     <ArrowsInSimple weight="bold" size={14} />
@@ -547,15 +565,14 @@ export function CreateRoomDialog() {
               {bridgeSelected && (
                 <div className="mx-5 mt-1 rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2">
                   <p className="text-[12px] leading-relaxed text-ink-muted">
-                    Your call runs on <span className="text-ink font-medium">Google Meet</span>.
-                    WarpTalk sits beside it: this room gets two seats — you, and one stand-in for
-                    everyone on the other side.{" "}
-                    <span className="text-ink">Source</span> is the language you speak;{" "}
-                    <span className="text-ink">target</span> is what the call hears.
+                    {t.rich("bridgeNotice.line1", {
+                      meet: (chunks) => <span className="text-ink font-medium">{chunks}</span>,
+                      src: (chunks) => <span className="text-ink">{chunks}</span>,
+                      tgt: (chunks) => <span className="text-ink">{chunks}</span>,
+                    })}
                   </p>
                   <p className="mt-1 text-[11px] leading-relaxed text-ink-muted/70">
-                    Needs the two virtual audio devices installed, and Meet pointed at them. The
-                    setup check runs when you open the room.
+                    {t("bridgeNotice.line2")}
                   </p>
                 </div>
               )}
@@ -571,7 +588,7 @@ export function CreateRoomDialog() {
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Meeting title"
+                  placeholder={t("titlePlaceholder")}
                   className="w-full bg-transparent text-[18px] font-medium text-ink placeholder:text-ink-muted/50 outline-none border-none focus:ring-0 p-0 shrink-0"
                   autoFocus
                 />
@@ -579,7 +596,7 @@ export function CreateRoomDialog() {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add description..."
+                  placeholder={t("descriptionPlaceholder")}
                   className={cn(
                     "w-full bg-transparent text-[14px] text-ink placeholder:text-ink-muted/60 outline-none border-none focus:ring-0 p-0 resize-none transition-all",
                     isExpanded ? "flex-1 min-h-[300px]" : "min-h-[60px]",
@@ -617,7 +634,7 @@ export function CreateRoomDialog() {
                     onClick={() => setDailyRecurrence(null)}
                     label={
                       <span data-testid="daily-pill">
-                        Daily {dailyRecurrence.time}
+                        {t("dailyPill", { time: dailyRecurrence.time })}
                         <X weight="bold" className="ml-1 inline h-3 w-3 align-[-1px]" />
                       </span>
                     }
@@ -691,13 +708,13 @@ export function CreateRoomDialog() {
                     updateRoomMutation.isPending ||
                     startRoomMutation.isPending
                       ? isInstantMeeting
-                        ? "Starting..."
-                        : "Saving..."
+                        ? t("footer.starting")
+                        : t("footer.saving")
                       : editRoomId
-                        ? "Save Changes"
+                        ? t("footer.saveChanges")
                         : isInstantMeeting
-                          ? "Start meeting"
-                          : "Create Room"}
+                          ? t("footer.startMeeting")
+                          : t("footer.createRoom")}
                   </Button>
                 </div>
               </div>
@@ -716,7 +733,7 @@ export function CreateRoomDialog() {
 
               <div className="flex flex-col items-center w-full max-w-[320px]">
                 <h3 className="text-[18px] font-semibold text-foreground mb-1 tracking-tight">
-                  Meeting Created Successfully
+                  {t("success.title")}
                 </h3>
                 {/* This screen is normally reached only by a meeting booked for LATER — an
                     instant one goes straight into the call — so it says what was actually
@@ -727,14 +744,14 @@ export function CreateRoomDialog() {
                     been booked for a time nobody chose. The toast carries the reason. */}
                 <p className="text-[13px] text-muted-foreground mb-6">
                   {isInstantMeeting
-                    ? `“${title}” was created but is not open yet. Share the link, or start it from the meeting page.`
-                    : `“${title}” is booked. Share the link now; it opens when the meeting starts.`}
+                    ? t("success.instant", { title })
+                    : t("success.scheduled", { title })}
                 </p>
 
                 {/* Room Code Card */}
                 <div className="w-full bg-surface-1 border border-border/60 rounded-lg p-3 mb-8 flex flex-col items-center gap-2">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                    Room Code
+                    {t("success.roomCode")}
                   </p>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[16px] font-semibold text-foreground tracking-wide">
@@ -743,7 +760,7 @@ export function CreateRoomDialog() {
                     <button
                       onClick={copyInviteLink}
                       className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-surface-2"
-                      title="Copy Invite Link"
+                      title={t("success.copyInviteLink")}
                     >
                       <Copy weight="bold" className="h-4 w-4" />
                     </button>
@@ -763,7 +780,7 @@ export function CreateRoomDialog() {
                     className="flex-1 text-[13px] h-[34px] font-medium gap-2"
                   >
                     <SlidersHorizontal weight="bold" size={14} />
-                    Configure
+                    {t("success.configure")}
                   </Button>
                   {/* "Join" — to the room's own page — used to sit here, and for a BOOKING it was
                       the wrong offer twice over. It is not a meeting yet, so there is nothing to
@@ -796,7 +813,7 @@ export function CreateRoomDialog() {
                     )}
                   >
                     <CalendarCheck weight="bold" size={14} />
-                    View in calendar
+                    {t("success.viewInCalendar")}
                   </Link>
                 </div>
               </div>

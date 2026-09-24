@@ -1,5 +1,6 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
+import { meetingDirectoryParams } from "@/lib/admin/meeting-directory-params";
 import type {
   AdminMeetingCountsDto,
   AdminMeetingDirectoryQuery,
@@ -17,7 +18,8 @@ export const adminMeetingService = {
   ): Promise<AdminPagedResult<AdminMeetingSummaryDto>> => {
     const { data } = await apiClient.get<AdminPagedResult<AdminMeetingSummaryDto>>(
       API.adminMeetings.base,
-      { params: query },
+      // "all" is sent as no status: the API 400'd it (WT-693).
+      { params: meetingDirectoryParams(query) },
     );
     return data;
   },

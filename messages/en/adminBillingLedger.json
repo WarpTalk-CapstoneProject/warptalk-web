@@ -1,0 +1,153 @@
+{
+  "header": {
+    "eyebrow": "Platform billing",
+    "title": "Billing",
+    "description": "System-wide credits, consumption, and active workspaces."
+  },
+  "search": {
+    "placeholder": "Jump to name or ID...",
+    "noWorkspaceFound": "No workspace found matching name \"{term}\"",
+    "searchFailed": "Could not perform workspace name search. Please use a valid Workspace ID."
+  },
+  "actions": {
+    "exportReport": "Export Report",
+    "managePlans": "Manage Plans"
+  },
+  "metrics": {
+    "totalIssuedCredits": {
+      "label": "Total Issued Credits",
+      "detail": "Circulating across workspaces"
+    },
+    "activeWorkspaces": {
+      "label": "Active Workspaces",
+      "detail": "Workspaces using the platform"
+    },
+    "monthlyConsumption": {
+      "label": "Monthly Consumption",
+      "detail": "Total credits consumed this month"
+    },
+    "transactions30d": {
+      "label": "Transactions (30d)",
+      "detail": "Credit transactions in the last 30 days"
+    }
+  },
+  "tabs": {
+    "overview": "Economics & Analytics",
+    "ledger": "Global Transactions",
+    "invoices": "Invoices",
+    "subscriptions": "Subscriptions",
+    "alerts": "Fraud Alerts"
+  },
+  "ledger": {
+    "cardTitle": "Global Transactions",
+    "filters": {
+      "typeLabel": "Type",
+      "allTypesPlaceholder": "All types",
+      "allTypes": "All Types",
+      "topUp": "Top Up",
+      "consumption": "Consumption",
+      "adjustment": "Adjustment",
+      "fromDate": "From date",
+      "toDate": "To date",
+      "workspaceId": "Workspace ID",
+      "workspaceIdPlaceholder": "Enter ID...",
+      "minAmount": "Min amount (cr)",
+      "minAmountPlaceholder": "e.g. 10",
+      "maxAmount": "Max amount (cr)",
+      "maxAmountPlaceholder": "e.g. 1000",
+      "clear": "Clear"
+    },
+    "table": {
+      "timestamp": "Timestamp",
+      "workspace": "Workspace",
+      "type": "Type",
+      "reason": "Reason",
+      "amount": "Amount",
+      "balanceAfter": "Balance After",
+      "action": "Action"
+    },
+    "empty": "No transactions found",
+    "meetingSession": "Meeting Session",
+    "systemAutomatic": "System automatic",
+    "typeBadge": {
+      "topUp": "Top-Up",
+      "consume": "Consume",
+      "adjustment": "Adjustment"
+    },
+    "view": "View",
+    "pagination": {
+      "loading": "Loading...",
+      "showing": "Showing <strong>{from}–{to}</strong> of <strong>{groups}</strong> grouped sessions (from <strong>{total}</strong> transactions)"
+    }
+  },
+  "export": {
+    "dialogTitle": "Export Billing Report",
+    "dialogDescription": "Exports a 2-sheet Excel file: <strong>Summary</strong> (system metrics + totals) and <strong>Audit Trail</strong> (all transactions on this page with active filters).",
+    "stats": {
+      "transactions": "Transactions",
+      "netTopUp": "Net Top-Up",
+      "totalConsumed": "Total Consumed",
+      "netAdjustments": "Net Adjustments"
+    },
+    "noteLabel": "Add a note (optional)",
+    "notePlaceholder": "e.g. Q2 2026 billing review for board meeting...",
+    "noteHelper": "This note will be printed at the top of the Summary sheet.",
+    "cancel": "Cancel",
+    "download": "Download Excel",
+    "generating": "Generating...",
+    "noDataAlert": "No data to export."
+  },
+  "transactionDetails": {
+    "title": "Transaction Details",
+    "subtitle": "Breakdown of variable AI service spend for this session",
+    "date": "Date",
+    "totalDeducted": "Total Deducted",
+    "serviceBreakdown": "Service Breakdown",
+    "callsSummary": "{count, plural, one {# call} other {# calls}} × {unitPrice} {suffix}",
+    "activityLogFeed": "Activity Log Feed",
+    "close": "Close"
+  },
+  "usageLabels": {
+    "translation": "Real-time Translation",
+    "summary": "AI meeting insights",
+    "chat": "AI workspace chat",
+    "other": "Other",
+    "aiUsage": "AI usage"
+  },
+  "idBadge": {
+    "copyTooltip": "Click to copy ID: {id}"
+  },
+  "growth": {
+    "usageHeading": "Credit usage",
+    "usageNote": "Consumption and top-ups — secondary to growth, and what the ledger below itemises.",
+    "vsPrevious": "{delta} vs previous 6 months",
+    "monthGrowth": "{percent} in {month}",
+    "tiles": {
+      "revenue": "Revenue · 6 months",
+      "sixMonths": "Paid payments, last 6 months",
+      "mrr": "MRR",
+      "activeSubscriptions": "{count} active subscriptions",
+      "activeWorkspaces": "Active workspaces · 6 months",
+      "activeWorkspacesDetail": "Used credits at least once",
+      "activeAccounts": "Active accounts · 6 months",
+      "activeAccountsDetail": "Signed in at least once",
+      "totalUsers": "Registered users",
+      "newUsers": "{count} new in 6 months"
+    },
+    "revenueTitle": "Revenue by month",
+    "revenueNote": "Paid payments in VND; a Stripe checkout and its first invoice count once. The latest month is month to date.",
+    "activeTitle": "Active accounts and workspaces",
+    "activeNote": "Per month: accounts that signed in, workspaces that used credits. The latest month is month to date.",
+    "usersTitle": "User and workspace growth",
+    "series": {
+      "activeAccounts": "Active accounts",
+      "activeWorkspaces": "Active workspaces",
+      "totalUsers": "Registered users",
+      "totalWorkspaces": "Workspaces",
+      "newUsers": "New users"
+    },
+    "loading": "Loading…",
+    "noData": "No paid payments in these months.",
+    "unavailable": "Not available from this backend yet."
+  }
+}

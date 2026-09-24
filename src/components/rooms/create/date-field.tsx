@@ -15,6 +15,7 @@
  * recurrence code that parses it is untouched.
  */
 
+import { useLocale, useTranslations } from "next-intl";
 import { CalendarBlank } from "@phosphor-icons/react/dist/ssr";
 
 import { Calendar } from "@/components/ui/calendar";
@@ -35,10 +36,10 @@ function parseLocalDate(value: string): Date | undefined {
 }
 
 /** "30 Sep 2026" — month spelled out, so there is no dd/mm vs mm/dd ambiguity to resolve. */
-function formatLabel(value: string): string {
+function formatLabel(value: string, locale: string, pickDateLabel: string): string {
   const date = parseLocalDate(value);
-  if (!date) return "Pick a date";
-  return new Intl.DateTimeFormat("en-GB", {
+  if (!date) return pickDateLabel;
+  return new Intl.DateTimeFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -61,6 +62,8 @@ export function DateField({
   className?: string;
   "data-testid"?: string;
 }) {
+  const t = useTranslations("rooms.create.dateField");
+  const locale = useLocale();
   const selected = parseLocalDate(value);
   const minDate = min ? parseLocalDate(min) : undefined;
 
@@ -80,7 +83,7 @@ export function DateField({
             )}
           >
             <CalendarBlank size={13} className="shrink-0 text-ink-muted" />
-            {formatLabel(value)}
+            {formatLabel(value, locale, t("pickDate"))}
           </button>
         }
       />
