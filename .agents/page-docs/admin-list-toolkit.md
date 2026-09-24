@@ -76,3 +76,37 @@ error / empty scenarios). `/dev` is 404 in production.
 - On a workspace page: the header still reads "Search, or paste a room code" and ⌘K opens the rooms
   palette.
 - On a list: add two filters, reload — the chips and rows come back; copy the URL to another tab.
+
+## Page adoptions (feat/admin-list-pages)
+
+Server-side lists send every filter to the API (the new backend params are in
+WarpTalk-CapstoneProject/warptalk-backend#452 — merge it first; an older backend ignores the unknown
+params and returns unfiltered pages); only plans, plugins and usage alerts filter in the
+browser, because they are small catalogues fetched whole.
+
+| Page | Search | Filters | Sort | Display |
+| --- | --- | --- | --- | --- |
+| Workspaces (`/admin/workspaces`) | name, slug | status tabs; members range (presets); created date | created, name, members, last updated | group by status; hide columns |
+| Accounts (`/admin/users`) | name, email | status tabs; platform role; signed in (never / at least once); last login date; joined date | joined, name, last login | group by status; hide columns (Joined hidden by default) |
+| Subscriptions (`/admin/subscriptions`) | — (use the Workspace filter) | status tabs; plan; service state; billing cycle; auto-renew; workspace (picker); period end date | period end, created, credits left | group by status / plan / service state; hide columns |
+| Billing ledger → Ledger (`?tab=ledger`) | transaction/reference id, else description | type; date; workspace (picker); amount range | date, amount | hide columns; export writes every matching row (200/request, capped at 5,000) |
+| Billing ledger → Invoices (`?tab=invoices`) | invoice number or id | status (draft/issued/open/paid/void/uncollectible); workspace; currency; issued date; total range | issued, total, due | hide columns |
+| Billing ledger → Alerts (`?tab=alerts`, client-side) | workspace name/id | 24h consumption range | consumption, workspace | — |
+| Sales leads (`/admin/sales-leads`) | email, company, name | status tabs; request type; source; created date; workspace | created, company | group by status; **board** (pipeline new → closed, 100 per page) |
+| Feedback (`/admin/feedback`, comments) | comment text, room title | rating range (presets 1–2 / 3 / 4–5); workspace; page-level `range=` tabs still drive summary + comments | latest / lowest-rated tabs | hide columns |
+| Global glossary (`/admin/global-glossary`) | term (server search is case-sensitive) | status tabs; domain; language | priority, updated, created, term | group by status / domain; hide columns |
+| Plans & pricing (`/admin/plans`, client-side) | plans: name/slug/tier; rate cards: type/provider/model/unit/languages | plans: tier, cycle, currency, active; rate cards: charge type, provider, unit, currency, margin band, in force | plans: display order, name, price, credits; rate cards: type, provider, unit price, margin, effective | group by tier/cycle/currency or type/provider/unit; `?tab=` in the URL |
+| Plugins (`/admin/plugins`, client-side, list controls only) | label, key, provider | status tabs; kind; provider; category; featured; has OAuth client id | catalog order, name, installed by | — |
+
+Notes:
+- Billing ledger: `?tab=` is in the URL and a tab switch drops the previous tab's list params (the tabs
+  share names like `q` and `workspace`). Only the active panel mounts. The Subscriptions tab is now a
+  link to `/admin/subscriptions` (it duplicated that page and filtered 200 rows in the browser; its
+  "Force cancel" with a hard-coded reason is gone — Cancel on the dedicated page asks for one). The
+  header's "workspace id or name" box was removed: the palette and the Workspace filters cover it.
+- Action intents: `/admin/billing?action=adjust-credit|export`, `/admin/plans?action=create-plan`,
+  `/admin/global-glossary?action=create|import`, `/admin/plugins?action=create`.
+- Accounts: "never signed in" and a last-login window cannot both hold, so the page drops the window
+  while "never" is chosen instead of letting the server answer 400.
+- Subscriptions show the workspace id (the billing API does not carry names); the Workspace filter
+  resolves names through the admin workspace directory.
