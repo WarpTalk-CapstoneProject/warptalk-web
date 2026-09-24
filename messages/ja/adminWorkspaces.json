@@ -500,6 +500,7 @@
       "dataExported": "データ概要をエクスポート",
       "sessionsRevoked": "メンバーをサインアウト",
       "other": "管理操作"
-    }
+    },
+    "openInAuditLog": "監査ログで開く"
   }
 }

@@ -500,6 +500,7 @@
       "dataExported": "Đã xuất tóm tắt dữ liệu",
       "sessionsRevoked": "Đã đăng xuất thành viên",
       "other": "Thao tác quản trị"
-    }
+    },
+    "openInAuditLog": "Mở trong nhật ký kiểm toán"
   }
 }

@@ -1,15 +1,17 @@
 "use client";
 
 import {
+  ArrowSquareOut,
   ClockCounterClockwise,
   NotePencil,
   Prohibit,
   ShieldCheck,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useAdminWorkspaceTimeline } from "@/hooks/use-admin-workspace-actions";
 import { timelineActionKey } from "@/lib/admin/workspace-actions";
 import { cn } from "@/lib/utils";
@@ -52,10 +54,20 @@ export function WorkspaceTimeline({ workspaceId, onAddNote }: { workspaceId: str
           <h2 className="text-sm font-semibold text-ink">{t("heading")}</h2>
           <p className="mt-0.5 text-xs text-ink-muted">{t("subtitle")}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={onAddNote}>
-          <NotePencil size={14} />
-          {t("addNote")}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          {/* The same entries, in the platform log: full filters, request details and CSV. */}
+          <Link
+            href={`/admin/audit?range=all&workspace=${encodeURIComponent(workspaceId)}`}
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
+          >
+            <ArrowSquareOut size={14} />
+            {t("openInAuditLog")}
+          </Link>
+          <Button variant="outline" size="sm" onClick={onAddNote}>
+            <NotePencil size={14} />
+            {t("addNote")}
+          </Button>
+        </div>
       </div>
 
       {timelineQuery.isError ? (

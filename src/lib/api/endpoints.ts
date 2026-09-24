@@ -530,7 +530,6 @@ export const API = {
     rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
     pricingConfig: "/usages/pricing-config",
   },
-  /** The platform audit log. Read-only; the store is append-only. */
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
     base: "/admin/notifications",
@@ -544,8 +543,15 @@ export const API = {
   adminWorkspaceOutbox: {
     deadLetters: "/workspaces/outbox/dead-letters",
   },
+  /**
+   * The platform audit log (workspace service). GET only: a cursor-paged list, one entry, the
+   * values each filter offers, and a CSV export that is itself recorded.
+   */
   adminAuditLog: {
     base: "/admin/audit-log",
+    entry: (id: string) => `/admin/audit-log/${encodeURIComponent(id)}`,
+    facets: "/admin/audit-log/facets",
+    export: "/admin/audit-log/export",
   },
   adminMeetings: {
     counts: "/admin/meetings/counts",
