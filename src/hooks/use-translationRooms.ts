@@ -22,6 +22,28 @@ const ROOM_FEEDBACK_KEY = ["translationRoomFeedback"] as const;
 /** Exported so a room-wide Start/Stop broadcast can refresh it without re-spelling the key. */
 export const sessionsKey = (roomId: string) => [...MEETING_KEY, roomId, "sessions"] as const;
 
+/**
+ * Second argument of the room-scoped polling hooks (participants, sessions).
+ *
+ * A bare boolean is the older `enabled` form and still works. `poll: false` fetches once and
+ * never refetches on an interval — an ENDED meeting's roster and sessions no longer change, and
+ * polling them every few seconds from the recap page only spent the per-user rate limit (WT-701).
+ */
+export type TranslationRoomPollOptions = {
+  /** Gate the request entirely. Defaults to true. */
+  enabled?: boolean;
+  /** Keep refetching on an interval. Defaults to true. */
+  poll?: boolean;
+};
+
+function resolvePollOptions(value: boolean | TranslationRoomPollOptions | undefined): {
+  enabled: boolean;
+  poll: boolean;
+} {
+  if (typeof value === "boolean") return { enabled: value, poll: true };
+  return { enabled: value?.enabled ?? true, poll: value?.poll ?? true };
+}
+
 export function useTranslationRooms(params?: {
   status?: string;
   search?: string;
@@ -260,7 +282,11 @@ export function useResumeTranslationRoom() {
 /** All translation sessions for a room — used to bucket transcript segments into
  * "Translation 1", "Translation 2"... blocks. Polls while the room is live so every
  * participant's transcript picks up a Start/Pause/Resume without a manual refresh. */
-export function useTranslationRoomSessions(roomId: string, enabled = true) {
+export function useTranslationRoomSessions(
+  roomId: string,
+  options: boolean | TranslationRoomPollOptions = true,
+) {
+  const { enabled, poll } = resolvePollOptions(options);
   return useQuery({
     queryKey: sessionsKey(roomId),
     queryFn: async () => {
@@ -268,7 +294,7 @@ export function useTranslationRoomSessions(roomId: string, enabled = true) {
       return data;
     },
     enabled: Boolean(roomId) && enabled,
-    refetchInterval: enabled ? 5000 : false,
+    refetchInterval: enabled && poll ? 5000 : false,
   });
 }
 
@@ -403,7 +429,11 @@ export function useCancelTranslationRoom() {
   });
 }
 
-export function useTranslationRoomParticipants(roomId: string, enabled = true) {
+export function useTranslationRoomParticipants(
+  roomId: string,
+  options: boolean | TranslationRoomPollOptions = true,
+) {
+  const { enabled, poll } = resolvePollOptions(options);
   return useQuery({
     queryKey: [...MEETING_KEY, roomId, "participants"],
     queryFn: async () => {
@@ -411,7 +441,7 @@ export function useTranslationRoomParticipants(roomId: string, enabled = true) {
       return data;
     },
     enabled: Boolean(roomId) && enabled,
-    refetchInterval: 3000,
+    refetchInterval: poll ? 3000 : false,
   });
 }
 

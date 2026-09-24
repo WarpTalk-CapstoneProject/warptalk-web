@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   type DockPosition,
@@ -33,6 +34,7 @@ export function MiniMeetingDock({
   floating: boolean;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("common.miniMeetingDock");
   const [position, setPosition] = useState<DockPosition | null>(null);
   const [size, setSize] = useState<DockSize>(DEFAULT_SIZE);
   const dragOffset = useRef<{ x: number; y: number } | null>(null);
@@ -181,7 +183,7 @@ export function MiniMeetingDock({
         <div
           data-mini-resize
           role="separator"
-          aria-label="Resize meeting window"
+          aria-label={t("resizeAria")}
           onPointerDown={(event) => {
             if (event.button !== 0) return;
             event.preventDefault();

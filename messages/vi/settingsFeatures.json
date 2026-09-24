@@ -1,0 +1,77 @@
+{
+  "heading": "Tính năng",
+  "subheading": "Những gì không gian làm việc này bao gồm, và mỗi giới hạn đến từ gói, hợp đồng, mặc định của nền tảng hay giới hạn do không gian làm việc đặt ra.",
+  "upgradeInBilling": "Nâng cấp trong Thanh toán",
+  "notMember": {
+    "title": "Bạn không phải thành viên của không gian làm việc này",
+    "body": "Chỉ thành viên của không gian làm việc này mới có thể xem những gì nó bao gồm."
+  },
+  "loadError": {
+    "title": "Không thể tải tính năng",
+    "body": "Đã có lỗi khi tải tính năng của không gian làm việc này. Hãy thử lại sau."
+  },
+  "notAvailable": {
+    "title": "Tính năng chưa khả dụng",
+    "body": "Gói của không gian làm việc này chưa được áp dụng. Việc này thường mất vài giây sau khi gói bắt đầu; hãy quay lại kiểm tra sau."
+  },
+  "noActivePlan": "Không gian làm việc này chưa có gói đang hoạt động, nên các giá trị mặc định của nền tảng được áp dụng và không thể bắt đầu cuộc họp mới.",
+  "choosePlan": "Chọn gói",
+  "groups": {
+    "Meetings": "Cuộc họp",
+    "AI and voice": "AI và giọng nói",
+    "Other": "Khác"
+  },
+  "ceilingAllows": "{source} cho phép",
+  "loweredByOwner": "Đã bị chủ sở hữu không gian làm việc hạ xuống",
+  "lastUpdated": "Cập nhật lần cuối {date}",
+  "entitlements": {
+    "value": {
+      "included": "Đã bao gồm",
+      "notIncluded": "Chưa bao gồm",
+      "unlimited": "Không giới hạn"
+    },
+    "source": {
+      "unknown": { "label": "Không rõ", "detail": "Nguồn của giá trị này không được báo cáo." },
+      "plan": { "label": "Gói", "detail": "Được đặt bởi gói {name}." },
+      "platformDefault": {
+        "label": "Mặc định nền tảng",
+        "detail": "Không có gói hoặc hợp đồng đang hoạt động nào đặt giá trị này, nên mặc định của nền tảng được áp dụng."
+      },
+      "contract": { "label": "Hợp đồng", "detail": "Được đặt bởi hợp đồng đã thương lượng của không gian làm việc này." },
+      "workspaceOverride": {
+        "label": "Giới hạn của không gian làm việc",
+        "detail": "Chủ sở hữu không gian làm việc đã hạ giá trị này xuống dưới mức gói cho phép."
+      },
+      "unknownNamed": { "detail": "Nguồn được báo cáo: {source}." }
+    },
+    "catalog": {
+      "max_active_rooms": {
+        "label": "Cuộc họp đang hoạt động",
+        "description": "Số cuộc họp có thể diễn ra cùng lúc.",
+        "unit": "{count, plural, other {# cuộc họp}}"
+      },
+      "max_participants": {
+        "label": "Người tham gia mỗi cuộc họp",
+        "description": "Số người có thể tham gia một cuộc họp.",
+        "unit": "{count, plural, other {# người tham gia}}"
+      },
+      "max_languages": {
+        "label": "Ngôn ngữ đích mỗi cuộc họp",
+        "description": "Số ngôn ngữ một cuộc họp có thể dịch sang cùng lúc.",
+        "unit": "{count, plural, other {# ngôn ngữ}}"
+      },
+      "voice_clone": {
+        "label": "Nhân bản giọng nói",
+        "description": "Lồng tiếng bản dịch bằng chính giọng nói của mỗi người nói."
+      },
+      "ai_assistant": {
+        "label": "Trợ lý AI",
+        "description": "WarpBot trả lời, tóm tắt và gợi ý trong cuộc họp."
+      },
+      "glossary": {
+        "label": "Bộ thuật ngữ tùy chỉnh",
+        "description": "Thuật ngữ của không gian làm việc giúp việc dịch nhất quán."
+      }
+    }
+  }
+}

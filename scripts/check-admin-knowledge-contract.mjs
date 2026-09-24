@@ -20,7 +20,7 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
-const [endpoints, service, hooks, table, filters, view, adminDetail, workspacePage] =
+const [endpoints, service, hooks, table, filters, view, adminDetail, workspacePage, knowledgeEn] =
   await Promise.all([
     source("src/lib/api/endpoints.ts"),
     source("src/services/admin-workspace.service.ts"),
@@ -30,6 +30,7 @@ const [endpoints, service, hooks, table, filters, view, adminDetail, workspacePa
     source("src/lib/knowledge/knowledge-view.ts"),
     source("src/app/(app)/admin/workspaces/[workspaceRef]/page.tsx"),
     source("src/app/(app)/[workspaceSlug]/knowledge/page.tsx"),
+    source("messages/en/knowledge.json").then(JSON.parse),
   ]);
 
 // The admin surface has no route into the index, at any layer.
@@ -79,15 +80,27 @@ assert.match(
   /useKnowledgeFilters/,
   "the workspace page must take its filter and cursor state from the shared hook",
 );
+// WT-607: the gate's copy now comes from the i18n catalog rather than living inline. The
+// contract checks that the page still calls the translation key AND that the English catalog
+// still carries the original wording — either half regressing (the call site reverting to a
+// literal, or the catalog's copy drifting) is what this guards against now.
 assert.match(
   workspacePage,
+  /t\(["']restricted\.title["']\)/,
+  "the workspace page must keep its owner/admin gate wired to the i18n catalog",
+);
+assert.match(
+  knowledgeEn.restricted.title,
   /Only a workspace Owner or Admin can see what has been indexed/,
-  "the workspace page must keep its owner/admin gate",
+  "messages/en/knowledge.json must keep the owner/admin gate's original wording",
 );
 
-// States the member page cannot silently drop, unchanged from the original contract.
-assert.match(table, /Could not read the index/, "the table must implement an error state");
-assert.match(table, /Nothing indexed yet/, "the table must implement an empty state");
+// States the member page cannot silently drop, unchanged from the original contract — now
+// verified against the catalog key the table calls, and that key's English text.
+assert.match(table, /t\(["']readError["']\)/, "the table must implement an error state");
+assert.match(knowledgeEn.table.readError, /Could not read the index/);
+assert.match(table, /t\(["']emptyTitle["']\)/, "the table must implement an empty state");
+assert.match(knowledgeEn.table.emptyTitle, /Nothing indexed yet/);
 assert.match(
   table,
   /emptyHint/,

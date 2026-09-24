@@ -16,6 +16,7 @@
  * the wrong amount against nothing.
  */
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import {
   ArrowCounterClockwise,
@@ -53,7 +54,6 @@ import { useAdminPlans } from "@/hooks/use-admin-pricing";
 import { formatAdminMoney } from "@/lib/billing/admin-money";
 import {
   CONTRACT_TERMS_KEYS,
-  CONTRACT_TERMS_LABELS,
   canMarkInvoicePaid,
   describeContractTermsChanges,
   draftFromSubscription,
@@ -132,6 +132,7 @@ function ContractSection({
   workspaceName: string;
   ownerId: string;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const subscriptionQuery = useAdminWorkspaceSubscription(workspaceId);
   const subscription = subscriptionQuery.data;
   const [mode, setMode] = useState<"edit" | "create" | null>(null);
@@ -145,21 +146,19 @@ function ContractSection({
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <Signature size={15} weight="duotone" className="text-ink-subtle" />
-            Contract
+            {t("contractHeading")}
           </h2>
-          <p className="mt-1 text-xs text-ink-muted">
-            Negotiated terms for an invoiced customer. Blank terms follow the plan.
-          </p>
+          <p className="mt-1 text-xs text-ink-muted">{t("contractSubtitle")}</p>
         </div>
         {subscription ? (
           <Button variant="outline" size="sm" onClick={() => setMode("edit")}>
             <PencilSimple size={13} />
-            Edit terms
+            {t("editTerms")}
           </Button>
         ) : subscription === null ? (
           <Button size="sm" onClick={() => setMode("create")}>
             <Plus size={13} />
-            Create contract
+            {t("createContract")}
           </Button>
         ) : null}
       </div>
@@ -169,14 +168,14 @@ function ContractSection({
           <div className="flex items-start gap-3 py-4 text-sm">
             <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
-              <p className="font-medium">The subscription could not be loaded.</p>
+              <p className="font-medium">{t("subscriptionLoadError")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void subscriptionQuery.refetch()}
               >
-                Try again
+                {t("tryAgain")}
               </Button>
             </div>
           </div>
@@ -187,37 +186,32 @@ function ContractSection({
             ))}
           </div>
         ) : subscription === null || subscription === undefined ? (
-          <p className="py-4 text-[13px] text-ink-muted">
-            No active subscription. A contract subscription can be created for this workspace.
-          </p>
+          <p className="py-4 text-[13px] text-ink-muted">{t("noSubscription")}</p>
         ) : (
           <>
             {isSuspended ? (
               <div className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
                 <span>
-                  AI service is suspended
-                  {subscription.suspendedReason ? ` (${subscription.suspendedReason})` : ""}.
-                  Settling an overdue invoice does not lift this on its own.
+                  {subscription.suspendedReason
+                    ? t("serviceSuspendedWithReason", { reason: subscription.suspendedReason })
+                    : t("serviceSuspended")}
+                  {t("serviceSuspendedSuffix")}
                 </span>
                 <Button variant="outline" size="sm" onClick={() => setResumeOpen(true)}>
                   <ArrowCounterClockwise size={13} />
-                  Resume service
+                  {t("resumeService")}
                 </Button>
               </div>
             ) : null}
-            <Row label="Plan" value={subscription.planName} hint={subscription.status} />
+            <Row label={t("planLabel")} value={subscription.planName} hint={subscription.status} />
             <Row
-              label="Period"
+              label={t("periodLabel")}
               value={`${formatDate(subscription.currentPeriodStart)} – ${formatDate(subscription.currentPeriodEnd)}`}
             />
             {CONTRACT_TERMS_KEYS.map((key) => (
               <TermRow key={key} termKey={key} subscription={subscription} />
             ))}
-            <p className="mt-3 text-[11px] leading-5 text-ink-subtle">
-              A workspace already on a trial or another plan keeps that subscription: move it with
-              Change plan on Subscriptions, then set its terms here. Create is only for a workspace
-              with no active subscription.
-            </p>
+            <p className="mt-3 text-[11px] leading-5 text-ink-subtle">{t("footNote")}</p>
           </>
         )}
       </div>
@@ -256,16 +250,18 @@ function TermRow({
   termKey: keyof ContractTermsValues;
   subscription: AdminContractSubscriptionDto;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const stored = termsFromSubscription(subscription)[termKey];
   const effectiveKey = EFFECTIVE_KEY[termKey];
   const effective = effectiveKey ? subscription[effectiveKey] : undefined;
+  const label = t(`termLabels.${termKey}`);
 
   if (stored != null) {
-    return <Row label={CONTRACT_TERMS_LABELS[termKey]} value={formatContractTerm(termKey, stored)} />;
+    return <Row label={label} value={formatContractTerm(termKey, stored)} />;
   }
   return (
     <Row
-      label={CONTRACT_TERMS_LABELS[termKey]}
+      label={label}
       value={
         typeof effective === "number" ? (
           formatContractTerm(termKey, effective)
@@ -273,7 +269,7 @@ function TermRow({
           <span className="text-ink-subtle">—</span>
         )
       }
-      hint="Plan default"
+      hint={t("planDefault")}
     />
   );
 }
@@ -293,6 +289,7 @@ function ContractTermsDialog({
   subscription: AdminContractSubscriptionDto | null;
   onClose: () => void;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const updateTerms = useUpdateAdminContractTerms(workspaceId);
   const createContract = useCreateAdminContract();
   const isSaving = updateTerms.isPending || createContract.isPending;
@@ -311,7 +308,7 @@ function ContractTermsDialog({
             onSubmit={async (terms, planId) => {
               if (mode === "edit") {
                 await updateTerms.mutateAsync(terms);
-                toast.success("Contract terms saved.");
+                toast.success(t("toastTermsSaved"));
               } else {
                 await createContract.mutateAsync({
                   workspaceId,
@@ -319,7 +316,7 @@ function ContractTermsDialog({
                   contractTerms: terms,
                   userId: ownerId,
                 });
-                toast.success("Contract subscription created.");
+                toast.success(t("toastContractCreated"));
               }
               onClose();
             }}
@@ -354,6 +351,7 @@ function ContractTermsForm({
   onCancel: () => void;
   onSubmit: (terms: ContractTermsValues, planId: string | null) => Promise<void>;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const plansQuery = useAdminPlans();
   const plans = (plansQuery.data ?? []).filter((plan) => plan.isActive);
   // Seeded from the STORED overrides: the PUT replaces all six, so a draft seeded any other way
@@ -368,7 +366,7 @@ function ContractTermsForm({
 
   const handleReview = () => {
     if (mode === "create" && !planId) {
-      setError("Choose the plan this contract is written against.");
+      setError(t("errorChoosePlan"));
       return;
     }
     const parsed = parseContractTermsDraft(draft);
@@ -379,11 +377,11 @@ function ContractTermsForm({
     // A blank price is stored as the PLAN's price in a column the server reads as VND. On a plan
     // priced in anything else that would relabel the number, so the price must be typed.
     if (mode === "create" && plan && plan.currency.toUpperCase() !== "VND" && parsed.terms.contractPriceVnd == null) {
-      setError(`${plan.name} is priced in ${plan.currency.toUpperCase()}. Enter the contract price in VND.`);
+      setError(t("errorPlanCurrency", { planName: plan.name, currency: plan.currency.toUpperCase() }));
       return;
     }
     if (mode === "edit" && describeContractTermsChanges(before, parsed.terms).length === 0) {
-      setError("Nothing has changed.");
+      setError(t("errorNoChanges"));
       return;
     }
     setError(null);
@@ -397,24 +395,24 @@ function ContractTermsForm({
       await onSubmit(review, mode === "create" ? planId : null);
     } catch (err) {
       setError(
-        getErrorMessage(
-          err,
-          mode === "edit" ? "The contract terms could not be saved." : "The contract could not be created.",
-        ),
+        getErrorMessage(err, mode === "edit" ? t("errorSaveTerms") : t("errorCreateContract")),
       );
     }
   };
 
   if (review) {
-    const changes = describeContractTermsChanges(before, review);
+    const changes = describeContractTermsChanges(before, review).map((change) => ({
+      ...change,
+      label: t(`termLabels.${change.key}`),
+    }));
     return (
       <>
         <DialogHeader>
-          <DialogTitle>{mode === "edit" ? "Confirm contract terms" : "Confirm new contract"}</DialogTitle>
+          <DialogTitle>{mode === "edit" ? t("confirmEditTitle") : t("confirmCreateTitle")}</DialogTitle>
           <DialogDescription>
             {mode === "edit"
-              ? `These terms apply to ${workspaceName} immediately and are republished to its entitlements. The next invoice is raised at the contract price below.`
-              : `Creates an active contract subscription for ${workspaceName}. It renews every cycle and each cycle raises an invoice at the contract price below, payable by transfer.`}
+              ? t("confirmEditDescription", { workspaceName })
+              : t("confirmCreateDescription", { workspaceName })}
           </DialogDescription>
         </DialogHeader>
 
@@ -423,11 +421,11 @@ function ContractTermsForm({
             <div className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 text-[12px]">
               <p className="font-medium text-ink">{plan.name}</p>
               <p className="mt-0.5 text-ink-muted">
-                Price per cycle:{" "}
+                {t("pricePerCycle")}{" "}
                 <span className="font-semibold text-ink">
                   {review.contractPriceVnd != null
                     ? spellMoney({ amount: review.contractPriceVnd, currency: "VND" })
-                    : `${spellMoney({ amount: plan.price, currency: plan.currency })} — the plan's price, stored as the contract price`}
+                    : `${spellMoney({ amount: plan.price, currency: plan.currency })} ${t("planPriceNote")}`}
                 </span>
               </p>
             </div>
@@ -438,7 +436,7 @@ function ContractTermsForm({
               ? changes
               : CONTRACT_TERMS_KEYS.map((key) => ({
                   key,
-                  label: CONTRACT_TERMS_LABELS[key],
+                  label: t(`termLabels.${key}`),
                   from: "",
                   to: formatContractTerm(key, review[key]),
                 }))
@@ -470,10 +468,10 @@ function ContractTermsForm({
 
         <DialogFooter className="mt-5">
           <Button variant="outline" onClick={() => setReview(null)} disabled={isSaving}>
-            Back
+            {t("back")}
           </Button>
           <Button onClick={() => void handleConfirm()} disabled={isSaving}>
-            {isSaving ? "Saving…" : mode === "edit" ? "Save terms" : "Create contract"}
+            {isSaving ? t("saving") : mode === "edit" ? t("saveTerms") : t("createContract")}
           </Button>
         </DialogFooter>
       </>
@@ -486,18 +484,15 @@ function ContractTermsForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{mode === "edit" ? "Edit contract terms" : "Create contract"}</DialogTitle>
-        <DialogDescription>
-          All six terms are saved together. Leave a field blank to follow the plan; a 0 overage cap
-          switches overage off.
-        </DialogDescription>
+        <DialogTitle>{mode === "edit" ? t("editTermsTitle") : t("createContract")}</DialogTitle>
+        <DialogDescription>{t("formDescription")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-3">
         {mode === "create" ? (
           <div>
             <Label htmlFor="contract-plan" className="text-[12px] text-ink-muted">
-              Plan
+              {t("planLabel")}
             </Label>
             <select
               id="contract-plan"
@@ -506,11 +501,15 @@ function ContractTermsForm({
               disabled={plansQuery.isPending || isSaving}
               className="mt-1.5 h-9 w-full rounded-lg border border-hairline bg-surface-2 px-3 text-[13px] text-ink outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
             >
-              <option value="">{plansQuery.isPending ? "Loading plans…" : "Choose a plan…"}</option>
+              <option value="">{plansQuery.isPending ? t("loadingPlans") : t("choosePlan")}</option>
               {plans.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
-                  {candidate.name} — {formatAdminMoney({ amount: candidate.price, currency: candidate.currency })}/
-                  {candidate.billingCycle} · {numberFormatter.format(candidate.creditsPerCycle)} credits
+                  {t("planOption", {
+                    name: candidate.name,
+                    price: formatAdminMoney({ amount: candidate.price, currency: candidate.currency }),
+                    cycle: candidate.billingCycle,
+                    credits: numberFormatter.format(candidate.creditsPerCycle),
+                  })}
                 </option>
               ))}
             </select>
@@ -521,13 +520,13 @@ function ContractTermsForm({
           {CONTRACT_TERMS_KEYS.map((key) => (
             <div key={key} className={cn("min-w-0", key === "billingContactEmail" && "sm:col-span-2")}>
               <Label htmlFor={`contract-${key}`} className="text-[12px] text-ink-muted">
-                {CONTRACT_TERMS_LABELS[key]}
+                {t(`termLabels.${key}`)}
               </Label>
               <Input
                 id={`contract-${key}`}
                 className="mt-1.5"
                 inputMode={key === "billingContactEmail" ? "email" : "numeric"}
-                placeholder="Plan default"
+                placeholder={t("planDefault")}
                 value={draft[key]}
                 onChange={(event) => set(key, event.target.value)}
                 disabled={isSaving}
@@ -541,10 +540,10 @@ function ContractTermsForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={handleReview} disabled={isSaving}>
-          Review
+          {t("review")}
         </Button>
       </DialogFooter>
     </>
@@ -562,6 +561,7 @@ function ResumeServiceDialog({
   workspaceName: string;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const resume = useResumeAdminWorkspaceService(workspaceId);
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -569,17 +569,17 @@ function ResumeServiceDialog({
   const handleConfirm = async () => {
     const trimmed = reason.trim();
     if (trimmed.length < 10) {
-      setError("Give a reason of at least ten characters, such as the bank reference that cleared.");
+      setError(t("resumeReasonTooShort"));
       return;
     }
     try {
       setError(null);
       await resume.mutateAsync(trimmed);
-      toast.success("AI service resumed.");
+      toast.success(t("toastServiceResumed"));
       setReason("");
       onOpenChange(false);
     } catch (err) {
-      setError(getErrorMessage(err, "The service could not be resumed."));
+      setError(getErrorMessage(err, t("errorResumeService")));
     }
   };
 
@@ -587,16 +587,13 @@ function ResumeServiceDialog({
     <Dialog open={open} onOpenChange={(next) => (resume.isPending ? undefined : onOpenChange(next))}>
       <DialogContent className="gap-0 sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Resume AI service?</DialogTitle>
-          <DialogDescription>
-            Lifts the suspension on {workspaceName} and republishes its entitlements. If another
-            invoice is still overdue, the hourly overdue sweep suspends it again.
-          </DialogDescription>
+          <DialogTitle>{t("resumeDialogTitle")}</DialogTitle>
+          <DialogDescription>{t("resumeDialogDescription", { workspaceName })}</DialogDescription>
         </DialogHeader>
         <div className="mt-4 grid gap-3">
           <div>
             <Label htmlFor="resume-reason" className="text-[12px] text-ink-muted">
-              Reason
+              {t("reasonLabel")}
             </Label>
             <Textarea
               id="resume-reason"
@@ -604,17 +601,17 @@ function ResumeServiceDialog({
               rows={3}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="Recorded in the billing service log."
+              placeholder={t("resumeReasonPlaceholder")}
             />
           </div>
           <ErrorLine message={error} />
         </div>
         <DialogFooter className="mt-5">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={resume.isPending}>
-            Back
+            {t("back")}
           </Button>
           <Button onClick={() => void handleConfirm()} disabled={resume.isPending}>
-            {resume.isPending ? "Resuming…" : "Resume service"}
+            {resume.isPending ? t("resuming") : t("resumeService")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -625,6 +622,7 @@ function ResumeServiceDialog({
 /* ── invoices ─────────────────────────────────────────────────────────────── */
 
 function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; workspaceName: string }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const [page, setPage] = useState(1);
   const invoicesQuery = useAdminWorkspaceInvoices(workspaceId, page);
   const invoices = invoicesQuery.data?.items ?? [];
@@ -636,20 +634,18 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
       <div className="border-b border-hairline px-4 py-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
           <FileText size={15} weight="duotone" className="text-ink-subtle" />
-          Invoices
+          {t("invoicesHeading")}
         </h2>
-        <p className="mt-1 text-xs text-ink-muted">
-          Mark an open invoice paid once its bank transfer has arrived.
-        </p>
+        <p className="mt-1 text-xs text-ink-muted">{t("invoicesSubtitle")}</p>
       </div>
 
       {invoicesQuery.isError ? (
         <div className="flex items-start gap-3 px-4 py-6 text-sm">
           <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
           <div>
-            <p className="font-medium">Invoices could not be loaded.</p>
+            <p className="font-medium">{t("invoicesLoadError")}</p>
             <Button variant="outline" size="sm" className="mt-3" onClick={() => void invoicesQuery.refetch()}>
-              Try again
+              {t("tryAgain")}
             </Button>
           </div>
         </div>
@@ -660,9 +656,7 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
           ))}
         </div>
       ) : invoices.length === 0 ? (
-        <p className="px-4 py-8 text-center text-[13px] text-ink-muted">
-          No invoices yet. A contract raises its first one when the billing cycle closes.
-        </p>
+        <p className="px-4 py-8 text-center text-[13px] text-ink-muted">{t("invoicesEmpty")}</p>
       ) : (
         <ol>
           {invoices.map((invoice) => {
@@ -675,9 +669,9 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-mono text-[12px] text-ink">{invoice.invoiceNumber}</p>
                   <p className="mt-0.5 text-[11px] text-ink-subtle">
-                    Issued {formatDate(invoice.issuedAt)}
-                    {invoice.dueAt ? ` · due ${formatDate(invoice.dueAt)}` : ""}
-                    {invoice.paidAt ? ` · paid ${formatDate(invoice.paidAt)}` : ""}
+                    {t("issued", { date: formatDate(invoice.issuedAt) })}
+                    {invoice.dueAt ? ` · ${t("due", { date: formatDate(invoice.dueAt) })}` : ""}
+                    {invoice.paidAt ? ` · ${t("paid", { date: formatDate(invoice.paidAt) })}` : ""}
                   </p>
                 </div>
                 <span
@@ -692,7 +686,7 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
                           : "border-border bg-surface-2 text-ink-muted",
                   )}
                 >
-                  {overdue ? "overdue" : invoice.status}
+                  {overdue ? t("overdue") : invoice.status}
                 </span>
                 <span className="w-[130px] shrink-0 text-right text-[13px] font-medium tabular-nums text-ink">
                   {formatAdminMoney({ amount: invoice.total, currency: invoice.currency })}
@@ -700,7 +694,7 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
                 <div className="w-[96px] shrink-0 text-right">
                   {canMarkInvoicePaid(invoice) ? (
                     <Button variant="outline" size="sm" onClick={() => setSettling(invoice)}>
-                      Mark paid
+                      {t("markPaid")}
                     </Button>
                   ) : null}
                 </div>
@@ -712,12 +706,10 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
 
       {totalPages > 1 ? (
         <div className="flex items-center justify-between border-t border-hairline px-4 py-2 text-[12px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
+          <span>{t("pageOf", { page, totalPages })}</span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-              Previous
+              {t("previous")}
             </Button>
             <Button
               variant="outline"
@@ -725,7 +717,7 @@ function InvoicesSection({ workspaceId, workspaceName }: { workspaceId: string; 
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
             >
-              Next
+              {t("next")}
             </Button>
           </div>
         </div>
@@ -751,6 +743,7 @@ function MarkInvoicePaidDialog({
   workspaceName: string;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const markPaid = useMarkAdminInvoicePaid();
 
   return (
@@ -765,7 +758,7 @@ function MarkInvoicePaidDialog({
             onCancel={() => onOpenChange(false)}
             onConfirm={async () => {
               await markPaid.mutateAsync(invoice.id);
-              toast.success(`Invoice ${invoice.invoiceNumber} marked paid.`);
+              toast.success(t("toastInvoicePaid", { invoiceNumber: invoice.invoiceNumber }));
               onOpenChange(false);
             }}
           />
@@ -788,6 +781,7 @@ function MarkPaidForm({
   onCancel: () => void;
   onConfirm: () => Promise<void>;
 }) {
+  const t = useTranslations("adminWorkspaces.contractBilling");
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
   const matches = invoiceConfirmationMatches(invoice, typed);
@@ -799,34 +793,36 @@ function MarkPaidForm({
       setError(null);
       await onConfirm();
     } catch (err) {
-      setError(getErrorMessage(err, "The invoice could not be marked paid."));
+      setError(getErrorMessage(err, t("errorMarkPaid")));
     }
   };
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Record a bank transfer?</DialogTitle>
-        <DialogDescription>
-          Marks the invoice and its payment paid, dated now. It grants no credits — the cycle already
-          did — and it cannot be undone from the portal.
-        </DialogDescription>
+        <DialogTitle>{t("recordPaymentTitle")}</DialogTitle>
+        <DialogDescription>{t("recordPaymentDescription")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-3">
         <div className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2.5">
-          <p className="text-[11px] uppercase tracking-wide text-ink-subtle">Amount received</p>
+          <p className="text-[11px] uppercase tracking-wide text-ink-subtle">{t("amountReceived")}</p>
           <p className="mt-1 text-lg font-semibold tabular-nums text-ink">{amount}</p>
           <p className="mt-1 text-[12px] text-ink-muted">
-            Subtotal {formatAdminMoney({ amount: invoice.subtotal, currency: invoice.currency })} + tax{" "}
-            {formatAdminMoney({ amount: invoice.tax, currency: invoice.currency })} · {workspaceName}
+            {t("amountSummary", {
+              subtotal: formatAdminMoney({ amount: invoice.subtotal, currency: invoice.currency }),
+              tax: formatAdminMoney({ amount: invoice.tax, currency: invoice.currency }),
+              workspaceName,
+            })}
           </p>
         </div>
 
         <div>
           <Label htmlFor="mark-paid-confirm" className="text-[12px] text-ink-muted">
-            Type the invoice number <span className="font-mono text-ink">{invoice.invoiceNumber}</span> to
-            confirm
+            {t.rich("confirmInvoiceLabel", {
+              invoiceNumber: invoice.invoiceNumber,
+              num: (chunks) => <span className="font-mono text-ink">{chunks}</span>,
+            })}
           </Label>
           <Input
             id="mark-paid-confirm"
@@ -843,11 +839,11 @@ function MarkPaidForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Back
+          {t("back")}
         </Button>
         <Button onClick={() => void handleConfirm()} disabled={!matches || isSaving}>
           <CheckCircle size={14} />
-          {isSaving ? "Recording…" : `Mark paid · ${amount}`}
+          {isSaving ? t("recording") : t("markPaidWithAmount", { amount })}
         </Button>
       </DialogFooter>
     </>

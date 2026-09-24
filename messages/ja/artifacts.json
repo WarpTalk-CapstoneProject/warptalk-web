@@ -1,0 +1,53 @@
+{
+  "filterByKindAria": "種類で記録を絞り込む",
+  "filters": {
+    "all": "すべての記録",
+    "transcript": "文字起こし",
+    "summary": "AI要約",
+    "minutes": "議事録"
+  },
+  "meetingsCount": "{count, plural, other {# 件の会議}}",
+  "mineOnly": {
+    "on": "主催した会議のみ表示中",
+    "off": "主催した会議のみ"
+  },
+  "search": {
+    "placeholder": "記録、会議、発言内容を検索"
+  },
+  "loading": "会議記録を読み込み中",
+  "error": {
+    "title": "記録を読み込めませんでした",
+    "description": "翻訳ルームサービスを確認してもう一度お試しください。",
+    "retry": "再試行"
+  },
+  "empty": {
+    "noResultsTitle": "この検索に一致する記録はありません",
+    "noResultsDescription": "別の単語を試すか、絞り込みをすべての記録に広げてください。",
+    "emptyTitle": "まだ会議記録がありません",
+    "emptyDescription": "会議が終了すると文字起こしとAI要約が作成されます。議事録は会議自体のページで作成されます。",
+    "footerNote": "WarpTalkが記録したものはすべてここに表示されます。"
+  },
+  "failedSource": {
+    "minutes": "議事録を読み込めなかったため、このリストには一部の記録が欠けている可能性があります。",
+    "records": "会議記録を読み込めなかったため、このリストには文字起こしと要約が欠けている可能性があります。"
+  },
+  "kindLabels": {
+    "transcript": "文字起こし",
+    "summary": "AI要約",
+    "minutes": "議事録"
+  },
+  "absence": {
+    "withheld": "この内容はまだあなたと共有されていません。会議の主催者が閲覧権限を管理しています。",
+    "generatingSummary": "アシスタントがこの要約を作成中です。",
+    "generatingOther": "この内容は現在作成中です。",
+    "emptyMinutes": "作成されましたが、まだ記入されていません。",
+    "emptyOther": "発言がなかったため、記録する内容がありませんでした。",
+    "unavailable": "この内容の元ファイルはもう利用できません。"
+  },
+  "relativeTime": {
+    "justNow": "たった今",
+    "minutesAgo": "{count}分前",
+    "hoursAgo": "{count}時間前",
+    "daysAgo": "{count}日前"
+  }
+}

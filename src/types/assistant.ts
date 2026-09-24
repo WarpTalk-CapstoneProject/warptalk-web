@@ -24,6 +24,21 @@ export interface AssistantMessageDto {
   mentionsJson?: string | null;
 }
 
+/**
+ * One turn a new conversation starts with — how a meeting's WarpBot thread continues in the
+ * widget (see lib/assistant/meeting-handoff.ts). The service accepts "user" and "assistant" only.
+ */
+export interface AssistantSeedMessageDto {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CreateAssistantConversationOptions {
+  /** Named after where it came from, so history does not list it as one more "New chat". */
+  title?: string;
+  seedMessages?: AssistantSeedMessageDto[];
+}
+
 export interface AssistantConversationDto {
   id: string;
   title: string;
@@ -162,7 +177,15 @@ export interface AssistantPluginCatalogItemDto {
   workspaceAvailability?: WorkspacePluginAvailability | null;
   /** `pending` when the caller has already asked this workspace's Owner for the plugin. */
   requestStatus?: PluginRequestStatus | null;
+  /**
+   * How a user connects. `oauth`: the provider's own sign-in page. `api_key`: each user pastes a
+   * key of their own, which the server checks against the MCP server before saving. Absent from a
+   * server older than API-key auth, which only knows OAuth.
+   */
+  authMode?: PluginAuthMode;
 }
+
+export type PluginAuthMode = "oauth" | "api_key";
 
 export type WorkspacePluginAvailability = "added" | "private" | "not_added";
 
@@ -241,6 +264,8 @@ export interface UpdatePrivatePluginRequest {
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
+  /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
+  apiKeyRequired?: boolean;
 }
 
 /**

@@ -25,6 +25,21 @@ export interface MemberPluginAction {
   subtitle: string | null;
 }
 
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+export type MemberPluginActionTranslator = (key: string, values?: Record<string, string>) => string;
+
+const DEFAULT_MEMBER_ACTION_COPY: Record<string, (values?: Record<string, string>) => string> = {
+  addedByWorkspace: () => "Added by your workspace",
+  notAddedYet: (v) => `Not added to ${v!.workspaceName} yet`,
+  waitingForOwner: () => "Waiting for your workspace owner",
+  thisWorkspace: () => "this workspace",
+};
+
+function defaultMemberActionT(key: string, values?: Record<string, string>): string {
+  return DEFAULT_MEMBER_ACTION_COPY[key]?.(values) ?? key;
+}
+
 /**
  * The action on a member's catalog row.
  *
@@ -36,25 +51,26 @@ export interface MemberPluginAction {
 export function memberPluginAction(
   plugin: Pick<AssistantPluginCatalogItemDto, "workspaceAvailability" | "requestStatus" | "installationStatus">,
   workspaceName: string | null | undefined,
+  t: MemberPluginActionTranslator = defaultMemberActionT,
 ): MemberPluginAction {
   const availability = plugin.workspaceAvailability ?? null;
 
   if (availability === "private") {
-    return { kind: "connect", caption: null, subtitle: "Added by your workspace" };
+    return { kind: "connect", caption: null, subtitle: t("addedByWorkspace") };
   }
 
   if (availability !== "not_added") {
     return { kind: "connect", caption: null, subtitle: null };
   }
 
-  const notAdded = `Not added to ${workspaceName?.trim() || "this workspace"} yet`;
+  const notAdded = t("notAddedYet", { workspaceName: workspaceName?.trim() || t("thisWorkspace") });
 
   if (plugin.installationStatus === "installed") {
     return { kind: "connect", caption: notAdded, subtitle: null };
   }
 
   if (plugin.requestStatus === "pending") {
-    return { kind: "requested", caption: "Waiting for your workspace owner", subtitle: null };
+    return { kind: "requested", caption: t("waitingForOwner"), subtitle: null };
   }
 
   return { kind: "request", caption: notAdded, subtitle: null };

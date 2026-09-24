@@ -1,0 +1,15 @@
+{
+  "filters": { "open": "未完了", "closed": "完了", "all": "すべて" },
+  "loading": "読み込み中…",
+  "empty": {
+    "openTitle": "未完了のタスクはありません",
+    "otherTitle": "この状態のタスクはまだありません",
+    "openDescription": "ミーティングのタスクはすべて完了しています。",
+    "otherDescription": "ミーティングでアクションアイテムが記録されるとここに表示されます。"
+  },
+  "markDone": "完了にする",
+  "reopen": "再開する",
+  "untitledMeeting": "無題のミーティング",
+  "drop": "却下",
+  "toasts": { "updateFailed": "更新できませんでした。" }
+}

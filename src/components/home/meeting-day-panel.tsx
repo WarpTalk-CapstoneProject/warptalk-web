@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { Plus, VideoCamera } from "@phosphor-icons/react";
 
 import { Button } from "@/components/ui/button";
@@ -14,23 +15,21 @@ import { useUIStore } from "@/stores/ui-store";
 import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 
-const LONG_DATE = new Intl.DateTimeFormat("en-US", {
-  weekday: "long",
-  month: "short",
-  day: "numeric",
-});
-const TIME = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" });
-
-
-const HOUR_LABEL = new Intl.DateTimeFormat("en-US", { hour: "numeric" });
-
 /** Every hour of the day, so the rail is a day and not just the hours that happen to be booked. */
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 /** One hour row. 44px is the floor, not the height — an hour with two meetings grows. */
 const HOUR_ROW_HEIGHT = 44;
 
-function MeetingBlock({ room, workspaceSlug }: { room: TranslationRoomDto; workspaceSlug: string }) {
+function MeetingBlock({
+  room,
+  workspaceSlug,
+  timeFormat,
+}: {
+  room: TranslationRoomDto;
+  workspaceSlug: string;
+  timeFormat: Intl.DateTimeFormat;
+}) {
   const languages = meetingLanguageSet(room.sourceLanguage, room.targetLanguages);
 
   return (
@@ -39,7 +38,7 @@ function MeetingBlock({ room, workspaceSlug }: { room: TranslationRoomDto; works
       className="flex min-w-0 items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 transition-colors hover:border-primary/50 hover:bg-primary/10"
     >
       <span className="shrink-0 text-[11px] font-medium tabular-nums text-primary">
-        {TIME.format(new Date(room.scheduledAt as string))}
+        {timeFormat.format(new Date(room.scheduledAt as string))}
       </span>
       <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">{room.title}</span>
       <span className="flex shrink-0 items-center gap-1">
@@ -66,9 +65,13 @@ function MeetingBlock({ room, workspaceSlug }: { room: TranslationRoomDto; works
 function DayHourRail({
   meetings,
   workspaceSlug,
+  timeFormat,
+  hourLabelFormat,
 }: {
   meetings: TranslationRoomDto[];
   workspaceSlug: string;
+  timeFormat: Intl.DateTimeFormat;
+  hourLabelFormat: Intl.DateTimeFormat;
 }) {
   const railRef = useRef<HTMLDivElement | null>(null);
 
@@ -103,7 +106,7 @@ function DayHourRail({
     <div ref={railRef} className="h-full overflow-y-auto pr-1">
       {HOURS.map((hour) => {
         const booked = meetingsByHour.get(hour) ?? [];
-        const label = HOUR_LABEL.format(new Date(2026, 0, 1, hour));
+        const label = hourLabelFormat.format(new Date(2026, 0, 1, hour));
 
         return (
           <div
@@ -116,7 +119,7 @@ function DayHourRail({
             </span>
             <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 py-1">
               {booked.map((room) => (
-                <MeetingBlock key={room.id} room={room} workspaceSlug={workspaceSlug} />
+                <MeetingBlock key={room.id} room={room} workspaceSlug={workspaceSlug} timeFormat={timeFormat} />
               ))}
             </div>
           </div>
@@ -138,6 +141,8 @@ function DayHourRail({
  * re-render; the meetings list already learned this (see its nextUpcoming comment).
  */
 export function MeetingDayPanel() {
+  const t = useTranslations("home.meetingDayPanel");
+  const locale = useLocale();
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
@@ -145,6 +150,16 @@ export function MeetingDayPanel() {
 
   const [today] = useState<Date>(() => new Date());
   const [selectedDate, setSelectedDate] = useState<Date>(() => new Date());
+
+  const longDateFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { weekday: "long", month: "short", day: "numeric" }),
+    [locale],
+  );
+  const timeFormat = useMemo(
+    () => new Intl.DateTimeFormat(locale, { hour: "numeric", minute: "2-digit" }),
+    [locale],
+  );
+  const hourLabelFormat = useMemo(() => new Intl.DateTimeFormat(locale, { hour: "numeric" }), [locale]);
 
   // workspaceId is what lets the server answer this for a workspace Owner/Admin at all: without
   // it the list falls back to host-or-participant-or-invitee, and an Admin sees an empty panel
@@ -162,12 +177,12 @@ export function MeetingDayPanel() {
 
   return (
     <section
-      aria-label="Meetings by day"
+      aria-label={t("ariaLabel")}
       className="rounded-[14px] border border-border bg-surface-1 p-3 shadow-linear sm:p-4"
     >
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-ink">
-          {LONG_DATE.format(selectedDate)}
+          {longDateFormat.format(selectedDate)}
         </h2>
 
         {/* The same strip the meetings list shows, so the two cannot disagree about which day
@@ -193,20 +208,25 @@ export function MeetingDayPanel() {
             ))}
           </div>
         ) : dayMeetings.length > 0 ? (
-          <DayHourRail meetings={dayMeetings} workspaceSlug={slug} />
+          <DayHourRail
+            meetings={dayMeetings}
+            workspaceSlug={slug}
+            timeFormat={timeFormat}
+            hourLabelFormat={hourLabelFormat}
+          />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 px-4 text-center">
             <VideoCamera size={22} weight="duotone" className="text-ink-muted" />
             <div>
               <p className="text-[13px] font-medium text-ink">
                 {isSameDay(selectedDate, today)
-                  ? "No meetings scheduled for today"
-                  : "No meetings scheduled for this day"}
+                  ? t("emptyTitleToday")
+                  : t("emptyTitleOtherDay")}
               </p>
               <p className="mt-0.5 text-[12px] text-ink-muted">
                 {canCreateMeetings
-                  ? "Schedule one, or enjoy the quiet."
-                  : "You'll see meetings here once someone invites you."}
+                  ? t("emptySubtitleCanCreate")
+                  : t("emptySubtitleCannotCreate")}
               </p>
             </div>
             {canCreateMeetings && (
@@ -216,7 +236,7 @@ export function MeetingDayPanel() {
                 className="h-8 gap-1.5 rounded-full px-3 text-[13px]"
               >
                 <Plus size={14} weight="bold" />
-                New meeting
+                {t("newMeeting")}
               </Button>
             )}
           </div>

@@ -38,6 +38,10 @@ const ADMIN_ROOT = "src/app/(app)/admin";
 
 const sidebar = await read("src/components/layout/linear-sidebar.tsx");
 const chrome = await read("src/components/admin/admin-page-chrome.tsx");
+// i18n: the Insights label and "Back to app" now render through t("adminNav.items.insights") /
+// t("adminNav.backToApp") rather than as literal source text — see common.json for the English
+// wording the checks below still pin.
+const commonEn = JSON.parse(await read("messages/en/common.json"));
 
 const checks = [];
 
@@ -62,13 +66,16 @@ checks.push([
 ]);
 checks.push([
   // NavLink treats a non-exact item as active for anything beneath its href, and every admin
-  // page is beneath /admin — so Overview would stay lit on every other admin screen.
-  "the Overview row matches /admin exactly",
-  /label: "Overview", href: "\/admin", exact: true/.test(sidebar),
+  // page is beneath /admin — so Insights would stay lit on every other admin screen. The row was
+  // "Overview" until the landing page became Insights (2026-09-17); the route never moved.
+  "the Insights row matches /admin exactly",
+  /label: t\("adminNav\.items\.insights"\), href: "\/admin", exact: true/.test(sidebar) &&
+    commonEn.sidebar?.adminNav?.items?.insights === "Insights",
 ]);
 checks.push([
   "the admin sidebar offers a way back to the app",
-  /isAdminPage && isSystemAdmin[\s\S]{0,4000}?Back to app/.test(sidebar),
+  /isAdminPage && isSystemAdmin[\s\S]{0,7000}?t\("adminNav\.backToApp"\)/.test(sidebar) &&
+    commonEn.sidebar?.adminNav?.backToApp === "Back to app",
 ]);
 
 // ── 2 · The ground is the page ground, not the chrome ground ─────────────────

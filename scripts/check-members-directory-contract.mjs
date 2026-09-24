@@ -64,8 +64,14 @@ for (const [mutation, what] of [
 // The owner asked for the invite flow to start from a button, not a permanent form rail.
 assert.match(
   members,
-  /<span>Invite new member<\/span>/,
+  /<span>\{t\("toolbar\.inviteNewMember"\)\}<\/span>/,
   "Members must offer an explicit Invite new member button.",
+);
+const membersMessagesEn = JSON.parse(read("messages/en/members.json"));
+assert.equal(
+  membersMessagesEn.toolbar.inviteNewMember,
+  "Invite new member",
+  "The English catalog must still say Invite new member.",
 );
 
 /**

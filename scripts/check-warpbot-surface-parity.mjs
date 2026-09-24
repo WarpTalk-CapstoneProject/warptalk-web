@@ -291,12 +291,25 @@ assert.deepEqual(
 );
 
 // The widget's composer: its placeholder, Enter sends, Shift+Enter is a new line.
-for (const [surface, source] of [
-  ["the widget", widget],
-  ["the Meet popup's WarpBot tab", popupPane],
-]) {
-  assert.match(source, /"Ask WarpBot\.\.\."/, `${surface} must use the "Ask WarpBot..." placeholder.`);
-}
+//
+// The widget's placeholder is now translated (t("askPlaceholder")) rather than a literal string;
+// the Meet popup's WarpBot tab is a separate, untranslated bundle and still carries the literal.
+const commonEn = JSON.parse(read("messages/en/common.json"));
+assert.match(
+  widget,
+  /t\("askPlaceholder"\)/,
+  'the widget must use the askPlaceholder translation for its "Ask WarpBot..." placeholder.',
+);
+assert.equal(
+  commonEn.chatbot?.askPlaceholder,
+  "Ask WarpBot...",
+  "the widget's placeholder must still read 'Ask WarpBot...' in English.",
+);
+assert.match(
+  popupPane,
+  /"Ask WarpBot\.\.\."/,
+  'the Meet popup\'s WarpBot tab must use the "Ask WarpBot..." placeholder.',
+);
 assert.match(
   popupPaneCode,
   /event\.key !== "Enter" \|\| event\.shiftKey\) return;/,

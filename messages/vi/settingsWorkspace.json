@@ -1,0 +1,115 @@
+{
+  "heading": "Cài đặt",
+  "subheading": "Giá trị mặc định của không gian làm việc cho cuộc họp, biên bản và dịch thuật. Quyền truy cập và bảo vệ dữ liệu nằm trong Bảo mật.",
+  "accessDenied": {
+    "title": "Từ chối truy cập",
+    "description": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem hoặc chỉnh sửa cấu hình."
+  },
+  "loadError": {
+    "title": "Không thể tải cài đặt không gian làm việc",
+    "description": "Không thể đọc được cấu hình hiện tại, nên không có gì được hiển thị ở đây thay vì hiển thị giá trị mặc định không thuộc về không gian làm việc này. Hãy thử lại, và nếu vẫn thất bại hãy kiểm tra dịch vụ workspace có hoạt động không.",
+    "retrying": "Đang thử lại…",
+    "retry": "Thử lại"
+  },
+  "workspaceInfo": {
+    "heading": "Thông tin không gian làm việc",
+    "slugLabel": "Slug không gian làm việc",
+    "slugDescription": "Định danh duy nhất để nhận diện không gian làm việc này.",
+    "copySlug": "Sao chép Slug",
+    "urlLabel": "URL không gian làm việc",
+    "urlDescription": "Liên kết truy cập trực tiếp để thành viên vào không gian làm việc này.",
+    "copyUrl": "Sao chép URL"
+  },
+  "toasts": {
+    "slugCopied": "Đã sao chép slug không gian làm việc!",
+    "urlCopied": "Đã sao chép URL không gian làm việc!",
+    "saveFailed": "Lưu cài đặt không gian làm việc thất bại."
+  },
+  "general": {
+    "heading": "Giá trị mặc định chung của không gian làm việc",
+    "defaultLanguage": {
+      "label": "Ngôn ngữ mặc định",
+      "description": "Ngôn ngữ nói mặc định cho phòng dịch mới.",
+      "placeholder": "Chọn ngôn ngữ"
+    },
+    "timezone": {
+      "label": "Múi giờ",
+      "description": "Múi giờ dùng cho lịch họp và dấu thời gian kiểm toán.",
+      "placeholder": "Chọn múi giờ"
+    },
+    "maxActiveRooms": {
+      "label": "Số phòng hoạt động tối đa",
+      "description": "Số phòng dịch đồng thời tối đa được phép cho không gian làm việc này.",
+      "ceiling": {
+        "plan": "Gói của bạn cho phép {ceiling} phòng đồng thời, nên {ceiling} là giá trị áp dụng. Đặt số lớn hơn ở đây không có tác dụng — mục này chỉ có thể hạ giới hạn xuống.",
+        "platformDefault": "Cho đến khi không gian làm việc này có gói đang hoạt động, nó bị giới hạn ở {ceiling} phòng đồng thời, nên {ceiling} là giá trị áp dụng. Đặt số lớn hơn ở đây không có tác dụng — mục này chỉ có thể hạ giới hạn xuống.",
+        "workspaceOverride": "Không gian làm việc này bị giới hạn ở {ceiling} phòng đồng thời, nên {ceiling} là giá trị áp dụng. Đặt số lớn hơn ở đây không có tác dụng — mục này chỉ có thể hạ giới hạn xuống."
+      }
+    },
+    "artifactRetentionDays": {
+      "label": "Số ngày lưu trữ bản ghi",
+      "description": "Số ngày giữ lại bản ghi và bản ghi âm cuộc họp (0 = vô thời hạn)."
+    },
+    "minutesClassification": {
+      "label": "Phân loại biên bản",
+      "description": "Phân loại mặc định in trên biên bản cuộc họp mới của không gian làm việc này.",
+      "placeholder": "Chọn phân loại",
+      "options": {
+        "internal": "Nội bộ",
+        "confidential": "Bảo mật",
+        "public": "Công khai"
+      }
+    },
+    "minutesTemplate": {
+      "label": "Mẫu biên bản",
+      "description": "Bố cục biên bản của không gian làm việc này mở ra và xuất thành. Không mẫu nào thay thế mẫu kia — cả hai đều thể hiện cùng một bản ghi.",
+      "placeholder": "Chọn mẫu",
+      "optionVietnamese": "Việt Nam (Nghị định 30/2020)",
+      "optionInternational": "Quốc tế (Tiếng Anh)"
+    },
+    "allowedTargetLanguages": {
+      "label": "Ngôn ngữ đích được phép dịch",
+      "description": "Các ngôn ngữ khả dụng để dịch trực tiếp trong phòng họp.",
+      "ceiling": {
+        "plan": "Gói của bạn cho phép {ceiling} ngôn ngữ đích mỗi cuộc họp. Bạn có thể cho phép nhiều hơn ở đây — một cuộc họp đơn giản là không thể dùng quá {ceiling} ngôn ngữ cùng lúc.",
+        "platformDefault": "Cho đến khi không gian làm việc này có gói đang hoạt động, nó bị giới hạn ở {ceiling} ngôn ngữ đích mỗi cuộc họp. Bạn có thể cho phép nhiều hơn ở đây — một cuộc họp đơn giản là không thể dùng quá {ceiling} ngôn ngữ cùng lúc.",
+        "workspaceOverride": "Không gian làm việc này bị giới hạn ở {ceiling} ngôn ngữ đích mỗi cuộc họp. Bạn có thể cho phép nhiều hơn ở đây — một cuộc họp đơn giản là không thể dùng quá {ceiling} ngôn ngữ cùng lúc."
+      }
+    },
+    "voiceCloning": {
+      "label": "Tổng hợp nhân bản giọng nói",
+      "description": "Tổng hợp giọng nói đã dịch bằng cách nhân bản giọng nói AI của người nói gốc."
+    },
+    "profanityFilter": {
+      "label": "Bộ lọc từ ngữ tục",
+      "description": "Kiểm duyệt ngôn từ không phù hợp hoặc tục tĩu trong bản ghi."
+    },
+    "allowPersonalPlugins": {
+      "label": "Cho phép plugin cá nhân",
+      "description": "Cho phép thành viên dùng plugin đã kết nối của họ trong hội thoại WarpBot cho không gian làm việc này."
+    },
+    "plugins": {
+      "label": "Plugin",
+      "description": "Chọn plugin mà thành viên của không gian làm việc này có thể kết nối trong WarpBot.",
+      "managePlugins": "Quản lý plugin"
+    }
+  },
+  "aiTranslation": {
+    "heading": "AI & Dịch thuật",
+    "useGlobalGlossary": {
+      "label": "Dùng bộ thuật ngữ chung",
+      "description": "Gộp bộ thuật ngữ chung vào các prompt bản ghi và dịch thuật mới."
+    }
+  },
+  "validation": {
+    "defaultLanguageRequired": "Vui lòng chọn ngôn ngữ mặc định",
+    "timezoneRequired": "Vui lòng chọn múi giờ",
+    "wholeNumber": "Phải là số nguyên",
+    "maxActiveRoomsMin": "Phải có ít nhất 1 phòng",
+    "maxActiveRoomsMax": "Tối đa 50 phòng",
+    "retentionMin": "Thời gian lưu phải là 0 (vô thời hạn) hoặc số dương",
+    "retentionMax": "Tối đa 3650 ngày",
+    "invitationExpiryMin": "Thời hạn phải ít nhất 1 ngày",
+    "invitationExpiryMax": "Tối đa 365 ngày"
+  }
+}

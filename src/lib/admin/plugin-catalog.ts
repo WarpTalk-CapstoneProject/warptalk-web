@@ -25,6 +25,7 @@
 import type {
   AdminPluginCatalogListItemDto,
   AdminPluginKind,
+  AdminPluginAuthMode,
   AdminPluginOAuthClientSource,
   AdminPluginToolManifestEntry,
   CreateAdminMcpPluginRequest,
@@ -40,6 +41,7 @@ export const OAUTH_CLIENT_SOURCE_LABELS: Record<AdminPluginOAuthClientSource, st
   preregistered: "preregistered",
   cimd: "CIMD",
   dcr: "DCR",
+  api_key: "API key",
 };
 
 /**
@@ -51,6 +53,7 @@ export const OAUTH_CLIENT_SOURCE_NOTES: Record<AdminPluginOAuthClientSource, str
   preregistered: "An operator supplied the client id. It must be present on this row.",
   cimd: "The client is identified by our published metadata document URL.",
   dcr: "Credentials came from RFC 7591 dynamic registration.",
+  api_key: "No OAuth. Each user pastes their own API key, sent to the server as a Bearer token.",
 };
 
 /**
@@ -386,6 +389,8 @@ export interface NewPluginDraft {
   authorizationEndpoint: string;
   tokenEndpoint: string;
   revokeEndpoint: string;
+  /** How users connect. `api_key` leaves the OAuth boxes empty. */
+  authMode: AdminPluginAuthMode;
 }
 
 export const EMPTY_NEW_PLUGIN_DRAFT: NewPluginDraft = {
@@ -400,6 +405,7 @@ export const EMPTY_NEW_PLUGIN_DRAFT: NewPluginDraft = {
   authorizationEndpoint: "",
   tokenEndpoint: "",
   revokeEndpoint: "",
+  authMode: "oauth",
 };
 
 export type NewPluginFieldErrors = Partial<Record<keyof NewPluginDraft, string>>;
@@ -493,7 +499,9 @@ export function validateNewPlugin(
     || draft.authorizationEndpoint.trim().length > 0
     || draft.tokenEndpoint.trim().length > 0
     || draft.revokeEndpoint.trim().length > 0;
-  if (oauthTouched && clientId.length === 0) {
+  if (draft.authMode === "api_key" && oauthTouched) {
+    errors.clientId = "An API-key app has no OAuth client. Clear this section or switch to OAuth.";
+  } else if (oauthTouched && clientId.length === 0) {
     errors.clientId =
       "A client id is required once anything else in this section is filled in — without one the row stays 'unresolved' and everything typed here is ignored.";
   }
@@ -537,6 +545,10 @@ export function toCreatePluginRequest(draft: NewPluginDraft): CreateAdminMcpPlug
 
   if (avatarUrl.length > 0) request.avatarUrl = avatarUrl;
   if (scopes.length > 0) request.requiredScopes = scopes;
+  if (draft.authMode === "api_key") {
+    request.authMode = "api_key";
+    return request;
+  }
 
   if (clientId.length > 0) {
     request.oAuth = {

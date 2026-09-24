@@ -1,0 +1,359 @@
+{
+  "list": {
+    "eyebrow": "Configuration",
+    "title": "Plugin catalog",
+    "description": "The marketplace, retired rows included. Workspace owners add these to their workspace; members connect with their own accounts. Private plugins a workspace creates for itself are not listed here.",
+    "refresh": "Refresh",
+    "createPlugin": "Create plugin",
+    "withMcp": "With MCP",
+    "brokenHeading": "{count, plural, one {# row cannot} other {# rows cannot}} complete an OAuth connect.",
+    "brokenDetail": "{labels} — marked pre-registered with no client id, so the consent screen is built with an empty client_id and the provider refuses it. Open the row and set the client id.",
+    "filterAria": "Filter the catalog by whether a row is active",
+    "trailingCount": "{visible} of {total}",
+    "searchPlaceholder": "Search by label, key or provider",
+    "searchAria": "Search the plugin catalog",
+    "tabs": {
+      "all": "All",
+      "active": "Active",
+      "retired": "Retired"
+    },
+    "error": {
+      "title": "The plugin catalog could not be loaded.",
+      "body": "Check the assistant service, and that your session still holds the platform admin role.",
+      "tryAgain": "Try again"
+    },
+    "emptyCatalog": "The catalog is empty. Nothing is on offer in WarpBot, for anyone.",
+    "noMatch": "No row matches this filter.",
+    "columns": {
+      "plugin": "Plugin",
+      "kind": "Kind",
+      "provider": "Provider",
+      "state": "State",
+      "oauthClient": "OAuth client",
+      "workspaces": "Workspaces",
+      "installs": "Installs",
+      "tools": "Tools"
+    },
+    "state": {
+      "active": "active",
+      "retired": "retired"
+    },
+    "kindLabels": {
+      "native": "native",
+      "mcp": "MCP"
+    },
+    "oauthSourceLabels": {
+      "unresolved": "unresolved",
+      "preregistered": "preregistered",
+      "cimd": "CIMD",
+      "dcr": "DCR",
+      "api_key": "API key"
+    },
+    "serverConfig": "server config",
+    "noClientIdBadge": "no client id",
+    "missingClientIdExplanation": "This row is marked pre-registered but holds no OAuth client id, so a connect attempt builds a consent URL with an empty client_id and the provider refuses it. Set the client id below.",
+    "featuredBadge": "featured",
+    "workspaceCount": "{count, plural, =0 {no workspaces} one {# workspace} other {# workspaces}}",
+    "footerNote": "A native row is served by compiled-in code and takes its OAuth client from service configuration, not from the catalog — so this screen can neither set nor vouch for one.",
+    "dialog": {
+      "title": "Add an MCP app",
+      "intro": "The row appears in every user's plugin list as soon as it is saved — no deploy and no restart. It is created as an MCP row that takes its key as its OAuth provider, with no tools: those arrive from the server's own tools/list on the first connect, and can be written by hand from the row's page.",
+      "description": {
+        "label": "Description",
+        "hint": "What a user reads in the catalog before installing it."
+      },
+      "pluginKey": {
+        "label": "Plugin key",
+        "placeholder": "linear",
+        "hint": "Lower-case, and permanent: it is this row's URL and its OAuth provider name. Reserved: {keys}."
+      },
+      "label": {
+        "label": "Label",
+        "placeholder": "Linear"
+      },
+      "mcpServerUrl": {
+        "label": "MCP server URL",
+        "placeholder": "https://mcp.example.com/mcp",
+        "hint": "Absolute https://. The tokens this row carries travel over it, so http is refused — on localhost too."
+      },
+      "avatarUrl": {
+        "label": "Avatar URL",
+        "hint": "Optional. An http(s) URL or a site-relative path."
+      },
+      "requiredScopes": {
+        "label": "Required scopes",
+        "hint": "Optional, one per line. Most MCP servers advertise their own on connect."
+      },
+      "authMode": {
+        "legend": "How users connect",
+        "oauthTitle": "Sign in with OAuth",
+        "oauthNote": "Users sign in on the provider's page. Recommended when the server supports it.",
+        "apiKeyTitle": "Each user pastes an API key",
+        "apiKeyNote": "No OAuth. The key is checked against the server, stored encrypted, and sent as a Bearer token."
+      },
+      "oauth": {
+        "checkboxTitle": "This server needs a hand-registered OAuth client",
+        "checkboxBody": "Leave this off unless you know it does. The registration ladder runs on the first connect and picks Client ID Metadata Documents or dynamic registration on its own; supplying a client id here instead marks the row preregistered, which is the state that must always hold an id.",
+        "clientId": {
+          "label": "Client id"
+        },
+        "clientSecret": {
+          "label": "Client secret",
+          "hint": "Optional — leave blank for a public client. It goes in and does not come back: no endpoint ever returns it, and it can only be replaced or cleared from the row's page afterwards."
+        },
+        "authorizationEndpoint": {
+          "label": "Authorization endpoint",
+          "hint": "Optional. Blank lets discovery find it."
+        },
+        "tokenEndpoint": {
+          "label": "Token endpoint",
+          "hint": "Optional."
+        },
+        "revokeEndpoint": {
+          "label": "Revoke endpoint",
+          "hint": "Optional."
+        }
+      },
+      "catalogNotLoadedNote": "The catalog has not loaded, so a key already taken by another row cannot be caught here — the server will still refuse it.",
+      "cancel": "Cancel",
+      "add": "Add to catalog",
+      "adding": "Adding…",
+      "toast": {
+        "problemCount": "{count, plural, one {# field still needs} other {# fields still need}} fixing. Nothing was sent.",
+        "success": "{key} added to the catalog. It is live for every user immediately — no deploy.",
+        "errorFallback": "Could not add the plugin to the catalog."
+      }
+    }
+  },
+  "detail": {
+    "backLink": "Plugin catalog",
+    "state": {
+      "active": "active",
+      "retired": "retired"
+    },
+    "kindLabels": {
+      "native": "native",
+      "mcp": "MCP"
+    },
+    "providerLabel": "provider {provider}",
+    "installsCount": "{count, plural, one {# install} other {# installs}}",
+    "connectionsCount": "{count, plural, one {# connection} other {# connections}}",
+    "refresh": "Refresh",
+    "rediscover": "Re-run discovery",
+    "clearing": "Clearing…",
+    "retire": "Retire",
+    "activate": "Activate",
+    "notFound": {
+      "title": "No such plugin",
+      "body": "Nothing in the catalog is keyed {key}. It may have been hard-deleted."
+    },
+    "loadError": {
+      "title": "This plugin could not be loaded",
+      "fallback": "The assistant service did not answer."
+    },
+    "tryAgain": "Try again",
+    "backToCatalog": "Back to the catalog",
+    "cannotConnectBanner": {
+      "title": "This row cannot complete an OAuth connect.",
+      "body": "This row is marked pre-registered but holds no OAuth client id, so a connect attempt builds a consent URL with an empty client_id and the provider refuses it. Set the client id below."
+    },
+    "toast": {
+      "activated": "Plugin activated.",
+      "retired": "Plugin retired.",
+      "activateFail": "Could not activate the plugin.",
+      "retireFail": "Could not retire the plugin.",
+      "rediscoverSuccess": "Discovery cleared. The registration ladder runs again on the next connect.",
+      "rediscoverFail": "Could not clear discovery for this plugin."
+    },
+    "metadata": {
+      "heading": "Catalog entry",
+      "unsavedChanges": "{count, plural, one {# unsaved change} other {# unsaved changes}}",
+      "label": "Label",
+      "category": {
+        "label": "Category",
+        "hint": "Leave empty to clear it."
+      },
+      "description": "Description",
+      "avatarUrl": {
+        "label": "Avatar URL",
+        "hint": "An http(s) URL or a site-relative path beginning with /. Empty clears it."
+      },
+      "sortOrder": {
+        "label": "Sort order",
+        "hint": "The curated order the catalog renders. Ties break on label."
+      },
+      "mcpServerUrl": {
+        "label": "MCP server URL",
+        "hint": "An absolute https:// URL. It cannot be cleared on an MCP row."
+      },
+      "nativeNote": "A native row is served by compiled-in code, which never reads an MCP server URL — so the field is not offered here. The server would refuse it anyway.",
+      "requiredScopes": {
+        "label": "Required scopes",
+        "hint": "One per line. Repeats are dropped by the server."
+      },
+      "featuredLabel": "Featured in the user-facing catalog",
+      "discard": "Discard",
+      "save": "Save changes",
+      "saving": "Saving…",
+      "toast": {
+        "updated": "Plugin updated.",
+        "saveFail": "Could not save the plugin."
+      }
+    },
+    "authMode": {
+      "heading": "How users connect",
+      "modeApiKey": "API key",
+      "modeOAuth": "OAuth",
+      "descriptionApiKey": "Each user pastes their own API key. WarpTalk checks it against the server, stores it encrypted and sends it as a Bearer token.",
+      "descriptionOAuth": "Users sign in on the provider's own page. The OAuth client below is resolved on the first connect.",
+      "confirmWarning": "Every user connected to {label} will have to connect again.",
+      "cancel": "Cancel",
+      "switch": "Switch",
+      "switchToApiKey": "Switch to API key",
+      "switchToOAuth": "Switch to OAuth",
+      "toast": {
+        "switchedToApiKey": "Users now connect with their own API key. Existing connections were ended.",
+        "switchedToOAuth": "Users now sign in with OAuth. Existing connections were ended.",
+        "switchFail": "Could not change how users connect."
+      }
+    },
+    "oauth": {
+      "heading": "OAuth client",
+      "sourceLabels": {
+        "unresolved": "unresolved",
+        "preregistered": "preregistered",
+        "cimd": "CIMD",
+        "dcr": "DCR",
+        "api_key": "API key"
+      },
+      "sourceNotes": {
+        "unresolved": "Discovery has not run. The registration ladder chooses on the first connect.",
+        "preregistered": "An operator supplied the client id. It must be present on this row.",
+        "cimd": "The client is identified by our published metadata document URL.",
+        "dcr": "Credentials came from RFC 7591 dynamic registration.",
+        "api_key": "No OAuth. Each user pastes their own API key, sent to the server as a Bearer token."
+      },
+      "clientIdSummary": "Client id",
+      "clientIdNotSet": "not set",
+      "clientSecretSummary": "Client secret",
+      "clientSecretStored": "stored, row last written {date}",
+      "clientSecretNone": "none stored — a public client",
+      "tokenEndpointAuthSummary": "Token endpoint auth",
+      "tokenEndpointAuthNotNegotiated": "not negotiated",
+      "registrationEndpointLabel": "Registration endpoint: {endpoint}.",
+      "native": {
+        "title": "This plugin's OAuth client is not in the catalog.",
+        "body": "A native row is served by compiled-in code that reads its client id and secret from service configuration. The server refuses to write them here, and offering the form anyway would let someone chasing an empty client_id type one in, watch it save, and believe the problem fixed while nothing had changed. Set it in the environment the assistant service runs with instead."
+      },
+      "clientId": {
+        "label": "Client id",
+        "hint": "Saving marks this row pre-registered. A client id is public by construction — it travels in every authorization URL the browser follows."
+      },
+      "clientSecretHeading": "Client secret",
+      "secretMode": {
+        "keepStored": "Keep the stored secret",
+        "leaveUnset": "Leave it unset — this row has no secret",
+        "replace": "Replace it",
+        "setOne": "Set one",
+        "clearStored": "Clear the stored secret"
+      },
+      "secretPlaceholder": "The new client secret",
+      "secretAria": "New client secret",
+      "secretHint": "A secret goes in and does not come back. Nothing on this screen can show you the stored one, so \"keep\" is the default: rotating an id must not wipe a secret merely because the field beneath it was blank.",
+      "authorizationEndpoint": {
+        "label": "Authorization endpoint",
+        "hint": "Optional. Blank leaves whatever discovery cached."
+      },
+      "tokenEndpoint": {
+        "label": "Token endpoint",
+        "hint": "Optional."
+      },
+      "revokeEndpoint": {
+        "label": "Revoke endpoint",
+        "hint": "Optional."
+      },
+      "dirtyCount": "{count, plural, one {# field differs} other {# fields differ}} from the stored row.",
+      "discard": "Discard",
+      "save": "Save OAuth client",
+      "saving": "Saving…",
+      "toast": {
+        "clientIdRequired": "A client id is required. Clearing one is not something this endpoint does.",
+        "secretRequired": "Type the new client secret, or choose to keep or clear the stored one.",
+        "savedCleared": "OAuth client saved and the stored secret cleared.",
+        "savedReplaced": "OAuth client and secret saved.",
+        "savedKept": "OAuth client saved. The stored secret was left alone.",
+        "saveFail": "Could not save the OAuth client."
+      }
+    },
+    "tools": {
+      "heading": "Tool manifest",
+      "lastRead": "last read from the server {date}",
+      "neverConfirmed": "hand-authored — never confirmed by a tools/list",
+      "intro": "The whole manifest, replaced in one write. pluginKey is stamped from the route and must not appear here. Saving clears the tools_synced_at marker, because a hand edit is not a successful tools/list and should not look like one.",
+      "textareaAria": "Tool manifest JSON",
+      "storedCount": "{count, plural, one {# tool} other {# tools}} stored",
+      "editorDiffers": " — the editor differs from them",
+      "discard": "Discard",
+      "validate": "Validate",
+      "replace": "Replace manifest",
+      "replacing": "Replacing…",
+      "toast": {
+        "valid": "The manifest is valid.",
+        "problems": "The manifest has {count, plural, one {# problem} other {# problems}}. Nothing was sent.",
+        "replacedEmpty": "Manifest replaced. This plugin now advertises no tools.",
+        "replacedCount": "Manifest replaced — {count, plural, one {# tool} other {# tools}}.",
+        "invalidFallback": "The server rejected the manifest.",
+        "replaceFail": "Could not replace the tool manifest."
+      }
+    },
+    "audits": {
+      "heading": "Tool calls",
+      "recordedCount": "{count} recorded",
+      "filterPlaceholder": "Filter by outcome, e.g. success or missing_scope",
+      "filterAria": "Filter recorded tool calls by outcome",
+      "loading": "Loading…",
+      "error": {
+        "title": "The tool-call record could not be loaded.",
+        "tryAgain": "Try again"
+      },
+      "emptyFiltered": "No recorded call matches that outcome.",
+      "emptyAll": "Nothing has called a tool on this plugin yet.",
+      "pageLabel": "Page {page} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "outcomeLabels": {
+        "success": "Succeeded",
+        "blocked": "Blocked",
+        "attentionConfirmation": "Awaiting confirmation",
+        "attentionSetup": "Needs setup",
+        "providerError": "Provider error",
+        "failed": "Failed"
+      }
+    },
+    "danger": {
+      "heading": "Delete",
+      "title": "Remove this row from the catalog entirely.",
+      "referencedBody": "Refused while anything references it — {installs, plural, one {# installation} other {# installations}} and {connections, plural, one {# connection} other {# connections}} still do. Retire it instead: a retired row is hidden from every catalog while those references stay intact.",
+      "notReferencedBody": "Nothing references this row, so it can be deleted outright. Retiring it is still the reversible option.",
+      "deleteButton": "Delete permanently",
+      "dialog": {
+        "title": "Delete {label}?",
+        "description": "{key} will be removed from the catalog along with its tool manifest and any stored OAuth client. Its recorded tool calls are not deleted. This cannot be undone from this screen.",
+        "cancel": "Cancel",
+        "deleting": "Deleting…",
+        "confirm": "Delete permanently"
+      },
+      "toast": {
+        "deleted": "{key} was deleted.",
+        "retiredInstead": "{key} was retired rather than deleted.",
+        "inUseFail": "This plugin is still referenced and cannot be hard-deleted.",
+        "deleteFail": "Could not delete the plugin."
+      }
+    },
+    "footer": {
+      "prefix": "Edits are stamped with the account that made them.",
+      "lastWrittenBy": "Last written by {editor} on {date}.",
+      "noRecordedEditor": "This row has no recorded editor — it was last written by a migration, or by a token carrying no usable subject. Created {date}."
+    }
+  }
+}

@@ -6,6 +6,7 @@ import type {
   BillingPolicyDto,
   PlanRequest,
   PricingConfigDto,
+  SetRateCardProviderCostRequest,
   UpdatePricingConfigRequest,
   UpsertUsageRateCardRequest,
   UsageRateCardDto,
@@ -92,6 +93,21 @@ export const adminPricingService = {
   deactivateRateCard: async (id: string): Promise<UsageRateCardDto> => {
     const { data } = await apiClient.post<UsageRateCardDto>(
       API.adminPricing.rateCardDeactivate(id),
+    );
+    return data;
+  },
+
+  /**
+   * Record what the provider charges per unit on a credit-unit (CRD) card. Returns the card now in
+   * effect: the same row when it had no cost yet, a new version when it had a different one.
+   */
+  setRateCardProviderCost: async (
+    id: string,
+    request: SetRateCardProviderCostRequest,
+  ): Promise<UsageRateCardDto> => {
+    const { data } = await apiClient.put<UsageRateCardDto>(
+      API.adminPricing.rateCardProviderCost(id),
+      request,
     );
     return data;
   },

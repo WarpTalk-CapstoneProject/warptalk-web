@@ -1,0 +1,125 @@
+{
+  "accessDenied": {
+    "title": "Access Denied",
+    "description": "Only workspace Owners and Administrators can view billing and subscription configurations."
+  },
+  "errorState": {
+    "title": "Could not load billing data",
+    "description": "Your balance and usage are unavailable right now, so nothing is shown rather than a figure that could be wrong. {message}",
+    "httpError": "The billing service responded with HTTP {status}.",
+    "unexpected": "An unexpected error occurred.",
+    "retry": "Retry"
+  },
+  "overages": {
+    "title": "Allow overages",
+    "badge": "Recommended",
+    "descriptionOn": "Meetings keep translating past zero credits, up to {cap} credits this cycle.",
+    "descriptionOff": "Meetings stop the moment the credits run out. Turn this on to let them continue up to the allowance your plan already grants.",
+    "manage": "Manage",
+    "enable": "Enable"
+  },
+  "stats": {
+    "creditsRemaining": {
+      "label": "Credits Remaining",
+      "granted": "{total} granted this cycle.",
+      "noAllowance": "No allowance on this cycle.",
+      "spent": "{used} spent since the cycle began.",
+      "cycleEnds": "Cycle ends {date}."
+    },
+    "currentPlan": {
+      "label": "Current Plan",
+      "noPlan": "No active plan",
+      "pricePerCycle": "{price} per cycle.",
+      "noBalance": "Meetings translate against a credit balance.",
+      "limits": "{participants} participants · {languages} languages per meeting.",
+      "limitsUnavailable": "Plan limits unavailable.",
+      "cancelled": "Cancelled — translation stops {date}. Resubscribe from Manage subscription.",
+      "renews": "Renews {date}."
+    }
+  },
+  "currentPlanRow": {
+    "label": "Current plan",
+    "renewsOn": "Renews on {date}",
+    "endsOn": "Ends on {date}"
+  },
+  "buyCredits": "Buy credits",
+  "manageSubscription": "Manage subscription",
+  "noSubscription": {
+    "title": "No active subscription",
+    "description": "This workspace has no billing plan yet, so there is no balance or usage to report. Choose a plan to start tracking credits and AI usage.",
+    "choosePlan": "Choose a plan"
+  },
+  "capabilities": {
+    "voiceCloning": "Voice cloning",
+    "aiAssistant": "AI assistant",
+    "customGlossary": "Custom glossary",
+    "dedicatedGpu": "Dedicated GPU"
+  },
+  "planGrid": {
+    "mostPopular": "Most popular",
+    "currentPlan": "Current plan",
+    "coveredByCurrentPlan": "Covered by current plan",
+    "upgrade": "Upgrade",
+    "choose": "Choose",
+    "creditsPerCycle": "{credits} credits/cycle",
+    "limits": "{participants} participants · {languages} languages",
+    "everythingInPlus": "Everything in {name}, plus",
+    "moreCreditsAndLimits": "More credits and higher limits"
+  },
+  "planPanel": {
+    "currentPlan": "Current plan",
+    "noPlan": "No active plan",
+    "noBalance": "Meetings translate against a credit balance.",
+    "pricePerYear": "{price} / year",
+    "pricePerMonth": "{price} / month",
+    "change": "Change",
+    "choose": "Choose",
+    "creditsPerCycle": "Credits per cycle",
+    "participantsPerMeeting": "Participants per meeting",
+    "languagesPerMeeting": "Languages per meeting",
+    "cycle": "Cycle",
+    "cancelled": "Cancelled. Translation stops for this workspace on {date}.",
+    "renewsAutomatically": "Renews automatically on {date}.",
+    "doesNotAutoRenew": "Does not auto-renew — credits stop on {date}."
+  },
+  "manageModal": {
+    "title": "Manage subscription",
+    "description": "The current plan, its cycle, and the settings that change it.",
+    "currentPlan": "Current plan",
+    "noPlan": "No active plan",
+    "planType": "Plan type",
+    "overageCreditsUsed": "Overage credits used",
+    "cappedThisCycle": "Capped at {cap} this cycle",
+    "nextCreditRefresh": "Next credit refresh",
+    "nextBillingDate": "Next billing date",
+    "cancelledNoRenew": "Cancelled — this plan will not renew",
+    "nextPaymentAmount": "Next payment amount",
+    "enableOverages": "Enable overages",
+    "recommended": "Recommended",
+    "modifyPlan": "Modify plan",
+    "changePlan": "Change plan",
+    "reactivating": "Reactivating…",
+    "resubscribe": "Resubscribe",
+    "cancelling": "Cancelling…",
+    "confirmCancel": "Confirm cancel",
+    "cancelPlan": "Cancel plan",
+    "managePayments": "Manage payments",
+    "invoices": "Invoices",
+    "cancelledNotice": "Translation stops for this workspace on {date}. Resubscribe before then to keep it running — the current period is already paid for, so it costs nothing.",
+    "billingCycle": {
+      "yearly": "Yearly",
+      "semiannual": "Semiannual",
+      "monthly": "Monthly",
+      "unknown": "—"
+    },
+    "toasts": {
+      "overageOn": "Meetings will keep running past zero credits, up to the plan's cap.",
+      "overageOff": "Meetings will stop when the credits run out.",
+      "overageFailed": "Could not change the overage setting.",
+      "cancelled": "Subscription cancelled. It stays active until the period ends.",
+      "cancelFailed": "Could not cancel the subscription.",
+      "reactivated": "Renewal is back on. This plan will continue past the current period.",
+      "reactivateFailed": "Could not reactivate the subscription."
+    }
+  }
+}

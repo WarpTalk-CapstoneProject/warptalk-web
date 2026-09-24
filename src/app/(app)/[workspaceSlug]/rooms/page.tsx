@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
@@ -57,8 +58,8 @@ import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { StatusPanel } from "./StatusPanel";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 
-function formatTimeShort(value?: string) {
-  if (!value) return "No date";
+function formatTimeShort(value: string | undefined, noDateLabel: string) {
+  if (!value) return noDateLabel;
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -88,10 +89,11 @@ function RepeatBadge({
    */
   series?: SeriesListSummary | null;
 }) {
-  const label = series ? recurrenceBadgeLabel(series.type) : "Repeats";
+  const t = useTranslations("rooms.repeatBadge");
+  const label = series ? recurrenceBadgeLabel(series.type) : t("label");
   const description = series
     ? describeRecurrenceWithTime(series)
-    : "Part of a repeating schedule";
+    : t("description");
 
   return (
     <span
@@ -143,6 +145,7 @@ function LinearRow({
   room: TranslationRoomDto;
   members: WorkspaceMemberDto[];
 }) {
+  const t = useTranslations("rooms");
   const params = useParams();
   const workspaceSlug = params?.workspaceSlug as string;
   const user = useAuthStore((state) => state.user);
@@ -177,10 +180,10 @@ function LinearRow({
               e.preventDefault();
               const inviteLink = `${window.location.origin}/join?code=${room.translationRoomCode}`;
               navigator.clipboard.writeText(inviteLink);
-              toast.success("Invite link copied");
+              toast.success(t("row.inviteLinkCopied"));
             }}
             className="hover:text-foreground transition-colors p-1"
-            title="Copy invite link"
+            title={t("row.copyInviteLink")}
           >
             <Copy size={14} weight="bold" />
           </button>
@@ -206,16 +209,16 @@ function LinearRow({
         {room.series && room.series.occurrenceCount > 1 && (
           <span
             className="hidden @[560px]:inline shrink-0 text-[11px] text-muted-foreground"
-            title={`${room.series.occurrenceCount} meetings in this schedule`}
+            title={t("row.occurrenceCount", { count: room.series.occurrenceCount })}
           >
-            {room.series.occurrenceCount} meetings
+            {t("row.occurrenceCountShort", { count: room.series.occurrenceCount })}
           </span>
         )}
         {/* The viewer's relation to the room, not "someone else booked it" — see
             isInvitedToRoom for why an Owner/Admin never gets this badge from the list. */}
         {isInvitedToRoom(room, user?.id, workspaceRole) && (
           <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 border border-amber-500/20">
-            Invited
+            {t("row.invited")}
           </span>
         )}
       </div>
@@ -284,19 +287,19 @@ function LinearRow({
             people icon and a title are the whole fix; the number itself was never wrong. */}
         <div
           className="hidden @[820px]:flex h-[26px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-          title={`${occupancy.seatCount} in the room of ${occupancy.capacity} seats`}
+          title={t("row.occupancyTitle", { seats: occupancy.seatCount, capacity: occupancy.capacity })}
         >
           <Users size={13} weight="regular" aria-hidden />
           <span className="tabular-nums">{occupancy.label}</span>
           <span className="sr-only">
-            participants in the room, out of {occupancy.capacity} seats
+            {t("row.occupancySr", { capacity: occupancy.capacity })}
           </span>
         </div>
 
         <div className="hidden @[900px]:flex h-[26px] shrink-0 items-center justify-center gap-1.5 rounded-full bg-surface-1 border border-border/60 px-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
           <CalendarIcon size={13} weight="regular" />
           <span className="tabular-nums">
-            {formatTimeShort(room.scheduledAt ?? room.createdAt)}
+            {formatTimeShort(room.scheduledAt ?? room.createdAt, t("row.noDate"))}
           </span>
         </div>
       </div>
@@ -308,6 +311,8 @@ function LinearRow({
 import { useUIStore } from "@/stores/ui-store";
 
 export default function MeetingsPageLinear() {
+  const t = useTranslations("rooms");
+  const locale = useLocale();
   const router = useRouter();
   const activeWorkspaceId = useWorkspaceStore(
     (state) => state.activeWorkspaceId,
@@ -521,7 +526,7 @@ export default function MeetingsPageLinear() {
       <div className="flex items-center justify-between px-4 py-3 shrink-0">
         {/* The chip style this page defined now lives in FilterChip, so Knowledge, Documents and
             the admin pages render the same control instead of four near-copies of it. */}
-        <FilterChipGroup label="Filter meetings">
+        <FilterChipGroup label={t("filterMeetingsAria")}>
           {(["active", "history", "all"] as const).map((tab) => (
             <FilterChip
               key={tab}
@@ -533,7 +538,7 @@ export default function MeetingsPageLinear() {
                 if (tab === "all") setDayFilter(null);
               }}
             >
-              {tab}
+              {t(`tabs.${tab}`)}
             </FilterChip>
           ))}
         </FilterChipGroup>
@@ -542,8 +547,8 @@ export default function MeetingsPageLinear() {
           <ExpandingSearchDock
             value={searchQuery}
             onValueChange={setSearchQuery}
-            placeholder="Search meetings..."
-            ariaLabel="Search meetings"
+            placeholder={t("search.placeholder")}
+            ariaLabel={t("search.ariaLabel")}
             collapsedWidth={28}
             expandedWidth={220}
             className="h-[28px] border-border/60 bg-surface-2 text-ink shadow-sm backdrop-blur-md focus-within:bg-surface-1"
@@ -553,13 +558,13 @@ export default function MeetingsPageLinear() {
           />
           <button
             className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
-            title="Filter"
+            title={t("toolbar.filter")}
           >
             <Funnel weight="bold" size={13} />
           </button>
           <button
             className="flex items-center justify-center w-[28px] h-[28px] rounded-full border border-border/60 text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-colors shadow-sm"
-            title="Display Options"
+            title={t("toolbar.displayOptions")}
           >
             <SlidersHorizontal weight="bold" size={13} />
           </button>
@@ -573,13 +578,13 @@ export default function MeetingsPageLinear() {
                 className="flex items-center gap-1.5 h-[28px] pl-2.5 pr-3 rounded-full bg-foreground text-background hover:opacity-90 transition-opacity text-[13px] font-medium shadow-sm"
               >
                 <Plus weight="bold" size={12} />
-                New Meeting
+                {t("toolbar.newMeeting")}
               </button>
             )}
             <button
               onClick={() => setJoinModalOpen(true)}
               className="flex items-center justify-center w-[28px] h-[28px] rounded-full bg-surface-2 hover:bg-surface-3 text-ink transition-colors shadow-sm border border-border/60"
-              title="Join via code"
+              title={t("toolbar.joinViaCode")}
             >
               <Keyboard weight="fill" size={14} />
             </button>
@@ -612,7 +617,7 @@ export default function MeetingsPageLinear() {
             onClick={() => setDayFilter(null)}
             className="text-[12px] font-medium text-primary hover:text-primary-hover"
           >
-            Clear day
+            {t("dayStrip.clearDay")}
           </button>
         ) : null}
       </div>
@@ -633,13 +638,13 @@ export default function MeetingsPageLinear() {
               {/* The heading has to name the day when one is applied. "Active Meetings 2" over a
                   list narrowed to Saturday reads as the count of everything active, and that is
                   precisely the mismatch that made the strip look broken. */}
-              <span className="font-medium text-foreground capitalize">
-                {activeTab} Meetings
+              <span className="font-medium text-foreground">
+                {t("group.heading", { tab: t(`tabs.${activeTab}`) })}
               </span>
               {dayFilter && !isAllView ? (
                 <span className="normal-case text-muted-foreground">
                   ·{" "}
-                  {new Intl.DateTimeFormat("en-US", {
+                  {new Intl.DateTimeFormat(locale, {
                     weekday: "short",
                     month: "short",
                     day: "numeric",
@@ -665,17 +670,20 @@ export default function MeetingsPageLinear() {
                     className="min-h-[300px]"
                     title={
                       dayFilter && !isAllView
-                        ? `No ${activeTab} meetings on ${new Intl.DateTimeFormat("en-US", {
-                            weekday: "long",
-                            month: "short",
-                            day: "numeric",
-                          }).format(dayFilter)}`
-                        : `No ${activeTab} meetings found`
+                        ? t("empty.noneOnDay", {
+                            tab: t(`tabs.${activeTab}`),
+                            date: new Intl.DateTimeFormat(locale, {
+                              weekday: "long",
+                              month: "short",
+                              day: "numeric",
+                            }).format(dayFilter),
+                          })
+                        : t("empty.noneFound", { tab: t(`tabs.${activeTab}`) })
                     }
                     description={
                       dayFilter && !isAllView
-                        ? "Clear the day filter to see every meeting in this status."
-                        : "Create a meeting or join one with a code to get started."
+                        ? t("empty.clearDayHint")
+                        : t("empty.getStartedHint")
                     }
                     action={
                       dayFilter && !isAllView ? (
@@ -684,7 +692,7 @@ export default function MeetingsPageLinear() {
                           onClick={() => setDayFilter(null)}
                           className="text-[12px] font-medium text-primary hover:text-primary-hover"
                         >
-                          Show every {activeTab} meeting
+                          {t("group.showEvery", { tab: t(`tabs.${activeTab}`) })}
                         </button>
                       ) : undefined
                     }
@@ -699,9 +707,9 @@ export default function MeetingsPageLinear() {
       <Dialog open={joinModalOpen} onOpenChange={setJoinModalOpen}>
         <DialogContent className="sm:max-w-[425px] !top-[25%] !translate-y-[-25%]">
           <DialogHeader>
-            <DialogTitle>Join Translation Room</DialogTitle>
+            <DialogTitle>{t("joinDialog.title")}</DialogTitle>
             <DialogDescription>
-              Enter the meeting code provided by your host to join the room.
+              {t("joinDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleJoin} className="grid gap-4 pt-2">
@@ -710,11 +718,11 @@ export default function MeetingsPageLinear() {
                 htmlFor="code"
                 className="text-foreground font-medium text-[13px]"
               >
-                Meeting code
+                {t("joinDialog.codeLabel")}
               </Label>
               <Input
                 id="code"
-                placeholder="e.g. ROOM-abc-123"
+                placeholder={t("joinDialog.codePlaceholder")}
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 autoComplete="off"
@@ -728,7 +736,7 @@ export default function MeetingsPageLinear() {
                 disabled={!joinCode.trim()}
                 className="disabled:bg-surface-2 disabled:text-ink-muted disabled:opacity-100 min-w-[80px] text-white"
               >
-                Join
+                {t("joinDialog.join")}
               </Button>
             </div>
           </form>

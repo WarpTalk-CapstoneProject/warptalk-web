@@ -66,6 +66,10 @@ export const ASSISTANT_TOOL_LABELS: Record<string, string> = {
   get_document: "Reading the document",
   ask_user: "Asking you for a couple of details",
   create_meeting: "Creating the meeting",
+  create_action_item: "Saving the action item",
+  add_glossary_term: "Adding to the glossary",
+  share_meeting_minutes: "Sharing the minutes",
+  continue_in_widget: "Moving to the WarpBot widget",
   // Not one of warptalk-ai's own tools: OpenAI runs this one server-side, and the worker
   // publishes the step by hand off the response stream because the dispatch loop a hosted call
   // never enters is what publishes every other one. From the reader's chair it is the same
@@ -98,6 +102,10 @@ export const ASSISTANT_TOOL_DONE_LABELS: Record<string, string> = {
   get_document: "Read the document",
   ask_user: "Asked you for details",
   create_meeting: "Created the meeting",
+  create_action_item: "Saved the action item",
+  add_glossary_term: "Added to the glossary",
+  share_meeting_minutes: "Shared the minutes",
+  continue_in_widget: "Moved to the WarpBot widget",
   web_search: "Searched the web",
 };
 

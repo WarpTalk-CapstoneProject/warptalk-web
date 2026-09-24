@@ -9,6 +9,7 @@ import {
   Users,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
@@ -31,21 +32,16 @@ import type {
 
 const PAGE_SIZE = 20;
 
-const STATUS_TABS: Array<{ value: AdminWorkspaceStatusFilter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "suspended", label: "Suspended" },
-  { value: "deleted", label: "Deleted" },
-];
+const STATUS_TAB_VALUES: AdminWorkspaceStatusFilter[] = ["all", "active", "suspended", "deleted"];
 
-const SORT_OPTIONS: Array<{ value: AdminWorkspaceSort; label: string }> = [
-  { value: "created_desc", label: "Newest" },
-  { value: "created_asc", label: "Oldest" },
-  { value: "name_asc", label: "Name A–Z" },
-  { value: "name_desc", label: "Name Z–A" },
-  { value: "members_desc", label: "Most members" },
-  { value: "members_asc", label: "Fewest members" },
-  { value: "updated_desc", label: "Recently updated" },
+const SORT_OPTION_VALUES: Array<{ value: AdminWorkspaceSort; labelKey: string }> = [
+  { value: "created_desc", labelKey: "createdDesc" },
+  { value: "created_asc", labelKey: "createdAsc" },
+  { value: "name_asc", labelKey: "nameAsc" },
+  { value: "name_desc", labelKey: "nameDesc" },
+  { value: "members_desc", labelKey: "membersDesc" },
+  { value: "members_asc", labelKey: "membersAsc" },
+  { value: "updated_desc", labelKey: "updatedDesc" },
 ];
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -59,18 +55,19 @@ function formatDate(value: string) {
 }
 
 function isStatusFilter(value: string | null): value is AdminWorkspaceStatusFilter {
-  return STATUS_TABS.some((tab) => tab.value === value);
+  return STATUS_TAB_VALUES.some((tab) => tab === value);
 }
 
 function isSort(value: string | null): value is AdminWorkspaceSort {
-  return SORT_OPTIONS.some((option) => option.value === value);
+  return SORT_OPTION_VALUES.some((option) => option.value === value);
 }
 
 function OwnerCell({ workspace }: { workspace: AdminWorkspaceSummaryDto }) {
+  const t = useTranslations("adminWorkspaces.list");
   if (!workspace.owner.resolved) {
     return (
-      <span className="text-xs italic text-ink-subtle" title={`Owner id ${workspace.owner.id}`}>
-        Owner unavailable
+      <span className="text-xs italic text-ink-subtle" title={t("ownerIdTitle", { id: workspace.owner.id })}>
+        {t("ownerUnavailable")}
       </span>
     );
   }
@@ -84,6 +81,7 @@ function OwnerCell({ workspace }: { workspace: AdminWorkspaceSummaryDto }) {
 }
 
 function WorkspacesDirectory() {
+  const t = useTranslations("adminWorkspaces.list");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -132,13 +130,22 @@ function WorkspacesDirectory() {
   const total = directoryQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  const statusTabs = useMemo(
+    () => STATUS_TAB_VALUES.map((value) => ({ value, label: t(`statusTabs.${value}`) })),
+    [t],
+  );
+  const sortOptions = useMemo(
+    () => SORT_OPTION_VALUES.map((option) => ({ value: option.value, label: t(`sortOptions.${option.labelKey}`) })),
+    [t],
+  );
+
   return (
     <AdminPage>
         <AdminPageHeader
-          eyebrow="Platform directory"
+          eyebrow={t("eyebrow")}
           eyebrowIcon={<Buildings size={14} weight="fill" />}
-          title="Workspaces"
-          description="Every workspace on the platform, independent of your own memberships."
+          title={t("title")}
+          description={t("description")}
           actions={
             <Button
               variant="outline"
@@ -150,13 +157,13 @@ function WorkspacesDirectory() {
                 size={14}
                 className={cn(directoryQuery.isFetching && "animate-spin")}
               />
-              Refresh
+              {t("refresh")}
             </Button>
           }
         />
 
         <AdminFilterTabs
-          tabs={STATUS_TABS}
+          tabs={statusTabs}
           value={status}
           onChange={(value) =>
             updateParams({
@@ -164,12 +171,8 @@ function WorkspacesDirectory() {
               page: undefined,
             })
           }
-          label="Workspace status"
-          trailing={
-            directoryQuery.isPending
-              ? "Loading…"
-              : `${numberFormatter.format(total)} workspace${total === 1 ? "" : "s"}`
-          }
+          label={t("filterLabel")}
+          trailing={directoryQuery.isPending ? t("loading") : t("workspaceCount", { count: total })}
         />
 
         <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
@@ -189,13 +192,13 @@ function WorkspacesDirectory() {
                 type="search"
                 value={searchDraft}
                 onChange={(event) => setSearchDraft(event.target.value)}
-                placeholder="Search name or slug"
-                aria-label="Search workspaces"
+                placeholder={t("searchPlaceholder")}
+                aria-label={t("searchAriaLabel")}
                 className="h-8 w-full rounded-lg border border-hairline bg-surface-1 pl-8 pr-2.5 text-[13px] text-ink placeholder:text-ink-subtle focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
               />
             </form>
             <label className="sr-only" htmlFor="workspace-sort">
-              Sort workspaces
+              {t("sortLabel")}
             </label>
             <select
               id="workspace-sort"
@@ -203,7 +206,7 @@ function WorkspacesDirectory() {
               onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
               className="h-8 rounded-lg border border-hairline bg-surface-1 px-2 text-[13px] text-ink focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
             >
-              {SORT_OPTIONS.map((option) => (
+              {sortOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -214,30 +217,27 @@ function WorkspacesDirectory() {
 
         <AdminPanel className="mt-4">
           <div className="hidden items-center border-b border-border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-subtle md:flex">
-            <span className="flex-1">Workspace</span>
-            <span className="w-[110px] shrink-0">Status</span>
-            <span className="w-[220px] shrink-0">Owner</span>
-            <span className="w-[90px] shrink-0 text-right">Members</span>
-            <span className="w-[120px] shrink-0 text-right">Created</span>
-            <span className="w-[130px] shrink-0 text-right">Last activity</span>
+            <span className="flex-1">{t("columns.workspace")}</span>
+            <span className="w-[110px] shrink-0">{t("columns.status")}</span>
+            <span className="w-[220px] shrink-0">{t("columns.owner")}</span>
+            <span className="w-[90px] shrink-0 text-right">{t("columns.members")}</span>
+            <span className="w-[120px] shrink-0 text-right">{t("columns.created")}</span>
+            <span className="w-[130px] shrink-0 text-right">{t("columns.lastActivity")}</span>
           </div>
 
           {directoryQuery.isError ? (
             <div className="flex items-start gap-2 px-4 py-8 text-sm text-destructive">
               <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0" />
               <div>
-                <p className="font-medium">The workspace directory could not be loaded.</p>
-                <p className="mt-1 text-ink-muted">
-                  Check the workspace service and that your session still holds the platform
-                  admin role.
-                </p>
+                <p className="font-medium">{t("errorTitle")}</p>
+                <p className="mt-1 text-ink-muted">{t("errorDescription")}</p>
                 <Button
                   variant="outline"
                   size="sm"
                   className="mt-3"
                   onClick={() => void directoryQuery.refetch()}
                 >
-                  Try again
+                  {t("tryAgain")}
                 </Button>
               </div>
             </div>
@@ -262,10 +262,8 @@ function WorkspacesDirectory() {
                 <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
                   <Buildings size={20} weight="duotone" />
                 </span>
-                <p className="mt-3 text-sm font-medium">No workspaces match these filters</p>
-                <p className="mt-1 text-xs text-ink-muted">
-                  Clear the search or pick a different status tab.
-                </p>
+                <p className="mt-3 text-sm font-medium">{t("emptyTitle")}</p>
+                <p className="mt-1 text-xs text-ink-muted">{t("emptyDescription")}</p>
               </div>
             </div>
           ) : (
@@ -320,9 +318,7 @@ function WorkspacesDirectory() {
 
           {totalPages > 1 ? (
             <div className="flex items-center justify-between border-t border-hairline px-4 py-2.5">
-              <p className="text-xs text-ink-muted">
-                Page {page} of {totalPages}
-              </p>
+              <p className="text-xs text-ink-muted">{t("pageOf", { page, totalPages })}</p>
               <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
@@ -331,7 +327,7 @@ function WorkspacesDirectory() {
                   onClick={() => updateParams({ page: String(page - 1) })}
                 >
                   <CaretLeft size={13} />
-                  Previous
+                  {t("previous")}
                 </Button>
                 <Button
                   variant="outline"
@@ -339,7 +335,7 @@ function WorkspacesDirectory() {
                   disabled={page >= totalPages}
                   onClick={() => updateParams({ page: String(page + 1) })}
                 >
-                  Next
+                  {t("next")}
                   <CaretRight size={13} />
                 </Button>
               </div>

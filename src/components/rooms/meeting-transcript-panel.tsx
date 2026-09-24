@@ -412,7 +412,8 @@ export function MeetingTranscriptArtifact({
     [languageOptions, grouped.length],
   );
 
-  const sessionsQuery = useTranslationRoomSessions(roomId);
+  // WT-701: an ended meeting's sessions are final — fetch once, do not poll every 5s.
+  const sessionsQuery = useTranslationRoomSessions(roomId, { poll: !isEnded });
   const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
   const showSessionLabels = blocks.length > 1;
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and

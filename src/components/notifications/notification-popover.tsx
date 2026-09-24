@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { notificationService } from "@/services/notification.service";
@@ -10,6 +11,7 @@ import { NOTIFICATION_GLASS, NotificationPanel } from "./notification-panel";
 const NOTHING_FRESH: ReadonlySet<string> = new Set();
 
 export function NotificationPopover() {
+  const t = useTranslations("common.notifications");
   const [open, setOpen] = useState(false);
   const [freshIds, setFreshIds] = useState<ReadonlySet<string>>(NOTHING_FRESH);
   const queryClient = useQueryClient();
@@ -53,8 +55,8 @@ export function NotificationPopover() {
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger
-        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-        title="Notifications"
+        aria-label={unreadCount > 0 ? t("ariaLabelUnread", { count: unreadCount }) : t("ariaLabel")}
+        title={t("ariaLabel")}
         className="relative flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
       >
         <Bell className="h-3 w-3" strokeWidth={2} />
@@ -66,7 +68,7 @@ export function NotificationPopover() {
         )}
       </PopoverTrigger>
 
-      <PopoverContent align="end" aria-label="Notifications" className={NOTIFICATION_GLASS}>
+      <PopoverContent align="end" aria-label={t("ariaLabel")} className={NOTIFICATION_GLASS}>
         <NotificationPanel
           notifications={notifications}
           freshIds={freshIds}

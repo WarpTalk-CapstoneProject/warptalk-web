@@ -1,0 +1,44 @@
+{
+  "title": "Hóa đơn",
+  "loading": "Đang tải…",
+  "countIssued": "{count, plural, other {# hóa đơn đã phát hành cho không gian làm việc này}}",
+  "accessDenied": "Chỉ Chủ sở hữu và Quản trị viên không gian làm việc mới có thể xem hóa đơn.",
+  "outstanding": {
+    "label": "Chưa thanh toán",
+    "awaitingPayment": "{count, plural, other {# hóa đơn đang chờ thanh toán}}",
+    "nothing": "Không có hóa đơn nào đang chờ thanh toán"
+  },
+  "paidToDate": {
+    "label": "Đã thanh toán",
+    "count": "{count, plural, other {# hóa đơn}}"
+  },
+  "table": {
+    "number": "Số hóa đơn",
+    "period": "Kỳ",
+    "issued": "Ngày phát hành",
+    "due": "Hạn thanh toán",
+    "amount": "Số tiền",
+    "status": "Trạng thái",
+    "actionsSr": "Hành động"
+  },
+  "noInvoices": "Chưa có hóa đơn nào được phát hành cho không gian làm việc này.",
+  "status": {
+    "paid": "Đã thanh toán",
+    "void": "Đã hủy",
+    "unpaid": "Chưa thanh toán"
+  },
+  "pay": "Thanh toán",
+  "pdf": "PDF",
+  "pagination": {
+    "pageOf": "Trang {page} / {totalPages}",
+    "previous": "Trước",
+    "next": "Sau"
+  },
+  "checkoutError": "Không thể bắt đầu thanh toán cho hóa đơn này. Vui lòng thử lại.",
+  "paymentAttempts": {
+    "title": "Các lần thanh toán không thành công",
+    "subtitle": "Trên gói đăng ký hiện tại",
+    "loadError": "Không thể tải các lần thanh toán.",
+    "tryAgain": "Thử lại"
+  }
+}

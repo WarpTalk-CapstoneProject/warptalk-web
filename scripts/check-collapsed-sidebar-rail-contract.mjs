@@ -3,9 +3,10 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const [layout, sidebar] = await Promise.all([
+const [layout, sidebar, commonMessagesEn] = await Promise.all([
   readFile(path.join(root, "src/app/(app)/layout.tsx"), "utf8"),
   readFile(path.join(root, "src/components/layout/linear-sidebar.tsx"), "utf8"),
+  readFile(path.join(root, "messages/en/common.json"), "utf8").then(JSON.parse),
 ]);
 
 const checks = [
@@ -28,9 +29,24 @@ const checks = [
   // The selected row sits on bg-canvas; bg-surface-2 is one step from it and made the current page
   // invisible in the rail. Every expanded row goes through navRowTone, which uses surface-3.
   ["expanded selected rows read against the canvas", sidebar.includes('? "bg-surface-3 text-ink [&_svg]:text-ink [&_span]:text-ink"') && !/"bg-surface-2"\s*:\s*"hover:bg-surface-2"/.test(sidebar) && !/:\s*"bg-surface-2"\s*\n\s*:\s*"hover:bg-surface-2"/.test(sidebar)],
-  ["collapsed rail preserves meeting search", sidebar.includes('aria-label="Search meetings"')],
-  ["collapsed rail preserves team invite", sidebar.includes('aria-label="Invite team members"')],
-  ["toggle announces the resulting action", layout.includes('leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"')],
+  // i18n: these three now render through the translation catalog rather than as literal source
+  // text — see common.json for the English wording asserted here.
+  [
+    "collapsed rail preserves meeting search",
+    sidebar.includes('aria-label={t("searchMeetings")}') &&
+      commonMessagesEn.sidebar?.searchMeetings === "Search meetings",
+  ],
+  [
+    "collapsed rail preserves team invite",
+    sidebar.includes('aria-label={t("inviteTeamMembers")}') &&
+      commonMessagesEn.sidebar?.inviteTeamMembers === "Invite team members",
+  ],
+  [
+    "toggle announces the resulting action",
+    layout.includes('leftSidebarOpen ? t("topbar.collapseSidebar") : t("topbar.expandSidebar")') &&
+      commonMessagesEn.topbar?.collapseSidebar === "Collapse sidebar" &&
+      commonMessagesEn.topbar?.expandSidebar === "Expand sidebar",
+  ],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

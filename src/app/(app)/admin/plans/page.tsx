@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowsClockwise,
   PencilSimple,
@@ -31,6 +32,7 @@ import {
   useAdminRateCards,
   useCreateAdminPlan,
   useDeactivateAdminRateCard,
+  useSetAdminRateCardProviderCost,
   useUpdateAdminPlan,
   useUpdateAdminPricingConfig,
   useUpsertAdminRateCard,
@@ -45,13 +47,9 @@ import { cn } from "@/lib/utils";
 import type { UsageRateCardDto } from "@/types/admin-pricing";
 import type { PlanDto } from "@/types/billing";
 
-const TABS = [
-  { value: "plans", label: "Plans" },
-  { value: "rate-cards", label: "Rate cards" },
-  { value: "configuration", label: "Configuration" },
-] as const;
+const TAB_VALUES = ["plans", "rate-cards", "configuration"] as const;
 
-type Tab = (typeof TABS)[number]["value"];
+type Tab = (typeof TAB_VALUES)[number];
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -77,17 +75,16 @@ function PanelState({
   onRetry: () => void;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("adminPlansSettings.plans");
   if (isError) {
     return (
       <div className="flex items-start gap-3 px-4 py-10 text-sm">
         <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
         <div>
           <p className="font-medium">{errorText}</p>
-          <p className="mt-1 text-ink-muted">
-            Check the billing service and that your session still holds the platform admin role.
-          </p>
+          <p className="mt-1 text-ink-muted">{t("errorHint")}</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
-            Try again
+            {t("tryAgain")}
           </Button>
         </div>
       </div>
@@ -118,6 +115,7 @@ function PanelState({
 }
 
 function PlanRow({ plan, onEdit }: { plan: PlanDto; onEdit: (plan: PlanDto) => void }) {
+  const t = useTranslations("adminPlansSettings.plans.planRow");
   return (
     <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
       <div className="min-w-0 flex-1">
@@ -144,14 +142,14 @@ function PlanRow({ plan, onEdit }: { plan: PlanDto; onEdit: (plan: PlanDto) => v
               : "border-border bg-surface-2 text-ink-muted",
           )}
         >
-          {plan.isActive ? "Active" : "Hidden"}
+          {plan.isActive ? t("active") : t("hidden")}
         </span>
       </div>
 
       <div className="shrink-0 md:ml-3">
         <Button variant="outline" size="sm" onClick={() => onEdit(plan)}>
           <PencilSimple size={13} />
-          Edit
+          {t("edit")}
         </Button>
       </div>
     </div>
@@ -167,6 +165,7 @@ function RateCardRow({
   onEdit: (card: UsageRateCardDto) => void;
   onDeactivate: (card: UsageRateCardDto) => void;
 }) {
+  const t = useTranslations("adminPlansSettings.plans.rateCardRow");
   const margin = resolveRateCardMargin(card);
   const tone = marginTone(margin);
 
@@ -208,9 +207,9 @@ function RateCardRow({
         )}
         title={
           margin.source === "derived"
-            ? "Computed from price and cost — both in USD"
+            ? t("marginDerivedTooltip")
             : margin.source === "recorded"
-              ? "As recorded on the rate card"
+              ? t("marginRecordedTooltip")
               : undefined
         }
       >
@@ -218,17 +217,17 @@ function RateCardRow({
       </div>
 
       <div className="w-[150px] shrink-0 text-[12px] text-ink-muted md:text-right">
-        from {formatDate(card.effectiveFrom)}
+        {t("from", { date: formatDate(card.effectiveFrom) })}
       </div>
 
       <div className="flex shrink-0 gap-1.5 md:ml-3">
         <Button variant="outline" size="sm" onClick={() => onEdit(card)}>
           <PencilSimple size={13} />
-          Edit
+          {t("edit")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => onDeactivate(card)}>
           <Prohibit size={13} />
-          Deactivate
+          {t("deactivate")}
         </Button>
       </div>
     </div>
@@ -253,6 +252,13 @@ function ConfigRow({ label, value }: { label: string; value: React.ReactNode }) 
 }
 
 export default function AdminPlansPage() {
+  const t = useTranslations("adminPlansSettings.plans");
+  const TAB_LABEL_KEYS: Record<Tab, string> = {
+    plans: "tabs.plans",
+    "rate-cards": "tabs.rateCards",
+    configuration: "tabs.configuration",
+  };
+  const TABS = TAB_VALUES.map((value) => ({ value, label: t(TAB_LABEL_KEYS[value]) }));
   const [tab, setTab] = useState<Tab>("plans");
   const plansQuery = useAdminPlans();
   const rateCardsQuery = useAdminRateCards();
@@ -262,6 +268,7 @@ export default function AdminPlansPage() {
   const createPlan = useCreateAdminPlan();
   const upsertRateCard = useUpsertAdminRateCard();
   const deactivateRateCard = useDeactivateAdminRateCard();
+  const setRateCardProviderCost = useSetAdminRateCardProviderCost();
   const updateConfig = useUpdateAdminPricingConfig();
 
   /**
@@ -287,22 +294,22 @@ export default function AdminPlansPage() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Revenue"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Tag size={14} weight="fill" />}
-        title="Plans & pricing"
-        description="What the platform sells, and what each unit of it costs to serve."
+        title={t("title")}
+        description={t("description")}
         actions={
           <>
             {tab === "plans" ? (
               <Button size="sm" onClick={() => setIsCreatingPlan(true)}>
                 <Plus size={14} />
-                New plan
+                {t("newPlan")}
               </Button>
             ) : null}
             {tab === "configuration" ? (
               <Button size="sm" onClick={() => setIsConfigOpen(true)} disabled={config === null}>
                 <PencilSimple size={14} />
-                Edit configuration
+                {t("editConfiguration")}
               </Button>
             ) : null}
             <Button
@@ -312,7 +319,7 @@ export default function AdminPlansPage() {
               disabled={active.isFetching}
             >
               <ArrowsClockwise size={14} className={cn(active.isFetching && "animate-spin")} />
-              Refresh
+              {t("refresh")}
             </Button>
           </>
         }
@@ -322,28 +329,24 @@ export default function AdminPlansPage() {
         tabs={TABS}
         value={tab}
         onChange={setTab}
-        label="Pricing view"
+        label={t("filterLabel")}
         trailing={
           tab === "plans"
             ? plansQuery.isPending
-              ? "Loading…"
-              : `${plans.length} plan${plans.length === 1 ? "" : "s"}`
+              ? t("loading")
+              : t("planCount", { count: plans.length })
             : tab === "rate-cards"
               ? rateCardsQuery.isPending
-                ? "Loading…"
-                : `${rateCards.length} rate card${rateCards.length === 1 ? "" : "s"}`
+                ? t("loading")
+                : t("rateCardCount", { count: rateCards.length })
               : configQuery.isPending
-                ? "Loading…"
-                : "Platform-wide"
+                ? t("loading")
+                : t("platformWide")
         }
       />
 
       {tab === "rate-cards" ? (
-        <p className="mt-4 text-[12px] text-ink-muted">
-          Margins are read from the rate card&rsquo;s recorded multiplier. Where a price is in one
-          currency and the provider cost in another, no margin is shown — dividing them would
-          produce a number off by the exchange rate.
-        </p>
+        <p className="mt-4 text-[12px] text-ink-muted">{t("rateCardsNote")}</p>
       ) : null}
 
       <AdminPanel className="mt-3">
@@ -352,8 +355,8 @@ export default function AdminPlansPage() {
             isError={plansQuery.isError}
             isPending={plansQuery.isPending}
             isEmpty={plans.length === 0}
-            errorText="Plans could not be loaded."
-            emptyText="No plans in the catalogue."
+            errorText={t("plansError")}
+            emptyText={t("plansEmpty")}
             onRetry={() => void plansQuery.refetch()}
           >
             <ul>
@@ -369,8 +372,8 @@ export default function AdminPlansPage() {
             isError={rateCardsQuery.isError}
             isPending={rateCardsQuery.isPending}
             isEmpty={rateCards.length === 0}
-            errorText="Rate cards could not be loaded."
-            emptyText="No rate cards configured."
+            errorText={t("rateCardsError")}
+            emptyText={t("rateCardsEmpty")}
             onRetry={() => void rateCardsQuery.refetch()}
           >
             <ul>
@@ -386,55 +389,53 @@ export default function AdminPlansPage() {
             isError={configQuery.isError}
             isPending={configQuery.isPending}
             isEmpty={config === null}
-            errorText="Pricing configuration could not be loaded."
-            emptyText="No pricing configuration is stored."
+            errorText={t("configError")}
+            emptyText={t("configEmpty")}
             onRetry={() => void configQuery.refetch()}
           >
             {config ? (
               <div>
                 <ConfigRow
-                  label="FX rate USD→VND"
+                  label={t("configRows.fxRate")}
                   value={numberFormatter.format(config.fxRateUsdVnd)}
                 />
                 <ConfigRow
-                  label="Credit value (VND)"
-                  value={numberFormatter.format(config.creditValueVnd)}
-                />
-                <ConfigRow
-                  label="Minimum price per credit (VND)"
-                  value={numberFormatter.format(config.minimumPricePerCreditVnd)}
-                />
-                <ConfigRow
-                  label="Minimum contract price"
+                  label={t("configRows.minimumContractPrice")}
                   value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
                 />
-                <ConfigRow label="Sales weight · usage" value={config.salesUsageWeight} />
-                <ConfigRow label="Sales weight · members" value={config.salesMembersWeight} />
-                <ConfigRow label="Sales weight · languages" value={config.salesLanguagesWeight} />
+                <ConfigRow label={t("configRows.salesWeightUsage")} value={config.salesUsageWeight} />
                 <ConfigRow
-                  label="Sales weight · AI services"
+                  label={t("configRows.salesWeightMembers")}
+                  value={config.salesMembersWeight}
+                />
+                <ConfigRow
+                  label={t("configRows.salesWeightLanguages")}
+                  value={config.salesLanguagesWeight}
+                />
+                <ConfigRow
+                  label={t("configRows.salesWeightAiServices")}
                   value={config.salesAiServicesWeight}
                 />
                 <ConfigRow
-                  label="Default overage cap ratio"
+                  label={t("configRows.defaultOverageCapRatio")}
                   value={config.defaultOverageCapRatio}
                 />
                 <ConfigRow
-                  label="Default invoice terms"
-                  value={`${config.defaultInvoiceTermsDays} days`}
+                  label={t("configRows.defaultInvoiceTerms")}
+                  value={t("configRows.defaultInvoiceTermsValue", { days: config.defaultInvoiceTermsDays })}
                 />
                 <ConfigRow
-                  label="Default invoice grace"
-                  value={`${config.defaultInvoiceGraceHours} hours`}
+                  label={t("configRows.defaultInvoiceGrace")}
+                  value={t("configRows.defaultInvoiceGraceValue", { hours: config.defaultInvoiceGraceHours })}
                 />
                 {/* The two the write endpoint does not take. Shown so their absence from the
                     editor reads as a property of the field, not as a gap in the form. */}
                 <ConfigRow
-                  label="Formula (derived)"
+                  label={t("configRows.formula")}
                   value={<span className="font-mono text-[11px]">{config.formula}</span>}
                 />
                 <ConfigRow
-                  label="Resolver key (derived)"
+                  label={t("configRows.resolverKey")}
                   value={<span className="font-mono text-[11px]">{config.resolverKey}</span>}
                 />
               </div>
@@ -443,12 +444,7 @@ export default function AdminPlansPage() {
         )}
       </AdminPanel>
 
-      <p className="mt-4 text-[12px] text-ink-muted">
-        Editable, within what the API allows. Nothing here is deleted: a plan is named on every
-        invoice ever raised against it, so it is retired with its Active switch, and a rate card is
-        retired with Deactivate because settled charges point at it. A new rate-card identity still
-        arrives with the migration that registers it.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
 
       <PlanCreateDialog
         open={isCreatingPlan}
@@ -479,7 +475,10 @@ export default function AdminPlansPage() {
           if (!open) setEditingCard(null);
         }}
         onSubmit={(request) => upsertRateCard.mutateAsync(request)}
-        isSaving={upsertRateCard.isPending}
+        onSetProviderCost={(id, providerUnitCostUsd) =>
+          setRateCardProviderCost.mutateAsync({ id, request: { providerUnitCostUsd } })
+        }
+        isSaving={upsertRateCard.isPending || setRateCardProviderCost.isPending}
       />
 
       <RateCardDeactivateDialog
@@ -489,7 +488,7 @@ export default function AdminPlansPage() {
         }}
         onConfirm={async (card) => {
           await deactivateRateCard.mutateAsync(card.id);
-          toast.success(`${card.chargeType} rate card deactivated.`);
+          toast.success(t("deactivateToast", { chargeType: card.chargeType }));
         }}
         isSaving={deactivateRateCard.isPending}
       />

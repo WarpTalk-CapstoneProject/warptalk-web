@@ -43,9 +43,12 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { continueMeetingChatInWidget } from "@/lib/assistant/continue-in-widget";
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -62,6 +65,7 @@ import {
   FileImage,
   FileArchive,
   Download,
+  ArrowUpRight,
 } from "lucide-react";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import { usePluginConnectUrl } from "@/hooks/use-assistant";
@@ -148,6 +152,11 @@ export function ChatPanel({
   active?: boolean;
 }) {
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  // "Continue in widget" hangs off WarpBot's LATEST answer only: one door, where the thread ends,
+  // rather than a button under every reply offering to move the same conversation.
+  const latestAssistantMessageId = [...messages].reverse().find(isAssistantMessage)?.id ?? null;
+  const handoffInFlight = useAssistantWidgetStore((state) => state.handoffInFlight);
+  const { data: roomForHandoff } = useTranslationRoom(roomId);
   // Only so a document chip under a WarpBot answer can link to that document; a room whose
   // workspace is not in the store simply renders the chip as a label.
   const activeWorkspaceSlug = useWorkspaceStore(
@@ -713,6 +722,10 @@ export function ChatPanel({
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: activeWorkspaceId ?? undefined,
       });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
       // Connected on the server already: the provider's grant covered it, nothing to open. Said
       // out loud, because this is the common case for a second Google plugin — and returning
       // silently left the button flipping back to "Connect", which reads as a click that failed.
@@ -894,6 +907,31 @@ export function ChatPanel({
                           running={false}
                           durationMs={assistantTrails[message.id].durationMs}
                         />
+                      ) : null}
+                      {/* The explicit door to the same handover WarpBot's continue_in_widget tool
+                          performs: the thread moves to THIS viewer's private widget and the call
+                          carries on beside it. Visible to everyone — each person continues in
+                          their own widget; nothing is moved for anyone else. */}
+                      {message.id === latestAssistantMessageId ? (
+                        <button
+                          type="button"
+                          data-testid="continue-in-widget"
+                          disabled={handoffInFlight}
+                          onClick={() =>
+                            void continueMeetingChatInWidget({
+                              roomId,
+                              roomTitle: roomForHandoff?.title ?? null,
+                            })
+                          }
+                          className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                        >
+                          {handoffInFlight ? (
+                            <LoaderCircle className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ArrowUpRight className="h-3 w-3" />
+                          )}
+                          Continue in WarpBot widget
+                        </button>
                       ) : null}
                     </div>
                   ) : (

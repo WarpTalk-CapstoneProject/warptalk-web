@@ -13,6 +13,7 @@
  */
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { WarningCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -31,38 +32,12 @@ import type { AdminUserSummaryDto } from "@/types/admin-user";
 
 export type AdminUserAction = "revoke-sessions" | "deactivate" | "reactivate" | "unlock";
 
-const COPY: Record<
-  AdminUserAction,
-  { title: string; description: string; confirm: string; pending: string }
-> = {
-  "revoke-sessions": {
-    title: "End every session?",
-    description:
-      "Signs the account out everywhere. It is not locked and the password is unchanged — the person can sign in again immediately.",
-    confirm: "End sessions",
-    pending: "Ending…",
-  },
-  deactivate: {
-    title: "Deactivate this account?",
-    description:
-      "The person cannot sign in, and the sessions already open are ended. Nothing is deleted and this can be undone.",
-    confirm: "Deactivate",
-    pending: "Deactivating…",
-  },
-  reactivate: {
-    title: "Reactivate this account?",
-    description:
-      "Sign-in is allowed again. Sessions ended earlier stay ended — the person signs in fresh.",
-    confirm: "Reactivate",
-    pending: "Reactivating…",
-  },
-  unlock: {
-    title: "Clear the lockout?",
-    description:
-      "Removes a failed-login lockout and resets the attempt counter, so the person can try again now instead of waiting out the window.",
-    confirm: "Unlock",
-    pending: "Unlocking…",
-  },
+// Maps each action to the sub-object under adminUsers.actionDialog carrying its copy.
+const ACTION_COPY_KEY: Record<AdminUserAction, "revokeSessions" | "deactivate" | "reactivate" | "unlock"> = {
+  "revoke-sessions": "revokeSessions",
+  deactivate: "deactivate",
+  reactivate: "reactivate",
+  unlock: "unlock",
 };
 
 export function AdminUserActionDialog({
@@ -115,12 +90,13 @@ function ActionForm({
 }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const copy = COPY[action];
+  const t = useTranslations("adminUsers.actionDialog");
+  const copyKey = ACTION_COPY_KEY[action];
 
   const handleSubmit = async () => {
     const trimmed = reason.trim();
     if (trimmed.length < 10) {
-      setError("Give a reason of at least ten characters. It goes into the platform audit log.");
+      setError(t("reasonTooShort"));
       return;
     }
 
@@ -134,7 +110,7 @@ function ActionForm({
           err,
           // Deliberate wording. The server abandons the change when it cannot audit it, so the
           // honest default is "nothing happened", not "this may have half-worked".
-          "Nothing was changed — the action could not be completed.",
+          t("genericError"),
         ),
       );
     }
@@ -143,8 +119,8 @@ function ActionForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{copy.title}</DialogTitle>
-        <DialogDescription>{copy.description}</DialogDescription>
+        <DialogTitle>{t(`${copyKey}.title`)}</DialogTitle>
+        <DialogDescription>{t(`${copyKey}.description`)}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-3">
@@ -154,15 +130,15 @@ function ActionForm({
           {action === "revoke-sessions" ? (
             <p className="mt-1.5 text-[11px] text-ink-muted">
               {user.activeSessionCount === 0
-                ? "No sessions are open right now."
-                : `${user.activeSessionCount} session${user.activeSessionCount === 1 ? "" : "s"} will end.`}
+                ? t("noSessionsOpen")
+                : t("sessionsWillEnd", { count: user.activeSessionCount })}
             </p>
           ) : null}
         </div>
 
         <div>
           <Label htmlFor="user-action-reason" className="text-[12px] text-ink-muted">
-            Reason
+            {t("reasonLabel")}
           </Label>
           <Textarea
             id="user-action-reason"
@@ -170,7 +146,7 @@ function ActionForm({
             rows={3}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Recorded in the platform audit log against your account."
+            placeholder={t("reasonPlaceholder")}
           />
         </div>
 
@@ -187,10 +163,10 @@ function ActionForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSaving}>
-          Back
+          {t("back")}
         </Button>
         <Button onClick={() => void handleSubmit()} disabled={isSaving}>
-          {isSaving ? copy.pending : copy.confirm}
+          {isSaving ? t(`${copyKey}.pending`) : t(`${copyKey}.confirm`)}
         </Button>
       </DialogFooter>
     </>

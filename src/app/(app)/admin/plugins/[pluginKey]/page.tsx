@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -45,15 +46,11 @@ import {
   catalogRowCannotConnect,
   describePluginToolOutcome,
   formatToolManifest,
-  MISSING_CLIENT_ID_EXPLANATION,
-  OAUTH_CLIENT_SOURCE_LABELS,
-  OAUTH_CLIENT_SOURCE_NOTES,
   parseScopeList,
   parseToolManifest,
-  PLUGIN_KIND_LABELS,
   supportsRediscovery,
 } from "@/lib/admin/plugin-catalog";
-import type { PluginToolOutcomeTone } from "@/lib/admin/plugin-catalog";
+import type { PluginToolOutcome, PluginToolOutcomeTone } from "@/lib/admin/plugin-catalog";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type {
@@ -193,6 +190,7 @@ function useSeededField<T>(serverValue: T) {
 }
 
 export default function AdminPluginDetailPage() {
+  const t = useTranslations("adminPlugins.detail");
   const params = useParams();
   const router = useRouter();
 
@@ -250,27 +248,24 @@ export default function AdminPluginDetailPage() {
             <WarningCircle size={22} weight="duotone" />
           </span>
           <h1 className="mt-4 text-lg font-semibold text-ink">
-            {notFound ? "No such plugin" : "This plugin could not be loaded"}
+            {notFound ? t("notFound.title") : t("loadError.title")}
           </h1>
           <p className="mt-2 text-[13px] text-ink-muted">
             {notFound ? (
-              <>
-                Nothing in the catalog is keyed{" "}
-                <span className="font-mono">{pluginKey}</span>. It may have been hard-deleted.
-              </>
+              t("notFound.body", { key: pluginKey })
             ) : (
-              failureMessage(detailQuery.error, "The assistant service did not answer.")
+              failureMessage(detailQuery.error, t("loadError.fallback"))
             )}
           </p>
           <div className="mt-5 flex justify-center gap-2">
             <Button variant="outline" size="sm" onClick={() => void detailQuery.refetch()}>
-              Try again
+              {t("tryAgain")}
             </Button>
             <Link
               href="/admin/plugins"
               className={cn(buttonVariants({ size: "sm" }))}
             >
-              Back to the catalog
+              {t("backToCatalog")}
             </Link>
           </div>
         </div>
@@ -285,21 +280,18 @@ export default function AdminPluginDetailPage() {
   const setActive = async (next: boolean) => {
     try {
       await activationMutation.mutateAsync({ isActive: next });
-      toast.success(next ? "Plugin activated." : "Plugin retired.");
+      toast.success(next ? t("toast.activated") : t("toast.retired"));
     } catch (error) {
-      reportFailure(
-        error,
-        next ? "Could not activate the plugin." : "Could not retire the plugin.",
-      );
+      reportFailure(error, next ? t("toast.activateFail") : t("toast.retireFail"));
     }
   };
 
   const rediscover = async () => {
     try {
       await rediscoverMutation.mutateAsync();
-      toast.success("Discovery cleared. The registration ladder runs again on the next connect.");
+      toast.success(t("toast.rediscoverSuccess"));
     } catch (error) {
-      reportFailure(error, "Could not clear discovery for this plugin.");
+      reportFailure(error, t("toast.rediscoverFail"));
     }
   };
 
@@ -310,7 +302,7 @@ export default function AdminPluginDetailPage() {
         className="inline-flex items-center gap-1.5 text-[12px] text-ink-muted transition-colors hover:text-ink"
       >
         <ArrowLeft size={13} />
-        Plugin catalog
+        {t("backLink")}
       </Link>
 
       <header className="mt-3 flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
@@ -321,26 +313,20 @@ export default function AdminPluginDetailPage() {
             </h1>
             {detail.isActive ? (
               <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                active
+                {t("state.active")}
               </span>
             ) : (
               <span className="rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-muted">
-                retired
+                {t("state.retired")}
               </span>
             )}
           </div>
           <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ink-muted">
             <span className="font-mono">{detail.pluginKey}</span>
-            <span>{PLUGIN_KIND_LABELS[detail.kind] ?? detail.kind}</span>
-            <span>provider {detail.provider}</span>
-            <span>
-              {numberFormatter.format(detail.installationCount)} install
-              {detail.installationCount === 1 ? "" : "s"}
-            </span>
-            <span>
-              {numberFormatter.format(detail.connectionCount)} connection
-              {detail.connectionCount === 1 ? "" : "s"}
-            </span>
+            <span>{t(detail.kind === "native" ? "kindLabels.native" : "kindLabels.mcp")}</span>
+            <span>{t("providerLabel", { provider: detail.provider })}</span>
+            <span>{t("installsCount", { count: detail.installationCount })}</span>
+            <span>{t("connectionsCount", { count: detail.connectionCount })}</span>
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -351,7 +337,7 @@ export default function AdminPluginDetailPage() {
             disabled={detailQuery.isFetching}
           >
             <ArrowsClockwise size={14} className={cn(detailQuery.isFetching && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
           {supportsRediscovery(detail.kind) ? (
             <Button
@@ -361,7 +347,7 @@ export default function AdminPluginDetailPage() {
               disabled={rediscoverMutation.isPending}
             >
               <ClockCounterClockwise size={14} />
-              {rediscoverMutation.isPending ? "Clearing…" : "Re-run discovery"}
+              {rediscoverMutation.isPending ? t("clearing") : t("rediscover")}
             </Button>
           ) : null}
           <Button
@@ -371,7 +357,7 @@ export default function AdminPluginDetailPage() {
             disabled={activationMutation.isPending}
           >
             {detail.isActive ? <Prohibit size={14} /> : null}
-            {detail.isActive ? "Retire" : "Activate"}
+            {detail.isActive ? t("retire") : t("activate")}
           </Button>
         </div>
       </header>
@@ -381,8 +367,8 @@ export default function AdminPluginDetailPage() {
           <div className="flex items-start gap-3 px-4 py-3 text-[13px]">
             <Warning size={16} weight="duotone" className="mt-0.5 shrink-0 text-amber-600" />
             <div>
-              <p className="font-medium">This row cannot complete an OAuth connect.</p>
-              <p className="mt-1 text-ink-muted">{MISSING_CLIENT_ID_EXPLANATION}</p>
+              <p className="font-medium">{t("cannotConnectBanner.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("cannotConnectBanner.body")}</p>
             </div>
           </div>
         </AdminPanel>
@@ -394,14 +380,17 @@ export default function AdminPluginDetailPage() {
           so a re-seeded detail was invisible to fields initialised with useState. That is what
           useSeededField above handles, per field. */}
       <MetadataSection key={`meta-${detail.pluginKey}`} detail={detail} />
-      <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
+      {detail.kind === "mcp" ? <AuthModeSection key={`auth-${detail.pluginKey}`} detail={detail} /> : null}
+      {detail.oAuthClientSource === "api_key" ? null : (
+        <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
+      )}
       <ToolsSection key={`tools-${detail.pluginKey}`} detail={detail} />
 
       <SectionHeading
         icon={<ClockCounterClockwise size={14} weight="duotone" />}
-        title="Tool calls"
+        title={t("audits.heading")}
         note={
-          audits ? `${numberFormatter.format(audits.totalCount)} recorded` : undefined
+          audits ? t("audits.recordedCount", { count: numberFormatter.format(audits.totalCount) }) : undefined
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -411,12 +400,12 @@ export default function AdminPluginDetailPage() {
             setAuditOutcome(event.target.value);
             setAuditPage(1);
           }}
-          placeholder="Filter by outcome, e.g. success or missing_scope"
-          aria-label="Filter recorded tool calls by outcome"
+          placeholder={t("audits.filterPlaceholder")}
+          aria-label={t("audits.filterAria")}
           className="max-w-xs"
         />
         {auditsQuery.isFetching ? (
-          <span className="text-[11px] text-ink-muted">Loading…</span>
+          <span className="text-[11px] text-ink-muted">{t("audits.loading")}</span>
         ) : null}
       </div>
       <AdminPanel>
@@ -428,9 +417,9 @@ export default function AdminPluginDetailPage() {
               className="mt-0.5 shrink-0 text-destructive"
             />
             <div>
-              <p className="font-medium">The tool-call record could not be loaded.</p>
+              <p className="font-medium">{t("audits.error.title")}</p>
               <p className="mt-1 text-ink-muted">
-                {failureMessage(auditsQuery.error, "The assistant service did not answer.")}
+                {failureMessage(auditsQuery.error, t("loadError.fallback"))}
               </p>
               <Button
                 variant="outline"
@@ -438,7 +427,7 @@ export default function AdminPluginDetailPage() {
                 className="mt-3"
                 onClick={() => void auditsQuery.refetch()}
               >
-                Try again
+                {t("audits.error.tryAgain")}
               </Button>
             </div>
           </div>
@@ -452,9 +441,7 @@ export default function AdminPluginDetailPage() {
           </ul>
         ) : !audits || audits.items.length === 0 ? (
           <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            {auditOutcome.trim().length > 0
-              ? "No recorded call matches that outcome."
-              : "Nothing has called a tool on this plugin yet."}
+            {auditOutcome.trim().length > 0 ? t("audits.emptyFiltered") : t("audits.emptyAll")}
           </p>
         ) : (
           <ul>
@@ -466,9 +453,7 @@ export default function AdminPluginDetailPage() {
       </AdminPanel>
       {audits && audits.totalCount > audits.pageSize ? (
         <div className="mt-3 flex items-center justify-between text-[12px] text-ink-muted">
-          <span>
-            Page {audits.page} of {auditTotalPages}
-          </span>
+          <span>{t("audits.pageLabel", { page: audits.page, total: auditTotalPages })}</span>
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -476,7 +461,7 @@ export default function AdminPluginDetailPage() {
               disabled={audits.page <= 1}
               onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
             >
-              Previous
+              {t("audits.previous")}
             </Button>
             <Button
               variant="outline"
@@ -484,7 +469,7 @@ export default function AdminPluginDetailPage() {
               disabled={audits.page >= auditTotalPages}
               onClick={() => setAuditPage((page) => page + 1)}
             >
-              Next
+              {t("audits.next")}
             </Button>
           </div>
         </div>
@@ -497,17 +482,11 @@ export default function AdminPluginDetailPage() {
       />
 
       <p className="mt-6 text-[12px] text-ink-muted">
-        Edits are stamped with the account that made them.{" "}
+        {t("footer.prefix")}{" "}
         {detail.updatedBy ? (
-          <>
-            Last written by <span className="font-mono">{detail.updatedBy}</span> on{" "}
-            {formatDateTime(detail.updatedAt)}.
-          </>
+          t("footer.lastWrittenBy", { editor: detail.updatedBy, date: formatDateTime(detail.updatedAt) })
         ) : (
-          <>
-            This row has no recorded editor — it was last written by a migration, or by a token
-            carrying no usable subject. Created {formatDateTime(detail.createdAt)}.
-          </>
+          t("footer.noRecordedEditor", { date: formatDateTime(detail.createdAt) })
         )}
       </p>
     </AdminPage>
@@ -517,6 +496,7 @@ export default function AdminPluginDetailPage() {
 // ── Metadata ─────────────────────────────────────────────────────────────────
 
 function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
+  const t = useTranslations("adminPlugins.detail.metadata");
   const mutation = useUpdateAdminPlugin(detail.pluginKey);
 
   const label = useSeededField(detail.label);
@@ -593,9 +573,9 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
       // duplicates scopes and can normalise a value, and a form still showing what was typed would
       // hide all three.
       followRow();
-      toast.success("Plugin updated.");
+      toast.success(t("toast.updated"));
     } catch (error) {
-      reportFailure(error, "Could not save the plugin.");
+      reportFailure(error, t("toast.saveFail"));
     }
   };
 
@@ -603,12 +583,12 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
     <>
       <SectionHeading
         icon={<Cardholder size={14} weight="duotone" />}
-        title="Catalog entry"
-        note={changeCount > 0 ? `${changeCount} unsaved change${changeCount === 1 ? "" : "s"}` : undefined}
+        title={t("heading")}
+        note={changeCount > 0 ? t("unsavedChanges", { count: changeCount }) : undefined}
       />
       <AdminPanel>
         <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
-          <Field label="Label" htmlFor="plugin-label">
+          <Field label={t("label")} htmlFor="plugin-label">
             <Input
               id="plugin-label"
               value={label.value}
@@ -617,9 +597,9 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             />
           </Field>
           <Field
-            label="Category"
+            label={t("category.label")}
             htmlFor="plugin-category"
-            hint="Leave empty to clear it."
+            hint={t("category.hint")}
           >
             <Input
               id="plugin-category"
@@ -629,7 +609,7 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             />
           </Field>
           <div className="md:col-span-2">
-            <Field label="Description" htmlFor="plugin-description">
+            <Field label={t("description")} htmlFor="plugin-description">
               <Textarea
                 id="plugin-description"
                 value={description.value}
@@ -640,9 +620,9 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             </Field>
           </div>
           <Field
-            label="Avatar URL"
+            label={t("avatarUrl.label")}
             htmlFor="plugin-avatar"
-            hint="An http(s) URL or a site-relative path beginning with /. Empty clears it."
+            hint={t("avatarUrl.hint")}
           >
             <Input
               id="plugin-avatar"
@@ -651,9 +631,9 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             />
           </Field>
           <Field
-            label="Sort order"
+            label={t("sortOrder.label")}
             htmlFor="plugin-sort-order"
-            hint="The curated order the catalog renders. Ties break on label."
+            hint={t("sortOrder.hint")}
           >
             <Input
               id="plugin-sort-order"
@@ -666,9 +646,9 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
           {detail.kind === "mcp" ? (
             <div className="md:col-span-2">
               <Field
-                label="MCP server URL"
+                label={t("mcpServerUrl.label")}
                 htmlFor="plugin-mcp-url"
-                hint="An absolute https:// URL. It cannot be cleared on an MCP row."
+                hint={t("mcpServerUrl.hint")}
               >
                 <Input
                   id="plugin-mcp-url"
@@ -680,16 +660,15 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
           ) : (
             <div className="md:col-span-2">
               <p className="rounded-lg border border-hairline bg-surface-2/60 px-3 py-2 text-[12px] text-ink-muted">
-                A native row is served by compiled-in code, which never reads an MCP server URL — so
-                the field is not offered here. The server would refuse it anyway.
+                {t("nativeNote")}
               </p>
             </div>
           )}
           <div className="md:col-span-2">
             <Field
-              label="Required scopes"
+              label={t("requiredScopes.label")}
               htmlFor="plugin-scopes"
-              hint="One per line. Repeats are dropped by the server."
+              hint={t("requiredScopes.hint")}
             >
               <Textarea
                 id="plugin-scopes"
@@ -707,7 +686,7 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
               onCheckedChange={(checked: boolean) => isFeatured.set(checked)}
             />
             <Label htmlFor="plugin-featured" className="text-[12px]">
-              Featured in the user-facing catalog
+              {t("featuredLabel")}
             </Label>
           </div>
         </div>
@@ -718,10 +697,10 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
             disabled={changeCount === 0 || mutation.isPending}
             onClick={followRow}
           >
-            Discard
+            {t("discard")}
           </Button>
           <Button size="sm" disabled={changeCount === 0 || mutation.isPending} onClick={() => void submit()}>
-            {mutation.isPending ? "Saving…" : "Save changes"}
+            {mutation.isPending ? t("saving") : t("save")}
           </Button>
         </div>
       </AdminPanel>
@@ -742,7 +721,66 @@ function MetadataSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
  */
 type SecretMode = "keep" | "replace" | "clear";
 
+/**
+ * OAuth or a per-user API key. Switching ends every user's connection to the row, because the
+ * credential each of them holds belongs to the other mode; the server does that, this only warns.
+ */
+function AuthModeSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
+  const t = useTranslations("adminPlugins.detail.authMode");
+  const mutation = useUpdateAdminPlugin(detail.pluginKey);
+  const current = detail.oAuthClientSource === "api_key" ? "api_key" : "oauth";
+  const next = current === "api_key" ? "oauth" : "api_key";
+  const [confirming, setConfirming] = useState(false);
+
+  const submit = async () => {
+    try {
+      await mutation.mutateAsync({ authMode: next });
+      setConfirming(false);
+      toast.success(next === "api_key" ? t("toast.switchedToApiKey") : t("toast.switchedToOAuth"));
+    } catch (error) {
+      reportFailure(error, t("toast.switchFail"));
+    }
+  };
+
+  return (
+    <>
+      <SectionHeading
+        icon={<Key size={14} weight="duotone" />}
+        title={t("heading")}
+        note={current === "api_key" ? t("modeApiKey") : t("modeOAuth")}
+      />
+      <AdminPanel>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 text-[12px]">
+          <p className="max-w-xl leading-5 text-ink-muted">
+            {current === "api_key"
+              ? t("descriptionApiKey")
+              : t("descriptionOAuth")}
+          </p>
+          {confirming ? (
+            <div className="flex items-center gap-2">
+              <span className="text-amber-700 dark:text-amber-400">
+                {t("confirmWarning", { label: detail.label })}
+              </span>
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={mutation.isPending}>
+                {t("cancel")}
+              </Button>
+              <Button size="sm" onClick={() => void submit()} disabled={mutation.isPending}>
+                {t("switch")}
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+              {next === "api_key" ? t("switchToApiKey") : t("switchToOAuth")}
+            </Button>
+          )}
+        </div>
+      </AdminPanel>
+    </>
+  );
+}
+
 function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
+  const t = useTranslations("adminPlugins.detail.oauth");
   const mutation = useSetAdminPluginOAuthClient(detail.pluginKey);
 
   // Every one of these follows a re-seeded row while it is untouched, which is the whole of the
@@ -780,11 +818,11 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
   const submit = async () => {
     const trimmedId = clientId.value.trim();
     if (trimmedId.length === 0) {
-      toast.error("A client id is required. Clearing one is not something this endpoint does.");
+      toast.error(t("toast.clientIdRequired"));
       return;
     }
     if (secretMode === "replace" && secret.length === 0) {
-      toast.error("Type the new client secret, or choose to keep or clear the stored one.");
+      toast.error(t("toast.secretRequired"));
       return;
     }
 
@@ -805,13 +843,13 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
       followRow();
       toast.success(
         secretMode === "clear"
-          ? "OAuth client saved and the stored secret cleared."
+          ? t("toast.savedCleared")
           : secretMode === "replace"
-            ? "OAuth client and secret saved."
-            : "OAuth client saved. The stored secret was left alone.",
+            ? t("toast.savedReplaced")
+            : t("toast.savedKept"),
       );
     } catch (error) {
-      reportFailure(error, "Could not save the OAuth client.");
+      reportFailure(error, t("toast.saveFail"));
     }
   };
 
@@ -819,19 +857,19 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
     <>
       <SectionHeading
         icon={<Key size={14} weight="duotone" />}
-        title="OAuth client"
-        note={OAUTH_CLIENT_SOURCE_LABELS[detail.oAuthClientSource] ?? detail.oAuthClientSource}
+        title={t("heading")}
+        note={t(`sourceLabels.${detail.oAuthClientSource}`)}
       />
       <AdminPanel>
         <div className="grid gap-3 border-b border-hairline/60 px-4 py-4 text-[12px] sm:grid-cols-3">
           <div>
-            <p className="text-[11px] font-medium text-ink-muted">Client id</p>
+            <p className="text-[11px] font-medium text-ink-muted">{t("clientIdSummary")}</p>
             <p className="mt-1 break-all font-mono text-[12px] text-ink">
-              {detail.oAuthClientId ?? "not set"}
+              {detail.oAuthClientId ?? t("clientIdNotSet")}
             </p>
           </div>
           <div>
-            <p className="text-[11px] font-medium text-ink-muted">Client secret</p>
+            <p className="text-[11px] font-medium text-ink-muted">{t("clientSecretSummary")}</p>
             {/* Never a value, never a mask of a value — the service does not return one in any
                 form. The only two facts it exposes are that a secret exists and, to the precision
                 the schema allows, when the row was last written. */}
@@ -840,55 +878,42 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                 <>
                   <span className="font-mono">•••••••••</span>{" "}
                   <span className="text-ink-muted">
-                    stored, row last written {formatDateTime(detail.credentialsUpdatedAt)}
+                    {t("clientSecretStored", { date: formatDateTime(detail.credentialsUpdatedAt) })}
                   </span>
                 </>
               ) : (
-                <span className="text-ink-muted">none stored — a public client</span>
+                <span className="text-ink-muted">{t("clientSecretNone")}</span>
               )}
             </p>
           </div>
           <div>
-            <p className="text-[11px] font-medium text-ink-muted">Token endpoint auth</p>
+            <p className="text-[11px] font-medium text-ink-muted">{t("tokenEndpointAuthSummary")}</p>
             <p className="mt-1 font-mono text-[12px] text-ink">
-              {detail.oAuthTokenEndpointAuthMethod ?? "not negotiated"}
+              {detail.oAuthTokenEndpointAuthMethod ?? t("tokenEndpointAuthNotNegotiated")}
             </p>
           </div>
         </div>
 
         <p className="border-b border-hairline/60 px-4 py-2.5 text-[11px] text-ink-muted">
-          {OAUTH_CLIENT_SOURCE_NOTES[detail.oAuthClientSource] ?? ""}
+          {t(`sourceNotes.${detail.oAuthClientSource}`)}
           {detail.oAuthRegistrationEndpoint ? (
-            <>
-              {" "}
-              Registration endpoint:{" "}
-              <span className="font-mono">{detail.oAuthRegistrationEndpoint}</span>.
-            </>
+            <> {t("registrationEndpointLabel", { endpoint: detail.oAuthRegistrationEndpoint })}</>
           ) : null}
         </p>
 
         {!catalogOwns ? (
           <div className="px-4 py-5 text-[13px]">
-            <p className="font-medium text-ink">
-              This plugin&rsquo;s OAuth client is not in the catalog.
-            </p>
-            <p className="mt-1.5 max-w-2xl text-[12px] leading-6 text-ink-muted">
-              A <span className="font-mono">native</span> row is served by compiled-in code that
-              reads its client id and secret from service configuration. The server refuses to write
-              them here, and offering the form anyway would let someone chasing an empty{" "}
-              <span className="font-mono">client_id</span> type one in, watch it save, and believe
-              the problem fixed while nothing had changed. Set it in the environment the assistant
-              service runs with instead.
-            </p>
+            <p className="font-medium text-ink">{t("native.title")}</p>
+            <p className="mt-1.5 max-w-2xl text-[12px] leading-6 text-ink-muted">{t("native.body")}</p>
           </div>
         ) : (
           <>
             <div className="grid gap-4 px-4 py-4 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Field
-                  label="Client id"
+                  label={t("clientId.label")}
                   htmlFor="oauth-client-id"
-                  hint="Saving marks this row pre-registered. A client id is public by construction — it travels in every authorization URL the browser follows."
+                  hint={t("clientId.hint")}
                 >
                   <Input
                     id="oauth-client-id"
@@ -901,7 +926,7 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
               </div>
 
               <div className="md:col-span-2 space-y-2">
-                <p className="text-[12px] font-medium">Client secret</p>
+                <p className="text-[12px] font-medium">{t("clientSecretHeading")}</p>
                 <div className="flex flex-col gap-1.5">
                   <label className="flex items-center gap-2 text-[12px] text-ink-muted">
                     <input
@@ -912,8 +937,8 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                       onChange={() => setSecretMode("keep")}
                     />
                     {detail.hasClientSecret
-                      ? "Keep the stored secret"
-                      : "Leave it unset — this row has no secret"}
+                      ? t("secretMode.keepStored")
+                      : t("secretMode.leaveUnset")}
                   </label>
                   <label className="flex items-center gap-2 text-[12px] text-ink-muted">
                     <input
@@ -923,7 +948,7 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                       checked={secretMode === "replace"}
                       onChange={() => setSecretMode("replace")}
                     />
-                    {detail.hasClientSecret ? "Replace it" : "Set one"}
+                    {detail.hasClientSecret ? t("secretMode.replace") : t("secretMode.setOne")}
                   </label>
                   <label
                     className={cn(
@@ -939,7 +964,7 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                       checked={secretMode === "clear"}
                       onChange={() => setSecretMode("clear")}
                     />
-                    Clear the stored secret
+                    {t("secretMode.clearStored")}
                   </label>
                 </div>
                 {secretMode === "replace" ? (
@@ -948,23 +973,19 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                     type="password"
                     value={secret}
                     autoComplete="new-password"
-                    placeholder="The new client secret"
-                    aria-label="New client secret"
+                    placeholder={t("secretPlaceholder")}
+                    aria-label={t("secretAria")}
                     className="font-mono text-[12px]"
                     onChange={(event) => setSecret(event.target.value)}
                   />
                 ) : null}
-                <p className="text-[11px] leading-5 text-ink-muted">
-                  A secret goes in and does not come back. Nothing on this screen can show you the
-                  stored one, so &ldquo;keep&rdquo; is the default: rotating an id must not wipe a
-                  secret merely because the field beneath it was blank.
-                </p>
+                <p className="text-[11px] leading-5 text-ink-muted">{t("secretHint")}</p>
               </div>
 
               <Field
-                label="Authorization endpoint"
+                label={t("authorizationEndpoint.label")}
                 htmlFor="oauth-authorization-endpoint"
-                hint="Optional. Blank leaves whatever discovery cached."
+                hint={t("authorizationEndpoint.hint")}
               >
                 <Input
                   id="oauth-authorization-endpoint"
@@ -973,7 +994,11 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                   onChange={(event) => authorizationEndpoint.set(event.target.value)}
                 />
               </Field>
-              <Field label="Token endpoint" htmlFor="oauth-token-endpoint" hint="Optional.">
+              <Field
+                label={t("tokenEndpoint.label")}
+                htmlFor="oauth-token-endpoint"
+                hint={t("tokenEndpoint.hint")}
+              >
                 <Input
                   id="oauth-token-endpoint"
                   value={tokenEndpoint.value}
@@ -982,7 +1007,11 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                 />
               </Field>
               <div className="md:col-span-2">
-                <Field label="Revoke endpoint" htmlFor="oauth-revoke-endpoint" hint="Optional.">
+                <Field
+                  label={t("revokeEndpoint.label")}
+                  htmlFor="oauth-revoke-endpoint"
+                  hint={t("revokeEndpoint.hint")}
+                >
                   <Input
                     id="oauth-revoke-endpoint"
                     value={revokeEndpoint.value}
@@ -997,9 +1026,7 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                   run is how they learn a field they had typed into is now contradicted by what the
                   server found, rather than learning it by overwriting it. */}
               <span className="text-[11px] text-ink-muted">
-                {dirtyCount > 0
-                  ? `${dirtyCount} field${dirtyCount === 1 ? "" : "s"} differ${dirtyCount === 1 ? "s" : ""} from the stored row.`
-                  : ""}
+                {dirtyCount > 0 ? t("dirtyCount", { count: dirtyCount }) : ""}
               </span>
               <div className="flex gap-2">
                 <Button
@@ -1008,10 +1035,10 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                   disabled={dirtyCount === 0 || mutation.isPending}
                   onClick={followRow}
                 >
-                  Discard
+                  {t("discard")}
                 </Button>
                 <Button size="sm" disabled={mutation.isPending} onClick={() => void submit()}>
-                  {mutation.isPending ? "Saving…" : "Save OAuth client"}
+                  {mutation.isPending ? t("saving") : t("save")}
                 </Button>
               </div>
             </div>
@@ -1025,6 +1052,7 @@ function OAuthSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
 // ── Tools ────────────────────────────────────────────────────────────────────
 
 function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
+  const t = useTranslations("adminPlugins.detail.tools");
   const mutation = useReplaceAdminPluginTools(detail.pluginKey);
   const stored = useMemo(() => formatToolManifest(detail.tools), [detail.tools]);
   // Follows a re-seeded row while untouched: after "Re-run discovery" reads a new tools/list, an
@@ -1038,7 +1066,7 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
   const validate = (): boolean => {
     const result = parseToolManifest(manifest.value);
     setErrors(result.ok ? [] : result.errors);
-    if (result.ok) toast.success("The manifest is valid.");
+    if (result.ok) toast.success(t("toast.valid"));
     return result.ok;
   };
 
@@ -1049,9 +1077,7 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
       // Checked here as well as on the server because PUT replaces the manifest wholesale: one bad
       // entry would otherwise cost a round trip to learn about, and there is no partial success to
       // fall back on.
-      toast.error(
-        `The manifest has ${result.errors.length} problem${result.errors.length === 1 ? "" : "s"}. Nothing was sent.`,
-      );
+      toast.error(t("toast.problems", { count: result.errors.length }));
       return;
     }
 
@@ -1064,15 +1090,15 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
       manifest.reset();
       toast.success(
         saved.tools.length === 0
-          ? "Manifest replaced. This plugin now advertises no tools."
-          : `Manifest replaced — ${saved.tools.length} tool${saved.tools.length === 1 ? "" : "s"}.`,
+          ? t("toast.replacedEmpty")
+          : t("toast.replacedCount", { count: saved.tools.length }),
       );
     } catch (error) {
       const code = catalogErrorCode(error);
       if (code === "invalid_tool_manifest") {
-        setErrors([failureMessage(error, "The server rejected the manifest.")]);
+        setErrors([failureMessage(error, t("toast.invalidFallback"))]);
       }
-      reportFailure(error, "Could not replace the tool manifest.");
+      reportFailure(error, t("toast.replaceFail"));
     }
   };
 
@@ -1080,26 +1106,21 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
     <>
       <SectionHeading
         icon={<Wrench size={14} weight="duotone" />}
-        title="Tool manifest"
+        title={t("heading")}
         note={
           detail.toolsSyncedAt
-            ? `last read from the server ${formatDateTime(detail.toolsSyncedAt)}`
-            : "hand-authored — never confirmed by a tools/list"
+            ? t("lastRead", { date: formatDateTime(detail.toolsSyncedAt) })
+            : t("neverConfirmed")
         }
       />
       <AdminPanel>
         <div className="px-4 py-4">
-          <p className="mb-2 text-[11px] leading-5 text-ink-muted">
-            The whole manifest, replaced in one write. <span className="font-mono">pluginKey</span>{" "}
-            is stamped from the route and must not appear here. Saving clears the{" "}
-            <span className="font-mono">tools_synced_at</span> marker, because a hand edit is not a
-            successful <span className="font-mono">tools/list</span> and should not look like one.
-          </p>
+          <p className="mb-2 text-[11px] leading-5 text-ink-muted">{t("intro")}</p>
           <Textarea
             value={manifest.value}
             rows={16}
             spellCheck={false}
-            aria-label="Tool manifest JSON"
+            aria-label={t("textareaAria")}
             aria-invalid={errors.length > 0}
             className="font-mono text-[12px] leading-5"
             onChange={(event) => {
@@ -1117,8 +1138,8 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-hairline/60 px-4 py-3">
           <span className="text-[11px] text-ink-muted">
-            {detail.tools.length} tool{detail.tools.length === 1 ? "" : "s"} stored
-            {dirty ? " — the editor differs from them" : ""}
+            {t("storedCount", { count: detail.tools.length })}
+            {dirty ? t("editorDiffers") : ""}
           </span>
           <div className="flex gap-2">
             <Button
@@ -1130,13 +1151,13 @@ function ToolsSection({ detail }: { detail: AdminPluginCatalogDetailDto }) {
                 setErrors([]);
               }}
             >
-              Discard
+              {t("discard")}
             </Button>
             <Button variant="outline" size="sm" onClick={() => validate()}>
-              Validate
+              {t("validate")}
             </Button>
             <Button size="sm" disabled={mutation.isPending} onClick={() => void submit()}>
-              {mutation.isPending ? "Replacing…" : "Replace manifest"}
+              {mutation.isPending ? t("replacing") : t("replace")}
             </Button>
           </div>
         </div>
@@ -1154,7 +1175,27 @@ const OUTCOME_TONE_CLASSES: Record<PluginToolOutcomeTone, string> = {
   failed: "border-destructive/25 bg-destructive/10 text-destructive",
 };
 
+/** Codes from `PluginConstants.ErrorCodes` that map to a "Provider error" label rather than a
+ *  plain "Failed" — mirrors the grouping `describePluginToolOutcome` applies, since that function
+ *  returns only the tone plus the raw code, not a translation key. */
+const PROVIDER_ERROR_TOOL_CODES = new Set([
+  "provider_rate_limited",
+  "provider_unavailable",
+  "provider_configuration",
+]);
+
+function outcomeLabelKey(outcome: PluginToolOutcome): string {
+  if (outcome.tone === "attention") {
+    return outcome.code === "confirmation_required" ? "attentionConfirmation" : "attentionSetup";
+  }
+  if (outcome.tone === "failed") {
+    return outcome.code && PROVIDER_ERROR_TOOL_CODES.has(outcome.code) ? "providerError" : "failed";
+  }
+  return outcome.tone;
+}
+
 function AuditRow({ entry }: { entry: AdminPluginToolAuditEntryDto }) {
+  const t = useTranslations("adminPlugins.detail.audits");
   const outcome = describePluginToolOutcome(entry.resultStatus);
   return (
     <li className="border-b border-hairline/60 px-4 py-2.5 text-[12px] last:border-b-0">
@@ -1166,7 +1207,7 @@ function AuditRow({ entry }: { entry: AdminPluginToolAuditEntryDto }) {
             OUTCOME_TONE_CLASSES[outcome.tone],
           )}
         >
-          {outcome.label}
+          {t(`outcomeLabels.${outcomeLabelKey(outcome)}` as "outcomeLabels.success")}
         </span>
         {outcome.code ? (
           <span className="font-mono text-[11px] text-ink-muted">{outcome.code}</span>
@@ -1192,6 +1233,7 @@ function DangerSection({
   detail: AdminPluginCatalogDetailDto;
   onHardDeleted: () => void;
 }) {
+  const t = useTranslations("adminPlugins.detail.danger");
   const mutation = useDeleteAdminPlugin(detail.pluginKey);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -1202,45 +1244,35 @@ function DangerSection({
       const result = await mutation.mutateAsync(true);
       setConfirmOpen(false);
       if (result.hardDeleted) {
-        toast.success(`${detail.pluginKey} was deleted.`);
+        toast.success(t("toast.deleted", { key: detail.pluginKey }));
         onHardDeleted();
       } else {
         // The server answers a soft delete the same way; saying so is better than claiming a
         // deletion that did not happen.
-        toast.success(`${detail.pluginKey} was retired rather than deleted.`);
+        toast.success(t("toast.retiredInstead", { key: detail.pluginKey }));
       }
     } catch (error) {
       reportFailure(
         error,
-        catalogErrorCode(error) === "plugin_in_use"
-          ? "This plugin is still referenced and cannot be hard-deleted."
-          : "Could not delete the plugin.",
+        catalogErrorCode(error) === "plugin_in_use" ? t("toast.inUseFail") : t("toast.deleteFail"),
       );
     }
   };
 
   return (
     <>
-      <SectionHeading icon={<Trash size={14} weight="duotone" />} title="Delete" />
+      <SectionHeading icon={<Trash size={14} weight="duotone" />} title={t("heading")} />
       <AdminPanel className="border-destructive/25">
         <div className="flex flex-col gap-3 px-4 py-4 text-[13px] sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">
-            <p className="font-medium">Remove this row from the catalog entirely.</p>
+            <p className="font-medium">{t("title")}</p>
             <p className="mt-1 text-[12px] leading-5 text-ink-muted">
-              {referenced ? (
-                <>
-                  Refused while anything references it — {numberFormatter.format(detail.installationCount)}{" "}
-                  installation{detail.installationCount === 1 ? "" : "s"} and{" "}
-                  {numberFormatter.format(detail.connectionCount)} connection
-                  {detail.connectionCount === 1 ? "" : "s"} still do. Retire it instead: a retired
-                  row is hidden from every catalog while those references stay intact.
-                </>
-              ) : (
-                <>
-                  Nothing references this row, so it can be deleted outright. Retiring it is still
-                  the reversible option.
-                </>
-              )}
+              {referenced
+                ? t("referencedBody", {
+                    installs: detail.installationCount,
+                    connections: detail.connectionCount,
+                  })
+                : t("notReferencedBody")}
             </p>
           </div>
           <Button
@@ -1251,7 +1283,7 @@ function DangerSection({
             onClick={() => setConfirmOpen(true)}
           >
             <Trash size={14} />
-            Delete permanently
+            {t("deleteButton")}
           </Button>
         </div>
       </AdminPanel>
@@ -1262,11 +1294,9 @@ function DangerSection({
       >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Delete {detail.label}?</DialogTitle>
+            <DialogTitle>{t("dialog.title", { label: detail.label })}</DialogTitle>
             <DialogDescription>
-              <span className="font-mono text-ink">{detail.pluginKey}</span> will be removed from
-              the catalog along with its tool manifest and any stored OAuth client. Its recorded
-              tool calls are not deleted. This cannot be undone from this screen.
+              {t("dialog.description", { key: detail.pluginKey })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1275,14 +1305,14 @@ function DangerSection({
               onClick={() => setConfirmOpen(false)}
               disabled={mutation.isPending}
             >
-              Cancel
+              {t("dialog.cancel")}
             </Button>
             <Button
               className="bg-destructive text-white hover:bg-destructive/90"
               disabled={mutation.isPending}
               onClick={() => void hardDelete()}
             >
-              {mutation.isPending ? "Deleting…" : "Delete permanently"}
+              {mutation.isPending ? t("dialog.deleting") : t("dialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>

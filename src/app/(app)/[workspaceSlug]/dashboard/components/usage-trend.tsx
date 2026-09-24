@@ -24,6 +24,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useTranslations } from "next-intl";
 
 import type { MonthlyUsagePoint } from "@/types/billing";
 
@@ -50,6 +51,8 @@ export function UsageTrend({
   /** Shown instead of the axes when there is nothing to plot — an empty grid is not a chart. */
   emptyMessage?: string;
 }) {
+  const t = useTranslations("dashboard.usageTrend");
+  const tDashboard = useTranslations("dashboard");
   const data = monthlyData.map((point) => ({
     label: point.monthName.slice(0, 3),
     consumed: point.consumedCredits,
@@ -68,7 +71,7 @@ export function UsageTrend({
       <div className="relative h-[220px] w-full">
         {!hasAnything ? (
           <p className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-center text-[12px] text-ink-muted">
-            {emptyMessage ?? `No credits used or added in ${year}.`}
+            {emptyMessage ?? tDashboard("usageEmptyForYear", { year })}
           </p>
         ) : null}
         <ResponsiveContainer width="100%" height="100%">
@@ -123,8 +126,8 @@ export function UsageTrend({
 
       {/* A recharts <Legend> adds 20px of padding and its own font stack to say two words. */}
       <div className="mt-2 flex items-center gap-4 text-[12px] text-ink-muted">
-        <Key color={CONSUMED} label="Consumed" />
-        <Key color={TOPPED_UP} label="Topped up" />
+        <Key color={CONSUMED} label={t("consumed")} />
+        <Key color={TOPPED_UP} label={t("toppedUp")} />
       </div>
     </>
   );
@@ -148,6 +151,7 @@ function TrendTooltip({
   payload?: { dataKey?: string | number; value?: number }[];
   label?: string | number;
 }) {
+  const t = useTranslations("dashboard.usageTrend");
   if (!active || !payload?.length) return null;
 
   const consumed = payload.find((entry) => entry.dataKey === "consumed")?.value ?? 0;
@@ -157,10 +161,10 @@ function TrendTooltip({
     <div className="rounded-lg border border-border bg-surface-1 px-2.5 py-2 text-[12px] shadow-linear">
       <p className="font-medium text-ink">{label}</p>
       <p className="mt-1 text-ink-muted">
-        <span className="tabular-nums text-ink">{consumed.toLocaleString()}</span> consumed
+        <span className="tabular-nums text-ink">{consumed.toLocaleString()}</span> {t("tooltipConsumed")}
       </p>
       <p className="text-ink-muted">
-        <span className="tabular-nums text-ink">{toppedUp.toLocaleString()}</span> topped up
+        <span className="tabular-nums text-ink">{toppedUp.toLocaleString()}</span> {t("tooltipToppedUp")}
       </p>
     </div>
   );

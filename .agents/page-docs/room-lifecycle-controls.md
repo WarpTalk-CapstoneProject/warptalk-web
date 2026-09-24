@@ -140,3 +140,15 @@ Both endpoints should validate host ownership and legal transitions.
 - Run `npm run test:recording-control`.
 - Run `npm run test:track-processors`.
 - Run `npm run test:2807-hotfix`.
+
+## Transcript Pause
+
+- Hosts can pause or resume transcript writing without stopping translation, dubbing, subtitles, or
+  the LiveKit conversation.
+- Participants learn the live state from `TranscriptPaused` / `TranscriptResumed` broadcasts.
+  A participant who joins during an existing pause learns it from the pause-window query.
+- A broadcast outranks an older in-flight pause-window response, and the event state is cleared on
+  hub reconnect so the next refetch can recover events missed while disconnected.
+- The meeting UI does not claim that the transcript is running until it has received either a
+  pause-window response or a broadcast.
+- Run `npm run test:transcript-pause`.

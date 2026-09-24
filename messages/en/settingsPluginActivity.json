@@ -1,0 +1,43 @@
+{
+  "accessDenied": {
+    "title": "Access Denied",
+    "description": "Only workspace Owners and Administrators can view plugin activity."
+  },
+  "loadError": {
+    "title": "Couldn't load plugin activity",
+    "description": "Retry, and if it keeps failing check that the assistant service is reachable."
+  },
+  "retrying": "Retrying…",
+  "retry": "Retry",
+  "allPlugins": "All plugins",
+  "allMembers": "All members",
+  "memberFallback": "Member",
+  "empty": {
+    "noMoreTitle": "No more activity",
+    "noMoreDescription": "That was the last page.",
+    "noMatchTitle": "No activity matches these filters",
+    "noMatchDescription": "Clear a filter to see more.",
+    "noActivityTitle": "No plugin activity yet",
+    "noActivityDescription": "When WarpBot runs a plugin tool for someone in this workspace, it is listed here."
+  },
+  "table": {
+    "time": "Time",
+    "member": "Member",
+    "plugin": "Plugin",
+    "tool": "Tool",
+    "result": "Result"
+  },
+  "noLongerMember": "No longer a member",
+  "page": "Page {page}",
+  "previous": "Previous",
+  "next": "Next",
+  "outcome": {
+    "succeeded": "Succeeded",
+    "blocked": "Blocked",
+    "awaitingConfirmation": "Awaiting confirmation",
+    "needsSetup": "Needs setup",
+    "providerError": "Provider error",
+    "failed": "Failed"
+  },
+  "formerMember": "Former member"
+}

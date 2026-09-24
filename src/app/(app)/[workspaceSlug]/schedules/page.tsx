@@ -13,7 +13,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { enGB } from "date-fns/locale";
+import { useLocale, useTranslations } from "next-intl";
 import {
   CalendarBlank,
   CaretLeft,
@@ -45,7 +45,7 @@ import {
   AgendaWeekStrip,
 } from "@/components/schedules/agenda-navigator";
 import { AgendaRow } from "@/components/schedules/agenda-row";
-import { MeetingStateIcon } from "@/components/schedules/meeting-state-icon";
+import { MeetingStateIcon, useMeetingStateLabel } from "@/components/schedules/meeting-state-icon";
 import { GoogleMeetMark, isGoogleMeetMeeting } from "@/components/meeting/google-meet-mark";
 import { useMeetingsInRange } from "@/hooks/use-my-meetings";
 import { agendaDayKey, type TimedMeeting } from "@/lib/meeting/agenda-sections";
@@ -55,16 +55,15 @@ import {
   canDownloadArtifact,
 } from "@/lib/meeting/meeting-artifacts";
 import { endOfMonth, shiftWeeks, startOfMonth, weekOf } from "@/lib/meeting/meeting-day";
-import {
-  meetingDisplayState,
-  meetingStateLabel,
-} from "@/lib/meeting/meeting-display-state";
+import { meetingDisplayState } from "@/lib/meeting/meeting-display-state";
 import { resolveMeetingTimeState } from "@/lib/meeting/meeting-time-state";
+import { dateFnsCalendarLocale, intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { formatLanguageRoute } from "@/lib/language/languages";
 import { getErrorMessage } from "@/lib/api/errors";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { UserChip } from "@/components/user/user-chip";
 import { cn } from "@/lib/utils";
+import { releaseArtifactIfPermitted } from "@/lib/meeting/artifact-consent";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { readScheduleFocus, schedulesPath } from "@/lib/workspace/workspace-routes";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -107,13 +106,10 @@ type CalendarView = "agenda" | "month" | "week";
 
 const calendarViews: CalendarView[] = ["agenda", "month", "week"];
 
-const timeFilters: Array<{ value: TimeFilter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "upcoming", label: "Upcoming" },
-  { value: "joined", label: "Joined" },
-];
+// The DISPLAY label is translated per view; `value` stays the literal `TimeFilter` union member
+// and must never be swapped for a translated string — see the `TimeFilter` comment above.
+const timeFilterValues: TimeFilter[] = ["all", "upcoming", "joined"];
 const EMPTY_MEETINGS: TimedMeeting[] = [];
-const APP_CALENDAR_LOCALE = "en-GB";
 
 /**
  * How a month cell packs its rows — and why there are no pixel numbers here any more.
@@ -176,6 +172,8 @@ const MONTH_FIT_TOLERANCE_PX = 0.001;
 export default function CalendarPage() {
   const params = useParams();
   const router = useRouter();
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const workspaceSlug = params?.workspaceSlug as string;
   const activeWorkspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
 
@@ -435,20 +433,22 @@ export default function CalendarPage() {
 
   async function downloadArtifact(artifact: RoomHistoryArtifact) {
     if (!canDownloadArtifact(artifact)) {
-      toast.error("This output is not ready to download.");
+      toast.error(t("toasts.downloadNotReady"));
       return;
     }
 
     setBusyArtifactId(artifact.id);
     try {
-      if (artifact.consentRequired) {
-        await translationRoomService.approveArtifactConsent(artifact.id);
-      }
+      // WT-824: only the host can release a consent-held recording; for anyone else the release
+      // is refused and the download itself says whether the host has released it.
+      const released = artifact.consentRequired
+        ? await releaseArtifactIfPermitted(artifact.id)
+        : false;
       const { data } = await translationRoomService.artifactDownload(artifact.id);
       openArtifactDownload(data);
-      if (artifact.consentRequired) await meetings.refetch();
+      if (released) await meetings.refetch();
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not download this output."));
+      toast.error(getErrorMessage(error, t("toasts.downloadFailed")));
     } finally {
       setBusyArtifactId(null);
     }
@@ -464,17 +464,16 @@ export default function CalendarPage() {
   const rangeNotices = (
     <>
       {meetings.isPartial ? (
-        <p className="text-[10px] leading-4 text-amber-700">
-          This week crosses two months and one of them failed to load, so some meetings may be
-          missing.
-        </p>
+        <p className="text-[10px] leading-4 text-amber-700">{t("notices.partialWeek")}</p>
       ) : null}
 
       {truncated ? (
         <p className="text-[10px] leading-4 text-ink-subtle">
-          Showing {fetched.length} of {meetings.data?.total} meetings in{" "}
-          {view === "week" ? "these weeks' months" : "this month"}. Narrow the search to see the
-          rest.
+          {t("notices.truncated", {
+            shown: fetched.length,
+            total: meetings.data?.total ?? 0,
+            scope: view === "week" ? t("notices.scopeWeek") : t("notices.scopeMonth"),
+          })}
         </p>
       ) : null}
     </>
@@ -508,7 +507,7 @@ export default function CalendarPage() {
           <ExpandingSearchDock
             value={query}
             onValueChange={setQuery}
-            placeholder="Search title, code, or description"
+            placeholder={t("search.placeholder")}
             expandedWidth={300}
           />
 
@@ -519,7 +518,7 @@ export default function CalendarPage() {
           <div
             className="flex h-9 shrink-0 items-center gap-0.5 rounded-md border border-border bg-surface-2/60 p-0.5"
             role="tablist"
-            aria-label="Calendar view"
+            aria-label={t("ariaLabels.calendarView")}
           >
             {calendarViews.map((value) => (
               <button
@@ -534,13 +533,13 @@ export default function CalendarPage() {
                   setSelectedDayKey(null);
                 }}
                 className={cn(
-                  "h-8 rounded px-3 text-[12px] font-medium capitalize transition-colors",
+                  "h-8 shrink-0 truncate rounded px-3 text-[12px] font-medium transition-colors",
                   view === value
                     ? "bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                     : "text-ink-muted hover:text-ink",
                 )}
               >
-                {value}
+                {t(`views.${value}`)}
               </button>
             ))}
           </div>
@@ -592,20 +591,20 @@ export default function CalendarPage() {
               <div className="mb-2 flex items-center justify-between px-1">
                 <button
                   type="button"
-                  aria-label={view === "week" ? "Previous week" : "Previous month"}
+                  aria-label={view === "week" ? t("ariaLabels.previousWeek") : t("ariaLabels.previousMonth")}
                   onClick={() => stepRange(-1)}
                   className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
                 >
                   <CaretLeft size={13} />
                 </button>
-                <span className="text-[12px] font-medium">
+                <span className="min-w-0 truncate text-[12px] font-medium">
                   {view === "week"
-                    ? formatWeekRange(weekDays)
-                    : monthAnchor.toLocaleDateString(APP_CALENDAR_LOCALE, { month: "long", year: "numeric" })}
+                    ? formatWeekRange(weekDays, locale)
+                    : monthAnchor.toLocaleDateString(intlCalendarLocale(locale), { month: "long", year: "numeric" })}
                 </span>
                 <button
                   type="button"
-                  aria-label={view === "week" ? "Next week" : "Next month"}
+                  aria-label={view === "week" ? t("ariaLabels.nextWeek") : t("ariaLabels.nextMonth")}
                   onClick={() => stepRange(1)}
                   className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
                 >
@@ -617,7 +616,7 @@ export default function CalendarPage() {
                 <Calendar
                   mode="single"
                   month={monthAnchor}
-                  locale={enGB}
+                  locale={dateFnsCalendarLocale(locale)}
                   weekStartsOn={1}
                   onMonthChange={setMonthAnchor}
                   onSelect={(date) => date && goToDay(date)}
@@ -743,35 +742,31 @@ function ScheduleMetricTabs({
   filter: TimeFilter;
   onFilterChange: (filter: TimeFilter) => void;
 }) {
+  const t = useTranslations("schedules");
   return (
     <div
       className="grid w-full grid-cols-3 gap-2 rounded-lg border border-border bg-surface-2/40 p-1 sm:max-w-[390px]"
       role="tablist"
-      aria-label="Timeline filters"
+      aria-label={t("ariaLabels.timelineFilters")}
     >
-      {timeFilters.map((item) => {
-        const value =
-          item.value === "all"
-            ? counts.all
-            : item.value === "upcoming"
-              ? counts.upcoming
-              : counts.joined;
+      {timeFilterValues.map((value) => {
+        const count = value === "all" ? counts.all : value === "upcoming" ? counts.upcoming : counts.joined;
         return (
           <button
-            key={item.value}
+            key={value}
             type="button"
             role="tab"
-            aria-selected={filter === item.value}
-            onClick={() => onFilterChange(item.value)}
+            aria-selected={filter === value}
+            onClick={() => onFilterChange(value)}
             className={cn(
               "min-w-0 rounded-md px-3 py-2 text-left transition-colors",
-              filter === item.value
+              filter === value
                 ? "bg-surface-1 text-ink shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
                 : "text-ink-muted hover:bg-surface-1/60 hover:text-ink",
             )}
           >
-            <span className="block truncate text-[10px] font-medium">{item.label}</span>
-            <span className="mt-0.5 block text-[16px] font-semibold tabular-nums">{value}</span>
+            <span className="block truncate text-[10px] font-medium">{t(`filters.${value}`)}</span>
+            <span className="mt-0.5 block text-[16px] font-semibold tabular-nums">{count}</span>
           </button>
         );
       })}
@@ -794,18 +789,19 @@ function ScheduleMetricTabs({
  * accessible names still carry the relation there.
  */
 function MonthRelationLegend() {
+  const t = useTranslations("schedules");
   return (
     <ul
-      aria-label="Chip legend"
+      aria-label={t("ariaLabels.chipLegend")}
       className="mr-1 hidden shrink-0 items-center gap-3 text-[10px] text-ink-subtle md:flex"
     >
       <li className="flex items-center gap-1.5">
         <span aria-hidden className="size-2.5 rounded-sm border border-ink/25 bg-ink/10" />
-        You host
+        {t("legend.youHost")}
       </li>
       <li className="flex items-center gap-1.5">
         <span aria-hidden className="size-2.5 rounded-sm border border-ink/60 bg-transparent" />
-        {"You're invited"}
+        {t("legend.youAreInvited")}
       </li>
     </ul>
   );
@@ -832,6 +828,9 @@ function MonthGrid({
   onSelectDay: (day: Date) => void;
   onOpenMeeting: (meeting: TimedMeeting) => void;
 }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const weekdayHeaders = useMemo(() => weekdayShortHeaders(locale), [locale]);
   const monthDays = useMemo(() => {
     const start = startOfMonth(monthAnchor);
     const end = endOfMonth(monthAnchor);
@@ -900,18 +899,16 @@ function MonthGrid({
       {meetings.length === 0 ? (
         <div className="flex items-center justify-center gap-2 border-b border-border bg-surface-2/30 px-4 py-2 text-center text-[11px] text-ink-muted">
           <FileText size={14} />
-          {hasQuery
-            ? "No meetings match this search."
-            : "Nothing on your timeline this month. Upcoming invites and meetings you joined appear here."}
+          {hasQuery ? t("monthView.noMeetingsMatchSearch") : t("monthView.nothingThisMonth")}
         </div>
       ) : null}
 
       <div className="min-h-0 flex-1 overflow-x-auto">
         <div className="grid h-full min-w-[860px] grid-cols-7 border-b border-border">
-          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((dayName) => (
+          {weekdayHeaders.map((dayName) => (
             <div
               key={dayName}
-              className="sticky top-0 z-10 border-b border-r border-border bg-surface-1/95 px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-ink-subtle backdrop-blur last:border-r-0"
+              className="sticky top-0 z-10 truncate border-b border-r border-border bg-surface-1/95 px-2 py-1.5 text-center text-[10px] font-medium uppercase tracking-wide text-ink-subtle backdrop-blur last:border-r-0"
             >
               {dayName}
             </div>
@@ -965,7 +962,7 @@ function MonthGrid({
                 <button
                   type="button"
                   aria-pressed={isSelected}
-                  aria-label={`${formatDayHeading(day)}, ${describeCount(dayMeetings.length)}`}
+                  aria-label={`${formatDayHeading(day, locale)}, ${describeCount(dayMeetings.length, t)}`}
                   onClick={() => onSelectDay(day)}
                   className="absolute inset-0 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50"
                 />
@@ -1016,7 +1013,10 @@ function MonthGrid({
                       <button
                         type="button"
                         onClick={() => onSelectDay(day)}
-                        aria-label={`Show all ${dayMeetings.length} meetings on ${formatDayHeading(day)}`}
+                        aria-label={t("ariaLabels.showAllMeetings", {
+                          count: dayMeetings.length,
+                          day: formatDayHeading(day, locale),
+                        })}
                         // Exactly one chip tall, and that is what makes the count a slot like any
                         // other. The class gives it the chip's height before anything is measured;
                         // once the probe has read the real chip, the inline height pins it to that
@@ -1028,7 +1028,7 @@ function MonthGrid({
                           MONTH_ROW_HEIGHT_CLASS,
                         )}
                       >
-                        <span className="truncate">+{hiddenCount} more</span>
+                        <span className="truncate">{t("monthView.moreCount", { count: hiddenCount })}</span>
                       </button>
                     ) : null}
                   </div>
@@ -1065,16 +1065,20 @@ function MonthGrid({
  * accessible name, because neither a glyph nor a fill is something a screen reader can announce.
  */
 function MonthChip({ meeting, onOpen }: { meeting: TimedMeeting; onOpen: () => void }) {
-  const relation = relationLabel(meeting);
-  const time = formatTime(meeting.occursAt);
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const relation = relationLabel(meeting, t);
+  const time = formatTime(meeting.occursAt, locale);
+  const stateLabel = useMeetingStateLabel()(meeting);
   const onGoogleMeet = isGoogleMeetMeeting(meeting);
+  const googleMeetTitleSuffix = onGoogleMeet ? ` · ${t("chip.googleMeet")}` : "";
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      title={`${meeting.title} · ${relation}${onGoogleMeet ? " · Google Meet" : ""}`}
-      aria-label={`${meeting.title}, ${time}, ${meetingStateLabel(meeting)}, ${relation}${onGoogleMeet ? ", on Google Meet" : ""}`}
+      title={`${meeting.title} · ${relation}${googleMeetTitleSuffix}`}
+      aria-label={`${meeting.title}, ${time}, ${stateLabel}, ${relation}${onGoogleMeet ? t("chip.onGoogleMeetSuffix") : ""}`}
       className={cn(
         "group pointer-events-auto flex w-full min-w-0 cursor-pointer items-center gap-1.5 overflow-hidden rounded-sm border px-1 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/40",
         MONTH_ROW_HEIGHT_CLASS,
@@ -1162,7 +1166,9 @@ function DayDetailPanel({
   onOpenMeeting: (meeting: TimedMeeting) => void;
   onClose: () => void;
 }) {
-  const heading = formatDayHeading(day);
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const heading = formatDayHeading(day, locale);
 
   useEffect(() => {
     if (!closeOnEscape) return;
@@ -1196,18 +1202,18 @@ function DayDetailPanel({
         until somebody actually asks a question about a day.
       */}
       <aside
-        aria-label={`Meetings on ${heading}`}
+        aria-label={t("ariaLabels.meetingsOnDay", { day: heading })}
         className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[380px] flex-col border-l border-border bg-surface-1 shadow-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-2 motion-safe:duration-150 xl:static xl:z-auto xl:w-[340px] xl:max-w-none xl:shrink-0 xl:shadow-none xl:motion-safe:animate-none"
       >
         <header className="flex shrink-0 items-start justify-between gap-2 border-b border-border px-4 py-3">
           <div className="min-w-0">
             <h2 className="truncate text-[13px] font-semibold text-ink">{heading}</h2>
-            <p className="mt-0.5 text-[11px] text-ink-subtle">{describeCount(meetings.length)}</p>
+            <p className="mt-0.5 text-[11px] text-ink-subtle">{describeCount(meetings.length, t)}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close day details"
+            aria-label={t("ariaLabels.closeDayDetails")}
             className="-mr-1 grid size-6 shrink-0 cursor-pointer place-items-center rounded-md text-ink-subtle outline-none transition-colors hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <X size={12} />
@@ -1235,12 +1241,10 @@ function DayDetailPanel({
               <div>
                 <CalendarBlank size={20} className="mx-auto text-ink-subtle" />
                 <p className="mt-2 text-[11px] font-medium text-ink-muted">
-                  {narrowed ? "Nothing on this day matches" : "Nothing on this day"}
+                  {narrowed ? t("dayPanel.nothingMatches") : t("dayPanel.nothingOnDay")}
                 </p>
                 <p className="mt-1 text-[10px] leading-4 text-ink-subtle">
-                  {narrowed
-                    ? "Clear the search or switch back to All to see everything booked here."
-                    : "Meetings you host or are invited to will show up here."}
+                  {narrowed ? t("dayPanel.clearSearchHint") : t("dayPanel.meetingsShowUpHere")}
                 </p>
               </div>
             </div>
@@ -1345,8 +1349,8 @@ function slotsInList(listHeight: number | null, row: MonthRowMetrics | null) {
 }
 
 /** "Tuesday, 8 September 2026" — the panel's title and the cells' accessible names. */
-function formatDayHeading(day: Date) {
-  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+function formatDayHeading(day: Date, locale: string) {
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -1354,9 +1358,15 @@ function formatDayHeading(day: Date) {
   }).format(day);
 }
 
-function describeCount(count: number) {
-  if (count === 0) return "no meetings";
-  return `${count} ${count === 1 ? "meeting" : "meetings"}`;
+/** Monday-first weekday short headers ("Mon" … "Sun"), in the reader's own locale. */
+function weekdayShortHeaders(locale: string) {
+  const formatter = new Intl.DateTimeFormat(intlCalendarLocale(locale), { weekday: "short" });
+  // 2023-01-02 is a Monday — an arbitrary, DST-safe anchor to walk one Monday-first week from.
+  return Array.from({ length: 7 }, (_, index) => formatter.format(new Date(2023, 0, 2 + index)));
+}
+
+function describeCount(count: number, t: ReturnType<typeof useTranslations>) {
+  return t("counts.meetings", { count });
 }
 
 /**
@@ -1386,6 +1396,8 @@ function WeekGrid({
   onOpenPast: (id: string) => void;
   onNavigate: (id: string) => void;
 }) {
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const byDay = useMemo(() => {
     const map = new Map<string, TimedMeeting[]>();
     for (const meeting of meetings) {
@@ -1437,7 +1449,7 @@ function WeekGrid({
                   )}
                 >
                   <div className="text-[10px] uppercase tracking-wide text-ink-subtle">
-                    {day.toLocaleDateString(APP_CALENDAR_LOCALE, { weekday: "short" })}
+                    {day.toLocaleDateString(intlCalendarLocale(locale), { weekday: "short" })}
                   </div>
                   <div
                     className={cn(
@@ -1486,7 +1498,7 @@ function WeekGrid({
 
       {meetings.length === 0 ? (
         <p className="border-t border-border px-4 py-3 text-center text-[11px] text-ink-muted">
-          Nothing on your timeline this week.
+          {t("weekView.nothingThisWeek")}
         </p>
       ) : null}
     </div>
@@ -1525,12 +1537,14 @@ function useNowMinute(): Date | null {
  * is the question the line actually answers on a page of thirty-minute meetings.
  */
 function NowLine({ now }: { now: Date }) {
-  const label = formatTime(now.toISOString());
+  const t = useTranslations("schedules");
+  const locale = useLocale();
+  const label = formatTime(now.toISOString(), locale);
 
   return (
     <div
       role="separator"
-      aria-label={`Current time, ${label}`}
+      aria-label={t("ariaLabels.currentTime", { time: label })}
       className="flex items-center gap-1 py-0.5"
     >
       <span className="size-1.5 shrink-0 rounded-full bg-rose-500" />
@@ -1554,10 +1568,13 @@ function WeekCard({
   // A cancelled meeting is not live, whatever the clock says about its slot: the pulsing dot and
   // the Join button are affordances for a room that is actually open. `meetingDisplayState` is
   // where cancellation outranks the clock, for this card and every other row on the page.
+  const t = useTranslations("schedules");
+  const locale = useLocale();
   const displayState = meetingDisplayState(meeting);
   const isCancelled = displayState === "cancelled";
   const isLive = displayState === "live";
-  const relation = relationLabel(meeting);
+  const relation = relationLabel(meeting, t);
+  const stateLabel = useMeetingStateLabel()(meeting);
 
   return (
     <div
@@ -1582,12 +1599,12 @@ function WeekCard({
           lines when even that is too narrow — always right-aligned, never overflowing. */}
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
         <span className="text-[10px] font-medium tabular-nums text-ink-muted">
-          {formatTime(meeting.occursAt)}
+          {formatTime(meeting.occursAt, locale)}
         </span>
         <span className="ml-auto flex flex-wrap items-center justify-end gap-1">
           <span
             className={cn(
-              "rounded px-1 py-0.5 text-[9px] font-medium",
+              "max-w-[120px] truncate rounded px-1 py-0.5 text-[9px] font-medium",
               relationPillClass(meeting),
             )}
           >
@@ -1595,11 +1612,11 @@ function WeekCard({
           </span>
           <span
             className={cn(
-              "rounded px-1 py-0.5 text-[9px] font-medium capitalize",
+              "max-w-[120px] truncate rounded px-1 py-0.5 text-[9px] font-medium",
               stateBadgeClass(meeting),
             )}
           >
-            {meetingStateLabel(meeting)}
+            {stateLabel}
           </span>
           {isLive ? (
             <span className="relative flex size-1.5 shrink-0">
@@ -1638,7 +1655,7 @@ function WeekCard({
           onClick={(event) => event.stopPropagation()}
           className="mt-1.5 flex h-6 items-center justify-center rounded border border-rose-500/30 bg-surface-1 text-[10px] font-medium text-rose-700 transition-colors hover:bg-rose-500/10"
         >
-          Join
+          {t("chip.join")}
         </Link>
       ) : null}
 
@@ -1685,6 +1702,8 @@ function PastMeetingDialog({
    * of times on the two renders, which is React error #310.
    */
   const bodyRef = useRef<HTMLDivElement>(null);
+  const t = useTranslations("schedules");
+  const locale = useLocale();
 
   if (!meeting) return null;
 
@@ -1713,7 +1732,7 @@ function PastMeetingDialog({
         <DialogHeader className="shrink-0 border-b border-border px-5 py-4 pr-12">
           <div className="flex items-center gap-2 text-[10px] font-medium uppercase text-ink-subtle">
             <span className="size-1.5 rounded-full bg-emerald-500" />
-            Past meeting
+            {t("dialog.pastMeeting")}
           </div>
           {/* break-words, here and on the description: an unbroken string — a pasted URL, a
               token — has no space to wrap at, and would otherwise widen the popup instead of
@@ -1734,16 +1753,16 @@ function PastMeetingDialog({
               whitespace-pre-wrap keeps the line breaks the author typed; without it an agenda
               written over twenty lines arrives as one wall of text. */}
           <DialogDescription className="whitespace-pre-wrap break-words text-[12px] leading-5 text-ink-muted">
-            {meeting.description || "Quick access to the room summary and retained artifacts."}
+            {meeting.description || t("dialog.noDescription")}
           </DialogDescription>
 
           <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-1 border-b border-border pb-4">
-            <Detail icon={CalendarBlank} label="When" value={formatDateTime(meeting.occursAt)} />
-            <Detail icon={Clock} label="Duration" value={formatDuration(meeting.durationSeconds)} />
-            <Detail icon={Users} label="Participants" value={String(meeting.participantCount)} />
+            <Detail icon={CalendarBlank} label={t("dialog.when")} value={formatDateTime(meeting.occursAt, locale)} />
+            <Detail icon={Clock} label={t("dialog.duration")} value={formatDuration(meeting.durationSeconds)} />
+            <Detail icon={Users} label={t("dialog.participants")} value={String(meeting.participantCount)} />
             <Detail
               icon={Translate}
-              label="Route"
+              label={t("dialog.route")}
               value={formatLanguageRoute(meeting.sourceLanguage, meeting.targetLanguages)}
             />
           </dl>
@@ -1751,7 +1770,7 @@ function PastMeetingDialog({
           <div className="mt-4 flex flex-wrap items-center gap-2 text-[10px] text-ink-subtle">
             <span className="rounded-full border border-border px-2 py-1">{meeting.translationRoomCode}</span>
             <span className="flex items-center gap-1">
-              Hosted by{" "}
+              {t("dialog.hostedBy")}{" "}
               <UserChip
                 user={{ userId: meeting.hostId, name: meeting.hostName, role: "Host" }}
                 variant="text"
@@ -1763,7 +1782,7 @@ function PastMeetingDialog({
           </div>
 
           <div className="mt-5 flex items-center justify-between">
-            <h3 className="text-[11px] font-semibold">Artifacts</h3>
+            <h3 className="text-[11px] font-semibold">{t("dialog.artifacts")}</h3>
             <span className="text-[10px] text-ink-subtle">{meeting.artifacts.length}</span>
           </div>
 
@@ -1782,12 +1801,12 @@ function PastMeetingDialog({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[11px] font-medium">
-                        {artifact.title || artifactLabel(artifact.type)}
+                        {artifact.title || artifactLabel(artifact.type, (type) => t(`artifactLabels.${type}`))}
                       </span>
-                      <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                        {artifactStatusLabel(artifact)}
+                      <span className="mt-0.5 block truncate text-[10px] text-ink-subtle">
+                        {artifactStatusLabel(artifact, (key) => t(`artifactStatus.${key}`))}
                         {artifact.format ? ` · ${artifact.format.toUpperCase()}` : ""}
-                        {artifact.createdAt ? ` · ${formatCompactDateTime(artifact.createdAt)}` : ""}
+                        {artifact.createdAt ? ` · ${formatCompactDateTime(artifact.createdAt, locale, t)}` : ""}
                       </span>
                     </span>
                     {busyArtifactId === artifact.id ? (
@@ -1803,7 +1822,7 @@ function PastMeetingDialog({
               ))
             ) : (
               <li className="px-3 py-6 text-center text-[11px] text-ink-muted">
-                No outputs retained for this meeting.
+                {t("dialog.noOutputs")}
               </li>
             )}
           </ul>
@@ -1814,7 +1833,7 @@ function PastMeetingDialog({
             href={`/${workspaceSlug}/rooms/${meeting.id}`}
             className="flex h-9 w-full items-center justify-center rounded-md border border-border bg-surface-2 text-[11px] font-medium text-ink transition-colors hover:border-ink/30"
           >
-            Open meeting
+            {t("dialog.openMeeting")}
           </Link>
         </div>
       </DialogContent>
@@ -1858,25 +1877,27 @@ function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
 }
 
 function LoadingState() {
+  const t = useTranslations("schedules");
   return (
     <div className="grid min-h-[420px] place-items-center">
       <div className="flex items-center gap-2 text-[11px] text-ink-muted">
         <SpinnerGap size={15} className="animate-spin" />
-        Loading your meetings
+        {t("loading.meetings")}
       </div>
     </div>
   );
 }
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
+  const t = useTranslations("schedules");
   return (
     <div className="grid min-h-[420px] place-items-center text-center">
       <div>
         <WarningCircle size={22} className="mx-auto text-ink-muted" />
-        <p className="mt-3 text-[12px] font-medium">Your meetings could not be loaded</p>
-        <p className="mt-1 text-[11px] text-ink-muted">Check the translation-room service and try again.</p>
+        <p className="mt-3 text-[12px] font-medium">{t("error.title")}</p>
+        <p className="mt-1 text-[11px] text-ink-muted">{t("error.description")}</p>
         <Button variant="outline" size="sm" className="mt-4 h-8" onClick={onRetry}>
-          Retry
+          {t("error.retry")}
         </Button>
       </div>
     </div>
@@ -1897,16 +1918,17 @@ function endOfDayDate(date: Date) {
 }
 
 /** "10 – 16 Aug 2026", or "31 Aug – 6 Sep 2026" when the week straddles two months. */
-function formatWeekRange(days: Date[]) {
+function formatWeekRange(days: Date[], locale: string) {
   const first = days[0];
   const last = days[days.length - 1];
   const sameMonth = first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear();
+  const tag = intlCalendarLocale(locale);
 
-  const start = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+  const start = new Intl.DateTimeFormat(tag, {
     day: "numeric",
     ...(sameMonth ? {} : { month: "short" }),
   }).format(first);
-  const end = new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+  const end = new Intl.DateTimeFormat(tag, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -2039,8 +2061,8 @@ function isHostedByViewer(meeting: MyMeetingItem) {
  * The words for the fill — kept beside it, as `meetingStateLabel` sits beside the state rule, so
  * the two cannot drift.
  */
-function relationLabel(meeting: MyMeetingItem) {
-  return isHostedByViewer(meeting) ? "You host" : "Invited";
+function relationLabel(meeting: MyMeetingItem, t: ReturnType<typeof useTranslations>) {
+  return isHostedByViewer(meeting) ? t("relation.youHost") : t("relation.invited");
 }
 
 /**
@@ -2076,16 +2098,16 @@ function stateBadgeClass(meeting: TimedMeeting) {
   return "bg-emerald-500/10 text-emerald-700";
 }
 
-function formatTime(value: string) {
+function formatTime(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, { hour: "2-digit", minute: "2-digit" }).format(date);
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
-function formatDateTime(value: string) {
+function formatDateTime(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
-  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -2093,10 +2115,10 @@ function formatDateTime(value: string) {
   }).format(date);
 }
 
-function formatCompactDateTime(value: string) {
+function formatCompactDateTime(value: string, locale: string, t: ReturnType<typeof useTranslations>) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown time";
-  return new Intl.DateTimeFormat(APP_CALENDAR_LOCALE, {
+  if (Number.isNaN(date.getTime())) return t("dialog.unknownTime");
+  return new Intl.DateTimeFormat(intlCalendarLocale(locale), {
     month: "short",
     day: "numeric",
     hour: "2-digit",

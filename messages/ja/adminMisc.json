@@ -1,0 +1,206 @@
+{
+  "salesLeads": {
+    "eyebrow": "収益",
+    "title": "営業リード",
+    "description": "プラットフォーム上のすべての営業問い合わせを新着順に表示します。",
+    "refresh": "更新",
+    "statusLabels": {
+      "new": "新規",
+      "reviewing": "確認中",
+      "quoted": "見積提示済み",
+      "converted": "成約",
+      "closed": "クローズ"
+    },
+    "allTab": "すべて",
+    "leadStatusAria": "リードのステータス",
+    "loading": "読み込み中…",
+    "leadCount": "{count, plural, other {リード #件}}",
+    "statusUpdated": "{company} を「{status}」に更新しました",
+    "statusUpdateFailed": "リードのステータスを更新できませんでした。",
+    "searchPlaceholder": "氏名、メール、会社名で検索",
+    "searchAria": "リードを検索",
+    "search": "検索",
+    "error": {
+      "title": "営業リードを読み込めませんでした。",
+      "description": "課金サービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
+      "retry": "再試行"
+    },
+    "empty": {
+      "title": "このフィルターに一致するリードはありません",
+      "description": "別のステータスタブを選ぶか、検索条件をクリアしてください。"
+    },
+    "openWorkspace": "ワークスペースを開く",
+    "noWorkspaceYet": "ワークスペース未作成",
+    "meetingsPerMonthNow": "現在 月{count}件のミーティング",
+    "expectedInSixMonths": "6か月後は{count}件を想定",
+    "showMore": "もっと見る",
+    "showLess": "閉じる",
+    "statusAria": "{company} のステータス",
+    "seats": "{count, plural, other {#席}}",
+    "creditsPerMonth": "月{count}クレジット",
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ"
+    }
+  },
+  "meetings": {
+    "eyebrow": "オペレーション",
+    "title": "ミーティング",
+    "description": "プラットフォーム上のすべての通訳ルーム。メタデータのみで、文字起こしやルーム操作はありません。",
+    "refresh": "更新",
+    "liveCount": "ライブ配信中 {count} 件",
+    "startedToday": "本日開始 {count} 件",
+    "statusTabs": {
+      "all": "すべて",
+      "live": "ライブ配信中",
+      "scheduled": "予定",
+      "ended": "終了",
+      "cancelled": "キャンセル",
+      "failed": "失敗",
+      "expired": "期限切れ"
+    },
+    "meetingStatusAria": "ミーティングのステータス",
+    "loading": "読み込み中…",
+    "meetingCount": "{count, plural, other {ミーティング #件}}",
+    "sort": {
+      "label": "並び替え",
+      "recentDesc": "新しい順",
+      "recentAsc": "古い順",
+      "durationDesc": "長い順"
+    },
+    "error": {
+      "title": "ミーティングを読み込めませんでした。",
+      "description": "通訳ルームサービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
+      "retry": "再試行"
+    },
+    "empty": {
+      "title": "このフィルターに一致するミーティングはありません",
+      "description": "別のステータスタブを選んでください。"
+    },
+    "openWorkspace": "ワークスペース",
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ"
+    },
+    "footerNote": "ここからミーティングを開いたり聴取したりする手段は意図的にありません。この画面はミーティングが行われた事実のみを示し、内容はそれを開催したワークスペースに帰属します。"
+  },
+  "feedback": {
+    "eyebrow": "オペレーション",
+    "title": "フィードバック",
+    "description": "ミーティング終了後に参加者が寄せた感想です。集計データとして表示し、誰が書いたかは示しません。",
+    "refresh": "更新",
+    "rangeTabs": {
+      "7": "7日間",
+      "30": "30日間",
+      "90": "90日間",
+      "365": "12か月"
+    },
+    "reportingWindowAria": "集計期間",
+    "loading": "読み込み中…",
+    "responseCount": "{count, plural, other {回答 #件}}",
+    "error": {
+      "title": "フィードバックを読み込めませんでした。",
+      "description": "通訳ルームサービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
+      "retry": "再試行"
+    },
+    "stats": {
+      "responses": "回答数",
+      "meetingsRated": "評価されたミーティング",
+      "ofEnded": "終了{count}件中",
+      "responseRate": "回答率",
+      "previous": "前期間: {value}"
+    },
+    "dimensions": {
+      "title": "項目別評価",
+      "empty": "この期間に送信された評価はありません。",
+      "ratedCount": "{count}件が評価",
+      "ratingTooltip": "{rating}★ — {count, plural, other {回答 #件}}",
+      "noData": "データなし",
+      "noDataHint": "この期間に評価はありません — 表示するスコアはありません。",
+      "share": "回答者の {share}",
+      "lowConfidence": "信頼度低",
+      "noTrend": "推移なし",
+      "previousTooltip": "前期間: {average}（{count, plural, other {# 件の回答}}）"
+    },
+    "comments": {
+      "title": "コメント",
+      "error": "コメントを読み込めませんでした。",
+      "empty": "この期間に書かれたコメントはありません。",
+      "sortRecent": "新しい順",
+      "sortLowest": "低評価順",
+      "sortAria": "コメントの並び順"
+    },
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ"
+    },
+    "footerNote": "閲覧専用で、構造上匿名です — APIはコメントの投稿者情報を送信しません。管理者が編集・削除できる評価では、読む価値がなくなってしまいます。",
+    "insights": {
+      "lowestTitle": "最もスコアの低い項目",
+      "lowestDetail": "{count} 件の評価",
+      "vsPrevious": "前期間比 {delta}",
+      "lowConfidenceTitle": "信頼度が低い — 結論ではなく兆候として読んでください。",
+      "lowConfidenceRule": "回答が {min} 件未満、または回答率が {rate} 未満の数値は信頼度低として表示されます。",
+      "noDataTitle": "{count, plural, other {# 項目にデータがありません}}",
+      "noDataBody": "{names}: この期間に評価はありません。"
+    }
+  },
+  "audit": {
+    "eyebrow": "オペレーション",
+    "title": "監査ログ",
+    "description": "プラットフォーム上のすべての管理操作、実行者、そしてその理由を記録します。",
+    "refresh": "更新",
+    "resultTabs": {
+      "all": "すべて",
+      "succeeded": "成功",
+      "failed": "失敗"
+    },
+    "actionResultAria": "操作結果",
+    "loading": "読み込み中…",
+    "entryCount": "{count, plural, other {#件}}",
+    "error": {
+      "title": "監査ログを読み込めませんでした。",
+      "description": "ワークスペースサービスと、セッションがプラットフォーム管理者ロールを保持しているかを確認してください。",
+      "retry": "再試行"
+    },
+    "empty": {
+      "title": "このフィルターに一致する管理操作はありません",
+      "description": "まだ何も記録されていないか、フィルターで除外されています。"
+    },
+    "noReasonRecorded": "— 理由の記録なし",
+    "failedBadge": "失敗",
+    "pagination": {
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ"
+    }
+  },
+  "emailTemplates": {
+    "eyebrow": "オペレーション",
+    "title": "メールテンプレート",
+    "description": "プラットフォームが送信するすべてのメール、その内容の管理場所、差し込まれる項目を一覧できます。",
+    "notEditableNotice": "これらのメールは送信元サービスのコード内で作成されているため、ここでは編集できません。件名や本文を変更するには、そのサービスのコードを変更する必要があります。",
+    "tabs": {
+      "all": "すべて",
+      "live": "稼働中",
+      "dormant": "休止中"
+    },
+    "filterAria": "ステータスでメールを絞り込む",
+    "emailCount": "{count, plural, other {メール #件}}",
+    "statusLive": "稼働中",
+    "statusDormant": "休止中",
+    "detail": {
+      "whyDormant": "休止している理由",
+      "subject": "件名",
+      "sentWhen": "送信タイミング",
+      "sentBy": "送信元",
+      "sentByValue": "{service}（{provider}経由）",
+      "body": "本文",
+      "variables": "変数",
+      "source": "ソース"
+    }
+  }
+}

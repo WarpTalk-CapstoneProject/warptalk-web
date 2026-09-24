@@ -1,0 +1,48 @@
+{
+  "header": {
+    "title": "連携アカウント",
+    "subtitle": "{email} としてWarpTalkにサインインする方法です。"
+  },
+  "error": {
+    "title": "サインイン方法を読み込めませんでした",
+    "hint": "再試行し、それでも失敗する場合は認証サービスに接続できるか確認してください。",
+    "retry": "再試行",
+    "retrying": "再試行中…"
+  },
+  "toasts": {
+    "linked": "Googleアカウントを連携しました。",
+    "linkFailed": "Googleアカウントを連携できませんでした。",
+    "authFailed": "Google認証に失敗したか、ポップアップが閉じられました。",
+    "unlinked": "Googleアカウントの連携を解除しました。",
+    "unlinkFailed": "Googleアカウントの連携を解除できませんでした。"
+  },
+  "signInMethods": {
+    "sectionTitle": "サインイン方法"
+  },
+  "google": {
+    "title": "Google",
+    "connected": "連携済み",
+    "notConnected": "未連携",
+    "linkButton": "Googleを連携",
+    "unlinkButton": "連携解除",
+    "notConfiguredTitle": "この環境ではGoogleサインインが設定されていません。",
+    "hintUnknown": "連携状態はまだサーバーから取得できません。",
+    "hintNotLinked": "{email} のGoogleアカウントでサインインします。そのメールアドレスはこのアカウントと一致している必要があります。",
+    "hintLinked": "{email} としてGoogleでサインインします。",
+    "unlinkNeedsPasswordReason": "Googleがあなたの唯一のサインイン方法です。まずパスワードを設定してから(サインインページの「パスワードをお忘れですか」を使用)、Googleの連携を解除できます。"
+  },
+  "password": {
+    "title": "パスワード",
+    "set": "設定済み",
+    "notSet": "未設定",
+    "hintUnknown": "パスワードの状態はまだサーバーから取得できません。",
+    "hintSet": "メールアドレスとパスワードでサインインします。",
+    "hintNotSet": "パスワードはまだ設定されていません。サインインページの「パスワードをお忘れですか」から設定してください。"
+  },
+  "unlinkDialog": {
+    "title": "Googleの連携を解除しますか?",
+    "description": "今後Googleでサインインできなくなります。メールアドレスとパスワードでは引き続きサインインでき、後で再度Googleを連携することもできます。",
+    "cancel": "キャンセル",
+    "confirm": "Googleの連携を解除"
+  }
+}

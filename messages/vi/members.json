@@ -1,0 +1,137 @@
+{
+  "filters": {
+    "all": "Tất cả",
+    "owner": "Chủ sở hữu",
+    "admin": "Quản trị viên",
+    "member": "Thành viên",
+    "invited": "Đã mời",
+    "requested": "Yêu cầu"
+  },
+  "roleLabels": {
+    "owner": "Chủ sở hữu",
+    "admin": "Quản trị viên",
+    "member": "Thành viên"
+  },
+  "search": {
+    "placeholder": "Tìm người...",
+    "ariaLabel": "Tìm người"
+  },
+  "toolbar": {
+    "memberFiltersTitle": "Bộ lọc thành viên",
+    "peopleCountTitle": "{count} người",
+    "exporting": "Đang xuất...",
+    "exportButton": "Xuất (.xlsx)",
+    "inviteNewMember": "Mời thành viên mới"
+  },
+  "table": {
+    "name": "Tên",
+    "role": "Vai trò",
+    "membershipType": "Loại thành viên",
+    "status": "Trạng thái",
+    "hostMeetings": "Chủ trì cuộc họp",
+    "actions": "Hành động"
+  },
+  "you": "Bạn",
+  "externalRoleFixedTitle": "Thành viên bên ngoài luôn giữ vai trò Thành viên — không thể thay đổi.",
+  "accessTypeAria": "Loại quyền truy cập cho {email}",
+  "membershipOptions": {
+    "internal": "Nội bộ",
+    "external": "Bên ngoài"
+  },
+  "statusLabels": {
+    "requested": "Đã yêu cầu",
+    "leaving": "Đang rời",
+    "invited": "Đã mời",
+    "joined": "Đã tham gia"
+  },
+  "leaveRequestPendingTitle": "Thành viên này đã yêu cầu rời và đang chờ phản hồi của bạn.",
+  "pendingLoadFailed": "Không thể tải lời mời và yêu cầu tham gia đang chờ, nên danh sách này chỉ hiển thị thành viên đã tham gia.",
+  "empty": {
+    "invitedTitle": "Không có lời mời đang chờ",
+    "invitedDescription": "Dùng Mời thành viên mới để gửi lời mời.",
+    "requestedTitle": "Không có yêu cầu nào đang chờ",
+    "requestedDescription": "Yêu cầu tham gia không gian làm việc này, và yêu cầu rời khỏi, sẽ xuất hiện ở đây.",
+    "defaultTitle": "Không tìm thấy người nào",
+    "defaultDescription": "Thử điều chỉnh từ khóa tìm kiếm hoặc bộ lọc."
+  },
+  "actions": {
+    "approveLeaveRequestTitle": "Duyệt yêu cầu rời",
+    "approveLeaveRequestAria": "Duyệt yêu cầu rời của {name}",
+    "rejectLeaveRequestTitle": "Từ chối yêu cầu rời",
+    "rejectLeaveRequestAria": "Từ chối yêu cầu rời của {name}",
+    "removeFromWorkspaceTitle": "Xóa khỏi không gian làm việc",
+    "removeFromWorkspaceAria": "Xóa {name} khỏi không gian làm việc",
+    "revokeInvitationTitle": "Thu hồi lời mời",
+    "revokeInvitationAria": "Thu hồi lời mời cho {email}",
+    "approveJoinRequestTitle": "Duyệt yêu cầu tham gia",
+    "rejectJoinRequestTitle": "Từ chối yêu cầu tham gia",
+    "approveAriaJoin": "Duyệt yêu cầu tham gia từ {email}",
+    "approveAriaLeave": "Duyệt yêu cầu rời từ {email}",
+    "rejectAriaJoin": "Từ chối yêu cầu tham gia từ {email}",
+    "rejectAriaLeave": "Từ chối yêu cầu rời từ {email}",
+    "leaveWorkspaceTitle": "Yêu cầu rời không gian làm việc",
+    "leave": "Rời đi"
+  },
+  "pagination": {
+    "previous": "Trước",
+    "next": "Sau",
+    "page": "Trang {page}"
+  },
+  "removeDialog": {
+    "title": "Xóa thành viên?",
+    "description": "Bạn có chắc muốn xóa <name></name>? Họ sẽ ngay lập tức mất quyền truy cập vào mọi cuộc họp, tài liệu và bản ghi trong không gian làm việc này.",
+    "cancel": "Hủy",
+    "confirm": "Xóa"
+  },
+  "revokeDialog": {
+    "title": "Thu hồi lời mời?",
+    "description": "Thu hồi lời mời cho <email></email> sẽ xóa hoàn toàn lời mời đó. Họ sẽ không thể chấp nhận bằng email đó nữa.",
+    "cancel": "Hủy",
+    "confirm": "Thu hồi"
+  },
+  "leaveDialog": {
+    "title": "Yêu cầu rời không gian làm việc?",
+    "description": "Yêu cầu rời <name></name> của bạn sẽ được gửi đến Quản trị viên không gian làm việc để phê duyệt.",
+    "cancel": "Hủy",
+    "confirm": "Gửi yêu cầu",
+    "submitting": "Đang gửi..."
+  },
+  "toasts": {
+    "exportSuccess": "Xuất danh sách thành viên thành công!",
+    "exportFailed": "Xuất danh sách thành viên thất bại.",
+    "permissionUpdated": "Đã cập nhật quyền chủ trì cuộc họp.",
+    "permissionUpdateFailed": "Cập nhật quyền cuộc họp thất bại",
+    "memberRemoved": "{name} đã bị xóa.",
+    "removeFailed": "Xóa thành viên thất bại",
+    "leaveRequestSubmitted": "Đã gửi yêu cầu rời. Đang chờ Quản trị viên/Chủ sở hữu phê duyệt.",
+    "leaveRequestFailed": "Gửi yêu cầu rời thất bại.",
+    "invitationRevoked": "Đã thu hồi lời mời cho {email}.",
+    "revokeFailed": "Thu hồi lời mời thất bại",
+    "leaveRequestApproved": "Đã duyệt yêu cầu rời.",
+    "leaveApproveFailed": "Duyệt yêu cầu rời thất bại",
+    "leaveRequestRejected": "Đã từ chối yêu cầu rời.",
+    "leaveRejectFailed": "Từ chối yêu cầu rời thất bại",
+    "memberApprovedEmailFailed": "Đã duyệt thành viên; gửi email phê duyệt thất bại.",
+    "joinRequestApproved": "Đã duyệt yêu cầu tham gia và gửi email.",
+    "approveFailed": "Duyệt yêu cầu tham gia thất bại",
+    "joinRequestRejected": "Đã từ chối yêu cầu tham gia.",
+    "rejectFailed": "Từ chối yêu cầu tham gia thất bại"
+  },
+  "export": {
+    "columns": {
+      "fullName": "Họ và tên",
+      "email": "Email",
+      "role": "Vai trò",
+      "membershipType": "Loại thành viên",
+      "status": "Trạng thái",
+      "date": "Ngày",
+      "hostMeetingsPermission": "Quyền chủ trì cuộc họp"
+    },
+    "notApplicable": "Không có",
+    "defaultRole": "Thành viên",
+    "defaultMembershipType": "Nội bộ",
+    "yes": "Có",
+    "no": "Không",
+    "workspaceFallback": "Không gian làm việc"
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
@@ -28,13 +29,14 @@ import {
   parsePluginOperatorSetupAction,
   type PluginOperatorSetupAction,
 } from "@/components/layout/plugin-operator-setup-card";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { cn } from "@/lib/utils";
 import type { AssistantConversationDto } from "@/types/assistant";
 
 export default function AiChatPage() {
+  const t = useTranslations("aiChat");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
   const conversationsQuery = useAssistantConversations(workspaceId);
   const createConversation = useCreateAssistantConversation();
@@ -143,21 +145,25 @@ export default function AiChatPage() {
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: workspaceId ?? undefined,
       });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
       const consentUrl = result.url;
       if (result.connected || !consentUrl) {
-        toast.success("Plugin connected.");
+        toast.success(t("toasts.pluginConnected"));
       } else if (openProviderConsent(consentUrl)) {
-        toast.message("Finish connecting this plugin in your browser.");
+        toast.message(t("toasts.pluginConnectOpenBrowser"));
       } else {
-        toast.error("Your browser blocked the consent window.", {
+        toast.error(t("toasts.pluginConnectBlocked"), {
           action: {
-            label: "Open it",
+            label: t("toasts.pluginConnectBlockedAction"),
             onClick: () => openProviderConsent(consentUrl),
           },
         });
       }
     } catch {
-      toast.error("Could not open the plugin connection flow.");
+      toast.error(t("toasts.pluginConnectFailed"));
     }
   }
 
@@ -189,7 +195,7 @@ export default function AiChatPage() {
     <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <Card className="min-h-0 overflow-hidden">
         <CardHeader className="flex flex-row items-center justify-between border-b">
-          <CardTitle className="text-base">AI conversations</CardTitle>
+          <CardTitle className="text-base">{t("conversations")}</CardTitle>
           <Button
             type="button"
             size="sm"
@@ -197,17 +203,17 @@ export default function AiChatPage() {
             onClick={() => void handleCreateConversation()}
             disabled={!workspaceId || createConversation.isPending}
           >
-            New
+            {t("new")}
           </Button>
         </CardHeader>
         <CardContent className="min-h-0 overflow-y-auto p-2">
           {conversationsQuery.isLoading ? (
-            <p className="p-3 text-sm text-muted-foreground">Loading conversations…</p>
+            <p className="p-3 text-sm text-muted-foreground">{t("loadingConversations")}</p>
           ) : conversationsQuery.isError ? (
-            <p className="p-3 text-sm text-destructive">Could not load conversations.</p>
+            <p className="p-3 text-sm text-destructive">{t("loadConversationsFailed")}</p>
           ) : conversations.length === 0 ? (
             <p className="p-3 text-sm text-muted-foreground">
-              Create a conversation to ask WarpTalk AI about this workspace.
+              {t("emptyConversations")}
             </p>
           ) : (
             <div className="space-y-1">
@@ -227,18 +233,18 @@ export default function AiChatPage() {
       <Card className="flex min-h-0 flex-col overflow-hidden">
         <CardHeader className="border-b">
           <CardTitle className="text-base">
-            {conversationQuery.data?.title ?? "WarpTalk AI"}
+            {conversationQuery.data?.title ?? t("defaultTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-4">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
             {conversationQuery.isLoading ? (
-              <p className="text-sm text-muted-foreground">Loading messages…</p>
+              <p className="text-sm text-muted-foreground">{t("loadingMessages")}</p>
             ) : conversationQuery.isError ? (
-              <p className="text-sm text-destructive">Could not load this conversation.</p>
+              <p className="text-sm text-destructive">{t("loadMessagesFailed")}</p>
             ) : messages.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Ask a question about your meetings, transcripts, or workspace documents.
+                {t("emptyMessages")}
               </p>
             ) : (
               messages.map((message) => (
@@ -253,7 +259,7 @@ export default function AiChatPage() {
                 >
                   <p className="whitespace-pre-wrap">{message.content}</p>
                   {message.status === "failed" ? (
-                    <p className="mt-1 text-xs text-destructive">Message processing failed.</p>
+                    <p className="mt-1 text-xs text-destructive">{t("messageFailed")}</p>
                   ) : null}
                 </div>
               ))
@@ -291,7 +297,7 @@ export default function AiChatPage() {
             <Input
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask WarpTalk AI about this workspace…"
+              placeholder={t("inputPlaceholder")}
               disabled={!workspaceId || sendMessage.isPending}
               maxLength={4000}
             />
@@ -299,7 +305,7 @@ export default function AiChatPage() {
               type="submit"
               disabled={!draft.trim() || !workspaceId || sendMessage.isPending}
             >
-              {sendMessage.isPending ? "Sending…" : "Send"}
+              {sendMessage.isPending ? t("sending") : t("send")}
             </Button>
           </form>
         </CardContent>

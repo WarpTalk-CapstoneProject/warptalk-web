@@ -66,7 +66,8 @@ assertIncludes(
 for (const [name, start] of [
   ["sending a message", "const sendMessage = async ("],
   ["New chat", "const startNewConversation = () => {"],
-  ["opening a conversation from history", "const openConversationFromHistory = async ("],
+  // openConversationFromHistory delegates to openConversationById, which also opens a thread handed over from a meeting.
+  ["opening a conversation (from history or a meeting handoff)", "const openConversationById = async ("],
 ]) {
   assertIncludes(
     slice(widget, widgetFile, start, "\n  };"),

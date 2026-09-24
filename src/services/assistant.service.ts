@@ -8,6 +8,7 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
+  CreateAssistantConversationOptions,
   CreatePrivatePluginRequest,
   PluginConnectResultDto,
   PluginToolPolicy,
@@ -31,8 +32,12 @@ export const assistantService = {
     return apiClient.get<AssistantConversationDetailDto>(API.assistant.conversation(id));
   },
 
-  createConversation(workspaceId: string) {
-    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, { workspaceId });
+  createConversation(workspaceId: string, options?: CreateAssistantConversationOptions) {
+    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, {
+      workspaceId,
+      ...(options?.title ? { title: options.title } : {}),
+      ...(options?.seedMessages?.length ? { seedMessages: options.seedMessages } : {}),
+    });
   },
 
   sendMessage(
@@ -112,6 +117,15 @@ export const assistantService = {
     return apiClient.post<PluginConnectResultDto>(API.assistant.pluginConnect(pluginKey, client), undefined, {
       params: workspaceId ? { workspaceId } : undefined,
     });
+  },
+
+  /** Answers with the catalog row. The key is checked against the MCP server and never sent back. */
+  connectPluginWithApiKey(pluginKey: string, apiKey: string, workspaceId?: string | null) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(
+      API.assistant.pluginApiKey(pluginKey),
+      { apiKey },
+      { params: workspaceId ? { workspaceId } : undefined },
+    );
   },
 
   disconnectPlugin(pluginKey: string) {

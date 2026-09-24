@@ -1,10 +1,14 @@
 #!/usr/bin/env node
 /**
- * Guard: the shipped UI is English.
+ * Guard: component source stays English-only.
  *
- * Fails when non-English text reaches a user-visible string in `src/`. There is no i18n
- * layer in this app — every label is a literal in the component that renders it — so a
- * plain source scan is the whole check.
+ * Fails when non-English text reaches a user-visible string in `src/`. As of WT-607, there
+ * IS an i18n layer (`next-intl`, catalogs under `/messages`) — but `/messages` lives outside
+ * `src/`, so this scan never sees translated copy and keeps doing its original job: a
+ * component must pull vi/ja text from the catalog via `useTranslations`/`getTranslations`,
+ * never hardcode it inline. See `.agents/page-docs/i18n-localization.md` for the catalog
+ * workflow, and `test:i18n-catalog` for the check that keeps the three locale trees in sync
+ * with each other.
  *
  * What counts as non-English here is the set of scripts this product has actually leaked:
  * Vietnamese tone/vowel marks, and the CJK/Hangul used by language endonyms. Ordinary

@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from "react";
 import { CaretDown, EnvelopeSimple, Info } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 import {
   AdminFilterTabs,
@@ -23,13 +24,8 @@ import { cn } from "@/lib/utils";
 
 type Filter = "all" | EmailStatus;
 
-const TABS = [
-  { value: "all", label: "All" },
-  { value: "live", label: "Live" },
-  { value: "dormant", label: "Dormant" },
-] as const;
-
 function StatusPill({ status }: { status: EmailStatus }) {
+  const t = useTranslations("adminMisc.emailTemplates");
   return (
     <span
       className={cn(
@@ -39,7 +35,7 @@ function StatusPill({ status }: { status: EmailStatus }) {
           : "border-hairline bg-surface-2 text-ink-muted",
       )}
     >
-      {status === "live" ? "Live" : "Dormant"}
+      {status === "live" ? t("statusLive") : t("statusDormant")}
     </span>
   );
 }
@@ -54,6 +50,7 @@ function Detail({ label, children }: { label: string; children: React.ReactNode 
 }
 
 function EmailRow({ entry }: { entry: EmailCatalogEntry }) {
+  const t = useTranslations("adminMisc.emailTemplates");
   const [open, setOpen] = useState(false);
 
   return (
@@ -81,14 +78,16 @@ function EmailRow({ entry }: { entry: EmailCatalogEntry }) {
 
       {open ? (
         <dl className="space-y-3 border-t border-hairline/60 bg-surface-2/40 px-4 py-4">
-          {entry.dormantReason ? <Detail label="Why dormant">{entry.dormantReason}</Detail> : null}
-          <Detail label="Subject">{entry.subject}</Detail>
-          <Detail label="Sent when">{entry.trigger}</Detail>
-          <Detail label="Sent by">
-            {entry.service} via {entry.provider}
+          {entry.dormantReason ? (
+            <Detail label={t("detail.whyDormant")}>{entry.dormantReason}</Detail>
+          ) : null}
+          <Detail label={t("detail.subject")}>{entry.subject}</Detail>
+          <Detail label={t("detail.sentWhen")}>{entry.trigger}</Detail>
+          <Detail label={t("detail.sentBy")}>
+            {t("detail.sentByValue", { service: entry.service, provider: entry.provider })}
           </Detail>
-          <Detail label="Body">{entry.bodySource}</Detail>
-          <Detail label="Variables">
+          <Detail label={t("detail.body")}>{entry.bodySource}</Detail>
+          <Detail label={t("detail.variables")}>
             <div className="flex flex-wrap gap-1.5">
               {entry.variables.map((variable) => (
                 <code
@@ -100,7 +99,7 @@ function EmailRow({ entry }: { entry: EmailCatalogEntry }) {
               ))}
             </div>
           </Detail>
-          <Detail label="Source">
+          <Detail label={t("detail.source")}>
             <code className="break-all font-mono text-[12px] text-ink-muted">
               warptalk-backend/{entry.sourcePath}
             </code>
@@ -112,6 +111,7 @@ function EmailRow({ entry }: { entry: EmailCatalogEntry }) {
 }
 
 export default function AdminEmailTemplatesPage() {
+  const t = useTranslations("adminMisc.emailTemplates");
   const [filter, setFilter] = useState<Filter>("all");
 
   const rows = useMemo(
@@ -119,33 +119,39 @@ export default function AdminEmailTemplatesPage() {
     [filter],
   );
 
+  const tabs = useMemo(
+    () => [
+      { value: "all" as const, label: t("tabs.all") },
+      { value: "live" as const, label: t("tabs.live") },
+      { value: "dormant" as const, label: t("tabs.dormant") },
+    ],
+    [t],
+  );
+
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Operations"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<EnvelopeSimple size={14} weight="fill" />}
-        title="Email templates"
-        description="Every email the platform sends, where its content lives, and what fills it in."
+        title={t("title")}
+        description={t("description")}
       />
 
       <div className="mt-5 flex items-start gap-3 rounded-lg border border-hairline bg-surface-1 px-4 py-3 shadow-linear">
         <Info size={16} weight="duotone" className="mt-0.5 shrink-0 text-ink-muted" />
-        <p className="text-[13px] text-ink-muted">
-          These emails are composed in code by the service that sends them, so they are not editable
-          here. Changing a subject or body is a code change in that service.
-        </p>
+        <p className="text-[13px] text-ink-muted">{t("notEditableNotice")}</p>
       </div>
 
       <AdminPanel className="mt-5">
         <div className="px-4">
           <AdminFilterTabs
-            tabs={TABS}
+            tabs={tabs}
             value={filter}
             onChange={setFilter}
-            label="Filter emails by status"
+            label={t("filterAria")}
             trailing={
               <span className="text-[12px] text-ink-muted">
-                {rows.length} {rows.length === 1 ? "email" : "emails"}
+                {t("emailCount", { count: rows.length })}
               </span>
             }
           />
