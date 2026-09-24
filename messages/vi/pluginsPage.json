@@ -36,7 +36,8 @@
     "addedByWorkspace": "Được thêm bởi không gian làm việc của bạn",
     "notAddedYet": "Chưa được thêm vào {workspaceName}",
     "waitingForOwner": "Đang chờ chủ sở hữu không gian làm việc của bạn",
-    "thisWorkspace": "không gian làm việc này"
+    "thisWorkspace": "không gian làm việc này",
+    "disabledByPlatform": "WarpTalk đã tắt plugin này cho workspace này. Kết nối của bạn được giữ, nhưng WarpBot sẽ không dùng ở đây."
   },
   "consentNotice": {
     "awaitingHeadline": "Hoàn tất kết nối {label} trong trình duyệt của bạn",

@@ -49,6 +49,16 @@ describe("memberPluginAction", () => {
     );
   });
 
+  test("a plugin WarpTalk turned off here keeps Connect, so the member can still disconnect it, and says why", () => {
+    const action = memberPluginAction(
+      { workspaceAvailability: "platform_disabled", installationStatus: "installed", canAdd: true },
+      "X",
+    );
+    assert.equal(action.kind, "connect");
+    assert.match(action.caption ?? "", /Turned off for this workspace by WarpTalk/);
+    assert.match(action.caption ?? "", /connection is kept/);
+  });
+
   test("a private plugin says the workspace added it", () => {
     const action = memberPluginAction({ workspaceAvailability: "private", installationStatus: "not_installed" }, "X");
     assert.equal(action.kind, "connect");
@@ -134,8 +144,10 @@ describe("memberPluginAction", () => {
 });
 
 describe("isOfferedInWorkspaceChat", () => {
-  test("chat hides only what the workspace has not added", () => {
+  test("chat hides what the workspace has not added, and what the platform turned off", () => {
     assert.equal(isOfferedInWorkspaceChat({ workspaceAvailability: "not_added" }), false);
+    // Turned off by the platform: the server refuses its tools, so chat must not offer it either.
+    assert.equal(isOfferedInWorkspaceChat({ workspaceAvailability: "platform_disabled" }), false);
     assert.equal(isOfferedInWorkspaceChat({ workspaceAvailability: "added" }), true);
     assert.equal(isOfferedInWorkspaceChat({ workspaceAvailability: "private" }), true);
     assert.equal(isOfferedInWorkspaceChat({ workspaceAvailability: undefined }), true);
