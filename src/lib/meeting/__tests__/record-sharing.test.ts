@@ -107,3 +107,91 @@ test("only a host is offered a sharing control", () => {
     assert.notEqual(describeRecordSharing({ artifactAccess: level, isHost: true }).action, null);
   }
 });
+
+// ---- WT-826: the record shares itself when the meeting ends -----------------------------------
+
+test("a running meeting that will share itself tells nobody it is withheld", () => {
+  // The owner's complaint in one line: participants of a live meeting were told the host "has not
+  // shared this meeting's record yet", about a record the room was about to share on its own.
+  const participant = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.hostOnly,
+    isHost: false,
+    isEnded: false,
+    autoShareRecord: true,
+  });
+  assert.notEqual(participant.badge, "Not shared yet");
+  assert.notEqual(participant.tone, "withheld");
+  assert.equal(participant.message, null);
+
+  const host = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.hostOnly,
+    isHost: true,
+    isEnded: false,
+    autoShareRecord: true,
+  });
+  assert.notEqual(host.badge, "Draft");
+  assert.equal(host.tone, "scheduled");
+  assert.match(host.message ?? "", /as soon as the meeting ends/);
+});
+
+test("the host's control on a record that shares itself keeps it private, never publishes early", () => {
+  const view = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.hostOnly,
+    isHost: true,
+    isEnded: false,
+    autoShareRecord: true,
+  });
+
+  assert.equal(view.action, "Keep private");
+  // nextArtifactAccess() would have answered ALL_PARTICIPANTS here — the opposite of the label.
+  assert.equal(view.nextLevel, ARTIFACT_ACCESS.hostOnly);
+});
+
+test("a room created before the toggle, with no answer from the server, still shares at the end", () => {
+  assert.equal(
+    describeRecordSharing({ artifactAccess: ARTIFACT_ACCESS.hostOnly, isHost: false, isEnded: false })
+      .badge,
+    "Shared when the meeting ends",
+  );
+});
+
+test("the toggle off, or a meeting that has ended, promises nothing about the end", () => {
+  const off = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.hostOnly,
+    isHost: false,
+    isEnded: false,
+    autoShareRecord: false,
+  });
+  assert.equal(off.badge, "Not shared yet");
+
+  // Ended and still HOST_ONLY means the host kept it or unpublished it: the room already had its
+  // one chance to share, and saying it will is a promise nothing is going to keep.
+  const ended = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.hostOnly,
+    isHost: true,
+    isEnded: true,
+    autoShareRecord: true,
+  });
+  assert.equal(ended.badge, "Draft");
+  assert.equal(ended.nextLevel, ARTIFACT_ACCESS.allParticipants);
+});
+
+test("once auto-published, the participant's 'Not shared yet' banner is gone", () => {
+  const view = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.allParticipants,
+    isHost: false,
+    isEnded: true,
+    autoShareRecord: true,
+  });
+  assert.equal(view.tone, null);
+  assert.equal(view.message, null);
+
+  const host = describeRecordSharing({
+    artifactAccess: ARTIFACT_ACCESS.allParticipants,
+    isHost: true,
+    isEnded: true,
+    autoShareRecord: true,
+  });
+  assert.equal(host.action, "Unpublish", "unpublishing afterwards must still be offered");
+  assert.equal(host.nextLevel, ARTIFACT_ACCESS.hostOnly);
+});

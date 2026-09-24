@@ -127,3 +127,33 @@ test("a turn still generating is not reported as an empty meeting", () => {
     "generating",
   );
 });
+
+test("WT-828: an empty meeting's insufficient summary is explained by the silence", () => {
+  // The worker writes insufficientData for a meeting with no transcript. Reporting that as "not
+  // enough content" was the empty Recap: a true sentence that named no reason.
+  assert.equal(
+    describeSummaryAbsence({
+      isGenerating: false,
+      summaryState: "empty",
+      hasSummaryArtifact: true,
+      hasParsedSummary: true,
+      insufficientData: true,
+      hasTranscript: false,
+    }),
+    "no-transcript",
+  );
+  assert.match(summaryAbsenceMessage("no-transcript"), /nobody spoke/i);
+
+  // A meeting that DID capture a transcript and was still judged too thin keeps its own answer.
+  assert.equal(
+    describeSummaryAbsence({
+      isGenerating: false,
+      summaryState: "empty",
+      hasSummaryArtifact: true,
+      hasParsedSummary: true,
+      insufficientData: true,
+      hasTranscript: true,
+    }),
+    "insufficient-data",
+  );
+});
