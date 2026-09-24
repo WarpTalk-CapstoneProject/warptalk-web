@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/format/currency";
@@ -124,6 +125,7 @@ const initialFormState: PlanFormState = {
 };
 
 export default function AdminPlansPage() {
+  const t = useTranslations("adminBillingPlansLegacy");
   const pathname = usePathname();
   // Mounted at both /admin/billing/plans and the legacy /billing/plans — see the matching note
   // in src/app/(internal)/billing/page.tsx. Stay on whichever base is already showing so the
@@ -175,7 +177,7 @@ export default function AdminPlansPage() {
       setFormState(initialFormState);
     },
     onError: (err: unknown) => {
-      setErrorMsg(getErrorMessage(err, "Failed to create plan."));
+      setErrorMsg(getErrorMessage(err, t("errors.createFailed")));
     },
   });
 
@@ -189,7 +191,7 @@ export default function AdminPlansPage() {
       setFormState(initialFormState);
     },
     onError: (err: unknown) => {
-      setErrorMsg(getErrorMessage(err, "Failed to update plan."));
+      setErrorMsg(getErrorMessage(err, t("errors.updateFailed")));
     },
   });
 
@@ -244,41 +246,39 @@ export default function AdminPlansPage() {
 
     // Validation
     if (!formState.name.trim()) {
-      setErrorMsg("Name is required.");
+      setErrorMsg(t("errors.nameRequired"));
       return;
     }
     if (formState.name.length > 100) {
-      setErrorMsg("Name must not exceed 100 characters.");
+      setErrorMsg(t("errors.nameTooLong"));
       return;
     }
 
     if (!formState.slug.trim()) {
-      setErrorMsg("Slug is required.");
+      setErrorMsg(t("errors.slugRequired"));
       return;
     }
     if (formState.slug.length > 50) {
-      setErrorMsg("Slug must not exceed 50 characters.");
+      setErrorMsg(t("errors.slugTooLong"));
       return;
     }
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(formState.slug)) {
-      setErrorMsg(
-        "Slug must be lowercase alphanumeric characters and hyphens only (e.g., 'gold-tier').",
-      );
+      setErrorMsg(t("errors.slugInvalid"));
       return;
     }
 
     if (!formState.tier.trim()) {
-      setErrorMsg("Tier is required.");
+      setErrorMsg(t("errors.tierRequired"));
       return;
     }
     if (formState.tier.length > 20) {
-      setErrorMsg("Tier must not exceed 20 characters.");
+      setErrorMsg(t("errors.tierTooLong"));
       return;
     }
 
     const currency = (formState.currency || "").toUpperCase().trim();
     if (currency.length !== 3) {
-      setErrorMsg("Currency must be a 3-character ISO code.");
+      setErrorMsg(t("errors.currencyInvalid"));
       return;
     }
 
@@ -288,9 +288,7 @@ export default function AdminPlansPage() {
       billingCycle !== "semiannual" &&
       billingCycle !== "yearly"
     ) {
-      setErrorMsg(
-        "Billing cycle must be 'monthly', 'semiannual', or 'yearly'.",
-      );
+      setErrorMsg(t("errors.billingCycleInvalid"));
       return;
     }
 
@@ -302,26 +300,24 @@ export default function AdminPlansPage() {
     else minPrice = 0.5;
 
     if (formState.price < minPrice) {
-      setErrorMsg(
-        `Price for ${currency} must be at least ${minPrice} due to Stripe payment constraints.`,
-      );
+      setErrorMsg(t("errors.priceTooLow", { currency, minPrice }));
       return;
     }
 
     if (formState.creditsPerCycle < 0) {
-      setErrorMsg("Credits must be non-negative.");
+      setErrorMsg(t("errors.creditsNegative"));
       return;
     }
     if (formState.maxParticipants < 2) {
-      setErrorMsg("Max participants must be at least 2.");
+      setErrorMsg(t("errors.maxParticipantsTooLow"));
       return;
     }
     if (formState.maxLanguages < 1) {
-      setErrorMsg("Max languages must be at least 1.");
+      setErrorMsg(t("errors.maxLanguagesTooLow"));
       return;
     }
     if (formState.sortOrder < 0) {
-      setErrorMsg("Sort order must be non-negative.");
+      setErrorMsg(t("errors.sortOrderNegative"));
       return;
     }
 
@@ -363,30 +359,30 @@ export default function AdminPlansPage() {
               variant="outline"
               className="bg-surface-2 text-ink border-hairline"
             >
-              Admin Panel
+              {t("header.badge")}
             </Badge>
             <h1 className="text-2xl font-semibold tracking-tight">
-              Subscription Plans
+              {t("header.title")}
             </h1>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Manage commercial packages, usage limits, and Stripe synchronization
+            {t("header.description")}
           </p>
         </div>
         <Button
           onClick={handleOpenCreate}
           className="bg-primary hover:bg-primary-hover text-primary-foreground gap-2 rounded-md"
         >
-          <Plus className="h-4 w-4" /> Add New Plan
+          <Plus className="h-4 w-4" /> {t("header.addNewPlan")}
         </Button>
       </div>
 
       {/* Plan list card */}
       <Card className="rounded-xl border-hairline bg-surface-1 shadow-linear">
         <CardHeader>
-          <CardTitle>All Packages</CardTitle>
+          <CardTitle>{t("list.title")}</CardTitle>
           <CardDescription>
-            View and modify user-facing packages.
+            {t("list.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -397,23 +393,23 @@ export default function AdminPlansPage() {
           ) : plans.length === 0 ? (
             <div className="flex h-32 flex-col items-center justify-center gap-2 border border-dashed rounded-lg border-hairline p-6 text-center">
               <p className="text-sm text-muted-foreground">
-                No subscription packages found.
+                {t("list.empty")}
               </p>
               <Button onClick={handleOpenCreate} variant="outline" size="sm">
-                Create First Plan
+                {t("list.createFirst")}
               </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="border-hairline hover:bg-transparent">
-                  <TableHead className="w-[180px]">Name</TableHead>
-                  <TableHead>Tier</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Credits/Cycle</TableHead>
-                  <TableHead>Limits (Voice / Glossary / ACL)</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[180px]">{t("list.columns.name")}</TableHead>
+                  <TableHead>{t("list.columns.tier")}</TableHead>
+                  <TableHead>{t("list.columns.price")}</TableHead>
+                  <TableHead>{t("list.columns.creditsPerCycle")}</TableHead>
+                  <TableHead>{t("list.columns.limits")}</TableHead>
+                  <TableHead>{t("list.columns.status")}</TableHead>
+                  <TableHead className="text-right">{t("list.columns.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -438,7 +434,7 @@ export default function AdminPlansPage() {
                     <TableCell>
                       <span className="font-semibold text-sm">
                         {plan.price === 0
-                          ? "Free"
+                          ? t("list.free")
                           : formatMoney(plan.price, plan.currency)}
                       </span>
                       <div className="text-xs text-muted-foreground capitalize">
@@ -456,15 +452,21 @@ export default function AdminPlansPage() {
                           <CheckCircle2
                             className={`h-3.5 w-3.5 ${plan.voiceCloneEnabled ? "text-emerald-500" : "text-muted-foreground"}`}
                           />
-                          Voice Clone:{" "}
-                          {plan.voiceCloneEnabled ? "Enabled" : "Disabled"}
+                          {t("list.voiceClone", {
+                            status: plan.voiceCloneEnabled
+                              ? t("list.enabled")
+                              : t("list.disabled"),
+                          })}
                         </span>
                         <span className="flex items-center gap-1.5">
                           <CheckCircle2
                             className={`h-3.5 w-3.5 ${plan.glossaryEnabled ? "text-emerald-500" : "text-muted-foreground"}`}
                           />
-                          Glossary Access:{" "}
-                          {plan.glossaryEnabled ? "Enabled" : "Disabled"}
+                          {t("list.glossaryAccess", {
+                            status: plan.glossaryEnabled
+                              ? t("list.enabled")
+                              : t("list.disabled"),
+                          })}
                         </span>
                       </div>
                     </TableCell>
@@ -475,7 +477,7 @@ export default function AdminPlansPage() {
                         }
                         className="rounded-full"
                       >
-                        {plan.isActive !== false ? "Active" : "Inactive"}
+                        {plan.isActive !== false ? t("list.active") : t("list.inactive")}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -508,11 +510,11 @@ export default function AdminPlansPage() {
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-primary" />
               {editingPlanId
-                ? "Edit Subscription Plan"
-                : "Create New Subscription Plan"}
+                ? t("dialog.editTitle")
+                : t("dialog.createTitle")}
             </DialogTitle>
             <DialogDescription>
-              Define plan pricing, limits, and specific AI feature flags.
+              {t("dialog.description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -527,10 +529,10 @@ export default function AdminPlansPage() {
             {/* General Info */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="name">Plan Name</Label>
+                <Label htmlFor="name">{t("dialog.fields.planName")}</Label>
                 <Input
                   id="name"
-                  placeholder="e.g. Startup, Enterprise"
+                  placeholder={t("dialog.fields.planNamePlaceholder")}
                   value={formState.name}
                   onChange={(e) =>
                     setFormState({ ...formState, name: e.target.value })
@@ -539,10 +541,10 @@ export default function AdminPlansPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="slug">Slug (URL identity)</Label>
+                <Label htmlFor="slug">{t("dialog.fields.slug")}</Label>
                 <Input
                   id="slug"
-                  placeholder="e.g. startup-plan, enterprise-tier"
+                  placeholder={t("dialog.fields.slugPlaceholder")}
                   value={formState.slug}
                   onChange={(e) =>
                     setFormState({ ...formState, slug: e.target.value })
@@ -555,7 +557,7 @@ export default function AdminPlansPage() {
             {/* Pricing & Limits */}
             <div className="grid grid-cols-3 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="price">Price</Label>
+                <Label htmlFor="price">{t("dialog.fields.price")}</Label>
                 <Input
                   id="price"
                   type="number"
@@ -570,7 +572,7 @@ export default function AdminPlansPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="currency">Currency</Label>
+                <Label htmlFor="currency">{t("dialog.fields.currency")}</Label>
                 <Select
                   value={formState.currency}
                   onValueChange={(val) =>
@@ -578,7 +580,7 @@ export default function AdminPlansPage() {
                   }
                 >
                   <SelectTrigger className="w-full bg-surface-2 border-hairline focus:ring-primary-focus">
-                    <SelectValue placeholder="Select currency" />
+                    <SelectValue placeholder={t("dialog.fields.currencyPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-1 border-hairline text-ink">
                     <SelectItem value="VND">VND</SelectItem>
@@ -587,7 +589,7 @@ export default function AdminPlansPage() {
                 </Select>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="billingCycle">Billing Cycle</Label>
+                <Label htmlFor="billingCycle">{t("dialog.fields.billingCycle")}</Label>
                 <Select
                   value={formState.billingCycle}
                   onValueChange={(val) =>
@@ -595,12 +597,12 @@ export default function AdminPlansPage() {
                   }
                 >
                   <SelectTrigger className="w-full bg-surface-2 border-hairline focus:ring-primary-focus">
-                    <SelectValue placeholder="Select cycle" />
+                    <SelectValue placeholder={t("dialog.fields.billingCyclePlaceholder")} />
                   </SelectTrigger>
                   <SelectContent className="bg-surface-1 border-hairline text-ink">
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                    <SelectItem value="semiannual">6 Months</SelectItem>
-                    <SelectItem value="yearly">Yearly</SelectItem>
+                    <SelectItem value="monthly">{t("dialog.fields.billingCycleMonthly")}</SelectItem>
+                    <SelectItem value="semiannual">{t("dialog.fields.billingCycleSemiannual")}</SelectItem>
+                    <SelectItem value="yearly">{t("dialog.fields.billingCycleYearly")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -609,7 +611,7 @@ export default function AdminPlansPage() {
             {/* Technical Limits */}
             <div className="grid grid-cols-4 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor="credits">Credits/Cycle</Label>
+                <Label htmlFor="credits">{t("dialog.fields.creditsPerCycle")}</Label>
                 <Input
                   id="credits"
                   type="number"
@@ -624,10 +626,10 @@ export default function AdminPlansPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="tier">Tier Level</Label>
+                <Label htmlFor="tier">{t("dialog.fields.tierLevel")}</Label>
                 <Input
                   id="tier"
-                  placeholder="e.g. Pro, Premium"
+                  placeholder={t("dialog.fields.tierLevelPlaceholder")}
                   value={formState.tier}
                   onChange={(e) =>
                     setFormState({ ...formState, tier: e.target.value })
@@ -636,7 +638,7 @@ export default function AdminPlansPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="maxParticipants">Max Participants</Label>
+                <Label htmlFor="maxParticipants">{t("dialog.fields.maxParticipants")}</Label>
                 <Input
                   id="maxParticipants"
                   type="number"
@@ -651,7 +653,7 @@ export default function AdminPlansPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="maxLanguages">Max Languages</Label>
+                <Label htmlFor="maxLanguages">{t("dialog.fields.maxLanguages")}</Label>
                 <Input
                   id="maxLanguages"
                   type="number"
@@ -672,15 +674,14 @@ export default function AdminPlansPage() {
             {/* Feature Flags */}
             <div className="border border-hairline rounded-lg p-4 bg-surface-2/20 space-y-4">
               <h3 className="text-sm font-semibold text-ink/80 mb-2 flex items-center gap-1.5">
-                <Shield className="h-4 w-4 text-primary" /> Feature
-                Authorization Flags
+                <Shield className="h-4 w-4 text-primary" /> {t("dialog.featureFlags.heading")}
               </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="voiceClone">Voice Cloning</Label>
+                    <Label htmlFor="voiceClone">{t("dialog.featureFlags.voiceCloning")}</Label>
                     <p className="text-xs text-muted-foreground">
-                      Allows neural voice mimicking
+                      {t("dialog.featureFlags.voiceCloningHint")}
                     </p>
                   </div>
                   <Switch
@@ -693,9 +694,9 @@ export default function AdminPlansPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="aiAssistant">AI Assistant</Label>
+                    <Label htmlFor="aiAssistant">{t("dialog.featureFlags.aiAssistant")}</Label>
                     <p className="text-xs text-muted-foreground">
-                      Interactive AI in meetings
+                      {t("dialog.featureFlags.aiAssistantHint")}
                     </p>
                   </div>
                   <Switch
@@ -711,9 +712,9 @@ export default function AdminPlansPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="space-y-0.5">
-                    <Label htmlFor="glossaryEnabled">Glossary Access</Label>
+                    <Label htmlFor="glossaryEnabled">{t("dialog.featureFlags.glossaryAccess")}</Label>
                     <p className="text-xs text-muted-foreground">
-                      Define business specific terminology
+                      {t("dialog.featureFlags.glossaryAccessHint")}
                     </p>
                   </div>
                   <Switch
@@ -729,7 +730,7 @@ export default function AdminPlansPage() {
 
             {/* Sub Limits & Features JSON */}
             <div className="grid gap-2">
-              <Label htmlFor="sortOrder">Sort Order (display sequence)</Label>
+              <Label htmlFor="sortOrder">{t("dialog.sortOrder")}</Label>
               <Input
                 id="sortOrder"
                 type="number"
@@ -745,11 +746,11 @@ export default function AdminPlansPage() {
             </div>
 
             <div className="grid gap-2">
-              <Label htmlFor="features">Plan Highlights (One per line)</Label>
+              <Label htmlFor="features">{t("dialog.highlights")}</Label>
               <Textarea
                 id="features"
                 rows={4}
-                placeholder="e.g. Up to 5 participants&#10;Realtime Translation&#10;Standard neural TTS"
+                placeholder={t("dialog.highlightsPlaceholder")}
                 value={formState.featuresText}
                 onChange={(e) =>
                   setFormState({ ...formState, featuresText: e.target.value })
@@ -761,9 +762,9 @@ export default function AdminPlansPage() {
             {editingPlanId && (
               <div className="flex items-center justify-between border-t border-hairline pt-3 mt-1">
                 <div className="space-y-0.5">
-                  <Label htmlFor="isActive">Active Status</Label>
+                  <Label htmlFor="isActive">{t("dialog.activeStatus")}</Label>
                   <p className="text-xs text-muted-foreground">
-                    Keep this enabled for users to view and purchase
+                    {t("dialog.activeStatusHint")}
                   </p>
                 </div>
                 <Switch
@@ -783,7 +784,7 @@ export default function AdminPlansPage() {
               onClick={() => setIsDialogOpen(false)}
               className="rounded-md"
             >
-              Cancel
+              {t("dialog.cancel")}
             </Button>
             <Button
               onClick={handleSave}
@@ -792,10 +793,10 @@ export default function AdminPlansPage() {
             >
               {createMutation.isPending || updateMutation.isPending ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> {t("dialog.saving")}
                 </>
               ) : (
-                "Save Package"
+                t("dialog.save")
               )}
             </Button>
           </DialogFooter>

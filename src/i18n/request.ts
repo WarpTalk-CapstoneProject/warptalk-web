@@ -57,6 +57,7 @@ const NAMESPACES = [
   "adminGlobalGlossary",
   "adminPlugins",
   "adminBillingLedger",
+  "adminBillingPlansLegacy",
   "download",
   "meetingControlBar",
   "meetingCallChrome",
