@@ -1,8 +1,8 @@
 {
   "workspaceFallback": "this workspace",
   "header": {
-    "title": "Plugins",
-    "subtitle": "Choose which plugins members of {workspaceName} can connect. Each member signs in with their own account.",
+    "title": "Workspace plugins",
+    "subtitle": "The marketplace plugins members of {workspaceName} can connect. Each member signs in with their own account.",
     "readOnly": "You can see this list. Only the workspace owner can change it."
   },
   "addMenu": {
@@ -13,7 +13,7 @@
   "states": {
     "loading": "Loading plugins...",
     "forbiddenTitle": "Only workspace owners and admins can see this page",
-    "forbiddenBody": "Ask for a plugin from your own Plugins page instead.",
+    "forbiddenBody": "Ask for a plugin from My connections instead.",
     "loadError": "Could not load this workspace's plugins.",
     "retry": "Retry"
   },
@@ -22,8 +22,7 @@
     "readOnly": "Only the workspace owner can add plugins."
   },
   "transition": {
-    "allAvailable": "Every marketplace plugin is available here until this list is changed.",
-    "noneAvailable": "No marketplace plugin is available here yet. Plugins were switched off in this workspace's old settings."
+    "carriedOver": "{count, plural, one {Nothing has been chosen for this workspace yet, so it keeps the plugin members already use here until you change this list.} other {Nothing has been chosen for this workspace yet, so it keeps the # plugins members already use here until you change this list.}}"
   },
   "requests": {
     "title": "Requests",
@@ -91,7 +90,7 @@
     "cancel": "Cancel",
     "remove": "Remove",
     "confirmPrivate": "Remove {label}? Members can no longer see or use it, in {workspaceName} or anywhere else.",
-    "confirmShared": "Remove {label} from {workspaceName}? WarpBot stops using it here. Members keep their own connection and can disconnect it from Plugins."
+    "confirmShared": "Remove {label} from {workspaceName}? WarpBot stops using it here. Members keep their own connection and can disconnect it from My connections."
   },
   "facts": {
     "notUsedYet": "Not used by any member yet",
@@ -115,5 +114,21 @@
     "requestApproved": "{label} added · {name} was notified",
     "requestDeclined": "{name} was told it wasn't added",
     "couldNotDecide": "Could not update the request."
+  },
+  "members": {
+    "title": "Members who connected it",
+    "count": "{count, plural, one {# member} other {# members}}",
+    "loading": "Loading members…",
+    "loadError": "Couldn't load who connected this plugin.",
+    "retry": "Retry",
+    "empty": "No member of this workspace has connected it yet.",
+    "formerMember": "A former member",
+    "connectedAgo": "Connected {when}",
+    "lastUsedAgo": "last used {when}",
+    "notUsedHereYet": "not used here yet",
+    "status": {
+      "expired": "Expired",
+      "revoked": "Disconnected"
+    }
   }
 }

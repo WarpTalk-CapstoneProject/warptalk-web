@@ -431,6 +431,9 @@ export const API = {
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/private`,
       privatePlugin: (workspaceId: string, pluginKey: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/private/${encodeURIComponent(pluginKey)}`,
+      /** Members who connected the plugin — Owner or Admin; connection metadata only. */
+      members: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/members`,
       requests: (workspaceId: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests`,
       myRequests: (workspaceId: string) =>
