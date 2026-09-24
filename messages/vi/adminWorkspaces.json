@@ -85,7 +85,8 @@
       "members": "Thành viên",
       "usage": "Sử dụng",
       "billing": "Thanh toán",
-      "audit": "Dòng thời gian"
+      "audit": "Dòng thời gian",
+      "plugins": "Plugin"
     },
     "toasts": {
       "suspended": "Đã tạm ngưng không gian làm việc.",

@@ -19,6 +19,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import { AdminPage, AdminPanel } from "@/components/admin/admin-page-chrome";
+import { PluginWorkspacesTab } from "@/components/admin/plugins/plugin-workspaces-tab";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -32,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   useAdminPluginAudits,
@@ -210,6 +212,8 @@ export default function AdminPluginDetailPage() {
   const rediscoverMutation = useRediscoverAdminPlugin(pluginKey);
   const activationMutation = useUpdateAdminPlugin(pluginKey);
 
+  // "settings" is the row itself; "workspaces" is where it reaches (per-workspace on/off).
+  const [tab, setTab] = useState("settings");
   const [auditPage, setAuditPage] = useState(1);
   const [auditOutcome, setAuditOutcome] = useState("");
   const auditQueryArgs = useMemo(
@@ -376,121 +380,134 @@ export default function AdminPluginDetailPage() {
         </AdminPanel>
       ) : null}
 
-      {/* Keyed on the plugin key so routing to a DIFFERENT row starts these sections over — an
-          edit to google_drive must not follow the operator to google_calendar. Freshness within
-          one row is not this key's job and never was: the key never changes while the row is open,
-          so a re-seeded detail was invisible to fields initialised with useState. That is what
-          useSeededField above handles, per field. */}
-      <MetadataSection key={`meta-${detail.pluginKey}`} detail={detail} />
-      {detail.kind === "mcp" ? <AuthModeSection key={`auth-${detail.pluginKey}`} detail={detail} /> : null}
-      {detail.oAuthClientSource === "api_key" ? null : (
-        <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
-      )}
-      <ToolsSection key={`tools-${detail.pluginKey}`} detail={detail} />
+      <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="mt-5">
+        <TabsList>
+          <TabsTrigger value="settings">{t("tabs.settings")}</TabsTrigger>
+          <TabsTrigger value="workspaces">{t("tabs.workspaces")}</TabsTrigger>
+        </TabsList>
 
-      <SectionHeading
-        icon={<ClockCounterClockwise size={14} weight="duotone" />}
-        title={t("audits.heading")}
-        note={
-          audits ? t("audits.recordedCount", { count: numberFormatter.format(audits.totalCount) }) : undefined
-        }
-      />
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Input
-          value={auditOutcome}
-          onChange={(event) => {
-            setAuditOutcome(event.target.value);
-            setAuditPage(1);
-          }}
-          placeholder={t("audits.filterPlaceholder")}
-          aria-label={t("audits.filterAria")}
-          className="max-w-xs"
-        />
-        {auditsQuery.isFetching ? (
-          <span className="text-[11px] text-ink-muted">{t("audits.loading")}</span>
-        ) : null}
-      </div>
-      <AdminPanel>
-        {auditsQuery.isError ? (
-          <div className="flex items-start gap-3 px-4 py-8 text-sm">
-            <WarningCircle
-              size={18}
-              weight="duotone"
-              className="mt-0.5 shrink-0 text-destructive"
+        <TabsContent value="settings">
+          {/* Keyed on the plugin key so routing to a DIFFERENT row starts these sections over — an
+              edit to google_drive must not follow the operator to google_calendar. Freshness within
+              one row is not this key's job and never was: the key never changes while the row is open,
+              so a re-seeded detail was invisible to fields initialised with useState. That is what
+              useSeededField above handles, per field. */}
+          <MetadataSection key={`meta-${detail.pluginKey}`} detail={detail} />
+          {detail.kind === "mcp" ? <AuthModeSection key={`auth-${detail.pluginKey}`} detail={detail} /> : null}
+          {detail.oAuthClientSource === "api_key" ? null : (
+            <OAuthSection key={`oauth-${detail.pluginKey}`} detail={detail} />
+          )}
+          <ToolsSection key={`tools-${detail.pluginKey}`} detail={detail} />
+
+          <SectionHeading
+            icon={<ClockCounterClockwise size={14} weight="duotone" />}
+            title={t("audits.heading")}
+            note={
+              audits ? t("audits.recordedCount", { count: numberFormatter.format(audits.totalCount) }) : undefined
+            }
+          />
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Input
+              value={auditOutcome}
+              onChange={(event) => {
+                setAuditOutcome(event.target.value);
+                setAuditPage(1);
+              }}
+              placeholder={t("audits.filterPlaceholder")}
+              aria-label={t("audits.filterAria")}
+              className="max-w-xs"
             />
-            <div>
-              <p className="font-medium">{t("audits.error.title")}</p>
-              <p className="mt-1 text-ink-muted">
-                {failureMessage(auditsQuery.error, t("loadError.fallback"))}
+            {auditsQuery.isFetching ? (
+              <span className="text-[11px] text-ink-muted">{t("audits.loading")}</span>
+            ) : null}
+          </div>
+          <AdminPanel>
+            {auditsQuery.isError ? (
+              <div className="flex items-start gap-3 px-4 py-8 text-sm">
+                <WarningCircle
+                  size={18}
+                  weight="duotone"
+                  className="mt-0.5 shrink-0 text-destructive"
+                />
+                <div>
+                  <p className="font-medium">{t("audits.error.title")}</p>
+                  <p className="mt-1 text-ink-muted">
+                    {failureMessage(auditsQuery.error, t("loadError.fallback"))}
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => void auditsQuery.refetch()}
+                  >
+                    {t("audits.error.tryAgain")}
+                  </Button>
+                </div>
+              </div>
+            ) : auditsQuery.isPending ? (
+              <ul aria-busy="true">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <li key={index} className="border-b border-hairline/60 px-4 py-3 last:border-b-0">
+                    <div className="h-3 w-64 animate-pulse rounded bg-surface-2" />
+                  </li>
+                ))}
+              </ul>
+            ) : !audits || audits.items.length === 0 ? (
+              <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
+                {auditOutcome.trim().length > 0 ? t("audits.emptyFiltered") : t("audits.emptyAll")}
               </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void auditsQuery.refetch()}
-              >
-                {t("audits.error.tryAgain")}
-              </Button>
+            ) : (
+              <ul>
+                {audits.items.map((entry) => (
+                  <AuditRow key={entry.id} entry={entry} />
+                ))}
+              </ul>
+            )}
+          </AdminPanel>
+          {audits && audits.totalCount > audits.pageSize ? (
+            <div className="mt-3 flex items-center justify-between text-[12px] text-ink-muted">
+              <span>{t("audits.pageLabel", { page: audits.page, total: auditTotalPages })}</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={audits.page <= 1}
+                  onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
+                >
+                  {t("audits.previous")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={audits.page >= auditTotalPages}
+                  onClick={() => setAuditPage((page) => page + 1)}
+                >
+                  {t("audits.next")}
+                </Button>
+              </div>
             </div>
-          </div>
-        ) : auditsQuery.isPending ? (
-          <ul aria-busy="true">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <li key={index} className="border-b border-hairline/60 px-4 py-3 last:border-b-0">
-                <div className="h-3 w-64 animate-pulse rounded bg-surface-2" />
-              </li>
-            ))}
-          </ul>
-        ) : !audits || audits.items.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            {auditOutcome.trim().length > 0 ? t("audits.emptyFiltered") : t("audits.emptyAll")}
+          ) : null}
+
+          <DangerSection
+            key={`danger-${detail.pluginKey}`}
+            detail={detail}
+            onHardDeleted={() => router.push("/admin/plugins")}
+          />
+
+          <p className="mt-6 text-[12px] text-ink-muted">
+            {t("footer.prefix")}{" "}
+            {detail.updatedBy ? (
+              t("footer.lastWrittenBy", { editor: detail.updatedBy, date: formatDateTime(detail.updatedAt) })
+            ) : (
+              t("footer.noRecordedEditor", { date: formatDateTime(detail.createdAt) })
+            )}
           </p>
-        ) : (
-          <ul>
-            {audits.items.map((entry) => (
-              <AuditRow key={entry.id} entry={entry} />
-            ))}
-          </ul>
-        )}
-      </AdminPanel>
-      {audits && audits.totalCount > audits.pageSize ? (
-        <div className="mt-3 flex items-center justify-between text-[12px] text-ink-muted">
-          <span>{t("audits.pageLabel", { page: audits.page, total: auditTotalPages })}</span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={audits.page <= 1}
-              onClick={() => setAuditPage((page) => Math.max(1, page - 1))}
-            >
-              {t("audits.previous")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={audits.page >= auditTotalPages}
-              onClick={() => setAuditPage((page) => page + 1)}
-            >
-              {t("audits.next")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
+        </TabsContent>
 
-      <DangerSection
-        key={`danger-${detail.pluginKey}`}
-        detail={detail}
-        onHardDeleted={() => router.push("/admin/plugins")}
-      />
-
-      <p className="mt-6 text-[12px] text-ink-muted">
-        {t("footer.prefix")}{" "}
-        {detail.updatedBy ? (
-          t("footer.lastWrittenBy", { editor: detail.updatedBy, date: formatDateTime(detail.updatedAt) })
-        ) : (
-          t("footer.noRecordedEditor", { date: formatDateTime(detail.createdAt) })
-        )}
-      </p>
+        <TabsContent value="workspaces" className="mt-4">
+          <PluginWorkspacesTab pluginKey={detail.pluginKey} />
+        </TabsContent>
+      </Tabs>
     </AdminPage>
   );
 }

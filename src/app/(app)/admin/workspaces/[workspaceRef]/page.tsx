@@ -35,6 +35,7 @@ import {
   type OpenWorkspaceAction,
 } from "@/components/admin/workspace-detail/workspace-action-dialogs";
 import { WorkspaceTimeline } from "@/components/admin/workspace-detail/workspace-timeline";
+import { WorkspacePluginsTab } from "@/components/admin/workspaces/workspace-plugins-tab";
 import {
   WorkspaceLifecycleDialog,
   type WorkspaceLifecycleAction,
@@ -1118,6 +1119,7 @@ export default function AdminWorkspaceDetailPage() {
                 <TabsTrigger value="members">{t("tabs.members")}</TabsTrigger>
                 <TabsTrigger value="usage">{t("tabs.usage")}</TabsTrigger>
                 <TabsTrigger value="billing">{t("tabs.billing")}</TabsTrigger>
+                <TabsTrigger value="plugins">{t("tabs.plugins")}</TabsTrigger>
                 <TabsTrigger value="audit">{t("tabs.audit")}</TabsTrigger>
               </TabsList>
 
@@ -1140,6 +1142,10 @@ export default function AdminWorkspaceDetailPage() {
 
               <TabsContent value="billing" className="mt-4">
                 <BillingTab workspace={workspace} onAction={setOpenAction} />
+              </TabsContent>
+
+              <TabsContent value="plugins" className="mt-4">
+                <WorkspacePluginsTab workspaceId={workspace.id} />
               </TabsContent>
 
               <TabsContent value="audit" className="mt-4">

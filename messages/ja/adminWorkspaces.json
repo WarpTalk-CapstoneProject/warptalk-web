@@ -85,7 +85,8 @@
       "members": "メンバー",
       "usage": "利用状況",
       "billing": "請求",
-      "audit": "タイムライン"
+      "audit": "タイムライン",
+      "plugins": "プラグイン"
     },
     "toasts": {
       "suspended": "ワークスペースを停止しました。",

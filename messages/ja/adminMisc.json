@@ -165,30 +165,5 @@
       "previous": "前へ",
       "next": "次へ"
     }
-  },
-  "emailTemplates": {
-    "eyebrow": "オペレーション",
-    "title": "メールテンプレート",
-    "description": "プラットフォームが送信するすべてのメール、その内容の管理場所、差し込まれる項目を一覧できます。",
-    "notEditableNotice": "これらのメールは送信元サービスのコード内で作成されているため、ここでは編集できません。件名や本文を変更するには、そのサービスのコードを変更する必要があります。",
-    "tabs": {
-      "all": "すべて",
-      "live": "稼働中",
-      "dormant": "休止中"
-    },
-    "filterAria": "ステータスでメールを絞り込む",
-    "emailCount": "{count, plural, other {メール #件}}",
-    "statusLive": "稼働中",
-    "statusDormant": "休止中",
-    "detail": {
-      "whyDormant": "休止している理由",
-      "subject": "件名",
-      "sentWhen": "送信タイミング",
-      "sentBy": "送信元",
-      "sentByValue": "{service}（{provider}経由）",
-      "body": "本文",
-      "variables": "変数",
-      "source": "ソース"
-    }
   }
 }

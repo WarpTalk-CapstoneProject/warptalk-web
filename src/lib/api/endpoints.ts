@@ -479,6 +479,23 @@ export const API = {
       `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
   },
   /**
+   * Which workspaces a marketplace plugin reaches (2026-09-25): its default, per-workspace
+   * overrides (bulk by id and/or plan), and both views. Platform-admin only. The workspace-centric
+   * routes live under `/assistant/admin/workspaces` so no literal sits beside `{pluginKey}`.
+   */
+  adminPluginWorkspaceAccess: {
+    workspaces: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/workspaces`,
+    availability: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/availability`,
+    overrides: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/workspaces/overrides`,
+    workspacePlugins: (workspaceId: string) =>
+      `/assistant/admin/workspaces/${encodeURIComponent(workspaceId)}/plugins`,
+    workspaceOverride: (workspaceId: string, pluginKey: string) =>
+      `/assistant/admin/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/override`,
+  },
+  /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
    * the workspace service's audit store — the transport that can refuse — which is what ended
    * the "no bus, so no privileged actions" era.
@@ -535,6 +552,33 @@ export const API = {
   adminAnnouncements: {
     base: "/admin/notifications",
     detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
+  },
+  /**
+   * The announcements CMS (notification service). Nested under /admin/notifications so it rides
+   * the gateway route that already exists rather than widening the approved admin surface.
+   */
+  adminAnnouncementCms: {
+    base: "/admin/notifications/announcements",
+    detail: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}`,
+    publish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/publish`,
+    unpublish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/unpublish`,
+    archive: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/archive`,
+    duplicate: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/duplicate`,
+  },
+  /** The email template CMS (notification service). Every sender reads what is saved here. */
+  adminEmailTemplates: {
+    base: "/admin/notifications/email-templates",
+    detail: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}`,
+    preview: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/preview`,
+    test: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/test`,
+    versions: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/versions`,
+    restore: (key: string, version: number) =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/versions/${version}/restore`,
+  },
+  /** Announcements as the signed-in user sees them: live, meant for them, not dismissed. */
+  announcements: {
+    active: "/notifications/announcements",
+    dismiss: (id: string) => `/notifications/announcements/${encodeURIComponent(id)}/dismiss`,
   },
   /**
    * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
