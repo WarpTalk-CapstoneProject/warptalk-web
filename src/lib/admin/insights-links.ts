@@ -37,7 +37,9 @@ export const INSIGHTS_LINK_TARGETS = {
 
   // Section headers: navigation.
   subscriptions: { path: "/admin/subscriptions" },
-  subscriptionsEndingSoon: { path: "/admin/subscriptions", params: { sort: "period_end_asc" } },
+  // The list toolkit names a sort by field + direction (`sort=periodEnd&dir=asc`); the old API
+  // spelling `period_end_asc` is not a field and would be dropped as unknown.
+  subscriptionsEndingSoon: { path: "/admin/subscriptions", params: { sort: "periodEnd", dir: "asc" } },
   workspaces: { path: "/admin/workspaces" },
   billingLedger: { path: "/admin/billing" },
   plans: { path: "/admin/plans" },
