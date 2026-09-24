@@ -72,6 +72,14 @@ export interface TranslationRoomDto {
   externalCalendarEventUrl?: string | null;
   isHost?: boolean;
   /**
+   * WT-703: the languages this finished meeting's summary renderings and minutes translations may
+   * be GENERATED in — its own languages narrowed by the workspace whitelist and the catalog,
+   * exactly what the server will accept. Sent by the room detail read once the meeting is over;
+   * absent or null otherwise, which the pickers read as "not known" (offer everything; the server
+   * still enforces). See artifact-language-options.ts.
+   */
+  artifactLanguages?: { generatable: string[] } | null;
+  /**
    * WT-327: the recurring series this room is an occurrence of, or absent for a one-off room.
    * An occurrence is an ORDINARY meeting in every other respect — its own code, transcript,
    * artifacts and billing — so this is only ever used to say "this repeats" in the UI.
@@ -417,6 +425,8 @@ export interface TranslationRoomArtifactDto {
   updatedAt?: string | null;
   /** WT-473: when the recording BEGAN. Absent means NOT SEEKABLE, never zero. */
   recordingStartedAt?: string | null;
+  /** WT-824: why a FAILED recording has no file (host-facing reason + LiveKit status/error). */
+  failureReason?: string | null;
 }
 
 export interface TranslationRoomHistoryItemDto {

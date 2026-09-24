@@ -19,7 +19,12 @@
       "previous": "前へ",
       "next": "次へ"
     },
-    "footerNote": "お知らせは指定した相手に一度だけ配信され、後から編集・取り消し・削除はできません。「全員」という対象は存在せず、セグメント解決機能が用意されるまでは指定したリストのみを受け付けます。"
+    "footerNote": "お知らせは指定した相手に一度だけ配信され、後から編集・取り消し・削除はできません。「全員」という対象は存在せず、セグメント解決機能が用意されるまでは指定したリストのみを受け付けます。",
+    "delivery": {
+      "sentAt": "{date} に送信",
+      "createdTitle": "作成済み — 未送信",
+      "delivered": "{count, plural, =0 {配信なし} other {# 件配信}}"
+    }
   },
   "detail": {
     "back": "お知らせ",
@@ -51,7 +56,9 @@
       "mode": "モード",
       "rawTargeting": "対象データ（生データ）",
       "segment": "セグメント",
-      "namedRecipients": "指定された受信者"
+      "namedRecipients": "指定された受信者",
+      "sentAt": "送信日時",
+      "delivered": "配信数"
     },
     "resolving": "· 取得中…",
     "toasts": {
@@ -76,17 +83,32 @@
       "downtimeRange": "{start} → {end}",
       "empty": "画像、リンク、コード、メンテナンス時間帯のいずれもありません。"
     },
-    "footerNote": "通知サービスはお知らせの配信日時や配信件数を記録していないため、ここには表示されません。"
+    "footerNote": "送信日時と配信件数は、すべての配信チャンクが集計された時点で記録されます。いずれかのチャンクが失敗したお知らせは Failed のままです。",
+    "notSent": "未送信",
+    "deliveryUnknown": "このサーバーからは報告されていません",
+    "deliveredCount": "{count, plural, =0 {受信者なし} other {受信者 # 人}}"
   },
   "composer": {
     "types": {
-      "ANNOUNCEMENT": { "label": "お知らせ", "hint": "プラットフォームからの一般的なニュースです。" },
-      "PROMOTION": { "label": "プロモーション", "hint": "特典、リンク、割引コードを含みます。" },
-      "MAINTENANCE": { "label": "メンテナンス", "hint": "メンテナンス時間帯を明記します。開始・終了とも必須です。" },
-      "SYSTEM": { "label": "システム", "hint": "プラットフォーム自身についての通知です。リンクや特典は含みません。" }
+      "ANNOUNCEMENT": {
+        "label": "お知らせ",
+        "hint": "プラットフォームからの一般的なニュースです。"
+      },
+      "PROMOTION": {
+        "label": "プロモーション",
+        "hint": "特典、リンク、割引コードを含みます。"
+      },
+      "MAINTENANCE": {
+        "label": "メンテナンス",
+        "hint": "メンテナンス時間帯を明記します。開始・終了とも必須です。"
+      },
+      "SYSTEM": {
+        "label": "システム",
+        "hint": "プラットフォーム自身についての通知です。リンクや特典は含みません。"
+      }
     },
     "title": "お知らせを作成",
-    "description": "指定した相手に一度だけ配信されます。下書き、予約配信、取り消しはできません。",
+    "description": "選んだ相手に一度だけ届きます — 指定したユーザー、1つのワークスペース、または全員。下書き・予約・取り消しはできません。",
     "typeLabel": "種類",
     "titleLabel": "タイトル",
     "messageLabel": "本文",
@@ -111,7 +133,7 @@
       "add": "追加",
       "remove": "{email}を削除",
       "clear": "クリア",
-      "footerNote": "指定リストのみ対応しています。セグメント解決機能が用意されるまで「全員」という対象は利用できません。"
+      "footerNote": "指定したユーザーのみ。より広く送るには上で「1つのワークスペース」または「全員」を選んでください。"
     },
     "cancel": "キャンセル",
     "review": "確認して送信へ進む",
@@ -123,7 +145,34 @@
       "andMore": "他 {count} 名",
       "back": "戻る",
       "sending": "送信中…",
-      "send": "{count} 名に送信"
+      "send": "{count} 名に送信",
+      "everyone": "プラットフォームの有効なアカウント全員",
+      "segment": "{name} の有効なメンバー全員（現在 {count, plural, other {#人}}）",
+      "sendAudience": "送信"
+    },
+    "audience": {
+      "label": "宛先",
+      "SPECIFIC_USERS": {
+        "label": "指定したユーザー",
+        "hint": "ディレクトリからアカウントを選びます。"
+      },
+      "SEGMENT": {
+        "label": "1つのワークスペース",
+        "hint": "ワークスペースの有効なメンバー全員。"
+      },
+      "BROADCAST": {
+        "label": "全員",
+        "hint": "プラットフォームの有効なアカウント全員。"
+      }
+    },
+    "segment": {
+      "label": "ワークスペース",
+      "searchPlaceholder": "名前でワークスペースを検索",
+      "searching": "検索中…",
+      "directoryError": "ワークスペース一覧を読み込めませんでした。",
+      "noMatch": "一致するワークスペースはありません。",
+      "change": "変更",
+      "memberCount": "{count, plural, other {#人のメンバー}}"
     }
   }
 }

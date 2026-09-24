@@ -41,8 +41,6 @@
     },
     "configRows": {
       "fxRate": "Tỷ giá USD→VND",
-      "creditValue": "Giá trị 1 credit (VND)",
-      "minimumPricePerCredit": "Giá tối thiểu mỗi credit (VND)",
       "minimumContractPrice": "Giá hợp đồng tối thiểu",
       "salesWeightUsage": "Trọng số bán hàng · mức sử dụng",
       "salesWeightMembers": "Trọng số bán hàng · thành viên",
@@ -68,15 +66,15 @@
     },
     "bandReference": {
       "title": "Dữ liệu tham chiếu",
-      "note": "Chỉ xem tại đây — những mục này thay đổi qua migration."
+      "note": "Danh mục ngôn ngữ được ghi nhật ký kiểm tra; đồng ý giọng nói chỉ đọc."
     },
     "billingPolicyHeading": "Chính sách thanh toán",
     "pricingEconomicsHeading": "Cấu trúc giá",
-    "pricingEconomicsSubnote": "Cùng một cấu hình mà bộ kiểm tra gói và bộ đọc biên lợi nhuận bảng giá tham chiếu — cũng có thể truy cập từ Gói & bảng giá.",
+    "pricingEconomicsSubnote": "Cùng một cấu hình mà bộ kiểm tra gói và bộ đọc biên lợi nhuận bảng giá tham chiếu — cũng có thể truy cập từ Gói & bảng giá. Giá bán cho khách hàng do Stripe quản lý, nên giá trị 1 credit và giá sàn mỗi credit không còn được chỉnh ở đây; chúng chỉ thay đổi qua migration.",
     "languageCatalogHeading": "Danh mục ngôn ngữ",
     "voiceConsentHeading": "Đồng ý nhân bản giọng nói",
     "voiceConsentCount": "{count, plural, other {# quyết định đã ghi nhận}}",
-    "explainer": "<strong>Vì sao không có gì để bấm bên dưới.</strong> Không dịch vụ nào đứng sau dữ liệu này có thể ghi lại ai đã thay đổi nó. Một công tắc ở đây sẽ cho phép ai đó thay đổi những gì mọi cuộc họp đang kiểm tra dựa vào mà không có tên gắn với thay đổi đó, vì vậy các mục này được thay đổi qua migration, nơi thay đổi được rà soát và có người chịu trách nhiệm.",
+    "explainer": "<strong>Những gì bạn có thể và không thể thay đổi ở đây.</strong> Danh mục ngôn ngữ có thể chỉnh sửa: mọi thao tác thêm, đổi tên hay bật/tắt đều được ghi vào nhật ký kiểm tra của nền tảng trước, và bị từ chối nếu không ghi được, nên mỗi thay đổi đều có tên người thực hiện. Sổ đồng ý nhân bản giọng nói vẫn chỉ đọc — dịch vụ của nó không ghi nhận được ai đã thay đổi.",
     "footerNote": "Chỉ có số liệu, và đó là một ranh giới chứ không phải một sự rút gọn. Giọng nói được nhân bản là dữ liệu sinh trắc học; một danh sách ai đã đồng ý sẽ trở thành một sổ đăng ký quyền sinh trắc học, và không có gì trên màn hình này tác động đến một cá nhân cụ thể.",
     "panelError": {
       "message": "Không thể tải {what}.",
@@ -97,10 +95,9 @@
       "errorWhat": "cấu hình giá",
       "fxRateLabel": "Tỷ giá (USD → VND)",
       "fxRateHint": "Dùng để quy đổi chi phí nhà cung cấp tính bằng USD sang VND.",
-      "creditValueLabel": "Giá trị 1 credit",
-      "creditValueHint": "Chi phí khách hàng phải trả cho một credit, tính bằng VND.",
-      "minimumPricePerCreditLabel": "Giá tối thiểu mỗi credit",
-      "minimumPricePerCreditHint": "Ngưỡng giá sàn mà bộ kiểm tra gói sử dụng — một gói theo VND không được bán credit thấp hơn mức này.",
+      "cartesiaUsdPerCreditLabel": "Giá USD mỗi credit Cartesia",
+      "cartesiaUsdPerCreditHint": "Chi phí WarpTalk trả cho một credit Cartesia. Insights tính chi phí lồng tiếng bằng số credit Cartesia đo được × giá này × tỷ giá. Tài khoản đang dùng credit đã mua từ trước, nên hãy nhập giá đã trả cho chúng, không phải mức biên 0 của gói Free. Mặc định: gói Startup, $49 / 1.250.000.",
+      "cartesiaUsdPerCreditValue": "${price} mỗi credit",
       "minimumContractPriceLabel": "Giá hợp đồng tối thiểu",
       "minimumContractPriceHint": "Theo mỗi chu kỳ, trước khi một gói được coi là hợp lệ.",
       "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
@@ -110,6 +107,61 @@
       "editButton": "Chỉnh sửa cấu trúc giá"
     },
     "languageCatalog": {
+      "manage": {
+        "add": "Thêm ngôn ngữ",
+        "edit": "Sửa",
+        "disable": "Tắt",
+        "enable": "Bật",
+        "columns": {
+          "usage": "Đang dùng",
+          "actions": ""
+        },
+        "usageNone": "—",
+        "usageLive": "{count} đang diễn ra",
+        "usageUpcoming": "{count} đã lên lịch",
+        "form": {
+          "addTitle": "Thêm ngôn ngữ",
+          "editTitle": "Sửa {code}",
+          "description": "Kiểm tra phòng chấp nhận ngôn ngữ ngay khi được bật. Bộ chọn ngôn ngữ cuộc họp trong ứng dụng chỉ hiển thị các ngôn ngữ ứng dụng hỗ trợ; ngôn ngữ mới sẽ hiện là “hiển thị dạng mã” cho đến khi được hỗ trợ.",
+          "codeLabel": "Mã",
+          "codeHint": "Mã ngôn ngữ ISO 639, vùng tùy chọn — ví dụ de hoặc de-DE.",
+          "nameLabel": "Tên",
+          "nativeNameLabel": "Tên bản địa",
+          "enabledLabel": "Bật cho phòng mới ngay",
+          "cancel": "Hủy",
+          "save": "Lưu",
+          "create": "Thêm ngôn ngữ",
+          "saving": "Đang lưu…",
+          "createdToast": "Đã thêm {code} vào danh mục.",
+          "savedToast": "Đã cập nhật {code}.",
+          "genericError": "Không có gì thay đổi. Danh mục chưa được cập nhật, hoặc thay đổi không ghi được vào nhật ký kiểm tra.",
+          "errors": {
+            "codeInvalid": "Dùng mã ngôn ngữ như de hoặc de-DE.",
+            "codeTaken": "Ngôn ngữ này đã có trong danh mục.",
+            "codeCovered": "Đã được bao gồm bởi {code} — phòng so khớp theo ngôn ngữ, không theo vùng.",
+            "nameRequired": "Bắt buộc nhập tên.",
+            "nameTooLong": "Tên tối đa 100 ký tự.",
+            "nativeNameTooLong": "Tên bản địa tối đa 100 ký tự."
+          }
+        },
+        "toggle": {
+          "disableTitle": "Tắt {name}?",
+          "enableTitle": "Bật {name}?",
+          "disableDescription": "Tắt mềm: dòng dữ liệu vẫn còn, các cuộc họp cũ vẫn giữ ngôn ngữ này. Phòng mới bằng {code} sẽ bị từ chối cho đến khi bật lại.",
+          "enableDescription": "Phòng mới bằng {code} sẽ được chấp nhận trở lại.",
+          "blocked": "{count, plural, other {# cuộc họp đang diễn ra dùng ngôn ngữ này.}} Có thể tắt sau khi chúng kết thúc.",
+          "last": "Đây là ngôn ngữ duy nhất đang bật. Tắt nó sẽ khiến không phòng nào tạo được.",
+          "confirmUpcoming": "{count, plural, other {# cuộc họp đã lên lịch dùng ngôn ngữ này}}. Ai sửa hoặc tham gia bằng {code} sẽ bị từ chối.",
+          "confirmCheckbox": "Tôi hiểu — vẫn tắt",
+          "cancel": "Hủy",
+          "confirmDisable": "Tắt",
+          "confirmEnable": "Bật",
+          "pending": "Đang xử lý…",
+          "disabledToast": "Đã tắt {code} cho phòng mới.",
+          "enabledToast": "Đã bật {code}.",
+          "genericError": "Không có gì thay đổi."
+        }
+      },
       "errorWhat": "danh mục ngôn ngữ",
       "empty": "Danh mục đang trống — không thể tạo phòng ở bất kỳ ngôn ngữ nào.",
       "driftTitle": "{count, plural, other {Bộ chọn cuộc họp đang hiển thị # ngôn ngữ mà danh mục này sẽ từ chối.}}",
@@ -233,7 +285,21 @@
       },
       "cancel": "Hủy",
       "save": "Lưu bảng giá",
-      "saving": "Đang lưu…"
+      "saving": "Đang lưu…",
+      "creditCost": {
+        "title": "Chi phí nhà cung cấp",
+        "description": "Số tiền nhà cung cấp tính cho WarpTalk trên mỗi đơn vị của thẻ đơn vị tín dụng (CRD) — thẻ mà mức sử dụng thực sự được quyết toán. Giá tín dụng của thẻ được đặt riêng và không thay đổi ở đây. Trang Insights dùng chi phí này để tính chi phí nhà cung cấp AI.",
+        "field": "Chi phí nhà cung cấp (USD mỗi {unit})",
+        "hint": "Tính bằng USD cho một {unit} sử dụng, đúng như nhà cung cấp tính phí. Phải lớn hơn 0.",
+        "noUnit": "đơn vị",
+        "effectBackfill": "Thẻ này chưa có chi phí nhà cung cấp. Giá trị cũng sẽ áp dụng cho mức sử dụng đã quyết toán trên thẻ, nên các kỳ trước trong Insights sẽ có chi phí.",
+        "effectSupersede": "Thẻ này đã có chi phí. Một phiên bản mới của thẻ có hiệu lực từ bây giờ; mức sử dụng đã quyết toán giữ nguyên chi phí đã áp dụng.",
+        "save": "Lưu chi phí nhà cung cấp",
+        "errors": {
+          "invalid": "Nhập một số tiền dương bằng USD, ví dụ 0.00049.",
+          "noUnit": "Thẻ này không có đơn vị, nên không thể áp dụng chi phí theo đơn vị."
+        }
+      }
     },
     "deactivate": {
       "title": "Vô hiệu hóa bảng giá này?",
@@ -251,11 +317,6 @@
       },
       "fields": {
         "fxRateUsdVnd": { "label": "Tỷ giá USD→VND", "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND." },
-        "creditValueVnd": { "label": "Giá trị 1 credit (VND)" },
-        "minimumPricePerCreditVnd": {
-          "label": "Giá tối thiểu mỗi credit (VND)",
-          "hint": "Ngưỡng sàn để kiểm tra giá ÷ credit của một gói theo VND."
-        },
         "minimumContractPriceVnd": { "label": "Giá hợp đồng tối thiểu (VND)" },
         "minimumContractPriceUsd": { "label": "Giá hợp đồng tối thiểu (USD)" },
         "salesUsageWeight": { "label": "Trọng số bán hàng · mức sử dụng" },
@@ -264,7 +325,8 @@
         "salesAiServicesWeight": { "label": "Trọng số bán hàng · dịch vụ AI" },
         "defaultOverageCapRatio": { "label": "Tỷ lệ trần vượt mức mặc định" },
         "defaultInvoiceTermsDays": { "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)" },
-        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" }
+        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" },
+        "cartesiaUsdPerCredit": { "label": "Giá USD mỗi credit Cartesia", "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại." }
       },
       "cancel": "Hủy",
       "save": "Lưu cấu hình",

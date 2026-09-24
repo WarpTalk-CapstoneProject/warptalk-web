@@ -19,6 +19,7 @@ import {
   DownloadSimple,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
 
 import {
@@ -31,7 +32,9 @@ import {
 } from "@/components/admin/insights/insights-charts";
 import { insightsHref, metricHref, workspaceHref } from "@/lib/admin/insights-links";
 import {
+  aiCostBasisView,
   assembleNeedsAttention,
+  cartesiaLineView,
   churnSub,
   compactNumber,
   deltaText,
@@ -317,10 +320,78 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
                 <span>last period {view.previous}</span>
               </div>
             ) : null}
+            {!loading && spec.id === "aiProviderCost" ? (
+              <AiCostBasisLine basis={sources.billing?.aiProviderCostBasis} />
+            ) : null}
             {!loading && view.note ? <div className="mt-1.5 text-[11px] text-ink-muted">{view.note}</div> : null}
           </CardShell>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Whether the AI provider cost priced dubbing from measured Cartesia credits or estimated it. The
+ * server's note beside it has the arithmetic; this is the one word an admin reads first.
+ */
+function AiCostBasisLine({ basis }: { basis: BillingInsightsDto["aiProviderCostBasis"] }) {
+  const t = useTranslations("adminOps.insights.aiCostBasis");
+  const view = aiCostBasisView(basis);
+  if (!view) return null;
+  return (
+    <div className={cn("mt-1.5 text-[11px] font-medium", view.tone === "warning" ? "text-warning" : "text-ink-muted")}>
+      {view.basis === "measured"
+        ? t("measured")
+        : view.basis === "mixed"
+          ? t("mixed", { measured: view.measuredDays, total: view.totalDays })
+          : t("estimated")}
+    </div>
+  );
+}
+
+/**
+ * Cartesia, measured: what billing's usage sync has read. One line, not a card — it is context for
+ * the AI cost figure, not a metric of its own — and amber whenever the sync is not healthy, because
+ * then the AI cost above it is an estimate.
+ */
+function CartesiaLine({ state, nowMs }: { state: SourceState<BillingSnapshotDto>; nowMs: number }) {
+  const t = useTranslations("adminOps.insights.cartesia");
+  const cartesia = state.status === "ready" ? state.data.cartesia : null;
+  if (!cartesia) return null;
+
+  const view = cartesiaLineView(cartesia, nowMs);
+  const price = new Intl.NumberFormat("en-US", { maximumFractionDigits: 10 }).format(cartesia.usdPerCredit);
+  const parts = [
+    view.creditsThisMonth === null
+      ? t("monthUnknown")
+      : t("thisMonth", { credits: formatCount(view.creditsThisMonth) }),
+    view.creditsToday === null ? null : t("today", { credits: formatCount(view.creditsToday) }),
+    view.remainingCredits === null
+      ? t("remainingUnknown")
+      : t("remaining", { credits: formatCount(view.remainingCredits) }),
+    view.syncedMinutesAgo === null ? t("neverSynced") : t("syncedAgo", { minutes: view.syncedMinutesAgo }),
+    cartesia.filteredToApiKey ? null : t("allKeys"),
+  ].filter(Boolean);
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-baseline gap-x-2.5 gap-y-1 rounded-xl border px-4 py-2.5 text-[12px] tabular-nums",
+        view.tone === "warning" ? "border-warning/40 bg-warning/10" : "border-hairline bg-surface-1",
+      )}
+    >
+      <span className="text-[11px] font-medium uppercase tracking-[0.4px] text-ink-muted">{t("title")}</span>
+      <span className={cn("font-semibold", view.tone === "warning" ? "text-warning" : "text-ink")}>
+        {t(`status.${view.state}`)}
+      </span>
+      <span className="text-ink-muted" title={cartesia.remainingCreditsNote ?? undefined}>
+        {parts.join(" · ")}
+      </span>
+      {view.note ? <span className="min-w-0 text-warning">{view.note}</span> : null}
+      <Link href="/admin/settings" className="ml-auto whitespace-nowrap text-[11px] text-primary hover:underline">
+        {t("price", { price })} →
+      </Link>
     </div>
   );
 }
@@ -704,6 +775,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       <PeriodCards props={props} />
       <SnapshotGrid cards={snapshotCards} />
       <SnapshotGrid cards={opsCards} />
+      <CartesiaLine state={props.snapshot} nowMs={props.updatedAt} />
 
       <details className="group">
         <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 px-0.5 py-1 text-[13px] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">

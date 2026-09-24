@@ -16,8 +16,10 @@
  */
 
 import type {
+  AiProviderCostBasisDto,
   BillingInsightsDto,
   BillingSnapshotDto,
+  CartesiaUsageDto,
   InsightsMetric,
   InsightsUnit,
   MeetingsInsightsDto,
@@ -202,6 +204,68 @@ function outstandingAmountText(invoices: BillingSnapshotDto["outstandingInvoices
   return invoices.amount === null
     ? `Amount not totalled${invoices.amountNote ? ` (${invoices.amountNote})` : ""}`
     : `${formatInsightValue(invoices.amount, "money")} outstanding`;
+}
+
+// ── Cartesia ─────────────────────────────────────────────────────────────────
+//
+// Structured, not worded: the page translates these (next-intl), and the node tests here have no
+// catalog. The tone is the only judgement made here.
+
+/** A sync older than this, while the status still says ok, is stale: 3 missed 10-minute syncs. */
+export const CARTESIA_STALE_MINUTES = 30;
+
+export interface CartesiaLineView {
+  /** `stale`: status ok, but the newest synced row is older than CARTESIA_STALE_MINUTES. */
+  state: CartesiaUsageDto["status"] | "stale";
+  tone: "neutral" | "warning";
+  creditsThisMonth: number | null;
+  creditsToday: number | null;
+  remainingCredits: number | null;
+  /** Minutes since the newest synced row; null when nothing was ever synced. */
+  syncedMinutesAgo: number | null;
+  note: string | null;
+}
+
+/** The snapshot's Cartesia line. Anything but a fresh ok sync is a warning. */
+export function cartesiaLineView(cartesia: CartesiaUsageDto, nowMs: number): CartesiaLineView {
+  const syncedMs = cartesia.lastSyncedAt ? Date.parse(cartesia.lastSyncedAt) : Number.NaN;
+  const syncedMinutesAgo = Number.isFinite(syncedMs) ? Math.max(0, Math.floor((nowMs - syncedMs) / 60_000)) : null;
+  const stale =
+    cartesia.status === "ok" && (syncedMinutesAgo === null || syncedMinutesAgo > CARTESIA_STALE_MINUTES);
+  const state = stale ? "stale" : cartesia.status;
+  return {
+    state,
+    tone: state === "ok" || state === "pending" ? "neutral" : "warning",
+    creditsThisMonth: cartesia.creditsThisMonth,
+    creditsToday: cartesia.creditsToday,
+    remainingCredits: cartesia.remainingCredits,
+    syncedMinutesAgo,
+    note: state === "ok" ? null : cartesia.statusNote,
+  };
+}
+
+export interface AiCostBasisView {
+  basis: AiProviderCostBasisDto["basis"];
+  measuredDays: number;
+  totalDays: number;
+  cartesiaCredits: number;
+  /** A basis the admin should question: estimated while the sync is broken or switched off. */
+  tone: "neutral" | "warning";
+}
+
+/**
+ * How the AI provider cost card priced dubbing. Null from a backend that predates the sync, so the
+ * card claims no basis rather than a wrong one.
+ */
+export function aiCostBasisView(basis: AiProviderCostBasisDto | null | undefined): AiCostBasisView | null {
+  if (!basis) return null;
+  return {
+    basis: basis.basis,
+    measuredDays: basis.measuredDays,
+    totalDays: basis.measuredDays + basis.estimatedDays,
+    cartesiaCredits: basis.cartesiaCredits,
+    tone: basis.basis !== "measured" && (basis.syncStatus === "error" || basis.syncStatus === "disabled") ? "warning" : "neutral",
+  };
 }
 
 // ── period cards ─────────────────────────────────────────────────────────────

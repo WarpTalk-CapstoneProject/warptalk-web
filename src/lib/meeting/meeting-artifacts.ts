@@ -30,9 +30,15 @@ export function artifactLabel(
 }
 
 /**
- * Consent outranks status. A file that is technically ready but still needs consent must not
- * read as "Ready" — the download will stop and ask, and saying "Ready" first makes that look
- * like a failure rather than the policy working.
+ * Consent outranks "Ready", and only "Ready". A file that is technically ready but still needs
+ * consent must not read as "Ready" — the download will stop and ask, and saying "Ready" first
+ * makes that look like a failure rather than the policy working.
+ *
+ * WT-824: but a file that is NOT ready has nothing behind the consent hold, and every recording
+ * row is written consent-required from the moment recording starts. Consent-first labelled a
+ * recording still being written, or one that failed, "Consent required" — and then the download
+ * said "not ready". The row sent people to the host about a permission when the real answer was
+ * "wait" or "this recording failed". So a non-ready status speaks for itself.
  *
  * `t` is optional for the same reason as `artifactLabel` above — see there.
  */
@@ -40,7 +46,9 @@ export function artifactStatusLabel(
   artifact: RoomHistoryArtifact,
   t?: (key: "consentRequired" | RoomHistoryArtifact["status"]) => string,
 ): string {
-  if (artifact.consentRequired) return t ? t("consentRequired") : "Consent required";
+  if (artifact.consentRequired && canDownloadArtifact(artifact)) {
+    return t ? t("consentRequired") : "Consent required";
+  }
   const status = artifact.status ?? "";
   if (t) return t(status);
   return status.charAt(0).toUpperCase() + status.slice(1);
@@ -70,6 +78,24 @@ export function findPlayableRecording(
       (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
     ) ?? null
   );
+}
+
+/**
+ * WT-824 — "Recording failed: <why>", for a failed recording whose reason the backend stored.
+ *
+ * Production's only two recordings both failed, and each row said "Failed" and nothing more —
+ * LiveKit's egress runs in LiveKit Cloud, so the reason it gave existed in one log line that the
+ * next deploy deleted. The backend now keeps it on the row (host-facing sentence plus LiveKit's
+ * status and error, URLs redacted); this is where a reader sees it.
+ *
+ * Null when there is nothing to add: not a recording, not failed, or failed before the column
+ * existed. The bare status label still covers those.
+ */
+export function recordingFailureText(artifact: RoomHistoryArtifact): string | null {
+  if (artifact.type !== "recording") return null;
+  if (artifact.status !== "failed" && artifact.status !== "missing") return null;
+  const reason = artifact.failureReason?.trim();
+  return reason ? `Recording failed: ${reason}` : null;
 }
 
 /** A recording artifact, whatever state it is in. The one predicate both counters below share. */

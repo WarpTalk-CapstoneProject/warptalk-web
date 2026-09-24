@@ -19,7 +19,12 @@
       "previous": "Trước",
       "next": "Tiếp"
     },
-    "footerNote": "Một thông báo chỉ được gửi một lần tới những người được nêu tên và không thể chỉnh sửa, thu hồi hay xóa sau đó. Không có đối tượng “tất cả mọi người”: dịch vụ chỉ chấp nhận danh sách nêu tên cho đến khi có bộ phân giải phân khúc."
+    "footerNote": "Một thông báo chỉ được gửi một lần tới những người được nêu tên và không thể chỉnh sửa, thu hồi hay xóa sau đó. Không có đối tượng “tất cả mọi người”: dịch vụ chỉ chấp nhận danh sách nêu tên cho đến khi có bộ phân giải phân khúc.",
+    "delivery": {
+      "sentAt": "Đã gửi {date}",
+      "createdTitle": "Đã tạo — chưa gửi",
+      "delivered": "{count, plural, =0 {Chưa gửi tới ai} other {Đã gửi tới #}}"
+    }
   },
   "detail": {
     "back": "Thông báo",
@@ -51,7 +56,9 @@
       "mode": "Chế độ",
       "rawTargeting": "Dữ liệu đối tượng thô",
       "segment": "Phân khúc",
-      "namedRecipients": "Người nhận được nêu tên"
+      "namedRecipients": "Người nhận được nêu tên",
+      "sentAt": "Thời điểm gửi",
+      "delivered": "Đã gửi tới"
     },
     "resolving": "· đang tra cứu…",
     "toasts": {
@@ -76,17 +83,32 @@
       "downtimeRange": "{start} → {end}",
       "empty": "Không có hình ảnh, liên kết, mã hay khung thời gian bảo trì."
     },
-    "footerNote": "Dịch vụ thông báo không ghi lại thời điểm gửi hay số lượt gửi cho một thông báo, nên các mục này không hiển thị ở đây."
+    "footerNote": "Thời điểm gửi và số lượt gửi được ghi lại khi mọi phần gửi đã được đếm; thông báo có bất kỳ phần nào gửi lỗi sẽ giữ trạng thái Failed.",
+    "notSent": "Chưa gửi",
+    "deliveryUnknown": "Máy chủ chưa báo cáo",
+    "deliveredCount": "{count, plural, =0 {Không có người nhận} other {# người nhận}}"
   },
   "composer": {
     "types": {
-      "ANNOUNCEMENT": { "label": "Thông báo", "hint": "Tin tức chung từ nền tảng." },
-      "PROMOTION": { "label": "Khuyến mãi", "hint": "Có ưu đãi, liên kết và mã giảm giá." },
-      "MAINTENANCE": { "label": "Bảo trì", "hint": "Nêu rõ khung thời gian bảo trì. Bắt buộc cả hai mốc thời gian." },
-      "SYSTEM": { "label": "Hệ thống", "hint": "Nền tảng tự thông báo về chính mình. Không liên kết, không ưu đãi." }
+      "ANNOUNCEMENT": {
+        "label": "Thông báo",
+        "hint": "Tin tức chung từ nền tảng."
+      },
+      "PROMOTION": {
+        "label": "Khuyến mãi",
+        "hint": "Có ưu đãi, liên kết và mã giảm giá."
+      },
+      "MAINTENANCE": {
+        "label": "Bảo trì",
+        "hint": "Nêu rõ khung thời gian bảo trì. Bắt buộc cả hai mốc thời gian."
+      },
+      "SYSTEM": {
+        "label": "Hệ thống",
+        "hint": "Nền tảng tự thông báo về chính mình. Không liên kết, không ưu đãi."
+      }
     },
     "title": "Soạn một thông báo",
-    "description": "Chỉ gửi một lần tới những người bạn nêu tên. Không có bản nháp, không lên lịch và không thể thu hồi.",
+    "description": "Gửi một lần tới người bạn chọn — một danh sách cụ thể, một không gian làm việc hoặc tất cả mọi người. Không có bản nháp, không hẹn giờ và không thể thu hồi.",
     "typeLabel": "Loại",
     "titleLabel": "Tiêu đề",
     "messageLabel": "Nội dung",
@@ -111,7 +133,7 @@
       "add": "Thêm",
       "remove": "Xóa {email}",
       "clear": "Xóa hết",
-      "footerNote": "Chỉ chấp nhận danh sách nêu tên. Dịch vụ không hỗ trợ đối tượng “tất cả mọi người” cho đến khi có bộ phân giải phân khúc."
+      "footerNote": "Danh sách cụ thể. Chọn “Một không gian làm việc” hoặc “Tất cả mọi người” ở trên để gửi rộng hơn."
     },
     "cancel": "Hủy",
     "review": "Xem lại trước khi gửi",
@@ -123,7 +145,34 @@
       "andMore": "và {count} người khác",
       "back": "Quay lại",
       "sending": "Đang gửi…",
-      "send": "Gửi cho {count} người"
+      "send": "Gửi cho {count} người",
+      "everyone": "Mọi tài khoản đang hoạt động trên nền tảng",
+      "segment": "Mọi thành viên đang hoạt động của {name} (hiện có {count, plural, other {# thành viên}})",
+      "sendAudience": "Gửi"
+    },
+    "audience": {
+      "label": "Đối tượng nhận",
+      "SPECIFIC_USERS": {
+        "label": "Người cụ thể",
+        "hint": "Chọn tài khoản từ danh bạ."
+      },
+      "SEGMENT": {
+        "label": "Một không gian làm việc",
+        "hint": "Mọi thành viên đang hoạt động của một không gian làm việc."
+      },
+      "BROADCAST": {
+        "label": "Tất cả mọi người",
+        "hint": "Mọi tài khoản đang hoạt động trên nền tảng."
+      }
+    },
+    "segment": {
+      "label": "Không gian làm việc",
+      "searchPlaceholder": "Tìm không gian làm việc theo tên",
+      "searching": "Đang tìm…",
+      "directoryError": "Không đọc được danh sách không gian làm việc.",
+      "noMatch": "Không có không gian làm việc nào khớp.",
+      "change": "Đổi",
+      "memberCount": "{count, plural, other {# thành viên}}"
     }
   }
 }

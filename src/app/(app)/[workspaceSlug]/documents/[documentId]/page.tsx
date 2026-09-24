@@ -27,6 +27,7 @@ import {
   useDownloadWorkspaceDocument,
   usePatchWorkspaceDocumentMetadata,
   useReuploadWorkspaceDocument,
+  useSetWorkspaceDocumentVisibility,
   useWorkspace,
   useWorkspaceDocument,
   useWorkspaceDocumentHistory,
@@ -38,7 +39,13 @@ import {
   canUploadRevision as canUploadRevisionFor,
   shouldShowRejectionFeedback,
 } from "@/lib/documents/document-review";
+import {
+  VISIBILITY_CONFIRM_COPY,
+  visibilityActionFor,
+  type VisibilityAction,
+} from "@/lib/documents/document-visibility";
 import { DocumentRejectDialog } from "@/components/documents/document-reject-dialog";
+import { DocumentVisibilityDialog } from "@/components/documents/document-visibility-dialog";
 import { DocumentReviewTrail } from "@/components/documents/document-review-trail";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -104,6 +111,14 @@ export default function DocumentDetailPage({ params }: PageProps) {
     activeWorkspaceId || "",
     documentId,
   );
+  // The way back from "public". Before this the page could approve a document into the workspace
+  // and had nothing that took it out again.
+  const visibilityMutation = useSetWorkspaceDocumentVisibility(
+    activeWorkspaceId || "",
+    documentId,
+  );
+  const [pendingVisibilityAction, setPendingVisibilityAction] =
+    useState<VisibilityAction | null>(null);
   const historyQuery = useWorkspaceDocumentHistory(
     activeWorkspaceId || "",
     documentId,
@@ -186,6 +201,21 @@ export default function DocumentDetailPage({ params }: PageProps) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
           ?.error || "Failed to upload the corrected version.";
+      toast.error(errorMsg);
+    }
+  };
+
+  const handleConfirmVisibility = async (action: VisibilityAction) => {
+    try {
+      await visibilityMutation.mutateAsync(
+        action === "make_private" ? "private" : "public",
+      );
+      setPendingVisibilityAction(null);
+      toast.success(VISIBILITY_CONFIRM_COPY[action].success);
+    } catch (err: unknown) {
+      const errorMsg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data
+          ?.error || "Failed to change who can see this document.";
       toast.error(errorMsg);
     }
   };
@@ -385,9 +415,24 @@ export default function DocumentDetailPage({ params }: PageProps) {
             setMemberAccess={setMemberAccess}
             onToggleAiIndexing={handleToggleAiIndexing}
             isAiIndexingBusy={patchMetadataMutation.isPending}
+            visibilityAction={visibilityActionFor(
+              doc,
+              currentUser?.id,
+              canApproveDocuments,
+            )}
+            onRequestVisibilityChange={setPendingVisibilityAction}
+            isVisibilityBusy={visibilityMutation.isPending}
           />
         </div>
       </div>
+
+      <DocumentVisibilityDialog
+        action={pendingVisibilityAction}
+        documentName={doc.name}
+        isSubmitting={visibilityMutation.isPending}
+        onClose={() => setPendingVisibilityAction(null)}
+        onConfirm={(action) => void handleConfirmVisibility(action)}
+      />
 
       <DocumentRejectDialog
         open={isRejectDialogOpen}

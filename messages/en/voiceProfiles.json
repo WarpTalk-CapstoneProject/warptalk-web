@@ -38,6 +38,10 @@
       "savedDubbed": "Saved. You will be dubbed in this voice.",
       "backToLiveClone": "Back to cloning your voice live.",
       "saveFailed": "Could not save the voice you are dubbed in."
+    },
+    "retryToasts": {
+      "queued": "Sent for cloning again.",
+      "failed": "Could not send the recording for cloning."
     }
   },
   "library": {
@@ -87,6 +91,18 @@
     "cloning": "Cloning",
     "cloningDetail": "usually under a minute",
     "reRecord": "Re-record",
+    "tryAgain": "Try again",
+    "cloneFailure": {
+      "planRequired": "The voice service's plan doesn't include cloning. Your recording is fine — try again once an admin upgrades the plan.",
+      "outOfCredits": "The voice service is out of credits. Your recording is fine — try again once an admin tops it up.",
+      "providerRejected": "The voice service refused our credentials. Your recording is fine — try again later.",
+      "providerUnavailable": "The voice service was unavailable. Your recording is fine — try again.",
+      "sampleRejected": "The voice service couldn't use this recording. Record a clearer, longer take.",
+      "sampleExpired": "The recording wasn't picked up in time. Try again.",
+      "unknown": "The voice service returned an unexpected error. Try again, or re-record.",
+      "notRecorded": "The reason wasn't recorded. Try again, or re-record.",
+      "detail": "Details: {detail}"
+    },
     "actionsFor": "Actions for {name}",
     "stopBeingDubbed": "Stop being dubbed in this",
     "beDubbedIn": "Be dubbed in this voice",

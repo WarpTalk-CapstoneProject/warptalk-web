@@ -14,9 +14,10 @@
  * the thing they wanted lived under. The boundary is now a band divider inside one page: knobs
  * first, reference data second, with the reason it is read-only stated where it applies.
  *
- * What is read-only here is read-only for a reason that has not changed: neither service behind
- * the catalog or the consent ledger can record WHO threw a switch, so those move by migration,
- * where the change is reviewed and has an author.
+ * The language catalog became editable with WT-691: translation-room now records every catalog
+ * change in the platform audit log over gRPC before saving it (and refuses the change when it
+ * cannot), which was the one reason it was read-only. The consent ledger is still read-only —
+ * its service cannot record who threw a switch.
  */
 
 import { useMemo, useState } from "react";
@@ -27,6 +28,7 @@ import {
   Globe,
   Microphone,
   PencilSimple,
+  Plus,
   Warning,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -50,12 +52,21 @@ import {
   useAdminLanguageCatalog,
   useAdminVoiceConsentSummary,
 } from "@/hooks/use-admin-configuration";
+import {
+  LanguageFormDialog,
+  LanguageToggleDialog,
+} from "@/components/admin/language-catalog-editor";
 import { compareLanguageCatalog } from "@/lib/language/catalog-drift";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
-import type { AdminVoiceConsentSummaryDto } from "@/types/admin-configuration";
+import type {
+  AdminSupportedLanguageDto,
+  AdminVoiceConsentSummaryDto,
+} from "@/types/admin-configuration";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+// USD per Cartesia credit is ~0.00004: the default six-digit cut would show 0.000039.
+const usdPerCreditFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 10 });
 
 /**
  * The divider that replaced the route split: what you can change, then what you can only read.
@@ -183,19 +194,20 @@ function PricingEconomicsPanel() {
                 {numberFormatter.format(config.fxRateUsdVnd)}
               </span>
             </SettingRow>
-            <SettingRow label={t("creditValueLabel")} hint={t("creditValueHint")}>
+            {/* Framed like the FX rate beside it: a conversion Insights applies to a measured
+                quantity, not a price anyone is charged. */}
+            <SettingRow label={t("cartesiaUsdPerCreditLabel")} hint={t("cartesiaUsdPerCreditHint")}>
               <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.creditValueVnd)} ₫
+                {config.cartesiaUsdPerCredit == null
+                  ? "—"
+                  : t("cartesiaUsdPerCreditValue", {
+                      price: usdPerCreditFormatter.format(config.cartesiaUsdPerCredit),
+                    })}
               </span>
             </SettingRow>
-            <SettingRow
-              label={t("minimumPricePerCreditLabel")}
-              hint={t("minimumPricePerCreditHint")}
-            >
-              <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.minimumPricePerCreditVnd)} ₫
-              </span>
-            </SettingRow>
+            {/* WT-690: no credit value or per-credit price floor here. Stripe owns customer
+                prices; both values are still read by billing (top-up pricing, plan/contract floor),
+                so they stay stored and change by migration, not from this page. */}
             <SettingRow label={t("minimumContractPriceLabel")} hint={t("minimumContractPriceHint")}>
               <span className="text-[13px] tabular-nums text-ink">
                 {t("minimumContractPriceValue", {
@@ -239,6 +251,17 @@ function PricingEconomicsPanel() {
   );
 }
 
+function usageText(
+  row: AdminSupportedLanguageDto,
+  t: ReturnType<typeof useTranslations>,
+): { text: string; live: boolean } {
+  const live = row.liveMeetings ?? 0;
+  const upcoming = row.upcomingMeetings ?? 0;
+  if (live > 0) return { text: t("manage.usageLive", { count: live }), live: true };
+  if (upcoming > 0) return { text: t("manage.usageUpcoming", { count: upcoming }), live: false };
+  return { text: t("manage.usageNone"), live: false };
+}
+
 function LanguageCatalogPanel() {
   const t = useTranslations("adminPlansSettings.settings.languageCatalog");
   const languagesQuery = useAdminLanguageCatalog();
@@ -246,9 +269,26 @@ function LanguageCatalogPanel() {
     () => (languagesQuery.data ? compareLanguageCatalog(languagesQuery.data) : null),
     [languagesQuery.data],
   );
+  // WT-691: add / edit / enable / disable. `formLanguage` undefined = closed, null = add.
+  const [formLanguage, setFormLanguage] = useState<AdminSupportedLanguageDto | null | undefined>(undefined);
+  const [toggleLanguage, setToggleLanguage] = useState<AdminSupportedLanguageDto | null>(null);
+  const catalog = languagesQuery.data ?? [];
+  const activeCount = catalog.filter((language) => language.isActive).length;
 
   return (
     <>
+      <div className="mt-2 flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setFormLanguage(null)}
+          disabled={!languagesQuery.data}
+        >
+          <Plus size={14} />
+          {t("manage.add")}
+        </Button>
+      </div>
+
       {/* The drift banner. languages.ts has warned in a comment since it was written that its
           rows and the server catalog can diverge; nothing has ever checked. This is that check,
           run against live data. */}
@@ -290,7 +330,9 @@ function LanguageCatalogPanel() {
               <span className="flex-1">{t("columns.name")}</span>
               <span className="w-[150px]">{t("columns.native")}</span>
               <span className="w-[90px]">{t("columns.rooms")}</span>
+              <span className="w-[110px]">{t("manage.columns.usage")}</span>
               <span className="w-[130px]">{t("columns.inThisApp")}</span>
+              <span className="w-[150px]" aria-hidden />
             </div>
             <ul>
               {comparison.rows.map((row) => (
@@ -315,6 +357,19 @@ function LanguageCatalogPanel() {
                       {row.isActive ? t("badgeAllowed") : t("badgeOff")}
                     </span>
                   </span>
+                  {(() => {
+                    const usage = usageText(row, t);
+                    return (
+                      <span
+                        className={cn(
+                          "w-[110px] shrink-0 text-[12px] tabular-nums",
+                          usage.live ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-ink-muted",
+                        )}
+                      >
+                        {usage.text}
+                      </span>
+                    );
+                  })()}
                   {/* Not shipped means every name this app renders for that language falls back
                       to the raw code — the user sees "de", not "German". */}
                   <span
@@ -329,12 +384,36 @@ function LanguageCatalogPanel() {
                         : t("shippedKnown")
                       : t("shippedAsCode")}
                   </span>
+                  <div className="flex w-[150px] shrink-0 items-center gap-1.5 md:justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setFormLanguage(row)}>
+                      {t("manage.edit")}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setToggleLanguage(row)}>
+                      {row.isActive ? t("manage.disable") : t("manage.enable")}
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
           </>
         )}
       </AdminPanel>
+
+      <LanguageFormDialog
+        open={formLanguage !== undefined}
+        language={formLanguage ?? null}
+        catalog={catalog}
+        onOpenChange={(open) => {
+          if (!open) setFormLanguage(undefined);
+        }}
+      />
+      <LanguageToggleDialog
+        language={toggleLanguage}
+        activeCount={activeCount}
+        onOpenChange={(open) => {
+          if (!open) setToggleLanguage(null);
+        }}
+      />
 
       <p className="mt-2 text-[12px] text-ink-muted">
         {t.rich("footnote", {

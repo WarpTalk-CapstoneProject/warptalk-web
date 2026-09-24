@@ -80,5 +80,31 @@
     "justNow": "たった今",
     "noConsumerTooltip": "このグループを読み取ったコンシューマーはまだありません",
     "consumerSeenTooltip": "Redisが認識したコンシューマー名であり、現在接続中の数ではありません"
+  },
+  "insights": {
+    "aiCostBasis": {
+      "measured": "吹き替えは Cartesia の使用量から計測",
+      "mixed": "吹き替えは {total} 日中 {measured} 日を計測、残りは推定",
+      "estimated": "吹き替えは推定（毎秒 12.5 文字）"
+    },
+    "cartesia": {
+      "title": "Cartesia",
+      "status": {
+        "ok": "同期済み",
+        "pending": "初回の同期を待機中",
+        "disabled": "同期は無効",
+        "error": "同期に失敗しています",
+        "stale": "同期が古くなっています"
+      },
+      "thisMonth": "今月 {credits} クレジット（UTC）",
+      "monthUnknown": "今月の使用量は未同期",
+      "today": "本日 {credits}",
+      "remaining": "残り {credits}",
+      "remainingUnknown": "残高: Cartesia の API では取得できません",
+      "syncedAgo": "{minutes, plural, =0 {たった今同期} other {# 分前に同期}}",
+      "neverSynced": "未同期",
+      "allKeys": "すべての API キー",
+      "price": "1 クレジットあたり ${price}"
+    }
   }
 }

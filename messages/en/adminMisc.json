@@ -109,26 +109,44 @@
       "responses": "Responses",
       "meetingsRated": "Meetings rated",
       "ofEnded": "of {count} ended",
-      "responseRate": "Response rate"
+      "responseRate": "Response rate",
+      "previous": "Previous period: {value}"
     },
     "dimensions": {
       "title": "Ratings by dimension",
       "empty": "No ratings were submitted in this window.",
       "ratedCount": "{count} rated",
-      "thinSample": "· thin sample",
-      "ratingTooltip": "{rating}★ — {count, plural, one {# response} other {# responses}}"
+      "ratingTooltip": "{rating}★ — {count, plural, one {# response} other {# responses}}",
+      "noData": "No data",
+      "noDataHint": "Nobody rated this in the period — there is no score to show.",
+      "share": "{share} of respondents",
+      "lowConfidence": "Low confidence",
+      "noTrend": "no trend",
+      "previousTooltip": "Previous period: {average} from {count, plural, one {# response} other {# responses}}"
     },
     "comments": {
       "title": "Comments",
       "error": "Comments could not be loaded.",
-      "empty": "Nobody left a written comment in this window."
+      "empty": "Nobody left a written comment in this window.",
+      "sortRecent": "Latest",
+      "sortLowest": "Lowest rated first",
+      "sortAria": "Comment order"
     },
     "pagination": {
       "pageOf": "Page {page} of {totalPages}",
       "previous": "Previous",
       "next": "Next"
     },
-    "footerNote": "Read-only, and anonymous by construction — the API does not send who wrote a comment. A rating an administrator could edit or delete would not be worth reading."
+    "footerNote": "Read-only, and anonymous by construction — the API does not send who wrote a comment. A rating an administrator could edit or delete would not be worth reading.",
+    "insights": {
+      "lowestTitle": "Lowest-scoring dimension",
+      "lowestDetail": "from {count} ratings",
+      "vsPrevious": "{delta} vs previous period",
+      "lowConfidenceTitle": "Low confidence — read these numbers as signals, not verdicts.",
+      "lowConfidenceRule": "A figure is marked low confidence under {min} responses or a {rate} response rate.",
+      "noDataTitle": "{count, plural, one {# dimension has no data} other {# dimensions have no data}}",
+      "noDataBody": "{names}: nobody rated it in this period."
+    }
   },
   "audit": {
     "eyebrow": "Operations",

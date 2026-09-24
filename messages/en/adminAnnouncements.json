@@ -19,7 +19,12 @@
       "previous": "Previous",
       "next": "Next"
     },
-    "footerNote": "An announcement is delivered once to the people it names and cannot be edited, recalled or deleted afterwards. There is no “everyone” audience: the service accepts a named list until a segment resolver is configured."
+    "footerNote": "An announcement is delivered once to the people it names and cannot be edited, recalled or deleted afterwards. There is no “everyone” audience: the service accepts a named list until a segment resolver is configured.",
+    "delivery": {
+      "sentAt": "Sent {date}",
+      "createdTitle": "Created — not sent yet",
+      "delivered": "{count, plural, =0 {None delivered} one {# delivered} other {# delivered}}"
+    }
   },
   "detail": {
     "back": "Announcements",
@@ -51,7 +56,9 @@
       "mode": "Mode",
       "rawTargeting": "Raw targeting",
       "segment": "Segment",
-      "namedRecipients": "Named recipients"
+      "namedRecipients": "Named recipients",
+      "sentAt": "Sent",
+      "delivered": "Delivered"
     },
     "resolving": "· resolving…",
     "toasts": {
@@ -76,17 +83,32 @@
       "downtimeRange": "{start} → {end}",
       "empty": "No image, link, code or downtime window."
     },
-    "footerNote": "The notification service does not record a delivery time or delivery counts for an announcement, so neither is shown here."
+    "footerNote": "The send time and delivered count are recorded once every delivery chunk has been counted; an announcement that failed any chunk stays Failed.",
+    "notSent": "Not sent yet",
+    "deliveryUnknown": "Not reported by this server",
+    "deliveredCount": "{count, plural, =0 {No recipients} one {# recipient} other {# recipients}}"
   },
   "composer": {
     "types": {
-      "ANNOUNCEMENT": { "label": "Announcement", "hint": "General news from the platform." },
-      "PROMOTION": { "label": "Promotion", "hint": "Carries an offer, a link and a discount code." },
-      "MAINTENANCE": { "label": "Maintenance", "hint": "States a downtime window. Both ends required." },
-      "SYSTEM": { "label": "System", "hint": "The platform speaking about itself. No links, no offers." }
+      "ANNOUNCEMENT": {
+        "label": "Announcement",
+        "hint": "General news from the platform."
+      },
+      "PROMOTION": {
+        "label": "Promotion",
+        "hint": "Carries an offer, a link and a discount code."
+      },
+      "MAINTENANCE": {
+        "label": "Maintenance",
+        "hint": "States a downtime window. Both ends required."
+      },
+      "SYSTEM": {
+        "label": "System",
+        "hint": "The platform speaking about itself. No links, no offers."
+      }
     },
     "title": "Compose an announcement",
-    "description": "Delivered to the people you name, once. There is no draft, no schedule and no recall.",
+    "description": "Delivered once to the people you choose — a named list, one workspace, or everyone. There is no draft, no schedule and no recall.",
     "typeLabel": "Type",
     "titleLabel": "Title",
     "messageLabel": "Message",
@@ -111,7 +133,7 @@
       "add": "Add",
       "remove": "Remove {email}",
       "clear": "Clear",
-      "footerNote": "A named list only. The service accepts no “everyone” audience until a segment resolver exists."
+      "footerNote": "A named list. Choose “One workspace” or “Everyone” above for a wider audience."
     },
     "cancel": "Cancel",
     "review": "Review before sending",
@@ -123,7 +145,34 @@
       "andMore": "and {count} more",
       "back": "Back",
       "sending": "Sending…",
-      "send": "Send to {count}"
+      "send": "Send to {count}",
+      "everyone": "Every active account on the platform",
+      "segment": "Every active member of {name} ({count, plural, one {# member} other {# members}} now)",
+      "sendAudience": "Send"
+    },
+    "audience": {
+      "label": "Audience",
+      "SPECIFIC_USERS": {
+        "label": "Named people",
+        "hint": "Pick accounts from the directory."
+      },
+      "SEGMENT": {
+        "label": "One workspace",
+        "hint": "Every active member of a workspace."
+      },
+      "BROADCAST": {
+        "label": "Everyone",
+        "hint": "Every active account on the platform."
+      }
+    },
+    "segment": {
+      "label": "Workspace",
+      "searchPlaceholder": "Search workspaces by name",
+      "searching": "Searching…",
+      "directoryError": "The workspace directory could not be read.",
+      "noMatch": "No workspace matches that.",
+      "change": "Change",
+      "memberCount": "{count, plural, one {# member} other {# members}}"
     }
   }
 }

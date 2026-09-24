@@ -18,6 +18,10 @@ import { Button } from "@/components/ui/button";
 import { useAdminAnnouncement } from "@/hooks/use-admin-announcements";
 import { useAdminUserDetail } from "@/hooks/use-admin-users";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
+import {
+  announcementDeliveredCount,
+  announcementStatusClasses,
+} from "@/lib/notifications/announcement-status";
 import { cn } from "@/lib/utils";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
@@ -68,17 +72,6 @@ async function copyText(
     toast.success(t("toasts.copied", { label }));
   } catch {
     toast.error(t("toasts.copyFailed", { label: label.toLowerCase() }));
-  }
-}
-
-function statusTone(status: string) {
-  switch (status.toLowerCase()) {
-    case "sent":
-      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-    case "failed":
-      return "border-destructive/20 bg-destructive/10 text-destructive";
-    default:
-      return "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
 }
 
@@ -231,7 +224,7 @@ export default function AdminAnnouncementDetailPage() {
             <span
               className={cn(
                 "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                statusTone(announcement.status),
+                announcementStatusClasses(announcement.status),
               )}
             >
               {announcement.status}
@@ -263,6 +256,16 @@ export default function AdminAnnouncementDetailPage() {
             <span className="font-mono text-[12px]">{announcement.type}</span>
           </Field>
           <Field label={t("fields.status")}>{announcement.status}</Field>
+          <Field label={t("fields.sentAt")}>
+            {announcement.sentAt ? formatWhen(announcement.sentAt) : <Muted>{t("notSent")}</Muted>}
+          </Field>
+          <Field label={t("fields.delivered")}>
+            {announcementDeliveredCount(announcement) !== null ? (
+              t("deliveredCount", { count: announcementDeliveredCount(announcement) ?? 0 })
+            ) : (
+              <Muted>{t("deliveryUnknown")}</Muted>
+            )}
+          </Field>
           <Field label={t("fields.author")}>
             {author ? (
               <span>

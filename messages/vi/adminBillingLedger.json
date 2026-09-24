@@ -116,5 +116,38 @@
   },
   "idBadge": {
     "copyTooltip": "Nhấn để sao chép ID: {id}"
+  },
+  "growth": {
+    "usageHeading": "Mức sử dụng credit",
+    "usageNote": "Tiêu thụ và nạp thêm — thứ yếu so với tăng trưởng, và là những gì sổ cái bên dưới liệt kê.",
+    "vsPrevious": "{delta} so với 6 tháng trước",
+    "monthGrowth": "{percent} trong {month}",
+    "tiles": {
+      "revenue": "Doanh thu · 6 tháng",
+      "sixMonths": "Các khoản đã thanh toán, 6 tháng gần nhất",
+      "mrr": "MRR",
+      "activeSubscriptions": "{count} gói đang hoạt động",
+      "activeWorkspaces": "Workspace hoạt động · 6 tháng",
+      "activeWorkspacesDetail": "Đã dùng credit ít nhất một lần",
+      "activeAccounts": "Tài khoản hoạt động · 6 tháng",
+      "activeAccountsDetail": "Đã đăng nhập ít nhất một lần",
+      "totalUsers": "Người dùng đã đăng ký",
+      "newUsers": "{count} mới trong 6 tháng"
+    },
+    "revenueTitle": "Doanh thu theo tháng",
+    "revenueNote": "Các khoản đã thanh toán, tính bằng VND; một lần checkout Stripe và hóa đơn đầu tiên của nó chỉ tính một lần. Tháng gần nhất là tính đến hôm nay.",
+    "activeTitle": "Tài khoản và workspace hoạt động",
+    "activeNote": "Theo tháng: tài khoản đã đăng nhập, workspace đã dùng credit. Tháng gần nhất là tính đến hôm nay.",
+    "usersTitle": "Tăng trưởng người dùng và workspace",
+    "series": {
+      "activeAccounts": "Tài khoản hoạt động",
+      "activeWorkspaces": "Workspace hoạt động",
+      "totalUsers": "Người dùng đã đăng ký",
+      "totalWorkspaces": "Workspace",
+      "newUsers": "Người dùng mới"
+    },
+    "loading": "Đang tải…",
+    "noData": "Không có khoản thanh toán nào trong các tháng này.",
+    "unavailable": "Backend này chưa hỗ trợ."
   }
 }

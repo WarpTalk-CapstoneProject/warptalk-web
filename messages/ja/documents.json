@@ -5,6 +5,7 @@
     "published": "公開済み",
     "pendingApproval": "承認待ち",
     "rejected": "却下",
+    "private": "非公開",
     "aiContext": "AIコンテキスト",
     "administrative": "管理用",
     "restricted": "制限あり",
@@ -33,6 +34,7 @@
   },
   "status": {
     "rejected": "却下",
+    "private": "非公開",
     "pendingApproval": "承認待ち",
     "administrative": "管理用",
     "aiReady": "AI利用可能",

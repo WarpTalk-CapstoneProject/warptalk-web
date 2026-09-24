@@ -63,6 +63,7 @@ import { getErrorMessage } from "@/lib/api/errors";
 import { ExpandingSearchDock } from "@/components/ui/expanding-search-dock";
 import { UserChip } from "@/components/user/user-chip";
 import { cn } from "@/lib/utils";
+import { releaseArtifactIfPermitted } from "@/lib/meeting/artifact-consent";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { readScheduleFocus, schedulesPath } from "@/lib/workspace/workspace-routes";
 import { translationRoomService } from "@/services/translation-room.service";
@@ -438,12 +439,14 @@ export default function CalendarPage() {
 
     setBusyArtifactId(artifact.id);
     try {
-      if (artifact.consentRequired) {
-        await translationRoomService.approveArtifactConsent(artifact.id);
-      }
+      // WT-824: only the host can release a consent-held recording; for anyone else the release
+      // is refused and the download itself says whether the host has released it.
+      const released = artifact.consentRequired
+        ? await releaseArtifactIfPermitted(artifact.id)
+        : false;
       const { data } = await translationRoomService.artifactDownload(artifact.id);
       openArtifactDownload(data);
-      if (artifact.consentRequired) await meetings.refetch();
+      if (released) await meetings.refetch();
     } catch (error) {
       toast.error(getErrorMessage(error, t("toasts.downloadFailed")));
     } finally {

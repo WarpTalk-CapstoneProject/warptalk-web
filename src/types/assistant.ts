@@ -24,6 +24,21 @@ export interface AssistantMessageDto {
   mentionsJson?: string | null;
 }
 
+/**
+ * One turn a new conversation starts with — how a meeting's WarpBot thread continues in the
+ * widget (see lib/assistant/meeting-handoff.ts). The service accepts "user" and "assistant" only.
+ */
+export interface AssistantSeedMessageDto {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CreateAssistantConversationOptions {
+  /** Named after where it came from, so history does not list it as one more "New chat". */
+  title?: string;
+  seedMessages?: AssistantSeedMessageDto[];
+}
+
 export interface AssistantConversationDto {
   id: string;
   title: string;
@@ -249,7 +264,7 @@ export interface UpdatePrivatePluginRequest {
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
-  /** An pi_key plugin: no consent page exists, the user pastes a key on the plugins page. */
+  /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
   apiKeyRequired?: boolean;
 }
 
