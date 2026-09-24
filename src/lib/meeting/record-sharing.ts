@@ -55,6 +55,41 @@ export type RecordSharingView = {
 };
 
 /**
+ * Translator shape shared with `getPlanDescription`/`buildFeatureList` (src/lib/utils.ts),
+ * matching `useTranslations("meetingRoomPage.record.sharing")` from next-intl. Optional and
+ * defaulted below so `describeRecordSharing`'s existing callers — and this file's own
+ * node:test suite, which asserts the literal English strings — keep working unchanged. See
+ * `.agents/page-docs/i18n-localization.md` for the pattern.
+ */
+type RecordSharingTranslator = (key: string) => string;
+
+const DEFAULT_RECORD_SHARING_TEXT: Record<string, string> = {
+  badgePublished: "Published",
+  badgeDraft: "Draft",
+  badgeSharedByHost: "Shared by host",
+  badgeNotSharedYet: "Not shared yet",
+  actionUnpublish: "Unpublish",
+  actionPublish: "Publish to participants",
+  // Says what changed and what still can: after sharing, every later edit is an edit to
+  // something other people have already read.
+  messageHostShared:
+    "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
+  // Names who is NOT seeing it. The screen said nothing at all before, so a host had no
+  // reason to think the record was private and every reason to assume it was not.
+  messageHostDraft:
+    "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
+  // "Unauthorized" was the old answer and it is the wrong sentence for the case that
+  // actually happens: somebody who WAS in the meeting, reading the record of the meeting
+  // they attended. It reads as a broken product rather than as a decision the host owns.
+  messageParticipantWithheld:
+    "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
+};
+
+function defaultRecordSharingText(key: string): string {
+  return DEFAULT_RECORD_SHARING_TEXT[key] ?? key;
+}
+
+/**
  * What the meeting-record header should say, for this viewer.
  *
  * Written as one function returning all four pieces because they have to agree: a "Draft" badge
@@ -64,31 +99,27 @@ export type RecordSharingView = {
 export function describeRecordSharing({
   artifactAccess,
   isHost,
+  t = defaultRecordSharingText,
 }: {
   artifactAccess?: string | null;
   isHost: boolean;
+  t?: RecordSharingTranslator;
 }): RecordSharingView {
   const shared = isRecordShared(artifactAccess);
 
   if (isHost) {
     return shared
       ? {
-          badge: "Published",
+          badge: t("badgePublished"),
           tone: "shared",
-          // Says what changed and what still can: after sharing, every later edit is an edit to
-          // something other people have already read.
-          message:
-            "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
-          action: "Unpublish",
+          message: t("messageHostShared"),
+          action: t("actionUnpublish"),
         }
       : {
-          badge: "Draft",
+          badge: t("badgeDraft"),
           tone: "draft",
-          // Names who is NOT seeing it. The screen said nothing at all before, so a host had no
-          // reason to think the record was private and every reason to assume it was not.
-          message:
-            "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
-          action: "Publish to participants",
+          message: t("messageHostDraft"),
+          action: t("actionPublish"),
         };
   }
 
@@ -96,15 +127,11 @@ export function describeRecordSharing({
   // nothing worth saying: they can simply read it, and a banner explaining that they are allowed
   // to read what is in front of them is noise.
   return shared
-    ? { badge: "Shared by host", tone: null, message: null, action: null }
+    ? { badge: t("badgeSharedByHost"), tone: null, message: null, action: null }
     : {
-        badge: "Not shared yet",
+        badge: t("badgeNotSharedYet"),
         tone: "withheld",
-        // "Unauthorized" was the old answer and it is the wrong sentence for the case that
-        // actually happens: somebody who WAS in the meeting, reading the record of the meeting
-        // they attended. It reads as a broken product rather than as a decision the host owns.
-        message:
-          "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
+        message: t("messageParticipantWithheld"),
         action: null,
       };
 }

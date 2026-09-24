@@ -1,1 +1,150 @@
-{}
+{
+  "status": {
+    "scheduled": "Đã lên lịch",
+    "waiting": "Đang chờ",
+    "inProgress": "Đang diễn ra",
+    "paused": "Tạm dừng",
+    "ended": "Đã kết thúc",
+    "cancelled": "Đã hủy",
+    "expired": "Đã hết hạn",
+    "failed": "Thất bại",
+    "timeout": "Đã hết giờ"
+  },
+  "presence": {
+    "inRoom": "Trong phòng",
+    "connected": "Đã kết nối",
+    "lobby": "Đang chờ ở phòng chờ",
+    "notInRoom": "Không có trong phòng",
+    "disconnected": "Mất kết nối",
+    "left": "Đã rời đi"
+  },
+  "loading": "Đang tải phòng…",
+  "copiedSuffix": "Đã sao chép {label}",
+  "editRoom": "Chỉnh sửa phòng",
+  "startingLabel": "Đang bắt đầu...",
+  "startError": "Không thể bắt đầu cuộc họp.",
+  "occupancyNoun": {
+    "attended": "đã tham dự",
+    "inRoom": "trong phòng"
+  },
+  "outdatedLink": {
+    "message": "Liên kết cuộc họp này đã cũ nên chúng tôi không thể mở phòng từ đó. Hãy mở cuộc họp từ danh sách Cuộc họp của bạn, hoặc nhờ người đã mời bạn gửi lại liên kết.",
+    "goToMeetings": "Đến trang Cuộc họp"
+  },
+  "noAccess": {
+    "message": "Bạn chưa có quyền truy cập phòng này. Nếu một đồng nghiệp đã chia sẻ liên kết này cho bạn, bạn có thể nhờ người tổ chức cho phép bạn vào.",
+    "asking": "Đang gửi yêu cầu…",
+    "askToJoin": "Xin tham gia",
+    "joinError": "Phòng này hiện không thể tham gia.",
+    "participantFallback": "Người tham gia"
+  },
+  "people": {
+    "panelTitle": "Người tham gia",
+    "participantsCount": "Người tham gia: {label}",
+    "noneInvited": "Chưa mời thêm ai khác.",
+    "groupCount": "{label}: {count}",
+    "groups": {
+      "waitingToBeAdmitted": "Đang chờ được cho vào",
+      "inRoom": "Trong phòng",
+      "attended": "Đã tham dự",
+      "left": "Đã rời đi",
+      "accepted": "Đã chấp nhận",
+      "awaitingReply": "Chưa phản hồi",
+      "didNotAttend": "Không tham dự",
+      "notInRoom": "Không có trong phòng"
+    },
+    "role": {
+      "host": "Người tổ chức",
+      "invitee": "Người được mời"
+    },
+    "unnamedParticipant": "Người tham gia chưa rõ tên",
+    "currentUser": "Bạn"
+  },
+  "record": {
+    "heading": "Hồ sơ cuộc họp",
+    "sectionsAriaLabel": "Các mục của hồ sơ cuộc họp",
+    "tabs": {
+      "recap": "Tóm lược",
+      "minutes": "Biên bản",
+      "artifacts": "Tệp lưu trữ"
+    },
+    "expand": {
+      "showDetails": "Hiện lại thông tin chi tiết cuộc họp",
+      "giveFullWidth": "Mở rộng hồ sơ ra toàn bộ chiều rộng",
+      "collapse": "Thu gọn hồ sơ",
+      "expand": "Mở rộng hồ sơ"
+    },
+    "writingUp": {
+      "title": "Đang soạn hồ sơ này",
+      "body": "Bản ghi và tóm tắt AI được tạo ra sau khi cuộc họp kết thúc — thường trong vòng một phút. Trang này sẽ tự cập nhật."
+    },
+    "sharing": {
+      "badgePublished": "Đã công bố",
+      "badgeDraft": "Bản nháp",
+      "badgeSharedByHost": "Được người tổ chức chia sẻ",
+      "badgeNotSharedYet": "Chưa được chia sẻ",
+      "actionUnpublish": "Ngừng công bố",
+      "actionPublish": "Công bố cho người tham gia",
+      "messageHostShared": "Mọi người đã tham dự đều có thể đọc hồ sơ này. Bạn vẫn có thể chỉnh sửa — thay đổi sẽ hiện ngay với họ.",
+      "messageHostDraft": "Chỉ mình bạn thấy được hồ sơ này. Hãy công bố để chia sẻ bản ghi, tóm tắt AI và bản ghi hình với mọi người đã tham dự.",
+      "messageParticipantWithheld": "Người tổ chức chưa chia sẻ hồ sơ của cuộc họp này. Bạn sẽ đọc được ở đây ngay khi họ chia sẻ.",
+      "saving": "Đang lưu…",
+      "toastUnpublished": "Đã ngừng công bố hồ sơ. Chỉ mình bạn thấy được nó bây giờ.",
+      "toastPublished": "Đã công bố hồ sơ. Mọi người đã tham dự đều có thể đọc được.",
+      "toastShareChangeFailed": "Không thể thay đổi ai được chia sẻ hồ sơ này."
+    },
+    "seekUnavailable": {
+      "unalignable": "Bạn vẫn xem được bản ghi hình này, nhưng chưa thể nhảy đến một thời điểm cụ thể — cuộc họp này được ghi âm trước khi WarpTalk bắt đầu lưu mốc thời gian bắt đầu của video.",
+      "multiple": "Cuộc họp này có nhiều hơn một bản ghi hình, nên việc nhảy đến một thời điểm cụ thể hiện chưa khả dụng — không thể khớp mốc thời gian với đúng tệp."
+    },
+    "recordingFailure": {
+      "all": "Cuộc họp này đã được ghi hình, nhưng việc ghi hình thất bại — không có tệp video nào được tạo ra, nên không có gì để xem hoặc tải xuống.",
+      "some": "Một phần bản ghi hình của cuộc họp này đã thất bại — một trong các lượt ghi không tạo ra tệp video. Những bản ghi đã lưu thành công vẫn xem được."
+    },
+    "toasts": {
+      "momentNotInTranscript": "Thời điểm đó không có trong bản ghi đã lưu.",
+      "momentHasNoLine": "Thời điểm đó không có dòng nào trong bản ghi.",
+      "momentScrollFailed": "Không thể cuộn đến thời điểm đó trong bản ghi.",
+      "versionNotWritten": "Không thể ghi lại phiên bản đó.",
+      "readLanguageFailed": "Không thể đọc cuộc họp này bằng ngôn ngữ đó.",
+      "versionNotArrived": "Phiên bản đó vẫn chưa có. Hãy thử lại.",
+      "rewriteFailed": "Không thể viết lại bản tóm tắt.",
+      "rewriteFailureReason": "Không thể viết lại bản tóm tắt này.",
+      "rewriting": "Đang viết lại bản tóm tắt…"
+    }
+  },
+  "notes": {
+    "heading": "Ghi chú phòng họp",
+    "placeholderEditable": "Thêm chương trình họp, bối cảnh, quyết định hoặc ghi chú cần xem lại...",
+    "placeholderReadOnly": "Chưa có ghi chú nào cho phòng này.",
+    "saving": "Đang lưu...",
+    "saved": "Đã lưu",
+    "toolbar": {
+      "textStyle": "Aa",
+      "text": "Văn bản",
+      "heading1": "Tiêu đề 1",
+      "heading2": "Tiêu đề 2",
+      "heading3": "Tiêu đề 3",
+      "bold": "In đậm",
+      "italic": "In nghiêng",
+      "underline": "Gạch chân",
+      "strikethrough": "Gạch ngang",
+      "quote": "Trích dẫn",
+      "inlineCode": "Mã trong dòng",
+      "codeBlock": "Khối mã",
+      "bulletList": "Danh sách chấm đầu dòng",
+      "numberedList": "Danh sách đánh số",
+      "link": "Liên kết",
+      "linkPlaceholder": "Dán một liên kết...",
+      "apply": "Áp dụng"
+    }
+  },
+  "actionsMenu": {
+    "moreActions": "Thêm thao tác",
+    "copyInviteLink": "Sao chép liên kết mời",
+    "inviteLinkLabel": "Liên kết mời",
+    "downloadIcs": "Tải tệp .ics",
+    "addToGoogleCalendar": "Thêm vào Lịch Google",
+    "endMeeting": "Kết thúc cuộc họp"
+  }
+}
