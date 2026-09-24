@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ASSISTANT_KEYS } from "@/hooks/use-assistant";
-import { collectMemberNames } from "@/lib/assistant/plugin-availability";
+import { collectMemberNames, collectMemberProfiles } from "@/lib/assistant/plugin-availability";
 import { assistantService } from "@/services/assistant.service";
 import { WorkspaceService } from "@/services/workspace.service";
 import type { CreatePrivatePluginRequest, UpdatePrivatePluginRequest } from "@/types/assistant";
@@ -20,6 +20,8 @@ export const WORKSPACE_PLUGIN_KEYS = {
   root: ["assistant", "workspace-plugins"] as const,
   overview: (workspaceId: string | null | undefined) =>
     ["assistant", "workspace-plugins", workspaceId ?? null, "overview"] as const,
+  members: (workspaceId: string | null | undefined, pluginKey: string | null | undefined) =>
+    ["assistant", "workspace-plugins", workspaceId ?? null, "members", pluginKey ?? null] as const,
 };
 
 function useInvalidateWorkspacePlugins() {
@@ -136,6 +138,51 @@ export function useWorkspaceMemberNames(
     queryKey: ["workspaces", "members", workspaceId ?? "", "names", idsKey] as const,
     queryFn: () =>
       collectMemberNames(idsKey.split(","), (page, pageSize) =>
+        WorkspaceService.listMembers(workspaceId!, page, pageSize),
+      ),
+    enabled: enabled && !!workspaceId && idsKey.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * The workspace's members who have connected one plugin — the Manage dialog's "who uses this".
+ * Owner or Admin: pass `enabled: false` for anyone else, whose request is a guaranteed 403.
+ */
+export function useWorkspacePluginMembers(
+  workspaceId: string | null | undefined,
+  pluginKey: string | null | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: WORKSPACE_PLUGIN_KEYS.members(workspaceId, pluginKey),
+    queryFn: async () => {
+      const { data } = await assistantService.listWorkspacePluginMembers(workspaceId!, pluginKey!);
+      return data;
+    },
+    enabled: enabled && !!workspaceId && !!pluginKey,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * Names and avatars for members the Manage dialog lists. The same member-list walk as
+ * `useWorkspaceMemberNames`, keyed under the member list's prefix so a member change refreshes it.
+ */
+export function useWorkspaceMemberProfiles(
+  workspaceId: string | null | undefined,
+  userIds: readonly (string | null | undefined)[],
+  enabled: boolean,
+) {
+  const idsKey = useMemo(
+    () => [...new Set(userIds.filter((id): id is string => !!id))].sort().join(","),
+    [userIds],
+  );
+  return useQuery({
+    queryKey: ["workspaces", "members", workspaceId ?? "", "profiles", idsKey] as const,
+    queryFn: () =>
+      collectMemberProfiles(idsKey.split(","), (page, pageSize) =>
         WorkspaceService.listMembers(workspaceId!, page, pageSize),
       ),
     enabled: enabled && !!workspaceId && idsKey.length > 0,

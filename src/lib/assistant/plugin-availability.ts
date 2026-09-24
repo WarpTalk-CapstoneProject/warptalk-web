@@ -15,6 +15,7 @@ import type {
   PluginAuthMode,
   UpdatePrivatePluginRequest,
   WorkspacePluginItemDto,
+  WorkspacePluginMemberDto,
   WorkspacePluginsOverviewDto,
 } from "../../types/assistant.ts";
 
@@ -149,35 +150,31 @@ export function pendingRequestBadge(
 }
 
 /**
- * The line under the header while the workspace is still on the pre-marketplace default.
+ * The line under the header while the Owner has never edited the workspace's list.
  *
- * Until the first change, the server judges the workspace by its old "Allow personal plugins"
- * switch: on, every marketplace plugin reads as added; off, none does. The rows already say which,
- * so no second field is needed — and claiming "every plugin is available" for a workspace whose
- * switch was off told the Owner the opposite of what members see.
+ * Until the first change, the server carries over only the marketplace plugins members already use
+ * in this workspace (and none if the old "Allow personal plugins" switch is off). The rows say which
+ * — so this names how many, and never claims the whole marketplace. It used to: "Every marketplace
+ * plugin is available here", over a list the Owner had never chosen, which read as fake.
+ *
+ * Nothing carried over means nothing to explain: the empty state and the marketplace below say it.
  */
 export function workspacePluginsTransitionNote(
   overview: Pick<WorkspacePluginsOverviewDto, "isCurated" | "inWorkspace" | "marketplace">,
   t: WorkspacePluginCopyTranslator = defaultTransitionT,
 ): string | null {
   if (overview.isCurated) return null;
-  if (overview.inWorkspace.some((plugin) => plugin.availability === "added")) {
-    return t("allAvailable");
-  }
-  if (overview.marketplace.length > 0) {
-    return t("noneAvailable");
-  }
-  return null;
+  const carried = overview.inWorkspace.filter((plugin) => plugin.availability === "added").length;
+  return carried > 0 ? t("carriedOver", { count: carried }) : null;
 }
 
-const DEFAULT_TRANSITION_COPY: Record<string, string> = {
-  allAvailable: "Every marketplace plugin is available here until this list is changed.",
-  noneAvailable:
-    "No marketplace plugin is available here yet. Plugins were switched off in this workspace's old settings.",
+const DEFAULT_TRANSITION_COPY: Record<string, (values?: Record<string, string | number>) => string> = {
+  carriedOver: (v) =>
+    `Nothing has been chosen for this workspace yet, so it keeps the ${v!.count === 1 ? "plugin" : `${v!.count} plugins`} members already use here until you change this list.`,
 };
 
-function defaultTransitionT(key: string): string {
-  return DEFAULT_TRANSITION_COPY[key] ?? key;
+function defaultTransitionT(key: string, values?: Record<string, string | number>): string {
+  return DEFAULT_TRANSITION_COPY[key]?.(values) ?? key;
 }
 
 const DEFAULT_FACTS_COPY: Record<string, (values?: Record<string, string | number>) => string> = {
@@ -347,8 +344,19 @@ export function plainTextErrorBody(error: unknown): string | null {
 }
 
 export interface MemberNamePage {
-  items: ReadonlyArray<{ userId: string; fullName?: string | null; email?: string | null }>;
+  items: ReadonlyArray<{
+    userId: string;
+    fullName?: string | null;
+    email?: string | null;
+    avatarUrl?: string | null;
+  }>;
   total?: number | null;
+}
+
+/** A member as the Manage dialog shows them: a name to read and, when they have one, a face. */
+export interface MemberProfile {
+  name: string;
+  avatarUrl: string | null;
 }
 
 /**
@@ -361,10 +369,25 @@ export interface MemberNamePage {
 export async function collectMemberNames(
   userIds: readonly (string | null | undefined)[],
   fetchPage: (page: number, pageSize: number) => Promise<MemberNamePage>,
-  { pageSize = 100, maxPages = 50 }: { pageSize?: number; maxPages?: number } = {},
+  options: { pageSize?: number; maxPages?: number } = {},
 ): Promise<Record<string, string>> {
+  const profiles = await collectMemberProfiles(userIds, fetchPage, options);
+  return Object.fromEntries(Object.entries(profiles).map(([userId, profile]) => [userId, profile.name]));
+}
+
+/**
+ * Name and avatar for the given user ids, from the workspace's member list a page at a time — the
+ * same walk as `collectMemberNames`, for the Manage dialog's "who connected this". An id never found
+ * (the member left) is absent, and a member with neither a name nor an email is absent too: the
+ * dialog then says "A former member" rather than printing an id.
+ */
+export async function collectMemberProfiles(
+  userIds: readonly (string | null | undefined)[],
+  fetchPage: (page: number, pageSize: number) => Promise<MemberNamePage>,
+  { pageSize = 100, maxPages = 50 }: { pageSize?: number; maxPages?: number } = {},
+): Promise<Record<string, MemberProfile>> {
   const missing = new Set(userIds.filter((id): id is string => !!id));
-  const names: Record<string, string> = {};
+  const profiles: Record<string, MemberProfile> = {};
   let fetched = 0;
 
   for (let page = 1; missing.size > 0 && page <= maxPages; page += 1) {
@@ -373,12 +396,34 @@ export async function collectMemberNames(
       if (!missing.has(member.userId)) continue;
       missing.delete(member.userId);
       const name = member.fullName?.trim() || member.email?.trim();
-      if (name) names[member.userId] = name;
+      if (name) profiles[member.userId] = { name, avatarUrl: member.avatarUrl?.trim() || null };
     }
     fetched += items.length;
     if (items.length === 0) break;
     if (typeof total === "number" ? fetched >= total : items.length < pageSize) break;
   }
 
-  return names;
+  return profiles;
+}
+
+/** One row of the Manage dialog's "who connected this". */
+export interface WorkspacePluginMemberRow extends WorkspacePluginMemberDto {
+  /** Null when the member is no longer in the list (they left since connecting). */
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * The server's members, in the server's order (most recently used first), with the names and faces
+ * only the workspace's member list knows. The server sends ids and connection metadata only.
+ */
+export function workspacePluginMemberRows(
+  members: readonly WorkspacePluginMemberDto[] | null | undefined,
+  profiles: Readonly<Record<string, MemberProfile>>,
+): WorkspacePluginMemberRow[] {
+  return (members ?? []).map((member) => ({
+    ...member,
+    name: profiles[member.userId]?.name ?? null,
+    avatarUrl: profiles[member.userId]?.avatarUrl ?? null,
+  }));
 }

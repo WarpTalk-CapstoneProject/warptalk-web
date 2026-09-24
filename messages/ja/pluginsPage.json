@@ -1,7 +1,7 @@
 {
   "header": {
-    "title": "プラグイン",
-    "subtitle": "お気に入りのツールでWarpBotを活用しましょう。"
+    "title": "マイ接続",
+    "subtitle": "WarpBotが使えるあなた自身のアカウントです。ワークスペースが提供するプラグインを接続しましょう。"
   },
   "search": {
     "placeholder": "プラグインを絞り込む"

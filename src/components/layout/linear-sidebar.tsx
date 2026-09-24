@@ -708,8 +708,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           : "/workspace",
       },
       {
+        // "My connections", not "Plugins": the workspace section below has its own plugin list, and
+        // two rows both called "Plugins" read as the same page twice (owner report, 2026-09-24).
         icon: PlugsConnected,
-        label: t("settingsNav.plugins"),
+        label: t("settingsNav.myConnections"),
         href: "/settings/plugins",
       },
     ];
@@ -726,7 +728,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
-        label: t("settingsNav.plugins"),
+        label: t("settingsNav.workspacePlugins"),
         exact: true,
         href: `/${activeWorkspaceSlug}/settings/plugins`,
         badge: pluginRequestBadge,
@@ -918,7 +920,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  {t("settingsNav.plugins")}
+                  {t("settingsNav.myConnections")}
                 </span>
               </Link>
             </div>
@@ -949,7 +951,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/plugins`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <PuzzlePiece size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      {t("settingsNav.plugins")}
+                      {t("settingsNav.workspacePlugins")}
                     </span>
                   </Link>
                   {pluginRequestBadge ? <NavBadge count={pluginRequestBadge} /> : null}
