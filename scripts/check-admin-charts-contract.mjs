@@ -82,9 +82,13 @@ assert.match(dashboard, /days\[index\]\?\.future \? "Still to come"/, "future da
 const css = read("src/app/globals.css");
 const rootBlock = css.slice(css.indexOf(":root {"), css.indexOf(".dark {"));
 const darkBlock = css.slice(css.indexOf(".dark {"));
-for (const token of ["--viz-1", "--viz-2"]) {
+for (const token of ["--viz-1", "--viz-2", "--viz-3", "--viz-4", "--viz-5"]) {
   assert.ok(rootBlock.includes(`${token}:`), `${token} is defined for light`);
   assert.ok(darkBlock.includes(`${token}:`), `${token} is defined for dark`);
 }
+
+// Profit and loss: provider and workspace colours follow the entity, never the rank.
+assert.match(dashboard, /providerColors\(/, "provider series are coloured by provider identity");
+assert.match(dashboard, /Colour follows the workspace/, "workspace series keep their colour when re-ranked");
 
 console.log("Admin charts contract: PASS");

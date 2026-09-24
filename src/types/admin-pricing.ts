@@ -1,3 +1,5 @@
+import type { FxRateStatusDto } from "@/types/admin-insights";
+
 /**
  * Contracts for the system-admin pricing screens.
  *
@@ -109,7 +111,11 @@ export interface SetRateCardProviderCostRequest {
  * resolved rather than what it holds, and the endpoint does not accept them.
  */
 export interface UpdatePricingConfigRequest {
-  fxRateUsdVnd: number;
+  /**
+   * Never sent by the admin UI any more: the rate is Stripe's, and an override goes through
+   * PUT /admin/billing/fx/override. Omitted keeps the rate; the same value as stored is no override.
+   */
+  fxRateUsdVnd?: number;
   /**
    * Never sent by the admin UI (WT-690): Stripe owns pricing, and omitted means the backend keeps
    * the stored value, which billing still reads to price top-ups.
@@ -155,6 +161,8 @@ export interface PricingConfigDto {
    * Absent from a backend that predates the Cartesia usage sync.
    */
   cartesiaUsdPerCredit?: number;
+  /** Where `fxRateUsdVnd` comes from (Stripe by default), as of when, and whether it is stale. */
+  fxRate?: FxRateStatusDto | null;
 }
 
 /** Platform billing policy. One knob today; the endpoint replaces the whole record. */

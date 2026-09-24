@@ -32,6 +32,8 @@ import type {
   BillingSnapshotDto,
   InsightsMetric,
   MeetingsInsightsDto,
+  PnlPeriodDto,
+  ProfitAndLossDto,
   UsersInsightsDto,
   WorkspacesInsightsDto,
 } from "@/types/admin-insights";
@@ -229,7 +231,77 @@ function fixtures(params: InsightsPeriodParams, gaps: boolean) {
     suspendedNow: 1,
   };
 
-  return { period, billing, snapshot, meetings, users, workspaces };
+  // Profit and loss: the same revenue days, OpenAI (STT priced, TRANSLATION not) and Cartesia costs at
+  // ~25,990 VND/USD, and the gaps scenario's day without a rate.
+  const pnlDay = (key: string, index: number, revenueOfDay: number | null): PnlPeriodDto => {
+    const openAiUsd = Math.round(random() * 40) / 10;
+    const cartesiaUsd = Math.round(random() * 60) / 10;
+    const noRate = gaps && index === 5;
+    const cost = noRate ? null : Math.round((openAiUsd + cartesiaUsd) * 25_990);
+    const margin = revenueOfDay === null || cost === null ? null : revenueOfDay - cost;
+    return {
+      key, revenue: revenueOfDay, aiCost: cost, aiCostUsd: openAiUsd + cartesiaUsd, grossMargin: margin,
+      marginPercent: margin === null || !revenueOfDay ? null : Math.round((margin / revenueOfDay) * 1000) / 10,
+      credits: Math.round(random() * 90_000), costCoveragePercent: 58, activeWorkspaces: 4, arpa: null,
+      fxRate: noRate ? null : 25_990,
+      providers: [
+        { provider: "openai", credits: Math.round(random() * 60_000), costUsd: openAiUsd, costVnd: noRate ? null : Math.round(openAiUsd * 25_990) },
+        { provider: "cartesia", credits: Math.round(random() * 30_000), costUsd: cartesiaUsd, costVnd: noRate ? null : Math.round(cartesiaUsd * 25_990) },
+      ],
+    };
+  };
+  const pnlDays = days.map((day, index) => pnlDay(day.key, index, revenueByDay[index]?.revenue ?? null));
+  const pnlCost = pnlDays.reduce((sum, row) => sum + (row.aiCost ?? 0), 0);
+  const pnl: ProfitAndLossDto = {
+    range,
+    previousRange,
+    generatedAt: NOW.toISOString(),
+    metrics: [
+      metric("revenue", revenue, Math.round(revenue * 0.8), "money"),
+      metric("aiProviderCost", pnlCost, Math.round(pnlCost * 0.7), "money", false, "covers 58% of consumed credits; no provider cost for TRANSLATION (42%)"),
+      metric("grossMargin", revenue - pnlCost, Math.round(revenue * 0.8 - pnlCost * 0.7), "money", true, "AI cost covers only 58% of consumed credits, so this margin is overstated"),
+      metric("grossMarginPercent", revenue ? Math.round(((revenue - pnlCost) / revenue) * 1000) / 10 : null, 81.2, "percent"),
+      metric("arpa", Math.round(revenue / 7), Math.round((revenue * 0.8) / 6), "money", true, "revenue ÷ 7 workspaces that paid or used credits"),
+      metric("activeWorkspaces", 7, 6, "count"),
+      metric("creditsConsumed", 1_840_000, 1_420_000, "credits"),
+    ],
+    aiCostUsd: pnlDays.reduce((sum, row) => sum + row.aiCostUsd, 0),
+    costCoveragePercent: 58,
+    costNote: "covers 58% of consumed credits",
+    fxNote: "USD converted at each day's rate (25,950–26,010 VND/USD; Stripe FX quote, Stripe charge conversion)",
+    days: pnlDays,
+    months: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].map((key, index) =>
+      pnlDay(key, index + 20, Math.round((4 + index) * 4_100_000))),
+    providers: [
+      { provider: "cartesia", credits: 620_000, coveredCredits: 620_000, coveragePercent: 100, costUsd: 96.4, costVnd: 2_505_436, measuredUsd: 80.1,
+        services: [{ chargeType: "AUDIO_DUBBING_STANDARD", service: "TTS", credits: 540_000, coveredCredits: 540_000, costUsd: 84 }, { chargeType: "AUDIO_DUBBING_VOICE_CLONE", service: "TTS", credits: 80_000, coveredCredits: 80_000, costUsd: 12.4 }],
+        note: "measured from the provider's usage API on synced days" },
+      { provider: "openai", credits: 1_220_000, coveredCredits: 440_000, coveragePercent: 36.1, costUsd: 22, costVnd: 571_780, measuredUsd: 0,
+        services: [{ chargeType: "TRANSLATION", service: "MT", credits: 780_000, coveredCredits: 0, costUsd: 0 }, { chargeType: "STT", service: "STT", credits: 440_000, coveredCredits: 440_000, costUsd: 22 }],
+        note: "no provider price for TRANSLATION: its cost is not in this figure" },
+    ],
+    plans: [
+      { planId: "p1", planSlug: "enterprise", planName: "Enterprise", revenue: Math.round(revenue * 0.7), credits: 1_100_000, aiCost: Math.round(pnlCost * 0.6), grossMargin: Math.round(revenue * 0.7 - pnlCost * 0.6), marginPercent: 88.4, activeWorkspaces: 3, arpa: Math.round((revenue * 0.7) / 3), costCoveragePercent: 55, note: null },
+      { planId: "p2", planSlug: "team", planName: "Team", revenue: Math.round(revenue * 0.3), credits: 600_000, aiCost: Math.round(pnlCost * 0.35), grossMargin: Math.round(revenue * 0.3 - pnlCost * 0.35), marginPercent: 71.2, activeWorkspaces: 3, arpa: Math.round((revenue * 0.3) / 3), costCoveragePercent: 62, note: null },
+      { planId: "p3", planSlug: "trial", planName: "Trial", revenue: 0, credits: 140_000, aiCost: Math.round(pnlCost * 0.05), grossMargin: -Math.round(pnlCost * 0.05), marginPercent: null, activeWorkspaces: 1, arpa: 0, costCoveragePercent: 70, note: null },
+    ],
+    topWorkspaces: ["Hanoi Law Firm", "Saigon Logistics", "Da Nang Clinic", null, "Hue Studio"].map((name, index) => ({
+      workspaceId: `0000000${index}-1111-4111-8111-111111111111`,
+      workspaceName: name,
+      planName: index < 2 ? "Enterprise" : "Team",
+      credits: 600_000 - index * 90_000,
+      days: days.map(() => Math.round(random() * (30_000 - index * 4_000))),
+    })),
+    fx: {
+      baseCurrency: "USD", quoteCurrency: "VND", rate: 25_989.9, source: gaps ? "stripe_charge" : "stripe_fx_quote",
+      sourceLabel: gaps ? "Stripe charge conversion" : "Stripe FX quote", rateDate: gaps ? "2026-09-14" : "2026-09-17",
+      asOf: NOW.toISOString(), basis: gaps ? "carriedForward" : "exact", mode: "stripe", manualRate: null, latestStripe: null,
+      stale: gaps, warning: gaps ? "Stripe has not returned a rate since 2026-09-14; reports use the last known rate (25,990 VND/USD, Stripe charge conversion, 2026-09-14)." : null,
+      history: [],
+    },
+  };
+
+  return { period, billing, snapshot, meetings, users, workspaces, pnl };
 }
 
 const ready = <T,>(data: T): SourceState<T> => ({ status: "ready", data });
@@ -263,6 +335,7 @@ export default function AdminInsightsPreviewPage() {
     users: answering ? ready(data.users) : scenario === "loading" ? LOADING : UNAVAILABLE,
     workspaces: answering ? ready(data.workspaces) : scenario === "loading" ? LOADING : UNAVAILABLE,
     meetings: answering ? ready(data.meetings) : scenario === "loading" ? LOADING : UNAVAILABLE,
+    pnl: answering ? ready(data.pnl) : scenario === "loading" ? LOADING : UNAVAILABLE,
     // The four sources that exist on every backend today.
     meetingCounts: scenario === "loading" ? LOADING : ready({ liveNow: 7, startedToday: 38 }),
     deadLetters:

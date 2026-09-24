@@ -57,6 +57,8 @@ import {
   LanguageToggleDialog,
 } from "@/components/admin/language-catalog-editor";
 import { compareLanguageCatalog } from "@/lib/language/catalog-drift";
+import { fxLineView } from "@/lib/admin/insights-pnl";
+import { useAdminFxActions, useAdminFxRate } from "@/hooks/use-admin-insights";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type {
@@ -169,6 +171,125 @@ function BillingPolicyPanel() {
   );
 }
 
+
+const fxInstant = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+/**
+ * The USD→VND rate: Stripe's by default (recorded daily by billing), with its source and as-of time,
+ * an amber warning whenever Stripe has not answered for a day (the reports then run on the last known
+ * rate), and an explicit, reversible override. Replaces the hand-typed 26,300.
+ */
+function FxRateRow({ fallbackRate }: { fallbackRate: number }) {
+  const t = useTranslations("adminPlansSettings.settings.pricingEconomics");
+  const fxQuery = useAdminFxRate();
+  const actions = useAdminFxActions();
+  const [overriding, setOverriding] = useState(false);
+  const [draft, setDraft] = useState("");
+  const fx = fxQuery.data ?? null;
+  const view = fxLineView(fx, fxInstant);
+  const busy = actions.refresh.isPending || actions.setOverride.isPending || actions.clearOverride.isPending;
+  const draftRate = Number(draft.replace(/,/g, ""));
+  const draftValid = Number.isFinite(draftRate) && draftRate > 0 && draftRate < 1_000_000;
+
+  const refresh = async () => {
+    try {
+      const result = await actions.refresh.mutateAsync();
+      if (result.error) toast.warning(t("fxRefreshPartial", { error: result.error }));
+      else toast.success(t("fxRefreshed"));
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("fxRefreshError")));
+    }
+  };
+
+  const applyOverride = async () => {
+    try {
+      await actions.setOverride.mutateAsync(draftRate);
+      setOverriding(false);
+      setDraft("");
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("fxOverrideError")));
+    }
+  };
+
+  const backToStripe = async () => {
+    try {
+      await actions.clearOverride.mutateAsync();
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("fxOverrideError")));
+    }
+  };
+
+  return (
+    <div className="border-b border-hairline/60 px-4 py-3.5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink">{t("fxRateLabel")}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{t("fxRateHint")}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <span className={cn("text-[13px] font-medium tabular-nums", view?.tone === "warning" ? "text-warning" : "text-ink")}>
+            {view ? view.rate : `${numberFormatter.format(fallbackRate)} VND/USD`}
+          </span>
+          {view ? (
+            <p className="mt-0.5 text-[11px] text-ink-muted">
+              {view.asOf ? t("fxSourceAsOf", { source: view.source, asOf: view.asOf }) : view.source}
+            </p>
+          ) : fxQuery.isError ? (
+            <p className="mt-0.5 text-[11px] text-warning">{t("fxStatusUnavailable")}</p>
+          ) : null}
+        </div>
+      </div>
+
+      {view?.warning ? (
+        <p role="status" className="mt-2 flex items-start gap-1.5 rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">
+          <Warning size={14} className="mt-0.5 shrink-0" />
+          {view.warning}
+        </p>
+      ) : null}
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" disabled={busy || !fx} onClick={() => void refresh()}>
+          <ArrowsClockwise size={14} />
+          {actions.refresh.isPending ? t("fxRefreshing") : t("fxRefresh")}
+        </Button>
+        {fx?.mode === "manual" ? (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => void backToStripe()}>
+            {t("fxUseStripe")}
+          </Button>
+        ) : overriding ? (
+          <>
+            <Input
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              inputMode="decimal"
+              placeholder={fx?.rate ? numberFormatter.format(fx.rate) : "26,000"}
+              aria-label={t("fxOverrideAriaLabel")}
+              className="h-8 w-32 text-right tabular-nums"
+            />
+            <Button size="sm" disabled={busy || !draftValid} onClick={() => void applyOverride()}>
+              {t("fxApplyOverride")}
+            </Button>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setOverriding(false)}>
+              {t("fxCancel")}
+            </Button>
+          </>
+        ) : (
+          <Button variant="ghost" size="sm" disabled={busy || !fx} onClick={() => setOverriding(true)}>
+            <PencilSimple size={14} />
+            {t("fxOverride")}
+          </Button>
+        )}
+        {fx?.mode === "manual" && fx.latestStripe ? (
+          <span className="text-[11px] text-ink-muted">
+            {t("fxStripeWouldBe", { rate: numberFormatter.format(fx.latestStripe.rate), date: fx.latestStripe.rateDate })}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function PricingEconomicsPanel() {
   const t = useTranslations("adminPlansSettings.settings.pricingEconomics");
   const configQuery = useAdminPricingConfig();
@@ -189,11 +310,7 @@ function PricingEconomicsPanel() {
           </div>
         ) : (
           <>
-            <SettingRow label={t("fxRateLabel")} hint={t("fxRateHint")}>
-              <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.fxRateUsdVnd)}
-              </span>
-            </SettingRow>
+            <FxRateRow fallbackRate={config.fxRateUsdVnd} />
             {/* Framed like the FX rate beside it: a conversion Insights applies to a measured
                 quantity, not a price anyone is charged. */}
             <SettingRow label={t("cartesiaUsdPerCreditLabel")} hint={t("cartesiaUsdPerCreditHint")}>
