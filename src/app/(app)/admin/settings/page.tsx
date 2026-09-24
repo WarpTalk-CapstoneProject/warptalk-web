@@ -184,13 +184,9 @@ function FxRateRow({ fallbackRate }: { fallbackRate: number }) {
   const t = useTranslations("adminPlansSettings.settings.pricingEconomics");
   const fxQuery = useAdminFxRate();
   const actions = useAdminFxActions();
-  const [overriding, setOverriding] = useState(false);
-  const [draft, setDraft] = useState("");
   const fx = fxQuery.data ?? null;
   const view = fxLineView(fx, fxInstant);
-  const busy = actions.refresh.isPending || actions.setOverride.isPending || actions.clearOverride.isPending;
-  const draftRate = Number(draft.replace(/,/g, ""));
-  const draftValid = Number.isFinite(draftRate) && draftRate > 0 && draftRate < 1_000_000;
+  const busy = actions.refresh.isPending || actions.clearOverride.isPending;
 
   const refresh = async () => {
     try {
@@ -199,16 +195,6 @@ function FxRateRow({ fallbackRate }: { fallbackRate: number }) {
       else toast.success(t("fxRefreshed"));
     } catch (error) {
       toast.error(getErrorMessage(error, t("fxRefreshError")));
-    }
-  };
-
-  const applyOverride = async () => {
-    try {
-      await actions.setOverride.mutateAsync(draftRate);
-      setOverriding(false);
-      setDraft("");
-    } catch (error) {
-      toast.error(getErrorMessage(error, t("fxOverrideError")));
     }
   };
 
@@ -253,33 +239,12 @@ function FxRateRow({ fallbackRate }: { fallbackRate: number }) {
           <ArrowsClockwise size={14} />
           {actions.refresh.isPending ? t("fxRefreshing") : t("fxRefresh")}
         </Button>
+        {/* The rate is Stripe's. A manual rate set before that rule can still be cleared here. */}
         {fx?.mode === "manual" ? (
           <Button variant="outline" size="sm" disabled={busy} onClick={() => void backToStripe()}>
             {t("fxUseStripe")}
           </Button>
-        ) : overriding ? (
-          <>
-            <Input
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              inputMode="decimal"
-              placeholder={fx?.rate ? numberFormatter.format(fx.rate) : "26,000"}
-              aria-label={t("fxOverrideAriaLabel")}
-              className="h-8 w-32 text-right tabular-nums"
-            />
-            <Button size="sm" disabled={busy || !draftValid} onClick={() => void applyOverride()}>
-              {t("fxApplyOverride")}
-            </Button>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => setOverriding(false)}>
-              {t("fxCancel")}
-            </Button>
-          </>
-        ) : (
-          <Button variant="ghost" size="sm" disabled={busy || !fx} onClick={() => setOverriding(true)}>
-            <PencilSimple size={14} />
-            {t("fxOverride")}
-          </Button>
-        )}
+        ) : null}
         {fx?.mode === "manual" && fx.latestStripe ? (
           <span className="text-[11px] text-ink-muted">
             {t("fxStripeWouldBe", { rate: numberFormatter.format(fx.latestStripe.rate), date: fx.latestStripe.rateDate })}
