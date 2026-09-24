@@ -153,7 +153,16 @@
     },
     "templatePicker": {
       "meetingType": "Loại cuộc họp",
-      "translateElsewhere": "Dịch một cuộc gọi ở nơi khác"
+      "translateElsewhere": "Dịch một cuộc gọi ở nơi khác",
+      "types": {
+        "event": "Sự kiện",
+        "channelMeeting": "Họp theo kênh",
+        "webinar": "Hội thảo trực tuyến",
+        "companyMeeting": "Họp công ty",
+        "virtualAppointment": "Cuộc hẹn trực tuyến",
+        "liveEvent": "Sự kiện trực tiếp",
+        "externalMeeting": "Cuộc họp bên ngoài"
+      }
     }
   },
   "startedBanner": {

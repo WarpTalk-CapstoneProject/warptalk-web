@@ -153,7 +153,16 @@
     },
     "templatePicker": {
       "meetingType": "ミーティングの種類",
-      "translateElsewhere": "外部の通話を翻訳する"
+      "translateElsewhere": "外部の通話を翻訳する",
+      "types": {
+        "event": "イベント",
+        "channelMeeting": "チャンネルミーティング",
+        "webinar": "ウェビナー",
+        "companyMeeting": "全社ミーティング",
+        "virtualAppointment": "オンライン相談",
+        "liveEvent": "ライブイベント",
+        "externalMeeting": "外部ミーティング"
+      }
     }
   },
   "startedBanner": {

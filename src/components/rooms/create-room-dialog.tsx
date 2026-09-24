@@ -16,7 +16,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel, isExternalBridge } from "@/lib/meeting/meeting-types";
+import { MEETING_TYPES, meetingTypeByValue, isExternalBridge } from "@/lib/meeting/meeting-types";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -116,7 +116,7 @@ export function CreateRoomDialog() {
   const [saveTranscript, setSaveTranscript] = useState(true);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [meetingTemplate, setMeetingTemplate] = useState("Event");
+  const [meetingTemplate, setMeetingTemplate] = useState(MEETING_TYPES[0].value);
   const [initializedEditRoomId, setInitializedEditRoomId] = useState<
     string | null
   >(null);
@@ -217,15 +217,16 @@ export function CreateRoomDialog() {
   //
   // WT-343: a workspace-wide default sat between these two for one release. Host approval is a
   // per-meeting decision and a second place to set it was one place too many.
+  const selectedMeetingType = meetingTypeByValue(meetingTemplate) ?? MEETING_TYPES[0];
   const effectiveRequiresApproval =
-    requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
+    requiresApproval ?? selectedMeetingType.defaults.requiresApproval;
 
   // WT-525. The one type whose meeting does not happen on WarpTalk: the call is on Google Meet
   // and WarpTalk sits beside it, so the room is seeded with exactly two seats — the host, and a
   // stand-in that carries everyone on the far side. Several controls below mean something
   // different (or nothing) under it, and the host needs to know that before submitting rather
   // than after the room exists.
-  const bridgeSelected = isExternalBridge(meetingTypeByLabel(meetingTemplate).value);
+  const bridgeSelected = isExternalBridge(selectedMeetingType.value);
 
   // An instant meeting: no start time and no repeat rule, i.e. "now". This is the same
   // distinction the server draws at creation — `ScheduledAt.HasValue ? "SCHEDULED" : "WAITING"` —
@@ -361,7 +362,7 @@ export function CreateRoomDialog() {
           // mute-on-entry, auto-record, breakouts and seat count server-side. It used to be
           // discarded here in favour of instant/scheduled, which is why every type behaved
           // identically.
-          translationRoomType: meetingTypeByLabel(meetingTemplate).value,
+          translationRoomType: (meetingTypeByValue(meetingTemplate) ?? MEETING_TYPES[0]).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,

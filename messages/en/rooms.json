@@ -153,7 +153,16 @@
     },
     "templatePicker": {
       "meetingType": "Meeting Type",
-      "translateElsewhere": "Translate a call elsewhere"
+      "translateElsewhere": "Translate a call elsewhere",
+      "types": {
+        "event": "Event",
+        "channelMeeting": "Channel Meeting",
+        "webinar": "Webinar",
+        "companyMeeting": "Company Meeting",
+        "virtualAppointment": "Virtual Appointment",
+        "liveEvent": "Live Event",
+        "externalMeeting": "External Meeting"
+      }
     }
   },
   "startedBanner": {

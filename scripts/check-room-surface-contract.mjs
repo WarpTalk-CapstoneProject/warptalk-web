@@ -225,9 +225,20 @@ assert.doesNotMatch(
 // Same two layers, same order, as TranslationRoomMapper.ResolveSettings. If this drifts, the
 // toggle silently lies about the meeting being created — a host sees "off" and then finds nobody
 // can start the meeting.
+//
+// i18n (2026-09-24): `meetingTemplate` used to hold the meeting type's English LABEL (the picker's
+// display text doubled as its own lookup key), which broke once the picker started showing a
+// translated label. It now holds the type's stable `value` (e.g. "EVENT"), resolved through
+// `meetingTypeByValue` with a same-shaped fallback to the registry's first entry — so this checks
+// both halves rather than the single literal expression that used to do both jobs at once.
 assert.match(
   createRoomDialog,
-  /requiresApproval \?\? meetingTypeByLabel\(meetingTemplate\)\.defaults\.requiresApproval/,
+  /const selectedMeetingType = meetingTypeByValue\(meetingTemplate\) \?\? MEETING_TYPES\[0\];/,
+  "The create dialog must resolve the selected meeting type by value, falling back to the registry's first entry.",
+);
+assert.match(
+  createRoomDialog,
+  /requiresApproval \?\? selectedMeetingType\.defaults\.requiresApproval/,
   "The create dialog's approval toggle must resolve explicit choice → meeting type default.",
 );
 // WT-343: host approval is a PER-MEETING decision. A workspace-wide default for it existed for
