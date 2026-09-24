@@ -33,7 +33,12 @@ const [endpoints, service, hooks, component, detail, pricingService, pricingHook
 // ── routes, as the billing controllers declare them ──────────────────────────
 assert.match(endpoints, /createContract: "\/subscriptions\/contract"/);
 assert.match(endpoints, /`\/subscriptions\/workspace\/\$\{workspaceId\}\/contract-terms`/);
-assert.match(endpoints, /markPaid: \(invoiceId: string\) => `\/invoices\/\$\{invoiceId\}\/mark-paid`/);
+// Mark-paid goes through the audited admin route (reason required, recorded before it settles),
+// scoped to the workspace in the route — not the bare, role-string-gated /invoices/{id}/mark-paid.
+assert.match(
+  endpoints,
+  /markPaid: \(workspaceId: string, invoiceId: string\) =>\s*`\/admin\/billing\/workspaces\/\$\{workspaceId\}\/invoices\/\$\{invoiceId\}\/mark-paid`/,
+);
 assert.match(endpoints, /`\/usages\/rate-card\/\$\{id\}\/deactivate`/);
 assert.match(endpoints, /rateCardPreview: "\/usages\/rate-card\/preview"/);
 assert.match(endpoints, /`\/usages\/rate-card\/\$\{id\}\/provider-cost`/);
@@ -41,7 +46,7 @@ assert.match(endpoints, /`\/usages\/rate-card\/\$\{id\}\/provider-cost`/);
 // ── services use the verbs the controllers accept ────────────────────────────
 assert.match(service, /apiClient\.post<[\s\S]*?API\.adminSubscriptions\.createContract/);
 assert.match(service, /apiClient\.put<[\s\S]*?API\.adminSubscriptions\.contractTerms/);
-assert.match(service, /apiClient\.post<InvoiceDto>\(API\.adminInvoices\.markPaid/);
+assert.match(service, /API\.adminInvoices\.markPaid\(workspaceId, invoiceId\),\s*\{ reason \}/);
 assert.match(pricingService, /apiClient\.post<UsageRateCardDto>\(\s*API\.adminPricing\.rateCardDeactivate/);
 assert.match(pricingService, /apiClient\.post<RateCardPreviewDto>\(\s*API\.adminPricing\.rateCardPreview/);
 assert.match(pricingService, /apiClient\.put<UsageRateCardDto>\(\s*API\.adminPricing\.rateCardProviderCost/);
@@ -67,6 +72,8 @@ for (const hook of [
 assert.match(component, /draftFromSubscription\(subscription\)/, "terms must be seeded from stored overrides");
 assert.match(component, /describeContractTermsChanges\(/, "terms must be reviewed before saving");
 assert.match(component, /invoiceConfirmationMatches\(invoice, typed\)/, "mark paid must be typed-confirmed");
+assert.match(component, /validateReason\(reason\)/, "mark paid must carry a reason for the audit log");
+assert.match(component, /markPaid\.mutateAsync\(\{ invoiceId: invoice\.id, reason \}\)/);
 assert.match(component, /spellMoney\(\{ amount: invoice\.total, currency: invoice\.currency \}\)/);
 assert.match(component, /canMarkInvoicePaid\(invoice\)/, "mark paid is offered on open invoices only");
 

@@ -1118,7 +1118,8 @@ function RateCardDeactivateForm({
  * was resolved rather than what it holds, and `UpdatePricingConfigRequest` has no room for them.
  */
 const CONFIG_FIELD_KEYS: (keyof UpdatePricingConfigRequest)[] = [
-  "fxRateUsdVnd",
+  // No fxRateUsdVnd: the rate is Stripe's, recorded daily; an override is its own explicit action on
+  // /admin/settings (PUT /admin/billing/fx/override). Sending it here would read as an override.
   "minimumContractPriceVnd",
   "minimumContractPriceUsd",
   "salesUsageWeight",

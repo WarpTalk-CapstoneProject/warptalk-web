@@ -66,6 +66,7 @@
   "planEndsOn": "{planName} ends on {date}.",
   "noMeetingsScheduled": "No meetings scheduled.",
   "runningNow": "Running now",
+  "openNow": "Open now",
   "noTimeSet": "No time set",
   "counts": { "members": "members", "documents": "documents", "meetings": "meetings" },
   "usageTrend": {

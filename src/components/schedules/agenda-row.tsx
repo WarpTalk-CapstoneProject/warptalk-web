@@ -8,6 +8,7 @@ import { GoogleMeetMark, isGoogleMeetMeeting } from "@/components/meeting/google
 import { UserChip } from "@/components/user/user-chip";
 import { formatLanguageRouteShort } from "@/lib/language/languages";
 import type { TimedMeeting } from "@/lib/meeting/agenda-sections";
+import { meetingDisplayState } from "@/lib/meeting/meeting-display-state";
 import { cn } from "@/lib/utils";
 import { intlCalendarLocale } from "@/lib/meeting/calendar-locale";
 
@@ -39,9 +40,16 @@ export function AgendaRow({
   highlighted?: boolean;
 }) {
   // Cancellation outranks the clock, as everywhere on the schedule: a cancelled meeting whose slot
-  // is now is not live, and gets neither the pulse nor the Join button.
-  const isCancelled = meeting.status === "cancelled";
-  const isLive = meeting.timeState === "live" && !isCancelled;
+  // is now is not live, and gets neither the pulse nor the Join button. Asked of the shared rule
+  // rather than of `status` directly, so this row and the glyph beside it cannot come to disagree
+  // — which is what WT-714's `expired` would otherwise have caused here: the sweep leaves a room
+  // whose slot is minutes old, and `timeState === "live"` is false for it, but the muted title and
+  // the trailing word were both spelled against `cancelled` alone.
+  const displayState = meetingDisplayState(meeting);
+  const isCancelled = displayState === "cancelled";
+  // Grey for either: there is no meeting behind this title. The word below says which.
+  const didNotHappen = isCancelled || displayState === "expired";
+  const isLive = displayState === "live";
 
   const t = useTranslations("schedules");
   const locale = useLocale();
@@ -101,10 +109,10 @@ export function AgendaRow({
             className={cn(
               "min-w-0 truncate text-[13.5px] leading-5",
               // Weight is the host signal: the meetings you run are the ones you cannot skip, and
-              // that has to read without a badge. Cancelled is muted colour only — never struck
-              // through (removed on purpose in 8953691).
+              // that has to read without a badge. Cancelled and expired are muted colour only —
+              // never struck through (removed on purpose in 8953691).
               meeting.isHost ? "font-semibold" : "font-normal",
-              isCancelled ? "text-ink-muted" : "text-ink",
+              didNotHappen ? "text-ink-muted" : "text-ink",
             )}
           >
             {meeting.title}
@@ -146,9 +154,9 @@ export function AgendaRow({
         >
           {t("chip.join")}
         </Link>
-      ) : isCancelled ? (
+      ) : didNotHappen ? (
         <span className="shrink-0 pt-[3px] text-[12px] leading-4 text-ink-muted">
-          {t("chip.cancelled")}
+          {isCancelled ? t("chip.cancelled") : t("chip.expired")}
         </span>
       ) : null}
     </div>
