@@ -145,7 +145,7 @@
     "activate": "Kích hoạt",
     "notFound": {
       "title": "Không tìm thấy plugin",
-      "body": "Không có dòng nào trong danh mục mang key {key}. Có thể nó đã bị xóa vĩnh viễn."
+      "body": "Không có dòng nào trong danh mục marketplace mang key {key}. Có thể nó đã bị xóa vĩnh viễn, hoặc đây là plugin do một workspace tự tạo — plugin đó thuộc về chủ workspace và không quản lý ở đây."
     },
     "loadError": {
       "title": "Không thể tải plugin này",
