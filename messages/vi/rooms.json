@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "Đang diễn ra",
+    "open": "Đã mở",
     "waiting": "Đang chờ",
     "scheduled": "Đã lên lịch",
     "ended": "Đã kết thúc",
@@ -162,7 +163,9 @@
   },
   "startedBanner": {
     "title": "Một cuộc họp đã bắt đầu",
+    "openedTitle": "Một cuộc họp đã mở",
     "joinNow": "Tham gia ngay",
+    "setUpAndJoin": "Thiết lập & tham gia",
     "openFromNotifications": "Mở từ thông báo của bạn.",
     "dismissAria": "Đóng"
   },

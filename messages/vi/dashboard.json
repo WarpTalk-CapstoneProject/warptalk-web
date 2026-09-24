@@ -66,6 +66,7 @@
   "planEndsOn": "{planName} kết thúc vào {date}.",
   "noMeetingsScheduled": "Chưa có cuộc họp nào được lên lịch.",
   "runningNow": "Đang diễn ra",
+  "openNow": "Đã mở cửa",
   "noTimeSet": "Chưa đặt thời gian",
   "counts": { "members": "thành viên", "documents": "tài liệu", "meetings": "cuộc họp" },
   "usageTrend": {

@@ -117,6 +117,13 @@ function StatusIcon({ status }: { status: string }) {
     return (
       <div className="w-3 h-3 rounded-full border-[1.5px] border-status-in-progress bg-status-in-progress/20 shadow-[0_0_8px_var(--color-status-in-progress)]/30" />
     );
+  // Open (WT-612 / WT-621) borrows the in-progress hue, because the room really is enterable —
+  // but not its glow, which is the "somebody is in here talking" signal and would overstate a
+  // room the clock unlocked and nobody has walked into yet.
+  if (status === "open")
+    return (
+      <div className="w-3 h-3 rounded-full border-[1.5px] border-status-in-progress bg-status-in-progress/20" />
+    );
   if (status === "waiting")
     return (
       <div className="w-3 h-3 rounded-full border-[1.5px] border-status-waiting bg-status-waiting/20" />
@@ -503,6 +510,11 @@ export default function MeetingsPageLinear() {
           (r.status === "in_progress" ||
             r.status === "paused" ||
             r.status === "waiting" ||
+            // WT-612 / WT-621: open is live. The clock unlocked the room at its slot and the
+            // meeting is enterable right now — and it must NOT fall through to the `scheduled`
+            // clause below, whose two-hour window would drop an open room off the tab while its
+            // door was still open.
+            r.status === "open" ||
             (r.status === "scheduled" &&
               (!r.scheduledAt ||
                 (new Date(r.scheduledAt) <= fifteenMinsFromNow &&

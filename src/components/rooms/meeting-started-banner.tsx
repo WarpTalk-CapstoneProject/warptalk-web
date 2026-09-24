@@ -20,6 +20,14 @@
  *   `payload_json` were both undefined. See meeting-started-notice.ts, which now reads both.
  *   Rendering the notice without a way to act on it is the failure mode worth guarding, so when
  *   there is genuinely no target the text says so instead of showing a dead control.
+ *
+ * TWO NOTICES, ONE CARD
+ *   WT-612 / WT-621 added MEETING_OPENED — the clock unlocking a scheduled room — and it shares
+ *   this card rather than getting a third one in the layout's stack, because it interrupts the
+ *   reader for the same reason and at the same moment. Only the words change, and they change
+ *   because the destination does: "Join now" leads into a call that is already running, while
+ *   "Set up & join" leads to the room page, where the reader picks a camera and a microphone
+ *   before walking into a room nobody is in yet. The verb has to match the door.
  */
 
 import { useEffect } from "react";
@@ -51,6 +59,8 @@ export function MeetingStartedBanner() {
 
   if (!notice) return null;
 
+  const isOpened = notice.kind === "opened";
+
   return (
     <div className="pointer-events-auto flex w-full max-w-[360px] items-start gap-3 rounded-[14px] border border-border bg-surface-1 p-3.5 shadow-lg">
       <span className="grid size-9 shrink-0 place-items-center rounded-full bg-[var(--primary)]/10 text-[var(--primary)]">
@@ -58,7 +68,9 @@ export function MeetingStartedBanner() {
       </span>
 
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold leading-snug text-ink">{t("title")}</p>
+        <p className="text-[13px] font-semibold leading-snug text-ink">
+          {isOpened ? t("openedTitle") : t("title")}
+        </p>
         <p className="mt-0.5 truncate text-[12px] text-ink-muted" title={notice.title}>
           {notice.title}
         </p>
@@ -69,7 +81,7 @@ export function MeetingStartedBanner() {
             onClick={dismiss}
             className="mt-2.5 inline-flex h-[28px] items-center rounded-full bg-foreground px-3.5 text-[12px] font-medium text-background transition hover:opacity-90"
           >
-            {t("joinNow")}
+            {isOpened ? t("setUpAndJoin") : t("joinNow")}
           </Link>
         ) : (
           <p className="mt-2 text-[11px] text-ink-subtle">{t("openFromNotifications")}</p>
