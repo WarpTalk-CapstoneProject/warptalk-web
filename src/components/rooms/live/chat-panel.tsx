@@ -43,6 +43,8 @@ import { CharacterCount } from "@tiptap/extensions";
 import Mention from "@tiptap/extension-mention";
 import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
+import { stripMeetingMarkers } from "@/lib/assistant/meeting-links";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
@@ -876,7 +878,11 @@ export function ChatPanel({
                     <div
                       className={`mt-0.5 max-w-full break-words text-left text-[13px] leading-relaxed text-ink`}
                     >
-                      <AssistantMarkdown>{message.originalText}</AssistantMarkdown>
+                      {/* Rooms open in a new tab from here: navigating in place would take the
+                          user out of the meeting they are sitting in. */}
+                      <AssistantMarkdown withMeetingCards meetingCardsOpenRoomsOutside>
+                        {message.originalText}
+                      </AssistantMarkdown>
                       {/* Under the answer, inside the same left-aligned block: the chips
                           belong to what WarpBot just said, and a row hung off the message
                           container would sit under whoever spoke next. */}
@@ -900,7 +906,7 @@ export function ChatPanel({
                     <p
                       className={`mt-0.5 max-w-full text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink-muted ${isMine ? "text-right" : "text-left"}`}
                     >
-                      {message.originalText}
+                      {userMessageDisplayText(message.originalText)}
                     </p>
                   )}
                   {translations[message.id]?.visible &&
@@ -908,7 +914,12 @@ export function ChatPanel({
                     <p
                       className={`mt-1 max-w-full rounded-md bg-surface-2 px-2 py-1 text-[13px] leading-relaxed whitespace-pre-wrap break-words text-ink ${isMine ? "text-right" : "text-left"}`}
                     >
-                      {translations[message.id]!.text}
+                      {/* A translation is plain text: it carries the confirmation token of an
+                          answer to a card, and the meeting marker of one of WarpBot's own
+                          answers, neither of which is for reading. */}
+                      {stripMeetingMarkers(
+                        userMessageDisplayText(translations[message.id]?.text ?? ""),
+                      )}
                       <span className="ml-1.5 text-[10px] font-medium uppercase text-ink-subtle">
                         {getLanguageName(translations[message.id]?.targetLanguage || suggestedTargetLanguage)}
                       </span>

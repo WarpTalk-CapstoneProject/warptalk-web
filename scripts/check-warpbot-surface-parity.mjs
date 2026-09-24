@@ -37,8 +37,15 @@ for (const [surface, source] of [
 ]) {
   assert.match(
     source,
-    /<AssistantMarkdown>/,
+    /<AssistantMarkdown\b/,
     `${surface} must render WarpBot's markdown, not the source of it.`,
+  );
+  // A meeting WarpBot created is a card with its link and code on every surface, labelled as a
+  // Google Meet meeting or a WarpTalk room - not a bare link on one and a card on another.
+  assert.match(
+    source,
+    /<AssistantMarkdown[^>]*\bwithMeetingCards\b/,
+    `${surface} must draw meeting cards under an answer that created a meeting.`,
   );
   assert.match(
     source,
@@ -51,6 +58,15 @@ for (const [surface, source] of [
     `${surface} must show the work trail.`,
   );
 }
+
+// The marker a card is built from is machinery, and react-markdown PRINTS an HTML comment rather
+// than dropping it — the JSON showed up under the answer in full. It comes out of the prose in
+// one place, so every surface is covered at once.
+assert.match(
+  read("src/components/assistant/assistant-markdown.tsx"),
+  /stripMeetingMarkers\(children\)/,
+  "AssistantMarkdown must strip meeting markers before rendering the answer.",
+);
 
 // ── the same colour ──────────────────────────────────────────────────────────
 
@@ -225,7 +241,7 @@ assert.match(
 // Streams: the answer is rendered from the message the chunks append to, not only once persisted.
 assert.match(
   popupPaneCode,
-  /<AssistantMarkdown>\{message\.content\}<\/AssistantMarkdown>/,
+  /<AssistantMarkdown\b[^>]*>\s*\{message\.content\}\s*<\/AssistantMarkdown>/,
   "The popup must render the answer as it is written.",
 );
 assert.match(

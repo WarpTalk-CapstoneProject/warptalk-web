@@ -99,9 +99,15 @@ import { toast } from "sonner";
 import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
-import { MessageMentionChips } from "@/components/assistant/message-mention-chips";
+import { UserMessageBody } from "@/components/assistant/message-mention-chips";
 import { mentionCompletion } from "@/lib/assistant/mention-completion";
-import { parseMessageMentions } from "@/lib/assistant/message-mentions";
+import {
+  hasMentionToken,
+  mentionToken,
+  mentionTokenEndingAt,
+  parseMessageMentions,
+  splitMentionTokens,
+} from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import {
   readDisabledPluginKeys,
@@ -1151,6 +1157,12 @@ export function GlobalChatbot() {
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputValue(val);
+    // Deleting "@Google Meet" from the text is how a mention is removed now that it lives in the
+    // sentence, so a context whose token is gone goes with it.
+    setSelectedContexts((prev) => {
+      const kept = prev.filter((ctx) => hasMentionToken(val, ctx.title));
+      return kept.length === prev.length ? prev : kept;
+    });
 
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPosition);
@@ -1274,7 +1286,35 @@ export function GlobalChatbot() {
       return;
     }
 
-    // Handle backspace when input is empty to delete the last context
+    // A mention lives in the text as "@Google Meet", so Backspace at its end removes the whole
+    // token. One character off it used to leave "@Google Mee" behind as ordinary words, with the
+    // structured mention silently dropped — the message then looked like it named a plugin it no
+    // longer named.
+    if (e.key === "Backspace" && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const input = inputRef.current;
+      const caret = input?.selectionStart ?? 0;
+      if (input && caret === input.selectionEnd) {
+        const token = mentionTokenEndingAt(
+          inputValue,
+          caret,
+          selectedContexts.map((ctx) => ({ label: ctx.title })),
+        );
+        if (token) {
+          e.preventDefault();
+          const next = inputValue.slice(0, token.start) + inputValue.slice(token.end);
+          setInputValue(next);
+          setSelectedContexts((prev) => prev.filter((ctx) => hasMentionToken(next, ctx.title)));
+          setTimeout(() => {
+            input.focus();
+            input.setSelectionRange(token.start, token.start);
+          }, 0);
+          return;
+        }
+      }
+    }
+
+    // Handle backspace when input is empty to delete the last context. Only mentions that never
+    // made it into the text can be left by now (see the sent bubble's `unplaced`).
     if (
       e.key === "Backspace" &&
       inputValue === "" &&
@@ -1293,6 +1333,16 @@ export function GlobalChatbot() {
   const filteredOptions = CONTEXT_OPTIONS.filter((opt) =>
     opt.title.toLowerCase().includes(mentionQuery.toLowerCase()),
   );
+
+  // The composer's text split around the mentions written into it, for the mirror's highlight.
+  const composerMentionSegments = splitMentionTokens(
+    inputValue,
+    selectedContexts.map((ctx) => ({
+      entityType: ctx.entityType,
+      entityId: ctx.entityId,
+      label: ctx.title,
+    })),
+  ).segments;
 
   // What Tab would finish the typed name with — see mention-completion.ts for when it is empty.
   const mentionGhost = mentionMenuOpen
@@ -1313,17 +1363,26 @@ export function GlobalChatbot() {
     const textBeforeCursor = inputValue.slice(0, cursorPosition);
     const textAfterCursor = inputValue.slice(cursorPosition);
 
+    // The mention stays in the sentence as "@Google Meet", where it was typed. It used to be cut
+    // out and kept only as a chip, so "tạo 1 cuộc họp bằng @Google Meet" was sent - and shown
+    // back in the bubble - as "tạo 1 cuộc họp bằng", with the chip stranded above it (17 Sep).
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
-    if (mentionMatch) {
-      const newTextBefore = textBeforeCursor.slice(0, mentionMatch.index);
-      setInputValue(newTextBefore + textAfterCursor);
-    }
+    const newTextBefore = mentionMatch
+      ? textBeforeCursor.slice(0, mentionMatch.index)
+      : textBeforeCursor;
+    const token = `${mentionToken(opt.title)} `;
+    const needsSpaceBefore = newTextBefore.length > 0 && !/\s$/.test(newTextBefore);
+    const nextBefore = `${newTextBefore}${needsSpaceBefore ? " " : ""}${token}`;
+    setInputValue(nextBefore + textAfterCursor.replace(/^ /, ""));
 
     setMentionMenuOpen(false);
 
-    // Focus back
+    // Focus back, with the caret after the token rather than at the end of the box.
     setTimeout(() => {
-      inputRef.current?.focus();
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextBefore.length, nextBefore.length);
     }, 0);
   };
 
@@ -1456,10 +1515,16 @@ export function GlobalChatbot() {
     // which workspace the turn belongs to.
     const sendWorkspaceId = readiness.workspaceId;
 
+    // A message this component composed rather than the user typing it — a question card's
+    // answer, a slash command — carries neither the draft's @mentions nor its attachments, and
+    // leaves the draft alone. Sending "Create" used to clear whatever the user had half-written
+    // and attach its chips to the answer.
+    const fromComposer = overrideContent === undefined;
+
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
     // unrelated message too.
-    const mentions: AssistantMentionDto[] = selectedContexts
+    const mentions: AssistantMentionDto[] = (fromComposer ? selectedContexts : [])
       .filter(
         (
           ctx,
@@ -1476,12 +1541,14 @@ export function GlobalChatbot() {
 
     // Captured before the state is cleared, for the same reason mentions are: this handler runs
     // against pre-update state and the request is built further down.
-    const sentAttachments = attachments;
+    const sentAttachments = fromComposer ? attachments : [];
 
-    setInputValue("");
+    if (fromComposer) {
+      setInputValue("");
+      setSelectedContexts([]);
+      setAttachments([]);
+    }
     setMentionMenuOpen(false);
-    setSelectedContexts([]);
-    setAttachments([]);
 
     let convId = conversationId;
     if (!convId) {
@@ -1691,7 +1758,7 @@ export function GlobalChatbot() {
                       >
                         {msg.role === "assistant" && !msg.failed ? (
                           <>
-                            <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                            <AssistantMarkdown withMeetingCards>{msg.content}</AssistantMarkdown>
                             <AnswerSources
                               sources={msg.sources ?? []}
                               workspaceSlug={activeWorkspaceSlug}
@@ -1706,17 +1773,18 @@ export function GlobalChatbot() {
                           </>
                         ) : (
                           <>
-                            <MessageMentionChips
+                            <UserMessageBody
+                              content={msg.content}
                               mentions={msg.mentions ?? []}
                               plugins={catalogPlugins}
-                            />
-                            {msg.attachments && msg.attachments.length > 0 ? (
-                              <ChatAttachmentStrip
-                                attachments={msg.attachments}
-                                className="mb-1 flex justify-end px-0 pb-0"
-                              />
-                            ) : null}
-                            {msg.content}
+                            >
+                              {msg.attachments && msg.attachments.length > 0 ? (
+                                <ChatAttachmentStrip
+                                  attachments={msg.attachments}
+                                  className="mb-1 flex justify-end px-0 pb-0"
+                                />
+                              ) : null}
+                            </UserMessageBody>
                           </>
                         )}
                       </div>
@@ -2001,7 +2069,12 @@ export function GlobalChatbot() {
                       dragDepth > 0 && "bg-primary/5 outline-dashed outline-1 outline-primary/40",
                     )}
                   >
-                    {selectedContexts.map((ctx) => (
+                    {/* Only contexts that are not already written into the sentence. A mention picked
+                        from the @ menu lives in the text as "@Google Meet" and is highlighted there
+                        by the mirror below; drawing it here too would show it twice. */}
+                    {selectedContexts
+                      .filter((ctx) => !hasMentionToken(inputValue, ctx.title))
+                      .map((ctx) => (
                       <span
                         key={ctx.id}
                         className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium"
@@ -2048,12 +2121,27 @@ export function GlobalChatbot() {
                         aria-hidden: the open menu already announces the option, and hearing the
                         sentence read back a second time is worse than not hearing the hint. */}
                     <div className="relative flex-1 min-w-[120px]">
-                      {mentionGhost && !composerOverflowing ? (
+                      {(mentionGhost || composerMentionSegments.some((part) => part.kind === "mention"))
+                      && !composerOverflowing ? (
                         <div
                           aria-hidden
                           className="pointer-events-none absolute inset-0 overflow-hidden text-[13px] whitespace-pre-wrap break-words"
                         >
-                          <span className="invisible">{inputValue}</span>
+                          {/* Same string, same glyphs: a mention token gets a tint BEHIND the
+                              textarea's own text (text-transparent keeps its background, where
+                              invisible would hide it), everything else stays invisible. No
+                              padding on the tint - padding would move every glyph after it. */}
+                          {composerMentionSegments.map((part, index) =>
+                            part.kind === "mention" ? (
+                              <span key={index} className="rounded-[3px] bg-primary/15 text-transparent">
+                                {mentionToken(part.mention.label ?? "")}
+                              </span>
+                            ) : (
+                              <span key={index} className="invisible">
+                                {part.text}
+                              </span>
+                            ),
+                          )}
                           <span className="text-ink-subtle">{mentionGhost}</span>
                         </div>
                       ) : null}

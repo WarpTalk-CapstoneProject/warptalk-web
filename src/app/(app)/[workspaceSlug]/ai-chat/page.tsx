@@ -18,6 +18,8 @@ import {
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
 import {
   PluginConnectionActionCard,
   parsePluginConnectionAction,
@@ -251,7 +253,15 @@ export default function AiChatPage() {
                       : "bg-muted text-foreground",
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" ? (
+                    // Markdown, like every other WarpBot surface: this printed the source of the
+                    // answer, so "**bold**" and a meeting marker reached the reader as characters.
+                    <AssistantMarkdown withMeetingCards>{message.content}</AssistantMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap">
+                      {userMessageDisplayText(message.content)}
+                    </p>
+                  )}
                   {message.status === "failed" ? (
                     <p className="mt-1 text-xs text-destructive">Message processing failed.</p>
                   ) : null}

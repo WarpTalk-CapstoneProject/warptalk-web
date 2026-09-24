@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { parseMessageMentions } from "../message-mentions.ts";
+import { parseMessageMentions, splitMentionTokens } from "../message-mentions.ts";
 
 describe("WarpBot — mentions read back onto a user message", () => {
   test("reads the shape the send path stores, without the server's workspace stamp", () => {
@@ -37,5 +37,32 @@ describe("WarpBot — mentions read back onto a user message", () => {
     assert.deepEqual(parseMessageMentions(JSON.stringify([row, row])), [
       { entityType: "plugin", entityId: "google_drive", label: "Google Drive" },
     ]);
+  });
+});
+
+describe("WarpBot — a mention is drawn where it was typed", () => {
+  const meet = { entityType: "plugin" as const, entityId: "google_meet", label: "Google Meet" };
+  const google = { entityType: "plugin" as const, entityId: "google", label: "Google" };
+
+  test("the token becomes a chip in place, and the sentence keeps its end", () => {
+    const { segments, unplaced } = splitMentionTokens("tạo 1 cuộc họp bằng @Google Meet nhé", [meet]);
+    assert.deepEqual(segments, [
+      { kind: "text", text: "tạo 1 cuộc họp bằng " },
+      { kind: "mention", mention: meet },
+      { kind: "text", text: " nhé" },
+    ]);
+    assert.deepEqual(unplaced, []);
+  });
+
+  test("a message sent before the token was kept draws its chips above, as before", () => {
+    const { segments, unplaced } = splitMentionTokens("tao 1 cuoc hop bang", [meet]);
+    assert.deepEqual(segments, [{ kind: "text", text: "tao 1 cuoc hop bang" }]);
+    assert.deepEqual(unplaced, [meet]);
+  });
+
+  test("the longer label wins where one name contains another", () => {
+    const { segments, unplaced } = splitMentionTokens("@Google Meet", [google, meet]);
+    assert.deepEqual(segments, [{ kind: "mention", mention: meet }]);
+    assert.deepEqual(unplaced, [google]);
   });
 });
