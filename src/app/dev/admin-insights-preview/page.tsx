@@ -366,6 +366,10 @@ export default function AdminInsightsPreviewPage() {
             stageLatencies: [],
             alerts: [],
             warnings: [],
+            meetings: null,
+            stageOutcomes: [],
+            outboxDeadLetters: { count: 2, oldestAt: NOW.toISOString() },
+            grafanaEmbedPath: null,
           }),
   };
 

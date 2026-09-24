@@ -1,8 +1,8 @@
 {
   "workspaceFallback": "このワークスペース",
   "header": {
-    "title": "プラグイン",
-    "subtitle": "{workspaceName}のメンバーが接続できるプラグインを選びます。各メンバーは自分のアカウントでサインインします。",
+    "title": "ワークスペースのプラグイン",
+    "subtitle": "{workspaceName}のメンバーが接続できるマーケットプレイスのプラグインです。各メンバーは自分のアカウントでサインインします。",
     "readOnly": "このリストは閲覧できます。変更できるのはワークスペースのオーナーだけです。"
   },
   "addMenu": {
@@ -13,7 +13,7 @@
   "states": {
     "loading": "プラグインを読み込み中...",
     "forbiddenTitle": "このページを表示できるのはワークスペースのオーナーと管理者だけです",
-    "forbiddenBody": "ご自身のプラグインページからリクエストしてください。",
+    "forbiddenBody": "マイ接続ページからリクエストしてください。",
     "loadError": "このワークスペースのプラグインを読み込めませんでした。",
     "retry": "再試行"
   },
@@ -22,8 +22,7 @@
     "readOnly": "プラグインを追加できるのはワークスペースのオーナーだけです。"
   },
   "transition": {
-    "allAvailable": "このリストを変更するまでは、マーケットプレイスのすべてのプラグインがここで利用できます。",
-    "noneAvailable": "このワークスペースではまだマーケットプレイスのプラグインを利用できません。以前の設定でプラグインがオフになっていました。"
+    "carriedOver": "{count, plural, other {このワークスペースではまだプラグインが選ばれていないため、このリストを変更するまでは、メンバーがここですでに使っている#件のプラグインがそのまま利用できます。}}"
   },
   "requests": {
     "title": "リクエスト",
@@ -91,7 +90,7 @@
     "cancel": "キャンセル",
     "remove": "削除",
     "confirmPrivate": "{label}を削除しますか？ {workspaceName}でも他のどこでも、メンバーはこれを表示も使用もできなくなります。",
-    "confirmShared": "{workspaceName}から{label}を削除しますか？ WarpBotはここでの使用を停止します。メンバー自身の接続は残り、プラグインページから切断できます。"
+    "confirmShared": "{workspaceName}から{label}を削除しますか？ WarpBotはここでの使用を停止します。メンバー自身の接続は残り、マイ接続ページから切断できます。"
   },
   "facts": {
     "notUsedYet": "まだどのメンバーも使用していません",
@@ -115,5 +114,21 @@
     "requestApproved": "{label}を追加しました · {name}に通知しました",
     "requestDeclined": "{name}に、追加されなかったことを伝えました",
     "couldNotDecide": "リクエストを更新できませんでした。"
+  },
+  "members": {
+    "title": "接続したメンバー",
+    "count": "{count}人",
+    "loading": "メンバーを読み込み中…",
+    "loadError": "このプラグインを接続したメンバーを読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "このワークスペースのメンバーはまだ誰も接続していません。",
+    "formerMember": "以前のメンバー",
+    "connectedAgo": "{when}に接続",
+    "lastUsedAgo": "最終使用 {when}",
+    "notUsedHereYet": "ここではまだ未使用",
+    "status": {
+      "expired": "期限切れ",
+      "revoked": "切断済み"
+    }
   }
 }

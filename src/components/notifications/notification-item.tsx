@@ -1,7 +1,10 @@
 "use client";
 
 import { QUERY_KEYS } from "@/constants/realtime";
-import { readMeetingInviteNotice } from "@/lib/notifications/meeting-started-notice";
+import {
+  readMeetingInviteNotice,
+  readMeetingStartedNotice,
+} from "@/lib/notifications/meeting-started-notice";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { NotificationMessageDto } from "@/types/notification";
 import { cn } from "@/lib/utils";
@@ -64,10 +67,26 @@ export function NotificationItem({ notification, fresh = false, onNavigate }: No
     },
   });
 
+  /**
+   * WT-612 / WT-621 — MEETING_OPENED is the one type whose `actionUrl` must not be followed.
+   *
+   * The bell is the DURABLE copy of the banner, so the rule about where that notice leads has to
+   * hold here too, or dismissing the popup and clicking the row a minute later lands somewhere
+   * else. The server mints `/room/{id}` for every meeting notification because the same string is
+   * emailed, and that address forwards straight into `/live` — right for a call already running,
+   * wrong for a room the clock merely unlocked: it skips device setup and drops the reader into
+   * an empty session. `readMeetingStartedNotice` resolves the room page instead.
+   *
+   * Only for the opened kind. MEETING_STARTED keeps following its own `actionUrl`, unchanged.
+   */
+  const opened = readMeetingStartedNotice(notification);
+  const openHref =
+    (opened?.kind === "opened" ? opened.joinHref : null) ?? notification.actionUrl;
+
   const handleOpen = () => {
-    if (!notification.actionUrl) return;
+    if (!openHref) return;
     onNavigate?.();
-    router.push(notification.actionUrl);
+    router.push(openHref);
   };
 
   return (

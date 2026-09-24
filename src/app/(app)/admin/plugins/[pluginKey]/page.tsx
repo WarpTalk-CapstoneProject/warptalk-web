@@ -19,6 +19,7 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 
 import { AdminPage, AdminPanel } from "@/components/admin/admin-page-chrome";
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -308,6 +309,7 @@ export default function AdminPluginDetailPage() {
       <header className="mt-3 flex flex-col gap-5 border-b border-border pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            <PluginGlyph plugin={detail} size="md" className="mr-1" />
             <h1 className="text-[30px] font-semibold leading-none tracking-tight">
               {detail.label}
             </h1>

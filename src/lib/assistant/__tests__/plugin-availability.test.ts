@@ -4,6 +4,7 @@ import { describe, test } from "node:test";
 import {
   canManageWorkspacePlugins,
   collectMemberNames,
+  collectMemberProfiles,
   createPrivatePluginRequest,
   describeMembersUsed,
   isOfferedInWorkspaceChat,
@@ -15,6 +16,7 @@ import {
   validatePrivatePluginDraft,
   workspacePluginFacts,
   workspacePluginSubtitle,
+  workspacePluginMemberRows,
   workspacePluginsTransitionNote,
 } from "../plugin-availability.ts";
 import type { WorkspacePluginItemDto } from "../../../types/assistant.ts";
@@ -182,22 +184,27 @@ describe("workspacePluginsTransitionNote", () => {
     );
   });
 
-  test("the old switch on: every marketplace plugin reads as added", () => {
-    assert.equal(
-      workspacePluginsTransitionNote({ isCurated: false, inWorkspace: [item()], marketplace: [] }),
-      "Every marketplace plugin is available here until this list is changed.",
-    );
-  });
-
-  test("the old switch off: it must not claim every plugin is available", () => {
+  test("an uncurated workspace names how many plugins it carried over, never the whole marketplace", () => {
+    // The owner report: "Every marketplace plugin is available here" over a list nobody chose.
     const note = workspacePluginsTransitionNote({
       isCurated: false,
-      inWorkspace: [item({ key: "crm", availability: "private" })],
-      marketplace: [item()],
+      inWorkspace: [item({ key: "notion" }), item({ key: "linear" })],
+      marketplace: [item({ key: "asana", availability: "not_added" })],
     });
     assert.ok(note);
     assert.doesNotMatch(note, /Every marketplace plugin/);
-    assert.match(note, /No marketplace plugin is available here yet/);
+    assert.match(note, /2 plugins members already use here/);
+  });
+
+  test("nothing carried over: nothing to explain, the empty state says it", () => {
+    assert.equal(
+      workspacePluginsTransitionNote({
+        isCurated: false,
+        inWorkspace: [item({ key: "crm", availability: "private" })],
+        marketplace: [item()],
+      }),
+      null,
+    );
   });
 
   test("an empty marketplace has no transition to explain", () => {
@@ -367,5 +374,34 @@ describe("collectMemberNames", () => {
     const { calls, fetchPage } = pager();
     await collectMemberNames(["gone"], fetchPage, { pageSize: 10, maxPages: 4 });
     assert.deepEqual(calls, [1, 2, 3, 4]);
+  });
+});
+
+describe("who connected a plugin", () => {
+  test("profiles carry the avatar, and a member without a name is left out", async () => {
+    const profiles = await collectMemberProfiles(["u1", "u2", "u3"], async () => ({
+      items: [
+        { userId: "u1", fullName: "Linh Tran", email: "linh@x.io", avatarUrl: "/avatars/u1.png" },
+        { userId: "u2", fullName: " ", email: "an@x.io", avatarUrl: null },
+        { userId: "u3", fullName: null, email: null },
+      ],
+      total: 3,
+    }));
+    assert.deepEqual(profiles, {
+      u1: { name: "Linh Tran", avatarUrl: "/avatars/u1.png" },
+      u2: { name: "an@x.io", avatarUrl: null },
+    });
+  });
+
+  test("rows keep the server's order and name a member who left as nobody", () => {
+    const rows = workspacePluginMemberRows(
+      [
+        { userId: "u2", connectionStatus: "connected", connectedAt: "2026-09-02T00:00:00Z", lastUsedAt: "2026-09-20T00:00:00Z", toolCallCount: 4 },
+        { userId: "gone", connectionStatus: "expired", connectedAt: "2026-09-01T00:00:00Z", lastUsedAt: null, toolCallCount: 0 },
+      ],
+      { u2: { name: "An", avatarUrl: null } },
+    );
+    assert.deepEqual(rows.map((row) => [row.userId, row.name]), [["u2", "An"], ["gone", null]]);
+    assert.equal(rows[0].toolCallCount, 4);
   });
 });

@@ -47,8 +47,14 @@ export const MISSED_GRACE_MS = 2 * 60 * 60 * 1000;
  *
  * `waiting` is here because the lobby being open is the point at which a participant can act on
  * the row: the room can be entered, which is the only distinction this state drives in the UI.
+ *
+ * `open` (WT-612 / WT-621) for the same reason, and it is the status that most needs to be here:
+ * the clock opened the room at its slot and nobody has walked in yet, so it is STILL `scheduled`'s
+ * neighbour on the clock and would otherwise fall into branch 2 — where the grace window would
+ * eventually report a room standing wide open as `missed`, and, before that, as `upcoming` while
+ * its door was already unlocked.
  */
-const LIVE_ROOM_STATUSES: readonly string[] = ["in_progress", "waiting", "paused"];
+const LIVE_ROOM_STATUSES: readonly string[] = ["in_progress", "waiting", "paused", "open"];
 
 /**
  * Participant statuses that prove the person was ACTUALLY IN THE ROOM at some point.
@@ -165,6 +171,7 @@ export function viewerAttended(
  *
  *  1. The room is open now → `live`. Status outranks the clock here; a room that is running is
  *     running whatever its booked slot said.
+ *  1b. The server has already expired it (WT-714) → `missed`, without consulting clock or roster.
  *  2. Still merely booked → `upcoming` until the grace window runs out, then `missed`. This is the
  *     never-happened case, and it needs no viewer: nobody attended, because there was nothing to
  *     attend.
@@ -192,6 +199,24 @@ export function resolveMeetingTimeState(
   options: { viewerUserId: string | null; now: number | null },
 ): MeetingTimeState {
   if (LIVE_ROOM_STATUSES.includes(meeting.status)) return "live";
+
+  /*
+   * WT-714 — the expire sweep says out loud what branch 2 below can only infer.
+   *
+   * `MISSED_GRACE_MS` exists because a booked room that nobody opened keeps `status: SCHEDULED`
+   * forever and the client has to guess, from the clock, when "not started yet" became "never
+   * happened". The server now makes that call itself: two hours after the slot, a booking nobody
+   * attended becomes EXPIRED. So this is the same verdict the grace window reaches, arrived at
+   * from evidence instead of from a threshold, and it must not fall through to branch 3 — where
+   * the attendance check would report a meeting that never ran as `joined` for every viewer with
+   * no participant row, which is the greenest possible lie about a room nobody entered.
+   *
+   * `missed` and not a state of its own: `MeetingTimeState` answers "where is this on the
+   * timeline", and the honest answer is the same one a no-show gets. WHY it is over — lapsed
+   * rather than attended-without-you — is a display distinction, and it is made in
+   * `meeting-display-state`, exactly as `cancelled` makes it.
+   */
+  if (meeting.status === "expired") return "missed";
 
   if (meeting.status === "scheduled") {
     if (options.now === null) return "upcoming";

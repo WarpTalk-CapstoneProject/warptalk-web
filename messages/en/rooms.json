@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "In progress",
+    "open": "Open",
     "waiting": "Waiting",
     "scheduled": "Scheduled",
     "ended": "Ended",
@@ -162,7 +163,9 @@
   },
   "startedBanner": {
     "title": "A meeting has started",
+    "openedTitle": "A meeting is open",
     "joinNow": "Join now",
+    "setUpAndJoin": "Set up & join",
     "openFromNotifications": "Open it from your notifications.",
     "dismissAria": "Dismiss"
   },

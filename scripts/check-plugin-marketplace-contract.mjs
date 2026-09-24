@@ -483,18 +483,19 @@ if (workspacePage.includes("Every marketplace plugin is available")) {
     "The owner page must not hardcode 'Every marketplace plugin is available'; which note is true depends on the old switch.",
   );
 }
-// The other half of the same guarantee: both notes still exist, and the "switched off" one still
-// does not claim availability. The helper picks between them; the catalog is where they are worded.
-if (
-  workspaceMessagesEn.transition.allAvailable !==
-  "Every marketplace plugin is available here until this list is changed."
-) {
-  throw new Error("The transition note's English copy for a workspace that had plugins on must be unchanged.");
+// 2026-09-24 (owner report: "the plugins shown are fake"). An uncurated workspace no longer has
+// every marketplace plugin: the server carries over only what its members already use, and the note
+// says how many. No catalog may claim the whole marketplace again.
+for (const locale of ["en", "vi", "ja"]) {
+  const transition = JSON.parse(
+    readFileSync(join(root, `messages/${locale}/workspacePlugins.json`), "utf8"),
+  ).transition;
+  if (!transition?.carriedOver || "allAvailable" in transition || "noneAvailable" in transition) {
+    throw new Error(`${locale}: the transition note is carriedOver only; the "every plugin" copy is gone.`);
+  }
 }
-if (/Every marketplace plugin is available/.test(workspaceMessagesEn.transition.noneAvailable)) {
-  throw new Error(
-    "The 'plugins were switched off' transition note must not claim every marketplace plugin is available.",
-  );
+if (/Every marketplace plugin is available/.test(JSON.stringify(workspaceMessagesEn))) {
+  throw new Error("No workspace plugin copy may claim every marketplace plugin is available.");
 }
 
 // Gap 12b — the empty state keeps the Marketplace section under it.
