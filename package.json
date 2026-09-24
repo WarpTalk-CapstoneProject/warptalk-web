@@ -116,6 +116,7 @@
     "test:agenda-sections": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/agenda-sections.test.ts",
     "test:agenda-navigator": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/agenda-navigator.test.ts",
     "test:meeting-language-set": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/meeting-language-set.test.ts",
+    "test:artifact-languages": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/language/__tests__/artifact-languages.test.ts",
     "test:workspace-routes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/workspace-routes.test.ts",
     "test:mention-menu": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/mention-menu.test.ts",
     "test:chat-sender": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/meeting/__tests__/chat-sender.test.ts",
