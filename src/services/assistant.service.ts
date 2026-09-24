@@ -77,6 +77,32 @@ export const assistantService = {
     return apiClient.delete<void>(API.assistant.conversation(id));
   },
 
+  /**
+   * Platform-scope WarpBot — a system admin in the admin portal. Its own endpoints and store: no
+   * workspace id, and a send carries text only (no page context, mentions, attachments or plugin
+   * switches, each of which names workspace content). The server enforces the admin role.
+   */
+  platform: {
+    listConversations() {
+      return apiClient.get<AssistantConversationDto[]>(API.assistant.platform.conversations);
+    },
+    getConversation(id: string) {
+      return apiClient.get<AssistantConversationDetailDto>(API.assistant.platform.conversation(id));
+    },
+    createConversation() {
+      return apiClient.post<AssistantConversationDto>(API.assistant.platform.conversations, {});
+    },
+    sendMessage(conversationId: string, content: string) {
+      return apiClient.post<SendAssistantMessageResponse>(
+        API.assistant.platform.sendMessage(conversationId),
+        { content },
+      );
+    },
+    archiveConversation(id: string) {
+      return apiClient.delete<void>(API.assistant.platform.conversation(id));
+    },
+  },
+
   getSkills() {
     return apiClient.get<AssistantSkillDto[]>(API.assistant.skills);
   },

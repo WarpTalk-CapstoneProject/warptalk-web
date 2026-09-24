@@ -45,6 +45,11 @@ export interface AssistantConversationDto {
   createdAt: string;
   lastMessageAt?: string | null;
   isArchived: boolean;
+  /**
+   * Which store the conversation lives in: "workspace", or "platform" for a system admin's
+   * WarpBot in the admin portal. Absent from an older backend, which only had workspace ones.
+   */
+  scope?: "workspace" | "platform";
 }
 
 export interface AssistantConversationDetailDto extends AssistantConversationDto {

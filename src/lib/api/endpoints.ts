@@ -386,6 +386,15 @@ export const API = {
     conversations: "/assistant/conversations",
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
+    /**
+     * Platform-scope WarpBot (system admins, admin portal). A separate store behind the
+     * system-admin policy — never the workspace routes above with an empty workspace id.
+     */
+    platform: {
+      conversations: "/assistant/platform/conversations",
+      conversation: (id: string) => `/assistant/platform/conversations/${id}`,
+      sendMessage: (id: string) => `/assistant/platform/conversations/${id}/messages`,
+    },
     skills: "/assistant/skills",
     plugins: "/assistant/plugins",
     installPlugin: (pluginKey: string) =>
