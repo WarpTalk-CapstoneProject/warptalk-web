@@ -130,6 +130,18 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
+    id: "providers",
+    kind: "page",
+    href: "/admin/providers",
+    labelKey: "providers",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "providers", "vendors", "openai", "cartesia", "livekit", "stripe", "cost", "usage", "uptime", "quota", "rate limit", "api",
+      "nhà cung cấp", "chi phí", "mức dùng", "hạn mức",
+      "プロバイダー", "コスト", "使用量", "稼働率",
+    ],
+  },
+  {
     id: "feedback",
     kind: "page",
     href: "/admin/feedback",
