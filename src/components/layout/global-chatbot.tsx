@@ -106,6 +106,7 @@ import { MessageMentionChips } from "@/components/assistant/message-mention-chip
 import { mentionCompletion } from "@/lib/assistant/mention-completion";
 import { parseMessageMentions } from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
 import {
   pluginWritesAlwaysAllowed,
   readDisabledPluginKeys,
@@ -608,8 +609,15 @@ export function GlobalChatbot() {
     () => assistantPlugins.map(withEffectiveConnectionStatus),
     [assistantPlugins],
   );
+  // The plugin menu and, through it, the @mention list. A plugin this workspace has not added is left
+  // out even when the member installed it: the server refuses its tools here, so its switch would do
+  // nothing and its mention would go nowhere. It stays on the Plugins page, where it is revoked.
+  // Past messages still resolve their chips against the whole catalog (`catalogPlugins`).
   const installedAssistantPlugins = useMemo(
-    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    () =>
+      catalogPlugins.filter(
+        (plugin) => plugin.installationStatus === "installed" && isOfferedInWorkspaceChat(plugin),
+      ),
     [catalogPlugins],
   );
   // Only a plugin that's actually usable can be @mentioned — mentioning a disconnected plugin

@@ -29,7 +29,8 @@
     "manage": "Manage",
     "reconnect": "Reconnect",
     "request": "Request",
-    "requested": "Requested"
+    "requested": "Requested",
+    "add": "Add"
   },
   "memberAction": {
     "addedByWorkspace": "Added by your workspace",
@@ -70,6 +71,8 @@
     "couldNotStartConnection": "Could not start the {label} connection.",
     "requestSent": "Request sent to your workspace owner",
     "couldNotAsk": "Could not ask for {label}.",
+    "added": "{label} added to this workspace",
+    "couldNotAdd": "Could not add {label}.",
     "disconnected": "{label} disconnected",
     "couldNotDisconnect": "Could not disconnect {label}.",
     "removed": "{label} removed",
