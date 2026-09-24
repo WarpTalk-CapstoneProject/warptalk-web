@@ -5,6 +5,10 @@
  * re-renders constantly, so one failed call became a loop: on 2026-09-24 a release's 500s started
  * it, it spent the account's 180-requests-a-minute budget on POST /presence/query alone, and from
  * then on every 429 was itself a failure that fed the loop - every other API returned 429 too.
+ *
+ * The lookup has since moved onto the notification hub (QueryPresence), which the HTTP limiter
+ * never sees; the Gateway gives it a per-connection budget instead, and a refusal from that is a
+ * failure like any other and waits out the same back-off.
  */
 export const PRESENCE_RETRY_AFTER_MS = 60_000;
 

@@ -52,6 +52,18 @@ export const SIGNALR_EVENTS = {
   PARTICIPANT_REJECTED: "ParticipantRejected",
 } as const;
 
+/**
+ * Client -> server methods on the notification hub (Gateway NotificationHub) that are named
+ * through a constant. `scripts/check-presence-over-hub.mjs` verifies every value here is a public
+ * method on the backend hub, so a rename on either side fails CI instead of failing at runtime
+ * with "Method does not exist".
+ */
+export const NOTIFICATION_HUB_METHODS = {
+  // The starting presence for a set of users. Replaces POST /api/v1/presence/query: the snapshot
+  // rides the same socket as the UserPresenceChanged deltas applied on top of it.
+  QUERY_PRESENCE: "QueryPresence",
+} as const;
+
 export const QUERY_KEYS = {
   NOTIFICATIONS: "notifications",
   UNREAD_COUNT: "unread-count",
