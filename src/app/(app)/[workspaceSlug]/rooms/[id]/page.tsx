@@ -2007,6 +2007,9 @@ function MeetingRecordSection({
         <MinutesPanel
           roomId={roomId}
           canManage={isHost}
+          // The same set the summary rail is handed: one answer to "which languages may this
+          // meeting still be written in", read once on this page.
+          generatableLanguages={generatableLanguages}
           // The same switch the summary's citations make: the moment being cited is a node in
           // the transcript, and that node only exists while the transcript tab is rendered.
           onSeek={(atMs) => {

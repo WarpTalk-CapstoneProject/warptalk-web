@@ -29,7 +29,8 @@
     "manage": "Quản lý",
     "reconnect": "Kết nối lại",
     "request": "Yêu cầu",
-    "requested": "Đã yêu cầu"
+    "requested": "Đã yêu cầu",
+    "add": "Thêm"
   },
   "memberAction": {
     "addedByWorkspace": "Được thêm bởi không gian làm việc của bạn",
@@ -70,6 +71,8 @@
     "couldNotStartConnection": "Không thể bắt đầu kết nối {label}.",
     "requestSent": "Đã gửi yêu cầu đến chủ sở hữu không gian làm việc của bạn",
     "couldNotAsk": "Không thể gửi yêu cầu {label}.",
+    "added": "Đã thêm {label} vào không gian làm việc này",
+    "couldNotAdd": "Không thể thêm {label}.",
     "disconnected": "Đã ngắt kết nối {label}",
     "couldNotDisconnect": "Không thể ngắt kết nối {label}.",
     "removed": "Đã xóa {label}",

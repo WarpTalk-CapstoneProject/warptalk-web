@@ -1,9 +1,12 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ASSISTANT_KEYS } from "@/hooks/use-assistant";
+import { collectMemberNames } from "@/lib/assistant/plugin-availability";
 import { assistantService } from "@/services/assistant.service";
+import { WorkspaceService } from "@/services/workspace.service";
 import type { CreatePrivatePluginRequest, UpdatePrivatePluginRequest } from "@/types/assistant";
 
 /**
@@ -109,5 +112,34 @@ export function useDecidePluginRequest(workspaceId: string | null | undefined) {
       return data;
     },
     onSuccess: invalidate,
+  });
+}
+
+/**
+ * Display names for the members the owner page mentions — who asked for a plugin, who added one.
+ *
+ * Not `useWorkspaceMembers(id, 1, 100)`: that is the first hundred members, and every request from
+ * anyone after them read "A member asked for…". This pages through the member list until each id is
+ * found (see `collectMemberNames`). Keyed under the member list's own prefix, so a member change
+ * that invalidates the list invalidates this too.
+ */
+export function useWorkspaceMemberNames(
+  workspaceId: string | null | undefined,
+  userIds: readonly (string | null | undefined)[],
+  enabled: boolean,
+) {
+  const idsKey = useMemo(
+    () => [...new Set(userIds.filter((id): id is string => !!id))].sort().join(","),
+    [userIds],
+  );
+  return useQuery({
+    queryKey: ["workspaces", "members", workspaceId ?? "", "names", idsKey] as const,
+    queryFn: () =>
+      collectMemberNames(idsKey.split(","), (page, pageSize) =>
+        WorkspaceService.listMembers(workspaceId!, page, pageSize),
+      ),
+    enabled: enabled && !!workspaceId && idsKey.length > 0,
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   });
 }

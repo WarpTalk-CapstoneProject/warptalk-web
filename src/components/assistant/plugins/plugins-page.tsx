@@ -37,8 +37,9 @@ import {
   useInstallAssistantPlugin,
   usePluginConnectUrl,
 } from "@/hooks/use-assistant";
-import { useRequestPlugin } from "@/hooks/use-workspace-plugins";
+import { useAddWorkspacePlugin, useRequestPlugin } from "@/hooks/use-workspace-plugins";
 import { memberPluginAction, PLUGIN_REQUEST_REASON_MAX } from "@/lib/assistant/plugin-availability";
+import { pluginErrorMessage } from "@/lib/assistant/plugin-errors";
 import {
   formatPluginLabelList,
   pluginWorkspaceBlock,
@@ -742,6 +743,7 @@ export default function PluginsPage() {
   const disconnectPlugin = useDisconnectAssistantPlugin();
   const disablePlugin = useDisableAssistantPlugin();
   const requestPlugin = useRequestPlugin(workspaceId);
+  const addWorkspacePlugin = useAddWorkspacePlugin(workspaceId);
   // The row whose Request dialog is open, by key for the same reason as selectedPluginKey below.
   const [requestPluginKey, setRequestPluginKey] = useState<string | null>(null);
 
@@ -1046,8 +1048,20 @@ export default function PluginsPage() {
       await requestPlugin.mutateAsync({ pluginKey: plugin.key, reason });
       setRequestPluginKey(null);
       toast.success(t("toasts.requestSent"));
-    } catch {
-      toast.error(t("toasts.couldNotAsk", { label: plugin.label }));
+    } catch (error) {
+      // The server says why (already asked, plugin retired, already added), sometimes as plain text.
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotAsk", { label: plugin.label })));
+    }
+  }
+
+  /** The Owner's row: add it to the workspace directly instead of asking themselves. */
+  async function addToWorkspace(plugin: AssistantPluginCatalogItemDto) {
+    if (!workspaceId) return;
+    try {
+      await addWorkspacePlugin.mutateAsync(plugin.key);
+      toast.success(t("toasts.added", { label: plugin.label }));
+    } catch (error) {
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotAdd", { label: plugin.label })));
     }
   }
 
@@ -1230,7 +1244,20 @@ export default function PluginsPage() {
                       <div className="truncate text-sm font-semibold text-ink">{plugin.label}</div>
                       <div className="truncate text-xs text-ink-muted">{action.subtitle ?? plugin.description}</div>
                     </button>
-                    {action.kind === "request" ? (
+                    {action.kind === "add" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!workspaceId || addWorkspacePlugin.isPending}
+                        onClick={() => void addToWorkspace(plugin)}
+                      >
+                        {addWorkspacePlugin.isPending && addWorkspacePlugin.variables === plugin.key ? (
+                          <Spinner className="animate-spin" size={14} />
+                        ) : null}
+                        {t("actionLabels.add")}
+                      </Button>
+                    ) : action.kind === "request" ? (
                       <Button
                         type="button"
                         size="sm"
