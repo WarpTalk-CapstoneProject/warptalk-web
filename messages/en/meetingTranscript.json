@@ -3,7 +3,9 @@
     "withheld": "This meeting has a transcript, but it is not shared with you. Only the people who took part can read it — ask the host if you need access.",
     "unavailable": "The transcript could not be loaded right now. Refresh to try again.",
     "notYet": "The transcript is saved here as the meeting is transcribed.",
-    "none": "No transcript was captured for this meeting."
+    "notKept": "This meeting was set not to keep a transcript. Subtitles and translation ran live, but nothing was saved, so there is no transcript, AI summary or minutes.",
+    "paused": "No transcript was saved. The transcript was paused during this meeting, and nothing was said while it was recording.",
+    "none": "No transcript was captured for this meeting because nobody spoke while it was open. WarpTalk saves what people say whether or not translation is started, so there was also nothing for an AI summary to be written from."
   },
   "followPlayback": {
     "srTitle": "Scroll with the recording again",
@@ -62,10 +64,12 @@
     "asSpoken": "As spoken",
     "asSpokenDetail": "Every line in its own language",
     "readIn": "Read this transcript in",
-    "translatingNow": "Translating the rest now",
+    "inThisTranscript": "In this transcript",
+    "notTranslatedYetGroup": "Not translated yet",
+    "translatingNow": "Translating now",
     "wholeMeeting": "The whole meeting",
-    "translateIntoThis": "Translate the meeting into this",
-    "partialDetail": "{done} of {total} {total, plural, one {entry} other {entries}} · translate the rest"
+    "notTranslatedYet": "Not translated yet",
+    "partialDetail": "{done} of {total} {total, plural, one {entry} other {entries}}"
   },
   "layoutToggle": {
     "conversation": "Conversation view",

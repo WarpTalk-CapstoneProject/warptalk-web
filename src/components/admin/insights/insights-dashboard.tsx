@@ -22,21 +22,20 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { BarList, type BarListRow } from "@/components/admin/charts/bar-list";
 import {
+  CHART_COLORS,
   ChartEmpty,
-  DailyLine,
-  Donut,
-  StackedBars,
-  ValueBars,
-  type DonutPart,
-} from "@/components/admin/insights/insights-charts";
+  ChartFigure,
+  TimeSeriesChart,
+} from "@/components/admin/charts/time-series-chart";
+import { compactMoney, sumKnown } from "@/lib/admin/chart-scale";
 import { insightsHref, metricHref, workspaceHref } from "@/lib/admin/insights-links";
 import {
   aiCostBasisView,
   assembleNeedsAttention,
   cartesiaLineView,
   churnSub,
-  compactNumber,
   deltaText,
   formatCount,
   formatInsightValue,
@@ -454,18 +453,23 @@ function Panel({
   title,
   subtitle,
   link,
+  chart = false,
   children,
   className,
 }: {
   title: string;
   subtitle?: string;
   link?: { href: string; label: string };
+  /** A chart card: no rule under the title, so the headline figure reads as part of it. */
+  chart?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   return (
+    // overflow-hidden keeps row hovers inside the rounded corners. It cannot clip a chart's hover
+    // readout any more: that is portalled to <body> (components/admin/charts/chart-tooltip).
     <section className={cn("min-w-0 overflow-hidden rounded-xl border border-hairline bg-surface-1", className)}>
-      <header className="flex items-start justify-between gap-2.5 border-b border-hairline px-4 py-2.5">
+      <header className={cn("flex items-start justify-between gap-2.5 px-4", chart ? "pt-3.5" : "border-b border-hairline py-2.5")}>
         <div className="min-w-0">
           <h2 className="text-[13px] font-medium text-ink">{title}</h2>
           {subtitle ? <p className="mt-0.5 text-[11px] text-ink-muted">{subtitle}</p> : null}
@@ -509,15 +513,8 @@ const dayShort = (date: Date) => new Intl.DateTimeFormat("en-US", { month: "shor
 const dateTime = (iso: string) =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
 
-const SERVICE_COLORS = [
-  "var(--usage-service-1)",
-  "var(--usage-service-2)",
-  "var(--usage-service-3)",
-  "var(--usage-service-4)",
-  "var(--usage-service-5)",
-];
-
-function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"], otherLabel: string): DonutPart[] {
+/** The five largest services, then "Other" — ranked bars, one hue: the rank is the length. */
+function creditsByServiceRows(rows: BillingInsightsDto["creditsByService"], otherLabel: string): BarListRow[] {
   const grouped = new Map<string, { label: string; value: number }>();
   for (const row of rows) {
     const service = usageServiceOf(row.usageType);
@@ -526,10 +523,35 @@ function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"], oth
     grouped.set(service.key, entry);
   }
   const sorted = [...grouped.entries()].filter(([, entry]) => entry.value > 0).sort((a, b) => b[1].value - a[1].value);
-  const parts: DonutPart[] = sorted.slice(0, 5).map(([key, entry], index) => ({ key, label: entry.label, value: entry.value, color: SERVICE_COLORS[index] }));
+  const result: BarListRow[] = sorted.slice(0, 5).map(([key, entry]) => ({
+    key,
+    label: entry.label,
+    segments: [{ key, label: entry.label, value: entry.value }],
+  }));
   const rest = sorted.slice(5).reduce((sum, [, entry]) => sum + entry.value, 0);
-  if (rest > 0) parts.push({ key: "other", label: otherLabel, value: rest, color: "var(--usage-service-other)" });
-  return parts;
+  if (rest > 0) {
+    result.push({ key: "other", label: otherLabel, segments: [{ key: "other", label: otherLabel, value: rest, color: "var(--usage-service-other)" }] });
+  }
+  return result;
+}
+
+/** "Tue, Sep 16" from a server day key, for tooltip titles. */
+function dayKeyTitle(key: string): string {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(year, month - 1, day));
+}
+
+const moneyVnd = (value: number) => formatMoney(value, "VND");
+const moneyAxis = (value: number) => compactMoney(value, "VND");
+
+function subscriptionSegments(t: ReturnType<typeof useTranslations>) {
+  return [
+    { key: "active", label: t("charts.legendActive"), color: CHART_COLORS.primary },
+    // A lighter step of the same hue: a trial is an account that has not paid yet, not another kind.
+    { key: "trial", label: t("charts.legendTrial"), color: "color-mix(in srgb, var(--viz-1) 40%, var(--surface-1))" },
+    // Status, not identity: past due is the one state that needs acting on.
+    { key: "pastDue", label: t("charts.legendPastDue"), color: "var(--warning)" },
+  ] as const;
 }
 
 function Rows({ children }: { children: ReactNode }) {
@@ -619,7 +641,8 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           links: {
             health: insightsHref("health"),
             suspendedWorkspaces: insightsHref("suspendedWorkspaces"),
-            deadLetters: insightsHref("deadLetters"),
+            // No drill-down: the Event outbox page was retired (2026-09-24). The count stays here.
+            deadLetters: null,
             newSalesLeads: insightsHref("newSalesLeads"),
             subscriptions: insightsHref("subscriptions"),
             workspace: workspaceHref,
@@ -800,143 +823,167 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </details>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <Panel
-          title={t("charts.revenue6mTitle")}
-          subtitle={joinNotes(t("charts.revenueByMonthSubtitle"), billing?.revenueByMonthNote) ?? undefined}
-          link={{ href: insightsHref("subscriptions"), label: t("links.subscriptions") }}
-        >
-          <div className="px-4 py-3.5">
+        <Panel chart title={t("charts.revenue6mTitle")} link={{ href: insightsHref("subscriptions"), label: t("links.subscriptions") }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
-              height={220}
+              height={240}
               empty={t("charts.noRevenue6m")}
               isEmpty={(data) => (data.revenueByMonth ?? []).length === 0}
             >
-              {(data) => (
-                <ValueBars
-                  ariaLabel={t("charts.ariaRevenueByMonth")}
-                  color="var(--success)"
-                  data={data.revenueByMonth.map((row) => ({
-                    key: row.month,
-                    label: monthKeyLabel(row.month),
-                    value: row.revenue,
-                    title: `${monthKeyLabel(row.month)}: ${row.revenue === null ? t("charts.noFigure") : formatMoney(row.revenue, "VND")}`,
-                  }))}
-                />
-              )}
+              {(data) => {
+                const months = data.revenueByMonth;
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(months.map((row) => row.revenue)), "money")}
+                      caption={joinNotes(t("charts.revenueByMonthSubtitle"), data.revenueByMonthNote)}
+                    />
+                    <TimeSeriesChart
+                      variant="bar"
+                      ariaLabel={t("charts.ariaRevenueByMonth")}
+                      height={180}
+                      labels={months.map((row) => monthKeyLabel(row.month))}
+                      series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: months.map((row) => row.revenue) }]}
+                      formatValue={moneyVnd}
+                      formatAxis={moneyAxis}
+                    />
+                  </>
+                );
+              }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel
-          title={t("charts.revenuePerDayTitle")}
-          subtitle={joinNotes(
-            isMonth ? t("charts.revenuePerDayNote", { label: period.label }) : period.label,
-            billing?.revenueByDayNote,
-          ) ?? undefined}
-          link={{ href: insightsHref("billingLedger"), label: t("links.ledger") }}
-        >
-          <div className="px-4 py-3.5">
+        <Panel chart title={t("charts.revenuePerDayTitle")} link={{ href: insightsHref("billingLedger"), label: t("links.ledger") }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
-              height={220}
+              height={240}
               empty={t("charts.noDaysInPeriod")}
               isEmpty={(data) => (data.revenueByDay ?? []).length === 0}
             >
-              {(data) => (
+              {(data) => {
                 // The server's own local days (of the tz the page sent), labelled from their keys.
-                <DailyLine
-                  ariaLabel={t("charts.ariaRevenuePerDay")}
-                  formatValue={(value) => formatMoney(value, "VND")}
-                  points={seriesAxis(data.revenueByDay, period.axisEndDay).map((day) => ({
-                    key: day.key,
-                    label: day.label,
-                    value: day.row?.revenue ?? null,
-                  }))}
-                />
-              )}
+                const days = seriesAxis(data.revenueByDay, period.axisEndDay);
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(days.map((day) => day.row?.revenue ?? null)), "money")}
+                      caption={joinNotes(
+                        isMonth ? t("charts.revenuePerDayNote", { label: period.label }) : period.label,
+                        data.revenueByDayNote,
+                      )}
+                    />
+                    <TimeSeriesChart
+                      variant="area"
+                      ariaLabel={t("charts.ariaRevenuePerDay")}
+                      height={180}
+                      labels={days.map((day) => day.label)}
+                      titles={days.map((day) => dayKeyTitle(day.key))}
+                      series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: days.map((day) => day.row?.revenue ?? null) }]}
+                      formatValue={moneyVnd}
+                      formatAxis={moneyAxis}
+                      describeGap={(index) => (days[index]?.future ? t("charts.stillToComeShort") : t("charts.noFigure"))}
+                    />
+                  </>
+                );
+              }}
             </SourceBody>
           </div>
         </Panel>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title={t("charts.creditsByServiceTitle")} subtitle={t("charts.creditsByServiceSubtitle", { period: period.label })} link={{ href: insightsHref("workspaces"), label: t("links.workspaces") }}>
-          <div className="px-4 py-3.5">
+        <Panel chart title={t("charts.creditsByServiceTitle")} link={{ href: insightsHref("workspaces"), label: t("links.workspaces") }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
-              height={170}
+              height={200}
               empty={t("charts.noCreditsConsumed")}
-              isEmpty={(data) => creditsByServiceParts(data.creditsByService ?? [], t("charts.otherService")).length === 0}
+              isEmpty={(data) => creditsByServiceRows(data.creditsByService ?? [], t("charts.otherService")).length === 0}
             >
               {(data) => {
-                const parts = creditsByServiceParts(data.creditsByService, t("charts.otherService"));
-                const total = parts.reduce((sum, part) => sum + part.value, 0);
-                return <Donut ariaLabel={t("charts.ariaCreditsByService")} parts={parts} centerLabel={compactNumber(total)} />;
+                const rows = creditsByServiceRows(data.creditsByService, t("charts.otherService"));
+                const total = rows.reduce((sum, row) => sum + row.segments[0].value, 0);
+                return (
+                  <>
+                    <ChartFigure value={formatCount(total)} caption={t("charts.creditsByServiceSubtitle", { period: period.label })} />
+                    <BarList ariaLabel={t("charts.ariaCreditsByService")} rows={rows} formatValue={formatCount} showShare />
+                  </>
+                );
               }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel title={t("charts.subscriptionsByPlanTitle")} subtitle={t("charts.subscriptionsByPlanSubtitle")} link={{ href: insightsHref("plans"), label: t("links.plans") }}>
-          <div className="px-4 py-3.5">
+        <Panel chart title={t("charts.subscriptionsByPlanTitle")} link={{ href: insightsHref("plans"), label: t("links.plans") }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.snapshot}
-              height={170}
+              height={200}
               empty={t("charts.noSubscriptionsYet")}
               isEmpty={(data) => (data.subscriptionsByPlan ?? []).length === 0}
             >
-              {(data) => (
-                <>
-                  <StackedBars
-                    ariaLabel={t("charts.ariaSubscriptionsByPlan")}
-                    rows={data.subscriptionsByPlan.map((plan) => ({
-                      key: plan.planSlug,
-                      label: plan.planName,
-                      segments: [
-                        { key: "active", label: t("charts.legendActive"), value: plan.active, color: "var(--primary)" },
-                        { key: "trial", label: t("charts.legendTrial"), value: plan.trial, color: "var(--info)", opacity: 0.45 },
-                        { key: "pastDue", label: t("charts.legendPastDue"), value: plan.pastDue, color: "var(--warning)" },
-                      ],
-                    }))}
-                  />
-                  <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-primary" />{t("charts.legendActive")}</span>
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-info opacity-45" />{t("charts.legendTrial")}</span>
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-warning" />{t("charts.legendPastDue")}</span>
-                  </div>
-                </>
-              )}
+              {(data) => {
+                const total = data.subscriptionsByPlan.reduce((sum, plan) => sum + plan.active + plan.trial + plan.pastDue, 0);
+                const segments = subscriptionSegments(t);
+                return (
+                  <>
+                    <ChartFigure value={formatCount(total)} caption={t("charts.subscriptionsByPlanSubtitle")} />
+                    <BarList
+                      ariaLabel={t("charts.ariaSubscriptionsByPlan")}
+                      legend={segments.map((segment) => ({ ...segment }))}
+                      formatValue={formatCount}
+                      rows={data.subscriptionsByPlan.map((plan) => ({
+                        key: plan.planSlug,
+                        label: plan.planName,
+                        segments: segments.map((segment) => ({
+                          key: segment.key,
+                          label: segment.label,
+                          color: segment.color,
+                          value: plan[segment.key],
+                        })),
+                      }))}
+                    />
+                  </>
+                );
+              }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel title={t("charts.meetingsPerDayTitle")} subtitle={t("charts.meetingsPerDaySubtitle")} link={{ href: insightsHref("meetings"), label: t("links.meetings") }}>
-          <div className="px-4 py-3.5">
+        {/* No link: the platform meeting directory was retired (2026-09-24). */}
+        <Panel chart title={t("charts.meetingsPerDayTitle")}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.meetings}
-              height={170}
+              height={200}
               empty={t("charts.noDaysInPeriod")}
               isEmpty={(data) => (data.meetingsByDay ?? []).length === 0}
             >
               {(data) => {
                 const days = seriesAxis(data.meetingsByDay, period.axisEndDay);
+                const hours = sumKnown(days.map((day) => day.row?.hours ?? null));
                 return (
-                  <ValueBars
-                    ariaLabel={t("charts.ariaMeetingsPerDay")}
-                    color="var(--primary)"
-                    height={170}
-                    showValues={days.length <= 16}
-                    data={days.map((day) => ({
-                      key: day.key,
-                      label: day.label,
-                      value: day.row?.meetings ?? null,
-                      title: day.row
-                        ? t("charts.meetingsTooltip", {
-                            label: day.label,
-                            count: day.row.meetings,
-                            hours: formatInsightValue(day.row.hours, "hours"),
-                          })
-                        : t("charts.stillToCome", { label: day.label }),
-                    }))}
-                  />
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(days.map((day) => day.row?.meetings ?? null)), "count")}
+                      caption={t("charts.meetingsPerDayCaption", { hours: formatInsightValue(hours, "hours") })}
+                    />
+                    <TimeSeriesChart
+                      variant="bar"
+                      integer
+                      ariaLabel={t("charts.ariaMeetingsPerDay")}
+                      height={220}
+                      labels={days.map((day) => day.label)}
+                      titles={days.map((day) => dayKeyTitle(day.key))}
+                      series={[{ key: "meetings", label: t("charts.meetingsSeriesLabel"), values: days.map((day) => day.row?.meetings ?? null) }]}
+                      formatValue={formatCount}
+                      describeGap={(index) => (days[index]?.future ? t("charts.stillToComeShort") : t("charts.noFigure"))}
+                      tooltipFooter={(index) => {
+                        const row = days[index]?.row;
+                        return row ? t("charts.hoursTranslatedSuffix", { hours: formatInsightValue(row.hours, "hours") }) : null;
+                      }}
+                    />
+                  </>
                 );
               }}
             </SourceBody>
@@ -976,23 +1023,19 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
             {(data) => {
               const top = data.topWorkspaces ?? [];
               if (top.length === 0) return <ListEmpty>{t("charts.noCreditsConsumed")}</ListEmpty>;
-              const max = Math.max(1, ...top.map((row) => row.credits));
               return (
-                <Rows>
-                  {top.map((row, index) => (
-                    <Row key={row.workspaceId} href={workspaceHref(row.workspaceId)}>
-                      <div className="min-w-0">
-                        <b className="block truncate text-[13px] font-medium text-ink">
-                          {index + 1}. {workspaceLabel(row.workspaceName, t)}
-                        </b>
-                        <span className="mt-1.5 block h-[3px] rounded-full bg-surface-3">
-                          <span className="block h-[3px] rounded-full bg-primary" style={{ width: `${Math.max(2, (row.credits / max) * 100)}%` }} />
-                        </span>
-                      </div>
-                      <div className="text-right text-[13px] tabular-nums text-ink">{formatCount(row.credits)}</div>
-                    </Row>
-                  ))}
-                </Rows>
+                <div className="px-4 py-3">
+                  <BarList
+                    ariaLabel={t("panels.topWorkspacesTitle")}
+                    formatValue={formatCount}
+                    rows={top.map((row, index) => ({
+                      key: row.workspaceId,
+                      label: `${index + 1}. ${workspaceLabel(row.workspaceName, t)}`,
+                      href: workspaceHref(row.workspaceId),
+                      segments: [{ key: "credits", label: t("panels.creditsSegmentLabel"), value: row.credits }],
+                    }))}
+                  />
+                </div>
               );
             }}
           </ListState>

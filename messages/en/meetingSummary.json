@@ -22,6 +22,10 @@
     "noSummary": "No summary yet"
   },
   "asSpoken": "As spoken",
+  "languageGroups": {
+    "available": "Available",
+    "canBeWritten": "Can be written"
+  },
   "controls": {
     "shapeAriaLabel": "Summary shape",
     "shapeTitle": "Read this meeting in a different shape",
@@ -62,7 +66,7 @@
     "failed": "Summary generation did not complete for this meeting. The transcript is still available.",
     "insufficientData": "There wasn't enough transcript content in this meeting to generate a summary.",
     "withheld": "A summary was produced for this meeting, but it is not shared with you. The meeting host controls who can read it.",
-    "noTranscript": "No transcript was captured for this meeting, so there was nothing to summarise.",
+    "noTranscript": "Nobody spoke in this meeting, so there is no transcript and nothing to summarise.",
     "absent": "This meeting ended without a summary artifact."
   }
 }

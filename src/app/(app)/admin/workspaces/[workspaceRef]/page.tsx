@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
+import { TimeSeriesChart } from "@/components/admin/charts/time-series-chart";
 import { WorkspaceContractBilling } from "@/components/admin/workspace-contract-billing";
 import {
   WorkspaceLifecycleDialog,
@@ -341,7 +342,6 @@ function UsageTab({ workspaceId }: { workspaceId: string }) {
   const t = useTranslations("adminWorkspaces.detail.usage");
   const analyticsQuery = useAdminWorkspaceAnalytics(workspaceId);
   const analytics = analyticsQuery.data;
-  const maxDaily = Math.max(1, ...(analytics?.consumptionSeries ?? []).map((p) => p.creditsConsumed));
 
   return (
     <TabState
@@ -382,25 +382,24 @@ function UsageTab({ workspaceId }: { workspaceId: string }) {
             {analytics.consumptionSeries.length === 0 ? (
               <p className="mt-3 text-xs text-ink-muted">{t("noBillableUsage")}</p>
             ) : (
-              <div className="mt-4 flex h-28 items-end gap-[3px]">
-                {analytics.consumptionSeries.map((point) => (
-                  <div
-                    key={point.date}
-                    className="group relative flex-1"
-                    title={t("tooltip", {
-                      date: shortDate.format(new Date(point.date)),
-                      credits: numberFormatter.format(point.creditsConsumed),
-                      events: point.events,
-                    })}
-                  >
-                    <div
-                      className="w-full rounded-sm bg-primary/70 transition-colors group-hover:bg-primary"
-                      style={{
-                        height: `${Math.max(2, (point.creditsConsumed / maxDaily) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                ))}
+              <div className="mt-4">
+                <TimeSeriesChart
+                  variant="bar"
+                  height={140}
+                  ariaLabel={t("dailyConsumption")}
+                  labels={analytics.consumptionSeries.map((point) => shortDate.format(new Date(point.date)))}
+                  series={[
+                    {
+                      key: "credits",
+                      label: "",
+                      values: analytics.consumptionSeries.map((point) => point.creditsConsumed),
+                    },
+                  ]}
+                  formatValue={(value) => `${numberFormatter.format(value)} cr`}
+                  tooltipFooter={(index) =>
+                    t("tooltipEvents", { events: analytics.consumptionSeries[index]?.events ?? 0 })
+                  }
+                />
               </div>
             )}
           </section>

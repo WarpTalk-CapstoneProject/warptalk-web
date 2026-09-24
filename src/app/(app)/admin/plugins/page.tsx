@@ -22,6 +22,7 @@ import {
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -258,8 +259,8 @@ export default function AdminPluginsPage() {
               <span className="w-[110px]">{t("columns.provider")}</span>
               <span className="w-[90px]">{t("columns.state")}</span>
               <span className="w-[140px]">{t("columns.oauthClient")}</span>
-              <span className="w-[90px] text-right">{t("columns.workspaces")}</span>
-              <span className="w-[80px] text-right">{t("columns.installs")}</span>
+              <span className="w-[120px] text-right">{t("columns.workspaces")}</span>
+              <span className="w-[90px] text-right">{t("columns.installs")}</span>
               <span className="w-[70px] text-right">{t("columns.tools")}</span>
               <span className="w-[24px]" />
             </div>
@@ -654,7 +655,10 @@ function CatalogRow({ row }: { row: AdminPluginCatalogListItemDto }) {
           !row.isActive && "opacity-60",
         )}
       >
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          {/* The same glyph, from the same source, as every member and Owner surface. */}
+          <PluginGlyph plugin={row} size="sm" />
+          <span className="flex min-w-0 flex-col">
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium text-ink">{row.label}</span>
             {cannotConnect ? (
@@ -666,6 +670,7 @@ function CatalogRow({ row }: { row: AdminPluginCatalogListItemDto }) {
             {row.isFeatured ? <Pill tone="muted">{t("featuredBadge")}</Pill> : null}
           </span>
           <span className="truncate font-mono text-[11px] text-ink-subtle">{row.pluginKey}</span>
+          </span>
         </span>
         <span className="w-[70px] shrink-0 text-[12px] text-ink-muted">
           {t(row.kind === "native" ? "kindLabels.native" : "kindLabels.mcp")}
@@ -689,15 +694,15 @@ function CatalogRow({ row }: { row: AdminPluginCatalogListItemDto }) {
             </span>
           )}
         </span>
-        {/* Workspaces that have added the plugin to their list. A workspace still on the
-            pre-marketplace "every plugin" default has no list yet and is not counted. */}
+        {/* Workspaces that have the plugin, by the server's own rule: a list that holds it, or a
+            workspace that never edited its list and whose members already use it. */}
         <span
-          className="w-[90px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right"
+          className="w-[120px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right"
           title={t("columns.workspaces")}
         >
           {workspaceCount}
         </span>
-        <span className="w-[80px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">
+        <span className="w-[90px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">
           {numberFormatter.format(row.installationCount)}
         </span>
         <span className="w-[70px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">

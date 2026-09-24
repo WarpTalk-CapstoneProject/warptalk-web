@@ -88,8 +88,13 @@
       "messageHostShared": "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
       "messageHostDraft": "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
       "messageParticipantWithheld": "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
+      "badgeScheduledHost": "Shares when the meeting ends",
+      "badgeScheduledParticipant": "Shared when the meeting ends",
+      "messageScheduled": "Everyone who took part will be able to read the transcript, AI summary and recording as soon as the meeting ends. Keep it private if this meeting should stay with you.",
+      "actionKeepPrivate": "Keep private",
       "saving": "Saving…",
       "toastUnpublished": "Record unpublished. Only you can see it now.",
+      "toastKeptPrivate": "Record kept private. It will not be shared when the meeting ends.",
       "toastPublished": "Record published. Everyone who took part can read it.",
       "toastShareChangeFailed": "Could not change who this record is shared with."
     },

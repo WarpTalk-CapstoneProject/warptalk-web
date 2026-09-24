@@ -3,7 +3,9 @@
     "withheld": "Cuộc họp này có bản ghi, nhưng chưa được chia sẻ với bạn. Chỉ những người đã tham gia mới có thể đọc — hãy hỏi người tổ chức nếu bạn cần quyền truy cập.",
     "unavailable": "Không thể tải bản ghi ngay lúc này. Hãy làm mới trang để thử lại.",
     "notYet": "Bản ghi sẽ xuất hiện ở đây khi cuộc họp được chuyển thành văn bản.",
-    "none": "Không có bản ghi nào được lưu lại cho cuộc họp này."
+    "notKept": "Cuộc họp này được đặt là không lưu bản ghi. Phụ đề và dịch vẫn hoạt động trực tiếp, nhưng không có gì được lưu lại, nên không có bản ghi, tóm tắt AI hay biên bản.",
+    "paused": "Không có bản ghi nào được lưu. Bản ghi đã bị tạm dừng trong cuộc họp này, và không có gì được nói trong lúc đó được ghi lại.",
+    "none": "Không có bản ghi nào được thu lại cho cuộc họp này vì không ai phát biểu khi nó diễn ra. WarpTalk lưu lại lời nói dù Bắt đầu dịch có được bật hay không, nên cũng không có gì để viết tóm tắt AI."
   },
   "followPlayback": {
     "srTitle": "Cuộn theo bản ghi âm một lần nữa",
@@ -62,10 +64,12 @@
     "asSpoken": "Như lời nói",
     "asSpokenDetail": "Mỗi dòng theo đúng ngôn ngữ gốc của nó",
     "readIn": "Đọc bản ghi này bằng",
-    "translatingNow": "Đang dịch phần còn lại",
+    "inThisTranscript": "Trong bản ghi này",
+    "notTranslatedYetGroup": "Chưa được dịch",
+    "translatingNow": "Đang dịch",
     "wholeMeeting": "Toàn bộ cuộc họp",
-    "translateIntoThis": "Dịch cuộc họp sang ngôn ngữ này",
-    "partialDetail": "{done} trên {total} mục · dịch phần còn lại"
+    "notTranslatedYet": "Chưa được dịch",
+    "partialDetail": "{done} trên {total} mục"
   },
   "layoutToggle": {
     "conversation": "Chế độ hội thoại",

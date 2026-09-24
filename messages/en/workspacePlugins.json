@@ -1,0 +1,134 @@
+{
+  "workspaceFallback": "this workspace",
+  "header": {
+    "title": "Workspace plugins",
+    "subtitle": "The marketplace plugins members of {workspaceName} can connect. Each member signs in with their own account.",
+    "readOnly": "You can see this list. Only the workspace owner can change it."
+  },
+  "addMenu": {
+    "trigger": "Add plugin",
+    "fromMarketplace": "From marketplace",
+    "withMcp": "With MCP"
+  },
+  "states": {
+    "loading": "Loading plugins...",
+    "forbiddenTitle": "Only workspace owners and admins can see this page",
+    "forbiddenBody": "Ask for a plugin from My connections instead.",
+    "loadError": "Could not load this workspace's plugins.",
+    "retry": "Retry"
+  },
+  "empty": {
+    "title": "Add a plugin to this workspace",
+    "readOnly": "Only the workspace owner can add plugins."
+  },
+  "transition": {
+    "carriedOver": "{count, plural, one {Nothing has been chosen for this workspace yet, so it keeps the plugin members already use here until you change this list.} other {Nothing has been chosen for this workspace yet, so it keeps the # plugins members already use here until you change this list.}}"
+  },
+  "requests": {
+    "title": "Requests",
+    "waiting": "{count} waiting",
+    "readOnly": "Only the workspace owner can add or decline these.",
+    "askedFor": "asked for",
+    "decline": "Decline",
+    "approve": "Add",
+    "requesterFallback": "A member",
+    "requesterFallbackSentence": "The member"
+  },
+  "inWorkspace": {
+    "title": "In this workspace",
+    "count": "{count, plural, one {# plugin} other {# plugins}}",
+    "empty": "No plugins yet. Add one from the marketplace below.",
+    "manage": "Manage",
+    "view": "View"
+  },
+  "marketplace": {
+    "title": "Marketplace",
+    "note": "Published by WarpTalk",
+    "allAdded": "Everything in the marketplace is already in this workspace.",
+    "add": "Add"
+  },
+  "marketplaceDialog": {
+    "title": "Add from marketplace",
+    "subtitle": "Members can connect it with their own accounts as soon as it's added."
+  },
+  "mcpDialog": {
+    "title": "Add your own MCP server",
+    "subtitle": "Only members of {workspaceName} will see it.",
+    "submit": "Add plugin"
+  },
+  "form": {
+    "nameLabel": "Name",
+    "namePlaceholder": "Internal CRM",
+    "urlLabel": "MCP server URL",
+    "urlPlaceholder": "https://mcp.example.com/mcp",
+    "descriptionLabel": "Description",
+    "optional": "Optional",
+    "descriptionPlaceholder": "What WarpBot can do with it",
+    "cancel": "Cancel",
+    "errors": {
+      "labelRequired": "Give the plugin a name.",
+      "labelTooLong": "Keep the name under 150 characters.",
+      "urlRequired": "Enter the MCP server URL.",
+      "urlNotHttps": "Use an https:// URL.",
+      "descriptionTooLong": "Keep the description under 500 characters."
+    }
+  },
+  "authMode": {
+    "legend": "How members connect",
+    "oauthTitle": "Sign in with OAuth",
+    "oauthNote": "Each member signs in on the server's own page.",
+    "apiKeyTitle": "Each member pastes an API key",
+    "apiKeyNote": "For servers without OAuth. The key is checked against the server and stored encrypted.",
+    "changeWarning": "Members who already connected it may need to connect again."
+  },
+  "manageDialog": {
+    "ariaLabel": "Manage {label}",
+    "save": "Save",
+    "removeFromWorkspace": "Remove from workspace",
+    "readOnly": "Only the workspace owner can change this.",
+    "close": "Close",
+    "cancel": "Cancel",
+    "remove": "Remove",
+    "confirmPrivate": "Remove {label}? Members can no longer see or use it, in {workspaceName} or anywhere else.",
+    "confirmShared": "Remove {label} from {workspaceName}? WarpBot stops using it here. Members keep their own connection and can disconnect it from My connections."
+  },
+  "facts": {
+    "notUsedYet": "Not used by any member yet",
+    "usedBy": "{count, plural, one {Used by # member} other {Used by # members}}",
+    "addedBy": "added by {name}",
+    "onlyThisWorkspace": "only this workspace",
+    "apiKeyPerMember": "each member pastes an API key",
+    "onlyThisWorkspaceAlone": "Only this workspace"
+  },
+  "dialog": {
+    "close": "Close"
+  },
+  "toasts": {
+    "added": "{label} added to {workspaceName}",
+    "couldNotAdd": "Could not add {label}.",
+    "removed": "Removed from {workspaceName}",
+    "couldNotRemove": "Could not remove {label}.",
+    "couldNotAddPlugin": "Could not add the plugin.",
+    "saved": "{label} saved",
+    "couldNotSave": "Could not save {label}.",
+    "requestApproved": "{label} added · {name} was notified",
+    "requestDeclined": "{name} was told it wasn't added",
+    "couldNotDecide": "Could not update the request."
+  },
+  "members": {
+    "title": "Members who connected it",
+    "count": "{count, plural, one {# member} other {# members}}",
+    "loading": "Loading members…",
+    "loadError": "Couldn't load who connected this plugin.",
+    "retry": "Retry",
+    "empty": "No member of this workspace has connected it yet.",
+    "formerMember": "A former member",
+    "connectedAgo": "Connected {when}",
+    "lastUsedAgo": "last used {when}",
+    "notUsedHereYet": "not used here yet",
+    "status": {
+      "expired": "Expired",
+      "revoked": "Disconnected"
+    }
+  }
+}

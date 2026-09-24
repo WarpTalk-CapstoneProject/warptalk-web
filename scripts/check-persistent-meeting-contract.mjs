@@ -222,9 +222,26 @@ assert.match(
 }
 assert.match(
   meetingSession,
-  /const wanted =\s*isBridgeRoom && isHost && translationStarted && hasInboundSource && !meetingIsIdleReaped;/,
+  /const wanted =\s*isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;/,
   "an idle reap must also release the stand-in's second LiveKit connection and its capture",
 );
+// WT-828: the far side is transcribed from the moment the meeting opens. Start Translation controls
+// translation and dubbing only, and the inbound leg used to wait for it — so everything the far
+// side said before Start was missing from the meeting's record.
+{
+  const wanted = /const wanted =([^;]*);/.exec(meetingSession)?.[1] ?? "";
+  assert.ok(wanted, "the bridge inbound gate (`const wanted = …`) must exist");
+  assert.doesNotMatch(
+    wanted,
+    /translation/i,
+    "the far side's capture must not wait for Start Translation — the transcript does not",
+  );
+  assert.match(
+    meetingSession,
+    /const bridgeListening = Boolean\(room\) && transcriptOpen;/,
+    "the bridge listens exactly while the transcript is open, and never before the room has loaded",
+  );
+}
 assert.match(
   meetingSession,
   /<ExternalBridgeWidget[\s\S]{0,1200}?idleDisconnected=\{meetingIsIdleReaped\}[\s\S]{0,200}?onRejoin=/,

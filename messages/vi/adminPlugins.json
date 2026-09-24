@@ -1,8 +1,8 @@
 {
   "list": {
     "eyebrow": "Cấu hình",
-    "title": "Danh mục plugin",
-    "description": "Toàn bộ chợ ứng dụng, kể cả các dòng đã ngừng hoạt động. Chủ workspace thêm plugin vào workspace của mình; thành viên kết nối bằng tài khoản riêng. Các plugin riêng tư mà một workspace tự tạo cho mình sẽ không xuất hiện ở đây.",
+    "title": "Kho plugin",
+    "description": "Kho plugin mà mọi workspace lấy từ đó, kể cả các dòng đã ngừng hoạt động. Chủ workspace thêm plugin vào workspace của mình; thành viên kết nối bằng tài khoản riêng. Các plugin riêng tư mà một workspace tự tạo cho mình sẽ không xuất hiện ở đây.",
     "refresh": "Làm mới",
     "createPlugin": "Tạo plugin",
     "withMcp": "Bằng MCP",
@@ -30,8 +30,8 @@
       "provider": "Nhà cung cấp",
       "state": "Trạng thái",
       "oauthClient": "OAuth client",
-      "workspaces": "Workspace",
-      "installs": "Lượt cài",
+      "workspaces": "Workspace đang dùng",
+      "installs": "Đã cài",
       "tools": "Công cụ"
     },
     "state": {
@@ -54,7 +54,7 @@
     "missingClientIdExplanation": "Dòng này được đánh dấu pre-registered nhưng không có client id OAuth, nên khi thử kết nối, URL xin cấp quyền sẽ được dựng với client_id rỗng và nhà cung cấp sẽ từ chối. Hãy đặt client id bên dưới.",
     "featuredBadge": "nổi bật",
     "workspaceCount": "{count, plural, =0 {không workspace nào} other {# workspace}}",
-    "footerNote": "Một dòng native được phục vụ bởi mã đã biên dịch sẵn và lấy OAuth client từ cấu hình dịch vụ, không phải từ danh mục — nên màn hình này không thể đặt hay xác nhận client cho dòng đó.",
+    "footerNote": "Workspace: những workspace có plugin trong danh sách, cộng với những workspace chưa từng sửa danh sách mà thành viên đang dùng plugin. Đã cài: số thành viên hiện đang cài plugin. Dòng native được phục vụ bởi mã biên dịch sẵn và lấy OAuth client từ cấu hình dịch vụ, không phải từ danh mục — nên màn hình này không thể đặt hay xác nhận client đó.",
     "dialog": {
       "title": "Thêm một ứng dụng MCP",
       "intro": "Dòng này sẽ xuất hiện trong danh sách plugin của mọi người dùng ngay khi được lưu — không cần triển khai lại, không cần khởi động lại. Nó được tạo dưới dạng dòng MCP lấy chính key làm tên nhà cung cấp OAuth, chưa có công cụ nào: các công cụ sẽ đến từ tools/list của chính server ở lần kết nối đầu tiên, và có thể được viết tay từ trang của dòng này.",

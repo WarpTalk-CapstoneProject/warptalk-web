@@ -22,6 +22,10 @@
     "noSummary": "Chưa có tóm tắt"
   },
   "asSpoken": "Như đã nói",
+  "languageGroups": {
+    "available": "Đã có sẵn",
+    "canBeWritten": "Có thể tạo"
+  },
   "controls": {
     "shapeAriaLabel": "Kiểu tóm tắt",
     "shapeTitle": "Đọc cuộc họp này theo một kiểu khác",
@@ -62,7 +66,7 @@
     "failed": "Việc tạo tóm tắt cho cuộc họp này chưa hoàn tất. Bản chép vẫn khả dụng.",
     "insufficientData": "Cuộc họp này không có đủ nội dung trong bản chép để tạo tóm tắt.",
     "withheld": "Một bản tóm tắt đã được tạo cho cuộc họp này, nhưng chưa được chia sẻ với bạn. Người tổ chức cuộc họp quyết định ai được đọc.",
-    "noTranscript": "Không có bản chép nào được ghi lại cho cuộc họp này, nên không có gì để tóm tắt.",
+    "noTranscript": "Không ai phát biểu trong cuộc họp này, nên không có bản chép và không có gì để tóm tắt.",
     "absent": "Cuộc họp này kết thúc mà không có tóm tắt nào được tạo."
   }
 }

@@ -88,8 +88,13 @@
       "messageHostShared": "参加した全員がこの記録を読めます。編集も引き続き可能です — 変更内容はすぐに相手にも反映されます。",
       "messageHostDraft": "この記録はあなただけが見られます。公開すると、参加した全員に文字起こし、AI要約、録画を共有できます。",
       "messageParticipantWithheld": "ホストはまだこのミーティングの記録を共有していません。共有され次第、ここで読めるようになります。",
+      "badgeScheduledHost": "ミーティング終了時に共有されます",
+      "badgeScheduledParticipant": "ミーティング終了時に共有されました",
+      "messageScheduled": "ミーティングが終了し次第、参加した全員が文字起こし、AI要約、録画を読めるようになります。この記録を非公開のままにしたい場合は非公開を維持してください。",
+      "actionKeepPrivate": "非公開のまま",
       "saving": "保存中…",
       "toastUnpublished": "記録の公開を取り消しました。現在はあなただけが見られます。",
+      "toastKeptPrivate": "記録を非公開のままにしました。ミーティング終了時にも共有されません。",
       "toastPublished": "記録を公開しました。参加した全員が読めます。",
       "toastShareChangeFailed": "この記録の共有設定を変更できませんでした。"
     },

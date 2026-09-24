@@ -11,6 +11,11 @@
  *   today, so no PERIOD card links — "Cancelled" opening every cancellation ever would break the
  *   rule. Section headers still link to their area; that is navigation, not a claim about a count.
  *
+ * RETIRED TARGETS (2026-09-24): the platform meeting directory (/admin/meetings) and the Event
+ *   outbox (/admin/outbox) were taken out of the portal. "Live meetings", "Meetings per day" and
+ *   "Dead-letter events" keep their figures and lose their links; the retired routes forward to
+ *   /admin in proxy.ts, so a link to them would only bounce back to this page.
+ *
  * Every target and param below is checked against the page source by
  * `src/lib/admin/__tests__/insights-links.test.ts`, so a renamed route or a dropped filter fails
  * the contracts rather than turning into a link that quietly shows everything.
@@ -26,16 +31,13 @@ export interface InsightsLinkTarget {
 export const INSIGHTS_LINK_TARGETS = {
   // Figures: exact sets.
   activeSubscriptions: { path: "/admin/subscriptions", params: { status: "active" } },
-  liveMeetings: { path: "/admin/meetings", params: { status: "live" } },
   newSalesLeads: { path: "/admin/sales-leads", params: { status: "new" } },
-  deadLetters: { path: "/admin/outbox" },
   suspendedWorkspaces: { path: "/admin/workspaces", params: { status: "suspended" } },
   health: { path: "/admin/health" },
 
   // Section headers: navigation.
   subscriptions: { path: "/admin/subscriptions" },
   subscriptionsEndingSoon: { path: "/admin/subscriptions", params: { sort: "period_end_asc" } },
-  meetings: { path: "/admin/meetings" },
   workspaces: { path: "/admin/workspaces" },
   billingLedger: { path: "/admin/billing" },
   plans: { path: "/admin/plans" },
@@ -61,9 +63,7 @@ export function workspaceHref(workspaceId: string | null | undefined): string | 
  */
 const METRIC_LINKS: Partial<Record<string, InsightsLinkKey>> = {
   activeSubscriptions: "activeSubscriptions",
-  liveMeetings: "liveMeetings",
   openSalesLeads: "newSalesLeads",
-  deadLetters: "deadLetters",
   suspendedWorkspaces: "suspendedWorkspaces",
 };
 

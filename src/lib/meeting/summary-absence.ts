@@ -48,6 +48,10 @@ export function describeSummaryAbsence(input: SummaryAbsenceInput): SummaryAbsen
   // Before the withheld check: the worker ran, produced a row, and said the transcript was too
   // thin. That is a real answer about the meeting, not a permission problem, and it stays the
   // more specific of the two.
+  // WT-828: except when there is no transcript at all. The worker marks an empty meeting's summary
+  // insufficient too, and "there wasn't enough transcript content" about a meeting with none is
+  // the empty Recap the owner reported — true, and no help to anybody. Silence is the reason.
+  if (input.insufficientData && input.hasTranscript === false) return "no-transcript";
   if (input.insufficientData) return "insufficient-data";
 
   // The distinction the old code could not draw. A row exists, its body did not reach us, and the
@@ -98,7 +102,7 @@ const DEFAULT_ABSENCE_COPY: Record<string, string> = {
     "A summary was produced for this meeting, but it is not shared with you. The meeting host controls who can read it.",
   // Says which of the two things is missing. "No summary" alone sends the reader after a
   // broken generator; the transcript being empty is the whole explanation.
-  noTranscript: "No transcript was captured for this meeting, so there was nothing to summarise.",
+  noTranscript: "Nobody spoke in this meeting, so there is no transcript and nothing to summarise.",
   absent: "This meeting ended without a summary artifact.",
 };
 

@@ -32,7 +32,17 @@ export type TranscriptAbsence =
   | "unavailable"
   /** The meeting is still running, or the finalizer has not written it yet. */
   | "not-yet"
-  /** The server answered, and the meeting really did capture nothing. */
+  /**
+   * WT-828: the meeting was set not to keep a transcript (`saveTranscript: false`). Nothing was
+   * lost — nothing was ever going to be written.
+   */
+  | "not-kept"
+  /**
+   * WT-828: the host paused the transcript at some point and nothing was saved outside the
+   * pause. "Nobody spoke" would be a claim this reader cannot check and may be false.
+   */
+  | "paused"
+  /** The server answered, and the meeting really did capture nothing: nobody spoke. */
   | "none";
 
 export type TranscriptAbsenceInput = {
@@ -47,6 +57,10 @@ export type TranscriptAbsenceInput = {
    * status. Absent means the request did not fail.
    */
   errorCode?: string | number | null;
+  /** WT-587/828: the room's `saveTranscript`. Only an explicit `false` means "kept no record". */
+  saveTranscript?: boolean;
+  /** WT-605/828: whether the transcript was paused at any point in this meeting. */
+  pausedAtSomePoint?: boolean;
 };
 
 /** Whether a failure means "refused" rather than "went wrong". */
@@ -78,6 +92,13 @@ export function describeTranscriptAbsence(
 
   if (!input.isEnded) return "not-yet";
 
+  // WT-828: the meeting is over and the server answered zero. Since the transcript no longer
+  // waits for Start Translation, there are only three ways to get here, and a reader deserves to
+  // know which one — "no transcript was captured" alone left them guessing whether the product
+  // had lost their meeting. A deliberate setting outranks a pause, which outranks silence.
+  if (input.saveTranscript === false) return "not-kept";
+  if (input.pausedAtSomePoint) return "paused";
+
   return "none";
 }
 
@@ -97,7 +118,14 @@ const DEFAULT_TRANSCRIPT_ABSENCE_MESSAGES: Record<TranscriptAbsence, string> = {
   // Deliberately does NOT say the meeting had no transcript. We do not know that.
   unavailable: "The transcript could not be loaded right now. Refresh to try again.",
   "not-yet": "The transcript is saved here as the meeting is transcribed.",
-  none: "No transcript was captured for this meeting.",
+  "not-kept":
+    "This meeting was set not to keep a transcript. Subtitles and translation ran live, but nothing was saved, so there is no transcript, AI summary or minutes.",
+  paused:
+    "No transcript was saved. The transcript was paused during this meeting, and nothing was said while it was recording.",
+  // WT-828: said as the reason, not only the fact. The transcript is saved whenever people
+  // speak — Start Translation controls translation and dubbing only — so an empty record of a
+  // finished meeting means nobody spoke while it was open.
+  none: "No transcript was captured for this meeting because nobody spoke while it was open. WarpTalk saves what people say whether or not translation is started, so there was also nothing for an AI summary to be written from.",
 };
 
 function defaultTranscriptAbsenceCopy(key: string): string {
@@ -137,6 +165,10 @@ export function transcriptAbsenceMessage(
       return t("unavailable");
     case "not-yet":
       return t("not-yet");
+    case "not-kept":
+      return t("not-kept");
+    case "paused":
+      return t("paused");
     case "none":
       return t("none");
   }

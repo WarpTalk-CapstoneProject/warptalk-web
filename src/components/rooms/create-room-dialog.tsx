@@ -114,6 +114,12 @@ export function CreateRoomDialog() {
   // value DESTROYS something — no transcript means no summary, no minutes and no knowledge-base
   // entry — so it starts true and is only put on the wire when somebody changes it.
   const [saveTranscript, setSaveTranscript] = useState(true);
+  // WT-826: share the record with participants when the meeting ends. On unless the host turns
+  // it off, and — like saveTranscript — only put on the wire when somebody changes it, so the
+  // server's own default decides for everyone who never opened the menu.
+  const [autoShareRecord, setAutoShareRecord] = useState(true);
+  // What the room being edited already holds, so an edit sends the toggle only when it moved.
+  const [loadedAutoShareRecord, setLoadedAutoShareRecord] = useState<boolean | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState(MEETING_TYPES[0].value);
@@ -170,6 +176,10 @@ export function CreateRoomDialog() {
     setScheduledAt(
       editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null,
     );
+    // Absent reads as ON: a room created before the toggle is shared when it ends, like a new one.
+    const storedAutoShare = editRoomData.settings?.autoShareRecord ?? true;
+    setAutoShareRecord(storedAutoShare);
+    setLoadedAutoShareRecord(storedAutoShare);
   }
 
   if (
@@ -342,6 +352,11 @@ export function CreateRoomDialog() {
             targetLanguages: targetLanguages,
             scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
             invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+            // WT-826: a settings PATCH, so only the field that moved. The server carries the
+            // room's sharing level with the toggle while the meeting has not happened yet.
+            ...(loadedAutoShareRecord !== null && autoShareRecord !== loadedAutoShareRecord
+              ? { settings: { autoShareRecord } }
+              : {}),
           },
         });
         toast.success(t("toasts.roomUpdated"));
@@ -373,7 +388,8 @@ export function CreateRoomDialog() {
           settings:
             requiresApproval === null &&
             !participantsCanStartTranslation &&
-            saveTranscript
+            saveTranscript &&
+            autoShareRecord
               ? undefined
               : {
                   ...(requiresApproval === null ? {} : { requiresApproval }),
@@ -384,6 +400,8 @@ export function CreateRoomDialog() {
                   // it back would pin the value against any future change — the same reasoning
                   // as requiresApproval above.
                   ...(saveTranscript ? {} : { saveTranscript: false }),
+                  // WT-826: likewise sent only as `false`.
+                  ...(autoShareRecord ? {} : { autoShareRecord: false }),
                 },
         };
 
@@ -661,6 +679,8 @@ export function CreateRoomDialog() {
                   }
                   saveTranscript={saveTranscript}
                   onSaveTranscriptChange={setSaveTranscript}
+                  autoShareRecord={autoShareRecord}
+                  onAutoShareRecordChange={setAutoShareRecord}
                   onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>
