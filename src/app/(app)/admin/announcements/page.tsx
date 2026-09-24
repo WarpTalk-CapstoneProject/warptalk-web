@@ -4,16 +4,18 @@
  * Announcements — a CMS for what the app tells its users.
  *
  * Two views:
- *   Announcements     cards for every CMS announcement, filtered by what its status means now
- *                     (draft, scheduled, published, ended, archived). Published ones are shown in
- *                     the app's announcement strip to their audience while the window is open.
+ *   Announcements     every CMS announcement, as cards or a table, filtered by what its status
+ *                     means now (draft, scheduled, published, ended, archived), its type and its
+ *                     placement. A published one is shown to its audience in its placement (top
+ *                     banner, modal, toast, notification centre, dashboard card) while its window
+ *                     is open.
  *   Inbox broadcasts  the one-shot notification sends, unchanged — a broadcast is delivered into
- *                     inboxes once, which is a different thing from a banner that runs for a while.
+ *                     inboxes once, which is a different thing from an announcement that runs.
  *
- * Everything on the cards is read from the notification service; nothing is a hardcoded list.
+ * Everything is read from the notification service; nothing is a hardcoded list.
  */
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -21,37 +23,48 @@ import { toast } from "sonner";
 import {
   Archive,
   ArrowCounterClockwise,
-  ArrowsClockwise,
-  CalendarBlank,
+  CaretDown,
+  CaretUp,
   Copy,
   DotsThree,
   Eye,
-  MagnifyingGlass,
   Megaphone,
   PaperPlaneTilt,
   PencilSimple,
   Plus,
   Trash,
+  UploadSimple,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
-import { AdminPage, AdminPageHeader } from "@/components/admin/admin-page-chrome";
+import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import { BroadcastHistory } from "@/components/admin/announcement-broadcast-history";
 import { AnnouncementComposer } from "@/components/admin/announcement-composer";
-import { AudienceLine, WindowLine } from "@/components/admin/cms/announcement-bits";
+import {
+  AnnouncementSwatch,
+  AnnouncementTypePill,
+  AudienceLine,
+  PlacementLabel,
+  WindowLine,
+} from "@/components/admin/cms/announcement-bits";
+import { useConfirm } from "@/components/admin/cms/cms-editor";
+import {
+  CmsBulkBar,
+  CmsEmptyState,
+  CmsSearchInput,
+  CmsSelectAll,
+  CmsSelectBox,
+  CmsSortSelect,
+  CmsTable,
+  CmsTd,
+  CmsTh,
+  CmsToolbar,
+  CmsViewToggle,
+  useListView,
+} from "@/components/admin/cms/cms-list";
 import { CmsCard, CmsCardGrid, CmsChip, EditedBy } from "@/components/admin/cms/cms-shared";
-import { AnnouncementPreviewDialog } from "@/components/admin/cms/announcement-preview-dialog";
-import { AnnouncementTypePill } from "@/components/announcements/announcement-card-view";
 import { PreviewMarkdown } from "@/components/markdown/document-markdown";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,9 +73,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
-import { Input } from "@/components/ui/input";
 import {
   useAdminAnnouncementCmsList,
+  useAnnouncementBulk,
   useArchiveAnnouncement,
   useDeleteAnnouncement,
   useDuplicateAnnouncement,
@@ -71,15 +84,22 @@ import {
 } from "@/hooks/use-admin-announcement-cms";
 import { useSendAdminAnnouncement } from "@/hooks/use-admin-announcements";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { prune, toggleAll, toggleOne } from "@/lib/admin/cms-selection";
 import {
   availableActions,
+  bulkActionsFor,
+  CMS_TYPES,
+  colorTokens,
   EFFECTIVE_STATUSES,
+  PLACEMENTS,
   statusClasses,
-  typeAccent,
+  type CmsType,
   type EffectiveStatus,
+  type Placement,
 } from "@/lib/announcements/announcement-cms";
 import { getErrorMessage } from "@/lib/api/errors";
-import type { AdminAnnouncementCmsDto } from "@/types/admin-cms";
+import { cn } from "@/lib/utils";
+import type { AdminAnnouncementCmsDto, AnnouncementBulkAction, AnnouncementSort } from "@/types/admin-cms";
 
 const PAGE_SIZE = 24;
 type StatusFilter = "ALL" | EffectiveStatus;
@@ -142,12 +162,19 @@ function AnnouncementsCms() {
 
 function CmsView() {
   const t = useTranslations("adminCms.announcements");
+  const tCommon = useTranslations("adminCms.common");
   const [status, setStatus] = useState<StatusFilter>("ALL");
+  const [type, setType] = useState<CmsType | "">("");
+  const [placement, setPlacement] = useState<Placement | "">("");
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<AnnouncementSort>("updated");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(1);
-  const [previewing, setPreviewing] = useState<AdminAnnouncementCmsDto | null>(null);
-  const [deleting, setDeleting] = useState<AdminAnnouncementCmsDto | null>(null);
+  const [view, setView] = useListView("wt.admin.announcements.view");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirm, confirmDialog] = useConfirm();
   const debouncedSearch = useDebouncedValue(search.trim(), 300);
+  const bulk = useAnnouncementBulk();
 
   const query = useMemo(
     () => ({
@@ -155,120 +182,211 @@ function CmsView() {
       pageSize: PAGE_SIZE,
       status: status === "ALL" ? undefined : status,
       search: debouncedSearch || undefined,
+      type: type || undefined,
+      placement: placement || undefined,
+      sort,
+      order,
     }),
-    [page, status, debouncedSearch],
+    [page, status, debouncedSearch, type, placement, sort, order],
   );
   const listQuery = useAdminAnnouncementCmsList(query);
-  const items = listQuery.data?.items ?? [];
+  const items = useMemo(() => listQuery.data?.items ?? [], [listQuery.data]);
   const counts = listQuery.data?.counts ?? {};
   const allCount = EFFECTIVE_STATUSES.reduce((sum, value) => sum + (counts[value] ?? 0), 0);
   const totalPages = Math.max(1, Math.ceil((listQuery.data?.total ?? 0) / PAGE_SIZE));
+  const visibleIds = items.map((item) => item.id);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a page or filter change drops rows it hid
+    setSelected((current) => prune(current, visibleIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleIds.join("|")]);
+
+  const filtered = status !== "ALL" || Boolean(debouncedSearch) || Boolean(type) || Boolean(placement);
+  const selectedStatuses = items.filter((item) => selected.includes(item.id)).map((item) => item.effectiveStatus);
+  const bulkActions = bulkActionsFor(selectedStatuses);
+  const resetPage = <T,>(setter: (value: T) => void) => (value: T) => {
+    setter(value);
+    setPage(1);
+  };
+
+  const runBulk = (action: AnnouncementBulkAction) =>
+    confirm({
+      title: t(`bulk.${action}.title`, { count: selected.length }),
+      description: t(`bulk.${action}.description`),
+      confirmLabel: t(`bulk.${action}.confirm`),
+      destructive: action === "delete" || action === "archive",
+      onConfirm: async () => {
+        try {
+          const result = await bulk.mutateAsync({ action, ids: selected });
+          if (result.failed === 0) toast.success(t(`bulk.${action}.done`, { count: result.succeeded }));
+          else toast.error(tCommon("bulk.partial", { failed: result.failed, error: result.items.find((item) => !item.succeeded)?.error ?? "" }));
+          setSelected([]);
+        } catch (caught) {
+          toast.error(getErrorMessage(caught, tCommon("toasts.failed")));
+        }
+      },
+    });
 
   return (
     <>
-      <div className="flex flex-col gap-3 border-b border-border py-3 lg:flex-row lg:items-center lg:justify-between">
-        <FilterChipGroup label={t("statusAria")}>
-          {STATUS_FILTERS.map((value) => (
-            <FilterChip
-              key={value}
-              selected={status === value}
-              onClick={() => {
-                setStatus(value);
-                setPage(1);
-              }}
-              badge={listQuery.data ? (value === "ALL" ? allCount : (counts[value] ?? 0)) : undefined}
+      <CmsToolbar
+        chips={
+          <FilterChipGroup label={t("statusAria")}>
+            {STATUS_FILTERS.map((value) => (
+              <FilterChip
+                key={value}
+                selected={status === value}
+                onClick={() => resetPage(setStatus)(value)}
+                badge={listQuery.data ? (value === "ALL" ? allCount : (counts[value] ?? 0)) : undefined}
+              >
+                {t(`statuses.${value}`)}
+              </FilterChip>
+            ))}
+          </FilterChipGroup>
+        }
+        controls={
+          <>
+            <CmsSearchInput value={search} onChange={resetPage(setSearch)} placeholder={t("searchPlaceholder")} />
+            <select
+              aria-label={t("filters.type")}
+              value={type}
+              onChange={(event) => resetPage(setType)(event.target.value as CmsType | "")}
+              className="h-8 rounded-lg border border-border bg-surface-1 px-2 text-[12.5px] text-ink"
             >
-              {t(`statuses.${value}`)}
-            </FilterChip>
-          ))}
-        </FilterChipGroup>
-        <div className="flex items-center gap-2">
-          <div className="relative w-full lg:w-64">
-            <MagnifyingGlass
-              size={14}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle"
+              <option value="">{t("filters.anyType")}</option>
+              {CMS_TYPES.map((value) => (
+                <option key={value} value={value}>
+                  {t(`editor.types.${value}.label`)}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label={t("filters.placement")}
+              value={placement}
+              onChange={(event) => resetPage(setPlacement)(event.target.value as Placement | "")}
+              className="h-8 rounded-lg border border-border bg-surface-1 px-2 text-[12.5px] text-ink"
+            >
+              <option value="">{t("filters.anyPlacement")}</option>
+              {PLACEMENTS.map((value) => (
+                <option key={value} value={value}>
+                  {t(`preview.placements.${value}`)}
+                </option>
+              ))}
+            </select>
+            <CmsSortSelect<AnnouncementSort>
+              value={sort}
+              onChange={resetPage(setSort)}
+              options={(["updated", "created", "starts", "priority", "title"] as const).map((value) => ({ value, label: t(`sort.${value}`) }))}
             />
-            <Input
-              className="pl-8"
-              placeholder={t("searchPlaceholder")}
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
-              }}
-            />
-          </div>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            aria-label={t("refresh")}
-            onClick={() => void listQuery.refetch()}
-            disabled={listQuery.isFetching}
-          >
-            <ArrowsClockwise size={14} className={listQuery.isFetching ? "animate-spin" : undefined} />
-          </Button>
-        </div>
-      </div>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label={order === "desc" ? t("sort.descending") : t("sort.ascending")}
+              title={order === "desc" ? t("sort.descending") : t("sort.ascending")}
+              onClick={() => resetPage(setOrder)(order === "desc" ? "asc" : "desc")}
+            >
+              {order === "desc" ? <CaretDown size={14} /> : <CaretUp size={14} />}
+            </Button>
+            <CmsViewToggle view={view} onChange={setView} />
+          </>
+        }
+      />
 
-      <div className="mt-5">
+      <div className="mt-4">
         {listQuery.isError ? (
-          <div className="flex items-start gap-3 rounded-lg border border-border bg-surface-1 px-4 py-8 text-sm">
-            <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
-            <div>
-              <p className="font-medium">{t("error.title")}</p>
-              <p className="mt-1 text-ink-muted">{t("error.description")}</p>
-              <Button variant="outline" size="sm" className="mt-3" onClick={() => void listQuery.refetch()}>
-                {t("error.retry")}
-              </Button>
-            </div>
-          </div>
+          <AdminPanel className="flex items-center gap-3 px-4 py-8 text-sm">
+            <WarningCircle size={18} weight="duotone" className="shrink-0 text-destructive" />
+            <span className="flex-1">{t("loadError")}</span>
+            <Button variant="outline" size="sm" onClick={() => void listQuery.refetch()}>
+              {tCommon("retry")}
+            </Button>
+          </AdminPanel>
         ) : listQuery.isPending ? (
           <CmsCardGrid>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <CmsCard key={index}>
-                <div className="space-y-3 p-4">
-                  <div className="h-3 w-24 animate-pulse rounded bg-surface-2" />
-                  <div className="h-4 w-56 animate-pulse rounded bg-surface-2" />
-                  <div className="h-3 w-full animate-pulse rounded bg-surface-2" />
-                  <div className="h-3 w-2/3 animate-pulse rounded bg-surface-2" />
-                </div>
-              </CmsCard>
+            {Array.from({ length: 6 }, (_, index) => (
+              <li key={index} className="h-[240px] animate-pulse rounded-lg bg-surface-2" />
             ))}
           </CmsCardGrid>
         ) : items.length === 0 ? (
-          <div className="grid place-items-center rounded-lg border border-border bg-surface-1 px-4 py-14 text-center">
-            <div>
-              <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-                <Megaphone size={20} weight="duotone" />
-              </span>
-              <p className="mt-3 text-sm font-medium">
-                {status === "ALL" && !debouncedSearch ? t("empty.title") : t("empty.filteredTitle")}
-              </p>
-              <p className="mt-1 text-xs text-ink-muted">{t("empty.description")}</p>
-              <Link href="/admin/announcements/posts/new" className={buttonVariants({ size: "sm", className: "mt-4" })}>
-                <Plus size={14} />
-                {t("new")}
-              </Link>
+          <CmsEmptyState
+            icon={<Megaphone size={18} />}
+            title={filtered ? t("empty.filtered") : t("empty.none")}
+            description={filtered ? t("empty.filteredHint") : t("empty.noneHint")}
+            action={
+              filtered ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setStatus("ALL");
+                    setSearch("");
+                    setType("");
+                    setPlacement("");
+                    setPage(1);
+                  }}
+                >
+                  {tCommon("list.clearFilters")}
+                </Button>
+              ) : (
+                <Link href="/admin/announcements/posts/new" className={buttonVariants({ size: "sm" })}>
+                  <Plus size={14} />
+                  {t("new")}
+                </Link>
+              )
+            }
+          />
+        ) : view === "cards" ? (
+          <>
+            <div className="mb-2 flex items-center gap-2 text-[12px] text-ink-muted">
+              <CmsSelectAll selected={selected} visible={visibleIds} onToggle={() => setSelected(toggleAll(selected, visibleIds))} />
+              {tCommon("list.selectAll")}
             </div>
-          </div>
+            <CmsCardGrid>
+              {items.map((announcement) => (
+                <AnnouncementCard
+                  key={announcement.id}
+                  announcement={announcement}
+                  selected={selected.includes(announcement.id)}
+                  onSelect={() => setSelected(toggleOne(selected, announcement.id))}
+                  confirm={confirm}
+                />
+              ))}
+            </CmsCardGrid>
+          </>
         ) : (
-          <CmsCardGrid>
+          <CmsTable
+            head={
+              <>
+                <CmsTh className="w-10">
+                  <CmsSelectAll selected={selected} visible={visibleIds} onToggle={() => setSelected(toggleAll(selected, visibleIds))} />
+                </CmsTh>
+                <CmsTh>{t("table.title")}</CmsTh>
+                <CmsTh>{t("table.status")}</CmsTh>
+                <CmsTh>{t("table.placement")}</CmsTh>
+                <CmsTh>{t("table.audience")}</CmsTh>
+                <CmsTh>{t("table.window")}</CmsTh>
+                <CmsTh className="text-right">{t("table.priority")}</CmsTh>
+                <CmsTh className="w-10" />
+              </>
+            }
+          >
             {items.map((announcement) => (
-              <AnnouncementCard
+              <AnnouncementRow
                 key={announcement.id}
                 announcement={announcement}
-                onPreview={() => setPreviewing(announcement)}
-                onDelete={() => setDeleting(announcement)}
+                selected={selected.includes(announcement.id)}
+                onSelect={() => setSelected(toggleOne(selected, announcement.id))}
+                confirm={confirm}
               />
             ))}
-          </CmsCardGrid>
+          </CmsTable>
         )}
       </div>
 
       {totalPages > 1 ? (
-        <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
+        <div className="mt-4 flex items-center justify-end gap-3 text-[12px] text-ink-muted">
           <span>{t("pageOf", { page, totalPages })}</span>
-          <div className="flex items-center gap-2">
+          <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
               {t("previous")}
             </Button>
@@ -279,221 +397,276 @@ function CmsView() {
         </div>
       ) : null}
 
-      <AnnouncementPreviewDialog announcement={previewing} onClose={() => setPreviewing(null)} />
-      <DeleteDialog announcement={deleting} onClose={() => setDeleting(null)} />
+      <CmsBulkBar count={selected.length} onClear={() => setSelected([])}>
+        {bulkActions.includes("publish") ? (
+          <Button size="sm" disabled={bulk.isPending} onClick={() => runBulk("publish")}>
+            <UploadSimple size={14} />
+            {t("bulk.publish.action")}
+          </Button>
+        ) : null}
+        {bulkActions.includes("duplicate") ? (
+          <Button variant="outline" size="sm" disabled={bulk.isPending} onClick={() => runBulk("duplicate")}>
+            <Copy size={14} />
+            {t("bulk.duplicate.action")}
+          </Button>
+        ) : null}
+        {bulkActions.includes("archive") ? (
+          <Button variant="outline" size="sm" disabled={bulk.isPending} onClick={() => runBulk("archive")}>
+            <Archive size={14} />
+            {t("bulk.archive.action")}
+          </Button>
+        ) : null}
+        {bulkActions.includes("delete") ? (
+          <Button variant="destructive" size="sm" disabled={bulk.isPending} onClick={() => runBulk("delete")}>
+            <Trash size={14} />
+            {t("bulk.delete.action")}
+          </Button>
+        ) : null}
+      </CmsBulkBar>
+      {confirmDialog}
     </>
   );
 }
 
-function AnnouncementCard({
-  announcement,
-  onPreview,
-  onDelete,
-}: {
-  announcement: AdminAnnouncementCmsDto;
-  onPreview: () => void;
-  onDelete: () => void;
-}) {
-  const t = useTranslations("adminCms.announcements");
-  const href = `/admin/announcements/posts/${announcement.id}`;
-  const actions = availableActions(announcement.effectiveStatus);
-  const router = useRouter();
+type Confirm = ReturnType<typeof useConfirm>[0];
 
+/** The per-item lifecycle menu, shared by the card and the table row. */
+function useRowActions(announcement: AdminAnnouncementCmsDto, confirm: Confirm) {
+  const t = useTranslations("adminCms.announcements");
+  const tCommon = useTranslations("adminCms.common");
+  const router = useRouter();
   const publish = usePublishAnnouncement();
   const unpublish = useUnpublishAnnouncement();
   const archive = useArchiveAnnouncement();
   const duplicate = useDuplicateAnnouncement();
-  const busy = publish.isPending || unpublish.isPending || archive.isPending || duplicate.isPending;
+  const remove = useDeleteAnnouncement();
+  const actions = availableActions(announcement.effectiveStatus);
+  const href = `/admin/announcements/posts/${announcement.id}`;
 
-  const run = async (label: string, action: () => Promise<unknown>) => {
+  const run = async (success: string, action: () => Promise<unknown>) => {
     try {
       await action();
-      toast.success(label);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t("toasts.failed")));
+      toast.success(success);
+    } catch (caught) {
+      toast.error(getErrorMessage(caught, tCommon("toasts.failed")));
     }
   };
 
-  return (
-    <CmsCard accentClassName={typeAccent(announcement.type)}>
-      <div className="flex flex-1 flex-col p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <CmsChip className={statusClasses(announcement.effectiveStatus)}>
-            {t(`statuses.${announcement.effectiveStatus as EffectiveStatus}`)}
-          </CmsChip>
-          <AnnouncementTypePill type={announcement.type} />
-        </div>
-        <Link href={href} className="mt-3 block">
-          <h2 className="line-clamp-2 text-[15px] font-semibold leading-snug text-ink group-hover:underline group-hover:underline-offset-2">
-            {announcement.title}
-          </h2>
-        </Link>
-        <PreviewMarkdown className="mt-1.5 line-clamp-3 text-[12.5px] leading-relaxed text-ink-muted">
-          {announcement.bodyMarkdown}
-        </PreviewMarkdown>
+  const menu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label={t("actions.more")} onClick={(event) => event.stopPropagation()} />}>
+        <DotsThree size={16} weight="bold" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[200px]">
+        {actions.includes("publishNow") ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2"
+            onClick={() =>
+              confirm({
+                title: t("confirm.publishTitle", { title: announcement.title }),
+                description: t("confirm.publishDescription"),
+                confirmLabel: t("actions.publishNow"),
+                onConfirm: () => run(t("toasts.published"), () => publish.mutateAsync({ id: announcement.id, request: {} })),
+              })
+            }
+          >
+            <PaperPlaneTilt size={14} />
+            {t("actions.publishNow")}
+          </DropdownMenuItem>
+        ) : null}
+        {actions.includes("unpublish") ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2"
+            onClick={() =>
+              confirm({
+                title: t("confirm.unpublishTitle", { title: announcement.title }),
+                description: t("confirm.unpublishDescription"),
+                confirmLabel: t("actions.unpublish"),
+                onConfirm: () => run(t("toasts.unpublished"), () => unpublish.mutateAsync(announcement.id)),
+              })
+            }
+          >
+            <ArrowCounterClockwise size={14} />
+            {t("actions.unpublish")}
+          </DropdownMenuItem>
+        ) : null}
+        {actions.includes("restore") ? (
+          <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => void run(t("toasts.restored"), () => unpublish.mutateAsync(announcement.id))}>
+            <ArrowCounterClockwise size={14} />
+            {t("actions.restore")}
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem
+          className="cursor-pointer gap-2"
+          onClick={() =>
+            void run(t("toasts.duplicated"), async () => {
+              const copy = await duplicate.mutateAsync(announcement.id);
+              router.push(`/admin/announcements/posts/${copy.id}`);
+            })
+          }
+        >
+          <Copy size={14} />
+          {t("actions.duplicate")}
+        </DropdownMenuItem>
+        {actions.includes("archive") ? (
+          <DropdownMenuItem
+            className="cursor-pointer gap-2"
+            onClick={() =>
+              confirm({
+                title: t("confirm.archiveTitle", { title: announcement.title }),
+                description: t("confirm.archiveDescription"),
+                confirmLabel: t("actions.archive"),
+                destructive: true,
+                onConfirm: () => run(t("toasts.archived"), () => archive.mutateAsync(announcement.id)),
+              })
+            }
+          >
+            <Archive size={14} />
+            {t("actions.archive")}
+          </DropdownMenuItem>
+        ) : null}
+        {actions.includes("delete") ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer gap-2 text-destructive"
+              onClick={() =>
+                confirm({
+                  title: t("deleteDialog.title"),
+                  description: t("deleteDialog.description", { title: announcement.title }),
+                  confirmLabel: t("deleteDialog.confirm"),
+                  destructive: true,
+                  onConfirm: () => run(t("toasts.deleted"), () => remove.mutateAsync(announcement.id)),
+                })
+              }
+            >
+              <Trash size={14} />
+              {t("actions.delete")}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  return { menu, href };
+}
 
-        <dl className="mt-auto space-y-1 pt-4 text-[12px]">
-          <div className="flex items-center gap-2 text-ink-muted">
-            <dt className="sr-only">{t("card.audience")}</dt>
-            <Megaphone size={12} className="shrink-0 text-ink-subtle" />
+function AnnouncementCard({
+  announcement,
+  selected,
+  onSelect,
+  confirm,
+}: {
+  announcement: AdminAnnouncementCmsDto;
+  selected: boolean;
+  onSelect: () => void;
+  confirm: Confirm;
+}) {
+  const t = useTranslations("adminCms.announcements");
+  const { menu, href } = useRowActions(announcement, confirm);
+  return (
+    <CmsCard accentClassName={colorTokens(announcement.accentColor).bar} className={cn(selected && "border-primary/50 ring-1 ring-primary/30")}>
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-start gap-2.5">
+          <CmsSelectBox checked={selected} onChange={onSelect} label={t("selectOne", { title: announcement.title })} className="mt-0.5" />
+          <AnnouncementSwatch announcement={announcement} />
+          <div className="min-w-0 flex-1">
+            <Link href={href} className="line-clamp-2 text-[14px] font-semibold leading-snug text-ink hover:underline">
+              {announcement.title}
+            </Link>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <CmsChip className={statusClasses(announcement.effectiveStatus)}>{t(`statuses.${announcement.effectiveStatus as EffectiveStatus}`)}</CmsChip>
+              <AnnouncementTypePill type={announcement.type} />
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 line-clamp-3 text-[12.5px] text-ink-muted">
+          <PreviewMarkdown>{announcement.bodyMarkdown}</PreviewMarkdown>
+        </div>
+        <dl className="mt-3 space-y-1 text-[11.5px] text-ink-muted">
+          <div className="flex gap-1.5">
+            <dt className="shrink-0 text-ink-subtle">{t("card.placement")}</dt>
+            <dd className="truncate">
+              <PlacementLabel placement={announcement.placement} />
+              {announcement.priority ? ` · ${t("card.priority", { priority: announcement.priority })}` : ""}
+            </dd>
+          </div>
+          <div className="flex gap-1.5">
+            <dt className="shrink-0 text-ink-subtle">{t("card.audience")}</dt>
             <dd className="truncate">
               <AudienceLine announcement={announcement} />
             </dd>
           </div>
-          <div className="flex items-center gap-2 text-ink-muted">
-            <dt className="sr-only">{t("card.window")}</dt>
-            <CalendarBlank size={12} className="shrink-0 text-ink-subtle" />
+          <div className="flex gap-1.5">
+            <dt className="shrink-0 text-ink-subtle">{t("card.window")}</dt>
             <dd className="truncate">
               <WindowLine announcement={announcement} />
             </dd>
           </div>
-          {announcement.ctaLabel ? (
-            <div className="flex items-center gap-2 text-ink-muted">
-              <dt className="sr-only">{t("card.cta")}</dt>
-              <span className="shrink-0 text-ink-subtle">↗</span>
-              <dd className="truncate">
-                {announcement.ctaLabel} · <span className="font-mono text-[11px]">{announcement.ctaUrl}</span>
-              </dd>
-            </div>
-          ) : null}
         </dl>
-        <p className="mt-2 truncate text-[11.5px] text-ink-subtle">
+        <div className="mt-auto pt-3 text-[11.5px] text-ink-subtle">
           <EditedBy at={announcement.updatedAt} by={announcement.updatedBy ?? announcement.createdBy} />
-        </p>
+        </div>
       </div>
-
-      <div className="flex items-center gap-1 border-t border-border px-3 py-2">
-        <Link href={href} className={buttonVariants({ size: "sm" })}>
-          <PencilSimple size={13} />
+      <div className="flex items-center gap-1 border-t border-border px-2 py-1.5">
+        <Link href={href} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          <PencilSimple size={14} />
           {t("actions.edit")}
         </Link>
-        <Button variant="ghost" size="sm" onClick={onPreview}>
-          <Eye size={13} />
+        <Link href={`${href}#preview`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+          <Eye size={14} />
           {t("actions.preview")}
-        </Button>
-        {actions.includes("publishNow") ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={() =>
-              void run(t("toasts.published"), () => publish.mutateAsync({ id: announcement.id, request: {} }))
-            }
-          >
-            <PaperPlaneTilt size={13} />
-            {t("actions.publishNow")}
-          </Button>
-        ) : null}
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" className="ml-auto" aria-label={t("actions.more")} />}
-          >
-            <DotsThree size={16} weight="bold" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[200px]">
-            {actions.includes("schedule") ? (
-              <DropdownMenuItem className="cursor-pointer gap-2" onClick={() => router.push(`${href}#schedule`)}>
-                <CalendarBlank size={14} />
-                {t("actions.schedule")}
-              </DropdownMenuItem>
-            ) : null}
-            {actions.includes("unpublish") ? (
-              <DropdownMenuItem
-                className="cursor-pointer gap-2"
-                disabled={busy}
-                onClick={() => void run(t("toasts.unpublished"), () => unpublish.mutateAsync(announcement.id))}
-              >
-                <ArrowCounterClockwise size={14} />
-                {t("actions.unpublish")}
-              </DropdownMenuItem>
-            ) : null}
-            {actions.includes("restore") ? (
-              <DropdownMenuItem
-                className="cursor-pointer gap-2"
-                disabled={busy}
-                onClick={() => void run(t("toasts.restored"), () => unpublish.mutateAsync(announcement.id))}
-              >
-                <ArrowCounterClockwise size={14} />
-                {t("actions.restore")}
-              </DropdownMenuItem>
-            ) : null}
-            <DropdownMenuItem
-              className="cursor-pointer gap-2"
-              disabled={busy}
-              onClick={() =>
-                void run(t("toasts.duplicated"), async () => {
-                  const copy = await duplicate.mutateAsync(announcement.id);
-                  router.push(`/admin/announcements/posts/${copy.id}`);
-                })
-              }
-            >
-              <Copy size={14} />
-              {t("actions.duplicate")}
-            </DropdownMenuItem>
-            {actions.includes("archive") ? (
-              <DropdownMenuItem
-                className="cursor-pointer gap-2"
-                disabled={busy}
-                onClick={() => void run(t("toasts.archived"), () => archive.mutateAsync(announcement.id))}
-              >
-                <Archive size={14} />
-                {t("actions.archive")}
-              </DropdownMenuItem>
-            ) : null}
-            {actions.includes("delete") ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="cursor-pointer gap-2 text-destructive" onClick={onDelete}>
-                  <Trash size={14} />
-                  {t("actions.delete")}
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        </Link>
+        <span className="ml-auto">{menu}</span>
       </div>
     </CmsCard>
   );
 }
 
-function DeleteDialog({
+function AnnouncementRow({
   announcement,
-  onClose,
+  selected,
+  onSelect,
+  confirm,
 }: {
-  announcement: AdminAnnouncementCmsDto | null;
-  onClose: () => void;
+  announcement: AdminAnnouncementCmsDto;
+  selected: boolean;
+  onSelect: () => void;
+  confirm: Confirm;
 }) {
   const t = useTranslations("adminCms.announcements");
-  const remove = useDeleteAnnouncement();
-
-  const confirm = async () => {
-    if (!announcement) return;
-    try {
-      await remove.mutateAsync(announcement.id);
-      toast.success(t("toasts.deleted"));
-      onClose();
-    } catch (error) {
-      toast.error(getErrorMessage(error, t("toasts.failed")));
-    }
-  };
-
+  const router = useRouter();
+  const { menu, href } = useRowActions(announcement, confirm);
   return (
-    <Dialog open={Boolean(announcement)} onOpenChange={(open) => (!open ? onClose() : undefined)}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("deleteDialog.title")}</DialogTitle>
-          <DialogDescription>{t("deleteDialog.description", { title: announcement?.title ?? "" })}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            {t("deleteDialog.cancel")}
-          </Button>
-          <Button variant="destructive" onClick={() => void confirm()} disabled={remove.isPending}>
-            {t("deleteDialog.confirm")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <tr className={cn("cursor-pointer hover:bg-surface-2/60", selected && "bg-primary/5")} onClick={() => router.push(href)}>
+      <CmsTd>
+        <CmsSelectBox checked={selected} onChange={onSelect} label={t("selectOne", { title: announcement.title })} />
+      </CmsTd>
+      <CmsTd>
+        <div className="flex items-center gap-2">
+          <span className={cn("size-2 shrink-0 rounded-full", colorTokens(announcement.accentColor).bar)} aria-hidden />
+          <Link href={href} onClick={(event) => event.stopPropagation()} className="max-w-[320px] truncate font-medium text-ink hover:underline">
+            {announcement.title}
+          </Link>
+        </div>
+      </CmsTd>
+      <CmsTd>
+        <CmsChip className={statusClasses(announcement.effectiveStatus)}>{t(`statuses.${announcement.effectiveStatus as EffectiveStatus}`)}</CmsChip>
+      </CmsTd>
+      <CmsTd className="text-[12px] text-ink-muted">
+        <PlacementLabel placement={announcement.placement} />
+      </CmsTd>
+      <CmsTd className="max-w-[240px] truncate text-[12px] text-ink-muted">
+        <AudienceLine announcement={announcement} />
+      </CmsTd>
+      <CmsTd className="max-w-[220px] truncate text-[12px] text-ink-muted">
+        <WindowLine announcement={announcement} />
+      </CmsTd>
+      <CmsTd className="text-right tabular-nums">{announcement.priority}</CmsTd>
+      <CmsTd>
+        <span onClick={(event) => event.stopPropagation()}>{menu}</span>
+      </CmsTd>
+    </tr>
   );
 }
 
