@@ -91,6 +91,7 @@ import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
   ParticipantInfoDto,
+  TranscriptCleanSentenceEventDto,
   TranscriptSegmentDto,
   TranslationRoomStateDto,
   TranslationTextDto,
@@ -2375,6 +2376,17 @@ export function PersistentMeetingSession({
             participantsRef.current,
           ),
         });
+      },
+    );
+    // WT-716 tier 2. `cleanText`/`cleanFlags` on TranscriptSegmentReceived above need no handling
+    // of their own — the segment is stored whole — but the merged sentences are a separate event.
+    // Same gate as the segments: a sentence is part of the transcript, and with the transcript
+    // closed there is nothing for it to replace. Revisions are resolved by the store (highest wins).
+    connection.on(
+      "TranscriptCleanSentenceReceived",
+      (sentence: TranscriptCleanSentenceEventDto) => {
+        if (!transcriptOpenRef.current) return;
+        useTranslationRoomStore.getState().upsertCleanSentence(sentence);
       },
     );
     connection.on(

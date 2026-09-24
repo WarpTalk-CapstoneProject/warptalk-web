@@ -46,10 +46,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   transcriptPauseWindowsKey,
   useTranscriptByRoom,
+  useTranscriptCleanSentences,
   useTranscriptPauseWindows,
   useTranscriptSegments,
   useTranscriptTranslations,
 } from "@/hooks/use-transcripts";
+import { mergeCleanSentences, upsertCleanSentence } from "@/lib/transcript/clean-transcript";
 import { useTranslationRoom, useTranslationRoomSessions } from "@/hooks/use-translationRooms";
 import {
   normalizeLanguageCode,
@@ -61,7 +63,7 @@ import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
-import type { TranscriptSegmentDto } from "@/types/realtime";
+import type { TranscriptCleanSentenceEventDto, TranscriptSegmentDto } from "@/types/realtime";
 
 import type {
   BridgeWidgetConnectionState,
@@ -127,6 +129,8 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
    * applies (see captionSegments in translationRoom-store).
    */
   const transcriptPausedRef = useRef(false);
+  /** WT-716 tier 2 from the hub. Merged with the REST read below, highest revision per id. */
+  const [liveCleanSentences, setLiveCleanSentences] = useState<TranscriptCleanSentenceEventDto[]>([]);
 
   useEffect(() => {
     if (!roomId || !signedIn) return;
@@ -146,6 +150,13 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
         next[index] = segment;
         return next;
       });
+    });
+
+    // WT-716 tier 2, registered on the same terms as the segment handler above: silent today,
+    // because this connection never joins the room group (see the header), and live the moment a
+    // join-free watch or the main window's relay exists. Until then the REST read below answers.
+    connection.on("TranscriptCleanSentenceReceived", (sentence: TranscriptCleanSentenceEventDto) => {
+      setLiveCleanSentences((previous) => upsertCleanSentence(previous, sentence));
     });
 
     // Both carry the room id and nothing else. Checked because the payload says which room, and
@@ -216,6 +227,12 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   const transcriptId = savedTranscriptQuery.data?.id;
   const savedSegmentsQuery = useTranscriptSegments(transcriptId);
   const savedTranslationsQuery = useTranscriptTranslations(transcriptId);
+  // WT-716 tier 2. Polled with everything else this window reads, because no broadcast reaches it.
+  const savedCleanSentencesQuery = useTranscriptCleanSentences(transcriptId);
+  const cleanSentences = useMemo(
+    () => mergeCleanSentences(savedCleanSentencesQuery.data ?? [], liveCleanSentences),
+    [savedCleanSentencesQuery.data, liveCleanSentences],
+  );
 
   const segments = useMemo(() => {
     // Saved translations keyed the way live segments carry them: by normalized target language.
@@ -243,6 +260,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
   const refetchTranscript = savedTranscriptQuery.refetch;
   const refetchSegments = savedSegmentsQuery.refetch;
   const refetchTranslations = savedTranslationsQuery.refetch;
+  const refetchCleanSentences = savedCleanSentencesQuery.refetch;
   const refetchPauseWindows = pauseWindowsQuery.refetch;
 
   useEffect(() => {
@@ -261,6 +279,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       }
       void refetchSegments();
       void refetchTranslations();
+      void refetchCleanSentences();
     };
 
     const interval = window.setInterval(tick, SAVED_TRANSCRIPT_REFRESH_MS);
@@ -274,6 +293,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
     refetchTranscript,
     refetchSegments,
     refetchTranslations,
+    refetchCleanSentences,
     refetchPauseWindows,
   ]);
 
@@ -334,6 +354,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       transcriptPausedSince: transcriptPause.since,
       transcriptPauseKnown: transcriptPause.known,
       segments,
+      cleanSentences,
       connectionState,
       hub,
       readerLanguage,
@@ -351,6 +372,7 @@ export function useBridgeWidgetState(roomId: string): BridgeWidgetState {
       transcriptPause.since,
       transcriptPause.known,
       segments,
+      cleanSentences,
       connectionState,
       hub,
       readerLanguage,
