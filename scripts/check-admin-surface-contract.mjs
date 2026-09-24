@@ -193,6 +193,9 @@ const NAV_EXEMPT = new Set([
   // The announcements CMS editor (`new` or an id), reached from a card or "New announcement" on
   // /admin/announcements.
   `${ADMIN_ROOT}/announcements/posts/[postId]/page.tsx`,
+  // One email layout or block, reached from the Layouts / Blocks sections of
+  // /admin/email-templates. Same reasoning as the posts editor above.
+  `${ADMIN_ROOT}/email-templates/blocks/[blockId]/page.tsx`,
   // One email's editor, reached from its card on /admin/email-templates.
   `${ADMIN_ROOT}/email-templates/[templateKey]/page.tsx`,
 ]);

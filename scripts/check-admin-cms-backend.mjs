@@ -32,6 +32,18 @@ check(
   read(`${api}/AnnouncementsController.cs`).includes('[Route("api/v1/notifications/announcements")]'),
 );
 
+check(
+  "email layouts and blocks are served at api/v1/admin/notifications/email-blocks",
+  read(`${api}/AdminEmailBlocksController.cs`).includes('[Route("api/v1/admin/notifications/email-blocks")]'),
+);
+check(
+  "the viewer feed records impressions, dismissals and clicks",
+  /HttpPost\("\{id:guid\}\/events"\)/.test(read(`${api}/AnnouncementsController.cs`)),
+);
+for (const controller of ["AdminEmailTemplatesController", "AdminEmailBlocksController", "AdminAnnouncementsController"]) {
+  check(`${controller} writes are audited`, /\[AdminAudited\(/.test(read(`${api}/${controller}.cs`)));
+}
+
 const senders = {
   "auth (Resend)": ["auth/src/WarpTalk.AuthService.Infrastructure/Services/ResendAuthEmailSender.cs", ["AuthVerifyEmail", "AuthPasswordReset"]],
   "workspace (Resend)": ["workspace/src/WarpTalk.WorkspaceService.Infrastructure/Adapters/WorkspaceInvitationEmailComposer.cs", ["WorkspaceInvitation", "WorkspaceJoinRequestApproved"]],
@@ -44,6 +56,14 @@ for (const [name, [file, keys]] of Object.entries(senders)) {
     `${name} composes through IEmailTemplateComposer with ${keys.join(", ")}`,
     /ComposeAsync\(/.test(source) && keys.every((key) => source.includes(`EmailTemplateCatalog.${key}`)),
   );
+}
+// Delivery counters (the Analytics tab) are only real if both provider paths report to them.
+for (const [name, file] of [
+  ["auth (Resend)", "auth/src/WarpTalk.AuthService.Infrastructure/Services/ResendAuthEmailSender.cs"],
+  ["workspace (Resend)", "workspace/src/WarpTalk.WorkspaceService.Infrastructure/Adapters/WorkspaceInvitationEmailComposer.cs"],
+  ["translation-room (SMTP)", "shared/WarpTalk.Shared/Services/SmtpEmailService.cs"],
+]) {
+  check(`${name} records each delivery`, /IEmailDeliveryRecorder/.test(read(file)));
 }
 
 for (const [label, passed] of checks) console.log(`${passed ? "PASS" : "FAIL"} ${label}`);
