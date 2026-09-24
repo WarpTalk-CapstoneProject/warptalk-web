@@ -31,11 +31,16 @@
  *   6. Reading a language never translates; generating one is offered per the meeting's
  *      languages (WT-705). Languages narrow workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3).
  *      Every language the transcript already holds stays in the picker and stays readable. The
- *      extra, not-yet-translated entries are the room's GENERATABLE languages
- *      (resolveGeneratableLanguages), never the product's chatTarget catalogue — a VI/EN/ES
- *      meeting used to be offered FR/JA/KO/ZH. Picking an entry only sets the language: it used
- *      to start translating 88 entries on the spot, for any viewer, with no confirmation. The
- *      backfill is started only from the confirmation dialog (or a retry of a confirmed run).
+ *      extra, not-yet-translated entries come from `artifactLanguageOptions` — the one helper
+ *      that decides what a finished meeting may be offered — never the product's chatTarget
+ *      catalogue read straight: a VI/EN/ES meeting used to be offered FR/JA/KO/ZH. Picking an
+ *      entry only sets the language: it used to start translating 88 entries on the spot, for
+ *      any viewer, with no confirmation. The backfill is started only from the confirmation
+ *      dialog (or a retry of a confirmed run).
+ *      That helper falls OPEN — no set from the server means every product language may be
+ *      OFFERED — so the TRANSLATE action keeps a narrower rule of its own: the server's list
+ *      when it sent one, and otherwise only the languages the transcript already holds. A
+ *      whole-meeting translation is not something to invite into a language nobody used.
  *   7. A corrected line's translations are refetched after the correction. Correcting what
  *      somebody said invalidates every translation of that line; redoing them happens in
  *      warptalk-ai and lands seconds later, so a page that only refetches segments shows the
@@ -155,9 +160,31 @@ assert.match(
 
 // 6. Reading never translates; the offers are the room's generatable languages.
 assert.ok(
-  panel.includes("resolveGeneratableLanguages("),
-  "The picker's not-yet-translated entries must come from the room's generatable languages"
-    + " (WT-705), the meeting's L2 intersected with the workspace's current L1.",
+  panel.includes("artifactLanguageOptions("),
+  "The picker's not-yet-translated entries must come from artifactLanguageOptions (WT-705) —"
+    + " the one helper that decides which languages a finished meeting may be offered, from the"
+    + " meeting's L2 intersected with the workspace's current L1.",
+);
+assert.equal(
+  (panel.match(/from "@\/lib\/(language|meeting)\/artifact-language[^"]*"/g) ?? []).length,
+  1,
+  "One source of truth: the panel reads the offerable set from artifact-language-options and"
+    + " from no second helper with a fail mode of its own.",
+);
+// The action that SPENDS is narrower than the list that is offered, because the helper above
+// deliberately falls open when the server sent no set. Offering a language costs nothing;
+// translating a two-hour meeting into one it never used costs the workspace.
+assert.ok(
+  /const translatableCodes = useMemo\(/.test(panel)
+    && /serverLanguages\s*\?[\s\S]{0,200}languageOptions\.map\(\(option\) => option\.code\)/.test(
+      panel,
+    ),
+  "Translate must be limited to the server's list when it exists, and otherwise to the"
+    + " languages already present in the transcript.",
+);
+assert.ok(
+  /canTranslateDisplayed =[\s\S]{0,240}translatableCodes\.has\(/.test(panel),
+  "The Translate affordance must be gated on that narrower set, not on what the menu offers.",
 );
 assert.ok(
   !panel.includes('languagesInScope("chatTarget")'),

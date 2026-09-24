@@ -93,7 +93,7 @@ export interface TranslationRoomDto {
    * - `undefined` — an older backend that does not send the field.
    * - `null` — the room has not finished yet, or the server could not compute the set.
    *
-   * See artifact-languages.ts for how each of those is read.
+   * See lib/meeting/artifact-language-options.ts for how each of those is read.
    */
   artifactLanguages?: RoomArtifactLanguagesDto | null;
 }

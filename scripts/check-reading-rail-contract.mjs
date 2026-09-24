@@ -265,14 +265,24 @@ assert.doesNotMatch(
 );
 assert.match(
   rail,
-  /resolveGeneratableLanguages\(/,
-  "The picker's writable languages come from the room's artifactLanguages (WT-703).",
+  /artifactLanguageOptions\(/,
+  "The picker's languages come from artifactLanguageOptions — the one helper that decides which "
+    + "languages a finished meeting may be offered, from the room's artifactLanguages (WT-703). "
+    + "A second helper with its own fail mode is the bug this replaced.",
+);
+// One source of truth, and this is how it stays one: the set is read from that module and from
+// nowhere else. A second helper with its own fail mode — one failing closed on a finished room
+// whose server list is null, one failing open — is exactly what this replaced.
+assert.equal(
+  (rail.match(/from "@\/lib\/(language|meeting)\/artifact-language[^"]*"/g) ?? []).length,
+  1,
+  "The rail must import the offerable set from artifact-language-options and from nothing else.",
 );
 assert.match(
   rail,
-  /artifactLanguageGroups\(/,
-  "Existing renderings and writable languages are split by the shared contract, so what already "
-    + "exists is never re-filtered.",
+  /const existingCodes = new Set\(/,
+  "Existing renderings and writable languages are split on what the record actually holds, so "
+    + "what already exists is never re-filtered.",
 );
 assert.match(
   rail,
@@ -291,8 +301,10 @@ assert.match(
 );
 assert.match(
   rail,
-  /canGenerateIn\(currentLanguage, generatable\)/,
-  "Changing the shape must not carry a language the new shape can neither read nor write.",
+  /writableCodes\.has\(target\)/,
+  "Changing the shape must not carry a language the new shape can neither read nor write. The "
+    + "write test is artifactLanguageOptions WITHOUT `keep` — `keep` exists to keep a value "
+    + "selectable, not to claim the server will write in it.",
 );
 assert.match(
   rail,

@@ -89,8 +89,12 @@ import {
 } from "@/components/rooms/transcript-speaker-avatar";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
-import { getLanguageCode, getLanguageName } from "@/lib/language/languages";
-import { canGenerateIn, resolveGeneratableLanguages } from "@/lib/language/artifact-languages";
+import {
+  getLanguageCode,
+  getLanguageName,
+  normalizeLanguageCode,
+} from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
@@ -340,14 +344,43 @@ export function MeetingTranscriptArtifact({
   );
   /* WT-705: languages narrow workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3). Everything the
      transcript already holds stays readable (languageOptions is never filtered); the offers added
-     on top are only the room's GENERATABLE languages — never the product's whole catalogue, which
-     is how a VI/EN/ES meeting used to be offered French. Until the room loads the set is empty,
-     so nothing is offered and nothing is auto-selected by it. */
+     on top come from `artifactLanguageOptions`, the one helper that decides which languages a
+     finished meeting may be offered — never the product's whole catalogue read straight, which is
+     how a VI/EN/ES meeting used to be offered French. */
   const { data: room } = useTranslationRoom(roomId);
-  const generatable = useMemo(() => resolveGeneratableLanguages(room).codes, [room]);
+  const serverLanguages = room?.artifactLanguages?.generatable;
+  const offeredCodes = useMemo(
+    () =>
+      artifactLanguageOptions(
+        serverLanguages,
+        languageOptions.map((option) => option.code),
+      ).map((option) => option.code),
+    [serverLanguages, languageOptions],
+  );
   const offeredLanguages = useMemo(
-    () => withOfferableLanguages(languageOptions, generatable, grouped.length),
-    [languageOptions, generatable, grouped.length],
+    () => withOfferableLanguages(languageOptions, offeredCodes, grouped.length),
+    [languageOptions, offeredCodes, grouped.length],
+  );
+  /*
+   * WHICH LANGUAGES THE TRANSLATE BUTTON MAY ACTUALLY START A RUN IN — narrower than the menu.
+   *
+   * `artifactLanguageOptions` fails OPEN on purpose: when the server sent no list, every product
+   * language is offered, because the server still enforces per request and an empty picker would
+   * hide allowed choices. For a summary that is a cheap refusal. Here it is not: a confirmed
+   * translation rewrites the whole meeting's transcript and spends workspace credits, so an
+   * unknown list must not become an invitation to translate a two-hour meeting into a language it
+   * never used. So: the server's list when there IS one, and otherwise only the languages the
+   * transcript already holds (where a run fills the lines that are missing from one it started).
+   */
+  const translatableCodes = useMemo(
+    () =>
+      new Set(
+        (serverLanguages
+          ? serverLanguages.map((code) => normalizeLanguageCode(code))
+          : languageOptions.map((option) => option.code)
+        ).filter(Boolean),
+      ),
+    [serverLanguages, languageOptions],
   );
   // Generating a translation spends workspace credits and changes what every reader of the record
   // sees, so it is a host action on a finished meeting — the same authority the minutes panel
@@ -430,7 +463,7 @@ export function MeetingTranscriptArtifact({
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
 
   const displayLanguage =
-    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, generatable);
+    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
 
   /* Filling in what the meeting never translated. Inert for as-spoken, and inert without a
      transcript id — the live tab has neither a saved transcript to work on nor an id to name it
@@ -453,7 +486,12 @@ export function MeetingTranscriptArtifact({
   }
 
   const [isTranslateDialogOpen, setIsTranslateDialogOpen] = useState(false);
-  const canTranslateDisplayed = canTranslate && canGenerateIn(displayLanguage, generatable);
+  // Narrower than the menu on purpose — see `translatableCodes`. As-spoken is not a language
+  // anything can be translated INTO, and normalising it would fold "as-spoken" to Assamese.
+  const canTranslateDisplayed =
+    canTranslate
+    && displayLanguage !== AS_SPOKEN
+    && translatableCodes.has(normalizeLanguageCode(displayLanguage));
 
   /** The one place a reader's choice becomes a backfill — after they confirmed it. */
   function confirmTranslation() {

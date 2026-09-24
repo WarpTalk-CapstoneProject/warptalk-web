@@ -69,12 +69,8 @@ import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-a
 import { InlineMarkdown, SummaryMarkdown } from "@/components/markdown/document-markdown";
 import { useSummaryRenderings } from "@/hooks/use-summary-renderings";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
-import {
-  artifactLanguageGroups,
-  canGenerateIn,
-  resolveGeneratableLanguages,
-} from "@/lib/language/artifact-languages";
-import { getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
+import { normalizeLanguageCode } from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
@@ -752,14 +748,18 @@ function RailSummary({
   // (403 otherwise), so nobody else is shown a button that can only fail.
   const isHost = Boolean(room && (room.isHost || (currentUserId && room.hostId === currentUserId)));
   /**
-   * WT-703 hands the server's set down as a prop from the room page, which is authoritative
-   * whenever the page has it. Without it — an older payload, or a caller that does not pass the
-   * prop — the room this rail already loads answers the same question, and a FINISHED room whose
-   * set the server could not compute fails closed instead of falling back to the catalogue.
+   * The server's WT-703 set, and the only rule about which languages may be offered.
+   *
+   * It arrives as a prop from the room page; when a caller does not pass one, the room this rail
+   * already loads carries the very same field. Nothing else is consulted — `artifactLanguage-
+   * Options` below decides what a missing set means (every product language, because the server
+   * still enforces on each request and an empty picker would hide an allowed choice).
    */
-  const generatable = useMemo<readonly string[]>(
-    () => generatableLanguages ?? resolveGeneratableLanguages(room).codes,
-    [generatableLanguages, room],
+  const serverLanguages = generatableLanguages ?? room?.artifactLanguages?.generatable;
+  /** What a NEW rendering may be written in. Deliberately without `keep`: this is the write test. */
+  const writableCodes = useMemo(
+    () => new Set(artifactLanguageOptions(serverLanguages).map((option) => option.code)),
+    [serverLanguages],
   );
   const { data: renderings, refetch: refetchRenderings } = useSummaryRenderings(roomId);
 
@@ -787,10 +787,25 @@ function RailSummary({
   }
 
   // Cheap enough to derive on every render: a handful of renderings at most.
-  const languageGroups = artifactLanguageGroups(
-    [...existingLanguagesFor(currentTemplate), summary?.summaryLanguage, currentLanguage],
-    generatable,
+  //
+  // `keep` is what must stay selectable whatever the server's set says — every rendering this
+  // template already has, the published summary's language, and the language on screen, because
+  // reading what exists is never re-filtered and a select whose value is missing renders blank.
+  const existingCodes = new Set(
+    [...existingLanguagesFor(currentTemplate), summary?.summaryLanguage]
+      .map((code) => normalizeLanguageCode(code ?? ""))
+      .filter(Boolean),
   );
+  const offeredLanguages = artifactLanguageOptions(serverLanguages, [
+    ...existingLanguagesFor(currentTemplate),
+    summary?.summaryLanguage,
+    currentLanguage,
+  ]);
+  // "Available" is what is already written down; everything else on offer has to be written.
+  const languageGroups = {
+    existing: offeredLanguages.filter((option) => existingCodes.has(option.code)),
+    generatable: offeredLanguages.filter((option) => !existingCodes.has(option.code)),
+  };
 
   /** The select's value must be one of its options; the groups carry normalized codes. */
   const selectedLanguage = currentLanguage ? normalizeLanguageCode(currentLanguage) : "";
@@ -805,7 +820,7 @@ function RailSummary({
     const target = normalizeLanguageCode(currentLanguage);
     const readable = existingLanguagesFor(templateKey).map((code) => normalizeLanguageCode(code));
     if (readable.includes(target)) return currentLanguage;
-    return canGenerateIn(currentLanguage, generatable) ? currentLanguage : "";
+    return writableCodes.has(target) ? currentLanguage : "";
   }
 
   function selectRendering(template: string, language: string) {
@@ -912,18 +927,18 @@ function RailSummary({
               <option value="">As spoken</option>
               {languageGroups.existing.length ? (
                 <optgroup label="Available">
-                  {languageGroups.existing.map((code) => (
-                    <option key={code} value={code}>
-                      {getLanguageName(code)}
+                  {languageGroups.existing.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
                     </option>
                   ))}
                 </optgroup>
               ) : null}
               {languageGroups.generatable.length ? (
                 <optgroup label="Can be written">
-                  {languageGroups.generatable.map((code) => (
-                    <option key={code} value={code}>
-                      {getLanguageName(code)}
+                  {languageGroups.generatable.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
                     </option>
                   ))}
                 </optgroup>

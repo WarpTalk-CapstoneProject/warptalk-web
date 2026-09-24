@@ -86,10 +86,7 @@ import {
   type MinutesEditHandlers,
 } from "@/components/rooms/minutes-document";
 import { getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
-import {
-  artifactLanguageGroups,
-  resolveGeneratableLanguages,
-} from "@/lib/language/artifact-languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import type { MinutesTranslationDto } from "@/types/meetingMinutes";
 
 /** The short form, for the badge beside the number. */
@@ -115,11 +112,17 @@ const DOCUMENT_STATUS: Record<string, string> = {
 export function MinutesPanel({
   roomId,
   canManage,
+  generatableLanguages,
   onSeek,
 }: {
   roomId: string;
   /** Host authority. The host is the secretary and the chair in this product. */
   canManage: boolean;
+  /**
+   * WT-703's set, as the room page read it. Absent means the page did not have one, not that
+   * nothing may be written — `artifactLanguageOptions` owns what that means.
+   */
+  generatableLanguages?: readonly string[] | null;
   /** Jump to a transcript moment, when the surrounding page has a transcript to jump to. */
   onSeek?: (atMs: number) => void;
 }) {
@@ -146,8 +149,9 @@ export function MinutesPanel({
   const { data: workspaceSettings } = useWorkspaceSettings(workspaceId ?? "");
   const { data: room } = useTranslationRoom(roomId);
   // WT-705: a NEW translation may only be asked for in the meeting's languages that the workspace
-  // still allows. Translations already stored in the minutes stay readable regardless.
-  const generatable = useMemo(() => resolveGeneratableLanguages(room).codes, [room]);
+  // still allows. Translations already stored in the minutes stay readable regardless. The prop is
+  // the room page's copy of the same server field; the room here answers for callers without one.
+  const serverLanguages = generatableLanguages ?? room?.artifactLanguages?.generatable;
 
   // WHAT IS BEING TYPED, OR NULL WHEN NOTHING IS.
   //
@@ -520,7 +524,7 @@ export function MinutesPanel({
           <ReadingLanguagePicker
             carried={carriedLanguages}
             primaryLanguage={stored?.primaryLanguage}
-            generatable={generatable}
+            generatableLanguages={serverLanguages}
             reading={readingLanguage}
             busy={fetched?.status === "generating"}
             disabled={dirty}
@@ -828,7 +832,7 @@ function SecretaryPicker({
 function ReadingLanguagePicker({
   carried,
   primaryLanguage,
-  generatable,
+  generatableLanguages,
   reading,
   busy,
   disabled,
@@ -837,8 +841,8 @@ function ReadingLanguagePicker({
   carried: string[];
   /** The language the record was drawn up in — "As drawn up" already is that reading. */
   primaryLanguage?: string | null;
-  /** WT-705: the languages a new translation may be written in (meeting L2 ∩ workspace L1). */
-  generatable: readonly string[];
+  /** WT-705: the server's set (meeting L2 ∩ workspace L1), or absent when it sent none. */
+  generatableLanguages?: readonly string[] | null;
   reading: string | null;
   busy: boolean;
   disabled: boolean;
@@ -846,26 +850,39 @@ function ReadingLanguagePicker({
 }) {
   // What is carried is always offered, unfiltered; only what would be WRITTEN is narrowed to the
   // meeting's own languages — anything else is refused by the server, and a choice that can only
-  // fail is not a choice.
-  const groups = artifactLanguageGroups(carried, generatable);
+  // fail is not a choice. Both lists come from the one helper: with `keep` for what the select
+  // must be able to show, without it for what may actually be written.
+  const offered = artifactLanguageOptions(generatableLanguages, [...carried, reading]);
+  const writableCodes = new Set(
+    artifactLanguageOptions(generatableLanguages).map((option) => option.code),
+  );
+  const carriedCodes = new Set(
+    carried.map((code) => normalizeLanguageCode(code)).filter(Boolean),
+  );
   // The language the record was drawn up in is already the "As drawn up" reading, so listing it
   // again under "Written on request" would offer to pay for a translation into itself.
   const primary = normalizeLanguageCode(primaryLanguage ?? "");
-  const writable = groups.generatable.filter((code) => code !== primary);
+  const drawnUp = offered.filter((option) => carriedCodes.has(option.code));
+  const writable = offered.filter(
+    (option) =>
+      !carriedCodes.has(option.code) && option.code !== primary && writableCodes.has(option.code),
+  );
   // A reading fetched before the policy changed must still show as selected, or the select
   // would silently snap back to "As drawn up" while the page shows the translation.
+  const readingCode = normalizeLanguageCode(reading ?? "");
   const orphanReading =
-    reading &&
-    !carried.includes(reading) &&
-    !groups.existing.includes(reading) &&
-    !writable.includes(reading)
-      ? reading
+    readingCode
+    && !carriedCodes.has(readingCode)
+    && !writable.some((option) => option.code === readingCode)
+      ? readingCode
       : null;
 
   return (
     <div className="inline-flex items-center gap-1.5">
       <select
-        value={reading ?? ""}
+        // Normalized: every option below carries the helper's normalized code, and a select
+        // whose value matches none of its options renders blank.
+        value={readingCode}
         disabled={disabled || busy}
         onChange={(event) => onChange(event.target.value)}
         aria-label="Read this record in"
@@ -873,20 +890,20 @@ function ReadingLanguagePicker({
         className="h-[30px] rounded-md border border-border bg-surface-1 px-2 text-[12px] text-ink disabled:opacity-60"
       >
         <option value="">As drawn up</option>
-        {carried.length > 0 ? (
+        {drawnUp.length > 0 ? (
           <optgroup label="Drawn up in">
-            {carried.map((code) => (
-              <option key={code} value={code}>
-                {getLanguageName(code)}
+            {drawnUp.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
               </option>
             ))}
           </optgroup>
         ) : null}
         {writable.length > 0 ? (
           <optgroup label="Written on request">
-            {writable.map((code) => (
-              <option key={code} value={code}>
-                {getLanguageName(code)}
+            {writable.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.label}
               </option>
             ))}
           </optgroup>

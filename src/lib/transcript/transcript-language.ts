@@ -229,10 +229,13 @@ export function transcriptLanguageOptions(
  * The picker's list: what the transcript already has, plus what it could be given.
  *
  * `transcriptLanguageOptions` is built from the record, and it refuses to invent a language with
- * no text in it. This adds those languages back, but only as OFFERS: `offerable` is the room's
- * GENERATABLE set (WT-705 — the meeting's L2 snapshot intersected with the workspace's current L1,
- * see `resolveGeneratableLanguages`), never the product's whole translation catalogue. A VI/EN/ES
- * meeting must not be offered French.
+ * no text in it. This adds those languages back, but only as OFFERS: `offerable` is what
+ * `artifactLanguageOptions` says this meeting may be offered (WT-705 — the server's set, the
+ * meeting's L2 snapshot intersected with the workspace's current L1), never the product's whole
+ * translation catalogue read straight. A VI/EN/ES meeting must not be offered French.
+ *
+ * Being offered is not being translatable: the caller keeps a narrower rule for the action that
+ * spends credits, because this list falls open when the server sent no set at all.
  *
  * Choosing an entry only READS the transcript in it. Filling in the missing lines is a separate,
  * confirmed action that only someone with host authority can take; a zero-coverage entry is a
