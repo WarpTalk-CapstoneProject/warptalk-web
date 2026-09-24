@@ -4,6 +4,10 @@ import { useEffect, useMemo, useRef } from "react";
 import { presenceService } from "@/services/presence.service";
 import { usePresenceStore } from "@/stores/presence-store";
 import type { PresenceState } from "@/types/presence";
+import { presenceIdsToRequest } from "@/lib/presence/retry";
+
+/** Ids whose last lookup failed, and when. Module-level so remounting a list does not reset it. */
+const failedAt = new Map<string, number>();
 
 /**
  * Resolves presence for the given members and keeps it current.
@@ -16,17 +20,19 @@ export function usePresence(userIds: (string | null | undefined)[]) {
   const states = usePresenceStore((store) => store.states);
   const setMany = usePresenceStore((store) => store.setMany);
 
-  const ids = useMemo(
-    () => Array.from(new Set(userIds.filter((id): id is string => Boolean(id)))),
-    [userIds],
-  );
+  // Callers pass a fresh array every render (members.map(...)); key the effect on the ids
+  // themselves so an identical list is not a new dependency.
+  const idsKey = Array.from(new Set(userIds.filter((id): id is string => Boolean(id))))
+    .sort()
+    .join(",");
+  const ids = useMemo(() => (idsKey ? idsKey.split(",") : []), [idsKey]);
 
   // Ids already requested, so a re-render with the same list does not re-fetch. Kept in a ref
   // rather than state because changing it must never itself trigger a render.
   const requestedRef = useRef(new Set<string>());
 
   useEffect(() => {
-    const missing = ids.filter((id) => !requestedRef.current.has(id));
+    const missing = presenceIdsToRequest(ids, requestedRef.current, failedAt, Date.now());
     if (missing.length === 0) return;
 
     missing.forEach((id) => requestedRef.current.add(id));
@@ -35,12 +41,18 @@ export function usePresence(userIds: (string | null | undefined)[]) {
     presenceService
       .query(missing)
       .then((result) => {
+        missing.forEach((id) => failedAt.delete(id));
         if (!cancelled) setMany(result);
       })
       .catch(() => {
         // Presence is decoration. A failed lookup leaves those ids unresolved so nothing is
-        // rendered for them, rather than asserting they are offline.
-        missing.forEach((id) => requestedRef.current.delete(id));
+        // rendered for them, rather than asserting they are offline - and it is not asked for
+        // again until PRESENCE_RETRY_AFTER_MS has passed.
+        const at = Date.now();
+        missing.forEach((id) => {
+          requestedRef.current.delete(id);
+          failedAt.set(id, at);
+        });
       });
 
     return () => {
