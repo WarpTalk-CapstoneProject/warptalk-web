@@ -13,6 +13,40 @@
     "exportReport": "Xuất báo cáo",
     "managePlans": "Quản lý gói"
   },
+  "adjustCredits": {
+    "trigger": "Điều chỉnh tín dụng",
+    "title": "Điều chỉnh tín dụng",
+    "description": "Thêm hoặc bớt tín dụng theo cách thủ công. Thao tác này sẽ được ghi lại trong nhật ký kiểm tra.",
+    "descriptionWithTarget": "Thêm hoặc bớt tín dụng cho không gian làm việc {workspaceId}. Thao tác này sẽ được ghi lại trong nhật ký kiểm tra.",
+    "confirmHeading": "Xác nhận điều chỉnh tín dụng này",
+    "confirmWorkspace": "Không gian làm việc: {name}",
+    "confirmAmount": "{sign}{amount} tín dụng",
+    "confirmReason": "Lý do: {reason}",
+    "workspaceLabel": "Không gian làm việc",
+    "workspaceLoading": "Đang tải danh sách không gian làm việc…",
+    "workspaceLoadError": "Không thể tải danh sách không gian làm việc",
+    "workspacePlaceholder": "Chọn một không gian làm việc…",
+    "workspaceOption": "{name} ({slug})",
+    "workspaceOptionSuspended": "{name} ({slug}) — đã tạm ngưng",
+    "amountLabel": "Số lượng",
+    "amountPlaceholder": "vd. 500 hoặc -500",
+    "amountHint": "Dùng giá trị âm để trừ tín dụng.",
+    "reasonLabel": "Lý do (Bắt buộc)",
+    "reasonPlaceholder": "vd. Bồi thường do gián đoạn dịch vụ",
+    "cancel": "Hủy",
+    "back": "Quay lại",
+    "reviewAdjustment": "Xem lại điều chỉnh",
+    "confirmAdjustment": "Xác nhận điều chỉnh",
+    "processing": "Đang xử lý...",
+    "success": "Đã điều chỉnh thành công {sign}{amount} tín dụng.",
+    "errors": {
+      "chooseWorkspace": "Vui lòng chọn một không gian làm việc.",
+      "invalidAmount": "Vui lòng nhập một số nguyên hợp lệ (khác 0).",
+      "amountTooLarge": "Mỗi lần điều chỉnh không được vượt quá {max} tín dụng.",
+      "reasonRequired": "Cần nhập lý do để phục vụ nhật ký kiểm tra.",
+      "adjustFailed": "Không thể điều chỉnh tín dụng. Vui lòng thử lại."
+    }
+  },
   "metrics": {
     "totalIssuedCredits": {
       "label": "Tổng tín dụng đã phát hành",

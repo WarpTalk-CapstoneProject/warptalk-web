@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { PlusMinus, WarningCircle, CheckCircle } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,7 @@ interface CreditAdjustmentConfirmation {
 }
 
 export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
+  const t = useTranslations("adminBillingLedger.adjustCredits");
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState("");
@@ -78,7 +80,10 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
         );
         queryClient.invalidateQueries({ queryKey: ["billing"] });
         setSuccess(
-          `Successfully adjusted ${confirmation.amount > 0 ? "+" : ""}${confirmation.amount} credits.`,
+          t("success", {
+            sign: confirmation.amount > 0 ? "+" : "",
+            amount: confirmation.amount,
+          }),
         );
         if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
         closeTimeoutRef.current = setTimeout(() => {
@@ -90,9 +95,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
           setSuccess("");
         }, 1500);
       } catch (err: unknown) {
-        setError(
-          getErrorMessage(err, "Failed to adjust credits. Please try again."),
-        );
+        setError(getErrorMessage(err, t("errors.adjustFailed")));
       } finally {
         setIsLoading(false);
       }
@@ -101,7 +104,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
 
     const targetWorkspaceId = workspaceId || inputWorkspaceId;
     if (!targetWorkspaceId) {
-      setError("Choose a workspace.");
+      setError(t("errors.chooseWorkspace"));
       return;
     }
     const selectedWorkspace = workspaceOptions.find((w) => w.id === targetWorkspaceId);
@@ -116,19 +119,21 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
       !Number.isInteger(numericAmount) ||
       numericAmount === 0
     ) {
-      setError("Please enter a valid whole-number amount (non-zero).");
+      setError(t("errors.invalidAmount"));
       return;
     }
 
     if (Math.abs(numericAmount) > MAX_CREDIT_ADJUSTMENT) {
       setError(
-        `A single adjustment cannot exceed ${MAX_CREDIT_ADJUSTMENT.toLocaleString()} credits.`,
+        t("errors.amountTooLarge", {
+          max: MAX_CREDIT_ADJUSTMENT.toLocaleString(),
+        }),
       );
       return;
     }
 
     if (!reason.trim()) {
-      setError("Reason is required for audit trail.");
+      setError(t("errors.reasonRequired"));
       return;
     }
 
@@ -159,18 +164,18 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
           <Button className="rounded-md h-9 px-4 bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm" />
         }
       >
-        <PlusMinus className="mr-2 h-4 w-4" /> Adjust Credits
+        <PlusMinus className="mr-2 h-4 w-4" /> {t("trigger")}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] bg-surface-1 border-hairline shadow-linear rounded-xl p-0 overflow-hidden">
         <div className="p-6">
           <DialogHeader>
             <DialogTitle className="text-xl font-medium text-ink">
-              Adjust Credits
+              {t("title")}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground mt-2">
-              Manually add or remove credits.
-              {workspaceId ? ` Target: ${workspaceId}` : ""} This action will be
-              recorded in the audit trail.
+              {workspaceId
+                ? t("descriptionWithTarget", { workspaceId })
+                : t("description")}
             </DialogDescription>
           </DialogHeader>
 
@@ -191,16 +196,18 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
 
             {confirmation ? (
               <div className="space-y-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-ink">
-                <p className="font-medium">Confirm this credit adjustment</p>
+                <p className="font-medium">{t("confirmHeading")}</p>
                 <p className="break-all text-xs text-muted-foreground">
-                  Workspace: {confirmation.workspaceName}
+                  {t("confirmWorkspace", { name: confirmation.workspaceName })}
                 </p>
                 <p className="text-lg font-semibold">
-                  {confirmation.amount > 0 ? "+" : ""}
-                  {confirmation.amount.toLocaleString()} credits
+                  {t("confirmAmount", {
+                    sign: confirmation.amount > 0 ? "+" : "",
+                    amount: confirmation.amount.toLocaleString(),
+                  })}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Reason: {confirmation.reason}
+                  {t("confirmReason", { reason: confirmation.reason })}
                 </p>
               </div>
             ) : null}
@@ -211,7 +218,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                   htmlFor="workspaceId"
                   className="text-sm font-medium text-ink"
                 >
-                  Workspace
+                  {t("workspaceLabel")}
                 </Label>
                 <select
                   id="workspaceId"
@@ -222,15 +229,22 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                 >
                   <option value="">
                     {directoryQuery.isPending
-                      ? "Loading workspaces…"
+                      ? t("workspaceLoading")
                       : directoryQuery.isError
-                        ? "Workspaces could not be loaded"
-                        : "Choose a workspace…"}
+                        ? t("workspaceLoadError")
+                        : t("workspacePlaceholder")}
                   </option>
                   {workspaceOptions.map((workspace) => (
                     <option key={workspace.id} value={workspace.id}>
-                      {workspace.name} ({workspace.slug})
-                      {workspace.status === "suspended" ? " — suspended" : ""}
+                      {workspace.status === "suspended"
+                        ? t("workspaceOptionSuspended", {
+                            name: workspace.name,
+                            slug: workspace.slug,
+                          })
+                        : t("workspaceOption", {
+                            name: workspace.name,
+                            slug: workspace.slug,
+                          })}
                     </option>
                   ))}
                 </select>
@@ -239,7 +253,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
 
             <div className="space-y-2">
               <Label htmlFor="amount" className="text-sm font-medium text-ink">
-                Amount
+                {t("amountLabel")}
               </Label>
               <div className="relative">
                 <Input
@@ -248,7 +262,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                   step="1"
                   min={-MAX_CREDIT_ADJUSTMENT}
                   max={MAX_CREDIT_ADJUSTMENT}
-                  placeholder="e.g. 500 or -500"
+                  placeholder={t("amountPlaceholder")}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   disabled={Boolean(confirmation)}
@@ -256,17 +270,17 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Use negative values to deduct credits.
+                {t("amountHint")}
               </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="reason" className="text-sm font-medium text-ink">
-                Reason (Required)
+                {t("reasonLabel")}
               </Label>
               <Input
                 id="reason"
-                placeholder="e.g. Compensation for downtime"
+                placeholder={t("reasonPlaceholder")}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 disabled={Boolean(confirmation)}
@@ -283,7 +297,7 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                 }
                 className="rounded-md border-hairline bg-surface-2 text-ink hover:bg-surface-3"
               >
-                {confirmation ? "Back" : "Cancel"}
+                {confirmation ? t("back") : t("cancel")}
               </Button>
               <Button
                 type="submit"
@@ -291,10 +305,10 @@ export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
                 className="rounded-md bg-primary hover:bg-primary-hover text-primary-foreground"
               >
                 {isLoading
-                  ? "Processing..."
+                  ? t("processing")
                   : confirmation
-                    ? "Confirm Adjustment"
-                    : "Review Adjustment"}
+                    ? t("confirmAdjustment")
+                    : t("reviewAdjustment")}
               </Button>
             </DialogFooter>
           </form>
