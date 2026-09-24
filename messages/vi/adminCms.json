@@ -1,0 +1,333 @@
+{
+  "common": {
+    "editedBy": "{name} sửa lúc {date}",
+    "editedAt": "Sửa lúc {date}"
+  },
+  "emailTemplates": {
+    "eyebrow": "Vận hành",
+    "title": "Mẫu email",
+    "description": "Mọi email mà nền tảng gửi đi. Chỉnh tiêu đề thư, dòng tiêu đề và nội dung; dịch vụ gửi email sẽ đọc phiên bản bạn đã lưu ở lần gửi kế tiếp.",
+    "refresh": "Làm mới",
+    "filterAria": "Lọc email",
+    "providersNote": "Email xác thực, không gian làm việc và thông báo gửi qua Resend; email cuộc họp gửi qua SMTP. Cả hai đều đọc mẫu đã lưu.",
+    "filters": {
+      "all": "Tất cả",
+      "live": "Đang dùng",
+      "dormant": "Chưa dùng",
+      "customized": "Đã tùy chỉnh"
+    },
+    "error": {
+      "title": "Không tải được danh sách mẫu email.",
+      "description": "Hãy kiểm tra dịch vụ thông báo và phiên đăng nhập của bạn vẫn có quyền quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "emptyFilter": "Không có email nào khớp bộ lọc này.",
+    "status": {
+      "live": "Đang dùng",
+      "dormant": "Chưa dùng",
+      "customized": "Đã tùy chỉnh · v{version}",
+      "default": "Nội dung mặc định"
+    },
+    "card": {
+      "subject": "Tiêu đề thư",
+      "service": "Gửi bởi",
+      "provider": "Nhà cung cấp",
+      "builtIn": "Đang dùng nội dung mặc định — chưa từng chỉnh sửa"
+    },
+    "actions": {
+      "edit": "Sửa",
+      "preview": "Xem trước",
+      "sendTest": "Gửi thử",
+      "sending": "Đang gửi…",
+      "reset": "Đặt lại",
+      "resetDisabled": "Đang là nội dung mặc định"
+    },
+    "toasts": {
+      "testSent": "Đã gửi email thử tới {email}",
+      "testFailed": "Không gửi được email thử.",
+      "reset": "“{name}” đã trở về nội dung mặc định.",
+      "resetFailed": "Không đặt lại được mẫu email."
+    },
+    "preview": {
+      "description": "Máy chủ dựng email với dữ liệu mẫu — đúng như người nhận sẽ thấy.",
+      "viewAria": "Định dạng xem trước",
+      "html": "Email",
+      "text": "Văn bản thuần",
+      "error": "Không dựng được bản xem trước.",
+      "subject": "Tiêu đề thư"
+    },
+    "resetDialog": {
+      "title": "Đặt lại “{name}” về nội dung mặc định?",
+      "description": "Các dịch vụ gửi sẽ dùng lại tiêu đề và nội dung mặc định trong khoảng 30 giây. Phiên bản đã tùy chỉnh vẫn nằm trong lịch sử và có thể khôi phục.",
+      "cancel": "Hủy",
+      "confirm": "Đặt lại mặc định"
+    },
+    "editor": {
+      "back": "Mẫu email",
+      "notFound": "Nền tảng không gửi email nào có tên này.",
+      "loadError": "Không tải được mẫu email.",
+      "retry": "Thử lại",
+      "eyebrow": "{service} · gửi qua {provider}",
+      "discard": "Bỏ thay đổi",
+      "resetToDefault": "Đặt lại mặc định",
+      "sendTest": "Gửi thử cho tôi",
+      "sending": "Đang gửi…",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "unsaved": "Chưa lưu thay đổi",
+      "fields": {
+        "subject": "Tiêu đề thư",
+        "heading": "Dòng tiêu đề",
+        "body": "Nội dung (HTML)",
+        "bodyHint": "Hiển thị bên trong khung email WarpTalk. Giá trị được mã hóa HTML khi gửi.",
+        "note": "Ghi chú thay đổi (không bắt buộc)",
+        "notePlaceholder": "Thay đổi gì và vì sao — hiển thị trong lịch sử"
+      },
+      "issuesTitle": "Hãy sửa các lỗi sau trước khi lưu:",
+      "issues": {
+        "UNKNOWN_VARIABLE": "“{name}” không phải là biến của email này.",
+        "MISSING_REQUIRED_VARIABLE": "Email phải chứa “{name}” — đó là thứ email này cần gửi tới người nhận.",
+        "REQUIRED": "Tiêu đề thư và nội dung là bắt buộc.",
+        "LINE_BREAK": "Tiêu đề thư chỉ được nằm trên một dòng."
+      },
+      "variables": {
+        "title": "Biến",
+        "description": "Bấm vào một biến để chèn vào {field} tại vị trí con trỏ.",
+        "fields": {
+          "subject": "tiêu đề thư",
+          "heading": "dòng tiêu đề",
+          "bodyHtml": "nội dung"
+        },
+        "insert": "Chèn tại con trỏ",
+        "required": "Bắt buộc",
+        "sample": "Mẫu: {value}"
+      },
+      "history": {
+        "title": "Lịch sử phiên bản",
+        "loading": "Đang tải lịch sử…",
+        "empty": "Chưa có phiên bản nào được lưu. Lần lưu đầu tiên sẽ bắt đầu lịch sử.",
+        "error": "Không tải được lịch sử.",
+        "load": "Nạp vào trình soạn",
+        "restore": "Khôi phục",
+        "current": "Hiện tại",
+        "restored": "Đã khôi phục phiên bản {version} làm mẫu hiện tại.",
+        "restoreFailed": "Không khôi phục được phiên bản này.",
+        "loaded": "Đã nạp phiên bản {version} vào trình soạn. Hãy lưu để sử dụng.",
+        "actions": {
+          "SAVED": "Đã lưu",
+          "RESTORED": "Khôi phục v{from}",
+          "RESET": "Đặt lại mặc định"
+        }
+      },
+      "previewViewAria": "Định dạng xem trước",
+      "previewHtml": "Email",
+      "previewText": "Văn bản thuần",
+      "previewError": "Không dựng được bản xem trước.",
+      "previewTitle": "Xem trước email",
+      "previewNote": "Xem trước trực tiếp bản nháp chưa lưu, được dựng bởi chính đoạn mã gửi email, với dữ liệu mẫu.",
+      "toasts": {
+        "saved": "Đã lưu. Các dịch vụ gửi sẽ dùng ở email tiếp theo.",
+        "saveFailed": "Không lưu được mẫu email.",
+        "testSent": "Đã gửi email thử tới {email}",
+        "testFailed": "Không gửi được email thử.",
+        "reset": "Đã trở về nội dung mặc định.",
+        "resetFailed": "Không đặt lại được mẫu email."
+      },
+      "resetDialog": {
+        "title": "Đặt lại về nội dung mặc định?",
+        "description": "Các dịch vụ gửi sẽ dùng lại tiêu đề và nội dung mặc định trong khoảng 30 giây. Phiên bản này vẫn nằm trong lịch sử và có thể khôi phục.",
+        "cancel": "Hủy",
+        "confirm": "Đặt lại mặc định"
+      }
+    }
+  },
+  "announcements": {
+    "eyebrow": "Vận hành",
+    "title": "Thông báo",
+    "description": "Tin tức hiển thị bên trong ứng dụng — ra mắt tính năng, lịch bảo trì, ưu đãi. Soạn nháp, xem trước, đăng ngay hoặc lên lịch, và lưu trữ khi đã xong.",
+    "inboxBroadcast": "Gửi vào hộp thư",
+    "new": "Thông báo mới",
+    "viewAria": "Thông báo hoặc tin gửi vào hộp thư",
+    "views": {
+      "cms": "Thông báo",
+      "broadcasts": "Tin gửi vào hộp thư"
+    },
+    "statusAria": "Lọc theo trạng thái",
+    "statuses": {
+      "ALL": "Tất cả",
+      "DRAFT": "Bản nháp",
+      "SCHEDULED": "Đã lên lịch",
+      "PUBLISHED": "Đang hiển thị",
+      "ENDED": "Đã kết thúc",
+      "ARCHIVED": "Đã lưu trữ"
+    },
+    "searchPlaceholder": "Tìm theo tiêu đề",
+    "refresh": "Làm mới",
+    "error": {
+      "title": "Không tải được danh sách thông báo.",
+      "description": "Hãy kiểm tra dịch vụ thông báo và phiên đăng nhập của bạn vẫn có quyền quản trị nền tảng.",
+      "retry": "Thử lại"
+    },
+    "empty": {
+      "title": "Chưa có thông báo nào",
+      "filteredTitle": "Không có thông báo nào khớp bộ lọc",
+      "description": "Thông báo bạn đăng sẽ hiển thị ở đầu ứng dụng cho đúng những người nhận."
+    },
+    "pageOf": "Trang {page}/{totalPages}",
+    "previous": "Trước",
+    "next": "Sau",
+    "audience": {
+      "all": "Tất cả người dùng",
+      "plans": "Gói: {plans}",
+      "workspaces": "{count} không gian làm việc"
+    },
+    "window": {
+      "scheduled": "Bắt đầu {date}",
+      "liveUntil": "Hiển thị đến {date}",
+      "liveSince": "Hiển thị từ {date}",
+      "ended": "Đã kết thúc {date}",
+      "archived": "Đã lưu trữ {date}",
+      "draftWindow": "Thời gian: {start} → {end}",
+      "onPublish": "khi đăng",
+      "noEnd": "không kết thúc",
+      "notPublished": "Chưa đăng"
+    },
+    "card": {
+      "audience": "Người nhận",
+      "window": "Thời gian",
+      "cta": "Nút"
+    },
+    "actions": {
+      "edit": "Sửa",
+      "preview": "Xem trước",
+      "publishNow": "Đăng ngay",
+      "schedule": "Lên lịch…",
+      "unpublish": "Chuyển về bản nháp",
+      "restore": "Khôi phục thành bản nháp",
+      "duplicate": "Nhân bản",
+      "archive": "Lưu trữ",
+      "delete": "Xóa bản nháp",
+      "more": "Thao tác khác"
+    },
+    "toasts": {
+      "failed": "Thao tác không thành công. Hãy thử lại.",
+      "saved": "Đã lưu.",
+      "published": "Đã đăng. Thông báo đang hiển thị cho người nhận.",
+      "scheduled": "Đã lên lịch.",
+      "unpublished": "Đã chuyển về bản nháp. Thông báo không còn hiển thị.",
+      "restored": "Đã khôi phục thành bản nháp.",
+      "duplicated": "Đã nhân bản thành bản nháp mới.",
+      "archived": "Đã lưu trữ. Thông báo không còn hiển thị.",
+      "deleted": "Đã xóa bản nháp."
+    },
+    "deleteDialog": {
+      "title": "Xóa bản nháp này?",
+      "description": "“{title}” sẽ bị xóa vĩnh viễn. Thông báo đã đăng không thể xóa — hãy lưu trữ thay vì xóa.",
+      "cancel": "Hủy",
+      "confirm": "Xóa bản nháp"
+    },
+    "preview": {
+      "title": "Xem trước như người dùng thấy",
+      "description": "Dải thông báo ở đầu ứng dụng và thẻ mở ra khi bấm “Xem thêm”.",
+      "strip": "Dải thông báo",
+      "card": "Xem thêm"
+    },
+    "errors": {
+      "titleRequired": "Cần nhập tiêu đề.",
+      "titleTooLong": "Tiêu đề tối đa 200 ký tự.",
+      "bodyRequired": "Cần nhập nội dung.",
+      "bodyTooLong": "Nội dung tối đa 20.000 ký tự.",
+      "plansRequired": "Hãy chọn ít nhất một gói.",
+      "workspacesRequired": "Hãy chọn ít nhất một không gian làm việc.",
+      "tooManyAudience": "Chỉ chọn tối đa 200 gói hoặc không gian làm việc.",
+      "labelWithoutLink": "Nhãn nút cần có đường dẫn.",
+      "linkWithoutLabel": "Đường dẫn cần có nhãn nút.",
+      "labelTooLong": "Nhãn nút tối đa 60 ký tự.",
+      "linkInvalid": "Đường dẫn phải là địa chỉ https:// hoặc http://, hoặc một đường dẫn trong ứng dụng bắt đầu bằng /.",
+      "windowInverted": "Thời điểm kết thúc phải sau thời điểm bắt đầu."
+    },
+    "editor": {
+      "back": "Thông báo",
+      "notFound": "Thông báo này không tồn tại.",
+      "loadError": "Không tải được thông báo.",
+      "retry": "Thử lại",
+      "newTitle": "Thông báo mới",
+      "description": "Soạn nội dung, chọn ai sẽ thấy và khi nào, rồi kiểm tra bản xem trước trước khi đăng.",
+      "save": "Lưu thay đổi",
+      "saveDraft": "Lưu bản nháp",
+      "saveAndPublish": "Lưu và đăng ngay",
+      "archivedNotice": "Thông báo này đã được lưu trữ và chỉ có thể xem. Hãy khôi phục thành bản nháp để sửa hoặc đăng lại.",
+      "fields": {
+        "type": "Loại",
+        "title": "Tiêu đề",
+        "titlePlaceholder": "Phụ đề trực tiếp nay hỗ trợ 40 ngôn ngữ",
+        "body": "Nội dung",
+        "bodyHint": "Markdown: **đậm**, danh sách, liên kết",
+        "bodyPlaceholder": "Có gì thay đổi, dành cho ai, và nên làm gì tiếp theo.",
+        "ctaLabel": "Nhãn nút (không bắt buộc)",
+        "ctaLabelPlaceholder": "Dùng thử",
+        "ctaUrl": "Đường dẫn của nút",
+        "ctaUrlPlaceholder": "/settings hoặc https://…",
+        "audience": "Ai sẽ thấy",
+        "window": "Khi nào hiển thị",
+        "windowHint": "Để trống thời điểm bắt đầu để hiển thị ngay khi đăng, và để trống thời điểm kết thúc để hiển thị cho đến khi lưu trữ.",
+        "startsAt": "Bắt đầu",
+        "endsAt": "Kết thúc"
+      },
+      "types": {
+        "ANNOUNCEMENT": {
+          "label": "Thông báo",
+          "hint": "Tin tức chung về nền tảng."
+        },
+        "FEATURE": {
+          "label": "Tính năng mới",
+          "hint": "Điều mới mà mọi người có thể dùng."
+        },
+        "MAINTENANCE": {
+          "label": "Bảo trì",
+          "hint": "Thời gian ngừng dịch vụ hoặc suy giảm theo kế hoạch."
+        },
+        "PROMOTION": {
+          "label": "Ưu đãi",
+          "hint": "Nâng cấp gói, giảm giá hoặc chiến dịch."
+        }
+      },
+      "audienceModes": {
+        "ALL": {
+          "label": "Mọi người",
+          "hint": "Mọi người dùng đã đăng nhập."
+        },
+        "PLANS": {
+          "label": "Theo gói",
+          "hint": "Thành viên của các không gian làm việc dùng những gói này."
+        },
+        "WORKSPACES": {
+          "label": "Theo không gian làm việc",
+          "hint": "Thành viên của những không gian làm việc này."
+        }
+      },
+      "schedule": "Lên lịch theo thời điểm bắt đầu",
+      "scheduleHint": "Thông báo sẽ tự hiển thị vào thời điểm bắt đầu — không cần quay lại.",
+      "scheduleNeedsFuture": "Hãy đặt thời điểm bắt đầu trong tương lai để lên lịch.",
+      "lifecycle": "Trạng thái",
+      "previewTitle": "Xem trước",
+      "previewDescription": "Đúng như những người nhận sẽ thấy, được dựng bằng chính các thành phần của ứng dụng.",
+      "previewPlaceholderTitle": "Tiêu đề của bạn",
+      "previewPlaceholderBody": "Nội dung thông báo sẽ hiện ở đây.",
+      "plans": {
+        "label": "Thành viên của bất kỳ không gian làm việc nào dùng các gói đã chọn sẽ thấy thông báo.",
+        "loading": "Đang tải danh sách gói…",
+        "error": "Không tải được danh mục gói.",
+        "retired": "Không có trong danh mục gói hiện tại"
+      },
+      "workspaces": {
+        "searchPlaceholder": "Tìm không gian làm việc theo tên",
+        "searching": "Đang tìm…",
+        "error": "Không tìm được trong danh bạ không gian làm việc.",
+        "noMatch": "Không có không gian làm việc nào khớp.",
+        "added": "Đã thêm",
+        "memberCount": "{count} thành viên"
+      }
+    }
+  }
+}

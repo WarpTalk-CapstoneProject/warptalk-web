@@ -25,6 +25,7 @@ import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { AnnouncementBanner } from "@/components/announcements/announcement-banner";
 import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
@@ -783,6 +784,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               content area — the meeting notices — stays put while the page scrolls under
               it. `<main>` itself cannot serve: it IS the scroll container. */}
           <div className="relative flex min-w-0 flex-1 flex-col">
+          {/* Published announcements (admin → Announcements), above the scroll container so the
+              strip stays put while the page scrolls. Not on the admin console, where the CMS
+              previews them, and not inside a live meeting, where nothing should compete. */}
+          <AnnouncementBanner enabled={!isAdminRoute && !isLiveMeetingRoute && !isOnboardingRoute} />
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (

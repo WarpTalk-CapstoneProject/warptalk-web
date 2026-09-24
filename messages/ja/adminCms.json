@@ -1,0 +1,333 @@
+{
+  "common": {
+    "editedBy": "{date} に {name} が編集",
+    "editedAt": "{date} に編集"
+  },
+  "emailTemplates": {
+    "eyebrow": "運用",
+    "title": "メールテンプレート",
+    "description": "プラットフォームが送信するすべてのメールです。件名・見出し・本文を編集すると、送信元のサービスは次回のメールから保存済みの内容を使います。",
+    "refresh": "再読み込み",
+    "filterAria": "メールを絞り込む",
+    "providersNote": "認証・ワークスペース・通知のメールは Resend、会議のメールは SMTP で送信されます。どちらも保存済みテンプレートを読み込みます。",
+    "filters": {
+      "all": "すべて",
+      "live": "使用中",
+      "dormant": "未使用",
+      "customized": "カスタマイズ済み"
+    },
+    "error": {
+      "title": "メールテンプレートを読み込めませんでした。",
+      "description": "通知サービスと、セッションがプラットフォーム管理者権限を保持しているかを確認してください。",
+      "retry": "再試行"
+    },
+    "emptyFilter": "この条件に一致するメールはありません。",
+    "status": {
+      "live": "使用中",
+      "dormant": "未使用",
+      "customized": "カスタマイズ済み · v{version}",
+      "default": "既定の文面"
+    },
+    "card": {
+      "subject": "件名",
+      "service": "送信元",
+      "provider": "プロバイダー",
+      "builtIn": "既定の文面を使用中（未編集）"
+    },
+    "actions": {
+      "edit": "編集",
+      "preview": "プレビュー",
+      "sendTest": "テスト送信",
+      "sending": "送信中…",
+      "reset": "リセット",
+      "resetDisabled": "既に既定の文面です"
+    },
+    "toasts": {
+      "testSent": "テストメールを {email} に送信しました",
+      "testFailed": "テストメールを送信できませんでした。",
+      "reset": "「{name}」を既定の文面に戻しました。",
+      "resetFailed": "テンプレートをリセットできませんでした。"
+    },
+    "preview": {
+      "description": "サンプル値を使ってサーバーでレンダリングしたもので、受信者が受け取る内容と同じです。",
+      "viewAria": "プレビュー形式",
+      "html": "メール",
+      "text": "テキスト",
+      "error": "プレビューをレンダリングできませんでした。",
+      "subject": "件名"
+    },
+    "resetDialog": {
+      "title": "「{name}」を既定の文面に戻しますか？",
+      "description": "約 30 秒以内に送信元が既定の件名と本文に戻ります。カスタマイズ版は履歴に残り、復元できます。",
+      "cancel": "キャンセル",
+      "confirm": "既定に戻す"
+    },
+    "editor": {
+      "back": "メールテンプレート",
+      "notFound": "この名前のメールは送信されていません。",
+      "loadError": "メールテンプレートを読み込めませんでした。",
+      "retry": "再試行",
+      "eyebrow": "{service} · {provider} 経由で送信",
+      "discard": "変更を破棄",
+      "resetToDefault": "既定に戻す",
+      "sendTest": "自分にテスト送信",
+      "sending": "送信中…",
+      "save": "保存",
+      "saving": "保存中…",
+      "unsaved": "未保存の変更",
+      "fields": {
+        "subject": "件名",
+        "heading": "見出し",
+        "body": "本文（HTML）",
+        "bodyHint": "WarpTalk のメールレイアウト内に表示されます。値は送信時に HTML エスケープされます。",
+        "note": "変更メモ（任意）",
+        "notePlaceholder": "何をなぜ変更したか（履歴に表示されます）"
+      },
+      "issuesTitle": "保存する前に次の点を修正してください：",
+      "issues": {
+        "UNKNOWN_VARIABLE": "「{name}」はこのメールの変数ではありません。",
+        "MISSING_REQUIRED_VARIABLE": "「{name}」をメールに含める必要があります。このメールが届けるべき内容です。",
+        "REQUIRED": "件名と本文は必須です。",
+        "LINE_BREAK": "件名は 1 行にしてください。"
+      },
+      "variables": {
+        "title": "変数",
+        "description": "クリックするとカーソル位置の{field}に挿入されます。",
+        "fields": {
+          "subject": "件名",
+          "heading": "見出し",
+          "bodyHtml": "本文"
+        },
+        "insert": "カーソル位置に挿入",
+        "required": "必須",
+        "sample": "サンプル: {value}"
+      },
+      "history": {
+        "title": "バージョン履歴",
+        "loading": "履歴を読み込み中…",
+        "empty": "保存されたバージョンはまだありません。最初の保存から履歴が始まります。",
+        "error": "履歴を読み込めませんでした。",
+        "load": "エディターに読み込む",
+        "restore": "復元",
+        "current": "現在",
+        "restored": "バージョン {version} を現在のテンプレートとして復元しました。",
+        "restoreFailed": "このバージョンを復元できませんでした。",
+        "loaded": "バージョン {version} をエディターに読み込みました。使うには保存してください。",
+        "actions": {
+          "SAVED": "保存",
+          "RESTORED": "v{from} を復元",
+          "RESET": "既定に戻した"
+        }
+      },
+      "previewViewAria": "プレビュー形式",
+      "previewHtml": "メール",
+      "previewText": "テキスト",
+      "previewError": "プレビューをレンダリングできませんでした。",
+      "previewTitle": "メールのプレビュー",
+      "previewNote": "未保存の下書きを、実際に送信するのと同じコードでサンプル値を使ってレンダリングしたライブプレビューです。",
+      "toasts": {
+        "saved": "保存しました。送信元は次回のメールから使用します。",
+        "saveFailed": "テンプレートを保存できませんでした。",
+        "testSent": "テストメールを {email} に送信しました",
+        "testFailed": "テストメールを送信できませんでした。",
+        "reset": "既定の文面に戻しました。",
+        "resetFailed": "テンプレートをリセットできませんでした。"
+      },
+      "resetDialog": {
+        "title": "既定の文面に戻しますか？",
+        "description": "約 30 秒以内に送信元が既定の件名と本文に戻ります。このバージョンは履歴に残り、復元できます。",
+        "cancel": "キャンセル",
+        "confirm": "既定に戻す"
+      }
+    }
+  },
+  "announcements": {
+    "eyebrow": "運用",
+    "title": "お知らせ",
+    "description": "アプリ内に表示するお知らせです（新機能、メンテナンス、キャンペーンなど）。下書き、プレビュー、今すぐ公開または予約公開を行い、終了したらアーカイブします。",
+    "inboxBroadcast": "受信箱に一斉送信",
+    "new": "新しいお知らせ",
+    "viewAria": "お知らせまたは受信箱への一斉送信",
+    "views": {
+      "cms": "お知らせ",
+      "broadcasts": "受信箱への一斉送信"
+    },
+    "statusAria": "ステータスで絞り込む",
+    "statuses": {
+      "ALL": "すべて",
+      "DRAFT": "下書き",
+      "SCHEDULED": "予約済み",
+      "PUBLISHED": "公開中",
+      "ENDED": "終了",
+      "ARCHIVED": "アーカイブ済み"
+    },
+    "searchPlaceholder": "タイトルを検索",
+    "refresh": "再読み込み",
+    "error": {
+      "title": "お知らせを読み込めませんでした。",
+      "description": "通知サービスと、セッションがプラットフォーム管理者権限を保持しているかを確認してください。",
+      "retry": "再試行"
+    },
+    "empty": {
+      "title": "お知らせはまだありません",
+      "filteredTitle": "この条件に一致するお知らせはありません",
+      "description": "公開したお知らせは、対象のユーザーに向けてアプリの上部に表示されます。"
+    },
+    "pageOf": "{page} / {totalPages} ページ",
+    "previous": "前へ",
+    "next": "次へ",
+    "audience": {
+      "all": "すべてのユーザー",
+      "plans": "プラン: {plans}",
+      "workspaces": "{count} 件のワークスペース"
+    },
+    "window": {
+      "scheduled": "{date} に開始",
+      "liveUntil": "{date} まで公開",
+      "liveSince": "{date} から公開中",
+      "ended": "{date} に終了",
+      "archived": "{date} にアーカイブ",
+      "draftWindow": "期間: {start} → {end}",
+      "onPublish": "公開時",
+      "noEnd": "終了なし",
+      "notPublished": "未公開"
+    },
+    "card": {
+      "audience": "対象",
+      "window": "期間",
+      "cta": "ボタン"
+    },
+    "actions": {
+      "edit": "編集",
+      "preview": "プレビュー",
+      "publishNow": "今すぐ公開",
+      "schedule": "予約…",
+      "unpublish": "下書きに戻す",
+      "restore": "下書きとして復元",
+      "duplicate": "複製",
+      "archive": "アーカイブ",
+      "delete": "下書きを削除",
+      "more": "その他の操作"
+    },
+    "toasts": {
+      "failed": "操作に失敗しました。もう一度お試しください。",
+      "saved": "保存しました。",
+      "published": "公開しました。対象のユーザーに表示されています。",
+      "scheduled": "予約しました。",
+      "unpublished": "下書きに戻しました。表示されなくなりました。",
+      "restored": "下書きとして復元しました。",
+      "duplicated": "新しい下書きとして複製しました。",
+      "archived": "アーカイブしました。表示されなくなりました。",
+      "deleted": "下書きを削除しました。"
+    },
+    "deleteDialog": {
+      "title": "この下書きを削除しますか？",
+      "description": "「{title}」は完全に削除されます。公開済みのお知らせは削除できません。代わりにアーカイブしてください。",
+      "cancel": "キャンセル",
+      "confirm": "下書きを削除"
+    },
+    "preview": {
+      "title": "ユーザーの表示でプレビュー",
+      "description": "アプリ上部のお知らせバーと、「続きを読む」で開くカードです。",
+      "strip": "お知らせバー",
+      "card": "続きを読む"
+    },
+    "errors": {
+      "titleRequired": "タイトルは必須です。",
+      "titleTooLong": "タイトルは 200 文字以内にしてください。",
+      "bodyRequired": "本文は必須です。",
+      "bodyTooLong": "本文は 20,000 文字以内にしてください。",
+      "plansRequired": "プランを 1 つ以上選択してください。",
+      "workspacesRequired": "ワークスペースを 1 つ以上選択してください。",
+      "tooManyAudience": "プランまたはワークスペースは最大 200 件までです。",
+      "labelWithoutLink": "ボタンのラベルにはリンクが必要です。",
+      "linkWithoutLabel": "リンクにはボタンのラベルが必要です。",
+      "labelTooLong": "ボタンのラベルは 60 文字以内にしてください。",
+      "linkInvalid": "リンクは https:// または http:// のアドレス、もしくは / で始まるアプリ内のパスにしてください。",
+      "windowInverted": "終了日時は開始日時より後にしてください。"
+    },
+    "editor": {
+      "back": "お知らせ",
+      "notFound": "このお知らせは存在しません。",
+      "loadError": "お知らせを読み込めませんでした。",
+      "retry": "再試行",
+      "newTitle": "新しいお知らせ",
+      "description": "内容を書き、誰にいつ表示するかを選び、公開前にプレビューを確認してください。",
+      "save": "変更を保存",
+      "saveDraft": "下書きを保存",
+      "saveAndPublish": "保存して今すぐ公開",
+      "archivedNotice": "このお知らせはアーカイブ済みのため閲覧のみです。編集や再公開をするには下書きとして復元してください。",
+      "fields": {
+        "type": "種類",
+        "title": "タイトル",
+        "titlePlaceholder": "ライブ字幕が 40 言語に対応しました",
+        "body": "本文",
+        "bodyHint": "Markdown: **太字**、リスト、リンク",
+        "bodyPlaceholder": "何が変わったか、誰向けか、次に何をすればよいか。",
+        "ctaLabel": "ボタンのラベル（任意）",
+        "ctaLabelPlaceholder": "試してみる",
+        "ctaUrl": "ボタンのリンク",
+        "ctaUrlPlaceholder": "/settings または https://…",
+        "audience": "表示する対象",
+        "window": "表示する期間",
+        "windowHint": "開始を空欄にすると公開した時点から、終了を空欄にするとアーカイブするまで表示されます。",
+        "startsAt": "開始",
+        "endsAt": "終了"
+      },
+      "types": {
+        "ANNOUNCEMENT": {
+          "label": "お知らせ",
+          "hint": "プラットフォームに関する一般的なニュース。"
+        },
+        "FEATURE": {
+          "label": "新機能",
+          "hint": "新しく使えるようになった機能。"
+        },
+        "MAINTENANCE": {
+          "label": "メンテナンス",
+          "hint": "計画的な停止やサービス低下。"
+        },
+        "PROMOTION": {
+          "label": "キャンペーン",
+          "hint": "プランのアップグレード、割引、キャンペーン。"
+        }
+      },
+      "audienceModes": {
+        "ALL": {
+          "label": "全員",
+          "hint": "ログインしているすべてのユーザー。"
+        },
+        "PLANS": {
+          "label": "プラン",
+          "hint": "これらのプランのワークスペースのメンバー。"
+        },
+        "WORKSPACES": {
+          "label": "ワークスペース",
+          "hint": "これらのワークスペースのメンバー。"
+        }
+      },
+      "schedule": "開始日時に予約",
+      "scheduleHint": "開始日時になると自動で公開されます。戻ってくる必要はありません。",
+      "scheduleNeedsFuture": "予約するには未来の開始日時を設定してください。",
+      "lifecycle": "ステータス",
+      "previewTitle": "プレビュー",
+      "previewDescription": "対象のユーザーに表示される内容そのものを、アプリのコンポーネントで描画しています。",
+      "previewPlaceholderTitle": "タイトル",
+      "previewPlaceholderBody": "お知らせの本文がここに表示されます。",
+      "plans": {
+        "label": "選択したプランのワークスペースのメンバーに表示されます。",
+        "loading": "プランを読み込み中…",
+        "error": "プラン一覧を読み込めませんでした。",
+        "retired": "現在のプラン一覧にありません"
+      },
+      "workspaces": {
+        "searchPlaceholder": "ワークスペース名で検索",
+        "searching": "検索中…",
+        "error": "ワークスペースのディレクトリを検索できませんでした。",
+        "noMatch": "一致するワークスペースはありません。",
+        "added": "追加済み",
+        "memberCount": "{count} 人のメンバー"
+      }
+    }
+  }
+}
