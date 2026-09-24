@@ -44,48 +44,6 @@
       "next": "Next"
     }
   },
-  "meetings": {
-    "eyebrow": "Operations",
-    "title": "Meetings",
-    "description": "Every translation room on the platform. Metadata only — no transcripts, no room controls.",
-    "refresh": "Refresh",
-    "liveCount": "{count} live",
-    "startedToday": "{count} started today",
-    "statusTabs": {
-      "all": "All",
-      "live": "Live now",
-      "scheduled": "Scheduled",
-      "ended": "Ended",
-      "cancelled": "Cancelled",
-      "failed": "Failed",
-      "expired": "Expired"
-    },
-    "meetingStatusAria": "Meeting status",
-    "loading": "Loading…",
-    "meetingCount": "{count, plural, one {# meeting} other {# meetings}}",
-    "sort": {
-      "label": "Sort",
-      "recentDesc": "Most recent",
-      "recentAsc": "Oldest",
-      "durationDesc": "Longest"
-    },
-    "error": {
-      "title": "Meetings could not be loaded.",
-      "description": "Check the translation-room service and that your session still holds the platform admin role.",
-      "retry": "Try again"
-    },
-    "empty": {
-      "title": "No meetings match this filter",
-      "description": "Pick a different status tab."
-    },
-    "openWorkspace": "workspace",
-    "pagination": {
-      "pageOf": "Page {page} of {totalPages}",
-      "previous": "Previous",
-      "next": "Next"
-    },
-    "footerNote": "There is no way to open or listen to a meeting from here, by design. This screen reports that a meeting happened; what was said in it belongs to the workspace that held it."
-  },
   "feedback": {
     "eyebrow": "Operations",
     "title": "Feedback",

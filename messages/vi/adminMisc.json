@@ -44,48 +44,6 @@
       "next": "Tiếp"
     }
   },
-  "meetings": {
-    "eyebrow": "Vận hành",
-    "title": "Cuộc họp",
-    "description": "Mọi phòng dịch trên nền tảng. Chỉ siêu dữ liệu — không có bản ghi âm, không điều khiển phòng.",
-    "refresh": "Làm mới",
-    "liveCount": "{count} đang diễn ra",
-    "startedToday": "{count} bắt đầu hôm nay",
-    "statusTabs": {
-      "all": "Tất cả",
-      "live": "Đang diễn ra",
-      "scheduled": "Đã lên lịch",
-      "ended": "Đã kết thúc",
-      "cancelled": "Đã hủy",
-      "failed": "Thất bại",
-      "expired": "Đã hết hạn"
-    },
-    "meetingStatusAria": "Trạng thái cuộc họp",
-    "loading": "Đang tải…",
-    "meetingCount": "{count, plural, other {# cuộc họp}}",
-    "sort": {
-      "label": "Sắp xếp",
-      "recentDesc": "Mới nhất",
-      "recentAsc": "Cũ nhất",
-      "durationDesc": "Dài nhất"
-    },
-    "error": {
-      "title": "Không thể tải danh sách cuộc họp.",
-      "description": "Hãy kiểm tra dịch vụ phòng dịch và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
-      "retry": "Thử lại"
-    },
-    "empty": {
-      "title": "Không có cuộc họp nào khớp với bộ lọc này",
-      "description": "Hãy chọn tab trạng thái khác."
-    },
-    "openWorkspace": "workspace",
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
-    },
-    "footerNote": "Không có cách nào để mở hoặc nghe lại một cuộc họp từ đây — đây là chủ ý thiết kế. Màn hình này chỉ ghi nhận rằng cuộc họp đã diễn ra; nội dung trao đổi thuộc về workspace đã tổ chức nó."
-  },
   "feedback": {
     "eyebrow": "Vận hành",
     "title": "Phản hồi",

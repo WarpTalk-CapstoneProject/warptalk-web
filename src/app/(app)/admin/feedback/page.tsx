@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   AdminFilterTabs,
   AdminPage,
@@ -433,20 +434,23 @@ function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
       {/* Trend vs the previous window of equal length, as the server computed it. */}
       <div className="w-[80px] shrink-0 text-[12px] tabular-nums">
         {delta ? (
-          <span
-            className={cn(
-              "font-medium",
-              tone === "good" && "text-emerald-600 dark:text-emerald-400",
-              tone === "bad" && "text-destructive",
-              tone === "flat" && "text-ink-muted",
-            )}
-            title={t("dimensions.previousTooltip", {
+          <Tooltip
+            content={t("dimensions.previousTooltip", {
               average: formatAverage(dimension.previousAverageRating ?? null),
               count: dimension.previousResponseCount ?? 0,
             })}
           >
-            {delta}
-          </span>
+            <span
+              className={cn(
+                "font-medium",
+                tone === "good" && "text-emerald-600 dark:text-emerald-400",
+                tone === "bad" && "text-destructive",
+                tone === "flat" && "text-ink-muted",
+              )}
+            >
+              {delta}
+            </span>
+          </Tooltip>
         ) : (
           <span className="text-ink-subtle">{t("dimensions.noTrend")}</span>
         )}
@@ -459,23 +463,21 @@ function DimensionRow({ dimension }: { dimension: AdminFeedbackDimensionDto }) {
           const rating = index + 1;
           const tone = ratingTone(rating);
           return (
-            <div
-              key={rating}
-              className="group relative h-6 flex-1 overflow-hidden rounded bg-surface-2"
-              title={t("dimensions.ratingTooltip", { rating, count: dimension.distribution[index] })}
-            >
-              <div
-                className={cn(
-                  "absolute bottom-0 left-0 right-0",
-                  tone === "bad"
-                    ? "bg-destructive/60"
-                    : tone === "neutral"
-                      ? "bg-ink/25"
-                      : "bg-emerald-500/60",
-                )}
-                style={{ height: `${Math.round(share * 100)}%` }}
-              />
-            </div>
+            <Tooltip key={rating} content={t("dimensions.ratingTooltip", { rating, count: dimension.distribution[index] })}>
+              <div className="group relative h-6 flex-1 overflow-hidden rounded bg-surface-2">
+                <div
+                  className={cn(
+                    "absolute bottom-0 left-0 right-0",
+                    tone === "bad"
+                      ? "bg-destructive/60"
+                      : tone === "neutral"
+                        ? "bg-ink/25"
+                        : "bg-emerald-500/60",
+                  )}
+                  style={{ height: `${Math.round(share * 100)}%` }}
+                />
+              </div>
+            </Tooltip>
           );
         })}
       </div>

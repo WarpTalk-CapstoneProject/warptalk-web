@@ -512,7 +512,6 @@ export const API = {
     rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
     pricingConfig: "/usages/pricing-config",
   },
-  /** Platform meeting directory (translation-room). Metadata only, read-only. */
   /** The platform audit log. Read-only; the store is append-only. */
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
@@ -526,13 +525,11 @@ export const API = {
    */
   adminWorkspaceOutbox: {
     deadLetters: "/workspaces/outbox/dead-letters",
-    replay: (eventId: string) => `/workspaces/outbox/${encodeURIComponent(eventId)}/replay`,
   },
   adminAuditLog: {
     base: "/admin/audit-log",
   },
   adminMeetings: {
-    base: "/admin/meetings",
     counts: "/admin/meetings/counts",
   },
   /**

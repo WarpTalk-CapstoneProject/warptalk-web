@@ -15,7 +15,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { MultiLine, ValueBars, ChartEmpty } from "@/components/admin/insights/insights-charts";
+import { ChartEmpty, TimeSeriesChart } from "@/components/admin/charts/time-series-chart";
 import {
   useAdminBillingInsights,
   useAdminBillingSnapshot,
@@ -24,8 +24,8 @@ import {
 } from "@/hooks/use-admin-insights";
 import { completedMonthGrowth, growthWindow, mergeGrowthMonths } from "@/lib/admin/billing-growth";
 import { browserTimeZone, monthKeyLabel } from "@/lib/admin/insights-period";
+import { compactMoney } from "@/lib/admin/chart-scale";
 import {
-  compactNumber,
   computeDelta,
   deltaText,
   deltaTone,
@@ -34,8 +34,9 @@ import {
 import { cn } from "@/lib/utils";
 import type { InsightsMetric, InsightsQuery } from "@/types/admin-insights";
 
-const PRIMARY = "var(--primary)";
-const SECOND = "var(--chart-2, #0ea5e9)";
+const money = (value: number) => formatInsightValue(value, "money");
+const moneyAxis = (value: number) => compactMoney(value, "VND");
+const count = (value: number) => formatInsightValue(value, "count");
 
 function metricOf(metrics: InsightsMetric[] | undefined, id: string): InsightsMetric | undefined {
   return metrics?.find((metric) => metric.id === id);
@@ -195,15 +196,13 @@ export function BillingGrowthOverview() {
           ) : !hasRevenue ? (
             <ChartEmpty height={220}>{billing.isPending ? t("loading") : t("noData")}</ChartEmpty>
           ) : (
-            <ValueBars
+            <TimeSeriesChart
+              variant="bar"
               ariaLabel={t("revenueTitle")}
-              color={PRIMARY}
-              data={rows.map((row, index) => ({
-                key: row.month,
-                label: labels[index],
-                value: row.revenue,
-                title: `${labels[index]}: ${formatInsightValue(row.revenue, "money")}`,
-              }))}
+              labels={labels}
+              series={[{ key: "revenue", label: t("tiles.revenue"), values: rows.map((row) => row.revenue) }]}
+              formatValue={money}
+              formatAxis={moneyAxis}
             />
           )}
         </Panel>
@@ -214,18 +213,16 @@ export function BillingGrowthOverview() {
               {users.isPending || billing.isPending ? t("loading") : t("unavailable")}
             </ChartEmpty>
           ) : (
-            <MultiLine
+            <TimeSeriesChart
+              variant="line"
+              integer
               ariaLabel={t("activeTitle")}
               labels={labels}
               series={[
-                { key: "users", label: t("series.activeAccounts"), color: PRIMARY, values: rows.map((r) => r.activeUsers) },
-                {
-                  key: "workspaces",
-                  label: t("series.activeWorkspaces"),
-                  color: SECOND,
-                  values: rows.map((r) => r.activeWorkspaces),
-                },
+                { key: "users", label: t("series.activeAccounts"), values: rows.map((r) => r.activeUsers) },
+                { key: "workspaces", label: t("series.activeWorkspaces"), values: rows.map((r) => r.activeWorkspaces) },
               ]}
+              formatValue={count}
             />
           )}
         </Panel>
@@ -235,31 +232,31 @@ export function BillingGrowthOverview() {
             <ChartEmpty height={200}>{users.isPending ? t("loading") : t("unavailable")}</ChartEmpty>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              <MultiLine
+              <TimeSeriesChart
+                variant="line"
+                integer
                 ariaLabel={t("usersTitle")}
                 labels={labels}
                 height={200}
                 series={[
-                  { key: "total-users", label: t("series.totalUsers"), color: PRIMARY, values: rows.map((r) => r.totalUsers) },
-                  {
-                    key: "total-workspaces",
-                    label: t("series.totalWorkspaces"),
-                    color: SECOND,
-                    values: rows.map((r) => r.totalWorkspaces),
-                  },
+                  { key: "total-users", label: t("series.totalUsers"), values: rows.map((r) => r.totalUsers) },
+                  { key: "total-workspaces", label: t("series.totalWorkspaces"), values: rows.map((r) => r.totalWorkspaces) },
                 ]}
+                formatValue={count}
               />
-              <ValueBars
-                ariaLabel={t("series.newUsers")}
-                color={SECOND}
-                height={200}
-                data={rows.map((row, index) => ({
-                  key: row.month,
-                  label: labels[index],
-                  value: row.newUsers,
-                  title: `${labels[index]}: ${row.newUsers == null ? "—" : compactNumber(row.newUsers)} ${t("series.newUsers")}`,
-                }))}
-              />
+              <div>
+                {/* A single series has no legend; this names it, level with the legend beside it. */}
+                <p className="mb-2 text-[11px] text-ink-muted">{t("series.newUsers")}</p>
+                <TimeSeriesChart
+                  variant="bar"
+                  integer
+                  ariaLabel={t("series.newUsers")}
+                  labels={labels}
+                  height={200}
+                  series={[{ key: "new-users", label: t("series.newUsers"), values: rows.map((row) => row.newUsers) }]}
+                  formatValue={count}
+                />
+              </div>
             </div>
           )}
         </Panel>
