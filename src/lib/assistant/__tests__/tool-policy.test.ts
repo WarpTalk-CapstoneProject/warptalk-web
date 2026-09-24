@@ -3,12 +3,14 @@ import { describe, test } from "node:test";
 
 import {
   groupToolsByEffect,
+  pluginWritesAlwaysAllowed,
   readDisabledPluginKeys,
   summarizeToolPolicies,
   togglePluginKey,
   toolPolicyOf,
   trustsAWriteTool,
   writeDisabledPluginKeys,
+  writeToolPolicyUpdate,
   type KeyValueStore,
 } from "../tool-policy.ts";
 import type { McpToolDescriptorDto } from "../../../types/assistant.ts";
@@ -81,6 +83,26 @@ test("summarizeToolPolicies counts each tool once", () => {
 test("trustsAWriteTool is true only for a write tool set to allow", () => {
   assert.equal(trustsAWriteTool([tool({ policy: "allow" })]), false);
   assert.equal(trustsAWriteTool([tool({ effect: "write", policy: "allow" })]), true);
+});
+
+describe("Always allow in the WarpBot chat", () => {
+  test("is null without write tools, and true only when every write tool is allowed", () => {
+    assert.equal(pluginWritesAlwaysAllowed([tool()]), null);
+    assert.equal(
+      pluginWritesAlwaysAllowed([tool({ name: "a", effect: "write" }), tool({ name: "b", effect: "write", policy: "allow" })]),
+      false,
+    );
+    assert.equal(
+      pluginWritesAlwaysAllowed([tool(), tool({ name: "a", effect: "write", policy: "allow" })]),
+      true,
+    );
+  });
+
+  test("updates only the write tools, to allow or back to asking", () => {
+    const tools = [tool(), tool({ name: "save_issue", effect: "write" })];
+    assert.deepEqual(writeToolPolicyUpdate(tools, true), { save_issue: "allow" });
+    assert.deepEqual(writeToolPolicyUpdate(tools, false), { save_issue: "approval" });
+  });
 });
 
 describe("disabled plugins per conversation", () => {

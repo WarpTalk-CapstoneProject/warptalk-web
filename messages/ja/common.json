@@ -208,6 +208,8 @@
     "showPageContext": "ページコンテキストを表示",
     "attachFiles": "画像やドキュメントを添付",
     "offInThisChat": "このチャットではオフ",
+    "alwaysAllowChanges": "変更を常に許可",
+    "pluginPermissionSaveFailed": "{label} の WarpBot の権限を保存できませんでした。",
     "sendMessage": "メッセージを送信",
     "thinking": "考え中...",
     "stillWorking": "処理に少し時間がかかっています。",

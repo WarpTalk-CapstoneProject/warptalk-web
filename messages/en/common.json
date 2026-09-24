@@ -208,6 +208,8 @@
     "showPageContext": "Show page context",
     "attachFiles": "Attach images or documents",
     "offInThisChat": "Off in this chat",
+    "alwaysAllowChanges": "Always allow changes",
+    "pluginPermissionSaveFailed": "Could not save WarpBot's permission for {label}.",
     "sendMessage": "Send message",
     "thinking": "Thinking...",
     "stillWorking": "Still working — this one is taking a while.",
