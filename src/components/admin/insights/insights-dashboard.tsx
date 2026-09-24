@@ -43,7 +43,6 @@ import {
   insightsCsv,
   joinNotes,
   mrrSub,
-  NOT_AVAILABLE_NOTE,
   outstandingSub,
   PERIOD_CARDS,
   periodCardView,
@@ -138,6 +137,7 @@ const CARD_LINK =
 // ── header + period bar ──────────────────────────────────────────────────────
 
 function UpdatedPulse({ updatedAt }: { updatedAt: number }) {
+  const t = useTranslations("adminOps.insights");
   return (
     <span className="flex items-center gap-1.5 text-[11px] tabular-nums text-ink-muted">
       <span
@@ -147,8 +147,10 @@ function UpdatedPulse({ updatedAt }: { updatedAt: number }) {
         )}
       />
       {updatedAt > 0
-        ? `Updated ${new Date(updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
-        : "Loading…"}
+        ? t("common.updated", {
+            time: new Date(updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          })
+        : t("common.loading")}
     </span>
   );
 }
@@ -170,6 +172,7 @@ function PeriodBar({
   onChoosePeriod: (choice: PeriodChoice) => void;
   onExport: () => void;
 }) {
+  const t = useTranslations("adminOps.insights");
   const [customOpen, setCustomOpen] = useState(period.period === "custom");
   const [draftFrom, setDraftFrom] = useState(period.customFrom);
   const [draftTo, setDraftTo] = useState(period.customTo);
@@ -177,14 +180,14 @@ function PeriodBar({
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-2.5">
-        <div role="group" aria-label="Period" className="inline-flex flex-wrap overflow-hidden rounded-lg border border-hairline bg-surface-1">
+        <div role="group" aria-label={t("periodBar.groupLabel")} className="inline-flex flex-wrap overflow-hidden rounded-lg border border-hairline bg-surface-1">
           <button type="button" className={SEGMENT} aria-pressed={period.period === "today"} onClick={() => onChoosePeriod({ period: "today" })}>
-            Today
+            {t("periodBar.today")}
           </button>
           <button type="button" className={SEGMENT} aria-pressed={period.period === "7d"} onClick={() => onChoosePeriod({ period: "7d" })}>
-            7 days
+            {t("periodBar.days7")}
           </button>
-          <button type="button" className={cn(SEGMENT, "px-2.5")} aria-label="Previous month" onClick={() => onChoosePeriod({ period: "month", month: period.prevMonth })}>
+          <button type="button" className={cn(SEGMENT, "px-2.5")} aria-label={t("periodBar.previousMonth")} onClick={() => onChoosePeriod({ period: "month", month: period.prevMonth })}>
             <CaretLeft size={14} />
           </button>
           <button type="button" className={SEGMENT} aria-pressed={period.period === "month"} onClick={() => onChoosePeriod({ period: "month", month: period.month })}>
@@ -193,15 +196,15 @@ function PeriodBar({
           <button
             type="button"
             className={cn(SEGMENT, "px-2.5")}
-            aria-label="Next month"
+            aria-label={t("periodBar.nextMonth")}
             disabled={!period.nextMonth}
-            title={period.nextMonth ? undefined : "This is the current month"}
+            title={period.nextMonth ? undefined : t("periodBar.currentMonthTitle")}
             onClick={() => period.nextMonth && onChoosePeriod({ period: "month", month: period.nextMonth })}
           >
             <CaretRight size={14} />
           </button>
           <button type="button" className={SEGMENT} aria-pressed={period.period === "6m"} onClick={() => onChoosePeriod({ period: "6m" })}>
-            6 months
+            {t("periodBar.months6")}
           </button>
           <button
             type="button"
@@ -211,7 +214,7 @@ function PeriodBar({
             onClick={() => setCustomOpen((open) => !open)}
           >
             <CalendarBlank size={14} />
-            Custom
+            {t("periodBar.custom")}
           </button>
         </div>
         <span className="text-[13px] text-ink-muted">{period.caption}</span>
@@ -221,7 +224,7 @@ function PeriodBar({
           className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-ink px-3.5 text-[13px] font-medium text-panel transition-opacity hover:opacity-85"
         >
           <DownloadSimple size={14} />
-          Export
+          {t("periodBar.export")}
         </button>
       </div>
 
@@ -234,7 +237,7 @@ function PeriodBar({
           }}
         >
           <label className="text-[11px] text-ink-muted">
-            From
+            {t("periodBar.from")}
             <input
               type="date"
               value={draftFrom}
@@ -243,7 +246,7 @@ function PeriodBar({
             />
           </label>
           <label className="text-[11px] text-ink-muted">
-            To (inclusive)
+            {t("periodBar.to")}
             <input
               type="date"
               value={draftTo}
@@ -256,7 +259,7 @@ function PeriodBar({
             disabled={!draftFrom || !draftTo}
             className="h-8 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Show this range
+            {t("periodBar.showRange")}
           </button>
         </form>
       ) : null}
@@ -286,6 +289,7 @@ function Eyebrow({ children }: { children: ReactNode }) {
 }
 
 function PeriodCards({ props }: { props: InsightsDashboardProps }) {
+  const t = useTranslations("adminOps.insights");
   const sources = {
     billing: dataOf(props.billing),
     users: dataOf(props.users),
@@ -296,7 +300,7 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {PERIOD_CARDS.map((spec) => {
         const state = props[spec.source];
-        const view = periodCardView(spec, sources);
+        const view = periodCardView(spec, sources, t);
         const loading = state.status === "loading";
         return (
           <CardShell
@@ -304,7 +308,7 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             href={metricHref(spec.id)}
             className={cn(state.status === "ready" && state.refreshing && "opacity-60")}
           >
-            <Eyebrow>{spec.label}</Eyebrow>
+            <Eyebrow>{t(`periodCards.${spec.id}`)}</Eyebrow>
             <div
               className={cn(
                 "mt-2 truncate text-[21px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
@@ -316,8 +320,8 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             </div>
             {view.available ? (
               <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] tabular-nums text-ink-muted">
-                <span className={DELTA_TONE_CLASS[view.deltaTone]}>{deltaText(view.delta)}</span>
-                <span>last period {view.previous}</span>
+                <span className={DELTA_TONE_CLASS[view.deltaTone]}>{deltaText(view.delta, t)}</span>
+                <span>{t("periodCards.lastPeriod", { value: view.previous })}</span>
               </div>
             ) : null}
             {!loading && spec.id === "aiProviderCost" ? (
@@ -407,6 +411,7 @@ interface SnapshotCardSpec {
 }
 
 function SnapshotCard({ spec }: { spec: SnapshotCardSpec }) {
+  const t = useTranslations("adminOps.insights");
   const loading = spec.state.status === "loading";
   const unavailable = spec.state.status === "unavailable";
   const href = spec.state.status === "ready" ? metricHref(spec.id) : null;
@@ -423,7 +428,7 @@ function SnapshotCard({ spec }: { spec: SnapshotCardSpec }) {
         {spec.state.status === "ready" ? (spec.display ?? "—") : "—"}
       </div>
       {unavailable ? (
-        <div className="mt-1.5 text-[11px] text-ink-muted">{NOT_AVAILABLE_NOTE}</div>
+        <div className="mt-1.5 text-[11px] text-ink-muted">{t("common.notAvailable")}</div>
       ) : spec.state.status === "ready" && spec.sub ? (
         <div className="mt-1.5 truncate text-[11px] text-ink-muted" title={spec.sub}>
           {spec.sub}
@@ -489,11 +494,12 @@ function SourceBody<T>({
   isEmpty: (data: T) => boolean;
   children: (data: T) => ReactNode;
 }) {
+  const t = useTranslations("adminOps.insights");
   if (state.status === "loading") {
     return <div className="animate-pulse rounded-md bg-surface-2" style={{ height }} />;
   }
   if (state.status === "unavailable") {
-    return <ChartEmpty height={height}>{NOT_AVAILABLE_NOTE}</ChartEmpty>;
+    return <ChartEmpty height={height}>{t("common.notAvailable")}</ChartEmpty>;
   }
   if (isEmpty(state.data)) return <ChartEmpty height={height}>{empty}</ChartEmpty>;
   return <div className={cn(state.refreshing && "opacity-60")}>{children(state.data)}</div>;
@@ -511,7 +517,7 @@ const SERVICE_COLORS = [
   "var(--usage-service-5)",
 ];
 
-function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"]): DonutPart[] {
+function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"], otherLabel: string): DonutPart[] {
   const grouped = new Map<string, { label: string; value: number }>();
   for (const row of rows) {
     const service = usageServiceOf(row.usageType);
@@ -522,7 +528,7 @@ function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"]): Do
   const sorted = [...grouped.entries()].filter(([, entry]) => entry.value > 0).sort((a, b) => b[1].value - a[1].value);
   const parts: DonutPart[] = sorted.slice(0, 5).map(([key, entry], index) => ({ key, label: entry.label, value: entry.value, color: SERVICE_COLORS[index] }));
   const rest = sorted.slice(5).reduce((sum, [, entry]) => sum + entry.value, 0);
-  if (rest > 0) parts.push({ key: "other", label: "Other", value: rest, color: "var(--usage-service-other)" });
+  if (rest > 0) parts.push({ key: "other", label: otherLabel, value: rest, color: "var(--usage-service-other)" });
   return parts;
 }
 
@@ -572,6 +578,7 @@ function ListEmpty({ children }: { children: ReactNode }) {
 }
 
 function ListState<T>({ state, children }: { state: SourceState<T>; children: (data: T) => ReactNode }) {
+  const t = useTranslations("adminOps.insights");
   if (state.status === "loading") {
     return (
       <div className="space-y-2 px-4 py-3">
@@ -581,13 +588,14 @@ function ListState<T>({ state, children }: { state: SourceState<T>; children: (d
       </div>
     );
   }
-  if (state.status === "unavailable") return <ListEmpty>{NOT_AVAILABLE_NOTE}</ListEmpty>;
+  if (state.status === "unavailable") return <ListEmpty>{t("common.notAvailable")}</ListEmpty>;
   return <>{children(state.data)}</>;
 }
 
 // ── the page ─────────────────────────────────────────────────────────────────
 
 export function InsightsDashboard(props: InsightsDashboardProps) {
+  const t = useTranslations("adminOps.insights");
   const { period } = props;
   const billing = dataOf(props.billing);
   const snapshot = dataOf(props.snapshot);
@@ -599,24 +607,27 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
   const attention = useMemo(
     () =>
-      assembleNeedsAttention({
-        snapshot,
-        suspendedWorkspaces: dataOf(props.suspendedWorkspaces),
-        deadLetters,
-        deadLettersCapped,
-        usageAlerts: dataOf(props.usageAlerts),
-        newSalesLeads: dataOf(props.newSalesLeads),
-        health,
-        links: {
-          health: insightsHref("health"),
-          suspendedWorkspaces: insightsHref("suspendedWorkspaces"),
-          deadLetters: insightsHref("deadLetters"),
-          newSalesLeads: insightsHref("newSalesLeads"),
-          subscriptions: insightsHref("subscriptions"),
-          workspace: workspaceHref,
+      assembleNeedsAttention(
+        {
+          snapshot,
+          suspendedWorkspaces: dataOf(props.suspendedWorkspaces),
+          deadLetters,
+          deadLettersCapped,
+          usageAlerts: dataOf(props.usageAlerts),
+          newSalesLeads: dataOf(props.newSalesLeads),
+          health,
+          links: {
+            health: insightsHref("health"),
+            suspendedWorkspaces: insightsHref("suspendedWorkspaces"),
+            deadLetters: insightsHref("deadLetters"),
+            newSalesLeads: insightsHref("newSalesLeads"),
+            subscriptions: insightsHref("subscriptions"),
+            workspace: workspaceHref,
+          },
         },
-      }),
-    [snapshot, props.suspendedWorkspaces, deadLetters, deadLettersCapped, props.usageAlerts, props.newSalesLeads, health],
+        t,
+      ),
+    [snapshot, props.suspendedWorkspaces, deadLetters, deadLettersCapped, props.usageAlerts, props.newSalesLeads, health, t],
   );
   const attentionLoading =
     [props.snapshot, props.suspendedWorkspaces, props.deadLetters, props.newSalesLeads, props.health].some(
@@ -648,109 +659,109 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   const snapshotCards: SnapshotCardSpec[] = [
     {
       id: "revenueToday",
-      label: "Revenue today",
+      label: t("cards.revenueToday"),
       state: props.snapshot,
       value: snapshot?.revenueToday,
       display: formatInsightValue(snapshot?.revenueToday, "money"),
-      sub: snapshot ? revenueTodaySub(snapshot) : null,
+      sub: snapshot ? revenueTodaySub(snapshot, t) : null,
     },
     {
       id: "mrr",
-      label: "MRR",
+      label: t("cards.mrr"),
       state: props.snapshot,
       value: snapshot?.mrr,
       display: formatInsightValue(snapshot?.mrr, "money"),
-      sub: snapshot ? mrrSub(snapshot) : null,
+      sub: snapshot ? mrrSub(snapshot, t) : null,
     },
     {
       id: "activeSubscriptions",
-      label: "Active subscriptions",
+      label: t("cards.activeSubscriptions"),
       state: props.snapshot,
       value: snapshot?.activeSubscriptions,
       display: formatInsightValue(snapshot?.activeSubscriptions, "count"),
       sub: snapshot
         ? [
-            `${formatCount(snapshot.activeByCycle.monthly)} monthly`,
-            `${formatCount(snapshot.activeByCycle.yearly)} yearly`,
-            snapshot.activeByCycle.other > 0 ? `${formatCount(snapshot.activeByCycle.other)} other` : null,
+            t("cards.monthlyCount", { count: formatCount(snapshot.activeByCycle.monthly) }),
+            t("cards.yearlyCount", { count: formatCount(snapshot.activeByCycle.yearly) }),
+            snapshot.activeByCycle.other > 0 ? t("cards.otherCount", { count: formatCount(snapshot.activeByCycle.other) }) : null,
           ].filter(Boolean).join(" · ")
         : null,
     },
     {
       id: "churnRate",
-      label: "Churn rate (month)",
+      label: t("cards.churnRate"),
       state: props.snapshot,
       value: snapshot?.churnRateMonth.rate,
       display: formatInsightValue(snapshot?.churnRateMonth.rate, "percent"),
-      sub: snapshot ? churnSub(snapshot.churnRateMonth) : null,
+      sub: snapshot ? churnSub(snapshot.churnRateMonth, t) : null,
     },
   ];
 
   const opsCards: SnapshotCardSpec[] = [
     {
       id: "liveMeetings",
-      label: "Live meetings",
+      label: t("cards.liveMeetings"),
       state: liveState,
       value: live?.liveNow,
       display: formatInsightValue(live?.liveNow, "count"),
-      sub: live ? `${formatCount(live.startedToday)} started today` : null,
+      sub: live ? t("cards.startedToday", { count: live.startedToday }) : null,
       tone: "neutral",
     },
     {
       id: "outstandingInvoices",
-      label: "Outstanding invoices",
+      label: t("cards.outstandingInvoices"),
       state: props.snapshot,
       value: snapshot?.outstandingInvoices.count,
       display: formatInsightValue(snapshot?.outstandingInvoices.amount, "money"),
-      sub: snapshot ? outstandingSub(snapshot.outstandingInvoices) : null,
+      sub: snapshot ? outstandingSub(snapshot.outstandingInvoices, t) : null,
     },
     {
       id: "openSalesLeads",
-      label: "Open sales leads",
+      label: t("cards.openSalesLeads"),
       state: props.newSalesLeads,
       value: dataOf(props.newSalesLeads),
       display: formatInsightValue(dataOf(props.newSalesLeads), "count"),
-      sub: "New, waiting for a reply",
+      sub: t("cards.newWaitingReply"),
     },
     {
       id: "deadLetters",
-      label: "Dead-letter events",
+      label: t("cards.deadLetters"),
       state: props.deadLetters,
       value: deadLetters?.length,
       display: deadLetters ? `${formatCount(deadLetters.length)}${deadLettersCapped ? "+" : ""}` : "—",
-      sub: "Workspace event outbox",
+      sub: t("cards.workspaceEventOutbox"),
     },
   ];
 
   const moreCards: SnapshotCardSpec[] = [
     {
       id: "trials",
-      label: "Trials",
+      label: t("cards.trials"),
       state: props.snapshot,
       display: formatInsightValue(snapshot?.trials, "count"),
-      sub: snapshot ? `${formatCount(snapshot.trialsEndingThisWeek)} end this week` : null,
+      sub: snapshot ? t("cards.endThisWeek", { count: snapshot.trialsEndingThisWeek }) : null,
     },
     {
       id: "pastDue",
-      label: "Past due subscriptions",
+      label: t("cards.pastDue"),
       state: props.snapshot,
       value: snapshot?.pastDue,
       display: formatInsightValue(snapshot?.pastDue, "count"),
-      sub: snapshot ? `${formatCount(snapshot.suspended)} suspended` : null,
+      sub: snapshot ? t("cards.suspendedCount", { count: snapshot.suspended }) : null,
     },
     {
       id: "activeWorkspaces",
-      label: "Active workspaces",
+      label: t("cards.activeWorkspaces"),
       state: props.snapshot,
       display: formatInsightValue(snapshot?.activeWorkspaces, "count"),
-      sub: "With an active subscription",
+      sub: t("cards.withActiveSubscription"),
     },
     {
       id: "platformCreditBalance",
-      label: "Platform credit balance",
+      label: t("cards.platformCreditBalance"),
       state: props.snapshot,
       display: formatInsightValue(snapshot?.platformCreditBalance, "credits"),
-      sub: "Credits across all workspaces",
+      sub: t("cards.creditsAcrossWorkspaces"),
     },
   ];
 
@@ -759,7 +770,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   return (
     <div className="flex flex-col gap-3.5 text-ink">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">Insights</h1>
+        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">{t("title")}</h1>
         <UpdatedPulse updatedAt={props.updatedAt} />
       </div>
 
@@ -780,8 +791,8 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       <details className="group">
         <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 px-0.5 py-1 text-[13px] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
           <CaretRight size={14} className="transition-transform group-open:rotate-90" />
-          <span className="group-open:hidden">Show 4 more metrics</span>
-          <span className="hidden group-open:inline">Hide 4 more metrics</span>
+          <span className="group-open:hidden">{t("periodCards.showMore", { count: moreCards.length })}</span>
+          <span className="hidden group-open:inline">{t("periodCards.hideMore", { count: moreCards.length })}</span>
         </summary>
         <div className="mt-2.5">
           <SnapshotGrid cards={moreCards} />
@@ -790,26 +801,26 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
         <Panel
-          title="Revenue, 6 months"
-          subtitle={joinNotes("Successful payments, by month", billing?.revenueByMonthNote) ?? undefined}
-          link={{ href: insightsHref("subscriptions"), label: "Subscriptions" }}
+          title={t("charts.revenue6mTitle")}
+          subtitle={joinNotes(t("charts.revenueByMonthSubtitle"), billing?.revenueByMonthNote) ?? undefined}
+          link={{ href: insightsHref("subscriptions"), label: t("links.subscriptions") }}
         >
           <div className="px-4 py-3.5">
             <SourceBody
               state={props.billing}
               height={220}
-              empty="No revenue in these six months."
+              empty={t("charts.noRevenue6m")}
               isEmpty={(data) => (data.revenueByMonth ?? []).length === 0}
             >
               {(data) => (
                 <ValueBars
-                  ariaLabel="Revenue per month"
+                  ariaLabel={t("charts.ariaRevenueByMonth")}
                   color="var(--success)"
                   data={data.revenueByMonth.map((row) => ({
                     key: row.month,
                     label: monthKeyLabel(row.month),
                     value: row.revenue,
-                    title: `${monthKeyLabel(row.month)}: ${row.revenue === null ? "no figure" : formatMoney(row.revenue, "VND")}`,
+                    title: `${monthKeyLabel(row.month)}: ${row.revenue === null ? t("charts.noFigure") : formatMoney(row.revenue, "VND")}`,
                   }))}
                 />
               )}
@@ -817,24 +828,24 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           </div>
         </Panel>
         <Panel
-          title="Revenue per day"
+          title={t("charts.revenuePerDayTitle")}
           subtitle={joinNotes(
-            isMonth ? `${period.label} — days still to come are left blank, not drawn as 0` : period.label,
+            isMonth ? t("charts.revenuePerDayNote", { label: period.label }) : period.label,
             billing?.revenueByDayNote,
           ) ?? undefined}
-          link={{ href: insightsHref("billingLedger"), label: "Ledger" }}
+          link={{ href: insightsHref("billingLedger"), label: t("links.ledger") }}
         >
           <div className="px-4 py-3.5">
             <SourceBody
               state={props.billing}
               height={220}
-              empty="No days in this period."
+              empty={t("charts.noDaysInPeriod")}
               isEmpty={(data) => (data.revenueByDay ?? []).length === 0}
             >
               {(data) => (
                 // The server's own local days (of the tz the page sent), labelled from their keys.
                 <DailyLine
-                  ariaLabel="Revenue per day"
+                  ariaLabel={t("charts.ariaRevenuePerDay")}
                   formatValue={(value) => formatMoney(value, "VND")}
                   points={seriesAxis(data.revenueByDay, period.axisEndDay).map((day) => ({
                     key: day.key,
@@ -849,67 +860,67 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Credits by AI service" subtitle={`Credits consumed · ${period.label}`} link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
+        <Panel title={t("charts.creditsByServiceTitle")} subtitle={t("charts.creditsByServiceSubtitle", { period: period.label })} link={{ href: insightsHref("workspaces"), label: t("links.workspaces") }}>
           <div className="px-4 py-3.5">
             <SourceBody
               state={props.billing}
               height={170}
-              empty="No credits consumed in this period."
-              isEmpty={(data) => creditsByServiceParts(data.creditsByService ?? []).length === 0}
+              empty={t("charts.noCreditsConsumed")}
+              isEmpty={(data) => creditsByServiceParts(data.creditsByService ?? [], t("charts.otherService")).length === 0}
             >
               {(data) => {
-                const parts = creditsByServiceParts(data.creditsByService);
+                const parts = creditsByServiceParts(data.creditsByService, t("charts.otherService"));
                 const total = parts.reduce((sum, part) => sum + part.value, 0);
-                return <Donut ariaLabel="Credits by AI service" parts={parts} centerLabel={compactNumber(total)} />;
+                return <Donut ariaLabel={t("charts.ariaCreditsByService")} parts={parts} centerLabel={compactNumber(total)} />;
               }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel title="Subscriptions by plan" subtitle="Active · trial · past due, right now" link={{ href: insightsHref("plans"), label: "Plans" }}>
+        <Panel title={t("charts.subscriptionsByPlanTitle")} subtitle={t("charts.subscriptionsByPlanSubtitle")} link={{ href: insightsHref("plans"), label: t("links.plans") }}>
           <div className="px-4 py-3.5">
             <SourceBody
               state={props.snapshot}
               height={170}
-              empty="No subscriptions yet."
+              empty={t("charts.noSubscriptionsYet")}
               isEmpty={(data) => (data.subscriptionsByPlan ?? []).length === 0}
             >
               {(data) => (
                 <>
                   <StackedBars
-                    ariaLabel="Subscriptions by plan and status"
+                    ariaLabel={t("charts.ariaSubscriptionsByPlan")}
                     rows={data.subscriptionsByPlan.map((plan) => ({
                       key: plan.planSlug,
                       label: plan.planName,
                       segments: [
-                        { key: "active", label: "Active", value: plan.active, color: "var(--primary)" },
-                        { key: "trial", label: "Trial", value: plan.trial, color: "var(--info)", opacity: 0.45 },
-                        { key: "pastDue", label: "Past due", value: plan.pastDue, color: "var(--warning)" },
+                        { key: "active", label: t("charts.legendActive"), value: plan.active, color: "var(--primary)" },
+                        { key: "trial", label: t("charts.legendTrial"), value: plan.trial, color: "var(--info)", opacity: 0.45 },
+                        { key: "pastDue", label: t("charts.legendPastDue"), value: plan.pastDue, color: "var(--warning)" },
                       ],
                     }))}
                   />
                   <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-primary" />Active</span>
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-info opacity-45" />Trial</span>
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-warning" />Past due</span>
+                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-primary" />{t("charts.legendActive")}</span>
+                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-info opacity-45" />{t("charts.legendTrial")}</span>
+                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-warning" />{t("charts.legendPastDue")}</span>
                   </div>
                 </>
               )}
             </SourceBody>
           </div>
         </Panel>
-        <Panel title="Meetings per day" subtitle="Meetings held · hours translated" link={{ href: insightsHref("meetings"), label: "Meetings" }}>
+        <Panel title={t("charts.meetingsPerDayTitle")} subtitle={t("charts.meetingsPerDaySubtitle")} link={{ href: insightsHref("meetings"), label: t("links.meetings") }}>
           <div className="px-4 py-3.5">
             <SourceBody
               state={props.meetings}
               height={170}
-              empty="No days in this period."
+              empty={t("charts.noDaysInPeriod")}
               isEmpty={(data) => (data.meetingsByDay ?? []).length === 0}
             >
               {(data) => {
                 const days = seriesAxis(data.meetingsByDay, period.axisEndDay);
                 return (
                   <ValueBars
-                    ariaLabel="Meetings per day"
+                    ariaLabel={t("charts.ariaMeetingsPerDay")}
                     color="var(--primary)"
                     height={170}
                     showValues={days.length <= 16}
@@ -918,8 +929,12 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                       label: day.label,
                       value: day.row?.meetings ?? null,
                       title: day.row
-                        ? `${day.label}: ${formatCount(day.row.meetings)} meetings · ${formatInsightValue(day.row.hours, "hours")}`
-                        : `${day.label}: still to come`,
+                        ? t("charts.meetingsTooltip", {
+                            label: day.label,
+                            count: day.row.meetings,
+                            hours: formatInsightValue(day.row.hours, "hours"),
+                          })
+                        : t("charts.stillToCome", { label: day.label }),
                     }))}
                   />
                 );
@@ -930,14 +945,14 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Needs attention" subtitle="Things an operator should act on today">
+        <Panel title={t("needsAttention.title")} subtitle={t("needsAttention.subtitle")}>
           {attentionLoading ? (
             <ListState state={{ status: "loading" }}>{() => null}</ListState>
           ) : attention.items.length === 0 ? (
             <ListEmpty>
               {attention.unavailable.length === 0
-                ? "Nothing needs attention right now."
-                : "Nothing needs attention in the sources that answered."}
+                ? t("needsAttention.nothingNow")
+                : t("needsAttention.nothingAnswered")}
             </ListEmpty>
           ) : (
             <Rows>
@@ -951,16 +966,16 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           )}
           {!attentionLoading && attention.unavailable.length > 0 ? (
             <footer className="border-t border-hairline px-4 py-2 text-[11px] text-ink-muted">
-              Not checked, not available yet: {attention.unavailable.join(", ")}
+              {t("needsAttention.notChecked", { sources: attention.unavailable.join(", ") })}
             </footer>
           ) : null}
         </Panel>
 
-        <Panel title="Top workspaces by credits" subtitle={period.label} link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
+        <Panel title={t("panels.topWorkspacesTitle")} subtitle={period.label} link={{ href: insightsHref("workspaces"), label: t("links.workspaces") }}>
           <ListState state={props.billing}>
             {(data) => {
               const top = data.topWorkspaces ?? [];
-              if (top.length === 0) return <ListEmpty>No credits consumed in this period.</ListEmpty>;
+              if (top.length === 0) return <ListEmpty>{t("charts.noCreditsConsumed")}</ListEmpty>;
               const max = Math.max(1, ...top.map((row) => row.credits));
               return (
                 <Rows>
@@ -968,7 +983,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                     <Row key={row.workspaceId} href={workspaceHref(row.workspaceId)}>
                       <div className="min-w-0">
                         <b className="block truncate text-[13px] font-medium text-ink">
-                          {index + 1}. {workspaceLabel(row.workspaceName)}
+                          {index + 1}. {workspaceLabel(row.workspaceName, t)}
                         </b>
                         <span className="mt-1.5 block h-[3px] rounded-full bg-surface-3">
                           <span className="block h-[3px] rounded-full bg-primary" style={{ width: `${Math.max(2, (row.credits / max) * 100)}%` }} />
@@ -983,11 +998,11 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           </ListState>
         </Panel>
 
-        <Panel title="Recent payments" subtitle="Across all workspaces" link={{ href: insightsHref("billingLedger"), label: "Ledger" }}>
+        <Panel title={t("panels.recentPaymentsTitle")} subtitle={t("panels.recentPaymentsSubtitle")} link={{ href: insightsHref("billingLedger"), label: t("links.ledger") }}>
           <ListState state={props.snapshot}>
             {(data) =>
               (data.recentPayments ?? []).length === 0 ? (
-                <ListEmpty>No payments yet.</ListEmpty>
+                <ListEmpty>{t("panels.noPaymentsYet")}</ListEmpty>
               ) : (
                 <Rows>
                   {data.recentPayments.map((payment, index) => {
@@ -996,7 +1011,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                     return (
                       <Row key={`${payment.workspaceId}-${payment.at}-${index}`} href={workspaceHref(payment.workspaceId)}>
                         <RowText
-                          title={payment.workspaceId ? workspaceLabel(payment.workspaceName) : "No workspace"}
+                          title={payment.workspaceId ? workspaceLabel(payment.workspaceName, t) : t("panels.noWorkspace")}
                           detail={[dateTime(payment.at), payment.method].filter(Boolean).join(" · ")}
                         />
                         <div className="text-right text-[13px] tabular-nums text-ink">
@@ -1015,21 +1030,24 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         </Panel>
 
         <Panel
-          title="Subscriptions ending soon"
-          subtitle="Soonest first · up to 8 paid subscriptions whose period ends within 14 days · trials not included"
-          link={{ href: insightsHref("subscriptionsEndingSoon"), label: "Subscriptions" }}
+          title={t("panels.endingSoonTitle")}
+          subtitle={t("panels.endingSoonSubtitle")}
+          link={{ href: insightsHref("subscriptionsEndingSoon"), label: t("links.subscriptions") }}
         >
           <ListState state={props.snapshot}>
             {(data) =>
               (data.endingSoon ?? []).length === 0 ? (
-                <ListEmpty>No paid subscription reaches the end of its period in the next 14 days.</ListEmpty>
+                <ListEmpty>{t("panels.noEndingSoon")}</ListEmpty>
               ) : (
                 <Rows>
                   {data.endingSoon.map((row) => (
                     <Row key={`${row.workspaceId}-${row.endsAt}`} href={workspaceHref(row.workspaceId)}>
                       <RowText
-                        title={workspaceLabel(row.workspaceName)}
-                        detail={`${row.planName} · ${row.cancelAtPeriodEnd ? "will not renew" : "renews"}`}
+                        title={workspaceLabel(row.workspaceName, t)}
+                        detail={t("panels.planRenewal", {
+                          plan: row.planName,
+                          renewal: row.cancelAtPeriodEnd ? t("panels.willNotRenew") : t("panels.renews"),
+                        })}
                       />
                       <div className={cn("text-right text-[13px] tabular-nums", row.cancelAtPeriodEnd ? "text-warning" : "text-ink")}>
                         {dayShort(new Date(row.endsAt))}
