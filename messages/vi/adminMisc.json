@@ -18,16 +18,10 @@
     "statusUpdated": "Đã đánh dấu {company} là {status}",
     "statusUpdateFailed": "Không thể cập nhật trạng thái khách hàng tiềm năng.",
     "searchPlaceholder": "Tìm theo tên, email hoặc công ty",
-    "searchAria": "Tìm khách hàng tiềm năng",
-    "search": "Tìm kiếm",
     "error": {
       "title": "Không thể tải danh sách khách hàng tiềm năng.",
       "description": "Hãy kiểm tra dịch vụ thanh toán và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
       "retry": "Thử lại"
-    },
-    "empty": {
-      "title": "Không có khách hàng tiềm năng nào khớp với bộ lọc này",
-      "description": "Hãy chọn tab trạng thái khác hoặc xóa nội dung tìm kiếm."
     },
     "openWorkspace": "Mở workspace",
     "noWorkspaceYet": "Chưa có workspace",
@@ -38,10 +32,31 @@
     "statusAria": "Trạng thái của {company}",
     "seats": "{count, plural, other {# chỗ}}",
     "creditsPerMonth": "{count} tín dụng / tháng",
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
+    "list": {
+      "filters": {
+        "requestType": "Loại yêu cầu",
+        "source": "Nguồn",
+        "created": "Ngày tạo",
+        "workspace": "Không gian làm việc",
+        "workspacePlaceholder": "Tìm không gian làm việc…"
+      },
+      "sourceLabels": {
+        "landing_pricing": "Trang bảng giá"
+      },
+      "sortFields": {
+        "created": "Ngày tạo",
+        "company": "Công ty"
+      },
+      "columns": {
+        "lead": "Khách hàng",
+        "request": "Yêu cầu",
+        "source": "Nguồn",
+        "created": "Ngày tạo",
+        "status": "Trạng thái"
+      },
+      "boardPageNote": "Bảng hiển thị một trang tối đa {size} khách hàng tiềm năng, theo thứ tự của danh sách. Chuyển trang để xem phần còn lại.",
+      "emptyTitle": "Chưa có khách hàng tiềm năng nào",
+      "emptyDescription": "Các yêu cầu liên hệ bộ phận kinh doanh từ trang bảng giá sẽ xuất hiện tại đây."
     }
   },
   "feedback": {
@@ -84,16 +99,10 @@
     },
     "comments": {
       "title": "Bình luận",
-      "error": "Không thể tải bình luận.",
       "empty": "Chưa có ai để lại bình luận trong khoảng thời gian này.",
       "sortRecent": "Mới nhất",
       "sortLowest": "Điểm thấp nhất trước",
       "sortAria": "Thứ tự bình luận"
-    },
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
     },
     "footerNote": "Chỉ xem, và ẩn danh theo thiết kế — API không gửi kèm ai là người viết bình luận. Một đánh giá mà quản trị viên có thể sửa hoặc xóa sẽ không còn đáng tin để đọc.",
     "insights": {
@@ -104,6 +113,27 @@
       "lowConfidenceRule": "Một số liệu bị đánh dấu độ tin cậy thấp khi dưới {min} phản hồi hoặc tỷ lệ phản hồi dưới {rate}.",
       "noDataTitle": "{count, plural, other {# tiêu chí chưa có dữ liệu}}",
       "noDataBody": "{names}: không ai đánh giá trong kỳ này."
+    },
+    "list": {
+      "searchPlaceholder": "Tìm trong nhận xét hoặc tên cuộc họp",
+      "commentCount": "{count, plural, other {# nhận xét}}",
+      "filters": {
+        "rating": "Điểm đánh giá",
+        "ratingUnit": "sao",
+        "ratingPresets": {
+          "unhappy": "Không hài lòng (1–2)",
+          "neutral": "Bình thường (3)",
+          "happy": "Hài lòng (4–5)"
+        },
+        "workspace": "Không gian làm việc",
+        "workspacePlaceholder": "Tìm không gian làm việc…"
+      },
+      "columns": {
+        "rating": "Điểm",
+        "comment": "Nhận xét",
+        "meeting": "Cuộc họp",
+        "submitted": "Thời điểm gửi"
+      }
     }
   },
   "audit": {

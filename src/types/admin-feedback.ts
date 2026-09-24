@@ -88,4 +88,9 @@ export interface AdminFeedbackQuery {
   to?: string;
   /** Comments only: `recent` (default) or `lowest` — lowest overall rating first (WT-694). */
   sort?: "recent" | "lowest";
+  /** Comments only: matched against the comment text and the room title. */
+  search?: string;
+  /** Comments only: bounds on the overall rating, 1..5 inclusive. */
+  minRating?: number;
+  maxRating?: number;
 }

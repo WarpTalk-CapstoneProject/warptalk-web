@@ -6,6 +6,7 @@ import type {
   CreditHistoryFilters,
   CreditHistoryQueryParams,
   CreditTransactionDto,
+  GlobalInvoiceFilters,
   PagedResult,
   SubscriptionDto,
   InvoiceDto,
@@ -142,6 +143,8 @@ export const billingService = {
       if (filters.toDate) params.toDate = filters.toDate;
       if (filters.minAmount !== undefined) params.minAmount = filters.minAmount;
       if (filters.maxAmount !== undefined) params.maxAmount = filters.maxAmount;
+      if (filters.search?.trim()) params.search = filters.search.trim();
+      if (filters.sort) params.sort = filters.sort;
     }
 
     const { data } = await apiClient.get<PagedResult<CreditTransactionDto>>(
@@ -457,13 +460,15 @@ export const billingService = {
   getGlobalInvoices: async (
     pageNumber = 1,
     pageSize = 20,
+    filters: GlobalInvoiceFilters = {},
   ): Promise<PagedResult<InvoiceDto>> => {
-    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(
-      `/invoices/global`,
-      {
-        params: { pageNumber, pageSize },
-      },
-    );
+    // Empty values are dropped rather than sent as `status=`, which the server would read as a
+    // request for invoices whose status is the empty string.
+    const params: Record<string, string | number> = { pageNumber, pageSize };
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== null && value !== "") params[key] = value;
+    }
+    const { data } = await apiClient.get<PagedResult<InvoiceDto>>(`/invoices/global`, { params });
     return data;
   },
 

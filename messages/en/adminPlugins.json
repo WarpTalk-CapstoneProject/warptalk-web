@@ -11,7 +11,6 @@
     "filterAria": "Filter the catalog by whether a row is active",
     "trailingCount": "{visible} of {total}",
     "searchPlaceholder": "Search by label, key or provider",
-    "searchAria": "Search the plugin catalog",
     "tabs": {
       "all": "All",
       "active": "Active",
@@ -122,6 +121,20 @@
         "problemCount": "{count, plural, one {# field still needs} other {# fields still need}} fixing. Nothing was sent.",
         "success": "{key} added to the catalog. It is live for every user immediately — no deploy.",
         "errorFallback": "Could not add the plugin to the catalog."
+      }
+    },
+    "listControls": {
+      "filters": {
+        "kind": "Kind",
+        "provider": "Provider",
+        "category": "Category",
+        "featured": "Featured",
+        "oauthClient": "Has OAuth client id"
+      },
+      "sortFields": {
+        "order": "Catalog order",
+        "label": "Name",
+        "installs": "Installed by"
       }
     }
   },

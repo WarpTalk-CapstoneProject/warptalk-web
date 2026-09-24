@@ -67,6 +67,40 @@
       "pageOf": "Trang {page}/{totalPages}",
       "previous": "Trước",
       "next": "Sau"
+    },
+    "columns": {
+      "plan": "Gói",
+      "status": "Trạng thái",
+      "value": "Giá trị hằng tháng",
+      "credits": "Tín dụng còn lại",
+      "periodEnd": "Kết thúc kỳ",
+      "actions": "Thao tác"
+    },
+    "filters": {
+      "plan": "Gói",
+      "service": "Trạng thái dịch vụ",
+      "serviceStates": {
+        "healthy": "Bình thường",
+        "low_balance": "Số dư thấp",
+        "in_overage": "Vượt hạn mức",
+        "suspended": "Tạm ngưng dịch vụ"
+      },
+      "cycle": "Chu kỳ thanh toán",
+      "cycles": {
+        "monthly": "Hằng tháng",
+        "yearly": "Hằng năm"
+      },
+      "autoRenew": "Tự động gia hạn",
+      "renews": "Có gia hạn",
+      "doesNotRenew": "Không gia hạn",
+      "workspace": "Không gian làm việc",
+      "workspacePlaceholder": "Tìm không gian làm việc theo tên hoặc slug…",
+      "periodEnd": "Kết thúc kỳ"
+    },
+    "sortFields": {
+      "periodEnd": "Ngày kết thúc kỳ",
+      "created": "Ngày tạo",
+      "credits": "Tín dụng còn lại"
     }
   },
   "lifecycleDialog": {
