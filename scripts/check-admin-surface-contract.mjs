@@ -190,6 +190,11 @@ const NAV_EXEMPT = new Set([
   // Reached from /admin/announcements by clicking a row. One notice's full record, not a
   // destination of its own.
   `${ADMIN_ROOT}/announcements/[id]/page.tsx`,
+  // The announcements CMS editor (`new` or an id), reached from a card or "New announcement" on
+  // /admin/announcements.
+  `${ADMIN_ROOT}/announcements/posts/[postId]/page.tsx`,
+  // One email's editor, reached from its card on /admin/email-templates.
+  `${ADMIN_ROOT}/email-templates/[templateKey]/page.tsx`,
 ]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;

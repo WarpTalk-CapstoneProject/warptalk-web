@@ -54,6 +54,7 @@ const NAMESPACES = [
   "adminUsers",
   "adminSubscriptions",
   "adminAnnouncements",
+  "adminCms",
   "adminPlansSettings",
   "adminGlobalGlossary",
   "adminPlugins",

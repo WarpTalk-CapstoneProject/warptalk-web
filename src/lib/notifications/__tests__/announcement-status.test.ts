@@ -38,7 +38,9 @@ test("the delivered count is shown only when the server sent one", () => {
 });
 
 test("the list and the detail page both read status, sent time and count through it", () => {
-  const list = read("../../../app/(app)/admin/announcements/page.tsx");
+  // The broadcast list moved out of the page when Announcements became a CMS; the page renders it
+  // under its "Inbox broadcasts" view.
+  const list = read("../../../components/admin/announcement-broadcast-history.tsx");
   const detail = read("../../../app/(app)/admin/announcements/[id]/page.tsx");
   for (const [name, source] of [["list", list], ["detail", detail]] as const) {
     assert.match(source, /announcementStatusClasses\(/, `${name} uses the shared status tone`);

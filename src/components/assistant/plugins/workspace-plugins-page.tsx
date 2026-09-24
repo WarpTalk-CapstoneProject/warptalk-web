@@ -787,6 +787,20 @@ export function WorkspacePluginsPage() {
     </section>
   ) : null;
 
+  // Plugins WarpTalk turned off for this workspace after it had them. Shown, not hidden, so the
+  // Owner knows where a plugin went and that members' connections are kept; never addable.
+  const disabledByPlatform = overview?.disabledByPlatform ?? [];
+  const disabledByPlatformSection = disabledByPlatform.length ? (
+    <section data-testid="workspace-plugins-disabled-by-platform" className="flex flex-col gap-3">
+      <SectionHead title={t("disabledByPlatform.title")} note={t("disabledByPlatform.note")} />
+      <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
+        {disabledByPlatform.map((plugin) => (
+          <PluginRow key={plugin.key} plugin={plugin} subtitle={t("disabledByPlatform.row")} action={null} />
+        ))}
+      </div>
+    </section>
+  ) : null;
+
   let body: React.ReactNode;
   if (!workspaceId) {
     body = null;
@@ -834,6 +848,7 @@ export function WorkspacePluginsPage() {
           )}
         </div>
         {marketplaceSection}
+        {disabledByPlatformSection}
       </>
     );
   } else {
@@ -895,6 +910,7 @@ export function WorkspacePluginsPage() {
         </section>
 
         {marketplaceSection}
+        {disabledByPlatformSection}
       </>
     );
   }
