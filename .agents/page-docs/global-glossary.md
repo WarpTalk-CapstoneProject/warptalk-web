@@ -15,6 +15,13 @@
   definition, usage note, and priority.
 - Published terms apply to opted-in workspaces. Workspace terminology takes precedence on a
   collision, and a workspace can opt out through `AiUsagePolicy.UseGlobalGlossary`.
+- **2026-09-24:** the create-term and edit-term dialogs' form no longer caps itself to
+  `max-h-[60vh] overflow-y-auto` — that wrapper showed a vertical scrollbar even though the six
+  fields fit the dialog comfortably, since `DialogContent` (`src/components/ui/dialog.tsx`) has
+  no height cap of its own to defer to. The form now just grows with its content, like the
+  bulk-import dialog beside it. If a future field addition makes either form tall enough to
+  genuinely risk overflowing a short viewport, re-add a height cap on the `DialogContent` itself
+  (which every dialog on this page already sizes independently) rather than on the form.
 
 ## Data and AI Flow
 

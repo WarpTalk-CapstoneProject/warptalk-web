@@ -8,6 +8,40 @@
     "exportReport": "レポートを書き出す",
     "managePlans": "プランを管理"
   },
+  "adjustCredits": {
+    "trigger": "クレジットを調整",
+    "title": "クレジットを調整",
+    "description": "クレジットを手動で追加または減算します。この操作は監査ログに記録されます。",
+    "descriptionWithTarget": "ワークスペース {workspaceId} のクレジットを手動で追加または減算します。この操作は監査ログに記録されます。",
+    "confirmHeading": "このクレジット調整を確認してください",
+    "confirmWorkspace": "ワークスペース: {name}",
+    "confirmAmount": "{sign}{amount} クレジット",
+    "confirmReason": "理由: {reason}",
+    "workspaceLabel": "ワークスペース",
+    "workspaceLoading": "ワークスペースを読み込み中…",
+    "workspaceLoadError": "ワークスペースを読み込めませんでした",
+    "workspacePlaceholder": "ワークスペースを選択…",
+    "workspaceOption": "{name}（{slug}）",
+    "workspaceOptionSuspended": "{name}（{slug}）— 停止中",
+    "amountLabel": "数量",
+    "amountPlaceholder": "例: 500 または -500",
+    "amountHint": "マイナス値を入力するとクレジットが減算されます。",
+    "reasonLabel": "理由（必須）",
+    "reasonPlaceholder": "例: サービス停止に対する補填",
+    "cancel": "キャンセル",
+    "back": "戻る",
+    "reviewAdjustment": "調整内容を確認",
+    "confirmAdjustment": "調整を確定",
+    "processing": "処理中...",
+    "success": "{sign}{amount} クレジットの調整が完了しました。",
+    "errors": {
+      "chooseWorkspace": "ワークスペースを選択してください。",
+      "invalidAmount": "0以外の有効な整数を入力してください。",
+      "amountTooLarge": "一度の調整で {max} クレジットを超えることはできません。",
+      "reasonRequired": "監査ログのため理由の入力が必要です。",
+      "adjustFailed": "クレジットの調整に失敗しました。もう一度お試しください。"
+    }
+  },
   "metrics": {
     "totalIssuedCredits": {
       "label": "発行済みクレジット合計",

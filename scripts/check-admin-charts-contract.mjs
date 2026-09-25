@@ -91,7 +91,17 @@ for (const rel of [
 
 // Future days stay blank: the dashboard tells the chart which gaps are still to come.
 const dashboard = read("src/components/admin/insights/insights-dashboard.tsx");
-assert.match(dashboard, /days\[index\]\?\.future \? "Still to come"/, "future days are described, not drawn as 0");
+assert.match(
+  dashboard,
+  /days\[index\]\?\.future \? t\("charts\.stillToComeShort"\)/,
+  "future days are described, not drawn as 0",
+);
+const adminOpsEn = JSON.parse(read("messages/en/adminOps.json"));
+assert.equal(
+  adminOpsEn.insights.charts.stillToComeShort,
+  "Still to come",
+  "The English catalog must still describe a future gap as \"Still to come\".",
+);
 
 const css = read("src/app/globals.css");
 const rootBlock = css.slice(css.indexOf(":root {"), css.indexOf(".dark {"));

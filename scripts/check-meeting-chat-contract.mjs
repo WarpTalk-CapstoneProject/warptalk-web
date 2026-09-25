@@ -4,11 +4,12 @@ import path from "node:path";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-const [endpoints, chatPanel, store, session] = await Promise.all([
+const [endpoints, chatPanel, store, session, meetingChatEn] = await Promise.all([
   readFile(path.join(root, "src/lib/api/endpoints.ts"), "utf8"),
   readFile(path.join(root, "src/components/rooms/live/chat-panel.tsx"), "utf8"),
   readFile(path.join(root, "src/stores/translationRoom-store.ts"), "utf8"),
   readFile(path.join(root, "src/components/rooms/live/persistent-meeting-session.tsx"), "utf8"),
+  readFile(path.join(root, "messages/en/meetingChat.json"), "utf8").then(JSON.parse),
 ]);
 
 // Comments below describe the defect in its own words; reading them as code is how a check
@@ -21,7 +22,13 @@ const checks = [
   ["frontend chat endpoint includes rooms segment", endpoints.includes("`/meetings/rooms/${roomId}/chat`")],
   ["chat panel loads persisted history", chatPanel.includes("useMeetingChat(roomId)")],
   ["chat panel hydrates realtime store", chatPanel.includes("setChatMessages(")],
-  ["chat panel renders history error state", chatPanel.includes("Could not load chat history")],
+  [
+    // "Could not load chat history" moved into i18n (t("history.loadError")) — assert the
+    // component still calls the key and the English catalog still carries the wording.
+    "chat panel renders history error state",
+    chatPanel.includes('t("history.loadError")') &&
+      meetingChatEn.history?.loadError === "Could not load chat history",
+  ],
   ["chat store exposes history hydration", store.includes("setChatMessages:")],
   ["chat store deduplicates messages by id", store.includes("existing.id === message.id")],
 

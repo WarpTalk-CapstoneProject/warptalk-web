@@ -12,7 +12,13 @@ import {
   Broadcast,
   ArrowSquareOut,
 } from "@phosphor-icons/react/dist/ssr";
-import { MEETING_TYPES, EXTERNAL_BRIDGE_TYPE, isExternalBridge } from "@/lib/meeting/meeting-types";
+import {
+  MEETING_TYPES,
+  MEETING_TYPE_I18N_KEYS,
+  EXTERNAL_BRIDGE_TYPE,
+  isExternalBridge,
+  meetingTypeByValue,
+} from "@/lib/meeting/meeting-types";
 
 /**
  * Icons live here rather than on the meeting type itself: `meeting-types.ts` is the API contract
@@ -48,22 +54,28 @@ export function TemplatePicker({ value, onChange }: { value: string; onChange: (
 
   function renderItem(type: (typeof MEETING_TYPES)[number]) {
     const Icon = ICON_BY_VALUE[type.value] ?? CalendarIcon;
+    const label = t(`types.${MEETING_TYPE_I18N_KEYS[type.value]}`);
     return (
       <CommandItem
         key={type.value}
-        onSelect={() => onChange(type.label)}
+        onSelect={() => onChange(type.value)}
         className="text-[13px] rounded-md cursor-pointer flex items-center gap-2 px-2 py-1.5 aria-selected:bg-surface-2"
       >
         <Icon weight="duotone" size={14} className="text-ink-muted" />
-        <span className="text-ink font-medium">{type.label}</span>
+        <span className="text-ink font-medium">{label}</span>
       </CommandItem>
     );
   }
 
+  const selectedType = meetingTypeByValue(value);
+  const selectedLabel = selectedType
+    ? t(`types.${MEETING_TYPE_I18N_KEYS[selectedType.value]}`)
+    : value;
+
   return (
     <Popover>
       <PopoverTrigger className="flex items-center gap-1 hover:bg-surface-2 px-1.5 py-0.5 rounded transition-colors text-ink cursor-pointer">
-        {value} <CaretDown size={12} weight="bold" className="text-ink-muted" />
+        {selectedLabel} <CaretDown size={12} weight="bold" className="text-ink-muted" />
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[240px] p-1 bg-surface-1 rounded-xl shadow-xl border-border/50">
         <Command className="bg-transparent">

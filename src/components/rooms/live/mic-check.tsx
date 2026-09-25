@@ -21,6 +21,7 @@
  *   drawings of one microphone can never learn to disagree.
  */
 
+import { useTranslations } from "next-intl";
 import { useLocalMicLevels } from "@/hooks/use-local-mic-levels";
 import { describeMicBackground, type MicBackgroundLabel } from "@/lib/meeting/mic-check";
 import { CloneCaptureMeter } from "./clone-capture-meter";
@@ -28,11 +29,11 @@ import { CloneCaptureMeter } from "./clone-capture-meter";
 /** Short on purpose — this is a live check, not a recording; ~9s covers "say a sentence". */
 const MIC_CHECK_WINDOW_SECONDS = 9;
 
-const BACKGROUND_COPY: Record<MicBackgroundLabel, { text: string; tone: "good" | "warn" }> = {
-  silent: { text: "Background: silent — suppression is holding.", tone: "good" },
-  low: { text: "Background: low.", tone: "good" },
-  noticeable: { text: "Background: noticeable — others can hear your room.", tone: "warn" },
-  loud: { text: "Background: loud — check what your microphone is next to.", tone: "warn" },
+const BACKGROUND_TONE: Record<MicBackgroundLabel, "good" | "warn"> = {
+  silent: "good",
+  low: "good",
+  noticeable: "warn",
+  loud: "warn",
 };
 
 export function MicCheck({
@@ -47,23 +48,25 @@ export function MicCheck({
   /** A muted microphone publishes silence; the strip must say that rather than look broken. */
   microphoneOn: boolean;
 }) {
+  const t = useTranslations("meetingControlBar");
   const levels = useLocalMicLevels({
     enabled: enabled && microphoneOn,
     windowSeconds: MIC_CHECK_WINDOW_SECONDS,
   });
   const background = microphoneOn ? describeMicBackground(levels) : null;
-  const copy = background ? BACKGROUND_COPY[background.label] : null;
+  const backgroundTone = background ? BACKGROUND_TONE[background.label] : null;
+  const backgroundText = background ? t(`micCheck.background.${background.label}`) : null;
 
   return (
     <div className="px-2.5 pb-2 pt-1">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-ink-muted">Mic check</span>
+        <span className="text-[11px] font-medium text-ink-muted">{t("micCheck.title")}</span>
         <span
           className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
             suppressionActive ? "bg-primary/10 text-primary" : "bg-surface-3 text-ink-subtle"
           }`}
         >
-          {suppressionActive ? "Krisp" : "Browser"}
+          {suppressionActive ? t("micCheck.providerKrisp") : t("micCheck.providerBrowser")}
         </span>
       </div>
 
@@ -73,19 +76,19 @@ export function MicCheck({
             levels={levels}
             progress={null}
             tone="idle"
-            ariaLabel="Live microphone level, as others hear it"
+            ariaLabel={t("micCheck.liveLevelAriaLabel")}
           />
           <p
             className={`mt-1 text-[10px] leading-snug ${
-              copy?.tone === "warn" ? "text-amber-600" : "text-ink-subtle"
+              backgroundTone === "warn" ? "text-amber-600" : "text-ink-subtle"
             }`}
           >
-            {copy ? copy.text : "Say something — the bars are what others hear."}
+            {backgroundText ?? t("micCheck.prompt")}
           </p>
         </>
       ) : (
         <p className="mt-1 text-[10px] leading-snug text-ink-subtle">
-          Your microphone is off — unmute to check it.
+          {t("micCheck.off")}
         </p>
       )}
     </div>

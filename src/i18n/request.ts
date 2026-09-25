@@ -59,6 +59,7 @@ const NAMESPACES = [
   "adminGlobalGlossary",
   "adminPlugins",
   "adminBillingLedger",
+  "adminBillingPlansLegacy",
   "adminLists",
   "adminStaff",
   "adminPackages",
@@ -67,6 +68,12 @@ const NAMESPACES = [
   "adminFinance",
   "adminInbox",
   "download",
+  "meetingControlBar",
+  "meetingCallChrome",
+  "meetingChat",
+  "meetingRoomPage",
+  "meetingTranscript",
+  "meetingSummary",
 ] as const;
 
 async function loadMessages(locale: string): Promise<Messages> {

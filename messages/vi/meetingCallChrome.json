@@ -1,0 +1,30 @@
+{
+  "readyCard": {
+    "dismissAria": "Đóng",
+    "title": "Cuộc họp của bạn đã sẵn sàng",
+    "description": "Chia sẻ liên kết này với những người bạn muốn mời vào cuộc họp.",
+    "addOthers": "Mời thêm người"
+  },
+  "captions": {
+    "earlierCaptions": "Phụ đề trước đó",
+    "fullTranscript": "Bản ghi đầy đủ",
+    "closeHistoryAria": "Đóng lịch sử phụ đề và quay lại phụ đề trực tiếp",
+    "backToLive": "Quay lại phụ đề trực tiếp",
+    "openFullTranscript": "Xem toàn bộ bản ghi",
+    "liveRegionAria": "Phụ đề trực tiếp. Cuộn lên để xem phụ đề trước đó.",
+    "emptyState": "Phụ đề sẽ hiện ở đây khi có người nói."
+  },
+  "stage": {
+    "cameraOff": "Camera đang tắt",
+    "presenting": "Bạn đang trình chiếu",
+    "retryConnection": "Thử kết nối lại",
+    "spotlightedByHost": "Được người tổ chức làm nổi bật",
+    "pinned": "Đã ghim",
+    "connectionState": {
+      "connected": "Đã kết nối",
+      "connecting": "Đang kết nối…",
+      "reconnecting": "Đang kết nối lại…",
+      "waiting": "Đang chờ LiveKit"
+    }
+  }
+}
