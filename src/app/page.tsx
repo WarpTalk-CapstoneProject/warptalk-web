@@ -1495,7 +1495,7 @@ export default function HomePage() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -12 }}
                   transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                  className="mx-auto mt-2 flex max-w-7xl flex-col gap-1 rounded-2xl border border-white/10 bg-black/70 p-3 text-sm text-white/72 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden"
+                  className="relative z-10 mx-auto mt-2 flex max-w-7xl flex-col gap-1 rounded-2xl border border-white/10 bg-[#0a0a0a] p-3 text-sm text-white/72 shadow-[0_20px_80px_rgba(0,0,0,0.6)] backdrop-blur-xl md:hidden"
                 >
                   {navLinks.map((link) => (
                     <a
