@@ -63,4 +63,17 @@ export const adminEmailBlockService = {
 
   bulk: async (action: EmailBlockBulkAction, ids: string[]): Promise<BulkResultDto> =>
     (await apiClient.post<BulkResultDto>(API.adminEmailBlocks.bulk, { action, ids })).data,
+
+  /** v3: the stored block rendered inside an email (published side unless draft). */
+  render: async (id: string, query: { dark?: boolean; templateKey?: string | null; locale?: string; draft?: boolean }): Promise<EmailPreviewDto> =>
+    (
+      await apiClient.get<EmailPreviewDto>(API.adminEmailBlocks.action(id, "render"), {
+        params: {
+          dark: query.dark ?? false,
+          templateKey: query.templateKey || undefined,
+          locale: query.locale ?? "en",
+          draft: query.draft ?? false,
+        },
+      })
+    ).data,
 };

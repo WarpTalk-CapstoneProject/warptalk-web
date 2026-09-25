@@ -609,6 +609,21 @@ export const API = {
       `/admin/notifications/email-templates/${encodeURIComponent(key)}/locales/${encodeURIComponent(locale)}/${action}`,
     restore: (key: string, locale: string, version: number) =>
       `/admin/notifications/email-templates/${encodeURIComponent(key)}/locales/${encodeURIComponent(locale)}/versions/${version}/restore`,
+    /** v3: a stored email rendered as received (thumbnails, the inbox preview). */
+    render: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/render`,
+    /** v3: custom templates. Create is POST base. */
+    details: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/details`,
+    deletion: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/deletion`,
+    remove: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/delete`,
+    restoreTemplate: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/restore`,
+  },
+  /** v3: audience sends of custom templates (content.email_send). */
+  adminEmailSends: {
+    estimate: (key: string) => `/admin/notifications/email-sends/templates/${encodeURIComponent(key)}/estimate`,
+    forTemplate: (key: string) => `/admin/notifications/email-sends/templates/${encodeURIComponent(key)}`,
+    detail: (id: string) => `/admin/notifications/email-sends/${encodeURIComponent(id)}`,
+    recipients: (id: string) => `/admin/notifications/email-sends/${encodeURIComponent(id)}/recipients`,
+    cancel: (id: string) => `/admin/notifications/email-sends/${encodeURIComponent(id)}/cancel`,
   },
   /** Email templates (CMS v2): layouts and reusable blocks, managed apart from any email's wording. */
   adminEmailBlocks: {
@@ -616,7 +631,7 @@ export const API = {
     bulk: "/admin/notifications/email-blocks/bulk",
     preview: "/admin/notifications/email-blocks/preview",
     detail: (id: string) => `/admin/notifications/email-blocks/${encodeURIComponent(id)}`,
-    action: (id: string, action: "draft" | "publish" | "discard-draft" | "duplicate" | "archive" | "unarchive" | "set-default" | "versions") =>
+    action: (id: string, action: "draft" | "publish" | "discard-draft" | "duplicate" | "archive" | "unarchive" | "set-default" | "versions" | "render") =>
       `/admin/notifications/email-blocks/${encodeURIComponent(id)}/${action}`,
     restore: (id: string, version: number) =>
       `/admin/notifications/email-blocks/${encodeURIComponent(id)}/versions/${version}/restore`,
