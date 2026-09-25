@@ -4,6 +4,7 @@ import { memo, useEffect, useRef, useState, type MouseEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Hls from "hls.js";
+import { List, X } from "@phosphor-icons/react/dist/ssr";
 import { AnimatePresence, motion, useScroll, useTransform } from "motion/react";
 import type { MotionValue, Variants } from "motion/react";
 import { useRouter } from "next/navigation";
@@ -1262,6 +1263,7 @@ export default function HomePage() {
   const [hasShellLoaded, setHasShellLoaded] = useState(false);
   const [hasHeroVideoLoaded, setHasHeroVideoLoaded] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const isLoading =
     !hasLoaderFinished || !hasShellLoaded || !hasHeroVideoLoaded;
 
@@ -1374,6 +1376,7 @@ export default function HomePage() {
   ) {
     event.preventDefault();
     setActiveSection(sectionId);
+    setIsMobileMenuOpen(false);
     document
       .getElementById(sectionId)
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1464,12 +1467,66 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={handleGetStarted}
-                  className="rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
+                  className="hidden rounded-xl bg-gradient-to-b from-white to-neutral-300 px-5 py-2.5 text-sm font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white md:inline-flex"
                 >
                   {t("nav.getStarted")}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen((open) => !open)}
+                  aria-label={isMobileMenuOpen ? t("nav.closeMenu") : t("nav.openMenu")}
+                  aria-expanded={isMobileMenuOpen}
+                  className="flex size-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-white transition hover:bg-white/10 md:hidden"
+                >
+                  {isMobileMenuOpen ? (
+                    <X weight="light" className="size-5" />
+                  ) : (
+                    <List weight="light" className="size-5" />
+                  )}
+                </button>
               </div>
             </nav>
+
+            <AnimatePresence>
+              {isMobileMenuOpen ? (
+                <motion.div
+                  initial={{ opacity: 0, y: -12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className="mx-auto mt-2 flex max-w-7xl flex-col gap-1 rounded-2xl border border-white/10 bg-black/70 p-3 text-sm text-white/72 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl md:hidden"
+                >
+                  {navLinks.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.href}
+                      onClick={(event) => handleNavClick(event, link.id)}
+                      className="rounded-xl px-4 py-3 transition-colors hover:bg-white/10 hover:text-white"
+                    >
+                      {t(`nav.${link.id}`)}
+                    </a>
+                  ))}
+                  <Link
+                    href="/download"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="rounded-xl px-4 py-3 transition-colors hover:bg-white/10 hover:text-white"
+                  >
+                    {t("nav.download")}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      handleGetStarted();
+                    }}
+                    className="mt-1 rounded-xl bg-gradient-to-b from-white to-neutral-300 px-4 py-3 text-center font-medium text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:from-white hover:to-white"
+                  >
+                    {t("nav.getStarted")}
+                  </button>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </header>
 
           <section className="relative z-10 flex min-h-screen items-center justify-center px-5 pb-36 pt-32 text-center md:px-8 lg:px-12">

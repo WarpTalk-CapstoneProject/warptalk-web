@@ -5,7 +5,9 @@
     "pricing": "Pricing",
     "contact": "Contact",
     "download": "Download",
-    "getStarted": "Get Started"
+    "getStarted": "Get Started",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "badges": {
     "realtimeTranslation": "Real-time Translation",
