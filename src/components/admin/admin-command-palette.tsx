@@ -351,11 +351,11 @@ export function AdminCommandPalette() {
     entry.kind === "page" ? tNav(entry.labelKey) : t(`actions.${entry.labelKey}`);
 
   const trimmed = query.trim();
+  // Fifteen pages and ten actions: ranking them on every keystroke costs nothing worth memoising.
   // G10: only what this person's staff role may open. The server refuses the rest anyway; the
   // palette should not offer a command that can only end in "you don't have access".
   const allowedPages = ADMIN_PALETTE_PAGES.filter((entry) => canUsePaletteEntry(staffAccess, entry));
   const allowedActions = ADMIN_PALETTE_ACTIONS.filter((entry) => canUsePaletteEntry(staffAccess, entry));
-  // Fifteen pages and ten actions: ranking them on every keystroke costs nothing worth memoising.
   const pages = trimmed
     ? rankPaletteEntries(trimmed, allowedPages, labelOf).map((r) => r.entry)
     : allowedPages;

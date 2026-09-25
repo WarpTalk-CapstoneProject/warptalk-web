@@ -47,6 +47,13 @@ export interface ChartSeries {
   color?: string;
   /** One per axis position. Null is a gap: never drawn, never counted as 0. */
   values: (number | null)[];
+  /**
+   * What the tooltip and the table say instead of `values`, when what is drawn is not the figure
+   * itself (a line indexed to its own peak so several units can share one chart). Same length.
+   */
+  display?: (number | null)[];
+  /** Formats this series' readout; defaults to the chart's `formatValue`. */
+  formatValue?: (value: number) => string;
 }
 
 export interface TimeSeriesChartProps {
@@ -213,12 +220,12 @@ export function TimeSeriesChart({
     active === null
       ? []
       : colored.map((s) => {
-          const value = s.values[active];
+          const value = (s.display ?? s.values)[active];
           const known = value !== null && value !== undefined && Number.isFinite(value);
           return {
             key: s.key,
             label: s.label,
-            value: known ? formatValue(value) : describeGap(active),
+            value: known ? (s.formatValue ?? formatValue)(value) : describeGap(active),
             color: colored.length > 1 ? s.color : undefined,
             muted: !known,
           };
@@ -439,10 +446,10 @@ export function TimeSeriesChart({
             <tr key={`${label}-${index}`}>
               <th scope="row">{titles?.[index] ?? label}</th>
               {colored.map((s) => {
-                const value = s.values[index];
+                const value = (s.display ?? s.values)[index];
                 return (
                   <td key={s.key}>
-                    {value === null || value === undefined || !Number.isFinite(value) ? describeGap(index) : formatValue(value)}
+                    {value === null || value === undefined || !Number.isFinite(value) ? describeGap(index) : (s.formatValue ?? formatValue)(value)}
                   </td>
                 );
               })}

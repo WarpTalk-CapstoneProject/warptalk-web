@@ -130,6 +130,18 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
+    id: "providers",
+    kind: "page",
+    href: "/admin/providers",
+    labelKey: "providers",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "providers", "vendors", "openai", "cartesia", "livekit", "stripe", "cost", "usage", "uptime", "quota", "rate limit", "api",
+      "nhà cung cấp", "chi phí", "mức dùng", "hạn mức",
+      "プロバイダー", "コスト", "使用量", "稼働率",
+    ],
+  },
+  {
     id: "feedback",
     kind: "page",
     href: "/admin/feedback",
@@ -267,7 +279,7 @@ export const ADMIN_PALETTE_ACTIONS: readonly AdminPaletteEntry[] = [
   {
     id: "composeAnnouncement",
     kind: "action",
-    // The announcements CMS (feat/admin-cms) owns this route; before it lands this is a 404.
+    // The announcements CMS (#577) owns this route: `posts/new` opens its composer.
     href: "/admin/announcements/posts/new",
     labelKey: "composeAnnouncement",
     // i18n-allow: search synonyms, matched in every language whatever the UI locale.

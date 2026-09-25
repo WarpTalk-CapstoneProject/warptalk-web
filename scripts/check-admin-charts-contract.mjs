@@ -63,6 +63,17 @@ assert.match(chart, /monotonePath\(/, "lines are monotone, never overshooting");
 assert.match(chart, /niceScale\(/, "ticks are round numbers");
 assert.match(chart, /<table className="sr-only">/, "every chart has a table view");
 
+// The pie and the uptime row keep the primitive's rules: portalled readout, keyboard, table view.
+for (const rel of ["src/components/admin/charts/pie-chart.tsx", "src/components/admin/charts/uptime-bars.tsx"]) {
+  const primitive = read(rel);
+  assert.match(primitive, /<ChartTooltip/, `${rel} reads out through the shared portalled tooltip`);
+  assert.match(primitive, /onKeyDown=/, `${rel} can be read with the keyboard`);
+  assert.match(primitive, /<table className="sr-only">/, `${rel} has a table view`);
+  assert.ok(!/#[0-9a-f]{6}\b/i.test(stripComments(primitive)), `${rel} hardcodes no colour`);
+}
+const pie = read("src/components/admin/charts/pie-chart.tsx");
+assert.match(pie, /emptyLabel/, "an empty pie says so instead of drawing a full circle");
+
 // Every admin dashboard chart goes through the primitive.
 for (const rel of [
   "src/components/admin/insights/insights-dashboard.tsx",
@@ -71,6 +82,9 @@ for (const rel of [
   "src/components/admin/FeatureBreakdownChart.tsx",
   "src/components/admin/TopWorkspacesChart.tsx",
   "src/app/(app)/admin/workspaces/[workspaceRef]/page.tsx",
+  "src/components/admin/providers/provider-card.tsx",
+  "src/components/admin/providers/provider-detail.tsx",
+  "src/components/admin/providers/provider-uptime-row.tsx",
 ]) {
   assert.match(read(rel), /from "@\/components\/admin\/charts\//, `${rel} draws with components/admin/charts`);
 }

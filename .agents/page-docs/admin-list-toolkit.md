@@ -55,7 +55,7 @@ deliberately not adopted here; the toolkit is exported from `@/components/admin/
 - Quick actions: Adjust credit…, Create plan, Compose announcement, Add plugin, Add glossary term,
   Import glossary, Export ledger, and three saved views (suspended workspaces, locked accounts, new
   leads). They navigate with `?action=` intents the pages consume via `useAdminActionIntent`.
-  "Compose announcement" targets `/admin/announcements/posts/new`, a route owned by the CMS PR.
+  "Compose announcement" opens the CMS composer at `/admin/announcements/posts/new` (#577).
 - Recent items: `localStorage` (`warptalk.admin.palette.recent.v1`), per viewer, wrapped in
   try/catch; malformed or non-`/admin` entries are discarded.
 

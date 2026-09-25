@@ -587,22 +587,46 @@ export const API = {
     unpublish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/unpublish`,
     archive: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/archive`,
     duplicate: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/duplicate`,
+    analytics: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/analytics`,
+    bulk: "/admin/notifications/announcements/bulk",
+    assets: "/admin/notifications/announcements/assets",
   },
-  /** The email template CMS (notification service). Every sender reads what is saved here. */
+  /**
+   * Email content (CMS v2): every catalog email, per locale, with a draft side only the admin sees
+   * and a published side every sender reads.
+   */
   adminEmailTemplates: {
     base: "/admin/notifications/email-templates",
+    bulk: "/admin/notifications/email-templates/bulk",
     detail: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}`,
+    stats: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/stats`,
     preview: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/preview`,
     test: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/test`,
-    versions: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/versions`,
-    restore: (key: string, version: number) =>
-      `/admin/notifications/email-templates/${encodeURIComponent(key)}/versions/${version}/restore`,
+    sampleSets: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/sample-sets`,
+    sampleSet: (key: string, id: string) =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/sample-sets/${encodeURIComponent(id)}`,
+    locale: (key: string, locale: string, action: "draft" | "publish" | "discard-draft" | "archive" | "unarchive" | "duplicate" | "reset-to-default" | "versions") =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/locales/${encodeURIComponent(locale)}/${action}`,
+    restore: (key: string, locale: string, version: number) =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/locales/${encodeURIComponent(locale)}/versions/${version}/restore`,
   },
-  /** Announcements as the signed-in user sees them: live, meant for them, not dismissed. */
+  /** Email templates (CMS v2): layouts and reusable blocks, managed apart from any email's wording. */
+  adminEmailBlocks: {
+    base: "/admin/notifications/email-blocks",
+    bulk: "/admin/notifications/email-blocks/bulk",
+    preview: "/admin/notifications/email-blocks/preview",
+    detail: (id: string) => `/admin/notifications/email-blocks/${encodeURIComponent(id)}`,
+    action: (id: string, action: "draft" | "publish" | "discard-draft" | "duplicate" | "archive" | "unarchive" | "set-default" | "versions") =>
+      `/admin/notifications/email-blocks/${encodeURIComponent(id)}/${action}`,
+    restore: (id: string, version: number) =>
+      `/admin/notifications/email-blocks/${encodeURIComponent(id)}/versions/${version}/restore`,
+  },
+  /** Announcements as the signed-in user sees them, and what they did with them. */
   announcements: {
     active: "/notifications/announcements",
-    dismiss: (id: string) => `/notifications/announcements/${encodeURIComponent(id)}/dismiss`,
+    events: (id: string) => `/notifications/announcements/${encodeURIComponent(id)}/events`,
   },
+
   /**
    * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
    * controller lives on the workspace service's own prefix and is gated there. Other services'
@@ -649,6 +673,16 @@ export const API = {
    */
   adminPlatformHealth: {
     base: "/admin/platform-health",
+  },
+  /**
+   * External providers (OpenAI, Cartesia, LiveKit, Stripe): usage, cost, our calls' success rate and
+   * a 90-day uptime row. Read-only; billing-service owns it, the gateway forwards the prefix.
+   */
+  adminProviders: {
+    base: "/admin/providers",
+    series: (key: string) => `/admin/providers/${encodeURIComponent(key)}/series`,
+    breakdown: (key: string) => `/admin/providers/${encodeURIComponent(key)}/breakdown`,
+    uptime: (key: string) => `/admin/providers/${encodeURIComponent(key)}/uptime`,
   },
   /** Product feedback, aggregated. Read-only; comments carry no user id. */
   adminFeedback: {

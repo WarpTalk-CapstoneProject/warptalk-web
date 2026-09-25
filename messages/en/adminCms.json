@@ -1,150 +1,632 @@
 {
   "common": {
     "editedBy": "Edited {date} by {name}",
-    "editedAt": "Edited {date}"
+    "editedAt": "Edited {date}",
+    "retry": "Try again",
+    "toasts": {
+      "failed": "That did not work. Try again."
+    },
+    "list": {
+      "view": "View",
+      "cards": "Cards",
+      "table": "Table",
+      "clearSearch": "Clear search",
+      "sortBy": "Sort",
+      "selectAll": "Select all on this page",
+      "clearFilters": "Clear filters"
+    },
+    "bulk": {
+      "label": "Bulk actions",
+      "selected": "{count, plural, one {# selected} other {# selected}}",
+      "clear": "Clear selection",
+      "partial": "{failed, plural, one {# item} other {# items}} could not be changed: {error}"
+    },
+    "editor": {
+      "actions": "Actions",
+      "unsaved": "Unsaved changes",
+      "saved": "All changes saved",
+      "saveShortcut": "⌘S / Ctrl+S",
+      "cancel": "Cancel"
+    },
+    "history": {
+      "noChanges": "No changes.",
+      "unchangedLines": "{count, plural, one {# unchanged line} other {# unchanged lines}}",
+      "loadError": "The version history could not be loaded.",
+      "noVersions": "Nothing published yet",
+      "noVersionsHint": "Every publish adds a version here, and any version can be restored into the draft.",
+      "actions": {
+        "published": "Published",
+        "restored": "Restored",
+        "reset": "Reset",
+        "other": "Saved"
+      },
+      "compareWith": "Compare with",
+      "comparePrevious": "vs v{version}",
+      "compareFirst": "First version",
+      "compareDraft": "vs current draft",
+      "restore": "Restore v{version} to draft",
+      "restoreHint": "Restoring copies this version into the draft. Nothing is sent differently until you publish.",
+      "auditError": "The audit log could not be loaded.",
+      "retry": "Try again",
+      "noAudit": "No recorded changes yet",
+      "noAuditHint": "Every change an admin makes here is written to the platform audit log.",
+      "auditFooter": "From the platform audit log. The full record, with filters and export, is under Audit log.",
+      "failed": "failed",
+      "hideChanges": "Hide changes",
+      "showChanges": "{count, plural, one {Show # change} other {Show # changes}}"
+    },
+    "preview": {
+      "device": "Device",
+      "desktop": "Desktop",
+      "mobile": "Mobile",
+      "theme": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "format": "Format",
+      "html": "HTML",
+      "text": "Plain text",
+      "noPreheader": "No preheader — inboxes show the first line of the body",
+      "layout": "Layout: {name}"
+    },
+    "markdown": {
+      "mode": "Editor mode",
+      "write": "Write",
+      "preview": "Preview",
+      "bold": "Bold",
+      "boldPlaceholder": "bold text",
+      "italic": "Italic",
+      "italicPlaceholder": "italic text",
+      "heading": "Heading",
+      "link": "Link",
+      "linkPlaceholder": "link text",
+      "bulleted": "Bulleted list",
+      "numbered": "Numbered list",
+      "quote": "Quote",
+      "code": "Code",
+      "image": "Upload an image",
+      "imageType": "Upload a PNG, JPEG, GIF or WebP image.",
+      "imageTooLarge": "Images must be 2 MB or smaller.",
+      "uploadFailed": "The image could not be uploaded.",
+      "nothingToPreview": "Nothing to preview yet.",
+      "hint": "Markdown: **bold**, _italic_, lists, links. Paste or drop an image to upload it."
+    },
+    "sendTest": {
+      "title": "Send a test of “{name}”",
+      "descriptionDraft": "Sends what is on screen now — saved or not — filled with sample data. Nothing is saved.",
+      "descriptionSaved": "Sends the saved draft of the locale you choose, filled with sample data.",
+      "recipients": "Send to",
+      "recipientsHint": "Up to {max} addresses, separated by commas or new lines.",
+      "invalid": "Not an email address: {addresses}",
+      "tooMany": "Send to {max} addresses or fewer.",
+      "locale": "Locale",
+      "sampleData": "Sample data",
+      "builtInSamples": "Built-in samples",
+      "cancel": "Cancel",
+      "send": "Send test",
+      "sending": "Sending…",
+      "sent": "{count, plural, one {Test sent to # address.} other {Test sent to # addresses.}}",
+      "partial": "Sent to {sent}; failed for {failed}.",
+      "failed": "The test email could not be sent."
+    }
   },
-  "emailTemplates": {
-    "eyebrow": "Operations",
+  "emails": {
+    "eyebrow": "Content",
     "title": "Email templates",
-    "description": "Every email the platform sends. Edit the subject, heading and body; the service that sends it reads your saved version on its next email.",
-    "refresh": "Refresh",
-    "filterAria": "Filter emails",
-    "providersNote": "Auth, workspace and notification emails go out through Resend; meeting emails through SMTP. Both read the saved template.",
+    "description": "Every email the platform sends, in English, Vietnamese and Japanese. Edits stay in a draft until you publish them; senders only ever use the published version.",
+    "newLayout": "New layout",
+    "newBlock": "New block",
+    "sectionsLabel": "Emails, layouts and blocks",
+    "sections": {
+      "emails": "Emails",
+      "layouts": "Layouts",
+      "blocks": "Blocks"
+    },
+    "filterLabel": "Filter emails",
     "filters": {
       "all": "All",
       "live": "Live",
       "dormant": "Dormant",
-      "customized": "Customized"
+      "customized": "Customized",
+      "draft": "Unpublished changes"
     },
-    "error": {
-      "title": "The email templates could not be loaded.",
-      "description": "Check the notification service and that your session still holds the platform admin role.",
-      "retry": "Try again"
+    "searchPlaceholder": "Search emails",
+    "sort": {
+      "name": "Name",
+      "updated": "Last edited",
+      "sent": "Most sent"
     },
-    "emptyFilter": "No email matches this filter.",
-    "status": {
+    "loadError": "The email templates could not be loaded.",
+    "empty": {
+      "none": "No emails",
+      "filtered": "No email matches",
+      "filteredHint": "Try another filter or clear the search."
+    },
+    "table": {
+      "email": "Email",
+      "status": "Status",
+      "locales": "Locales",
+      "sender": "Sent by",
+      "sent30": "Sent (30 days)",
+      "updated": "Last edited"
+    },
+    "selectOne": "Select {name}",
+    "chips": {
       "live": "Live",
       "dormant": "Dormant",
-      "customized": "Customized · v{version}",
-      "default": "Built-in wording"
+      "customized": "Customized",
+      "draft": "Unpublished changes"
+    },
+    "localeStates": {
+      "PUBLISHED": "Published",
+      "CHANGES": "Published, with unpublished changes",
+      "DRAFT_ONLY": "Draft only — not sent yet",
+      "ARCHIVED": "Archived",
+      "MISSING": "Not written — falls back"
     },
     "card": {
-      "subject": "Subject",
-      "service": "Sent by",
-      "provider": "Provider",
-      "builtIn": "Using the built-in wording — never edited"
+      "subject": "Subject (English, as sent)",
+      "sent30": "{sent, number} sent · {failed, number} failed in 30 days"
     },
     "actions": {
       "edit": "Edit",
       "preview": "Preview",
       "sendTest": "Send test",
-      "sending": "Sending…",
-      "reset": "Reset",
-      "resetDisabled": "Already the built-in wording"
-    },
-    "toasts": {
-      "testSent": "Test email sent to {email}",
-      "testFailed": "The test email could not be sent.",
-      "reset": "“{name}” is back to the built-in wording.",
-      "resetFailed": "The template could not be reset."
-    },
-    "preview": {
-      "description": "Rendered by the server with sample values — exactly what a recipient gets.",
-      "viewAria": "Preview format",
-      "html": "Email",
-      "text": "Plain text",
-      "error": "The preview could not be rendered.",
-      "subject": "Subject"
+      "reset": "Reset to default"
     },
     "resetDialog": {
       "title": "Reset “{name}” to the built-in wording?",
-      "description": "Senders go back to the default subject and body within about 30 seconds. The customized version stays in the history and can be restored.",
-      "cancel": "Cancel",
-      "confirm": "Reset to default"
+      "description": "The English draft is replaced with the built-in subject and body. Nothing changes for recipients until you publish it.",
+      "confirm": "Reset draft"
     },
-    "editor": {
-      "back": "Email templates",
-      "notFound": "The platform sends no email by this name.",
-      "loadError": "The email template could not be loaded.",
-      "retry": "Try again",
-      "eyebrow": "{service} · sent via {provider}",
-      "discard": "Discard changes",
-      "resetToDefault": "Reset to default",
-      "sendTest": "Send test to me",
-      "sending": "Sending…",
-      "save": "Save",
-      "saving": "Saving…",
-      "unsaved": "Unsaved changes",
-      "fields": {
-        "subject": "Subject",
-        "heading": "Heading",
-        "body": "Body (HTML)",
-        "bodyHint": "Shown inside the WarpTalk email layout. Values are HTML-escaped when sent.",
-        "note": "Change note (optional)",
-        "notePlaceholder": "What changed and why — shown in the history"
+    "bulk": {
+      "localeLabel": "Locale the action applies to",
+      "allLocales": "All locales",
+      "publish": {
+        "action": "Publish drafts",
+        "title": "{count, plural, one {Publish # email?} other {Publish # emails?}}",
+        "description": "Every unpublished draft in {locale} goes live. Senders use it within about 30 seconds.",
+        "confirm": "Publish"
       },
-      "issuesTitle": "Fix these before saving:",
-      "issues": {
-        "UNKNOWN_VARIABLE": "“{name}” is not a variable this email has.",
-        "MISSING_REQUIRED_VARIABLE": "“{name}” must appear in the email — it is what the email exists to deliver.",
-        "REQUIRED": "The subject and the body are required.",
-        "LINE_BREAK": "The subject must be a single line."
+      "discard": {
+        "action": "Discard drafts",
+        "title": "{count, plural, one {Discard the draft of # email?} other {Discard the drafts of # emails?}}",
+        "description": "Unpublished changes in {locale} are thrown away. What is published stays as it is.",
+        "confirm": "Discard drafts"
       },
-      "variables": {
-        "title": "Variables",
-        "description": "Click one to insert it into the {field} at the cursor.",
-        "fields": {
-          "subject": "subject",
-          "heading": "heading",
-          "bodyHtml": "body"
-        },
-        "insert": "Insert at the cursor",
-        "required": "Required",
-        "sample": "Sample: {value}"
+      "archive": {
+        "action": "Archive",
+        "title": "{count, plural, one {Archive # email?} other {Archive # emails?}}",
+        "description": "Archived locales ({locale}) stop being sent; recipients fall back to English, then to the built-in wording.",
+        "confirm": "Archive"
       },
-      "history": {
-        "title": "Version history",
-        "loading": "Loading history…",
-        "empty": "No saved versions yet. The first save starts the history.",
-        "error": "The history could not be loaded.",
-        "load": "Load into editor",
-        "restore": "Restore",
-        "current": "Current",
-        "restored": "Version {version} restored as the current template.",
-        "restoreFailed": "That version could not be restored.",
-        "loaded": "Version {version} loaded into the editor. Save to use it.",
-        "actions": {
-          "SAVED": "Saved",
-          "RESTORED": "Restored v{from}",
-          "RESET": "Reset to default"
-        }
-      },
-      "previewViewAria": "Preview format",
-      "previewHtml": "Email",
-      "previewText": "Plain text",
-      "previewError": "The preview could not be rendered.",
-      "previewTitle": "Email preview",
-      "previewNote": "Live preview of the unsaved draft, rendered by the same code that sends it, filled with sample values.",
-      "toasts": {
-        "saved": "Saved. Senders use it on their next email.",
-        "saveFailed": "The template could not be saved.",
-        "testSent": "Test email sent to {email}",
-        "testFailed": "The test email could not be sent.",
-        "reset": "Back to the built-in wording.",
-        "resetFailed": "The template could not be reset."
-      },
-      "resetDialog": {
-        "title": "Reset to the built-in wording?",
-        "description": "Senders go back to the default subject and body within about 30 seconds. This version stays in the history and can be restored.",
-        "cancel": "Cancel",
-        "confirm": "Reset to default"
+      "duplicate": {
+        "action": "Copy to locale",
+        "title": "{count, plural, one {Copy # email to another locale?} other {Copy # emails to another locale?}}",
+        "description": "The {locale} draft is copied into the draft of the locale you pick, replacing it. Nothing is published.",
+        "target": "Copy into",
+        "confirm": "Copy"
       }
+    },
+    "toasts": {
+      "published": "Published. Senders use it within about 30 seconds.",
+      "discarded": "Drafts discarded.",
+      "archived": "Archived.",
+      "duplicated": "Copied into the other locale's draft.",
+      "reset": "The English draft is back to the built-in wording. Publish it to send it."
+    }
+  },
+  "blocks": {
+    "layoutIntro": "Layouts are the shell every email is poured into: the HTML around the body, its plain-text frame, and its dark-mode styles. One layout is the default; an email can choose another.",
+    "blockIntro": "Blocks are reusable snippets — a signature, a footer, a legal line — that an email or a layout includes with '{{> key}}'. Publishing a block updates every email that uses it.",
+    "filterLabel": "Filter",
+    "filters": {
+      "all": "All",
+      "PUBLISHED": "Published",
+      "CHANGES": "Unpublished changes",
+      "DRAFT": "Never published",
+      "ARCHIVED": "Archived"
+    },
+    "searchPlaceholder": "Search by name or key",
+    "sort": {
+      "name": "Name",
+      "updated": "Last edited"
+    },
+    "loadError": "These could not be loaded.",
+    "empty": {
+      "layout": "No layouts yet",
+      "layoutHint": "Emails use the built-in WarpTalk layout until you publish one and make it the default.",
+      "block": "No blocks yet",
+      "blockHint": "Create a block for anything several emails repeat.",
+      "filtered": "Nothing matches"
+    },
+    "create": {
+      "layout": "New layout",
+      "block": "New block",
+      "layoutTitle": "New layout",
+      "layoutDescription": "It starts from a working shell with '{{content}}' where each email's body goes. Nothing uses it until you publish it.",
+      "blockTitle": "New block",
+      "blockDescription": "Emails include it by its key. Nothing uses it until you publish it.",
+      "name": "Name",
+      "key": "Key",
+      "keyHintBlock": "Emails include it as '{{> '{key}'}}'. Lower-case letters, digits, - and _.",
+      "keyHintLayout": "Lower-case letters, digits, - and _. It cannot be changed later.",
+      "descriptionLabel": "Description (optional)",
+      "submit": "Create",
+      "created": "Created as a draft."
+    },
+    "table": {
+      "name": "Name",
+      "status": "Status",
+      "version": "Published",
+      "usedBy": "Used by",
+      "updated": "Last edited"
+    },
+    "nouns": {
+      "layout": "{count, plural, one {layout} other {layouts}}",
+      "block": "{count, plural, one {block} other {blocks}}"
+    },
+    "bulk": {
+      "publish": {
+        "action": "Publish",
+        "title": "Publish {count} {noun}?",
+        "description": "Every email using them changes within about 30 seconds.",
+        "confirm": "Publish"
+      },
+      "duplicate": {
+        "action": "Duplicate",
+        "title": "Duplicate {count} {noun}?",
+        "description": "Each copy is a new, unpublished draft.",
+        "confirm": "Duplicate"
+      },
+      "archive": {
+        "action": "Archive",
+        "title": "Archive {count} {noun}?",
+        "description": "Anything still in use, or the default layout, is skipped and reported.",
+        "confirm": "Archive"
+      },
+      "delete": {
+        "action": "Delete",
+        "title": "Delete {count} {noun}?",
+        "description": "Only never-published drafts are deleted; the rest are skipped. This cannot be undone.",
+        "confirm": "Delete"
+      }
+    },
+    "toasts": {
+      "publish": "Published.",
+      "duplicate": "Duplicated as drafts.",
+      "archive": "Archived.",
+      "delete": "Deleted."
+    },
+    "selectOne": "Select {name}",
+    "default": "Default",
+    "statuses": {
+      "PUBLISHED": "Published",
+      "CHANGES": "Unpublished changes",
+      "DRAFT": "Never published",
+      "ARCHIVED": "Archived"
+    },
+    "usedBy": "{count, plural, one {Used by {first}} other {Used by {first} and more (#)}}",
+    "unused": "Not used by any email",
+    "version": "v{version} live",
+    "neverPublished": "Never published",
+    "actions": {
+      "edit": "Edit",
+      "preview": "Preview"
+    }
+  },
+  "emailEditor": {
+    "back": "Email templates",
+    "notFound": "The platform sends no email by this name.",
+    "loadError": "The email could not be loaded.",
+    "retry": "Try again",
+    "eyebrow": "Email content",
+    "live": "Live",
+    "dormant": "Dormant",
+    "locale": "Locale",
+    "switchLocaleUnsaved": "You have unsaved changes in this locale. Switch anyway and lose them?",
+    "localeStates": {
+      "PUBLISHED": "Published",
+      "CHANGES": "Unpublished changes",
+      "DRAFT_ONLY": "Draft only",
+      "ARCHIVED": "Archived",
+      "MISSING": "Not written"
+    },
+    "sentAs": {
+      "own": "Recipients in {locale} are sent published version v{version}.",
+      "english": "{locale} has nothing published, so its recipients get the English version.",
+      "builtIn": "Nothing is published for {locale} or English, so its recipients get the built-in wording."
+    },
+    "archivedNotice": "This locale is archived: it is not sent, and it is read-only. Unarchive it to edit or publish it.",
+    "tabsLabel": "Email sections",
+    "tabs": {
+      "content": "Content",
+      "layout": "Layout",
+      "variables": "Variables",
+      "preview": "Preview",
+      "history": "History",
+      "analytics": "Analytics"
+    },
+    "fields": {
+      "subject": "Subject",
+      "subjectHint": "One line. Variables allowed.",
+      "preheader": "Preheader",
+      "preheaderHint": "The grey line inboxes show after the subject.",
+      "heading": "Heading",
+      "headingHint": "The title inside the email. Optional.",
+      "bodyHtml": "Body (HTML)",
+      "bodyHtmlHint": "Poured into the layout. Values are HTML-escaped when sent.",
+      "textBody": "Plain-text version",
+      "deriveText": "Derive from the HTML",
+      "derivedHint": "The plain-text part is generated from the HTML body. Turn this off to write it yourself."
+    },
+    "issuesTitle": "Fix these before publishing",
+    "issues": {
+      "UNKNOWN_VARIABLE": "'{{'{variable}'}}' is not a variable this email has.",
+      "MISSING_REQUIRED_VARIABLE": "'{{'{variable}'}}' must appear — it is what this email exists to deliver.",
+      "REQUIRED": "This field is required.",
+      "LINE_BREAK": "This must be a single line."
+    },
+    "insert": {
+      "variables": "Variables",
+      "variablesHint": "Click to insert at the cursor of the field you were in. * is required.",
+      "blocks": "Blocks",
+      "noBlocks": "No published blocks yet.",
+      "manageBlocks": "Manage blocks"
+    },
+    "layout": {
+      "title": "Layout",
+      "description": "The shell this email is poured into. Only published layouts can be chosen.",
+      "defaultOption": "Default layout ({name})",
+      "builtIn": "built-in",
+      "defaultOptionHint": "Follows whichever layout is the default, now and later.",
+      "chosenUnavailable": "The layout this draft uses is no longer published; it will be sent in the default layout.",
+      "manage": "Manage layouts",
+      "blocksTitle": "Blocks",
+      "blocksDescription": "Insert a published block into the body. Publishing the block later updates this email too.",
+      "insert": "Insert",
+      "noBlocks": "No published blocks yet."
+    },
+    "variables": {
+      "title": "Variables",
+      "description": "What this email can say. The sender fills them in; a required one must appear or the email cannot be published.",
+      "name": "Variable",
+      "meaning": "Meaning",
+      "required": "Required",
+      "requiredYes": "Required"
+    },
+    "samples": {
+      "label": "Sample data",
+      "builtIn": "Built-in samples",
+      "title": "Sample-data sets",
+      "description": "Named sets of values for previews and test sends — a long name, a Japanese name, an expired link.",
+      "name": "Set name",
+      "namePlaceholder": "Long Vietnamese name",
+      "save": "Save set",
+      "saveAsNew": "Save as new set",
+      "saved": "Sample set saved.",
+      "delete": "Delete set",
+      "deleteTitle": "Delete “{name}”?",
+      "deleteDescription": "Previews and tests that used it go back to the built-in samples.",
+      "deleted": "Sample set deleted."
+    },
+    "previewOfDraft": "Showing the saved draft.",
+    "previewOfDraftUnsaved": "Showing what is on screen, including unsaved changes.",
+    "previewError": "The preview could not be rendered.",
+    "history": {
+      "versions": "Published versions ({locale})",
+      "audit": "Audit log"
+    },
+    "analytics": {
+      "description": "Emails handed to the provider by the senders, per day. A failure is the provider refusing it.",
+      "range": "Range",
+      "lastDays": "Last {days} days",
+      "error": "The delivery numbers could not be loaded.",
+      "figureCaption": "{failed} failed · failure rate {rate}",
+      "sent": "Sent",
+      "failed": "Failed",
+      "chartLabel": "Emails sent and failed per day",
+      "byLocale": "By locale",
+      "loading": "Loading…",
+      "empty": "Nothing sent in this range."
+    },
+    "status": {
+      "published": "Published v{version}",
+      "DRAFT_ONLY": "Never published",
+      "ARCHIVED": "Archived",
+      "MISSING": "Not written yet — starts from the built-in wording"
+    },
+    "actions": {
+      "saveDraft": "Save draft",
+      "preview": "Preview",
+      "sendTest": "Send test",
+      "duplicate": "Copy to locale",
+      "archive": "Archive locale",
+      "unarchive": "Unarchive",
+      "reset": "Reset to default",
+      "discard": "Discard changes",
+      "deleteDraft": "Delete draft",
+      "publish": "Publish",
+      "saveAndPublish": "Save & publish"
+    },
+    "publishBlocked": "Fix the issues on the Content tab first.",
+    "publishDialog": {
+      "title": "Publish the {locale} version?",
+      "description": "Every “{name}” email in this locale uses it within about 30 seconds.",
+      "note": "Change note (optional)",
+      "notePlaceholder": "What changed and why — shown in the history",
+      "confirm": "Publish"
+    },
+    "duplicateDialog": {
+      "title": "Copy to another locale",
+      "description": "The {locale} content is copied into the draft of the locale you pick. Nothing is published.",
+      "target": "Copy into",
+      "overwrites": "replaces its draft",
+      "confirm": "Copy"
+    },
+    "discardDialog": {
+      "title": "Discard unpublished changes?",
+      "description": "The draft goes back to the published version. This cannot be undone.",
+      "descriptionNeverPublished": "This locale has never been published, so the draft is deleted and recipients keep falling back.",
+      "confirm": "Discard"
+    },
+    "archiveDialog": {
+      "title": "Archive the {locale} version?",
+      "description": "It stops being sent at once; recipients fall back to English, then to the built-in wording. Its history is kept.",
+      "confirm": "Archive"
+    },
+    "unarchiveDialog": {
+      "title": "Unarchive this locale?",
+      "description": "Its published version is sent again within about 30 seconds.",
+      "confirm": "Unarchive"
+    },
+    "resetDialog": {
+      "title": "Reset the draft to the built-in wording?",
+      "description": "The draft is replaced with the built-in subject and body. Nothing changes for recipients until you publish it.",
+      "confirm": "Reset draft"
+    },
+    "restoreDialog": {
+      "title": "Restore v{version} into the draft?",
+      "description": "The draft becomes a copy of that version. Publish it to send it.",
+      "confirm": "Restore"
+    },
+    "toasts": {
+      "saved": "Draft saved. Recipients still get the published version.",
+      "published": "{locale} published. Senders use it within about 30 seconds.",
+      "duplicated": "Copied. You are now editing that locale's draft.",
+      "discarded": "Changes discarded.",
+      "archived": "Archived. It is no longer sent.",
+      "unarchived": "Unarchived.",
+      "reset": "Draft reset to the built-in wording.",
+      "restored": "v{version} restored into the draft."
+    }
+  },
+  "blockEditor": {
+    "back": "Email templates",
+    "notFound": "This layout or block does not exist.",
+    "loadError": "It could not be loaded.",
+    "retry": "Try again",
+    "eyebrowLayout": "Email layout",
+    "eyebrowBlock": "Email block",
+    "descriptionLayout": "The HTML shell emails are poured into. '{{content}}' is where each email's body goes; '{{heading}}', '{{preheader}}' and '{{subject}}' are also available.",
+    "descriptionBlock": "A reusable snippet. Emails and layouts include it as {include}.",
+    "default": "Default layout",
+    "statuses": {
+      "PUBLISHED": "Published",
+      "CHANGES": "Unpublished changes",
+      "DRAFT": "Never published",
+      "ARCHIVED": "Archived"
+    },
+    "usedByCount": "{count, plural, one {Used by # email} other {Used by # emails}}",
+    "unused": "Not used by any email",
+    "archivedNotice": "Archived: no email uses it, and it is read-only. Unarchive it to edit it.",
+    "tabsLabel": "Sections",
+    "tabs": {
+      "content": "Content",
+      "preview": "Preview",
+      "usage": "Used by",
+      "history": "History"
+    },
+    "fields": {
+      "name": "Name",
+      "description": "Description",
+      "html": "HTML",
+      "htmlHintLayout": "Must contain '{{content}}' exactly once.",
+      "htmlHintBlock": "No layout slots, and no other blocks.",
+      "text": "Plain-text frame",
+      "textHint": "Wraps the plain-text part. Must contain '{{content}}'.",
+      "darkCss": "Dark-mode CSS",
+      "darkCssHint": "Applied under prefers-color-scheme: dark."
+    },
+    "previewWith": "Preview with",
+    "previewSample": "Sample content",
+    "previewLocale": "Locale",
+    "previewError": "The preview could not be rendered.",
+    "usage": {
+      "none": "Nothing uses this yet",
+      "noneLayout": "Choose it on an email's Layout tab, or make it the default layout.",
+      "noneBlock": "Add {include} to an email or a layout.",
+      "description": "Publishing a new version changes all of these within about 30 seconds."
+    },
+    "history": {
+      "versions": "Published versions",
+      "audit": "Audit log"
+    },
+    "status": {
+      "published": "Published v{version}",
+      "never": "Never published"
+    },
+    "actions": {
+      "saveDraft": "Save draft",
+      "preview": "Preview",
+      "duplicate": "Duplicate",
+      "makeDefault": "Make default",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "discard": "Discard changes",
+      "delete": "Delete",
+      "publish": "Publish",
+      "saveAndPublish": "Save & publish"
+    },
+    "publishDialog": {
+      "title": "Publish “{name}”?",
+      "descriptionUsed": "{count, plural, one {# email changes} other {# emails change}} within about 30 seconds: {list}.",
+      "descriptionUnused": "Nothing uses it yet, so no email changes.",
+      "note": "Change note (optional)",
+      "confirm": "Publish"
+    },
+    "copyName": "{name} (copy)",
+    "duplicateDialog": {
+      "title": "Duplicate",
+      "description": "The copy is a new, unpublished draft with its own key.",
+      "name": "Name of the copy",
+      "confirm": "Duplicate"
+    },
+    "archiveDialog": {
+      "title": "Archive “{name}”?",
+      "description": "It must not be in use or be the default layout. Its history is kept.",
+      "confirm": "Archive"
+    },
+    "unarchiveDialog": {
+      "title": "Unarchive?",
+      "description": "It can be edited, published and chosen again.",
+      "confirm": "Unarchive"
+    },
+    "deleteDialog": {
+      "title": "Delete “{name}”?",
+      "description": "It was never published, so nothing uses it. This cannot be undone.",
+      "confirm": "Delete"
+    },
+    "discardDialog": {
+      "title": "Discard unpublished changes?",
+      "description": "The draft goes back to published v{version}.",
+      "confirm": "Discard"
+    },
+    "defaultDialog": {
+      "title": "Make “{name}” the default layout?",
+      "description": "Every email that follows the default switches to it within about 30 seconds.",
+      "confirm": "Make default"
+    },
+    "restoreDialog": {
+      "title": "Restore v{version} into the draft?",
+      "description": "The draft becomes a copy of that version. Publish it to use it.",
+      "confirm": "Restore"
+    },
+    "toasts": {
+      "saved": "Draft saved. Emails still use the published version.",
+      "published": "Published. Emails use it within about 30 seconds.",
+      "duplicated": "Duplicated as a draft.",
+      "archived": "Archived.",
+      "unarchived": "Unarchived.",
+      "deleted": "Deleted.",
+      "discarded": "Changes discarded.",
+      "defaulted": "It is now the default layout.",
+      "restored": "v{version} restored into the draft."
     }
   },
   "announcements": {
-    "eyebrow": "Operations",
+    "eyebrow": "Content",
     "title": "Announcements",
-    "description": "News shown inside the app — feature launches, maintenance windows, offers. Draft, preview, publish now or schedule, and archive when it is done.",
+    "description": "What the app tells its users — launches, maintenance, offers — as a banner, a modal, a toast, a notification-centre card or a home-page card. Draft, preview, target, schedule and measure it here.",
     "inboxBroadcast": "Inbox broadcast",
     "new": "New announcement",
     "viewAria": "Announcements or inbox broadcasts",
@@ -162,24 +644,53 @@
       "ARCHIVED": "Archived"
     },
     "searchPlaceholder": "Search titles",
-    "refresh": "Refresh",
-    "error": {
-      "title": "Announcements could not be loaded.",
-      "description": "Check the notification service and that your session still holds the platform admin role.",
-      "retry": "Try again"
+    "filters": {
+      "type": "Type",
+      "anyType": "Any type",
+      "placement": "Placement",
+      "anyPlacement": "Any placement"
     },
+    "sort": {
+      "updated": "Last edited",
+      "created": "Created",
+      "starts": "Start time",
+      "priority": "Priority",
+      "title": "Title",
+      "descending": "Descending",
+      "ascending": "Ascending"
+    },
+    "loadError": "Announcements could not be loaded.",
     "empty": {
-      "title": "No announcements yet",
-      "filteredTitle": "Nothing matches this filter",
-      "description": "Announcements you publish appear at the top of the app for the people they are for."
+      "none": "No announcements yet",
+      "noneHint": "Announcements you publish appear in the app for the people they are for.",
+      "filtered": "Nothing matches these filters",
+      "filteredHint": "Try another status, type or placement, or clear the search."
     },
+    "table": {
+      "title": "Title",
+      "status": "Status",
+      "placement": "Placement",
+      "audience": "Audience",
+      "window": "Window",
+      "priority": "Priority"
+    },
+    "selectOne": "Select “{title}”",
     "pageOf": "Page {page} of {totalPages}",
     "previous": "Previous",
     "next": "Next",
+    "card": {
+      "placement": "Shown as",
+      "priority": "priority {priority}",
+      "audience": "Audience",
+      "window": "Window"
+    },
     "audience": {
       "all": "All users",
       "plans": "Plans: {plans}",
-      "workspaces": "{count, plural, one {# workspace} other {# workspaces}}"
+      "workspaces": "{count, plural, one {# workspace} other {# workspaces}}",
+      "roles": "Roles: {roles}",
+      "locales": "Language: {locales}",
+      "newUsers": "Joined in the last {days} days"
     },
     "window": {
       "scheduled": "Starts {date}",
@@ -192,16 +703,10 @@
       "noEnd": "no end",
       "notPublished": "Not published yet"
     },
-    "card": {
-      "audience": "Audience",
-      "window": "Window",
-      "cta": "Button"
-    },
     "actions": {
       "edit": "Edit",
       "preview": "Preview",
       "publishNow": "Publish now",
-      "schedule": "Schedule…",
       "unpublish": "Move back to draft",
       "restore": "Restore to draft",
       "duplicate": "Duplicate",
@@ -209,8 +714,45 @@
       "delete": "Delete draft",
       "more": "More actions"
     },
+    "confirm": {
+      "publishTitle": "Publish “{title}” now?",
+      "publishDescription": "It starts showing to its audience at once, in its placement, until its end time.",
+      "unpublishTitle": "Move “{title}” back to draft?",
+      "unpublishDescription": "It stops showing at once. Its analytics are kept.",
+      "archiveTitle": "Archive “{title}”?",
+      "archiveDescription": "It stops showing and becomes read-only. It can be restored to a draft later."
+    },
+    "bulk": {
+      "publish": {
+        "action": "Publish",
+        "title": "{count, plural, one {Publish # announcement?} other {Publish # announcements?}}",
+        "description": "Each one with a future start time is scheduled for it; the rest go live now. Ones already live are skipped.",
+        "confirm": "Publish",
+        "done": "{count, plural, one {# announcement published.} other {# announcements published.}}"
+      },
+      "duplicate": {
+        "action": "Duplicate",
+        "title": "{count, plural, one {Duplicate # announcement?} other {Duplicate # announcements?}}",
+        "description": "Each copy is a new draft.",
+        "confirm": "Duplicate",
+        "done": "{count, plural, one {# copy created.} other {# copies created.}}"
+      },
+      "archive": {
+        "action": "Archive",
+        "title": "{count, plural, one {Archive # announcement?} other {Archive # announcements?}}",
+        "description": "They stop showing at once. Ones already archived are skipped.",
+        "confirm": "Archive",
+        "done": "{count, plural, one {# announcement archived.} other {# announcements archived.}}"
+      },
+      "delete": {
+        "action": "Delete drafts",
+        "title": "{count, plural, one {Delete # draft?} other {Delete # drafts?}}",
+        "description": "Only drafts are deleted; anything that was ever published is skipped — archive those instead. This cannot be undone.",
+        "confirm": "Delete",
+        "done": "{count, plural, one {# draft deleted.} other {# drafts deleted.}}"
+      }
+    },
     "toasts": {
-      "failed": "That did not work. Try again.",
       "saved": "Saved.",
       "published": "Published. It is showing to its audience now.",
       "scheduled": "Scheduled.",
@@ -223,14 +765,7 @@
     "deleteDialog": {
       "title": "Delete this draft?",
       "description": "“{title}” will be removed permanently. Published announcements cannot be deleted — archive them instead.",
-      "cancel": "Cancel",
       "confirm": "Delete draft"
-    },
-    "preview": {
-      "title": "Preview as users will see it",
-      "description": "The strip at the top of the app, and the card that opens from “Read more”.",
-      "strip": "Announcement strip",
-      "card": "Read more"
     },
     "errors": {
       "titleRequired": "A title is required.",
@@ -242,9 +777,49 @@
       "tooManyAudience": "Choose 200 plans or workspaces at most.",
       "labelWithoutLink": "A button label needs a link.",
       "linkWithoutLabel": "A link needs a button label.",
-      "labelTooLong": "The button label must be 60 characters or fewer.",
+      "labelTooLong": "A button label must be 60 characters or fewer.",
       "linkInvalid": "The link must be an https:// or http:// address, or a path in the app starting with /.",
-      "windowInverted": "The end of the window must be after its start."
+      "secondaryNeedsPrimary": "Add the main button before a second one.",
+      "secondaryIncomplete": "The second button needs both a label and a link.",
+      "secondaryLinkInvalid": "The second button's link must be an https:// or http:// address, or a path starting with /.",
+      "windowInverted": "The end of the window must be after its start.",
+      "imageInvalid": "The image must be an uploaded image or an https:// address.",
+      "priorityOutOfRange": "Priority must be between 0 and 100.",
+      "newUsersOutOfRange": "“Joined in the last … days” must be between 1 and 365, or empty."
+    },
+    "preview": {
+      "frameLabel": "{placement} preview, {device}",
+      "placementLabel": "Placement",
+      "chosen": "chosen",
+      "otherPlacement": "Showing a placement this announcement does not use — change it on the Design tab.",
+      "placements": {
+        "TOP_BANNER": "Top banner",
+        "MODAL": "Modal",
+        "TOAST": "Toast",
+        "NOTIFICATION_CENTER": "Notification centre",
+        "DASHBOARD_CARD": "Dashboard card"
+      },
+      "devices": {
+        "desktop": "desktop",
+        "mobile": "phone"
+      }
+    },
+    "analytics": {
+      "description": "Impressions count once per person per browser session; clicks and dismissals as they happen.",
+      "range": "Range",
+      "lastDays": "Last {days} days",
+      "error": "The analytics could not be loaded.",
+      "impressions": "Impressions",
+      "uniqueViewers": "{count, plural, one {# person} other {# people}}",
+      "ctaClicks": "Button clicks",
+      "secondaryClicks": "{count, plural, one {# on the second button} other {# on the second button}}",
+      "clickThrough": "Click-through",
+      "uniqueClickers": "{count, plural, one {# person clicked} other {# people clicked}}",
+      "dismissals": "Dismissals",
+      "dismissRate": "{rate} of viewers",
+      "chartLabel": "Impressions and clicks per day",
+      "loading": "Loading…",
+      "empty": "No activity in this range."
     },
     "editor": {
       "back": "Announcements",
@@ -252,25 +827,49 @@
       "loadError": "The announcement could not be loaded.",
       "retry": "Try again",
       "newTitle": "New announcement",
-      "description": "Write it, choose who sees it and when, and check the preview before it goes live.",
-      "save": "Save changes",
+      "description": "Write it, design it, choose who sees it and when, and check every placement before it goes live.",
       "saveDraft": "Save draft",
       "saveAndPublish": "Save & publish now",
+      "notSavedYet": "Not saved yet",
       "archivedNotice": "This announcement is archived and read-only. Restore it to a draft to edit or publish it again.",
+      "tabsLabel": "Announcement sections",
+      "tabs": {
+        "content": "Content",
+        "design": "Design",
+        "audience": "Audience",
+        "schedule": "Schedule",
+        "preview": "Preview",
+        "history": "History",
+        "analytics": "Analytics"
+      },
+      "previewTitle": "Preview",
+      "openPreview": "All placements",
+      "previewPlaceholderTitle": "Your title",
+      "previewPlaceholderBody": "Your announcement text appears here.",
+      "schedule": "Schedule",
+      "scheduleHint": "Schedule puts it live at the start time on its own — no need to come back.",
+      "scheduleNeedsFuture": "Set a start time in the future to schedule it.",
+      "scheduleDialog": {
+        "title": "Schedule this announcement?",
+        "description": "It goes live on its own at {date} and shows until its end time."
+      },
       "fields": {
         "type": "Type",
         "title": "Title",
         "titlePlaceholder": "Live captions now in 40 languages",
         "body": "Body",
-        "bodyHint": "Markdown: **bold**, lists, links",
         "bodyPlaceholder": "What changed, who it is for, and what to do next.",
-        "ctaLabel": "Button label (optional)",
+        "buttons": "Buttons",
+        "buttonsHint": "Optional. A second button needs the first one.",
+        "primary": "Main button",
+        "secondary": "Second button",
+        "ctaLabel": "Label",
         "ctaLabelPlaceholder": "Try it",
-        "ctaUrl": "Button link",
+        "ctaUrl": "Link",
         "ctaUrlPlaceholder": "/settings or https://…",
         "audience": "Who sees it",
         "window": "When it shows",
-        "windowHint": "Leave the start empty to show it from the moment it is published, and the end empty to show it until it is archived.",
+        "windowHint": "Leave the start empty to show it from the moment it is published, and the end empty to show it until it is unpublished or archived. Times are in your time zone.",
         "startsAt": "Starts",
         "endsAt": "Ends"
       },
@@ -306,14 +905,102 @@
           "hint": "Members of these workspaces."
         }
       },
-      "schedule": "Schedule for the start time",
-      "scheduleHint": "It goes live at the start time on its own — no need to come back.",
-      "scheduleNeedsFuture": "Set a start time in the future to schedule it.",
-      "lifecycle": "Status",
-      "previewTitle": "Preview",
-      "previewDescription": "Exactly what the people it is for will see, drawn by the app's own components.",
-      "previewPlaceholderTitle": "Your title",
-      "previewPlaceholderBody": "Your announcement text appears here.",
+      "design": {
+        "placement": "Placement",
+        "placementHint": "Where in the app it appears. Every placement is shown to the audience you choose.",
+        "placementHints": {
+          "TOP_BANNER": "A strip across the top of every page.",
+          "MODAL": "A dialog over the page when the app opens. Use sparingly.",
+          "TOAST": "A small card in the bottom corner.",
+          "NOTIFICATION_CENTER": "A card at the top of the bell panel, with a dot on the bell.",
+          "DASHBOARD_CARD": "A card on the workspace home page."
+        },
+        "variant": "Style",
+        "variants": {
+          "SUBTLE": {
+            "label": "Subtle",
+            "hint": "A tinted background."
+          },
+          "SOLID": {
+            "label": "Solid",
+            "hint": "Filled with the colour. Loudest."
+          },
+          "OUTLINE": {
+            "label": "Outline",
+            "hint": "A coloured border."
+          }
+        },
+        "color": "Colour",
+        "colors": {
+          "BRAND": "Brand",
+          "BLUE": "Blue",
+          "GREEN": "Green",
+          "AMBER": "Amber",
+          "RED": "Red",
+          "VIOLET": "Violet",
+          "NEUTRAL": "Neutral"
+        },
+        "icon": "Icon",
+        "iconDefault": "Type default",
+        "image": "Image",
+        "imageHint": "Shown at the top of a modal and beside a dashboard card. Upload one (PNG, JPEG, GIF or WebP, up to 2 MB) or use an https:// address.",
+        "imageUrl": "Image address",
+        "uploadImage": "Upload",
+        "removeImage": "Remove image",
+        "imageNotShown": "This placement does not show the image; it appears for the modal and the dashboard card."
+      },
+      "targeting": {
+        "title": "Narrow it down",
+        "description": "All of these are optional, and all of them must match.",
+        "roles": "Workspace role",
+        "roleNames": {
+          "Owner": "Owners",
+          "Admin": "Admins",
+          "Member": "Members"
+        },
+        "rolesAny": "Any role.",
+        "rolesSome": "Only people with one of these roles in at least one of their workspaces.",
+        "locales": "App language",
+        "localeNames": {
+          "en": "English",
+          "vi": "Tiếng Việt",
+          "ja": "日本語"
+        },
+        "localesAny": "Any language.",
+        "localesSome": "Only people using the app in one of these languages.",
+        "newUsers": "Joined in the last … days",
+        "newUsersPlaceholder": "Any account age",
+        "newUsersHint": "For onboarding tips: only accounts created within this many days (1–365)."
+      },
+      "delivery": {
+        "title": "How it behaves",
+        "description": "How often each person sees it, which one wins when several share a placement, and whether it can be closed.",
+        "frequency": "Show",
+        "frequencies": {
+          "UNTIL_DISMISSED": {
+            "label": "Until dismissed",
+            "hint": "Every visit until the person closes it."
+          },
+          "ONCE": {
+            "label": "Once",
+            "hint": "One browser session per person."
+          },
+          "EVERY_SESSION": {
+            "label": "Every session",
+            "hint": "Comes back each new session, even after closing."
+          },
+          "DAILY": {
+            "label": "Once a day",
+            "hint": "At most once every 24 hours per person."
+          }
+        },
+        "priority": "Priority",
+        "priorityHint": "0–100. Higher shows first; a modal shows one at a time.",
+        "dismissible": "Can be dismissed",
+        "dismissibleOn": "People can close it for good",
+        "dismissibleOff": "It stays until it ends",
+        "dismissibleHint": "A modal or toast can always be closed for the current visit."
+      },
       "plans": {
         "label": "Members of any workspace on the selected plans see it.",
         "loading": "Loading plans…",

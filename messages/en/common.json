@@ -105,6 +105,7 @@
         "billingLedger": "Billing ledger",
         "salesLeads": "Sales leads",
         "systemHealth": "System health",
+        "providers": "Providers",
         "feedback": "Feedback",
         "auditLog": "Audit log",
         "announcements": "Announcements",
@@ -311,6 +312,8 @@
     "position": "{current} of {total}",
     "dismiss": "Dismiss",
     "dontShowAgain": "Don't show this again",
+    "close": "Close",
+    "badge": "Announcement",
     "types": {
       "ANNOUNCEMENT": "Announcement",
       "FEATURE": "New feature",
