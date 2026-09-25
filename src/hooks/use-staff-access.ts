@@ -38,12 +38,28 @@ export function useStaffAccess(): { access: StaffAccessSnapshot; isLoading: bool
   });
 
   if (!hint) return { access: NO_STAFF_ACCESS, isLoading: false, isError: false };
+  if (query.isError && !query.data) {
+    // The endpoint could not answer — most likely a backend older than G10 (404) during a
+    // rollout, or auth briefly down. Fall back to what the token has always meant: the whole
+    // portal. That is only what the page OFFERS; every admin endpoint still checks the real
+    // permission, so the fallback cannot grant anything, while the alternative would lock every
+    // administrator out of the portal whenever this one call fails.
+    return { access: LEGACY_HINT_ACCESS, isLoading: false, isError: true };
+  }
   return {
     access: query.data ?? NO_STAFF_ACCESS,
     isLoading: query.isPending,
     isError: query.isError,
   };
 }
+
+const LEGACY_HINT_ACCESS: StaffAccessSnapshot = {
+  isStaff: true,
+  roleSlug: null,
+  roleName: null,
+  isSuperAdmin: true,
+  permissions: [],
+};
 
 /** Whether to offer something that needs `permission`. The server decides whether it works. */
 export function useCan(permission: AdminPermission): boolean {
