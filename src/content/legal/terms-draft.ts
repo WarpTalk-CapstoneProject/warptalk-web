@@ -30,6 +30,8 @@ export const TERMS_SECTIONS: LegalSection[] = [
       "Workspaces and roles: a workspace Owner has full control over that workspace, including billing and changing other members' roles. A workspace Admin can manage members and most workspace settings, and can view and manage billing, but cannot change another member's role or transfer ownership — only the Owner can. A Member can join meetings and use the features the workspace has enabled for them. Joining a workspace via a verified email domain or an invitation link means you agree to that workspace's own internal policies, in addition to these Terms.",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — this whole
+  // file is a draft awaiting review, per legal-draft.tsx.
   {
     heading: "4. Subscriptions and billing",
     paragraphs: [
@@ -74,6 +76,8 @@ export const TERMS_SECTIONS: LegalSection[] = [
       "The Service is provided \"as is.\" Translation, transcription, and AI-generated summaries can contain errors — do not rely on WarpTalk output for decisions where mistranslation could cause harm (e.g. medical, legal, or safety-critical situations) without independent verification.",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — see the file
+  // header above.
   {
     heading: "11. Limitation of liability",
     paragraphs: [
@@ -92,6 +96,8 @@ export const TERMS_SECTIONS: LegalSection[] = [
       "We may update the Service or these Terms over time. We'll give notice of material changes before they take effect. Continued use after that point means you accept the updated Terms.",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — see the file
+  // header above.
   {
     heading: "14. Governing law and disputes",
     paragraphs: [
@@ -104,6 +110,8 @@ export const TERMS_SECTIONS: LegalSection[] = [
   },
 ];
 
+// i18n-allow: reviewer checklist in Vietnamese for @Tú, not end-user copy — see the file
+// header above.
 export const TERMS_REVIEW_NOTES = [
   "Credit chưa dùng có cộng dồn sang kỳ sau không",
   "Chính sách hoàn tiền cụ thể (đang để mặc định: xét theo từng trường hợp)",

@@ -18,6 +18,9 @@ export type LegalSection = {
   paragraphs: string[];
 };
 
+// i18n-allow: "CẦN XÁC NHẬN" ("needs confirmation") is the literal marker draft-legal.tsx's
+// content files use for a reviewer note — matching it here is code, not copy, and it stays
+// Vietnamese because the reviewer (@Tú) and this file's whole purpose are.
 function NeedsConfirmationHighlighted({ text }: { text: string }) {
   const parts = text.split(/(\[CẦN XÁC NHẬN[^\]]*\])/g);
   return (
@@ -51,6 +54,9 @@ export function LegalDraft({
 }) {
   return (
     <main className="mx-auto flex min-h-[100dvh] w-full max-w-3xl flex-col gap-8 px-6 py-16">
+      {/* i18n-allow: "@Tú" is the reviewer's name, and the [CẦN XÁC NHẬN] marker below it is
+          explained in the file header — this banner is itself the notice that the page is a
+          draft, not translated end-user copy. */}
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
         <p className="font-semibold">
           ⚠️ Draft — pending legal review by @Tú. Not yet in force.
@@ -86,6 +92,7 @@ export function LegalDraft({
         ))}
       </div>
 
+      {/* i18n-allow: "@Tú" is the reviewer's name — see the file header. */}
       <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm leading-relaxed text-neutral-700">
         <p className="mb-2 font-semibold text-neutral-900">
           Checklist for @Tú before this goes live:

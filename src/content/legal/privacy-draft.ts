@@ -8,6 +8,10 @@ import type { LegalSection } from "@/components/legal/legal-draft";
  */
 export const PRIVACY_LAST_UPDATED_NOTE = "Draft prepared for review — not yet published.";
 
+// i18n-allow: this whole file is a draft awaiting review by a Vietnamese-speaking lead
+// (@Tú), not translated end-user copy — the [CẦN XÁC NHẬN] markers are notes to that
+// reviewer, in the language they and the rest of legal-draft.tsx's audience actually work
+// in. See legal-draft.tsx for why this page exists outside the normal i18n catalog.
 export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     heading: "1. Who we are",
@@ -28,6 +32,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Cookies: session cookies to keep you signed in. We do not currently use advertising cookies or third-party tracking pixels.",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — see the file
+  // header above.
   {
     heading: "3. How we use your information",
     paragraphs: [
@@ -42,6 +48,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "We require every third party we share data with to protect it under terms at least as strict as this policy, and we don't allow any of them to use your data for their own purposes.",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — see the file
+  // header above.
   {
     heading: "5. How long we keep your data",
     paragraphs: [
@@ -49,6 +57,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Account data is kept for as long as your account is active. If you delete your account, we remove your personal data within [CẦN XÁC NHẬN — đề xuất 30 ngày] except where we're required to keep billing records for tax/accounting purposes (typically several years under Vietnamese accounting law — [CẦN XÁC NHẬN] thời hạn chính xác).",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — see the file
+  // header above.
   {
     heading: "6. Your rights",
     paragraphs: [
@@ -63,6 +73,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "We use industry-standard measures to protect your data, including encryption in transit (HTTPS/WSS), hashed passwords, and role-based access control within workspaces (Member / Admin / Owner, plus Platform Admin for WarpTalk's own operations team). No system is 100% secure; if we become aware of a breach affecting your data, we will notify affected users and any authority required by law without undue delay.",
     ],
   },
+  // i18n-allow: draft reviewer note in Vietnamese for @Tú, not end-user copy — see the file
+  // header above.
   {
     heading: "8. International data transfers",
     paragraphs: [
@@ -89,6 +101,8 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   },
 ];
 
+// i18n-allow: reviewer checklist in Vietnamese for @Tú, not end-user copy — see the file
+// header above.
 export const PRIVACY_REVIEW_NOTES = [
   "Tên pháp nhân + địa chỉ đăng ký kinh doanh chính thức (nếu dự án đã có), hoặc xác nhận dùng \"WarpTalk\" như hiện tại",
   "Có thay đổi chính sách không dùng data để train model chung trong tương lai không",
