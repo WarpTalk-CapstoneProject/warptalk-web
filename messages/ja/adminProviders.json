@@ -106,7 +106,8 @@
     "p95": "p95",
     "noCalls": "呼び出しの記録なし",
     "incident": "{impact} のインシデント: {name}",
-    "loadFailed": "稼働率の行を読み込めませんでした。"
+    "loadFailed": "稼働率の行を読み込めませんでした。",
+    "noStatusFeed": "{provider} は機械可読なステータスを公開していないため、状態と稼働率は WarpTalk 自身の呼び出しから判断しています。"
   },
   "detail": {
     "expand": "詳細を表示",
@@ -151,7 +152,8 @@
     "timeout": "タイムアウト",
     "network_error": "ネットワーク",
     "error": "未分類",
-    "client_error": "当社のリクエスト (4xx)"
+    "client_error": "当社のリクエスト (4xx)",
+    "declined": "カード拒否 (402)"
   },
   "errors": {
     "loadTitle": "プロバイダーを読み込めませんでした。",

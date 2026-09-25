@@ -106,7 +106,8 @@
     "p95": "p95",
     "noCalls": "no calls recorded",
     "incident": "{impact} incident: {name}",
-    "loadFailed": "The uptime row could not be loaded."
+    "loadFailed": "The uptime row could not be loaded.",
+    "noStatusFeed": "{provider} publishes no machine-readable status, so its status and uptime are judged from WarpTalk's own calls to it."
   },
   "detail": {
     "expand": "Show details",
@@ -151,7 +152,8 @@
     "timeout": "Timeout",
     "network_error": "Network",
     "error": "Unclassified",
-    "client_error": "Our request (4xx)"
+    "client_error": "Our request (4xx)",
+    "declined": "Card declined (402)"
   },
   "errors": {
     "loadTitle": "Providers could not be loaded.",

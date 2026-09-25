@@ -45,6 +45,9 @@ export function ProviderUptimeRow({ provider, tz }: { provider: AdminProviderSum
         }
       />
       {data.note ? <p className="mt-1.5 text-[11px] text-ink-subtle">{data.note}</p> : null}
+      {!provider.statusPage ? (
+        <p className="mt-1 text-[11px] text-ink-subtle">{t("uptime.noStatusFeed", { provider: provider.name })}</p>
+      ) : null}
     </div>
   );
 }
