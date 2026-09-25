@@ -106,7 +106,8 @@
     "p95": "p95",
     "noCalls": "không có lệnh gọi nào",
     "incident": "Sự cố {impact}: {name}",
-    "loadFailed": "Không tải được hàng thời gian hoạt động."
+    "loadFailed": "Không tải được hàng thời gian hoạt động.",
+    "noStatusFeed": "{provider} không công bố trạng thái dạng máy đọc được, nên trạng thái và thời gian hoạt động được đánh giá từ chính các lệnh gọi của WarpTalk."
   },
   "detail": {
     "expand": "Xem chi tiết",
@@ -151,7 +152,8 @@
     "timeout": "Quá thời gian",
     "network_error": "Mạng",
     "error": "Chưa phân loại",
-    "client_error": "Yêu cầu của ta (4xx)"
+    "client_error": "Yêu cầu của ta (4xx)",
+    "declined": "Thẻ bị từ chối (402)"
   },
   "errors": {
     "loadTitle": "Không tải được danh sách nhà cung cấp.",
