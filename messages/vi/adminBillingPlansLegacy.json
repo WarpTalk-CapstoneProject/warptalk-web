@@ -1,0 +1,89 @@
+{
+  "header": {
+    "badge": "Bảng quản trị",
+    "title": "Gói đăng ký",
+    "description": "Quản lý các gói thương mại, giới hạn sử dụng và đồng bộ với Stripe",
+    "addNewPlan": "Thêm gói mới"
+  },
+  "list": {
+    "title": "Tất cả gói",
+    "description": "Xem và chỉnh sửa các gói hiển thị cho người dùng.",
+    "empty": "Không tìm thấy gói đăng ký nào.",
+    "createFirst": "Tạo gói đầu tiên",
+    "columns": {
+      "name": "Tên",
+      "tier": "Cấp độ",
+      "price": "Giá",
+      "creditsPerCycle": "Credit/Chu kỳ",
+      "limits": "Giới hạn (Giọng nói / Thuật ngữ / ACL)",
+      "status": "Trạng thái",
+      "actions": "Thao tác"
+    },
+    "free": "Miễn phí",
+    "voiceClone": "Nhân bản giọng nói: {status}",
+    "glossaryAccess": "Quyền truy cập thuật ngữ: {status}",
+    "enabled": "Đã bật",
+    "disabled": "Đã tắt",
+    "active": "Đang hoạt động",
+    "inactive": "Ngừng hoạt động"
+  },
+  "dialog": {
+    "editTitle": "Chỉnh sửa gói đăng ký",
+    "createTitle": "Tạo gói đăng ký mới",
+    "description": "Thiết lập giá, giới hạn và các cờ tính năng AI của gói.",
+    "fields": {
+      "planName": "Tên gói",
+      "planNamePlaceholder": "VD: Startup, Enterprise",
+      "slug": "Slug (định danh URL)",
+      "slugPlaceholder": "VD: startup-plan, enterprise-tier",
+      "price": "Giá",
+      "currency": "Đơn vị tiền tệ",
+      "currencyPlaceholder": "Chọn đơn vị tiền tệ",
+      "billingCycle": "Chu kỳ thanh toán",
+      "billingCyclePlaceholder": "Chọn chu kỳ",
+      "billingCycleMonthly": "Hàng tháng",
+      "billingCycleSemiannual": "6 tháng",
+      "billingCycleYearly": "Hàng năm",
+      "creditsPerCycle": "Credit/Chu kỳ",
+      "tierLevel": "Cấp độ",
+      "tierLevelPlaceholder": "VD: Pro, Premium",
+      "maxParticipants": "Số người tham gia tối đa",
+      "maxLanguages": "Số ngôn ngữ tối đa"
+    },
+    "featureFlags": {
+      "heading": "Cờ phân quyền tính năng",
+      "voiceCloning": "Nhân bản giọng nói",
+      "voiceCloningHint": "Cho phép mô phỏng giọng nói bằng AI",
+      "aiAssistant": "Trợ lý AI",
+      "aiAssistantHint": "AI tương tác trong cuộc họp",
+      "glossaryAccess": "Quyền truy cập thuật ngữ",
+      "glossaryAccessHint": "Định nghĩa thuật ngữ riêng của doanh nghiệp"
+    },
+    "sortOrder": "Thứ tự hiển thị",
+    "highlights": "Điểm nổi bật của gói (mỗi dòng một mục)",
+    "highlightsPlaceholder": "VD: Tối đa 5 người tham gia&#10;Dịch thời gian thực&#10;TTS thần kinh tiêu chuẩn",
+    "activeStatus": "Trạng thái hoạt động",
+    "activeStatusHint": "Giữ bật để người dùng có thể xem và mua gói",
+    "cancel": "Hủy",
+    "save": "Lưu gói",
+    "saving": "Đang lưu..."
+  },
+  "errors": {
+    "nameRequired": "Tên là bắt buộc.",
+    "nameTooLong": "Tên không được vượt quá 100 ký tự.",
+    "slugRequired": "Slug là bắt buộc.",
+    "slugTooLong": "Slug không được vượt quá 50 ký tự.",
+    "slugInvalid": "Slug chỉ được chứa chữ thường, chữ số và dấu gạch nối (VD: 'gold-tier').",
+    "tierRequired": "Cấp độ là bắt buộc.",
+    "tierTooLong": "Cấp độ không được vượt quá 20 ký tự.",
+    "currencyInvalid": "Đơn vị tiền tệ phải là mã ISO gồm 3 ký tự.",
+    "billingCycleInvalid": "Chu kỳ thanh toán phải là 'monthly', 'semiannual' hoặc 'yearly'.",
+    "priceTooLow": "Giá cho {currency} phải tối thiểu {minPrice} do giới hạn thanh toán của Stripe.",
+    "creditsNegative": "Credit không được là số âm.",
+    "maxParticipantsTooLow": "Số người tham gia tối đa phải từ 2 trở lên.",
+    "maxLanguagesTooLow": "Số ngôn ngữ tối đa phải từ 1 trở lên.",
+    "sortOrderNegative": "Thứ tự hiển thị không được là số âm.",
+    "createFailed": "Tạo gói thất bại.",
+    "updateFailed": "Cập nhật gói thất bại."
+  }
+}

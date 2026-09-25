@@ -12,13 +12,20 @@ import {
   type KeyboardEvent,
 } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { useTranslations } from "next-intl";
 import { CaretDown, ListBullets } from "@phosphor-icons/react/dist/ssr";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { identityFor } from "@/lib/meeting/participant-identity";
 import {
   captionTextForReader,
   groupTranscriptSegments,
+  mergeTranslations,
 } from "@/lib/transcript/transcript-display";
+import {
+  buildCleanTranscriptView,
+  withAbsorbedSegmentIds,
+} from "@/lib/transcript/clean-transcript";
+import { useTranscriptViewMode } from "@/hooks/use-transcripts";
 import type { GroupedTranscriptSegment } from "@/lib/transcript/transcript-display";
 import {
   LIVE_CAPTION_SCROLLBACK,
@@ -126,9 +133,11 @@ export function LiveSubtitleOverlay({
    */
   onOpenTranscript?: () => void;
 }) {
+  const t = useTranslations("meetingCallChrome.captions");
   // The caption lane, not the transcript lane: captions keep running while the transcript is
   // paused, and this list is the one a pause never withholds from. See captionSegments.
   const segments = useTranslationRoomStore((state) => state.captionSegments);
+  const cleanSentences = useTranslationRoomStore((state) => state.cleanSentences);
   const identities = useMeetingIdentities();
   const reduceMotion = useReducedMotion() ?? false;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -140,19 +149,50 @@ export function LiveSubtitleOverlay({
   const browsing = variant === "lane" && scrollback.browsing;
   const browsingRef = useRef(browsing);
 
-  const spoken = useMemo(
-    () =>
-      // Resolved ONCE per utterance here rather than inside CaptionLine, so a line with nothing to
-      // show this reader yet never occupies a slot. Filtering after the slice would leave the lane
-      // rendering two lines and a gap.
-      groupTranscriptSegments(segments)
-        .map((utterance) => ({
-          utterance,
-          caption: captionTextForReader(utterance, readerLanguage, translationActive),
-        }))
-        .filter((line): line is CaptionLineData => Boolean(line.caption)),
-    [segments, readerLanguage, translationActive],
-  );
+  /**
+   * WT-716 — the lane reads Clean or Verbatim, and it is the SAME choice the transcript panel
+   * uses rather than a switch of its own.
+   *
+   * The lane has no header to hang a toggle on (it is three lines over live video, with the
+   * control bar's CC button the only thing that governs it), and a caption surface that showed
+   * "ừm, ừm, cái đó" while the panel two inches away showed the same sentence cleaned would read
+   * as two transcripts of one meeting. So the preference is shared and there is no second control:
+   * a reader who wants the recogniser's exact words switches once, in the panel, and both follow.
+   */
+  const [viewMode] = useTranscriptViewMode();
+
+  const spoken = useMemo(() => {
+    // Clean captions are built from the SEGMENTS the lane already holds — tier 1 wording, with
+    // filler-only lines dropped so the lane never spends one of its three slots on "um". A merged
+    // sentence (tier 2) is used when one has arrived for lines still on screen; it usually has
+    // not, because the lane is showing what was said a second ago and the sentence is written
+    // afterwards. Falling back to the per-segment text is the ordinary case here, not the
+    // exception.
+    const view =
+      viewMode === "clean"
+        ? buildCleanTranscriptView(segments, cleanSentences, {
+            idOf: (segment) => segment.segmentId,
+            // A swallowed segment takes its translations with it unless they are folded in, and
+            // the translation is what this lane actually prints for a reader in another language.
+            absorb: (head, absorbed) => ({
+              ...head,
+              translations: mergeTranslations(head.translations, absorbed.translations),
+              confidence: Math.min(head.confidence, absorbed.confidence),
+            }),
+          })
+        : null;
+    const grouped = groupTranscriptSegments(view ? view.segments : segments);
+    const shown = view ? withAbsorbedSegmentIds(grouped, view) : grouped;
+    // Resolved ONCE per utterance here rather than inside CaptionLine, so a line with nothing to
+    // show this reader yet never occupies a slot. Filtering after the slice would leave the lane
+    // rendering two lines and a gap.
+    return shown
+      .map((utterance) => ({
+        utterance,
+        caption: captionTextForReader(utterance, readerLanguage, translationActive),
+      }))
+      .filter((line): line is CaptionLineData => Boolean(line.caption));
+  }, [segments, cleanSentences, viewMode, readerLanguage, translationActive]);
 
   const lines = useMemo(
     () =>
@@ -315,7 +355,7 @@ export function LiveSubtitleOverlay({
       >
         {browsing ? (
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/70 px-3 py-1.5">
-            <p className="text-[12px] font-medium text-ink-muted">Earlier captions</p>
+            <p className="text-[12px] font-medium text-ink-muted">{t("earlierCaptions")}</p>
             <div className="flex items-center gap-1">
               {onOpenTranscript ? (
                 <button
@@ -324,14 +364,14 @@ export function LiveSubtitleOverlay({
                   className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium text-ink transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <ListBullets className="size-3.5" weight="bold" />
-                  Full transcript
+                  {t("fullTranscript")}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={jumpToLatest}
-                aria-label="Close caption history and follow live captions"
-                title="Back to live captions"
+                aria-label={t("closeHistoryAria")}
+                title={t("backToLive")}
                 className="grid size-7 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <CaretDown className="size-3.5" weight="bold" />
@@ -344,8 +384,8 @@ export function LiveSubtitleOverlay({
           <button
             type="button"
             onClick={onOpenTranscript}
-            aria-label="Open full transcript"
-            title="Open full transcript"
+            aria-label={t("openFullTranscript")}
+            title={t("openFullTranscript")}
             className="absolute right-1.5 top-1.5 z-10 grid size-7 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <ListBullets className="size-4" weight="bold" />
@@ -355,7 +395,7 @@ export function LiveSubtitleOverlay({
         <div
           ref={scrollRef}
           role="region"
-          aria-label="Live captions. Scroll up for earlier captions."
+          aria-label={t("liveRegionAria")}
           // Focusable so the history is reachable without a wheel: arrows and PageUp open it,
           // End or Escape close it (captionKeyAction).
           tabIndex={0}
@@ -373,7 +413,7 @@ export function LiveSubtitleOverlay({
           <div className="flex min-h-full max-w-3xl flex-col justify-end gap-1.5">
             {lines.length === 0 ? (
               <p className="text-[13px] text-ink-subtle">
-                Captions will appear here as people speak.
+                {t("emptyState")}
               </p>
             ) : (
               lines.map((line, index) => (

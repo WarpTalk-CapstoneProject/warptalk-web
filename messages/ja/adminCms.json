@@ -127,7 +127,10 @@
       "live": "使用中",
       "dormant": "休止中",
       "customized": "カスタマイズ済み",
-      "draft": "未公開の変更あり"
+      "draft": "未公開の変更あり",
+      "custom": "ここで作成",
+      "builtIn": "組み込み",
+      "archived": "アーカイブ済み"
     },
     "searchPlaceholder": "メールを検索",
     "sort": {
@@ -154,7 +157,8 @@
       "live": "使用中",
       "dormant": "休止中",
       "customized": "カスタマイズ済み",
-      "draft": "未公開の変更あり"
+      "draft": "未公開の変更あり",
+      "archived": "アーカイブ済み"
     },
     "localeStates": {
       "PUBLISHED": "公開済み",
@@ -212,7 +216,15 @@
       "discarded": "下書きを破棄しました。",
       "archived": "アーカイブしました。",
       "duplicated": "別の言語の下書きにコピーしました。",
-      "reset": "英語の下書きを組み込みの文面に戻しました。送信するには公開してください。"
+      "reset": "英語の下書きを組み込みの文面に戻しました。送信するには公開してください。",
+      "archivedAll": "アーカイブしました。送信には組み込みの文面が使われます。",
+      "restored": "復元しました。一覧に戻りました。"
+    },
+    "newTemplate": "新しいテンプレート",
+    "archiveAllDialog": {
+      "title": "「{name}」のすべての言語をアーカイブしますか？",
+      "description": "{service} サービスはこのメールを送り続けますが、アーカイブを解除するまで、すべての言語で編集内容ではなく組み込みの文面が使われます。",
+      "confirm": "アーカイブして組み込みの文面を使う"
     }
   },
   "blocks": {
@@ -312,6 +324,10 @@
     "actions": {
       "edit": "編集",
       "preview": "プレビュー"
+    },
+    "kinds": {
+      "LAYOUT": "レイアウト",
+      "PARTIAL": "再利用ブロック"
     }
   },
   "emailEditor": {
@@ -344,7 +360,9 @@
       "variables": "変数",
       "preview": "プレビュー",
       "history": "履歴",
-      "analytics": "分析"
+      "analytics": "分析",
+      "details": "詳細",
+      "sends": "送信"
     },
     "fields": {
       "subject": "件名",
@@ -446,7 +464,11 @@
       "discard": "変更を破棄",
       "deleteDraft": "下書きを削除",
       "publish": "公開",
-      "saveAndPublish": "保存して公開"
+      "saveAndPublish": "保存して公開",
+      "restoreTemplate": "テンプレートを復元",
+      "asReceived": "受信時の表示で確認",
+      "sendEmail": "メールを送信…",
+      "deleteTemplate": "テンプレートを削除"
     },
     "publishBlocked": "先に「コンテンツ」タブの問題を修正してください。",
     "publishDialog": {
@@ -497,8 +519,12 @@
       "archived": "アーカイブしました。送信されなくなりました。",
       "unarchived": "アーカイブを解除しました。",
       "reset": "下書きを組み込みの文面に戻しました。",
-      "restored": "v{version} を下書きに復元しました。"
-    }
+      "restored": "v{version} を下書きに復元しました。",
+      "restoredTemplate": "テンプレートを復元しました。"
+    },
+    "deletedNotice": "このテンプレートは削除済みで読み取り専用です（理由: {reason}）。編集や送信をするには復元してください。",
+    "sendNeedsPublish": "先に英語版を公開してください。",
+    "builtInNoDelete": "{service} サービスが送信するため削除できません。組み込みの文面に戻すか、言語をアーカイブしてその文面に戻してください。"
   },
   "blockEditor": {
     "back": "メールテンプレート",
@@ -1014,7 +1040,282 @@
         "noMatch": "一致するワークスペースがありません。",
         "added": "追加済み",
         "memberCount": "{count} 人のメンバー"
+      },
+      "email": {
+        "title": "メールでも送信",
+        "description": "このお知らせが公開されたときに、メールテンプレートを使って同じ対象にメールを送ります。",
+        "noPermission": "対象へのメール送信には「対象にメールを送信」権限が必要です。",
+        "loadError": "メールテンプレートを読み込めませんでした。",
+        "none": "メールを送らない",
+        "preview": "メールをプレビュー",
+        "manage": "メールテンプレートを管理",
+        "noneEligible": "使えるテンプレートがまだありません。メールテンプレートで作成し、英語版を公開してください。",
+        "unavailable": "選んだテンプレートは削除されたか公開されていません。別のテンプレートを選ぶか、メールなしにしてください。",
+        "when": "開始日時に、お知らせのメールをオフにしていない対象全員へ送信されます。それまでに非公開にすると送信は取り消されます。",
+        "alsoSends": "対象にはすぐにメールも送信されます。",
+        "alsoSendsAtStart": "メールも同時に送信されます。"
       }
+    }
+  },
+  "library": {
+    "categories": {
+      "BUILT_IN": "組み込み",
+      "TRANSACTIONAL_CUSTOM": "トランザクション",
+      "MARKETING": "マーケティング",
+      "ANNOUNCEMENT": "お知らせメール"
+    },
+    "thumbnail": {
+      "error": "プレビューできません",
+      "open": "「{name}」を受信時の表示でプレビュー",
+      "preview": "プレビュー"
+    },
+    "card": {
+      "sentByYou": "あなたが対象に送信",
+      "deletedBecause": "削除: {reason}",
+      "restore": "復元",
+      "more": "その他の操作",
+      "sendEmail": "メールを送信…",
+      "publishFirst": "先に英語版を公開してください",
+      "archiveAll": "アーカイブ（組み込みの文面を使用）",
+      "archiveAllHint": "送信は組み込みの文面に戻ります",
+      "delete": "削除",
+      "builtInNoDelete": "{service} サービスが使用中です。削除の代わりにリセットまたはアーカイブしてください"
+    },
+    "inbox": {
+      "dialogTitle": "受信時の「{name}」",
+      "frameTitle": "「{name}」の本文",
+      "language": "言語",
+      "sampleData": "サンプルデータ",
+      "defaultSample": "既定のサンプル",
+      "to": "宛先",
+      "preheader": "プレビュー行",
+      "formatHtml": "メール",
+      "formatText": "プレーンテキスト",
+      "error": "このメールを表示できませんでした。",
+      "openInNewTab": "新しいタブで開く",
+      "sendTest": "テスト送信",
+      "edit": "編集",
+      "previewWith": "表示先",
+      "sampleContent": "サンプル内容",
+      "source": {
+        "published": "送信中のバージョン v{version}",
+        "fallback": "{locale} は未作成 — {used} を送信",
+        "draft": "下書き — まだ送信されません",
+        "builtIn": "組み込みの文面"
+      }
+    },
+    "send": {
+      "title": "「{name}」を送信",
+      "description": "公開済みのバージョンだけが送信されます。各自の言語、なければ英語です。",
+      "steps": "ステップ",
+      "stepNames": {
+        "audience": "対象",
+        "values": "詳細",
+        "confirm": "確認"
+      },
+      "who": "送信先",
+      "when": "送信日時（任意）",
+      "whenHint": "空欄ならすぐに送信します。時刻はあなたのタイムゾーンです。",
+      "errors": {
+        "plans": "プランを 1 つ以上選んでください。",
+        "workspaces": "ワークスペースを 1 つ以上選んでください。",
+        "past": "未来の日時を選んでください。",
+        "required": "必須です。",
+        "notALink": "完全なリンク（https://…）を入力してください。",
+        "notANumber": "数値を入力してください。",
+        "notADate": "日付を入力してください。",
+        "tooLong": "長すぎます。"
+      },
+      "noValues": "このテンプレートは追加の入力が不要です。各自の名前とアドレスは自動で入ります。",
+      "automatic": "受信者の名前とアドレスは各自に自動で入ります。",
+      "reaches": "{count} 人",
+      "optedOut": "{count} 人がこの種類のメールをオフにしているためスキップされます。",
+      "fallback": "{locales}: その言語は未公開のため、英語版が送られます。",
+      "startsAt": "{date} に開始します。",
+      "duration": "1 分あたり {rate} 通で、約 {minutes} 分かかります。",
+      "nobody": "この対象にはメールを送れる人がいません。",
+      "acknowledge": "{count} 人にメールが送信されることを理解しました。",
+      "recount": "送信時にサーバーが再集計します。{tolerance} 人を超えて変わった場合は、新しい人数を確認してください。",
+      "back": "戻る",
+      "cancel": "キャンセル",
+      "next": "次へ",
+      "counting": "集計中…",
+      "review": "確認",
+      "send": "{count} 人に送信",
+      "schedule": "{count} 人への送信を予約",
+      "started": "{count} 人に送信しています。「送信」タブで確認できます。",
+      "scheduled": "予約しました。「送信」タブで確認できます。",
+      "startFailed": "送信を開始できませんでした。",
+      "estimateFailed": "対象を集計できませんでした。"
+    },
+    "sends": {
+      "noPermission": "対象にメールを送信できません",
+      "noPermissionHint": "「対象にメールを送信」権限が必要です。",
+      "loadError": "送信を読み込めませんでした。",
+      "empty": "まだ送信されていません",
+      "emptyHint": "あなたやお知らせによるすべての送信が、受信者ごとの結果とともにここに表示されます。",
+      "newSend": "メールを送信…",
+      "statuses": {
+        "QUEUED": "待機中",
+        "SENDING": "送信中",
+        "COMPLETED": "完了",
+        "CANCELLED": "取り消し",
+        "FAILED": "失敗"
+      },
+      "fromAnnouncement": "お知らせと同時",
+      "scheduledFor": "{date} に予約",
+      "startedAt": "{date} に開始",
+      "counts": "送信 {sent} · 失敗 {failed} · スキップ {skipped} / {total}",
+      "back": "すべての送信",
+      "cancelTitle": "この送信を取り消しますか？",
+      "cancelDescription": "未送信の {pending} 通はスキップされます。送信済みのメールは取り消せません。",
+      "cancel": "送信を取り消す",
+      "cancelled": "送信を取り消しました。",
+      "audience": "対象",
+      "created": "作成",
+      "values": "値",
+      "recipientFilter": "受信者を絞り込む",
+      "allRecipients": "すべて",
+      "recipientStatuses": {
+        "SENT": "送信済み",
+        "FAILED": "失敗",
+        "SKIPPED": "スキップ",
+        "PENDING": "待機中"
+      },
+      "resolving": "対象の人を確認しています…",
+      "noRecipients": "該当する受信者はいません。",
+      "recipient": "受信者",
+      "language": "言語",
+      "status": "状態",
+      "when": "送信日時",
+      "pageOf": "{page} / {totalPages} ページ",
+      "previous": "前へ",
+      "next": "次へ",
+      "audiencePlans": "プラン: {plans}",
+      "audienceWorkspaces": "{count} 件のワークスペース",
+      "audienceAll": "全員",
+      "audienceNew": "過去 {days} 日以内に登録"
+    },
+    "delete": {
+      "title": "「{name}」を削除しますか？",
+      "description": "組み込みのメールは削除できません。これはここで作成されたものです。",
+      "how": "削除の方法",
+      "archive": "アーカイブに移動",
+      "archiveHint": "候補に表示されなくなり、「アーカイブ済み」から復元できます。送信ログは残ります。",
+      "purge": "完全に削除",
+      "purgeHint": "一度もメールを送っていないため、下書き・バージョン・サンプルとともに削除できます。",
+      "purgeUnavailable": "一度も送信していないテンプレートだけが完全に削除できます。",
+      "checking": "送信履歴を確認しています…",
+      "reason": "理由（監査ログに残ります）",
+      "reasonPlaceholder": "キャンペーン終了、…に置き換え",
+      "archived": "アーカイブに移動しました。",
+      "purged": "完全に削除しました。",
+      "confirmArchive": "アーカイブに移動",
+      "confirmPurge": "完全に削除"
+    },
+    "details": {
+      "variablesHint": "自動で入る項目以外に送信時に尋ねる内容です。必須の項目は送信時に値が必要です。",
+      "save": "詳細を保存",
+      "saved": "詳細を保存しました。",
+      "saveFailed": "詳細を保存できませんでした。"
+    },
+    "wizard": {
+      "title": "新しいメールテンプレート",
+      "description": "下書きとして保存されます。公開して対象に送信するか、お知らせと一緒に送るまで何も送信されません。",
+      "stepsLabel": "ステップ",
+      "steps": {
+        "basics": "基本",
+        "layout": "レイアウト",
+        "variables": "変数",
+        "content": "内容",
+        "review": "確認"
+      },
+      "cancel": "キャンセル",
+      "back": "戻る",
+      "next": "次へ",
+      "saving": "保存中…",
+      "saveDraft": "下書きを保存",
+      "created": "テンプレートを下書きとして作成しました。",
+      "createFailed": "テンプレートを作成できませんでした。",
+      "name": "名前",
+      "namePlaceholder": "秋の製品アップデート",
+      "key": "キー",
+      "keyHint": "名前から提案されます。小文字、数字、ドット、ハイフン。後から変更できません。",
+      "category": "メールの種類",
+      "categories": {
+        "TRANSACTIONAL_CUSTOM": {
+          "label": "トランザクション",
+          "hint": "ポリシー変更などの業務連絡。選んだ全員に送信されます。"
+        },
+        "MARKETING": {
+          "label": "マーケティング",
+          "hint": "キャンペーンやニュース。プロモーションメールをオフにした人はスキップされます。"
+        },
+        "ANNOUNCEMENT": {
+          "label": "お知らせメール",
+          "hint": "お知らせと一緒に送信。お知らせのタイトル、本文、リンクを使えます。"
+        }
+      },
+      "descriptionLabel": "説明（任意）",
+      "howItSends": "ここで作成したテンプレートには自動送信がありません。対象に送信したときか、お知らせのメールとしてのみ送られます。",
+      "defaultLayout": "既定のレイアウト",
+      "defaultLayoutHint": "既定になっているレイアウトに従います。",
+      "builtInLayout": "WarpTalk レイアウト",
+      "automaticVariables": "自動で入る項目",
+      "implicit": {
+        "RecipientName": "受信者の名前",
+        "RecipientEmail": "受信者のメール",
+        "AnnouncementTitle": "お知らせのタイトル",
+        "AnnouncementText": "お知らせの本文",
+        "AnnouncementLink": "お知らせのリンク"
+      },
+      "variableName": "名前（テンプレート内）",
+      "variableLabel": "ラベル（送信フォーム）",
+      "variableType": "種類",
+      "variableSample": "サンプル値",
+      "variableRequired": "必須",
+      "removeVariable": "変数を削除",
+      "addVariable": "変数を追加",
+      "types": {
+        "TEXT": "テキスト",
+        "URL": "リンク",
+        "DATE": "日付",
+        "NUMBER": "数値",
+        "MULTILINE": "段落"
+      },
+      "language": "言語",
+      "languages": {
+        "en": "English",
+        "vi": "Tiếng Việt",
+        "ja": "日本語"
+      },
+      "optional": "任意",
+      "fallbackHint": "任意: この言語を使う人には、作成して公開するまで英語版が送られます。",
+      "subject": "件名",
+      "preheader": "プレビュー行",
+      "heading": "見出し",
+      "body": "本文（HTML）",
+      "bodyHint": "変数をクリックするとカーソル位置に挿入されます。保存後にすべて調整し、受信時の表示で確認できます。",
+      "languagesWritten": "作成した言語",
+      "noVariables": "なし",
+      "reviewHint": "保存では下書きのみ作成されます。次に英語版を公開し、「メールを送信」を使うか、お知らせのメールとして選んでください。",
+      "errors": {
+        "nameRequired": "テンプレートに名前を付けてください。",
+        "keyInvalid": "キーは 3〜60 文字の小文字、数字、ドット、ハイフンにしてください。",
+        "keyTaken": "このキーは別のテンプレートで使われています。",
+        "variableNameInvalid": "変数名は英字・数字・_ で、英字で始めてください。",
+        "variableImplicit": "その変数は自動で入ります。別の名前にしてください。",
+        "variableDuplicate": "同じ名前の変数が 2 つあります。",
+        "variableSampleInvalid": "サンプル値が種類と一致しません。",
+        "tooManyVariables": "変数は 20 個までです。",
+        "englishRequired": "英語版を作成してください。すべての言語のフォールバックになります。",
+        "subjectRequired": "作成した言語には件名が必要です。",
+        "bodyRequired": "作成した言語には本文が必要です。",
+        "unknownVariable": "宣言されていない変数が使われています。"
+      },
+      "bodyView": "本文の表示",
+      "quickLook": "クイックプレビュー",
+      "write": "編集"
     }
   }
 }

@@ -37,6 +37,9 @@ const read = (rel) => stripComments(fs.readFileSync(path.join(root, rel), "utf8"
 
 const rail = read("src/components/rooms/meeting-reading-rail.tsx");
 const preview = read("src/app/dev/transcript-preview/page.tsx");
+const meetingSummaryEn = JSON.parse(
+  fs.readFileSync(path.join(root, "messages/en/meetingSummary.json"), "utf8"),
+);
 
 /** One declaration's source, from its opening line to the line that closes it at `closer`. */
 function block(source, opener, closer) {
@@ -72,11 +75,14 @@ assert.match(
   "Every other section must keep RailClaimButton — decisions and action items are lists, and "
     + "nothing in this ticket changes how a list is drawn.",
 );
+// "no moment recorded" moved into i18n (t("claim.noMoment")) — assert the rail still branches on
+// claim.atMs to pick that key, and the English catalog still carries the wording.
 assert.match(
   rail,
-  /claim\.atMs === null \? "no moment recorded" : formatCitationTime\(claim\.atMs\)/,
+  /claim\.atMs === null \? t\("claim\.noMoment"\) : formatCitationTime\(claim\.atMs\)/,
   "The claim button must keep printing its moment, or its absence, on its own line.",
 );
+assert.equal(meetingSummaryEn.claim?.noMoment, "no moment recorded");
 
 // ── A sentence carries no timestamp line, no rule and no underline ──────────
 
@@ -117,11 +123,17 @@ assert.match(
   "The guidance line must be gated on the section's heading, so it appears once per section rather "
     + "than beside every sentence.",
 );
+// "Click a sentence to see where it came from." moved into i18n (t("narrative.hint")) — assert
+// the rail still calls that key, and the English catalog still carries the wording.
 assert.match(
   rail,
-  /Click a sentence to see where it came from\./,
+  /t\("narrative\.hint"\)/,
   "The section must say, once, that its sentences are clickable. It is the only rest-state "
     + "instruction left after the timestamp line went.",
+);
+assert.equal(
+  meetingSummaryEn.narrative?.hint,
+  "Click a sentence to see where it came from.",
 );
 
 // 3. The moments arrive on hover AND on focus, and they hold their space at rest. Unmounting them

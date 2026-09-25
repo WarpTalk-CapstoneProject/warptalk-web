@@ -540,7 +540,7 @@ function Editor({ block, backLink }: { block: EmailBlockDto; backLink: React.Rea
             </section>
             <section>
               <h3 className="mb-3 text-[13px] font-semibold">{t("history.audit")}</h3>
-              <AuditHistory entityType="EmailBlock" entityId={block.id} />
+              <AuditHistory entityType="email_block" entityId={block.id} />
             </section>
           </div>
         </CmsTabPanel>

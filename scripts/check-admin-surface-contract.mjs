@@ -192,6 +192,13 @@ const NAV_EXEMPT = new Set([
   // Reached from /admin/announcements by clicking a row. One notice's full record, not a
   // destination of its own.
   `${ADMIN_ROOT}/announcements/[id]/page.tsx`,
+  // Reached from /admin/billing's "Manage Plans" button / a ledger row's workspace link, not
+  // from the nav. Both re-export the same component the legacy /billing/plans and
+  // /billing/workspace/[id] routes render, kept under /admin so that navigating from
+  // /admin/billing stays inside the system-admin portal's own sidebar instead of dropping into
+  // the older (internal) layout's — see the basePath note in src/app/(internal)/billing/page.tsx.
+  `${ADMIN_ROOT}/billing/plans/page.tsx`,
+  `${ADMIN_ROOT}/billing/workspace/[id]/page.tsx`,
   // The announcements CMS editor (`new` or an id), reached from a card or "New announcement" on
   // /admin/announcements.
   `${ADMIN_ROOT}/announcements/posts/[postId]/page.tsx`,

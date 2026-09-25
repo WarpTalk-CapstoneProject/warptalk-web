@@ -1,0 +1,122 @@
+{
+  "absence": {
+    "withheld": "この会議には文字起こしがありますが、あなたとは共有されていません。参加した人だけが読むことができます — アクセスが必要な場合はホストに相談してください。",
+    "unavailable": "文字起こしを読み込めませんでした。再読み込みしてもう一度お試しください。",
+    "notYet": "会議が文字起こしされ次第、ここに保存されます。",
+    "notKept": "この会議は文字起こしを保存しない設定でした。字幕と翻訳はライブで動作しましたが、何も保存されなかったため、文字起こし、AI要約、議事録はありません。",
+    "paused": "文字起こしは保存されませんでした。この会議では文字起こしが一時停止されており、その間は何も記録されませんでした。",
+    "none": "この会議では誰も発言しなかったため、文字起こしは記録されませんでした。WarpTalkは翻訳の開始有無にかかわらず発言を保存するため、AI要約の元になる内容もありませんでした。"
+  },
+  "followPlayback": {
+    "srTitle": "録画に合わせてもう一度スクロール",
+    "label": "再生に追従"
+  },
+  "toolbar": {
+    "entriesChip": "{isEnded, select, true {保存済み} other {進行中}} ・ {count, plural, other {#件}}",
+    "durationTitle": "会議の長さ — 開始してから終了するまでの時間",
+    "duration": "所要時間 {duration}",
+    "translationStarted": "{time}に翻訳を開始",
+    "finalizedTitle": "内容は承認され、ロックされています。これ以上の編集はできません。",
+    "finalized": "確定済み・ロック中",
+    "findAria": "この文字起こしを検索",
+    "copy": "コピー",
+    "copyLabel": "文字起こし",
+    "download": "ダウンロード",
+    "discard": "破棄",
+    "saving": "保存中…",
+    "doneSaveAll": "完了してすべて保存",
+    "editAll": "すべて編集",
+    "finalizeButtonTitle": "内容を承認してロックします。以降は編集できなくなります。",
+    "finalizing": "確定中…",
+    "finalizeAndLock": "確定してロック"
+  },
+  "finalizeDialog": {
+    "title": "この文字起こしを確定してロックしますか?",
+    "description": "確定すると、文字起こしは承認済みとしてロックされます。これ以上の編集はできません。",
+    "cancel": "キャンセル",
+    "confirm": "確定する"
+  },
+  "toasts": {
+    "correctionTooShort": "この編集は行の内容を削りすぎています。1文につき単語を1つ以上残してください。",
+    "correctionSaved": "修正を保存しました。翻訳は再作成されています。",
+    "correctionSaveFailed": "文字起こしの修正を保存できませんでした。",
+    "batchUnsplittable": "{saved}件を保存しましたが、{count, plural, other {#行}}は内容を削りすぎているため保存できませんでした。1文につき単語を1つ以上残してください。",
+    "batchSaved": "{count, plural, other {#件の修正}}を保存しました。翻訳は再作成されています。",
+    "batchPartialFailure": "{saved}件を保存しましたが、{failed}件は保存できませんでした。入力内容はそのまま残っています — もう一度お試しください。",
+    "finalizeSuccess": "文字起こしを確定してロックしました。",
+    "finalizeFailed": "文字起こしを確定できませんでした。"
+  },
+  "sessionDivider": {
+    "label": "翻訳セッション {number}",
+    "now": "現在"
+  },
+  "languageStatus": {
+    "translating": "この会議の残りを{name}に翻訳しています — {total}件中{done}件が完了。",
+    "translatingAria": "{name}に翻訳中",
+    "budgetExhausted": "この文字起こしは本日の翻訳上限に達しました。{count, plural, other {#件}}は話された言語のまま残り、元の言葉はワンクリックで確認できます。",
+    "failed": "{count, plural, other {#件}}を{name}に翻訳できませんでした。",
+    "tryAgain": "もう一度試す",
+    "notFullyCovered": "{total}件中{missing}件が{name}に完全には翻訳されていません — マークが付いており、話された言葉はワンクリックで確認できます。",
+    "notYetTranslated": "{total}件中{missing}件がまだ{name}に翻訳されていません。",
+    "translateAction": "{count, plural, other {翻訳する}}"
+  },
+  "languageMenu": {
+    "asSpoken": "話された言語のまま",
+    "asSpokenDetail": "各行をそれぞれの言語のまま表示します",
+    "readIn": "この文字起こしを読む言語",
+    "inThisTranscript": "この文字起こしに含まれる言語",
+    "notTranslatedYetGroup": "まだ翻訳されていません",
+    "translatingNow": "翻訳中",
+    "wholeMeeting": "会議全体をカバー",
+    "notTranslatedYet": "まだ翻訳されていません",
+    "partialDetail": "{total}件中{done}件"
+  },
+  "layoutToggle": {
+    "conversation": "会話表示",
+    "document": "ドキュメント表示",
+    "timeline": "タイムライン表示"
+  },
+  "speaker": {
+    "you": "あなた",
+    "unknownSpeaker": "不明な発言者",
+    "unknownSpeakerLower": "不明な発言者"
+  },
+  "line": {
+    "editAria": "文字起こしの行を編集",
+    "editTitle": "この行を編集",
+    "editByAria": "{speaker}による発言行を編集",
+    "playFromHere": "ここから録画を再生",
+    "playFromHereAt": "ここから録画を再生 — {time}",
+    "translatedPartialTitle": "この行の一部は翻訳されていません — {language}で話された内容をすべて表示します",
+    "translatedTitle": "{language}から翻訳 — 話された内容を表示します",
+    "untranslatedTitle": "この行は翻訳されていません — {language}で話された内容のまま表示しています"
+  },
+  "findBar": {
+    "placeholder": "この文字起こしを検索 — アクセント記号は省略可",
+    "closeAria": "検索を閉じる"
+  },
+  "versionHistory": {
+    "aria": "変更履歴",
+    "triggerTitle": "この行は修正されています — 変更履歴を表示",
+    "label": "変更履歴",
+    "heading": "変更履歴",
+    "subheading": "新しい順に表示。各項目は保存された1件の修正です。",
+    "loading": "読み込み中…",
+    "loadError": "変更履歴を読み込めませんでした。閉じてもう一度お試しください。",
+    "empty": "この行には記録された修正がありません。"
+  },
+  "editor": {
+    "editingTranslated": "{language}で話された内容を編集しています。翻訳はここから再作成されます。",
+    "cancel": "キャンセル",
+    "saving": "保存中…",
+    "save": "修正を保存"
+  },
+  "cleanView": {
+    "groupLabel": "文字起こしの表示",
+    "clean": "整形",
+    "cleanTitle": "フィラーや言い直しを除き、1行に1文で表示します。あなたの表示だけが変わります。",
+    "verbatim": "逐語",
+    "verbatimTitle": "音声認識が書き起こしたそのままの内容です。あなたの表示だけが変わります。",
+    "selfRepair": "話者が言い直しました。実際の発言: 「{rawText}」"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "readyCard": {
+    "dismissAria": "Dismiss",
+    "title": "Your meeting’s ready",
+    "description": "Share this link with the people you want in the meeting.",
+    "addOthers": "Add others"
+  },
+  "captions": {
+    "earlierCaptions": "Earlier captions",
+    "fullTranscript": "Full transcript",
+    "closeHistoryAria": "Close caption history and follow live captions",
+    "backToLive": "Back to live captions",
+    "openFullTranscript": "Open full transcript",
+    "liveRegionAria": "Live captions. Scroll up for earlier captions.",
+    "emptyState": "Captions will appear here as people speak."
+  },
+  "stage": {
+    "cameraOff": "Camera is off",
+    "presenting": "You are presenting",
+    "retryConnection": "Retry connection",
+    "spotlightedByHost": "Spotlighted by host",
+    "pinned": "Pinned",
+    "connectionState": {
+      "connected": "Connected",
+      "connecting": "Connecting",
+      "reconnecting": "Reconnecting",
+      "waiting": "Waiting for LiveKit"
+    }
+  }
+}
