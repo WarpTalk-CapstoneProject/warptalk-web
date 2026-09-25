@@ -36,6 +36,7 @@ import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { AdminCommandPalette, AdminHeaderSearch } from "@/components/admin/admin-command-palette";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { adminPageLabelKey } from "@/lib/admin/admin-page-title";
 import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
@@ -594,29 +595,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               if (segments.length >= 1) {
                 const firstSeg = segments[0];
                 if (firstSeg === "admin") {
-                  const ADMIN_LABEL_KEYS: Record<string, string> = {
-                    workspaces: "workspaces",
-                    users: "accounts",
-                    subscriptions: "subscriptions",
-                    plans: "plansAndPricing",
-                    billing: "billingLedger",
-                    "sales-leads": "salesLeads",
-                    meetings: "meetings",
-                    health: "systemHealth",
-                    outbox: "eventOutbox",
-                    feedback: "feedback",
-                    audit: "auditLog",
-                    announcements: "announcements",
-                    "email-templates": "emailTemplates",
-                    settings: "platformSettings",
-                    plugins: "plugins",
-                    "global-glossary": "globalGlossary",
-                  };
-                  const adminSeg = segments[1];
-                  const key = adminSeg ? ADMIN_LABEL_KEYS[adminSeg] : undefined;
-                  parts.push({
-                    label: key ? t(`sidebar.adminNav.items.${key}`) : t("sidebar.adminNav.items.insights"),
-                  });
+                  // One map for every admin page (lib/admin/admin-page-title.ts); "Insights" is
+                  // /admin's own title, never the fallback for a page the map does not know.
+                  const key = adminPageLabelKey(pathname);
+                  if (key) parts.push({ label: t(`sidebar.adminNav.items.${key}`) });
                 } else if (firstSeg === "settings" && segments[1] === "plugins") {
                   // The personal page, outside any workspace slug: "My connections", never the raw
                   // segment, and never "Plugins", which is the workspace page's name.
