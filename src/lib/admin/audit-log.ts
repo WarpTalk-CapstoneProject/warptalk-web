@@ -70,6 +70,25 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "fx_rate.refreshed": "Exchange rate refreshed from Stripe",
   "fx_rate.overridden": "Exchange rate overridden",
   "fx_rate.override_cleared": "Exchange rate override removed",
+  // Packages (billing, G11)
+  "credit_pack.created": "Credit pack created",
+  "credit_pack.updated": "Credit pack edited",
+  "credit_pack.duplicated": "Credit pack duplicated",
+  "credit_pack.archived": "Credit pack archived",
+  "credit_pack.unarchived": "Credit pack restored",
+  "credit_pack.stripe_synced": "Credit pack synced to Stripe",
+  "addon.created": "Add-on created",
+  "addon.updated": "Add-on edited",
+  "addon.duplicated": "Add-on duplicated",
+  "addon.archived": "Add-on archived",
+  "addon.unarchived": "Add-on restored",
+  "addon.stripe_synced": "Add-on synced to Stripe",
+  "coupon.created": "Coupon created",
+  "coupon.updated": "Coupon edited",
+  "coupon.duplicated": "Coupon duplicated",
+  "coupon.archived": "Coupon archived",
+  "coupon.unarchived": "Coupon restored",
+  "coupon.stripe_synced": "Coupon synced to Stripe",
   // Global glossary (transcript)
   "glossary.term_created": "Glossary term added",
   "glossary.term_updated": "Glossary term edited",
@@ -140,6 +159,9 @@ export const AUDIT_ENTITY_LABELS: Readonly<Record<string, string>> = {
   expense_category: "Expense category",
   expense_budget: "Expense budget",
   inbox_item: "Inbox item",
+  credit_pack: "Credit pack",
+  addon: "Add-on",
+  coupon: "Coupon",
 };
 
 export const AUDIT_SOURCE_LABELS: Readonly<Record<string, string>> = {
@@ -255,6 +277,12 @@ export function auditEntityHref(entity: AuditSubjectRef, before?: Summary, after
       return "/admin/finance/expenses";
     case "inbox_item":
       return "/admin/inbox";
+    case "credit_pack":
+      return "/admin/packages";
+    case "addon":
+      return "/admin/packages?tab=addons";
+    case "coupon":
+      return "/admin/packages?tab=coupons";
     default:
       return null;
   }

@@ -662,6 +662,30 @@ export const API = {
     pnl: "/admin/billing/insights/pnl",
   },
   /** The USD→VND rate: Stripe's by default, recorded daily, overridable. System admin only. */
+  /**
+   * G11 — /admin/packages: credit packs, add-ons and coupons. Every write is audited server-side
+   * and guarded by billing.packages_manage; reads by billing.read. Nothing here deletes: an item
+   * is archived, and its Stripe objects are deactivated, never removed.
+   */
+  adminPackages: {
+    options: "/admin/billing/packages/options",
+    creditPacks: "/admin/billing/packages/credit-packs",
+    creditPack: (id: string) => `/admin/billing/packages/credit-packs/${id}`,
+    addons: "/admin/billing/packages/addons",
+    addon: (id: string) => `/admin/billing/packages/addons/${id}`,
+    coupons: "/admin/billing/packages/coupons",
+    coupon: (id: string) => `/admin/billing/packages/coupons/${id}`,
+  },
+  /**
+   * G11 — what a workspace can buy besides its plan. Buying goes through /payments/checkout with
+   * paymentType CreditPack / AddOn; the server prices the item, never the browser.
+   */
+  billingCatalog: {
+    catalog: (workspaceId: string) => `/payments/workspace/${workspaceId}/catalog`,
+    couponPreview: (workspaceId: string) => `/payments/workspace/${workspaceId}/coupon-preview`,
+    cancelAddon: (workspaceId: string, workspaceAddonId: string) =>
+      `/payments/workspace/${workspaceId}/addons/${workspaceAddonId}/cancel`,
+  },
   adminFx: {
     status: "/admin/billing/fx",
     refresh: "/admin/billing/fx/refresh",

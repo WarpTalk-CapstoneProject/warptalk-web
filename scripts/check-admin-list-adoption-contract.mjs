@@ -39,6 +39,7 @@ const PAGES = [
   [`${ADMIN}/feedback/page.tsx`, true],
   [`${ADMIN}/global-glossary/page.tsx`, true],
   [`${ADMIN}/plans/page.tsx`, false],
+  [`${ADMIN}/packages/page.tsx`, false],
   [`${ADMIN}/plugins/page.tsx`, false],
   // G12: the inbox is aggregated and bounded by the server (≤200 items per source); the expense
   // list is bounded by its period window on the server, then filtered in the browser.

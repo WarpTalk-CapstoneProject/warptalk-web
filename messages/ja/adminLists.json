@@ -136,7 +136,9 @@
       "createRole": "スタッフロールを作成",
       "myInbox": "自分の担当",
       "recordExpense": "経費を記録",
-      "importExpenses": "CSVから経費をインポート"
+      "importExpenses": "CSVから経費をインポート",
+      "createCreditPack": "クレジットパックを作成",
+      "createCoupon": "クーポンを作成"
     }
   }
 }

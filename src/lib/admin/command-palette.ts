@@ -93,6 +93,19 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
+    id: "packages",
+    kind: "page",
+    href: "/admin/packages",
+    labelKey: "packages",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "packages", "credit pack", "credit packs", "top-up", "add-on", "add-ons", "addon", "coupon", "coupons",
+      "promotion", "promo code", "discount", "campaign",
+      "gói credit", "gói bán thêm", "tiện ích bổ sung", "mã giảm giá", "khuyến mãi", "giảm giá",
+      "パッケージ", "クレジットパック", "アドオン", "クーポン", "割引",
+    ],
+  },
+  {
     id: "plans",
     kind: "page",
     href: "/admin/plans",
@@ -324,6 +337,22 @@ export const ADMIN_PALETTE_ACTIONS: readonly AdminPaletteEntry[] = [
     labelKey: "createPlan",
     // i18n-allow: search synonyms, matched in every language whatever the UI locale.
     keywords: ["create plan", "new plan", "add plan", "tạo gói", "thêm gói", "gói mới", "プラン作成"],
+  },
+  {
+    id: "createCreditPack",
+    kind: "action",
+    href: "/admin/packages?action=create-credit-pack",
+    labelKey: "createCreditPack",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["create credit pack", "new credit pack", "new pack", "tạo gói credit", "gói credit mới", "クレジットパック作成"],
+  },
+  {
+    id: "createCoupon",
+    kind: "action",
+    href: "/admin/packages?action=create-coupon",
+    labelKey: "createCoupon",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["create coupon", "new coupon", "promo code", "discount code", "tạo mã giảm giá", "mã khuyến mãi", "クーポン作成"],
   },
   {
     id: "composeAnnouncement",

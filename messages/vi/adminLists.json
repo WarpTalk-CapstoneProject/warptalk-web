@@ -136,7 +136,9 @@
       "createRole": "Tạo vai trò nhân sự",
       "myInbox": "Việc của tôi",
       "recordExpense": "Ghi một khoản chi",
-      "importExpenses": "Nhập chi phí từ CSV"
+      "importExpenses": "Nhập chi phí từ CSV",
+      "createCreditPack": "Tạo gói credit",
+      "createCoupon": "Tạo mã giảm giá"
     }
   }
 }

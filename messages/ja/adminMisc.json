@@ -337,7 +337,25 @@
       "inbox_snoozed": "項目をスヌーズ",
       "inbox_done": "項目を完了",
       "inbox_reopened": "項目を再開",
-      "inbox_note_added": "項目にメモを追加"
+      "inbox_note_added": "項目にメモを追加",
+      "credit_pack_created": "クレジットパックを作成",
+      "credit_pack_updated": "クレジットパックを編集",
+      "credit_pack_duplicated": "クレジットパックを複製",
+      "credit_pack_archived": "クレジットパックをアーカイブ",
+      "credit_pack_unarchived": "クレジットパックを復元",
+      "credit_pack_stripe_synced": "クレジットパックを Stripe に同期",
+      "addon_created": "アドオンを作成",
+      "addon_updated": "アドオンを編集",
+      "addon_duplicated": "アドオンを複製",
+      "addon_archived": "アドオンをアーカイブ",
+      "addon_unarchived": "アドオンを復元",
+      "addon_stripe_synced": "アドオンを Stripe に同期",
+      "coupon_created": "クーポンを作成",
+      "coupon_updated": "クーポンを編集",
+      "coupon_duplicated": "クーポンを複製",
+      "coupon_archived": "クーポンをアーカイブ",
+      "coupon_unarchived": "クーポンを復元",
+      "coupon_stripe_synced": "クーポンを Stripe に同期"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -366,7 +384,10 @@
       "operating_expense": "運営経費",
       "expense_category": "経費カテゴリ",
       "expense_budget": "経費予算",
-      "inbox_item": "受信トレイ項目"
+      "inbox_item": "受信トレイ項目",
+      "credit_pack": "クレジットパック",
+      "addon": "アドオン",
+      "coupon": "クーポン"
     },
     "sources": {
       "workspace_service": "ワークスペース",

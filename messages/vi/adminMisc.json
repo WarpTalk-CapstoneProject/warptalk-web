@@ -337,7 +337,25 @@
       "inbox_snoozed": "Đã hoãn việc",
       "inbox_done": "Đã đóng việc",
       "inbox_reopened": "Đã mở lại việc",
-      "inbox_note_added": "Đã thêm ghi chú việc"
+      "inbox_note_added": "Đã thêm ghi chú việc",
+      "credit_pack_created": "Đã tạo gói credit",
+      "credit_pack_updated": "Đã sửa gói credit",
+      "credit_pack_duplicated": "Đã nhân bản gói credit",
+      "credit_pack_archived": "Đã lưu trữ gói credit",
+      "credit_pack_unarchived": "Đã khôi phục gói credit",
+      "credit_pack_stripe_synced": "Đã đồng bộ gói credit lên Stripe",
+      "addon_created": "Đã tạo tiện ích bổ sung",
+      "addon_updated": "Đã sửa tiện ích bổ sung",
+      "addon_duplicated": "Đã nhân bản tiện ích bổ sung",
+      "addon_archived": "Đã lưu trữ tiện ích bổ sung",
+      "addon_unarchived": "Đã khôi phục tiện ích bổ sung",
+      "addon_stripe_synced": "Đã đồng bộ tiện ích bổ sung lên Stripe",
+      "coupon_created": "Đã tạo mã giảm giá",
+      "coupon_updated": "Đã sửa mã giảm giá",
+      "coupon_duplicated": "Đã nhân bản mã giảm giá",
+      "coupon_archived": "Đã lưu trữ mã giảm giá",
+      "coupon_unarchived": "Đã khôi phục mã giảm giá",
+      "coupon_stripe_synced": "Đã đồng bộ mã giảm giá lên Stripe"
     },
     "entities": {
       "workspace": "Workspace",
@@ -366,7 +384,10 @@
       "operating_expense": "Khoản chi vận hành",
       "expense_category": "Danh mục chi phí",
       "expense_budget": "Ngân sách chi phí",
-      "inbox_item": "Mục hộp việc"
+      "inbox_item": "Mục hộp việc",
+      "credit_pack": "Gói credit",
+      "addon": "Tiện ích bổ sung",
+      "coupon": "Mã giảm giá"
     },
     "sources": {
       "workspace_service": "Workspace",

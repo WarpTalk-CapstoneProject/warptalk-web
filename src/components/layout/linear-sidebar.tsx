@@ -42,6 +42,7 @@ import type { IconProps } from "@phosphor-icons/react";
 import {
   Archive,
   ArrowUUpLeft,
+  Package,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -504,6 +505,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: Gauge, label: t("adminNav.items.subscriptions"), href: "/admin/subscriptions" },
           { icon: FileText, label: t("adminNav.items.plansAndPricing"), href: "/admin/plans" },
+          { icon: Package, label: t("adminNav.items.packages"), href: "/admin/packages" },
           { icon: CreditCard, label: t("adminNav.items.billingLedger"), href: "/admin/billing" },
           { icon: Handshake, label: t("adminNav.items.salesLeads"), href: "/admin/sales-leads" },
           // G12: company operating expenses, budgets and the P&L with them.
