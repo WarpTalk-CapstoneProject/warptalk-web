@@ -13,8 +13,13 @@ const liveRoom = fs.readFileSync(
 
 assert.match(
   liveRoom,
-  /connection\.on\("TranslationCreditsExhausted",[\s\S]{0,200}?translationSuspendedNotice\(reason\)/,
-  "The meeting must tell everyone why translation stopped when the workspace cannot pay for it.",
+  /connection\.on\("TranslationCreditsExhausted",[\s\S]{0,200}?translationSuspendedNotice\(reason, translateCreditsNoticeRef\.current\)/,
+  "The meeting must tell everyone why translation stopped, in their own language (rooms.translationCredits).",
+);
+assert.match(
+  liveRoom,
+  /useTranslations\("rooms\.translationCredits"\)/,
+  "The billing notices must come from the rooms.translationCredits catalog, not hardcoded English.",
 );
 assert.match(
   liveRoom,

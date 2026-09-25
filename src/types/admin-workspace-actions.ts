@@ -42,6 +42,15 @@ export interface AdminWorkspaceSubscriptionSummaryDto {
   creditsRemaining: number;
   creditsUsedThisCycle: number;
   creditsPerCycle: number;
+  /**
+   * Credits kept from this subscription after it ended without a renewal (billing
+   * CreditFreezeService): not spendable, restored on renewal, never deleted. 0 on a live plan.
+   * Optional because an older billing build does not send it.
+   */
+  frozenCredits?: number;
+  creditsFrozenAt?: string | null;
+  /** Set once frozen credits outlived the grace window. Still kept. */
+  frozenCreditsDormantAt?: string | null;
 }
 
 export interface AdminWorkspaceInvoiceSummaryDto {

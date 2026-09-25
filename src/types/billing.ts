@@ -8,6 +8,20 @@ export interface CreditBalanceDto {
   currentPeriodEnd: string; // ISO datetime
 }
 
+/**
+ * Credits a workspace kept from a subscription that ended (GET credits/workspace/{id}/frozen).
+ * Answers for a workspace with NO live plan — the case the balance endpoint 404s on.
+ */
+export interface FrozenCreditsDto {
+  workspaceId: string;
+  frozenCredits: number;
+  frozenAt: string | null;
+  endedAt: string | null;
+  dormantSince: string | null;
+  graceEndsAt: string | null;
+  hasActiveSubscription: boolean;
+}
+
 export interface SubscriptionDto {
   id: string;
   /** Nullable on the wire (`Guid? UserId`): a workspace contract subscription has no user. */

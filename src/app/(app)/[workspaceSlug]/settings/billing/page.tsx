@@ -63,7 +63,7 @@ import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { PlanDto } from "@/types/billing";
+import type { FrozenCreditsDto, PlanDto } from "@/types/billing";
 
 import {
   BannerRow,
@@ -201,6 +201,16 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
     retry: 1,
   });
 
+  // Credits kept from a subscription that ended. Asked separately because it is the one number
+  // that still exists when there is no plan: the balance above 404s for an expired workspace.
+  const { data: frozen } = useQuery({
+    queryKey: ["billing", "frozen", workspaceId],
+    queryFn: () => billingService.getFrozenCredits(workspaceId),
+    enabled: !!workspaceId,
+    retry: 1,
+  });
+  const frozenCredits = frozen?.frozenCredits ?? 0;
+
   const { data: overage } = useQuery({
     queryKey: ["billing", "overage", workspaceId],
     queryFn: () => billingService.getOverageSetting(workspaceId),
@@ -284,7 +294,7 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
   }
 
   if (hasNoSubscription) {
-    return <BillingNoSubscriptionState workspaceSlug={workspaceSlug} />;
+    return <BillingNoSubscriptionState workspaceSlug={workspaceSlug} frozen={frozen ?? null} />;
   }
 
   if (hardError) {
@@ -300,6 +310,15 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   return (
     <div className="flex min-w-0 flex-col text-ink">
+      {frozenCredits > 0 ? (
+        // Renewed, and the previous subscription's kept credits are on their way into this one
+        // (the payment moves them; the hourly billing sweep catches any it did not).
+        <BannerRow
+          title={t("frozen.pendingTitle")}
+          badge={<Pill tone="accent">{formatAmount(frozenCredits)}</Pill>}
+          description={t("frozen.pendingDescription", { credits: formatAmount(frozenCredits) })}
+        />
+      ) : null}
       <BannerRow
         title={t("overages.title")}
         badge={<Pill tone="accent">{t("overages.badge")}</Pill>}
@@ -419,14 +438,36 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
  * Legitimate account state: the workspace simply has no plan yet. Deliberately not styled as a
  * failure, and it carries the one action that resolves it.
  */
-function BillingNoSubscriptionState({ workspaceSlug }: { workspaceSlug: string }) {
+function BillingNoSubscriptionState({
+  workspaceSlug,
+  frozen,
+}: {
+  workspaceSlug: string;
+  frozen: FrozenCreditsDto | null;
+}) {
   const t = useTranslations("settingsBilling");
+  const kept = frozen?.frozenCredits ?? 0;
+  // An expired workspace still owns what it bought. Say so, with the number, instead of the
+  // generic "no plan" copy that reads as if everything was lost.
+  const description =
+    kept > 0
+      ? [
+          t("frozen.keptDetail", {
+            date: frozen?.endedAt ? format(new Date(frozen.endedAt), "MMM d, yyyy") : "—",
+          }),
+          frozen?.dormantSince
+            ? t("frozen.dormant", { date: format(new Date(frozen.dormantSince), "MMM d, yyyy") })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : t("noSubscription.description");
   return (
     <div className="px-4 py-4">
       <PagePlaceholder
         kind="billing"
-        title={t("noSubscription.title")}
-        description={t("noSubscription.description")}
+        title={kept > 0 ? t("frozen.kept", { credits: formatAmount(kept) }) : t("noSubscription.title")}
+        description={description}
         action={
           <Link href={`/${workspaceSlug}/payment/plans`}>
             <span className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background transition hover:opacity-90">
