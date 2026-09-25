@@ -1047,12 +1047,14 @@ const footerNavigation: Array<{ key: string; href: string }> = [
   { key: "navTestimonials", href: "#" },
   { key: "navFaq", href: "#" },
 ];
-const footerCompanyKeys = [
-  "companyBlog",
-  "companyAbout",
-  "companyTerms",
-  "companyPrivacy",
-] as const;
+// WT-841: companyTerms/companyPrivacy pointed at "#" even after /terms and /privacy existed
+// (WT-835/WT-836) — dead footer links on the landing page. Blog/About still have nowhere to go.
+const footerCompanyLinks: Array<{ key: string; href: string }> = [
+  { key: "companyBlog", href: "#" },
+  { key: "companyAbout", href: "#" },
+  { key: "companyTerms", href: "/terms" },
+  { key: "companyPrivacy", href: "/privacy" },
+];
 
 const footerSocialIcons = [
   {
@@ -1207,9 +1209,9 @@ function LandingFooter() {
               </div>
               <div className="footer-col">
                 <h3 className="footer-col-title">{t("companyTitle")}</h3>
-                {footerCompanyKeys.map((key) => (
-                  <a href="#" key={key}>
-                    {t(key)}
+                {footerCompanyLinks.map((item) => (
+                  <a href={item.href} key={item.key}>
+                    {t(item.key)}
                   </a>
                 ))}
               </div>
