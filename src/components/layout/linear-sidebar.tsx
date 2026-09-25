@@ -25,7 +25,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useStaffAccess } from "@/hooks/use-staff-access";
-import { canViewAdminPath } from "@/lib/admin/staff-permissions";
+import { useAdminInboxSummary } from "@/hooks/use-admin-inbox";
+import { inboxBadge } from "@/lib/admin/inbox";
+import { ADMIN_PERMISSIONS, canViewAdminPath, hasPermission } from "@/lib/admin/staff-permissions";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
 import { canManageWorkspacePlugins, pendingRequestBadge } from "@/lib/assistant/plugin-availability";
@@ -82,7 +84,8 @@ import {
   LinkSimple,
   Devices,
   IdentificationBadge,
-  UserGear,} from "@phosphor-icons/react/dist/ssr";
+  UserGear,
+  Tray,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -471,6 +474,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
    */
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
+  // G12: the Inbox row's pill counts open items the person can see. Read only inside the portal and
+  // only for someone who holds inbox.read; the server caches the fan-out, so polling is cheap.
+  const { data: inboxSummary } = useAdminInboxSummary(
+    isAdminPage && isSystemAdmin && hasPermission(staffAccess, ADMIN_PERMISSIONS.inboxRead),
+  );
+
   if (isAdminPage && isSystemAdmin) {
     const allAdminSections: Array<{ section: string; items: NavItem[] }> = [
       {
@@ -481,6 +490,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // "Insights", not "Overview" (owner's call, 2026-09-17): the landing page became the
           // period-compared business insights page. The route did not move.
           { icon: Gauge, label: t("adminNav.items.insights"), href: "/admin", exact: true },
+          // G12: everything waiting on the platform team, aggregated from the pages that own it.
+          { icon: Tray, label: t("adminNav.items.inbox"), href: "/admin/inbox", badge: inboxBadge(inboxSummary?.counts) },
           { icon: Buildings, label: t("adminNav.items.workspaces"), href: "/admin/workspaces" },
           // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
           // "Users" is the same word the workspace sidebar uses for that workspace's members —
@@ -497,6 +508,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Package, label: t("adminNav.items.packages"), href: "/admin/packages" },
           { icon: CreditCard, label: t("adminNav.items.billingLedger"), href: "/admin/billing" },
           { icon: Handshake, label: t("adminNav.items.salesLeads"), href: "/admin/sales-leads" },
+          // G12: company operating expenses, budgets and the P&L with them.
+          { icon: Receipt, label: t("adminNav.items.operatingCosts"), href: "/admin/finance/expenses" },
         ],
       },
       {

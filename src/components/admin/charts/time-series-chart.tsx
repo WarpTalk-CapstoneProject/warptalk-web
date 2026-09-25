@@ -63,6 +63,11 @@ export interface TimeSeriesChartProps {
   titles?: string[];
   series: ChartSeries[];
   variant?: "area" | "line" | "bar";
+  /**
+   * Bar only: one column per position with the series stacked bottom-up (a total split into its
+   * parts, e.g. monthly spend by category) instead of side by side. Put the total in `tooltipFooter`.
+   */
+  stacked?: boolean;
   /** Plot plus the x-axis band. */
   height?: number;
   /** The full value, for the tooltip and the table. */
@@ -116,6 +121,7 @@ export function TimeSeriesChart({
   titles,
   series,
   variant = "area",
+  stacked = false,
   height = 200,
   formatValue,
   formatAxis = compactAxisNumber,
@@ -141,7 +147,12 @@ export function TimeSeriesChart({
     [series],
   );
 
-  const rawMax = Math.max(0, ...colored.flatMap((s) => s.values.map((v) => (v === null || !Number.isFinite(v) ? 0 : v))));
+  const isStacked = stacked && variant === "bar";
+  const positive = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) || v < 0 ? 0 : v);
+  const stackTotal = (index: number) => colored.reduce((sum, s) => sum + positive(s.values[index]), 0);
+  const rawMax = isStacked
+    ? Math.max(0, ...labels.map((_, index) => stackTotal(index)))
+    : Math.max(0, ...colored.flatMap((s) => s.values.map((v) => (v === null || !Number.isFinite(v) ? 0 : v))));
   const scale = niceScale(rawMax, { integer, targetTicks: height < 170 ? 3 : 4 });
   const tickLabels = scale.ticks.map((tick) => formatAxis(tick));
   const padLeft = Math.ceil(Math.max(...tickLabels.map(textWidth), 12)) + 12;
@@ -162,11 +173,12 @@ export function TimeSeriesChart({
   const labelIndexes = xLabelIndexes(count, plotWidth, Math.max(0, ...labels.map(textWidth)) + 20);
 
   // Columns: grouped side by side for several series, each at most 24px, a 2px gap between.
-  const groupCount = colored.length;
+  const groupCount = isStacked ? 1 : colored.length;
   const column = Math.max(2, Math.min(MAX_COLUMN, (slot * 0.62 - GROUP_GAP * (groupCount - 1)) / groupCount));
   const groupWidth = column * groupCount + GROUP_GAP * (groupCount - 1);
 
   const topOf = (index: number): number => {
+    if (isStacked) return stackTotal(index) > 0 ? y(stackTotal(index)) : baseY;
     const values = colored.map((s) => s.values[index]).filter((v): v is number => v !== null && Number.isFinite(v));
     return values.length ? y(Math.max(...values)) : baseY;
   };
@@ -219,7 +231,10 @@ export function TimeSeriesChart({
   const tooltipRows: TooltipRow[] =
     active === null
       ? []
-      : colored.map((s) => {
+      : colored.flatMap((s) => {
+          if (isStacked && positive(s.values[active]) === 0) return [];
+          return [s];
+        }).map((s) => {
           const value = (s.display ?? s.values)[active];
           const known = value !== null && value !== undefined && Number.isFinite(value);
           return {
@@ -308,7 +323,27 @@ export function TimeSeriesChart({
           />
         ) : null}
 
-        {variant === "bar"
+        {isStacked
+          ? labels.map((_, index) => {
+              const parts = colored
+                .map((s) => ({ key: s.key, color: s.color, value: positive(s.values[index]) }))
+                .filter((part) => part.value > 0);
+              let bottom = baseY;
+              const left = x(index) - column / 2;
+              return (
+                <g key={`stack-${index}`} style={{ opacity: active === null || active === index ? 1 : 0.45, transition: "opacity 120ms" }}>
+                  {parts.map((part, partIndex) => {
+                    const height = Math.max(1, baseY - y(part.value));
+                    const top = bottom - height;
+                    const isTop = partIndex === parts.length - 1;
+                    const d = columnPath(left, top, column, height, isTop ? 4 : 0);
+                    bottom = top;
+                    return <path key={part.key} d={d} style={{ fill: part.color }} />;
+                  })}
+                </g>
+              );
+            })
+          : variant === "bar"
           ? colored.map((s, seriesIndex) =>
               s.values.map((value, index) => {
                 if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) return null;

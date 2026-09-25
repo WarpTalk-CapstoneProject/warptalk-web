@@ -182,11 +182,13 @@
     "accounts": "Tài khoản",
     "meetings": "Cuộc họp",
     "billing": "Thanh toán",
+    "finance": "Tài chính",
     "plugins": "Plugin",
     "content": "Nội dung",
     "glossary": "Thuật ngữ",
     "settings": "Cài đặt",
     "operations": "Vận hành",
+    "inbox": "Hộp việc",
     "audit": "Kiểm toán",
     "staff": "Nhân sự",
     "assistant": "WarpBot"

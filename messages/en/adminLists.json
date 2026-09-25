@@ -134,6 +134,9 @@
       "newSalesLeads": "Show new sales leads",
       "inviteStaff": "Invite staff",
       "createRole": "Create a staff role",
+      "myInbox": "My inbox",
+      "recordExpense": "Record an expense",
+      "importExpenses": "Import expenses from CSV",
       "createCreditPack": "Create credit pack",
       "createCoupon": "Create coupon"
     }

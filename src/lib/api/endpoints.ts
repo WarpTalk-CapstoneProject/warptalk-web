@@ -708,6 +708,36 @@ export const API = {
     breakdown: (key: string) => `/admin/providers/${encodeURIComponent(key)}/breakdown`,
     uptime: (key: string) => `/admin/providers/${encodeURIComponent(key)}/uptime`,
   },
+  /**
+   * G12 operating costs and expenses (billing). Reads need finance.read, writes finance.manage —
+   * salaries live here, so not billing.read. Receipts are multipart uploads to object storage.
+   */
+  adminExpenses: {
+    base: "/admin/billing/expenses",
+    detail: (id: string) => `/admin/billing/expenses/${encodeURIComponent(id)}`,
+    markPaid: (id: string) => `/admin/billing/expenses/${encodeURIComponent(id)}/mark-paid`,
+    receipt: (id: string) => `/admin/billing/expenses/${encodeURIComponent(id)}/receipt`,
+    categories: "/admin/billing/expenses/categories",
+    category: (id: string) => `/admin/billing/expenses/categories/${encodeURIComponent(id)}`,
+    budgets: "/admin/billing/expenses/budgets",
+    report: "/admin/billing/expenses/report",
+    pnl: "/admin/billing/expenses/pnl",
+    importPreview: "/admin/billing/expenses/import/preview",
+    import: "/admin/billing/expenses/import",
+  },
+  /**
+   * G12 pending-work inbox (workspace service): aggregated live from each owning service with the
+   * caller's token. Item keys contain ':' so they travel in bodies and query strings.
+   */
+  adminInbox: {
+    base: "/admin/inbox",
+    summary: "/admin/inbox/summary",
+    notes: "/admin/inbox/notes",
+    assign: "/admin/inbox/assign",
+    snooze: "/admin/inbox/snooze",
+    done: "/admin/inbox/done",
+    reopen: "/admin/inbox/reopen",
+  },
   /** Product feedback, aggregated. Read-only; comments carry no user id. */
   adminFeedback: {
     summary: "/admin/feedback/summary",

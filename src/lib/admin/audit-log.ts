@@ -113,6 +113,21 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "staff_role.updated": "Staff role edited",
   "staff_role.duplicated": "Staff role duplicated",
   "staff_role.deleted": "Staff role deleted",
+  "expense.created": "Expense recorded",
+  "expense.updated": "Expense updated",
+  "expense.deleted": "Expense deleted",
+  "expense.marked_paid": "Expense marked paid",
+  "expense.imported": "Expenses imported",
+  "expense.receipt_attached": "Receipt attached",
+  "expense.receipt_removed": "Receipt removed",
+  "expense_category.created": "Expense category created",
+  "expense_category.updated": "Expense category updated",
+  "expense_budget.set": "Budgets set",
+  "inbox.assigned": "Inbox item assigned",
+  "inbox.snoozed": "Inbox item snoozed",
+  "inbox.done": "Inbox item closed",
+  "inbox.reopened": "Inbox item reopened",
+  "inbox.note_added": "Inbox note added",
 };
 
 /** Mirrors AdminAuditEntityTypes on the backend. */
@@ -140,6 +155,10 @@ export const AUDIT_ENTITY_LABELS: Readonly<Record<string, string>> = {
   staff_member: "Staff member",
   staff_role: "Staff role",
   staff_invitation: "Staff invitation",
+  operating_expense: "Operating expense",
+  expense_category: "Expense category",
+  expense_budget: "Expense budget",
+  inbox_item: "Inbox item",
   credit_pack: "Credit pack",
   addon: "Add-on",
   coupon: "Coupon",
@@ -252,6 +271,12 @@ export function auditEntityHref(entity: AuditSubjectRef, before?: Summary, after
       return "/admin/staff";
     case "staff_role":
       return "/admin/roles";
+    case "operating_expense":
+    case "expense_category":
+    case "expense_budget":
+      return "/admin/finance/expenses";
+    case "inbox_item":
+      return "/admin/inbox";
     case "credit_pack":
       return "/admin/packages";
     case "addon":

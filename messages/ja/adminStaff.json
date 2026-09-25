@@ -182,11 +182,13 @@
     "accounts": "アカウント",
     "meetings": "ミーティング",
     "billing": "請求",
+    "finance": "財務",
     "plugins": "プラグイン",
     "content": "コンテンツ",
     "glossary": "用語集",
     "settings": "設定",
     "operations": "運用",
+    "inbox": "受信トレイ",
     "audit": "監査",
     "staff": "スタッフ",
     "assistant": "WarpBot"

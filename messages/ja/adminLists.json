@@ -134,6 +134,9 @@
       "newSalesLeads": "新規の営業リードを表示",
       "inviteStaff": "スタッフを招待",
       "createRole": "スタッフロールを作成",
+      "myInbox": "自分の担当",
+      "recordExpense": "経費を記録",
+      "importExpenses": "CSVから経費をインポート",
       "createCreditPack": "クレジットパックを作成",
       "createCoupon": "クーポンを作成"
     }

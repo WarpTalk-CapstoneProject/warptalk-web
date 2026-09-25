@@ -1,0 +1,156 @@
+{
+  "eyebrow": "Internal",
+  "title": "Inbox",
+  "description": "Everything waiting on the platform team, read live from the pages that own it. An item leaves by itself once it is handled there.",
+  "refresh": "Refresh",
+  "tiles": {
+    "open": "Open",
+    "mine": "Assigned to me",
+    "unassigned": "Unassigned",
+    "overdue": "Past SLA"
+  },
+  "statesAria": "Item state",
+  "states": {
+    "open": "Open",
+    "snoozed": "Snoozed",
+    "done": "Done"
+  },
+  "scope": {
+    "aria": "Whose items",
+    "all": "All",
+    "mine": "My inbox"
+  },
+  "searchPlaceholder": "Search items, customers, assignees…",
+  "itemCount": "{count, plural, one {# item} other {# items}}",
+  "filters": {
+    "type": "Type",
+    "priority": "Priority",
+    "assignee": "Assignee",
+    "age": "Age",
+    "sla": "SLA",
+    "source": "Source"
+  },
+  "assignee": {
+    "me": "Me",
+    "unassigned": "Unassigned",
+    "someone": "A staff member"
+  },
+  "age": {
+    "today": "Under a day",
+    "days1to3": "1–3 days",
+    "days3to7": "3–7 days",
+    "week": "Over a week"
+  },
+  "sla": {
+    "overdue": "Overdue",
+    "dueSoon": "Due within 24 h",
+    "onTrack": "On track",
+    "none": "No SLA"
+  },
+  "columns": {
+    "item": "Item",
+    "customer": "Customer",
+    "age": "Age",
+    "priority": "Priority",
+    "due": "Due",
+    "assignee": "Assignee"
+  },
+  "unnamedWorkspace": "Workspace",
+  "ageUnits": {
+    "m": "{count} m",
+    "h": "{count} h",
+    "d": "{count} d",
+    "w": "{count} w"
+  },
+  "notesCount": "{count, plural, one {# note} other {# notes}}",
+  "empty": {
+    "open": {
+      "title": "Nothing is waiting",
+      "description": "No open item in the areas you can see."
+    },
+    "snoozed": {
+      "title": "Nothing snoozed",
+      "description": "Snoozed items come back on their own at the time you chose."
+    },
+    "done": {
+      "title": "Nothing closed by hand",
+      "description": "Items that close themselves never appear here; this lists the ones someone marked done."
+    }
+  },
+  "sourceUnavailable": "{source} could not be read just now; its items are missing from this list.",
+  "sourceTruncated": "{source} has more items than it returned; the most urgent are shown.",
+  "types": {
+    "sales_lead": "New sales lead",
+    "invoice_past_due": "Invoice past due",
+    "invoice_awaiting_payment": "Payment to confirm",
+    "payment_disputed": "Payment disputed",
+    "trial_ending": "Trial ending",
+    "subscription_ending": "Subscription ending",
+    "subscription_suspended": "Service suspended",
+    "provider_incident": "Provider incident",
+    "provider_quota": "Provider quota (402)",
+    "expense_due": "Expense due",
+    "staff_invitation": "Staff invitation",
+    "announcement_scheduled": "Announcement to review",
+    "announcement_draft": "Stale draft",
+    "broadcast_failed": "Broadcast failed",
+    "dead_letter": "Dead-lettered event"
+  },
+  "priorities": {
+    "urgent": "Urgent",
+    "high": "High",
+    "normal": "Normal",
+    "low": "Low"
+  },
+  "sources": {
+    "billing": "Billing",
+    "providers": "Providers",
+    "expenses": "Operating costs",
+    "staff": "Staff",
+    "content": "Content",
+    "operations": "Operations"
+  },
+  "actionFailed": "That did not work. Try again.",
+  "toasts": {
+    "assigned": "Assigned",
+    "unassigned": "Unassigned",
+    "noteAdded": "Note added",
+    "snoozed": "Snoozed",
+    "woken": "Back in the inbox",
+    "reopened": "Reopened",
+    "done": "Marked done"
+  },
+  "detail": {
+    "detail": "Detail",
+    "amount": "Amount",
+    "waitingSince": "Waiting since",
+    "closesItself": "This item leaves the inbox by itself once it is handled on its page.",
+    "closesByHand": "Nothing on its page closes this item: mark it done here once it is handled."
+  },
+  "open": "Open the page that resolves it",
+  "triage": {
+    "title": "Triage",
+    "assignedTo": "Assigned to",
+    "assignToMe": "Assign to me",
+    "assignTo": "Assign to…",
+    "unassign": "Unassign",
+    "snoozedUntil": "Snoozed until {when}",
+    "snooze": "Snooze until",
+    "wake": "Wake now",
+    "reopen": "Reopen",
+    "markDone": "Mark done"
+  },
+  "snooze": {
+    "laterToday": "In 3 hours",
+    "tomorrow": "Tomorrow 9:00",
+    "nextWeek": "Next Monday",
+    "nextMonth": "In 30 days"
+  },
+  "notes": {
+    "title": "Internal notes",
+    "loading": "Loading notes…",
+    "empty": "No notes yet.",
+    "placeholder": "What was done, who was contacted…",
+    "add": "Add note"
+  }
+}

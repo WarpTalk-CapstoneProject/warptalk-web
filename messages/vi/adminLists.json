@@ -134,6 +134,9 @@
       "newSalesLeads": "Xem khách hàng tiềm năng mới",
       "inviteStaff": "Mời nhân viên",
       "createRole": "Tạo vai trò nhân sự",
+      "myInbox": "Việc của tôi",
+      "recordExpense": "Ghi một khoản chi",
+      "importExpenses": "Nhập chi phí từ CSV",
       "createCreditPack": "Tạo gói credit",
       "createCoupon": "Tạo mã giảm giá"
     }
