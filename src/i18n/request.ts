@@ -62,6 +62,8 @@ const NAMESPACES = [
   "adminLists",
   "adminStaff",
   "adminProviders",
+  "adminFinance",
+  "adminInbox",
   "download",
 ] as const;
 
