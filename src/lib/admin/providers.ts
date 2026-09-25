@@ -204,7 +204,7 @@ export function defaultMetrics(provider: ProviderKey): ProviderMetricKey[] {
     case "livekit":
       return ["usage", "roomMinutes", "costUsd", "costVnd"];
     case "stripe":
-      return ["usage", "failedPayments", "volumeVnd"];
+      return ["usage", "costUsd", "costVnd", "failures", "p95Ms"];
     default:
       return ["usage", "costUsd", "costVnd", "failures", "p95Ms"];
   }
