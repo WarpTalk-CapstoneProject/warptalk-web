@@ -24,6 +24,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { canViewAdminPath } from "@/lib/admin/staff-permissions";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
 import { canManageWorkspacePlugins, pendingRequestBadge } from "@/lib/assistant/plugin-availability";
@@ -76,7 +78,9 @@ import {
   ListChecks,
   Bell,
   LinkSimple,
-  Devices,} from "@phosphor-icons/react/dist/ssr";
+  Devices,
+  IdentificationBadge,
+  UserGear,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -252,6 +256,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isSystemAdmin = useIsSystemAdmin();
+  const { access: staffAccess } = useStaffAccess();
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -465,7 +470,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
   if (isAdminPage && isSystemAdmin) {
-    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+    const allAdminSections: Array<{ section: string; items: NavItem[] }> = [
       {
         section: t("adminNav.sections.platform"),
         items: [
@@ -517,7 +522,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
         ],
       },
+      {
+        // G10: who works on the platform, and what each of them may do here.
+        section: t("adminNav.sections.team"),
+        items: [
+          { icon: IdentificationBadge, label: t("adminNav.items.staff"), href: "/admin/staff" },
+          { icon: UserGear, label: t("adminNav.items.roles"), href: "/admin/roles" },
+        ],
+      },
     ];
+
+    // G10: offer only the pages this person's staff role can read (the server enforces the same
+    // permission on every endpoint behind them). A section left with no rows is dropped entirely.
+    const adminSections = allAdminSections
+      .map((group) => ({ ...group, items: group.items.filter((item) => canViewAdminPath(staffAccess, item.href)) }))
+      .filter((group) => group.items.length > 0);
 
     // WT-444: "Back to app" pointed at /workspace whenever no workspace was active, and for the
     // only person who ever sees this button that is a loop. /workspace redirects a system admin

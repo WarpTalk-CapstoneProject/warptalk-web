@@ -1,0 +1,265 @@
+{
+  "gate": {
+    "noPermissionTitle": "あなたのロールには含まれていません",
+    "noPermissionBody": "あなたのスタッフロール（{role}）ではこのページを利用できません。必要な場合は Super Admin に依頼してください。",
+    "goToAllowed": "利用できるページへ移動"
+  },
+  "status": {
+    "active": "有効",
+    "suspended": "停止中",
+    "accountDeactivated": "アカウント無効"
+  },
+  "roleChoice": {
+    "allPermissions": "すべての権限",
+    "permissionCount": "{total} 件中 {count} 件の権限",
+    "current": "現在のロール",
+    "beyondYou": "あなた自身が持たない権限を付与します"
+  },
+  "reasonDialog": {
+    "reasonLabel": "理由（監査ログに記録されます）",
+    "reasonPlaceholder": "この操作を行う理由",
+    "reasonTooShort": "{count} 文字以上で入力してください。理由はこの操作の唯一の記録です。",
+    "genericError": "何も変更されていません。サーバーが拒否したか、監査ログに記録できませんでした。",
+    "back": "戻る"
+  },
+  "invite": {
+    "title": "スタッフを招待",
+    "description": "WarpTalk アカウントがあるアドレスにはすぐにアクセスが付与されます。それ以外のアドレスには招待が送られ、7 日以内に確認済みのそのアドレスで初めてサインインしたときに有効になります。",
+    "emailLabel": "メールアドレス",
+    "emailPlaceholder": "name@warptalk.vn",
+    "roleLabel": "ロール",
+    "noteLabel": "メモ（任意、監査ログに記録）",
+    "notePlaceholder": "月曜から勤務するサポート担当",
+    "invalidEmail": "有効なメールアドレスを入力してください。",
+    "chooseRole": "ロールを選択してください。",
+    "grantedToast": "{email} にスタッフ権限を付与しました。",
+    "invitedToast": "{email} に招待を送信しました。",
+    "emailNotSent": "メールを送信できませんでした。権限は有効です。直接お伝えください。",
+    "genericError": "招待を作成できませんでした。",
+    "cancel": "キャンセル",
+    "sending": "招待中…",
+    "send": "招待"
+  },
+  "changeRole": {
+    "title": "{name} のロールを変更",
+    "description": "30 秒以内にすべてのサービスで有効になります。次回サインイン時に新しいロールが表示されます。",
+    "chooseRole": "別のロールを選択してください。",
+    "doneToast": "{name} のロールを変更しました。",
+    "saving": "保存中…",
+    "save": "ロールを変更"
+  },
+  "staff": {
+    "eyebrow": "チーム",
+    "title": "スタッフ",
+    "description": "WarpTalk を運営するメンバー、各自のロール、管理ポータルを最後に利用した日時。",
+    "refresh": "更新",
+    "invite": "スタッフを招待",
+    "filterLabel": "ステータスでスタッフを絞り込む",
+    "statusTabs": {
+      "all": "すべて ({count})",
+      "active": "有効 ({count})",
+      "suspended": "停止中 ({count})"
+    },
+    "filters": {
+      "role": "ロール",
+      "lastActive": "最終利用",
+      "lastActiveOptions": {
+        "7d": "過去 7 日以内",
+        "30d": "過去 30 日以内",
+        "90d": "過去 90 日以内",
+        "inactive30d": "30 日以上利用なし",
+        "never": "未利用"
+      }
+    },
+    "columns": {
+      "person": "メンバー",
+      "role": "ロール",
+      "status": "ステータス",
+      "lastActive": "最終利用",
+      "lastSignIn": "最終サインイン",
+      "added": "追加日",
+      "actions": "操作"
+    },
+    "you": "（あなた）",
+    "never": "なし",
+    "source": {
+      "migrated": "旧システム管理者",
+      "invited": "招待",
+      "invitation_accepted": "招待を承諾",
+      "legacy_bridge": "旧システム管理者"
+    },
+    "searchPlaceholder": "名前・メール・ロールで検索",
+    "count": "{count} 名のスタッフ",
+    "sort": {
+      "name": "名前",
+      "email": "メール",
+      "role": "ロール",
+      "lastActive": "最終利用",
+      "lastSignIn": "最終サインイン",
+      "created": "追加日"
+    },
+    "emptyTitle": "該当するスタッフがいません",
+    "emptyDescription": "検索や絞り込みを解除すると全員が表示されます。",
+    "invitations": {
+      "title": "保留中の招待",
+      "description": "まだ WarpTalk アカウントがないアドレスです。確認済みの初回サインインで有効になります。",
+      "expired": "期限切れ",
+      "expires": "{date} に期限切れ",
+      "revoke": "取り消す"
+    },
+    "menu": {
+      "open": "{name} の操作",
+      "activity": "アクティビティを見る",
+      "changeRole": "ロールを変更",
+      "suspend": "停止",
+      "reactivate": "再開",
+      "remove": "スタッフ権限を削除"
+    }
+  },
+  "actions": {
+    "suspend": {
+      "title": "スタッフ権限を停止",
+      "description": "WarpTalk アカウントは残りますが、30 秒以内にすべてのサービスで管理ポータルを使えなくなります。後で再開できます。",
+      "confirm": "停止",
+      "pending": "停止中…",
+      "done": "{name} を停止しました。"
+    },
+    "reactivate": {
+      "title": "スタッフ権限を再開",
+      "description": "30 秒以内にすべてのサービスでロールが再び有効になります。",
+      "confirm": "再開",
+      "pending": "再開中…",
+      "done": "{name} を再開しました。"
+    },
+    "remove": {
+      "title": "スタッフ権限を削除",
+      "description": "アカウントは残り、スタッフ権限のみが削除されます。これまでの操作は監査ログに残ります。",
+      "confirm": "権限を削除",
+      "pending": "削除中…",
+      "done": "{name} はスタッフではなくなりました。"
+    },
+    "revoke": {
+      "title": "招待を取り消す",
+      "description": "このアドレスでサインインしてもスタッフ権限は付与されません。",
+      "confirm": "取り消す",
+      "pending": "取り消し中…",
+      "done": "{email} への招待を取り消しました。"
+    }
+  },
+  "roleEditor": {
+    "viewTitle": "ロール",
+    "editTitle": "ロールを編集",
+    "createTitle": "新しいロール",
+    "builtInDescription": "組み込みロールは変更できません。複製すると編集できるカスタムロールになります。",
+    "ownRoleDescription": "あなた自身のロールのため編集できません。他の管理者に依頼してください。",
+    "description": "このロールを持つ人が閲覧・操作できる範囲を選びます。付与できるのはあなた自身が持つ権限だけです。",
+    "nameLabel": "名前",
+    "namePlaceholder": "二次サポート",
+    "descriptionLabel": "用途",
+    "descriptionPlaceholder": "アカウント操作が必要なエスカレーション対応",
+    "superAdminNote": "Super Admin は今後追加される権限も含め、すべての権限を持ちます。",
+    "matrixPermission": "権限",
+    "matrixGranted": "付与",
+    "clearArea": "領域の選択を解除",
+    "selectArea": "領域をすべて選択",
+    "kindView": "閲覧",
+    "kindChange": "変更",
+    "notGrantable": "あなたはこの権限を持っていません",
+    "nameRequired": "ロール名を入力してください。",
+    "permissionsRequired": "権限を 1 つ以上選択してください。",
+    "savedToast": "{name} を保存しました。",
+    "createdToast": "{name} を作成しました。",
+    "genericError": "ロールを保存できませんでした。",
+    "duplicate": "複製",
+    "close": "閉じる",
+    "cancel": "キャンセル",
+    "saving": "保存中…",
+    "save": "保存",
+    "create": "ロールを作成"
+  },
+  "areas": {
+    "workspaces": "ワークスペース",
+    "accounts": "アカウント",
+    "meetings": "ミーティング",
+    "billing": "請求",
+    "plugins": "プラグイン",
+    "content": "コンテンツ",
+    "glossary": "用語集",
+    "settings": "設定",
+    "operations": "運用",
+    "audit": "監査",
+    "staff": "スタッフ",
+    "assistant": "WarpBot"
+  },
+  "holders": {
+    "loading": "読み込み中…",
+    "error": "この権限の保有者を読み込めませんでした。",
+    "roles": "{count} 件のロールが付与",
+    "members": "{count} 名が保有",
+    "nobody": "現在この権限を持つ人はいません。",
+    "openStaff": "スタッフを開く"
+  },
+  "roles": {
+    "eyebrow": "チーム",
+    "title": "ロール",
+    "description": "各スタッフロールが閲覧・操作できる範囲。組み込みロールは読み取り専用です。複製してカスタムロールを作成できます。",
+    "create": "ロールを作成",
+    "viewLabel": "ロールまたは権限",
+    "views": {
+      "roles": "ロール",
+      "permissions": "権限"
+    },
+    "filters": {
+      "kind": "種類",
+      "builtIn": "組み込み",
+      "custom": "カスタム"
+    },
+    "columns": {
+      "role": "ロール",
+      "permissions": "権限",
+      "members": "人数",
+      "updated": "更新日",
+      "actions": "操作"
+    },
+    "builtIn": "組み込み",
+    "custom": "カスタム",
+    "all": "すべて",
+    "permissionCount": "{count}/{total}",
+    "pendingInvites": "招待 {count} 件",
+    "menu": {
+      "open": "{name} の操作",
+      "edit": "編集",
+      "view": "表示",
+      "duplicate": "複製",
+      "delete": "削除",
+      "deleteInUse": "使用中のため削除できません"
+    },
+    "duplicatedToast": "{name} を作成しました。下で編集してください。",
+    "duplicateError": "ロールを複製できませんでした。",
+    "permissionColumns": {
+      "permission": "権限",
+      "roles": "ロール",
+      "members": "人数",
+      "who": "保有者"
+    },
+    "whoHasIt": "保有者を見る",
+    "searchPlaceholder": "ロールを検索",
+    "count": "{count} 件のロール",
+    "sort": {
+      "name": "名前",
+      "permissions": "権限数",
+      "members": "人数",
+      "updated": "最終更新"
+    },
+    "emptyTitle": "ロールがありません",
+    "emptyFilteredTitle": "該当するロールがありません",
+    "emptyDescription": "検索や絞り込みを解除するとすべてのロールが表示されます。",
+    "deleteDialog": {
+      "title": "{name} を削除",
+      "description": "誰も保有していないロールのみ削除できます。一覧から消えますが、履歴は監査ログに残ります。",
+      "confirm": "ロールを削除",
+      "pending": "削除中…",
+      "done": "{name} を削除しました。"
+    }
+  }
+}

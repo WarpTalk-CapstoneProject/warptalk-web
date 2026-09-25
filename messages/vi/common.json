@@ -93,7 +93,8 @@
         "platform": "Nền tảng",
         "revenue": "Doanh thu",
         "operations": "Vận hành",
-        "configuration": "Cấu hình"
+        "configuration": "Cấu hình",
+        "team": "Nhân sự"
       },
       "items": {
         "insights": "Thông tin chi tiết",
@@ -110,7 +111,9 @@
         "emailTemplates": "Mẫu email",
         "platformSettings": "Cài đặt nền tảng",
         "plugins": "Plugin",
-        "globalGlossary": "Thuật ngữ toàn cục"
+        "globalGlossary": "Thuật ngữ toàn cục",
+        "staff": "Nhân viên",
+        "roles": "Vai trò"
       }
     },
     "settingsNav": {

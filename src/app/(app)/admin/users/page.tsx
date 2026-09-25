@@ -50,6 +50,8 @@ import type {
   AdminUserStatusFilter,
   AdminUserSummaryDto,
 } from "@/types/admin-user";
+import { useCan } from "@/hooks/use-staff-access";
+import { ADMIN_PERMISSIONS } from "@/lib/admin/staff-permissions";
 
 const PAGE_SIZE = 20;
 
@@ -419,6 +421,9 @@ function UserActions({
   onAction: (user: AdminUserSummaryDto, action: AdminUserAction) => void;
 }) {
   const t = useTranslations("adminUsers.list");
+  // G10: sign-out, deactivate, reactivate and unlock need accounts.manage (the server checks too).
+  const canManage = useCan(ADMIN_PERMISSIONS.accountsManage);
+  if (!canManage) return null;
   if (user.status === "deleted") {
     return <span className="text-[11px] text-ink-subtle">{t("noActionsAvailable")}</span>;
   }

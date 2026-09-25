@@ -131,7 +131,9 @@
       "exportLedger": "Export the billing ledger",
       "suspendedWorkspaces": "Show suspended workspaces",
       "lockedAccounts": "Show locked accounts",
-      "newSalesLeads": "Show new sales leads"
+      "newSalesLeads": "Show new sales leads",
+      "inviteStaff": "Invite staff",
+      "createRole": "Create a staff role"
     }
   }
 }

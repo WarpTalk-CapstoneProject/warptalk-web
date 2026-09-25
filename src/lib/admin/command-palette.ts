@@ -213,6 +213,30 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
       "用語集", "用語", "辞書",
     ],
   },
+  {
+    id: "staff",
+    kind: "page",
+    href: "/admin/staff",
+    labelKey: "staff",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "staff", "team", "employees", "admins", "operators", "invite staff", "suspend staff", "who has access",
+      "nhân sự", "nhân viên", "quản trị viên", "đội ngũ", "mời nhân viên",
+      "スタッフ", "社員", "管理者",
+    ],
+  },
+  {
+    id: "roles",
+    kind: "page",
+    href: "/admin/roles",
+    labelKey: "roles",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "roles", "role", "permissions", "permission", "rbac", "access control", "who has this permission",
+      "vai trò", "phân quyền", "quyền", "quyền hạn",
+      "ロール", "権限", "アクセス制御",
+    ],
+  },
 ];
 
 /**
@@ -309,6 +333,22 @@ export const ADMIN_PALETTE_ACTIONS: readonly AdminPaletteEntry[] = [
     // i18n-allow: search synonyms, matched in every language whatever the UI locale.
     keywords: ["new leads", "new sales leads", "untriaged", "khách hàng mới", "lead mới", "新規リード"],
   },
+  {
+    id: "inviteStaff",
+    kind: "action",
+    href: "/admin/staff?action=invite",
+    labelKey: "inviteStaff",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["invite staff", "add staff", "new admin", "add admin", "mời nhân viên", "thêm nhân viên", "スタッフ招待"],
+  },
+  {
+    id: "createRole",
+    kind: "action",
+    href: "/admin/roles?action=create",
+    labelKey: "createRole",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["create role", "new role", "custom role", "tạo vai trò", "vai trò mới", "ロール作成"],
+  },
 ];
 
 export interface RankedEntry {
@@ -404,6 +444,7 @@ export const ADMIN_SEARCHABLE_LISTS: readonly { id: string; href: string; labelK
   { id: "feedback", href: "/admin/feedback", labelKey: "feedback" },
   { id: "globalGlossary", href: "/admin/global-glossary", labelKey: "globalGlossary" },
   { id: "plugins", href: "/admin/plugins", labelKey: "plugins" },
+  { id: "staff", href: "/admin/staff", labelKey: "staff" },
 ];
 
 export function listSearchHref(href: string, query: string): string {

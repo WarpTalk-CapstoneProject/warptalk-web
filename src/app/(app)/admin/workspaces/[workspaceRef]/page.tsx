@@ -75,6 +75,8 @@ import type {
   AdminWorkspaceBillingOverviewDto,
   AdminWorkspaceMoneyDto,
 } from "@/types/admin-workspace-actions";
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { ADMIN_PERMISSIONS, hasPermission, type AdminPermission } from "@/lib/admin/staff-permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 const hoursFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
@@ -861,6 +863,9 @@ export default function AdminWorkspaceDetailPage() {
 
   const [tab, setTab] = useState("overview");
   const [openAction, setOpenAction] = useState<OpenWorkspaceAction | null>(null);
+  // G10: offer only what this person's staff role allows; the server enforces the same permission.
+  const { access: staffAccess } = useStaffAccess();
+  const can = (permission: AdminPermission) => hasPermission(staffAccess, permission);
   const [dialogAction, setDialogAction] = useState<WorkspaceLifecycleAction | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const pending =
@@ -1022,30 +1027,30 @@ export default function AdminWorkspaceDetailPage() {
                   <DropdownMenuContent align="end" className="min-w-[240px]">
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>{t("menu.billing")}</DropdownMenuLabel>
-                      <DropdownMenuItem disabled={!subscription} onClick={() => setOpenAction({ id: "adjustCredits" })}>
+                      <DropdownMenuItem disabled={!subscription || !can(ADMIN_PERMISSIONS.billingAdjustCredit)} onClick={() => setOpenAction({ id: "adjustCredits" })}>
                         <PlusMinus size={14} />
                         {t("menu.adjustCredits")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem disabled={!subscription} onClick={() => setOpenAction({ id: "changePlan" })}>
+                      <DropdownMenuItem disabled={!subscription || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)} onClick={() => setOpenAction({ id: "changePlan" })}>
                         <Swap size={14} />
                         {t("menu.changePlan")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem disabled={!subscription?.isTrial} onClick={() => setOpenAction({ id: "extendTrial" })}>
+                      <DropdownMenuItem disabled={!subscription?.isTrial || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)} onClick={() => setOpenAction({ id: "extendTrial" })}>
                         <HourglassMedium size={14} />
                         {t("menu.extendTrial")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
-                        disabled={!subscription || subscription.isTrial}
+                        disabled={!subscription || subscription.isTrial || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)}
                         onClick={() => setOpenAction({ id: "compPeriod" })}
                       >
                         <Gift size={14} />
                         {t("menu.compPeriod")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem disabled={!subscription} onClick={() => setOpenAction({ id: "entitlements" })}>
+                      <DropdownMenuItem disabled={!subscription || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)} onClick={() => setOpenAction({ id: "entitlements" })}>
                         <SlidersHorizontal size={14} />
                         {t("menu.entitlements")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setTab("billing")}>
+                      <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.billingRead)} onClick={() => setTab("billing")}>
                         <CurrencyCircleDollar size={14} />
                         {t("menu.invoices")}
                       </DropdownMenuItem>
@@ -1053,15 +1058,15 @@ export default function AdminWorkspaceDetailPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>{t("menu.account")}</DropdownMenuLabel>
-                      <DropdownMenuItem disabled={deleted} onClick={() => setOpenAction({ id: "transferOwnership" })}>
+                      <DropdownMenuItem disabled={deleted || !can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => setOpenAction({ id: "transferOwnership" })}>
                         <UserSwitch size={14} />
                         {t("menu.transferOwnership")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem disabled={deleted} onClick={() => setOpenAction({ id: "signOutAll" })}>
+                      <DropdownMenuItem disabled={deleted || !can(ADMIN_PERMISSIONS.accountsManage)} onClick={() => setOpenAction({ id: "signOutAll" })}>
                         <SignOut size={14} />
                         {t("menu.signOutAll")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem disabled={deleted} onClick={() => setOpenAction({ id: "sendNotice" })}>
+                      <DropdownMenuItem disabled={deleted || !can(ADMIN_PERMISSIONS.workspacesWrite)} onClick={() => setOpenAction({ id: "sendNotice" })}>
                         <Megaphone size={14} />
                         {t("menu.sendNotice")}
                       </DropdownMenuItem>
@@ -1069,11 +1074,11 @@ export default function AdminWorkspaceDetailPage() {
                     <DropdownMenuSeparator />
                     <DropdownMenuGroup>
                       <DropdownMenuLabel>{t("menu.data")}</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => setOpenAction({ id: "exportSummary" })}>
+                      <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesWrite)} onClick={() => setOpenAction({ id: "exportSummary" })}>
                         <DownloadSimple size={14} />
                         {t("menu.exportSummary")}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => setOpenAction({ id: "addNote" })}>
+                      <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesWrite)} onClick={() => setOpenAction({ id: "addNote" })}>
                         <NotePencil size={14} />
                         {t("menu.addNote")}
                       </DropdownMenuItem>
@@ -1084,17 +1089,17 @@ export default function AdminWorkspaceDetailPage() {
                         <DropdownMenuGroup>
                           <DropdownMenuLabel>{t("menu.lifecycle")}</DropdownMenuLabel>
                           {workspace.status === "active" ? (
-                            <DropdownMenuItem onClick={() => openLifecycle("suspend")}>
+                            <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => openLifecycle("suspend")}>
                               <Prohibit size={14} />
                               {t("suspend")}
                             </DropdownMenuItem>
                           ) : (
-                            <DropdownMenuItem onClick={() => openLifecycle("reactivate")}>
+                            <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => openLifecycle("reactivate")}>
                               <ShieldCheck size={14} />
                               {t("reactivate")}
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuItem variant="destructive" onClick={() => openLifecycle("delete")}>
+                          <DropdownMenuItem variant="destructive" disabled={!can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => openLifecycle("delete")}>
                             <Trash size={14} />
                             {t("delete")}
                           </DropdownMenuItem>

@@ -93,7 +93,8 @@
         "platform": "プラットフォーム",
         "revenue": "収益",
         "operations": "運用",
-        "configuration": "構成"
+        "configuration": "構成",
+        "team": "チーム"
       },
       "items": {
         "insights": "インサイト",
@@ -110,7 +111,9 @@
         "emailTemplates": "メールテンプレート",
         "platformSettings": "プラットフォーム設定",
         "plugins": "プラグイン",
-        "globalGlossary": "グローバル用語集"
+        "globalGlossary": "グローバル用語集",
+        "staff": "スタッフ",
+        "roles": "ロール"
       }
     },
     "settingsNav": {

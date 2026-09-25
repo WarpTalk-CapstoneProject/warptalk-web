@@ -500,6 +500,30 @@ export const API = {
    * the workspace service's audit store — the transport that can refuse — which is what ended
    * the "no bus, so no privileged actions" era.
    */
+  /**
+   * Platform staff, roles and the permission catalog (auth `AdminStaffController`, G10). Reads
+   * need staff.read, every write staff.manage; every write takes a reason and is audited before it
+   * commits. The server also refuses self-changes, grants beyond the caller's own permissions and
+   * anything that would leave no active Super Admin.
+   */
+  adminStaff: {
+    base: "/admin/staff",
+    detail: (userId: string) => `/admin/staff/${userId}`,
+    role: (userId: string) => `/admin/staff/${userId}/role`,
+    suspend: (userId: string) => `/admin/staff/${userId}/suspend`,
+    reactivate: (userId: string) => `/admin/staff/${userId}/reactivate`,
+    remove: (userId: string) => `/admin/staff/${userId}/remove`,
+    invitations: "/admin/staff/invitations",
+    revokeInvitation: (id: string) => `/admin/staff/invitations/${id}/revoke`,
+    roles: "/admin/staff/roles",
+    roleDetail: (id: string) => `/admin/staff/roles/${id}`,
+    duplicateRole: (id: string) => `/admin/staff/roles/${id}/duplicate`,
+    deleteRole: (id: string) => `/admin/staff/roles/${id}/delete`,
+    permissions: "/admin/staff/permissions",
+    permissionHolders: (code: string) => `/admin/staff/permissions/${encodeURIComponent(code)}/holders`,
+    /** GET, any signed-in user: the caller's own staff access. What the portal renders from. */
+    me: "/auth/staff-access",
+  },
   adminUsers: {
     base: "/admin/users",
     detail: (id: string) => `/admin/users/${id}`,
