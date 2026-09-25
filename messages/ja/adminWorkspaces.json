@@ -150,7 +150,10 @@
       "overridden": "契約による上書き",
       "burnHeading": "クレジット消費 — 過去30日",
       "burnSubtitle": "日次消費と台帳の日末残高",
-      "adjustCredits": "クレジット調整"
+      "adjustCredits": "クレジット調整",
+      "frozenCredits": "凍結クレジット",
+      "frozenCreditsValue": "{credits}（{date} から保持、更新時に復元）",
+      "frozenCreditsDormant": "{credits}（{date} から休眠、引き続き保持）"
     },
     "audit": {
       "emptyTitle": "管理操作の履歴はまだありません",

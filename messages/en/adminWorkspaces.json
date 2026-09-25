@@ -150,7 +150,10 @@
       "overridden": "contract override",
       "burnHeading": "Credit burn — last 30 days",
       "burnSubtitle": "Daily consumption and the ledger's end-of-day balance",
-      "adjustCredits": "Adjust credits"
+      "adjustCredits": "Adjust credits",
+      "frozenCredits": "Frozen credits",
+      "frozenCreditsValue": "{credits} (kept since {date}, restored on renewal)",
+      "frozenCreditsDormant": "{credits} (dormant since {date}, still kept)"
     },
     "audit": {
       "emptyTitle": "No administrative actions yet",

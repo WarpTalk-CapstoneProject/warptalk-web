@@ -378,6 +378,24 @@ function OverviewTab({
               {subscription.trialEndsAt ? <Field label={t("trialEnds")} value={formatDate(subscription.trialEndsAt)} /> : null}
               <Field label={t("autoRenew")} value={subscription.autoRenew ? t("yes") : t("no")} />
               <Field label={t("creditsPerCycle")} value={numberFormatter.format(subscription.creditsPerCycle)} />
+              {(subscription.frozenCredits ?? 0) > 0 ? (
+                // Kept from a subscription that ended: not spendable, restored on renewal, never
+                // deleted. Adjust Credit on a workspace with no live plan adjusts THIS number.
+                <Field
+                  label={t("frozenCredits")}
+                  value={
+                    subscription.frozenCreditsDormantAt
+                      ? t("frozenCreditsDormant", {
+                          credits: numberFormatter.format(subscription.frozenCredits ?? 0),
+                          date: formatDate(subscription.frozenCreditsDormantAt),
+                        })
+                      : t("frozenCreditsValue", {
+                          credits: numberFormatter.format(subscription.frozenCredits ?? 0),
+                          date: formatDate(subscription.creditsFrozenAt ?? subscription.currentPeriodEnd),
+                        })
+                  }
+                />
+              ) : null}
             </>
           ) : (
             <p className="py-4 text-[13px] text-ink-muted">{t("noSubscription")}</p>

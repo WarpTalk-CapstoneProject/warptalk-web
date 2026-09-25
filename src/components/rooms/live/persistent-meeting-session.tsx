@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -200,7 +201,8 @@ import { translationRoomService } from "@/services/translation-room.service";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import {
-  TRANSLATION_RESTORED_NOTICE,
+  type TranslationCreditsTranslator,
+  translationRestoredNotice,
   translationSuspendedNotice,
 } from "@/lib/billing/translation-credits-notice";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
@@ -281,6 +283,15 @@ export function PersistentMeetingSession({
     (state) => state.activeWorkspaceId,
   );
   const user = useAuthStore((state) => state.user);
+  // The hub's billing notices speak the viewer's language. Read through a ref so the hub effect
+  // below never reconnects just because the translator changed identity with the locale.
+  const translateCreditsNotice = useTranslations("rooms.translationCredits");
+  const translateCreditsNoticeRef = useRef<TranslationCreditsTranslator>((key) =>
+    translateCreditsNotice(key),
+  );
+  useEffect(() => {
+    translateCreditsNoticeRef.current = (key) => translateCreditsNotice(key);
+  }, [translateCreditsNotice]);
   const [meetingSession, setMeetingSession] =
     useState<JoinMeetingResponseDto | null>(null);
   // Declared up here only because the participants poll below has to see it. The reaper that
@@ -2358,11 +2369,13 @@ export function PersistentMeetingSession({
     // translation_worker has stopped translating this room. Said to everyone — every listener
     // loses their dub, not just the host — and in words that name the actual reason.
     connection.on("TranslationCreditsExhausted", (_roomId: string, reason?: string) => {
-      toast.error(translationSuspendedNotice(reason), { duration: 15000 });
+      toast.error(translationSuspendedNotice(reason, translateCreditsNoticeRef.current), {
+        duration: 15000,
+      });
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
     connection.on("TranslationCreditsRestored", () => {
-      toast.success(TRANSLATION_RESTORED_NOTICE);
+      toast.success(translationRestoredNotice(translateCreditsNoticeRef.current));
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
     // WT-354: who was already here. The hub sends this to the caller alone, once, immediately

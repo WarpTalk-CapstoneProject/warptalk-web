@@ -121,5 +121,12 @@
       "reactivated": "Renewal is back on. This plan will continue past the current period.",
       "reactivateFailed": "Could not reactivate the subscription."
     }
+  },
+  "frozen": {
+    "kept": "{credits} credits kept — renew to use them",
+    "keptDetail": "Your subscription ended on {date}. Credits you bought, and plan credits within your plan's rollover allowance, are kept and come back as soon as you renew.",
+    "dormant": "They have been waiting since {date}; they are still yours and still come back when you renew.",
+    "pendingTitle": "Credits from your previous plan",
+    "pendingDescription": "{credits} credits kept from your previous subscription are being added to this plan."
   }
 }
