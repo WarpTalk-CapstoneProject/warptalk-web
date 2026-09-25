@@ -114,7 +114,8 @@
         "plugins": "Plugin",
         "globalGlossary": "Thuật ngữ toàn cục",
         "staff": "Nhân viên",
-        "roles": "Vai trò"
+        "roles": "Vai trò",
+        "packages": "Gói bán thêm"
       }
     },
     "settingsNav": {

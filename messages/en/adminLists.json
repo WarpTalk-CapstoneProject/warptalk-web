@@ -133,7 +133,9 @@
       "lockedAccounts": "Show locked accounts",
       "newSalesLeads": "Show new sales leads",
       "inviteStaff": "Invite staff",
-      "createRole": "Create a staff role"
+      "createRole": "Create a staff role",
+      "createCreditPack": "Create credit pack",
+      "createCoupon": "Create coupon"
     }
   }
 }

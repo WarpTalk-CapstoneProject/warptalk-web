@@ -46,6 +46,12 @@ export interface CreateCheckoutSessionRequest {
    * session so the completion handler grants exactly what was paid for.
    */
   credits?: number;
+  /** G11, paymentType CreditPack / AddOn: the catalog item. Its price is the catalog's. */
+  packageId?: string;
+  /** G11, add-ons: units bought. */
+  quantity?: number;
+  /** G11: a coupon code; validated server-side. One coupon per checkout. */
+  couponCode?: string;
 }
 
 export interface CheckoutSessionDto {

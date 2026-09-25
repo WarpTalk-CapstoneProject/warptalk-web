@@ -322,7 +322,25 @@
       "staff_role_created": "Tạo vai trò nhân sự",
       "staff_role_updated": "Sửa vai trò nhân sự",
       "staff_role_duplicated": "Nhân bản vai trò nhân sự",
-      "staff_role_deleted": "Xoá vai trò nhân sự"
+      "staff_role_deleted": "Xoá vai trò nhân sự",
+      "credit_pack_created": "Đã tạo gói credit",
+      "credit_pack_updated": "Đã sửa gói credit",
+      "credit_pack_duplicated": "Đã nhân bản gói credit",
+      "credit_pack_archived": "Đã lưu trữ gói credit",
+      "credit_pack_unarchived": "Đã khôi phục gói credit",
+      "credit_pack_stripe_synced": "Đã đồng bộ gói credit lên Stripe",
+      "addon_created": "Đã tạo tiện ích bổ sung",
+      "addon_updated": "Đã sửa tiện ích bổ sung",
+      "addon_duplicated": "Đã nhân bản tiện ích bổ sung",
+      "addon_archived": "Đã lưu trữ tiện ích bổ sung",
+      "addon_unarchived": "Đã khôi phục tiện ích bổ sung",
+      "addon_stripe_synced": "Đã đồng bộ tiện ích bổ sung lên Stripe",
+      "coupon_created": "Đã tạo mã giảm giá",
+      "coupon_updated": "Đã sửa mã giảm giá",
+      "coupon_duplicated": "Đã nhân bản mã giảm giá",
+      "coupon_archived": "Đã lưu trữ mã giảm giá",
+      "coupon_unarchived": "Đã khôi phục mã giảm giá",
+      "coupon_stripe_synced": "Đã đồng bộ mã giảm giá lên Stripe"
     },
     "entities": {
       "workspace": "Workspace",
@@ -347,7 +365,10 @@
       "fx_rate": "Tỷ giá",
       "staff_member": "Nhân viên",
       "staff_role": "Vai trò nhân sự",
-      "staff_invitation": "Lời mời nhân sự"
+      "staff_invitation": "Lời mời nhân sự",
+      "credit_pack": "Gói credit",
+      "addon": "Tiện ích bổ sung",
+      "coupon": "Mã giảm giá"
     },
     "sources": {
       "workspace_service": "Workspace",

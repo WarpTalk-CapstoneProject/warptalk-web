@@ -61,6 +61,8 @@ const NAMESPACES = [
   "adminBillingLedger",
   "adminLists",
   "adminStaff",
+  "adminPackages",
+  "settingsBillingCatalog",
   "adminProviders",
   "download",
 ] as const;

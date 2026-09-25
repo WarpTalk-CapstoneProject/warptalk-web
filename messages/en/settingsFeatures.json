@@ -33,6 +33,7 @@
     "source": {
       "unknown": { "label": "Unknown", "detail": "The source of this value was not reported." },
       "plan": { "label": "Plan", "detail": "Set by the {name} plan." },
+      "addon": { "label": "Add-on", "detail": "Raised by the {name} add-on this workspace bought." },
       "platformDefault": {
         "label": "Platform default",
         "detail": "No active plan or contract sets this, so the platform default applies."

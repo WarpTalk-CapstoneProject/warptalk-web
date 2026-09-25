@@ -39,6 +39,7 @@ const PAGES = [
   [`${ADMIN}/feedback/page.tsx`, true],
   [`${ADMIN}/global-glossary/page.tsx`, true],
   [`${ADMIN}/plans/page.tsx`, false],
+  [`${ADMIN}/packages/page.tsx`, false],
   [`${ADMIN}/plugins/page.tsx`, false],
 ];
 

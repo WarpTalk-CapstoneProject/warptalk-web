@@ -68,7 +68,7 @@ export const ENTITLEMENT_CATALOG: Record<string, CatalogEntry> = {
 
 export const ENTITLEMENT_GROUP_ORDER: EntitlementGroup[] = ["Meetings", "AI and voice", "Other"];
 
-export type EntitlementSourceKind = "plan" | "contract" | "platform" | "workspace" | "unknown";
+export type EntitlementSourceKind = "plan" | "addon" | "contract" | "platform" | "workspace" | "unknown";
 
 export interface EntitlementSourceLabel {
   kind: EntitlementSourceKind;
@@ -86,6 +86,8 @@ const DEFAULT_ENTITLEMENT_COPY: Record<string, (values?: Record<string, string>)
   "source.unknown.detail": () => "The source of this value was not reported.",
   "source.plan.label": () => "Plan",
   "source.plan.detail": (v) => `Set by the ${v!.name} plan.`,
+  "source.addon.label": () => "Add-on",
+  "source.addon.detail": (v) => `Raised by the ${v!.name} add-on this workspace bought.`,
   "source.platformDefault.label": () => "Platform default",
   "source.platformDefault.detail": () =>
     "No active plan or contract sets this, so the platform default applies.",
@@ -114,6 +116,11 @@ export function describeSource(
     const slug = source.slice("plan:".length);
     const name = slug && slug !== "unknown" ? humanize(slug) : "your plan";
     return { kind: "plan", label: t("source.plan.label"), detail: t("source.plan.detail", { name }) };
+  }
+  // G11: a purchased add-on raised this on top of the plan ("addon:<slug>").
+  if (source.startsWith("addon:")) {
+    const name = humanize(source.slice("addon:".length));
+    return { kind: "addon", label: t("source.addon.label"), detail: t("source.addon.detail", { name }) };
   }
   switch (source) {
     case "platform_default":

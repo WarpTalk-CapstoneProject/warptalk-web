@@ -114,7 +114,8 @@
         "plugins": "Plugins",
         "globalGlossary": "Global glossary",
       "staff": "Staff",
-      "roles": "Roles"
+      "roles": "Roles",
+      "packages": "Packages"
       }
     },
     "settingsNav": {
