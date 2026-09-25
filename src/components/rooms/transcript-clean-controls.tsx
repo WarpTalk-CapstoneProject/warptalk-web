@@ -10,6 +10,7 @@
  */
 
 import { Undo2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import type { TranscriptViewMode } from "@/lib/transcript/clean-transcript";
 import { cn } from "@/lib/utils";
@@ -33,23 +34,16 @@ export function TranscriptViewModeToggle({
   onChange: (mode: TranscriptViewMode) => void;
   className?: string;
 }) {
+  const t = useTranslations("meetingTranscript.cleanView");
   const options: { key: TranscriptViewMode; label: string; title: string }[] = [
-    {
-      key: "clean",
-      label: "Clean",
-      title: "Fillers and repeated words removed, one sentence per line. Only changes your view.",
-    },
-    {
-      key: "verbatim",
-      label: "Verbatim",
-      title: "Exactly what the speech recogniser wrote down. Only changes your view.",
-    },
+    { key: "clean", label: t("clean"), title: t("cleanTitle") },
+    { key: "verbatim", label: t("verbatim"), title: t("verbatimTitle") },
   ];
 
   return (
     <div
       role="group"
-      aria-label="Transcript wording"
+      aria-label={t("groupLabel")}
       className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border p-0.5", className)}
     >
       {options.map((option) => (
@@ -87,7 +81,8 @@ export function SelfRepairMarker({
   /** On the reader's own bubble, which is the solid primary colour. */
   inverted?: boolean;
 }) {
-  const label = `The speaker corrected themselves. As said: "${rawText}"`;
+  const t = useTranslations("meetingTranscript.cleanView");
+  const label = t("selfRepair", { rawText });
   return (
     <span
       role="img"
