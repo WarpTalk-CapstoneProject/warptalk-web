@@ -11,7 +11,6 @@
     "filterAria": "Lọc danh mục theo trạng thái hoạt động của từng dòng",
     "trailingCount": "{visible} trên {total}",
     "searchPlaceholder": "Tìm theo tên hiển thị, key hoặc nhà cung cấp",
-    "searchAria": "Tìm kiếm trong danh mục plugin",
     "tabs": {
       "all": "Tất cả",
       "active": "Đang hoạt động",
@@ -122,6 +121,20 @@
         "problemCount": "{count, plural, other {# trường}} vẫn cần sửa. Chưa gửi gì cả.",
         "success": "{key} đã được thêm vào danh mục. Có hiệu lực ngay với mọi người dùng — không cần triển khai lại.",
         "errorFallback": "Không thể thêm plugin vào danh mục."
+      }
+    },
+    "listControls": {
+      "filters": {
+        "kind": "Loại",
+        "provider": "Nhà cung cấp",
+        "category": "Danh mục",
+        "featured": "Nổi bật",
+        "oauthClient": "Có client id OAuth"
+      },
+      "sortFields": {
+        "order": "Thứ tự danh mục",
+        "label": "Tên",
+        "installs": "Số người cài đặt"
       }
     }
   },
@@ -354,6 +367,164 @@
       "prefix": "Các chỉnh sửa được ghi lại cùng tài khoản đã thực hiện.",
       "lastWrittenBy": "Ghi lần cuối bởi {editor} vào {date}.",
       "noRecordedEditor": "Dòng này không có người chỉnh sửa được ghi nhận — lần ghi gần nhất là do một migration, hoặc một token không mang định danh sử dụng được. Tạo lúc {date}."
+    },
+    "tabs": {
+      "settings": "Cài đặt",
+      "workspaces": "Workspace"
+    }
+  },
+  "workspaceAccess": {
+    "loadError": "Không tải được danh sách workspace của plugin này",
+    "loadErrorFallback": "Không đọc được danh sách workspace. Chưa có gì thay đổi.",
+    "retry": "Thử lại",
+    "noPlan": "Chưa có gói",
+    "lastUsed": "Dùng lần cuối {date}",
+    "connectedCount": "{count, plural, other {# thành viên}}",
+    "availability": {
+      "title": "Mặc định cho các workspace",
+      "body": "Áp dụng cho mọi workspace trừ khi bạn ghi đè bên dưới. Ghi đè luôn được ưu tiên; plugin đã ngừng thì tắt ở mọi nơi.",
+      "options": {
+        "available": {
+          "label": "Hiển thị cho tất cả",
+          "hint": "Chủ workspace có thể thêm từ marketplace của họ."
+        },
+        "opt_in": {
+          "label": "Ẩn (chỉ bật theo từng workspace)",
+          "hint": "Ẩn khỏi mọi workspace cho đến khi bạn bật cho từng nơi."
+        },
+        "retired": {
+          "label": "Ngừng cung cấp",
+          "hint": "Tắt ở mọi nơi. Kết nối của thành viên được giữ nhưng không dùng."
+        }
+      },
+      "restrictToPlans": "Chỉ cho workspace thuộc các gói này",
+      "restrictHint": "Workspace thuộc gói khác, hoặc chưa có gói, sẽ không thấy plugin trừ khi bạn bật riêng.",
+      "addPlan": "Thêm",
+      "addPlanPlaceholder": "Mã gói, ví dụ business",
+      "save": "Lưu mặc định",
+      "saving": "Đang lưu…",
+      "saved": "Đã lưu mặc định.",
+      "saveFailed": "Không lưu được mặc định. Chưa có gì thay đổi.",
+      "unsaved": "Có thay đổi chưa lưu"
+    },
+    "table": {
+      "title": "Workspace",
+      "summary": "{total} workspace · {enabled} đang bật · {disabled} đang tắt · {overridden} ghi đè · {inUse} đang dùng",
+      "noWorkspaces": "Chưa có workspace nào.",
+      "noMatches": "Không có kết quả phù hợp bộ lọc.",
+      "selectAll": "Chọn tất cả workspace đang hiển thị",
+      "selectRow": "Chọn {workspace}"
+    },
+    "columns": {
+      "workspace": "Workspace",
+      "plugin": "Plugin",
+      "plan": "Gói",
+      "state": "Trạng thái",
+      "list": "Danh sách của chủ",
+      "connected": "Đã kết nối",
+      "usage": "Lượt WarpBot gọi",
+      "actions": "Thao tác"
+    },
+    "filters": {
+      "search": "Tìm workspace",
+      "searchPlugins": "Tìm plugin",
+      "stateLabel": "Lọc theo trạng thái",
+      "state": {
+        "all": "Tất cả",
+        "enabled": "Đang bật",
+        "disabled": "Đang tắt"
+      },
+      "sourceLabel": "Lọc theo nguồn của trạng thái",
+      "source": {
+        "all": "Kế thừa và ghi đè",
+        "inherited": "Chỉ kế thừa",
+        "overridden": "Chỉ ghi đè"
+      },
+      "planLabel": "Lọc theo gói",
+      "plan": {
+        "all": "Mọi gói",
+        "none": "Chưa có gói"
+      }
+    },
+    "state": {
+      "enabled": "Đang bật",
+      "disabled": "Đang tắt"
+    },
+    "source": {
+      "override": "Ghi đè cho workspace này",
+      "plan": "Kế thừa · chỉ cho {plans}",
+      "optIn": "Kế thừa · chỉ bật theo từng workspace",
+      "retired": "Plugin đã ngừng",
+      "inherited": "Kế thừa · hiển thị cho tất cả"
+    },
+    "list": {
+      "added": "Đã thêm",
+      "notAdded": "Chưa thêm"
+    },
+    "workspaceStatus": {
+      "suspended": "đã tạm ngưng"
+    },
+    "actions": {
+      "enable": "Bật",
+      "disable": "Tắt",
+      "reset": "Về mặc định",
+      "noneRetired": "Đã ngừng — hãy kích hoạt lại trước"
+    },
+    "bulk": {
+      "byPlan": "Áp dụng theo gói…",
+      "selected": "{count, plural, other {Đã chọn # workspace}}",
+      "target": "{count, plural, other {# workspace}}",
+      "clear": "Bỏ chọn",
+      "planTarget": "các workspace thuộc gói đã chọn",
+      "choosePlan": "Hãy chọn ít nhất một gói.",
+      "actionLabel": "Thao tác",
+      "plansLabel": "Gói",
+      "plansHint": "Áp dụng cho mọi workspace đang thuộc các gói này. Workspace chuyển sang gói sau này sẽ theo mặc định."
+    },
+    "toast": {
+      "applied": "Đã đổi {changed}, {unchanged} vốn đã như vậy.",
+      "enable": "Đã bật {plugin} cho workspace này.",
+      "disable": "Đã tắt {plugin} cho workspace này.",
+      "reset": "{plugin} đã trở về theo mặc định."
+    },
+    "connected": {
+      "title": "Người đã kết nối",
+      "kept": "Kết nối được giữ khi plugin tắt; WarpBot không dùng chúng.",
+      "loading": "Đang tải thành viên…"
+    },
+    "workspaceTab": {
+      "title": "Plugin trong workspace này",
+      "body": "Gói: {plan}. Tắt một plugin sẽ ẩn nó khỏi marketplace của workspace này và WarpBot ngừng dùng nó ở đây. Kết nối của thành viên được giữ.",
+      "summary": "{enabled} đang bật · {disabled} đang tắt · {overridden} ghi đè",
+      "noPlugins": "Chưa có plugin nào trên marketplace.",
+      "target": "{plugin} trong {workspace}"
+    },
+    "dialog": {
+      "enable": {
+        "title": "Bật cho {target}?",
+        "body": "Chủ workspace ở đó có thể thêm và thành viên có thể kết nối, bất kể mặc định hay quy tắc theo gói.",
+        "confirm": "Bật"
+      },
+      "disable": {
+        "title": "Tắt cho {target}?",
+        "body": "Plugin biến mất khỏi marketplace của họ và WarpBot ngừng dùng nó ở đó. Kết nối của thành viên được giữ, không dùng, và hoạt động lại khi bạn bật lại.",
+        "confirm": "Tắt"
+      },
+      "reset": {
+        "title": "Đưa {target} về mặc định?",
+        "body": "Bỏ ghi đè; mặc định và quy tắc theo gói của plugin được áp dụng lại.",
+        "confirm": "Về mặc định"
+      },
+      "reasonRequired": "Lý do (bắt buộc, ghi vào nhật ký kiểm tra)",
+      "reasonOptional": "Lý do (không bắt buộc, ghi vào nhật ký kiểm tra)",
+      "reasonPlaceholder": "Vì sao thay đổi?",
+      "errors": {
+        "reasonRequired": "Hãy nêu lý do tắt plugin.",
+        "reasonTooLong": "Lý do tối đa 500 ký tự."
+      },
+      "cancel": "Hủy",
+      "saving": "Đang lưu…",
+      "failed": "Chưa thay đổi được. Hãy thử lại."
     }
   }
 }

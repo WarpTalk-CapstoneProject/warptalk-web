@@ -24,6 +24,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { useAdminInboxSummary } from "@/hooks/use-admin-inbox";
+import { inboxBadge } from "@/lib/admin/inbox";
+import { ADMIN_PERMISSIONS, canViewAdminPath, hasPermission } from "@/lib/admin/staff-permissions";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
 import { canManageWorkspacePlugins, pendingRequestBadge } from "@/lib/assistant/plugin-availability";
@@ -38,6 +42,7 @@ import type { IconProps } from "@phosphor-icons/react";
 import {
   Archive,
   ArrowUUpLeft,
+  Package,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -52,6 +57,7 @@ import {
   Globe,
   Handshake,
   Heartbeat,
+  Plugs,
   House,
   Keyboard,
   MagnifyingGlass,
@@ -76,7 +82,10 @@ import {
   ListChecks,
   Bell,
   LinkSimple,
-  Devices,} from "@phosphor-icons/react/dist/ssr";
+  Devices,
+  IdentificationBadge,
+  UserGear,
+  Tray,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -252,6 +261,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isSystemAdmin = useIsSystemAdmin();
+  const { access: staffAccess } = useStaffAccess();
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -464,8 +474,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
    */
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
+  // G12: the Inbox row's pill counts open items the person can see. Read only inside the portal and
+  // only for someone who holds inbox.read; the server caches the fan-out, so polling is cheap.
+  const { data: inboxSummary } = useAdminInboxSummary(
+    isAdminPage && isSystemAdmin && hasPermission(staffAccess, ADMIN_PERMISSIONS.inboxRead),
+  );
+
   if (isAdminPage && isSystemAdmin) {
-    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+    const allAdminSections: Array<{ section: string; items: NavItem[] }> = [
       {
         section: t("adminNav.sections.platform"),
         items: [
@@ -474,6 +490,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // "Insights", not "Overview" (owner's call, 2026-09-17): the landing page became the
           // period-compared business insights page. The route did not move.
           { icon: Gauge, label: t("adminNav.items.insights"), href: "/admin", exact: true },
+          // G12: everything waiting on the platform team, aggregated from the pages that own it.
+          { icon: Tray, label: t("adminNav.items.inbox"), href: "/admin/inbox", badge: inboxBadge(inboxSummary?.counts) },
           { icon: Buildings, label: t("adminNav.items.workspaces"), href: "/admin/workspaces" },
           // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
           // "Users" is the same word the workspace sidebar uses for that workspace's members —
@@ -487,14 +505,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: Gauge, label: t("adminNav.items.subscriptions"), href: "/admin/subscriptions" },
           { icon: FileText, label: t("adminNav.items.plansAndPricing"), href: "/admin/plans" },
+          { icon: Package, label: t("adminNav.items.packages"), href: "/admin/packages" },
           { icon: CreditCard, label: t("adminNav.items.billingLedger"), href: "/admin/billing" },
           { icon: Handshake, label: t("adminNav.items.salesLeads"), href: "/admin/sales-leads" },
+          // G12: company operating expenses, budgets and the P&L with them.
+          { icon: Receipt, label: t("adminNav.items.operatingCosts"), href: "/admin/finance/expenses" },
         ],
       },
       {
         section: t("adminNav.sections.operations"),
         items: [
           { icon: Heartbeat, label: t("adminNav.items.systemHealth"), href: "/admin/health" },
+          { icon: Plugs, label: t("adminNav.items.providers"), href: "/admin/providers" },
           { icon: Star, label: t("adminNav.items.feedback"), href: "/admin/feedback" },
           { icon: Archive, label: t("adminNav.items.auditLog"), href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: t("adminNav.items.announcements"), href: "/admin/announcements" },
@@ -517,7 +539,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
         ],
       },
+      {
+        // G10: who works on the platform, and what each of them may do here.
+        section: t("adminNav.sections.team"),
+        items: [
+          { icon: IdentificationBadge, label: t("adminNav.items.staff"), href: "/admin/staff" },
+          { icon: UserGear, label: t("adminNav.items.roles"), href: "/admin/roles" },
+        ],
+      },
     ];
+
+    // G10: offer only the pages this person's staff role can read (the server enforces the same
+    // permission on every endpoint behind them). A section left with no rows is dropped entirely.
+    const adminSections = allAdminSections
+      .map((group) => ({ ...group, items: group.items.filter((item) => canViewAdminPath(staffAccess, item.href)) }))
+      .filter((group) => group.items.length > 0);
 
     // WT-444: "Back to app" pointed at /workspace whenever no workspace was active, and for the
     // only person who ever sees this button that is a loop. /workspace redirects a system admin

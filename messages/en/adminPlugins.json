@@ -11,7 +11,6 @@
     "filterAria": "Filter the catalog by whether a row is active",
     "trailingCount": "{visible} of {total}",
     "searchPlaceholder": "Search by label, key or provider",
-    "searchAria": "Search the plugin catalog",
     "tabs": {
       "all": "All",
       "active": "Active",
@@ -122,6 +121,20 @@
         "problemCount": "{count, plural, one {# field still needs} other {# fields still need}} fixing. Nothing was sent.",
         "success": "{key} added to the catalog. It is live for every user immediately — no deploy.",
         "errorFallback": "Could not add the plugin to the catalog."
+      }
+    },
+    "listControls": {
+      "filters": {
+        "kind": "Kind",
+        "provider": "Provider",
+        "category": "Category",
+        "featured": "Featured",
+        "oauthClient": "Has OAuth client id"
+      },
+      "sortFields": {
+        "order": "Catalog order",
+        "label": "Name",
+        "installs": "Installed by"
       }
     }
   },
@@ -354,6 +367,164 @@
       "prefix": "Edits are stamped with the account that made them.",
       "lastWrittenBy": "Last written by {editor} on {date}.",
       "noRecordedEditor": "This row has no recorded editor — it was last written by a migration, or by a token carrying no usable subject. Created {date}."
+    },
+    "tabs": {
+      "settings": "Settings",
+      "workspaces": "Workspaces"
+    }
+  },
+  "workspaceAccess": {
+    "loadError": "Couldn't load this plugin's workspaces",
+    "loadErrorFallback": "The workspace list could not be read. Nothing was changed.",
+    "retry": "Try again",
+    "noPlan": "No plan",
+    "lastUsed": "Last used {date}",
+    "connectedCount": "{count, plural, one {# member} other {# members}}",
+    "availability": {
+      "title": "Default for workspaces",
+      "body": "What every workspace gets unless you override it below. Overrides always win; a retired plugin is off everywhere.",
+      "options": {
+        "available": {
+          "label": "Available to all",
+          "hint": "Workspace owners can add it from their marketplace."
+        },
+        "opt_in": {
+          "label": "Hidden (opt-in only)",
+          "hint": "Hidden from every workspace until you enable it for one."
+        },
+        "retired": {
+          "label": "Retired",
+          "hint": "Off everywhere. Members' connections are kept but unused."
+        }
+      },
+      "restrictToPlans": "Only for workspaces on these plans",
+      "restrictHint": "Workspaces on other plans, or with no plan, don't see it unless you enable it for them.",
+      "addPlan": "Add",
+      "addPlanPlaceholder": "Plan slug, e.g. business",
+      "save": "Save default",
+      "saving": "Saving…",
+      "saved": "Default saved.",
+      "saveFailed": "Couldn't save the default. Nothing was changed.",
+      "unsaved": "Unsaved changes"
+    },
+    "table": {
+      "title": "Workspaces",
+      "summary": "{total} workspaces · {enabled} enabled · {disabled} off · {overridden} overridden · {inUse} using it",
+      "noWorkspaces": "There are no workspaces yet.",
+      "noMatches": "Nothing matches these filters.",
+      "selectAll": "Select all shown workspaces",
+      "selectRow": "Select {workspace}"
+    },
+    "columns": {
+      "workspace": "Workspace",
+      "plugin": "Plugin",
+      "plan": "Plan",
+      "state": "State",
+      "list": "Owner's list",
+      "connected": "Connected",
+      "usage": "WarpBot calls",
+      "actions": "Actions"
+    },
+    "filters": {
+      "search": "Search workspaces",
+      "searchPlugins": "Search plugins",
+      "stateLabel": "Filter by state",
+      "state": {
+        "all": "All",
+        "enabled": "Enabled",
+        "disabled": "Off"
+      },
+      "sourceLabel": "Filter by where the state comes from",
+      "source": {
+        "all": "Inherited and overridden",
+        "inherited": "Inherited only",
+        "overridden": "Overridden only"
+      },
+      "planLabel": "Filter by plan",
+      "plan": {
+        "all": "All plans",
+        "none": "No plan"
+      }
+    },
+    "state": {
+      "enabled": "Enabled",
+      "disabled": "Off"
+    },
+    "source": {
+      "override": "Overridden for this workspace",
+      "plan": "Inherited · only for {plans}",
+      "optIn": "Inherited · opt-in only",
+      "retired": "Plugin retired",
+      "inherited": "Inherited · available to all"
+    },
+    "list": {
+      "added": "Added",
+      "notAdded": "Not added"
+    },
+    "workspaceStatus": {
+      "suspended": "suspended"
+    },
+    "actions": {
+      "enable": "Enable",
+      "disable": "Turn off",
+      "reset": "Reset to default",
+      "noneRetired": "Retired — reinstate it first"
+    },
+    "bulk": {
+      "byPlan": "Apply to a plan…",
+      "selected": "{count, plural, one {# workspace selected} other {# workspaces selected}}",
+      "target": "{count, plural, one {# workspace} other {# workspaces}}",
+      "clear": "Clear",
+      "planTarget": "workspaces on the chosen plans",
+      "choosePlan": "Choose at least one plan.",
+      "actionLabel": "Action",
+      "plansLabel": "Plans",
+      "plansHint": "Applies to every workspace on these plans today. Workspaces that join a plan later follow the default."
+    },
+    "toast": {
+      "applied": "{changed} changed, {unchanged} already that way.",
+      "enable": "{plugin} enabled for this workspace.",
+      "disable": "{plugin} turned off for this workspace.",
+      "reset": "{plugin} follows the default again."
+    },
+    "connected": {
+      "title": "Connected by",
+      "kept": "Connections are kept while the plugin is off; WarpBot doesn't use them.",
+      "loading": "Loading members…"
+    },
+    "workspaceTab": {
+      "title": "Plugins in this workspace",
+      "body": "Plan: {plan}. Turning a plugin off hides it from this workspace's marketplace and stops WarpBot using it here. Members' connections are kept.",
+      "summary": "{enabled} enabled · {disabled} off · {overridden} overridden",
+      "noPlugins": "There are no marketplace plugins.",
+      "target": "{plugin} in {workspace}"
+    },
+    "dialog": {
+      "enable": {
+        "title": "Enable for {target}?",
+        "body": "Workspace owners there can add it and members can connect it, whatever the default or plan rule says.",
+        "confirm": "Enable"
+      },
+      "disable": {
+        "title": "Turn off for {target}?",
+        "body": "It disappears from their marketplace and WarpBot stops using it there. Members' connections are kept, unused, and work again if you turn it back on.",
+        "confirm": "Turn off"
+      },
+      "reset": {
+        "title": "Reset {target} to the default?",
+        "body": "The override is removed and the plugin's default and plan rule apply again.",
+        "confirm": "Reset"
+      },
+      "reasonRequired": "Reason (required, recorded in the audit log)",
+      "reasonOptional": "Reason (optional, recorded in the audit log)",
+      "reasonPlaceholder": "Why is this changing?",
+      "errors": {
+        "reasonRequired": "Give a reason for turning it off.",
+        "reasonTooLong": "Keep the reason under 500 characters."
+      },
+      "cancel": "Cancel",
+      "saving": "Saving…",
+      "failed": "The change wasn't made. Try again."
     }
   }
 }

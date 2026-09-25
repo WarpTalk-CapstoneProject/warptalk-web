@@ -9,7 +9,11 @@ import { Button } from "@/components/ui/button";
 import { LanguageLabel } from "@/components/language/language-label";
 import { useTranslationRooms } from "@/hooks/use-translationRooms";
 import { meetingLanguageSet } from "@/lib/language/languages";
-import { isSameDay, meetingsOn } from "@/lib/meeting/meeting-day";
+import {
+  isSameDay,
+  meetingsOn,
+  UNFINISHED_ROOM_STATUSES_FILTER,
+} from "@/lib/meeting/meeting-day";
 import { MeetingDayStrip } from "@/components/meetings/meeting-day-strip";
 import { useUIStore } from "@/stores/ui-store";
 import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-store";
@@ -166,7 +170,10 @@ export function MeetingDayPanel() {
   // for a workspace that has meetings in it. Same reasoning as the meetings list.
   const roomList = useTranslationRooms({
     pageSize: 100,
-    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED",
+    // The shared list, not four names typed out here: this one silently lost every OPEN room the
+    // day it was added to the enum (WT-612 / WT-621), which is a meeting that is happening RIGHT
+    // NOW missing from the panel that exists to show today.
+    status: UNFINISHED_ROOM_STATUSES_FILTER,
     workspaceId: activeWorkspaceId ?? undefined,
   });
 

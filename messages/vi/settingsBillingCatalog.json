@@ -1,0 +1,82 @@
+{
+  "packs": {
+    "title": "Gói credit",
+    "description": "Credit mua một lần, cộng thêm ngoài gói cước. Thanh toán một lần, cộng vào số dư của workspace."
+  },
+  "addons": {
+    "title": "Tiện ích bổ sung",
+    "description": "Nâng một giới hạn của gói cước, gia hạn riêng.",
+    "cycle": "Chu kỳ thanh toán",
+    "cycles": {
+      "monthly": "Hằng tháng",
+      "yearly": "Hằng năm"
+    },
+    "owned": "Đang dùng",
+    "ownedUnits": "+{units} {unit}",
+    "ownedOn": "Đã bật",
+    "endsOn": "Kết thúc {date}",
+    "cancel": "Huỷ",
+    "billed": "{price} · {cycle}",
+    "needsPlan": "Tiện ích bổ sung đi kèm gói cước trả phí. Hãy chọn gói cước để thêm."
+  },
+  "cards": {
+    "untitled": "Chưa đặt tên",
+    "credits": "{credits} credit",
+    "bonus": "+{bonus} tặng thêm",
+    "validFor": "Credit chưa dùng hết hạn sau {days, plural, other {# ngày}} kể từ khi mua",
+    "neverExpires": "Credit không hết hạn",
+    "remaining": "{count, plural, other {Còn # lượt mua}}",
+    "availableUntil": "Bán đến {date}",
+    "noPrice": "Không bán bằng tiền tệ của bạn",
+    "buy": "Mua",
+    "add": "Thêm",
+    "raises": "+{units} {unit} {entitlement} mỗi đơn vị",
+    "unlocks": "Mở khoá {entitlement}",
+    "unit": "đơn vị",
+    "quantityRange": "{min}–{max} đơn vị",
+    "perUnitMonth": "/ {unit} / tháng",
+    "perUnitYear": "/ {unit} / năm",
+    "perMonth": "/ tháng",
+    "perYear": "/ năm",
+    "entitlements": {
+      "max_participants": "người tham gia mỗi cuộc họp",
+      "max_languages": "ngôn ngữ mỗi cuộc họp",
+      "max_active_rooms": "phòng đồng thời",
+      "voice_clone": "nhân bản giọng nói",
+      "ai_assistant": "trợ lý AI",
+      "glossary": "bảng thuật ngữ riêng"
+    }
+  },
+  "purchase": {
+    "packDescription": "Credit được cộng vào workspace ngay khi thanh toán hoàn tất.",
+    "addonDescription": "Tính phí {cycle}, gia hạn riêng. Huỷ bất cứ lúc nào; vẫn dùng được đến hết kỳ đã trả.",
+    "cycles": {
+      "monthly": "hằng tháng",
+      "yearly": "hằng năm"
+    },
+    "quantity": "Số lượng ({unit})",
+    "coupon": "Mã giảm giá",
+    "couponPlaceholder": "Không bắt buộc",
+    "apply": "Áp dụng",
+    "couponApplied": "{name}: −{discount}",
+    "couponInvalid": "Mã này không áp dụng được ở đây.",
+    "couponFailed": "Không kiểm tra được mã.",
+    "credits": "Credit",
+    "includesBonus": "Gồm {bonus} credit tặng thêm",
+    "listPrice": "Giá",
+    "total": "Tổng cộng",
+    "totalHintOnce": "Thu một lần. Giá cuối cùng được xác nhận trên trang Stripe.",
+    "totalHintRecurring": "Thu {cycle}. Giá cuối cùng được xác nhận trên trang Stripe.",
+    "continue": "Tiếp tục thanh toán",
+    "starting": "Đang mở trang thanh toán…",
+    "checkoutFailed": "Không bắt đầu được thanh toán."
+  },
+  "cancelDialog": {
+    "title": "Huỷ {name}?",
+    "description": "Tiện ích vẫn hoạt động đến hết kỳ đã thanh toán, sau đó không gia hạn. Không hoàn tiền.",
+    "keep": "Giữ lại",
+    "confirm": "Huỷ tiện ích",
+    "done": "Tiện ích sẽ kết thúc khi hết kỳ đã thanh toán.",
+    "failed": "Không huỷ được tiện ích."
+  }
+}

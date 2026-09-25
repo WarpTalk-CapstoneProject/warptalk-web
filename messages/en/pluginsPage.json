@@ -36,7 +36,8 @@
     "addedByWorkspace": "Added by your workspace",
     "notAddedYet": "Not added to {workspaceName} yet",
     "waitingForOwner": "Waiting for your workspace owner",
-    "thisWorkspace": "this workspace"
+    "thisWorkspace": "this workspace",
+    "disabledByPlatform": "Turned off for this workspace by WarpTalk. Your connection is kept, but WarpBot won't use it here."
   },
   "consentNotice": {
     "awaitingHeadline": "Finish connecting {label} in your browser",

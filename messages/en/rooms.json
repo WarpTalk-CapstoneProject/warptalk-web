@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "In progress",
+    "open": "Open",
     "waiting": "Waiting",
     "scheduled": "Scheduled",
     "ended": "Ended",
@@ -171,7 +172,9 @@
   },
   "startedBanner": {
     "title": "A meeting has started",
+    "openedTitle": "A meeting is open",
     "joinNow": "Join now",
+    "setUpAndJoin": "Set up & join",
     "openFromNotifications": "Open it from your notifications.",
     "dismissAria": "Dismiss"
   },
@@ -258,5 +261,16 @@
     },
     "searching": "Searching meetings...",
     "empty": "No meetings found. Try a room title, code, or one of the quick actions above."
+  },
+  "bridgeFarSide": {
+    "label": "They speak",
+    "ariaLabel": "They speak {language}. Change what the other side of the call speaks",
+    "hint": "What the other side of the call speaks",
+    "connecting": "Connecting to WarpTalk…",
+    "notSet": "Set",
+    "menuHint": "Your speech is translated into this language, and theirs is translated into yours.",
+    "failed": "Could not change what the other side speaks",
+    "sameLanguage": "You and the other side are both set to {language}, so nothing will be translated. Choose what they speak.",
+    "singleLanguageWorkspace": "This workspace only allows {language}, so there is nothing to translate into. Ask a workspace admin to allow a second language."
   }
 }

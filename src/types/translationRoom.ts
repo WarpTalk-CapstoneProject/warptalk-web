@@ -8,6 +8,16 @@
 export type TranslationRoomStatus =
   | "scheduled"
   | "waiting"
+  /**
+   * WT-612 / WT-621: the clock opened the door at `scheduledAt` — nobody pressed Start.
+   *
+   * It is the gap between "booked" and "somebody is in it": the room is enterable, and there is
+   * no translation session behind it yet. The first person who actually walks in takes it to
+   * `in_progress`. So it is live for every purpose the UI has (it is joinable, it belongs in
+   * Active, it is not missed and not finished) while being nothing like `in_progress` for the
+   * one purpose that reads a session — see persistent-meeting-session's `meetingLive`.
+   */
+  | "open"
   | "in_progress"
   | "paused"
   | "ended"
@@ -202,6 +212,12 @@ export interface CreateTranslationRoomRequest {
   externalMeetingUrl?: string;
   externalCalendarEventId?: string;
   externalCalendarEventUrl?: string;
+  /**
+   * EXTERNAL_BRIDGE only: what the other side of the external call speaks — the language of the
+   * "External Meeting" stand-in. Omitted, the server takes the first target that is not the
+   * source. See lib/meeting/bridge-far-side-language.ts.
+   */
+  externalMeetingLanguage?: string;
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   FileText,
   Globe,
   Library,
+  ShieldCheck,
   Video,
   type LucideIcon,
 } from "lucide-react";
@@ -49,6 +50,7 @@ const KIND_ICON: Record<AnswerSourceKind, LucideIcon> = {
   meeting: Video,
   transcript: AudioLines,
   web: Globe,
+  admin: ShieldCheck,
 };
 
 const COLLAPSED_COUNT = 3;

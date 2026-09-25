@@ -46,6 +46,12 @@ export interface CreateCheckoutSessionRequest {
    * session so the completion handler grants exactly what was paid for.
    */
   credits?: number;
+  /** G11, paymentType CreditPack / AddOn: the catalog item. Its price is the catalog's. */
+  packageId?: string;
+  /** G11, add-ons: units bought. */
+  quantity?: number;
+  /** G11: a coupon code; validated server-side. One coupon per checkout. */
+  couponCode?: string;
 }
 
 export interface CheckoutSessionDto {
@@ -175,6 +181,31 @@ export interface CreditHistoryFilters {
   toDate?: string;
   minAmount?: number;
   maxAmount?: number;
+  /**
+   * Global ledger only. A transaction or reference id (exact), otherwise matched against the
+   * description. Ignored by a backend that predates it, so callers must not rely on it narrowing.
+   */
+  search?: string;
+  /** Global ledger only: created_desc (default) | created_asc | amount_desc | amount_asc. */
+  sort?: "created_desc" | "created_asc" | "amount_desc" | "amount_asc";
+}
+
+/**
+ * Server-side filters for the platform-wide invoice list (`GET /invoices/global`).
+ *
+ * `search` is an invoice number fragment, or an exact invoice id. Dates bound `issuedAt`
+ * (`fromDate` inclusive, `toDate` exclusive); amounts bound `total`.
+ */
+export interface GlobalInvoiceFilters {
+  search?: string;
+  status?: string;
+  workspaceId?: string;
+  currency?: string;
+  fromDate?: string;
+  toDate?: string;
+  minTotal?: number;
+  maxTotal?: number;
+  sort?: "issued_desc" | "issued_asc" | "total_desc" | "total_asc" | "due_asc";
 }
 
 export interface CreditHistoryQueryParams extends CreditHistoryFilters {

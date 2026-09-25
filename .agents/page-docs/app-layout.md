@@ -90,3 +90,4 @@ The app layout shell defines the shared navigation and header surfaces used acro
 - Check narrow desktop widths to ensure the fixed host sidebar and topbar actions do not overlap page content.
 - Open Ask WarpBot twice and confirm each main-trigger click starts a blank conversation; use the minimized chip to confirm explicit resume still works.
 - Run `npm run test:2807-hotfix`.
+- **2026-09-25 (admin command palette):** on `/admin/*` the header search is `AdminHeaderSearch` and ⌘K opens `AdminCommandPalette` (admin pages by name/synonym in en/vi/ja, platform records, quick actions, recents) instead of the workspace room-code palette; the shell mounts exactly one of the two palettes. The workspace app's "Search, or paste a room code" box is unchanged. See `.agents/page-docs/admin-list-toolkit.md` and `scripts/check-admin-command-palette-contract.mjs`.

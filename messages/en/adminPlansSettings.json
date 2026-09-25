@@ -1,5 +1,70 @@
 {
   "plans": {
+    "list": {
+      "visibleOfTotal": "{visible} of {total}",
+      "cycles": {
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      },
+      "plans": {
+        "searchPlaceholder": "Search plans by name or slug",
+        "filters": {
+          "tier": "Tier",
+          "cycle": "Billing cycle",
+          "currency": "Currency",
+          "active": "Active"
+        },
+        "sortFields": {
+          "order": "Display order",
+          "name": "Name",
+          "price": "Price",
+          "credits": "Credits per cycle"
+        },
+        "columns": {
+          "plan": "Plan",
+          "tier": "Tier",
+          "cycle": "Billing cycle",
+          "price": "Price",
+          "credits": "Credits / cycle",
+          "status": "Status",
+          "order": "Order"
+        }
+      },
+      "rateCards": {
+        "searchPlaceholder": "Search charge type, provider or model",
+        "filters": {
+          "chargeType": "Charge type",
+          "provider": "Provider",
+          "unit": "Unit",
+          "currency": "Currency",
+          "margin": "Margin",
+          "active": "In force"
+        },
+        "marginBands": {
+          "loss": "Loss (below 1×)",
+          "thin": "Thin (1× to 1.5×)",
+          "healthy": "Healthy (1.5× and up)",
+          "unknown": "Not known"
+        },
+        "inForce": "In force",
+        "deactivated": "Deactivated",
+        "sortFields": {
+          "chargeType": "Charge type",
+          "provider": "Provider",
+          "price": "Unit price",
+          "margin": "Margin",
+          "effective": "Effective from"
+        },
+        "columns": {
+          "rateCard": "Rate card",
+          "unit": "Unit",
+          "price": "Unit price",
+          "providerCost": "Provider cost",
+          "margin": "Margin",
+          "effective": "Effective"
+        }
+      }
+    },
     "eyebrow": "Revenue",
     "title": "Plans & pricing",
     "description": "What the platform sells, and what each unit of it costs to serve.",
@@ -94,7 +159,21 @@
     "pricingEconomics": {
       "errorWhat": "The pricing configuration",
       "fxRateLabel": "FX rate (USD → VND)",
-      "fxRateHint": "Reads a USD provider cost in VND terms.",
+      "fxRateHint": "Stripe's USD→VND rate, recorded once a day; every report converts each day at that day's rate.",
+      "fxSourceAsOf": "{source} · as of {asOf}",
+      "fxStatusUnavailable": "Rate source not available yet",
+      "fxRefresh": "Refresh from Stripe",
+      "fxRefreshing": "Refreshing…",
+      "fxRefreshed": "USD→VND rate refreshed from Stripe",
+      "fxRefreshPartial": "Stripe did not return everything: {error}",
+      "fxRefreshError": "Could not refresh the rate from Stripe",
+      "fxOverride": "Override",
+      "fxOverrideAriaLabel": "Override rate, VND per US dollar",
+      "fxApplyOverride": "Use this rate",
+      "fxCancel": "Cancel",
+      "fxUseStripe": "Use Stripe's rate again",
+      "fxOverrideError": "Could not change the rate",
+      "fxStripeWouldBe": "Stripe's rate: {rate} ({date})",
       "cartesiaUsdPerCreditLabel": "Cartesia USD per credit",
       "cartesiaUsdPerCreditHint": "What one Cartesia credit costs WarpTalk. Insights price dubbing as measured Cartesia credits × this × the FX rate. The account spends credits bought earlier, so enter what they cost, not the Free plan's marginal 0. Default: Startup plan, $49 / 1,250,000.",
       "cartesiaUsdPerCreditValue": "${price} per credit",

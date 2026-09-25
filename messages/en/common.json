@@ -93,24 +93,31 @@
         "platform": "Platform",
         "revenue": "Revenue",
         "operations": "Operations",
-        "configuration": "Configuration"
+        "configuration": "Configuration",
+        "team": "Team"
       },
       "items": {
         "insights": "Insights",
+        "inbox": "Inbox",
         "workspaces": "Workspaces",
         "accounts": "Accounts",
         "subscriptions": "Subscriptions",
         "plansAndPricing": "Plans & pricing",
         "billingLedger": "Billing ledger",
         "salesLeads": "Sales leads",
+        "operatingCosts": "Operating costs",
         "systemHealth": "System health",
+        "providers": "Providers",
         "feedback": "Feedback",
         "auditLog": "Audit log",
         "announcements": "Announcements",
         "emailTemplates": "Email templates",
         "platformSettings": "Platform settings",
         "plugins": "Plugins",
-        "globalGlossary": "Global glossary"
+        "globalGlossary": "Global glossary",
+      "staff": "Staff",
+      "roles": "Roles",
+      "packages": "Packages"
       }
     },
     "settingsNav": {
@@ -340,5 +347,23 @@
     "workspaceSettings": "Workspace settings",
     "billing": "Billing",
     "signOut": "Sign out"
+  },
+  "announcements": {
+    "regionLabel": "Announcements",
+    "readMore": "Read more",
+    "pagerLabel": "More announcements",
+    "previous": "Previous announcement",
+    "next": "Next announcement",
+    "position": "{current} of {total}",
+    "dismiss": "Dismiss",
+    "dontShowAgain": "Don't show this again",
+    "close": "Close",
+    "badge": "Announcement",
+    "types": {
+      "ANNOUNCEMENT": "Announcement",
+      "FEATURE": "New feature",
+      "MAINTENANCE": "Maintenance",
+      "PROMOTION": "Offer"
+    }
   }
 }

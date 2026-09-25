@@ -64,6 +64,7 @@ type BackendJoinResponse = {
 const statusMap: Record<string, TranslationRoomStatus> = {
   SCHEDULED: "scheduled",
   WAITING: "waiting",
+  OPEN: "open",
   IN_PROGRESS: "in_progress",
   PAUSED: "paused",
   ENDED: "ended",

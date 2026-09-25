@@ -161,6 +161,12 @@ export function RealtimeNotificationProvider({
         // a meeting in progress cannot, and the only useful response is one click. This type
         // used to be discarded at validation before it ever reached a client
         // (warptalk-backend#190), so the popup had nothing to show.
+        //
+        // MEETING_OPENED (WT-612 / WT-621) is read by the same function and lands in the same
+        // banner with the same cue: a room the clock just unlocked is news of the same urgency,
+        // and it is the notification that REPLACES the one a host used to send by pressing Start
+        // on a scheduled meeting. The reader is told it is open rather than running, and is sent
+        // through device setup rather than into the call — see readMeetingStartedNotice.
         const meetingStarted = readMeetingStartedNotice(notif);
         if (meetingStarted) {
           playNotificationCue("meeting-started");

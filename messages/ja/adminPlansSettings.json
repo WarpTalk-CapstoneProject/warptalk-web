@@ -1,5 +1,70 @@
 {
   "plans": {
+    "list": {
+      "visibleOfTotal": "{visible} / {total}",
+      "cycles": {
+        "monthly": "月額",
+        "yearly": "年額"
+      },
+      "plans": {
+        "searchPlaceholder": "名前またはスラッグでプランを検索",
+        "filters": {
+          "tier": "ティア",
+          "cycle": "請求サイクル",
+          "currency": "通貨",
+          "active": "有効"
+        },
+        "sortFields": {
+          "order": "表示順",
+          "name": "名前",
+          "price": "価格",
+          "credits": "サイクルあたりのクレジット"
+        },
+        "columns": {
+          "plan": "プラン",
+          "tier": "ティア",
+          "cycle": "請求サイクル",
+          "price": "価格",
+          "credits": "クレジット / サイクル",
+          "status": "ステータス",
+          "order": "順序"
+        }
+      },
+      "rateCards": {
+        "searchPlaceholder": "課金タイプ、プロバイダー、モデルを検索",
+        "filters": {
+          "chargeType": "課金タイプ",
+          "provider": "プロバイダー",
+          "unit": "単位",
+          "currency": "通貨",
+          "margin": "マージン",
+          "active": "適用中"
+        },
+        "marginBands": {
+          "loss": "赤字 (1× 未満)",
+          "thin": "薄利 (1×〜1.5×)",
+          "healthy": "健全 (1.5× 以上)",
+          "unknown": "不明"
+        },
+        "inForce": "適用中",
+        "deactivated": "無効化済み",
+        "sortFields": {
+          "chargeType": "課金タイプ",
+          "provider": "プロバイダー",
+          "price": "単価",
+          "margin": "マージン",
+          "effective": "適用開始日"
+        },
+        "columns": {
+          "rateCard": "料金カード",
+          "unit": "単位",
+          "price": "単価",
+          "providerCost": "プロバイダー原価",
+          "margin": "マージン",
+          "effective": "適用開始"
+        }
+      }
+    },
     "eyebrow": "収益",
     "title": "プランと価格",
     "description": "プラットフォームが販売するものと、各単位を提供するのにかかるコスト。",
@@ -94,7 +159,21 @@
     "pricingEconomics": {
       "errorWhat": "価格設定",
       "fxRateLabel": "為替レート（USD → VND）",
-      "fxRateHint": "USD建てのプロバイダーコストをVND換算で読み取ります。",
+      "fxRateHint": "Stripe の USD→VND レート（毎日記録）。各レポートは日ごとにその日のレートで換算します。",
+      "fxSourceAsOf": "{source} · {asOf} 時点",
+      "fxStatusUnavailable": "レートの取得元はまだ利用できません",
+      "fxRefresh": "Stripe から更新",
+      "fxRefreshing": "更新中…",
+      "fxRefreshed": "Stripe から USD→VND レートを更新しました",
+      "fxRefreshPartial": "Stripe から一部のデータを取得できませんでした: {error}",
+      "fxRefreshError": "Stripe からレートを更新できませんでした",
+      "fxOverride": "上書き",
+      "fxOverrideAriaLabel": "上書きレート（1 米ドルあたりの VND）",
+      "fxApplyOverride": "このレートを使う",
+      "fxCancel": "キャンセル",
+      "fxUseStripe": "Stripe のレートに戻す",
+      "fxOverrideError": "レートを変更できませんでした",
+      "fxStripeWouldBe": "Stripe のレート: {rate}（{date}）",
       "cartesiaUsdPerCreditLabel": "Cartesia 1 クレジットあたりの USD",
       "cartesiaUsdPerCreditHint": "WarpTalk が Cartesia の 1 クレジットに支払う金額です。Insights では、吹き替えのコストを「計測された Cartesia クレジット × この値 × 為替レート」で算出します。アカウントは以前に購入したクレジットを消費しているため、Free プランの限界費用 0 ではなく購入時の単価を入力してください。既定値: Startup プラン、$49 / 1,250,000。",
       "cartesiaUsdPerCreditValue": "1 クレジットあたり ${price}",

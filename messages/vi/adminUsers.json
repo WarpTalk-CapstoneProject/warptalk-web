@@ -44,7 +44,8 @@
       "roles": "Vai trò",
       "sessions": "Phiên",
       "lastLogin": "Lần đăng nhập gần nhất",
-      "actions": "Hành động"
+      "actions": "Hành động",
+      "created": "Ngày tham gia"
     },
     "noRoles": "—",
     "neverSignedIn": "Chưa từng đăng nhập",
@@ -58,6 +59,20 @@
       "pageOf": "Trang {page} / {totalPages}",
       "previous": "Trước",
       "next": "Sau"
+    },
+    "filters": {
+      "role": "Vai trò nền tảng",
+      "platformAdmin": "Quản trị nền tảng",
+      "signedIn": "Đã đăng nhập",
+      "neverSignedIn": "Chưa bao giờ",
+      "hasSignedIn": "Ít nhất một lần",
+      "lastLogin": "Đăng nhập gần nhất",
+      "created": "Ngày tham gia"
+    },
+    "sortFields": {
+      "created": "Ngày tham gia",
+      "name": "Tên",
+      "lastLogin": "Đăng nhập gần nhất"
     }
   },
   "detail": {

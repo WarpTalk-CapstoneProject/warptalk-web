@@ -2,6 +2,7 @@
   "status": {
     "scheduled": "Đã lên lịch",
     "waiting": "Đang chờ",
+    "open": "Đang mở",
     "inProgress": "Đang diễn ra",
     "paused": "Tạm dừng",
     "ended": "Đã kết thúc",

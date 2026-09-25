@@ -20,6 +20,8 @@
  * This is the same rule, asked once, so a control the server cannot accept never looks alive.
  */
 
+import type { AssistantScope } from "./assistant-scope.ts";
+
 export type ComposerBlocker = "no-workspace" | "empty";
 
 /**
@@ -28,8 +30,21 @@ export type ComposerBlocker = "no-workspace" | "empty";
  * growing a second, half-written copy of this rule, exactly as they had.
  */
 export type ComposerReadiness =
-  | { canSend: true; workspaceId: string; blocker: null; hint: null }
-  | { canSend: false; workspaceId: null; blocker: ComposerBlocker; hint: string };
+  | { canSend: true; scope: "workspace"; workspaceId: string; blocker: null; hint: null }
+  /**
+   * Platform scope (a system admin on /admin): the turn belongs to NO workspace, so the yes
+   * carries none — a handler cannot accidentally create a workspace conversation from it.
+   */
+  | { canSend: true; scope: "platform"; workspaceId: null; blocker: null; hint: null }
+  | {
+      canSend: false;
+      scope: AssistantScope;
+      workspaceId: null;
+      blocker: ComposerBlocker;
+      hint: string;
+    };
+
+const PLATFORM_EMPTY_HINT = "Ask about the platform — revenue, workspaces, billing or health.";
 
 const HINTS: Record<ComposerBlocker, string> = {
   "no-workspace":
@@ -37,11 +52,36 @@ const HINTS: Record<ComposerBlocker, string> = {
   empty: "Type a message, or attach a file.",
 };
 
-export function composerReadiness(input: {
+/** What a workspace-only caller can get back: never the platform yes. */
+export type WorkspaceComposerReadiness = Exclude<
+  ComposerReadiness,
+  { canSend: true; scope: "platform" }
+>;
+
+interface ComposerReadinessInput {
   text: string;
   attachmentCount: number;
   activeWorkspaceId: string | null | undefined;
-}): ComposerReadiness {
+  /** Defaults to "workspace": every caller written before platform scope existed. */
+  scope?: AssistantScope;
+}
+
+export function composerReadiness(
+  input: ComposerReadinessInput & { scope?: "workspace" },
+): WorkspaceComposerReadiness;
+export function composerReadiness(input: ComposerReadinessInput): ComposerReadiness;
+export function composerReadiness(input: ComposerReadinessInput): ComposerReadiness {
+  const scope = input.scope ?? "workspace";
+
+  // Platform scope needs no workspace — that is the whole point of it — and takes text only:
+  // attachments are workspace content, and the platform send carries none.
+  if (scope === "platform") {
+    if (input.text.trim().length === 0) {
+      return { canSend: false, scope, workspaceId: null, blocker: "empty", hint: PLATFORM_EMPTY_HINT };
+    }
+    return { canSend: true, scope, workspaceId: null, blocker: null, hint: null };
+  }
+
   // Reported BEFORE the empty check, and deliberately.
   //
   // It is the blocker that survives whatever the person types next, so saying it while the box
@@ -51,6 +91,7 @@ export function composerReadiness(input: {
   if (!input.activeWorkspaceId) {
     return {
       canSend: false,
+      scope,
       workspaceId: null,
       blocker: "no-workspace",
       hint: HINTS["no-workspace"],
@@ -60,8 +101,14 @@ export function composerReadiness(input: {
   // WT-474: an attachment on its own is a question ("what is this?"), so a turn carrying only
   // files is allowed to go.
   if (input.text.trim().length === 0 && input.attachmentCount === 0) {
-    return { canSend: false, workspaceId: null, blocker: "empty", hint: HINTS.empty };
+    return { canSend: false, scope, workspaceId: null, blocker: "empty", hint: HINTS.empty };
   }
 
-  return { canSend: true, workspaceId: input.activeWorkspaceId, blocker: null, hint: null };
+  return {
+    canSend: true,
+    scope,
+    workspaceId: input.activeWorkspaceId,
+    blocker: null,
+    hint: null,
+  };
 }

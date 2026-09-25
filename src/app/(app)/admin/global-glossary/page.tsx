@@ -5,23 +5,34 @@ import {
   Archive,
   CheckCircle,
   ClockCounterClockwise,
+  FolderSimple,
   Globe,
   PencilSimple,
   Plus,
   ShieldWarning,
   Spinner,
+  Translate,
   Trash,
   Upload,
 } from "@phosphor-icons/react/dist/ssr";
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
+import {
+  AdminDataTable,
+  AdminListToolbar,
+  AdminStatusTabs,
+  useAdminActionIntent,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -42,8 +53,13 @@ import {
   useUpdateGlobalGlossaryTerm,
 } from "@/hooks/use-global-glossary";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { enumValue, type ListStateConfig } from "@/lib/admin/list-state";
 import { languagesInScope } from "@/lib/language/languages";
-import type { GlobalGlossaryTermDto } from "@/types/global-glossary";
+import type {
+  GlobalGlossaryTermDto,
+  GlobalGlossaryTermQuery,
+  GlobalGlossaryTermSort,
+} from "@/types/global-glossary";
 
 /**
  * WT-461: the languages a global glossary term may name.
@@ -85,20 +101,72 @@ function buildTermSchema(t: TermFormTranslator) {
 type TermFormData = z.infer<ReturnType<typeof buildTermSchema>>;
 
 const statusFilters = ["all", "draft", "published", "archived"] as const;
-import {
-  AdminFilterTabs,
-  AdminPage,
-  AdminPageHeader,
-} from "@/components/admin/admin-page-chrome";
+const TERM_STATUSES = ["draft", "published", "archived"] as const;
 
-export default function AdminGlobalGlossaryPage() {
+const PAGE_SIZE = 20;
+
+/**
+ * The glossary listing's view, in the URL. Status is what the tabs write (`status=`); the rest is
+ * the Filter menu. Every filter and every order is server-side (GET /admin/global-glossary).
+ *
+ * Domain is free text on the term, so its def carries no `values`: a link's domain is sent as
+ * typed and the server matches it exactly.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: TERM_STATUSES },
+    { key: "domain", kind: "enum" },
+    { key: "language", kind: "enum", values: glossaryLanguages.map((language) => language.code) },
+  ],
+  sortFields: ["priority", "updated", "created", "term"],
+  defaultSort: { field: "priority", direction: "desc" },
+  columns: [
+    { id: "term" },
+    { id: "translation" },
+    { id: "languages" },
+    { id: "domain" },
+    { id: "priority" },
+    { id: "status" },
+    { id: "updated", defaultHidden: true },
+    { id: "created", defaultHidden: true },
+  ],
+  groupings: ["status", "domain"],
+};
+
+/** The orders the server runs in one direction only. Term is the one it runs both ways. */
+const ONE_WAY_SORTS = new Set(["priority", "updated", "created"]);
+
+function apiSort(field: string, direction: "asc" | "desc"): GlobalGlossaryTermSort {
+  if (field === "term") return direction === "desc" ? "term_desc" : "term_asc";
+  if (field === "updated") return "updated_desc";
+  if (field === "created") return "created_desc";
+  return "priority_desc";
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" }).format(
+    new Date(value),
+  );
+}
+
+/**
+ * Every business domain this page has seen, so the Domain filter can offer them. Accumulated, not
+ * read off the current page: with "Domain is legal" applied every row says legal, and a menu built
+ * from the page would offer nothing else. Adjusted during render, React's pattern for derived state.
+ */
+function useSeenDomains(values: readonly string[]): string[] {
+  const [seen, setSeen] = useState<string[]>([]);
+  const missing = Array.from(new Set(values.filter((value) => value && !seen.includes(value))));
+  if (missing.length > 0) setSeen([...seen, ...missing]);
+  return missing.length > 0 ? [...seen, ...missing] : seen;
+}
+
+function GlobalGlossaryAdmin() {
   const t = useTranslations("adminGlobalGlossary");
   const isSystemAdmin = useIsSystemAdmin();
+  const list = useAdminListState(LIST_CONFIG);
+  const { state } = list;
 
-  const [page, setPage] = useState(1);
-  const pageSize = 20;
-  const [status, setStatus] = useState<(typeof statusFilters)[number]>("all");
-  const [search, setSearch] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [termToEdit, setTermToEdit] = useState<GlobalGlossaryTermDto | null>(null);
@@ -109,12 +177,38 @@ export default function AdminGlobalGlossaryPage() {
   } | null>(null);
   const [csvText, setCsvText] = useState("");
 
-  const query = {
-    page,
-    pageSize,
-    status: status === "all" ? undefined : status,
-    search: search || undefined,
-  };
+  // The palette's "Add glossary term" and "Import glossary" actions.
+  useAdminActionIntent({
+    create: () => setIsCreateOpen(true),
+    import: () => setIsBulkImportOpen(true),
+  });
+
+  // Priority, updated and created run newest/highest first only. A link or the Display panel's
+  // direction button can still ask for ascending; snap back rather than show an arrow the rows
+  // do not follow.
+  const { setSort } = list;
+  useEffect(() => {
+    if (ONE_WAY_SORTS.has(state.sort.field) && state.sort.direction === "asc") {
+      setSort(state.sort.field, "desc");
+    }
+  }, [state.sort.field, state.sort.direction, setSort]);
+
+  const status = enumValue(state.filters, "status");
+  const domain = enumValue(state.filters, "domain");
+  const language = enumValue(state.filters, "language");
+
+  const query = useMemo<GlobalGlossaryTermQuery>(
+    () => ({
+      page: state.page,
+      pageSize: PAGE_SIZE,
+      status,
+      businessDomain: domain,
+      language,
+      search: state.search || undefined,
+      sort: apiSort(state.sort.field, state.sort.direction),
+    }),
+    [state.page, status, domain, language, state.search, state.sort.field, state.sort.direction],
+  );
 
   const termsQuery = useGlobalGlossaryTerms(query);
   const auditsQuery = useGlobalGlossaryAudits(auditsTermId || "");
@@ -141,6 +235,12 @@ export default function AdminGlobalGlossaryPage() {
     defaultValues: { term: "", preferredTranslation: "", priority: 5 },
   });
 
+  const terms = termsQuery.data?.items ?? [];
+  const domains = useSeenDomains([
+    ...terms.map((term) => term.businessDomain ?? ""),
+    ...(domain ? [domain] : []),
+  ]);
+
   if (!isSystemAdmin) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-10 text-center">
@@ -151,9 +251,8 @@ export default function AdminGlobalGlossaryPage() {
     );
   }
 
-  const terms = termsQuery.data?.items ?? [];
   const totalCount = termsQuery.data?.totalCount ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   const handleCreate = async (data: TermFormData) => {
     try {
@@ -323,177 +422,251 @@ export default function AdminGlobalGlossaryPage() {
     }
   };
 
-  return (
-    <AdminPage>
-        <AdminPageHeader
-          eyebrow={t("header.eyebrow")}
-          eyebrowIcon={<Globe size={14} weight="fill" />}
-          title={t("header.title")}
-          description={t("header.description")}
-          actions={
-            <>
-              <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
-                <Upload className="h-4 w-4" />
-                {t("actions.bulkImportCsv")}
-              </Button>
-              <Button size="sm" onClick={() => setIsCreateOpen(true)}>
-                <Plus className="h-4 w-4" />
-                {t("actions.newTerm")}
-              </Button>
-            </>
-          }
-        />
+  const statusTabs = statusFilters.map((s) => ({ value: s, label: t(`filters.status.${s}`) }));
+  const statusLabel = (value: string) =>
+    (TERM_STATUSES as readonly string[]).includes(value) ? t(`filters.status.${value}`) : value;
+  const languageName = (code: string) =>
+    glossaryLanguages.find((candidate) => candidate.code === code)?.name ?? code;
 
-        <AdminFilterTabs
-          tabs={statusFilters.map((s) => ({
-            value: s,
-            label: t(`filters.status.${s}`),
-          }))}
-          value={status}
-          onChange={(value) => {
-            setStatus(value);
-            setPage(1);
-          }}
-          label={t("filters.statusLabel")}
-          trailing={
-            <Input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              placeholder={t("filters.searchPlaceholder")}
-              className="h-7 w-[240px] text-[12px] shadow-none"
-            />
-          }
-        />
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "domain",
+      label: t("list.filters.domain"),
+      icon: <FolderSimple size={13} />,
+      kind: "enum",
+      options: domains
+        .slice()
+        .sort((a, b) => a.localeCompare(b))
+        .map((value) => ({ value, label: value })),
+    },
+    {
+      key: "language",
+      label: t("list.filters.language"),
+      icon: <Translate size={13} />,
+      kind: "enum",
+      options: glossaryLanguages.map((candidate) => ({ value: candidate.code, label: candidate.name, hint: candidate.code })),
+    },
+  ];
 
-      <Card className="mt-4 border-border bg-surface-1 shadow-none">
+  const rowAction =
+    "h-6 w-6 flex items-center justify-center rounded text-ink-muted transition-colors";
 
-        <CardContent className="p-0 overflow-x-auto">
-          {termsQuery.isLoading ? (
-            <div className="flex h-48 items-center justify-center">
-              <Spinner className="h-6 w-6 animate-spin text-primary" />
-            </div>
-          ) : terms.length === 0 ? (
-            <div className="flex h-48 flex-col items-center justify-center gap-2 text-center p-6">
-              <Globe className="h-8 w-8 text-ink-muted" />
-              <p className="text-sm font-medium">{t("table.emptyTitle")}</p>
-            </div>
-          ) : (
-            <div className="min-w-[800px] divide-y divide-hairline">
-              <div className="grid grid-cols-[1fr_1fr_100px_80px_90px_140px] items-center gap-3 px-4 py-2 bg-surface-2 text-[10px] font-semibold text-ink-muted uppercase tracking-wider">
-                <span className="truncate">{t("table.term")}</span>
-                <span className="truncate">{t("table.translation")}</span>
-                <span className="truncate">{t("table.domain")}</span>
-                <span className="truncate">{t("table.priority")}</span>
-                <span className="truncate">{t("table.status")}</span>
-                <span className="text-right truncate">{t("table.actions")}</span>
-              </div>
-
-              {terms.map((term) => (
-                <div
-                  key={term.id}
-                  className="grid grid-cols-[1fr_1fr_100px_80px_90px_140px] items-center gap-3 px-4 py-2.5 hover:bg-surface-2/30 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <span className="text-xs font-semibold text-ink truncate block">
-                      {term.term}
-                    </span>
-                    {term.definition && (
-                      <span className="text-[10px] text-ink-muted truncate block">
-                        {term.definition}
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-xs text-primary font-semibold truncate">
-                    {term.preferredTranslation}
-                  </span>
-                  <span className="text-xs text-ink-muted truncate">
-                    {term.businessDomain || t("table.noDomain")}
-                  </span>
-                  <span className="text-xs text-ink-muted">
-                    {term.priority}
-                  </span>
-                  <Badge
-                    variant={
-                      term.status === "published" ? "default" : "secondary"
-                    }
-                    className="w-fit capitalize"
-                  >
-                    {t(`filters.status.${term.status}`)}
-                  </Badge>
-                  <div className="flex justify-end items-center gap-1">
-                    <button
-                      onClick={() => openEditDialog(term)}
-                      className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors"
-                      title={t("rowActions.edit")}
-                    >
-                      <PencilSimple className="h-3.5 w-3.5" />
-                    </button>
-                    {term.status !== "published" && (
-                      <button
-                        onClick={() => handlePublish(term.id, term.term)}
-                        disabled={publishMutation.isPending}
-                        className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-primary/10 hover:text-primary transition-colors"
-                        title={t("rowActions.publish")}
-                      >
-                        <CheckCircle className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    {term.status !== "archived" && (
-                      <button
-                        onClick={() => handleArchive(term.id, term.term)}
-                        disabled={archiveMutation.isPending}
-                        className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 transition-colors"
-                        title={t("rowActions.archive")}
-                      >
-                        <Archive className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => setAuditsTermId(term.id)}
-                      className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-surface-2 transition-colors"
-                      title={t("rowActions.viewAuditHistory")}
-                    >
-                      <ClockCounterClockwise className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        setTermToDelete({ id: term.id, term: term.term })
-                      }
-                      className="h-6 w-6 flex items-center justify-center rounded text-ink-muted hover:bg-destructive/10 hover:text-destructive transition-colors"
-                      title={t("rowActions.delete")}
-                    >
-                      <Trash className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 text-xs text-ink-muted">
+  const columns: AdminColumn<GlobalGlossaryTermDto>[] = [
+    {
+      id: "term",
+      header: t("table.term"),
+      primary: true,
+      sortField: "term",
+      cell: (term) => (
+        <div className="min-w-0">
+          <span className="block truncate text-xs font-semibold text-ink">{term.term}</span>
+          {term.definition ? (
+            <span className="block truncate text-[10px] font-normal text-ink-muted">{term.definition}</span>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: "translation",
+      header: t("table.translation"),
+      cell: (term) => <span className="block truncate text-xs font-semibold text-primary">{term.preferredTranslation}</span>,
+    },
+    {
+      id: "languages",
+      header: t("list.columns.languages"),
+      className: "w-[120px]",
+      cell: (term) => (
+        <span
+          className="font-mono text-[11px] uppercase text-ink-muted"
+          title={`${term.sourceLanguage ? languageName(term.sourceLanguage) : t("list.anyLanguage")} → ${term.targetLanguage ? languageName(term.targetLanguage) : t("list.anyLanguage")}`}
+        >
+          {term.sourceLanguage ?? "*"} → {term.targetLanguage ?? "*"}
+        </span>
+      ),
+    },
+    {
+      id: "domain",
+      header: t("table.domain"),
+      className: "w-[120px]",
+      cell: (term) => <span className="block truncate text-xs text-ink-muted">{term.businessDomain || t("table.noDomain")}</span>,
+    },
+    {
+      id: "priority",
+      header: t("table.priority"),
+      align: "right",
+      className: "w-[90px]",
+      sortField: "priority",
+      defaultDirection: "desc",
+      cell: (term) => <span className="text-xs text-ink-muted">{term.priority}</span>,
+    },
+    {
+      id: "status",
+      header: t("table.status"),
+      className: "w-[110px]",
+      cell: (term) => (
+        <Badge variant={term.status === "published" ? "default" : "secondary"} className="w-fit capitalize">
+          {statusLabel(term.status)}
+        </Badge>
+      ),
+    },
+    {
+      id: "updated",
+      header: t("list.columns.updated"),
+      align: "right",
+      className: "w-[120px]",
+      sortField: "updated",
+      defaultDirection: "desc",
+      cell: (term) => <span className="text-xs text-ink-muted">{formatDate(term.updatedAt)}</span>,
+    },
+    {
+      id: "created",
+      header: t("list.columns.created"),
+      align: "right",
+      className: "w-[120px]",
+      sortField: "created",
+      defaultDirection: "desc",
+      cell: (term) => <span className="text-xs text-ink-muted">{formatDate(term.createdAt)}</span>,
+    },
+    {
+      id: "actions",
+      header: t("table.actions"),
+      align: "right",
+      className: "w-[150px]",
+      cell: (term) => (
+        <div className="flex items-center justify-end gap-1">
           <button
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="h-7 px-2.5 rounded-md border border-hairline bg-surface-1 disabled:opacity-40"
+            type="button"
+            onClick={() => openEditDialog(term)}
+            className={`${rowAction} hover:bg-surface-2 hover:text-ink`}
+            title={t("rowActions.edit")}
+            aria-label={t("rowActions.edit")}
           >
-            {t("pagination.previous")}
+            <PencilSimple className="h-3.5 w-3.5" />
           </button>
-          <span>{t("pagination.summary", { page, totalPages, count: totalCount })}</span>
+          {term.status !== "published" && (
+            <button
+              type="button"
+              onClick={() => handlePublish(term.id, term.term)}
+              disabled={publishMutation.isPending}
+              className={`${rowAction} hover:bg-primary/10 hover:text-primary`}
+              title={t("rowActions.publish")}
+              aria-label={t("rowActions.publish")}
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {term.status !== "archived" && (
+            <button
+              type="button"
+              onClick={() => handleArchive(term.id, term.term)}
+              disabled={archiveMutation.isPending}
+              className={`${rowAction} hover:bg-surface-2`}
+              title={t("rowActions.archive")}
+              aria-label={t("rowActions.archive")}
+            >
+              <Archive className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            className="h-7 px-2.5 rounded-md border border-hairline bg-surface-1 disabled:opacity-40"
+            type="button"
+            onClick={() => setAuditsTermId(term.id)}
+            className={`${rowAction} hover:bg-surface-2`}
+            title={t("rowActions.viewAuditHistory")}
+            aria-label={t("rowActions.viewAuditHistory")}
           >
-            {t("pagination.next")}
+            <ClockCounterClockwise className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTermToDelete({ id: term.id, term: term.term })}
+            className={`${rowAction} hover:bg-destructive/10 hover:text-destructive`}
+            title={t("rowActions.delete")}
+            aria-label={t("rowActions.delete")}
+          >
+            <Trash className="h-3.5 w-3.5" />
           </button>
         </div>
-      )}
+      ),
+    },
+  ];
+
+  return (
+    <AdminPage>
+      <AdminPageHeader
+        eyebrow={t("header.eyebrow")}
+        eyebrowIcon={<Globe size={14} weight="fill" />}
+        title={t("header.title")}
+        description={t("header.description")}
+        actions={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setIsBulkImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              {t("actions.bulkImportCsv")}
+            </Button>
+            <Button size="sm" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              {t("actions.newTerm")}
+            </Button>
+          </>
+        }
+      />
+
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filters.statusLabel")} />
+
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("filters.searchPlaceholder")}
+        filters={filterFields}
+        count={termsQuery.isPending ? null : totalCount}
+        countLabel={t("list.termCount", { count: totalCount })}
+        isFetching={termsQuery.isFetching && !termsQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "priority", label: t("list.sortFields.priority") },
+            { field: "updated", label: t("list.sortFields.updated") },
+            { field: "created", label: t("list.sortFields.created") },
+            { field: "term", label: t("list.sortFields.term") },
+          ],
+          groupOptions: [
+            { key: "status", label: t("table.status") },
+            { key: "domain", label: t("table.domain") },
+          ],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
+      />
+
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={terms}
+          rowKey={(term) => term.id}
+          isPending={termsQuery.isPending}
+          isError={termsQuery.isError}
+          onRetry={() => void termsQuery.refetch()}
+          empty={{
+            title: t("table.emptyTitle"),
+            description: t("list.emptyDescription"),
+            icon: <Globe size={20} weight="duotone" />,
+          }}
+          groupings={{
+            status: {
+              keyOf: (term) => term.status,
+              label: statusLabel,
+              order: TERM_STATUSES,
+            },
+            domain: {
+              keyOf: (term) => term.businessDomain ?? "",
+              label: (key) => key || t("list.noDomainGroup"),
+            },
+          }}
+          pagination={{ page: state.page, pageCount: totalPages, total: totalCount, pageSize: PAGE_SIZE }}
+          caption={t("header.title")}
+          minWidth={900}
+        />
+      </AdminPanel>
 
       {/* Create Term Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -856,5 +1029,13 @@ export default function AdminGlobalGlossaryPage() {
         </DialogContent>
       </Dialog>
     </AdminPage>
+  );
+}
+
+export default function AdminGlobalGlossaryPage() {
+  return (
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
+      <GlobalGlossaryAdmin />
+    </Suspense>
   );
 }

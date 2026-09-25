@@ -75,6 +75,7 @@ import {
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
+import { CatalogSection } from "./components/catalog-section";
 
 /**
  * The billing API answers "this workspace has no plan" with an explicit error code rather than an
@@ -389,6 +390,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           </BillingButton>
         </div>
       </GridRow>
+
+      {/* G11: the credit packs and add-ons this workspace may buy, priced by the server. */}
+      <CatalogSection workspaceId={workspaceId} />
 
       {activePlans.length > 0 ? (
         <PlanGrid

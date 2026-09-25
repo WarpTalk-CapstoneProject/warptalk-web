@@ -4,11 +4,6 @@
     "title": "Billing",
     "description": "System-wide credits, consumption, and active workspaces."
   },
-  "search": {
-    "placeholder": "Jump to name or ID...",
-    "noWorkspaceFound": "No workspace found matching name \"{term}\"",
-    "searchFailed": "Could not perform workspace name search. Please use a valid Workspace ID."
-  },
   "actions": {
     "exportReport": "Export Report",
     "managePlans": "Manage Plans"
@@ -76,20 +71,9 @@
     "cardTitle": "Global Transactions",
     "filters": {
       "typeLabel": "Type",
-      "allTypesPlaceholder": "All types",
-      "allTypes": "All Types",
       "topUp": "Top Up",
       "consumption": "Consumption",
-      "adjustment": "Adjustment",
-      "fromDate": "From date",
-      "toDate": "To date",
-      "workspaceId": "Workspace ID",
-      "workspaceIdPlaceholder": "Enter ID...",
-      "minAmount": "Min amount (cr)",
-      "minAmountPlaceholder": "e.g. 10",
-      "maxAmount": "Max amount (cr)",
-      "maxAmountPlaceholder": "e.g. 1000",
-      "clear": "Clear"
+      "adjustment": "Adjustment"
     },
     "table": {
       "timestamp": "Timestamp",
@@ -108,15 +92,10 @@
       "consume": "Consume",
       "adjustment": "Adjustment"
     },
-    "view": "View",
-    "pagination": {
-      "loading": "Loading...",
-      "showing": "Showing <strong>{from}–{to}</strong> of <strong>{groups}</strong> grouped sessions (from <strong>{total}</strong> transactions)"
-    }
+    "view": "View"
   },
   "export": {
     "dialogTitle": "Export Billing Report",
-    "dialogDescription": "Exports a 2-sheet Excel file: <strong>Summary</strong> (system metrics + totals) and <strong>Audit Trail</strong> (all transactions on this page with active filters).",
     "stats": {
       "transactions": "Transactions",
       "netTopUp": "Net Top-Up",
@@ -183,5 +162,102 @@
     "loading": "Loading…",
     "noData": "No paid payments in these months.",
     "unavailable": "Not available from this backend yet."
+  },
+  "lists": {
+    "tabsLabel": "Billing sections",
+    "workspacePlaceholder": "Search workspaces…",
+    "creditsUnit": "credits",
+    "ledger": {
+      "searchPlaceholder": "Search descriptions, or paste a transaction id…",
+      "count": "{count, plural, one {# transaction} other {# transactions}}",
+      "filters": {
+        "date": "Date"
+      },
+      "amountPresets": {
+        "over1k": "1,000+ credits",
+        "over10k": "10,000+ credits",
+        "over100k": "100,000+ credits"
+      },
+      "emptyDescription": "Top-ups, consumption and adjustments appear here as they happen."
+    },
+    "export": {
+      "description": "Exports a 2-sheet Excel file: <strong>Summary</strong> (system metrics and totals) and <strong>Audit Trail</strong> — every transaction matching the ledger's current search and filters.",
+      "matching": "{count, plural, one {# transaction will be exported.} other {# transactions will be exported.}}",
+      "truncated": "Only the first {cap} are exported. Narrow the filters to export the rest.",
+      "loading": "Loading the matching transactions…",
+      "failed": "The transactions could not be loaded for export. Close this and try again."
+    },
+    "invoices": {
+      "caption": "Invoices",
+      "searchPlaceholder": "Search by invoice number, or paste an invoice id…",
+      "count": "{count, plural, one {# invoice} other {# invoices}}",
+      "filters": {
+        "status": "Status",
+        "workspace": "Workspace",
+        "currency": "Currency",
+        "issued": "Issued",
+        "total": "Total"
+      },
+      "statuses": {
+        "draft": "Draft",
+        "issued": "Issued",
+        "open": "Open",
+        "paid": "Paid",
+        "void": "Void",
+        "uncollectible": "Uncollectible"
+      },
+      "sort": {
+        "issued": "Issued date",
+        "total": "Total",
+        "due": "Due date"
+      },
+      "columns": {
+        "invoice": "Invoice",
+        "issued": "Issued",
+        "workspace": "Workspace",
+        "status": "Status",
+        "due": "Due",
+        "total": "Total",
+        "actions": "Actions"
+      },
+      "viewReceipt": "View receipt",
+      "stripeInvoice": "Stripe invoice",
+      "emptyTitle": "No invoices yet",
+      "emptyDescription": "Invoices appear here once a workspace pays for a plan or for credits."
+    },
+    "subscriptions": {
+      "title": "Subscriptions have their own page",
+      "description": "Search and filter every workspace subscription, see recurring revenue, and cancel or reactivate a subscription in the subscriptions directory.",
+      "open": "Open subscriptions"
+    },
+    "alerts": {
+      "title": "Fraud & usage alerts",
+      "description": "Workspaces with unusually high credit consumption (more than 50,000 credits in the last 24 hours).",
+      "searchPlaceholder": "Search workspaces by name or id…",
+      "count": "{count, plural, one {# alert} other {# alerts}}",
+      "filters": {
+        "consumption": "24h consumption"
+      },
+      "consumptionPresets": {
+        "over100k": "100,000+ credits",
+        "over500k": "500,000+ credits",
+        "over1m": "1,000,000+ credits"
+      },
+      "sort": {
+        "consumption": "24h consumption",
+        "workspace": "Workspace name"
+      },
+      "columns": {
+        "workspace": "Workspace",
+        "id": "Workspace ID",
+        "reason": "Reason",
+        "consumption": "24h consumption",
+        "actions": "Actions"
+      },
+      "reason": "Unusually high consumption: {credits} credits in 24h",
+      "investigate": "Investigate",
+      "emptyTitle": "No unusual usage",
+      "emptyDescription": "No workspace has consumed more than 50,000 credits in the last 24 hours."
+    }
   }
 }

@@ -79,8 +79,10 @@ const checks = [
   ],
   [
     "the first message waits until this client has joined the hub group",
+    // Both sends — the workspace one and the platform-scope one (a system admin on /admin) —
+    // stream over the same hub group, so both must come after the join, not just the first.
     widget.includes("waitForConversationJoin") &&
-      /await waitForConversationJoin\(convId\);[\s\S]{0,400}sendAssistantMessage\.mutateAsync/.test(
+      /await waitForConversationJoin\(convId\);[\s\S]{0,600}sendPlatformMessage\.mutateAsync[\s\S]{0,200}sendAssistantMessage\.mutateAsync/.test(
         widget,
       ),
   ],

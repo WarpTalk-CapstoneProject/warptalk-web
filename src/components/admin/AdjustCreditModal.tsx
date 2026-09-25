@@ -30,10 +30,17 @@ interface CreditAdjustmentConfirmation {
   reason: string;
 }
 
-export function AdjustCreditModal({ workspaceId }: { workspaceId?: string }) {
+export function AdjustCreditModal({
+  workspaceId,
+  defaultOpen = false,
+}: {
+  workspaceId?: string;
+  /** Open on mount — the admin command palette's "Adjust credit…" lands here with it set. */
+  defaultOpen?: boolean;
+}) {
   const t = useTranslations("adminBillingLedger.adjustCredits");
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [inputWorkspaceId, setInputWorkspaceId] = useState("");

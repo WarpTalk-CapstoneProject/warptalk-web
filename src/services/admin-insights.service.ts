@@ -3,8 +3,11 @@ import { API } from "@/lib/api/endpoints";
 import type {
   BillingInsightsDto,
   BillingSnapshotDto,
+  FxRateStatusDto,
+  FxRefreshResultDto,
   InsightsQuery,
   MeetingsInsightsDto,
+  ProfitAndLossDto,
   UsersInsightsDto,
   WorkspacesInsightsDto,
 } from "@/types/admin-insights";
@@ -41,6 +44,31 @@ export const adminInsightsService = {
     const { data } = await apiClient.get<WorkspacesInsightsDto>(API.adminInsights.workspaces, {
       params: query,
     });
+    return data;
+  },
+
+  getProfitAndLoss: async (query: InsightsQuery): Promise<ProfitAndLossDto> => {
+    const { data } = await apiClient.get<ProfitAndLossDto>(API.adminInsights.pnl, { params: query });
+    return data;
+  },
+
+  getFxRate: async (): Promise<FxRateStatusDto> => {
+    const { data } = await apiClient.get<FxRateStatusDto>(API.adminFx.status);
+    return data;
+  },
+
+  refreshFxRate: async (): Promise<FxRefreshResultDto> => {
+    const { data } = await apiClient.post<FxRefreshResultDto>(API.adminFx.refresh);
+    return data;
+  },
+
+  setFxOverride: async (rate: number): Promise<FxRateStatusDto> => {
+    const { data } = await apiClient.put<FxRateStatusDto>(API.adminFx.override, { rate });
+    return data;
+  },
+
+  clearFxOverride: async (): Promise<FxRateStatusDto> => {
+    const { data } = await apiClient.delete<FxRateStatusDto>(API.adminFx.override);
     return data;
   },
 

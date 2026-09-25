@@ -93,7 +93,9 @@ export function SearchMeetingDialog() {
   const { data, isLoading } = useTranslationRooms({
     search: searchQuery,
     pageSize: 10,
-    status: "SCHEDULED,WAITING,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
+    // OPEN is WT-612 / WT-621: a room the clock opened at its slot. Left out, ⌘K could not find
+    // the one meeting whose door is standing open — the likeliest thing anyone is searching for.
+    status: "SCHEDULED,WAITING,OPEN,IN_PROGRESS,PAUSED,ENDED,CANCELLED,TIMEOUT",
     workspaceId: activeWorkspaceId ?? undefined,
   });
 

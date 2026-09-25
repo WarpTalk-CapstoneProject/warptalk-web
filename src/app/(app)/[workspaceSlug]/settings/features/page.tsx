@@ -32,6 +32,7 @@ type ApiErrorLike = { response?: { status?: number } };
 
 const SOURCE_CHIP_TONE: Record<EntitlementSourceKind, string> = {
   plan: "border-primary/25 bg-primary/10 text-primary",
+  addon: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   contract: "border-hairline bg-surface-2 text-ink",
   platform: "border-hairline bg-surface-2 text-ink-muted",
   workspace: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",

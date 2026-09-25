@@ -45,6 +45,11 @@ export interface AssistantConversationDto {
   createdAt: string;
   lastMessageAt?: string | null;
   isArchived: boolean;
+  /**
+   * Which store the conversation lives in: "workspace", or "platform" for a system admin's
+   * WarpBot in the admin portal. Absent from an older backend, which only had workspace ones.
+   */
+  scope?: "workspace" | "platform";
 }
 
 export interface AssistantConversationDetailDto extends AssistantConversationDto {
@@ -172,6 +177,8 @@ export interface AssistantPluginCatalogItemDto {
    * Whether the workspace the catalog was listed for has this plugin (plugin marketplace,
    * 2026-09-17). `added`: a marketplace plugin the workspace has. `private`: an MCP plugin the
    * workspace's Owner created, visible only there. `not_added`: a member may ask the Owner for it.
+   * `platform_disabled`: WarpTalk turned it off for this workspace — listed only for a member who
+   * already installed it, whose connection is kept but unused.
    * Absent when the catalog was listed without a workspace, or by a server older than the marketplace.
    */
   workspaceAvailability?: WorkspacePluginAvailability | null;
@@ -196,7 +203,7 @@ export interface AssistantPluginCatalogItemDto {
 
 export type PluginAuthMode = "oauth" | "api_key";
 
-export type WorkspacePluginAvailability = "added" | "private" | "not_added";
+export type WorkspacePluginAvailability = "added" | "private" | "not_added" | "platform_disabled";
 
 export type PluginRequestStatus = "pending" | "approved" | "declined";
 
@@ -278,6 +285,12 @@ export interface WorkspacePluginsOverviewDto {
   inWorkspace: WorkspacePluginItemDto[];
   marketplace: WorkspacePluginItemDto[];
   pendingRequests: WorkspacePluginRequestDto[];
+  /**
+   * Plugins this workspace had (on its list, or used by members) that the platform admin has since
+   * turned off here. Not addable; members' connections are kept but unused. Optional for an older
+   * server.
+   */
+  disabledByPlatform?: WorkspacePluginItemDto[];
 }
 
 export interface CreatePrivatePluginRequest {

@@ -66,6 +66,7 @@
   "planEndsOn": "{planName}は{date}に終了します。",
   "noMeetingsScheduled": "予定されているミーティングはありません。",
   "runningNow": "進行中",
+  "openNow": "入室可能",
   "noTimeSet": "時間未設定",
   "counts": { "members": "メンバー", "documents": "ドキュメント", "meetings": "ミーティング" },
   "usageTrend": {

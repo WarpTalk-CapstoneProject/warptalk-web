@@ -183,10 +183,28 @@ export interface RoomOccupancy<T extends ParticipantLike = ParticipantLike> {
  * "0/100" on a finished meeting is arithmetically true and useless: nobody is in a meeting that
  * ended. What a finished meeting has is an ATTENDANCE — how many people turned up — and that is
  * what the pill should carry once the room is over.
+ *
+ * WT-714 added `expired` and `failed`, which were missing for the ordinary reason a list like this
+ * goes wrong: neither status was reachable when it was written. `expired` is now — the sweep
+ * retires a booking nobody attended two hours after its slot — and the omission read at its worst
+ * on exactly that room. Falling through to the live branch, the Tracking panel reported the
+ * server's stale `participantCount` as people who are in the room RIGHT NOW, on a meeting whose
+ * defining property is that nobody ever entered it. `failed` is here for the same reason and is
+ * the more obvious of the two: a room that broke is not one anybody is still sitting in.
+ *
+ * Stated as a set rather than a chain of `===`, because the chain is what let two statuses be
+ * left out of it silently.
  */
+const FINISHED_ROOM_STATUSES: ReadonlySet<string> = new Set([
+  "ended",
+  "cancelled",
+  "expired",
+  "failed",
+  "timeout",
+]);
+
 export function isFinishedStatus(status?: string | null): boolean {
-  const normalized = status?.toLowerCase();
-  return normalized === "ended" || normalized === "cancelled" || normalized === "timeout";
+  return FINISHED_ROOM_STATUSES.has(status?.toLowerCase() ?? "");
 }
 
 export function roomOccupancy<T extends ParticipantLike>(input: {

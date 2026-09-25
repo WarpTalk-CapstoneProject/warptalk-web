@@ -2,6 +2,7 @@
   "status": {
     "scheduled": "予定済み",
     "waiting": "待機中",
+    "open": "オープン",
     "inProgress": "進行中",
     "paused": "一時停止中",
     "ended": "終了",

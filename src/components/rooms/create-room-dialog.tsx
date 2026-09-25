@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { MEETING_TYPES, meetingTypeByValue, isExternalBridge } from "@/lib/meeting/meeting-types";
+import { planBridgeRoomLanguages } from "@/lib/meeting/bridge-far-side-language";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -339,8 +340,24 @@ export function CreateRoomDialog() {
       // declared language (an internal fallback for the audio-route mesh), and the full
       // declared set is sent as targetLanguages.
       const languages = Array.from(new Set(meetingLanguages));
-      const sourceLanguage = languages[0];
-      const targetLanguages = languages;
+      let sourceLanguage = languages[0];
+      let targetLanguages = languages;
+      // A bridge room's second seat is the other side of the external call, and its language is
+      // the only thing that makes the room translate. Positional targets seeded it with the host's
+      // own language (languages[0] is both the source and the first target), so it is now named:
+      // the first declared language that is not the host's, or the workspace-aware default.
+      // Same rule as the desktop's automatic Meet room (lib/meeting/bridge-auto-room).
+      let externalMeetingLanguage: string | undefined;
+      if (bridgeSelected && !editRoomId) {
+        const bridgeLanguages = planBridgeRoomLanguages({
+          speak: sourceLanguage,
+          candidates: languages,
+          allowedLanguages: allowedTargetLanguages ?? [],
+        });
+        sourceLanguage = bridgeLanguages.sourceLanguage;
+        targetLanguages = bridgeLanguages.targetLanguages;
+        externalMeetingLanguage = bridgeLanguages.externalMeetingLanguage;
+      }
 
       if (editRoomId) {
         await updateRoomMutation.mutateAsync({
@@ -380,6 +397,7 @@ export function CreateRoomDialog() {
           translationRoomType: (meetingTypeByValue(meetingTemplate) ?? MEETING_TYPES[0]).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
+          ...(externalMeetingLanguage ? { externalMeetingLanguage } : {}),
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
           // WT-341. Sent only when the host actually chose: RoomSettingsRequest makes every
           // member nullable precisely so "not sent" stays distinguishable from "sent false", and

@@ -130,5 +130,10 @@
       "expired": "Expired",
       "revoked": "Disconnected"
     }
+  },
+  "disabledByPlatform": {
+    "title": "Turned off by WarpTalk",
+    "note": "Not available in this workspace right now",
+    "row": "WarpTalk has turned this plugin off for this workspace. Members' connections are kept, but WarpBot won't use them here."
   }
 }

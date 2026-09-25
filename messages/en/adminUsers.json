@@ -44,7 +44,8 @@
       "roles": "Roles",
       "sessions": "Sessions",
       "lastLogin": "Last Login",
-      "actions": "Actions"
+      "actions": "Actions",
+      "created": "Joined"
     },
     "noRoles": "—",
     "neverSignedIn": "Never signed in",
@@ -58,6 +59,20 @@
       "pageOf": "Page {page} of {totalPages}",
       "previous": "Previous",
       "next": "Next"
+    },
+    "filters": {
+      "role": "Platform role",
+      "platformAdmin": "Platform admin",
+      "signedIn": "Signed in",
+      "neverSignedIn": "Never",
+      "hasSignedIn": "At least once",
+      "lastLogin": "Last login",
+      "created": "Joined"
+    },
+    "sortFields": {
+      "created": "Joined",
+      "name": "Name",
+      "lastLogin": "Last login"
     }
   },
   "detail": {

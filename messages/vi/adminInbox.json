@@ -1,0 +1,156 @@
+{
+  "eyebrow": "Nội bộ",
+  "title": "Hộp việc",
+  "description": "Mọi việc đang chờ đội vận hành nền tảng, đọc trực tiếp từ trang quản lý việc đó. Một mục tự biến mất khi đã được xử lý ở đó.",
+  "refresh": "Làm mới",
+  "tiles": {
+    "open": "Đang mở",
+    "mine": "Giao cho tôi",
+    "unassigned": "Chưa giao",
+    "overdue": "Quá hạn SLA"
+  },
+  "statesAria": "Trạng thái mục",
+  "states": {
+    "open": "Đang mở",
+    "snoozed": "Đã hoãn",
+    "done": "Đã xong"
+  },
+  "scope": {
+    "aria": "Việc của ai",
+    "all": "Tất cả",
+    "mine": "Việc của tôi"
+  },
+  "searchPlaceholder": "Tìm mục, khách hàng, người phụ trách…",
+  "itemCount": "{count, plural, other {# mục}}",
+  "filters": {
+    "type": "Loại",
+    "priority": "Mức ưu tiên",
+    "assignee": "Người phụ trách",
+    "age": "Thời gian chờ",
+    "sla": "SLA",
+    "source": "Nguồn"
+  },
+  "assignee": {
+    "me": "Tôi",
+    "unassigned": "Chưa giao",
+    "someone": "Một nhân viên"
+  },
+  "age": {
+    "today": "Dưới 1 ngày",
+    "days1to3": "1–3 ngày",
+    "days3to7": "3–7 ngày",
+    "week": "Trên 1 tuần"
+  },
+  "sla": {
+    "overdue": "Quá hạn",
+    "dueSoon": "Đến hạn trong 24 giờ",
+    "onTrack": "Đúng hạn",
+    "none": "Không có SLA"
+  },
+  "columns": {
+    "item": "Mục",
+    "customer": "Khách hàng",
+    "age": "Đã chờ",
+    "priority": "Ưu tiên",
+    "due": "Hạn",
+    "assignee": "Người phụ trách"
+  },
+  "unnamedWorkspace": "Không gian làm việc",
+  "ageUnits": {
+    "m": "{count} phút",
+    "h": "{count} giờ",
+    "d": "{count} ngày",
+    "w": "{count} tuần"
+  },
+  "notesCount": "{count, plural, other {# ghi chú}}",
+  "empty": {
+    "open": {
+      "title": "Không có việc đang chờ",
+      "description": "Không có mục nào đang mở trong các khu vực bạn được xem."
+    },
+    "snoozed": {
+      "title": "Không có mục đã hoãn",
+      "description": "Mục đã hoãn tự quay lại vào thời điểm bạn chọn."
+    },
+    "done": {
+      "title": "Chưa có mục nào được đóng thủ công",
+      "description": "Mục tự đóng không hiện ở đây; danh sách này là các mục được đánh dấu xong."
+    }
+  },
+  "sourceUnavailable": "Không đọc được {source} lúc này; các mục của nguồn này đang thiếu trong danh sách.",
+  "sourceTruncated": "{source} có nhiều mục hơn số đã trả về; đang hiện các mục gấp nhất.",
+  "types": {
+    "sales_lead": "Khách hàng tiềm năng mới",
+    "invoice_past_due": "Hoá đơn quá hạn",
+    "invoice_awaiting_payment": "Cần xác nhận thanh toán",
+    "payment_disputed": "Thanh toán bị khiếu nại",
+    "trial_ending": "Sắp hết dùng thử",
+    "subscription_ending": "Gói sắp kết thúc",
+    "subscription_suspended": "Dịch vụ bị tạm ngưng",
+    "provider_incident": "Sự cố nhà cung cấp",
+    "provider_quota": "Hết hạn mức nhà cung cấp (402)",
+    "expense_due": "Khoản chi đến hạn",
+    "staff_invitation": "Lời mời nhân viên",
+    "announcement_scheduled": "Thông báo cần duyệt",
+    "announcement_draft": "Bản nháp bị bỏ quên",
+    "broadcast_failed": "Gửi thông báo thất bại",
+    "dead_letter": "Sự kiện bị dead-letter"
+  },
+  "priorities": {
+    "urgent": "Khẩn cấp",
+    "high": "Cao",
+    "normal": "Bình thường",
+    "low": "Thấp"
+  },
+  "sources": {
+    "billing": "Thanh toán",
+    "providers": "Nhà cung cấp",
+    "expenses": "Chi phí vận hành",
+    "staff": "Nhân viên",
+    "content": "Nội dung",
+    "operations": "Vận hành"
+  },
+  "actionFailed": "Thao tác không thành công. Hãy thử lại.",
+  "toasts": {
+    "assigned": "Đã giao",
+    "unassigned": "Đã bỏ giao",
+    "noteAdded": "Đã thêm ghi chú",
+    "snoozed": "Đã hoãn",
+    "woken": "Đã đưa lại vào hộp việc",
+    "reopened": "Đã mở lại",
+    "done": "Đã đánh dấu xong"
+  },
+  "detail": {
+    "detail": "Chi tiết",
+    "amount": "Số tiền",
+    "waitingSince": "Chờ từ",
+    "closesItself": "Mục này tự rời hộp việc khi được xử lý trên trang của nó.",
+    "closesByHand": "Trang của mục này không tự đóng nó: hãy đánh dấu xong tại đây khi đã xử lý."
+  },
+  "open": "Mở trang xử lý",
+  "triage": {
+    "title": "Phân loại",
+    "assignedTo": "Giao cho",
+    "assignToMe": "Giao cho tôi",
+    "assignTo": "Giao cho…",
+    "unassign": "Bỏ giao",
+    "snoozedUntil": "Hoãn đến {when}",
+    "snooze": "Hoãn đến",
+    "wake": "Bỏ hoãn",
+    "reopen": "Mở lại",
+    "markDone": "Đánh dấu xong"
+  },
+  "snooze": {
+    "laterToday": "3 giờ nữa",
+    "tomorrow": "9:00 ngày mai",
+    "nextWeek": "Thứ Hai tới",
+    "nextMonth": "30 ngày nữa"
+  },
+  "notes": {
+    "title": "Ghi chú nội bộ",
+    "loading": "Đang tải ghi chú…",
+    "empty": "Chưa có ghi chú.",
+    "placeholder": "Đã làm gì, đã liên hệ ai…",
+    "add": "Thêm ghi chú"
+  }
+}

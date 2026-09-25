@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "Đang diễn ra",
+    "open": "Đã mở",
     "waiting": "Đang chờ",
     "scheduled": "Đã lên lịch",
     "ended": "Đã kết thúc",
@@ -171,7 +172,9 @@
   },
   "startedBanner": {
     "title": "Một cuộc họp đã bắt đầu",
+    "openedTitle": "Một cuộc họp đã mở",
     "joinNow": "Tham gia ngay",
+    "setUpAndJoin": "Thiết lập & tham gia",
     "openFromNotifications": "Mở từ thông báo của bạn.",
     "dismissAria": "Đóng"
   },
@@ -258,5 +261,16 @@
     },
     "searching": "Đang tìm cuộc họp...",
     "empty": "Không tìm thấy cuộc họp nào. Hãy thử tên phòng, mã, hoặc một trong các thao tác nhanh ở trên."
+  },
+  "bridgeFarSide": {
+    "label": "Bên kia nói",
+    "ariaLabel": "Bên kia nói {language}. Đổi ngôn ngữ của phía bên kia cuộc gọi",
+    "hint": "Ngôn ngữ phía bên kia cuộc gọi đang nói",
+    "connecting": "Đang kết nối tới WarpTalk…",
+    "notSet": "Chọn",
+    "menuHint": "Lời bạn nói được dịch sang ngôn ngữ này, và lời của họ được dịch sang ngôn ngữ của bạn.",
+    "failed": "Không đổi được ngôn ngữ của phía bên kia",
+    "sameLanguage": "Bạn và phía bên kia đều đang để {language}, nên sẽ không có gì được dịch. Hãy chọn ngôn ngữ họ nói.",
+    "singleLanguageWorkspace": "Không gian làm việc này chỉ cho phép {language}, nên không có ngôn ngữ nào để dịch sang. Hãy nhờ quản trị viên cho phép thêm một ngôn ngữ thứ hai."
   }
 }
