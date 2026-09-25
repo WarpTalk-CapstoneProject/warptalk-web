@@ -89,7 +89,12 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       setUser: (user) => set({ user }),
-      setTokens: (accessToken) => set({ accessToken }),
+      // WT-840: this is the silent-refresh path (persistTokens in api/client.ts), reached
+      // without going through login(). Leaving `isAuthenticated` untouched meant a session that
+      // had been marked false — a network blip misread as a dead session, say — stayed false
+      // forever even once a live access token came back, and anything gating render on that
+      // flag hung on a spinner indefinitely with a perfectly good token sitting right next to it.
+      setTokens: (accessToken) => set({ accessToken, isAuthenticated: true }),
       login: (user, accessToken) => {
         // Before the new identity is installed, not after. Anything still cached at this
         // point was fetched as somebody else, and this is the last instant at which nothing
