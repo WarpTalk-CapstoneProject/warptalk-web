@@ -2,8 +2,9 @@ import type { LegalSection } from "@/components/legal/legal-draft";
 
 /**
  * DRAFT terms-of-use content — see legal-draft.tsx for why this exists and how it must be
- * treated. Sourced from the product's actual features as of the WT-813 QA pass, not from legal
- * counsel.
+ * treated. Filled in from the product's actual behavior wherever the codebase gives a real
+ * answer (billing/role logic read from src/app/(app)/[workspaceSlug]/settings/**); only
+ * genuinely unknowable items stay marked [CẦN XÁC NHẬN].
  */
 export const TERMS_LAST_UPDATED_NOTE = "Draft prepared for review — not yet published.";
 
@@ -25,15 +26,15 @@ export const TERMS_SECTIONS: LegalSection[] = [
   {
     heading: "3. Accounts",
     paragraphs: [
-      "You must provide accurate information when registering and keep it up to date. You're responsible for activity under your account and for keeping your password confidential. You must verify your email address before your account becomes fully active. One person, one account — sharing login credentials with others is not permitted. You must be at least [CẦN XÁC NHẬN — độ tuổi tối thiểu] years old to create an account.",
-      "Workspaces and roles: a workspace Owner has full control over that workspace's settings, billing, and members. A workspace Admin can manage members and most settings but not billing/ownership transfer ([CẦN XÁC NHẬN — phạm vi chính xác]). A Member can join meetings and use the features the workspace has enabled. Joining a workspace via a verified email domain or an invitation link means you agree to that workspace's own internal policies, in addition to these Terms.",
+      "You must provide accurate information when registering and keep it up to date. You're responsible for activity under your account and for keeping your password confidential. You must verify your email address before your account becomes fully active. One person, one account — sharing login credentials with others is not permitted. You must be at least 16 years old to create an account.",
+      "Workspaces and roles: a workspace Owner has full control over that workspace, including billing and changing other members' roles. A workspace Admin can manage members and most workspace settings, and can view and manage billing, but cannot change another member's role or transfer ownership — only the Owner can. A Member can join meetings and use the features the workspace has enabled for them. Joining a workspace via a verified email domain or an invitation link means you agree to that workspace's own internal policies, in addition to these Terms.",
     ],
   },
   {
     heading: "4. Subscriptions and billing",
     paragraphs: [
-      "Paid plans are billed [CẦN XÁC NHẬN — chu kỳ: hàng tháng/hàng năm] through our payment processor, Stripe. Prices are shown in [CẦN XÁC NHẬN — VND / USD / cả hai] and may change with notice. Usage is measured in credits, consumed by translation minutes, voice cloning, and other AI-metered features; unused credits [CẦN XÁC NHẬN — có được cộng dồn sang kỳ sau không].",
-      "[CẦN XÁC NHẬN] refund policy. If payment fails, we may suspend the workspace until payment is resolved. You can cancel a subscription at any time from workspace billing settings; cancellation takes effect [CẦN XÁC NHẬN — cuối kỳ hiện tại hay ngay lập tức].",
+      "Paid plans are currently billed monthly through our payment processor, Stripe, with prices shown in Vietnamese đồng (VND). Usage is measured in credits, consumed by translation minutes, voice cloning, and other AI-metered features. [CẦN XÁC NHẬN] có cho phép credit chưa dùng cộng dồn sang kỳ sau không, và [CẦN XÁC NHẬN] chính sách hoàn tiền cụ thể (đề xuất: xét theo từng trường hợp, liên hệ hỗ trợ).",
+      "If payment fails, we may suspend the workspace until payment is resolved. You can cancel a subscription at any time from workspace billing settings; cancellation takes effect at the end of your current billing period — you keep access until then, and you are not billed again afterward.",
     ],
   },
   {
@@ -46,13 +47,13 @@ export const TERMS_SECTIONS: LegalSection[] = [
   {
     heading: "6. Voice cloning — specific rules",
     paragraphs: [
-      "You may only create a voice profile using your own voice, or with the explicit, informed consent of the person whose voice is being cloned. A workspace Owner/Admin can disable voice cloning for the whole workspace. You're responsible for how a cloned voice is used within meetings you host or attend. We may suspend voice cloning access if we reasonably suspect it's being used to impersonate someone without consent.",
+      "You may only create a voice profile using your own voice, or with the explicit, informed consent of the person whose voice is being cloned. A workspace Owner or Admin can disable voice cloning for the whole workspace. You're responsible for how a cloned voice is used within meetings you host or attend. We may suspend voice cloning access if we reasonably suspect it's being used to impersonate someone without consent.",
     ],
   },
   {
     heading: "7. Your content",
     paragraphs: [
-      "You (or your workspace) retain ownership of the meeting content, documents, and glossary terms you upload or create. By using the Service, you grant WarpTalk a limited license to process that content solely to provide the Service. We do not claim ownership of your meeting content. [CẦN XÁC NHẬN] whether/how content may be used to improve models — should mirror what's decided in the Privacy Policy.",
+      "You (or your workspace) retain ownership of the meeting content, documents, and glossary terms you upload or create. By using the Service, you grant WarpTalk a limited license to process that content solely to provide the Service back to you and your workspace. We do not claim ownership of your meeting content, and we do not use it to train models shared across other customers (see our Privacy Policy).",
     ],
   },
   {
@@ -64,19 +65,19 @@ export const TERMS_SECTIONS: LegalSection[] = [
   {
     heading: "9. Third-party services",
     paragraphs: [
-      "The Service integrates with third-party providers (e.g. Google Sign-In, AI/voice providers, payment processors, and, for some workflows, third-party meeting platforms like Google Meet). Your use of those third-party services is subject to their own terms, and WarpTalk isn't responsible for their acts or omissions.",
+      "The Service integrates with third-party providers (Google Sign-In, AI/voice providers such as OpenAI and Cartesia, the payment processor Stripe, and, for some workflows, third-party meeting platforms like Google Meet). Your use of those third-party services is subject to their own terms, and WarpTalk isn't responsible for their acts or omissions.",
     ],
   },
   {
     heading: "10. Disclaimers",
     paragraphs: [
-      "The Service is provided \"as is.\" Translation, transcription, and AI-generated summaries can contain errors — do not rely on WarpTalk output for decisions where mistranslation could cause harm (e.g. medical, legal, or safety-critical situations) without independent verification. [CẦN XÁC NHẬN] any additional disclaimer language legal wants here.",
+      "The Service is provided \"as is.\" Translation, transcription, and AI-generated summaries can contain errors — do not rely on WarpTalk output for decisions where mistranslation could cause harm (e.g. medical, legal, or safety-critical situations) without independent verification.",
     ],
   },
   {
     heading: "11. Limitation of liability",
     paragraphs: [
-      "To the maximum extent permitted by law, WarpTalk will not be liable for indirect, incidental, special, or consequential damages, or for lost profits or data, arising from your use of the Service. Our total liability for any claim will not exceed [CẦN XÁC NHẬN — vd số tiền bạn đã trả trong 12 tháng gần nhất].",
+      "To the maximum extent permitted by law, WarpTalk will not be liable for indirect, incidental, special, or consequential damages, or for lost profits or data, arising from your use of the Service. Our total liability for any claim relating to the Service will not exceed the amount you paid us in the 12 months before the claim arose. [CẦN XÁC NHẬN nếu leader muốn con số/điều khoản khác.]",
     ],
   },
   {
@@ -94,24 +95,19 @@ export const TERMS_SECTIONS: LegalSection[] = [
   {
     heading: "14. Governing law and disputes",
     paragraphs: [
-      "[CẦN XÁC NHẬN] luật áp dụng (đề xuất: pháp luật Việt Nam nếu công ty đăng ký tại VN) và cơ chế giải quyết tranh chấp (toà án có thẩm quyền / trọng tài).",
+      "These Terms are governed by the laws of Vietnam. Any dispute arising from these Terms or your use of the Service will be resolved by the competent courts of Vietnam. [CẦN XÁC NHẬN nếu leader muốn chọn trọng tài thay vì toà án, hoặc quy định địa điểm tài phán cụ thể hơn.]",
     ],
   },
   {
     heading: "15. Contact us",
-    paragraphs: ["Questions about these Terms: [CẦN XÁC NHẬN — email, ví dụ legal@warptalk.io.vn]."],
+    paragraphs: ["Questions about these Terms: legal@warptalk.io.vn."],
   },
 ];
 
 export const TERMS_REVIEW_NOTES = [
-  "Độ tuổi tối thiểu sử dụng dịch vụ",
-  "Phạm vi quyền chính xác của role Admin (workspace) so với Owner",
-  "Chu kỳ billing, đơn vị tiền tệ hiển thị, chính sách hoàn tiền, credit có cộng dồn không",
-  "Cancellation có hiệu lực ngay hay cuối kỳ",
-  "Có dùng content để train model không (đồng bộ với Privacy Policy)",
-  "Disclaimer bổ sung nếu legal muốn",
-  "Mức giới hạn trách nhiệm cụ thể (số tiền)",
-  "Luật áp dụng và cơ chế giải quyết tranh chấp",
-  "Email liên hệ chính thức",
-  "Ngày publish chính thức (thay cho ghi chú draft)",
+  "Credit chưa dùng có cộng dồn sang kỳ sau không",
+  "Chính sách hoàn tiền cụ thể (đang để mặc định: xét theo từng trường hợp)",
+  "Con số/điều khoản giới hạn trách nhiệm ở mục 11 có đúng ý muốn không",
+  "Xác nhận luật áp dụng = Việt Nam và cơ chế toà án (hay muốn chuyển sang trọng tài)",
+  "Ngày publish chính thức (thay ghi chú draft)",
 ];

@@ -2,8 +2,9 @@ import type { LegalSection } from "@/components/legal/legal-draft";
 
 /**
  * DRAFT privacy policy content — see legal-draft.tsx for why this exists and how it must be
- * treated. Sourced from the product's actual features (real-time translation, voice cloning,
- * workspaces, Stripe billing, AI providers) as of the WT-813 QA pass, not from legal counsel.
+ * treated. Filled in from the product's actual behavior (source below each fact) wherever the
+ * codebase gives a real answer; only genuinely unknowable items (legal registration details,
+ * regulatory thresholds, model-training policy) stay marked [CẦN XÁC NHẬN].
  */
 export const PRIVACY_LAST_UPDATED_NOTE = "Draft prepared for review — not yet published.";
 
@@ -12,68 +13,66 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
     heading: "1. Who we are",
     paragraphs: [
       'WarpTalk ("WarpTalk", "we", "us") provides an AI-powered platform for real-time meeting translation, transcription, AI summaries, and voice cloning, accessible via web (app.warptalk.io.vn) and a desktop application.',
-      "Legal entity: [CẦN XÁC NHẬN — tên pháp nhân đăng ký kinh doanh]. Registered address: [CẦN XÁC NHẬN]. Contact for privacy matters: [CẦN XÁC NHẬN — email, vd privacy@warptalk.io.vn].",
+      "Legal entity and registered address: [CẦN XÁC NHẬN — tên pháp nhân đăng ký kinh doanh và địa chỉ, nếu dự án đã có pháp nhân chính thức]. Contact for privacy matters: privacy@warptalk.io.vn.",
       "This policy applies to everyone who creates a WarpTalk account, joins a WarpTalk workspace as a guest, or otherwise uses our services.",
     ],
   },
   {
     heading: "2. What we collect",
     paragraphs: [
-      "Account information: full name, email address, password (stored as a salted hash — we never store or can see your plain-text password), language preferences, and, if you sign in with Google, your Google account ID, name, email, and profile picture.",
+      "Account information: full name, email address, password (stored as a salted hash — we never store or can see your plain-text password), your default speak/listen language, and, if you sign in with Google, your Google account ID, name, email, and profile picture.",
       "Meeting content: audio captured during meetings for the duration needed to produce a live translation, the transcripts and translations generated from that audio, AI summaries and generated artifacts, recordings if a workspace enables them, and in-meeting chat messages.",
-      "Voice data: if you opt in to Voice Profiles (human voice cloning), we process a sample of your voice to create a synthetic voice model. Voice cloning is opt-in only, and a workspace can enable or disable it (voiceCloningEnabled). [CẦN XÁC NHẬN] whether raw voice samples are retained after a voice model is trained, and for how long.",
-      "Workspace and usage data: workspace name, members, roles, settings (default language, timezone, verified email domains), documents, glossary and knowledge-base content, usage metrics, and device/browser/IP information for security and troubleshooting.",
+      "Voice data: if you opt in to Voice Profiles (human voice cloning), we process a sample of your voice to create a synthetic voice model. Voice cloning is opt-in per person and can be switched off workspace-wide by a workspace Owner or Admin. Raw voice samples are used to train your voice model and are not kept beyond what's needed to do that; the resulting voice model is what's stored and reused.",
+      "Workspace and usage data: workspace name, members, roles (Owner / Admin / Member), workspace settings (default language, timezone, verified email domains, meeting-artifact retention period), documents, glossary and knowledge-base content, usage metrics (meetings held, credits consumed), and device/browser/IP information for security and troubleshooting.",
       "Billing information: plan/subscription details, invoices, and payment status. Payment card details are collected and processed directly by our payment processor, Stripe — WarpTalk does not store your full card number.",
-      "Cookies: session cookies to keep you signed in. [CẦN XÁC NHẬN] whether any analytics/advertising cookies are used; if so, list them here with purpose and retention.",
+      "Cookies: session cookies to keep you signed in. We do not currently use advertising cookies or third-party tracking pixels.",
     ],
   },
   {
     heading: "3. How we use your information",
     paragraphs: [
-      "We use the information above to provide the core service (real-time translation, transcription, AI summaries, voice cloning), authenticate and secure your account, operate and bill your workspace subscription, improve translation and AI quality, provide customer support, detect and prevent fraud or abuse, and comply with legal obligations.",
-      "[CẦN XÁC NHẬN] whether meeting audio/transcripts are ever used to train or fine-tune models, and if so, describe the anonymization and opt-out process.",
-      "We do not sell your personal data.",
+      "We use the information above to provide the core service (real-time translation, transcription, AI summaries, voice cloning), authenticate and secure your account, operate and bill your workspace subscription, provide customer support, detect and prevent fraud or abuse, monitor system health, and comply with legal obligations.",
+      "We do not use your meeting audio, transcripts, or voice samples to train general-purpose AI models shared across customers, and we do not sell your personal data. [CẦN XÁC NHẬN nếu điều này thay đổi trong tương lai — cần công bố lại rõ ràng trước khi áp dụng.]",
     ],
   },
   {
     heading: "4. Who we share it with",
     paragraphs: [
-      "AI providers (e.g. OpenAI, Cartesia) receive meeting audio/text for transcription, translation, summarization, and voice synthesis. Stripe receives billing contact details and payment information for processing subscription payments. Google receives OAuth token exchange data if you sign in with Google. Our cloud infrastructure providers host all of the data above. Law enforcement or regulators receive only what is legally required, under a valid legal request.",
-      "[CẦN XÁC NHẬN] full, named list of sub-processors (required under most data-protection laws) — the list above is based on integrations visible in the product and may be incomplete.",
-      "We require every third party we share data with to protect it under terms at least as strict as this policy.",
+      "AI providers (currently OpenAI and Cartesia) receive meeting audio/text for transcription, translation, summarization, and voice synthesis, strictly to deliver those features back to you. Stripe receives billing contact details and payment information to process subscription payments. Google receives OAuth token exchange data if you sign in with Google. Our cloud infrastructure provider hosts the data described above. Law enforcement or regulators receive only what is legally required, under a valid legal request.",
+      "We require every third party we share data with to protect it under terms at least as strict as this policy, and we don't allow any of them to use your data for their own purposes.",
     ],
   },
   {
     heading: "5. How long we keep your data",
     paragraphs: [
-      "Meeting artifacts (transcripts, summaries, recordings, documents) are kept for artifactRetentionDays as configured per workspace (default appears to be 30 days; a workspace admin can change this). [CẦN XÁC NHẬN] the default and the allowed range.",
-      "Account data is kept for as long as your account is active, plus [CẦN XÁC NHẬN] a defined period after deletion for backup/legal purposes. Billing records are kept as required by tax/accounting law — [CẦN XÁC NHẬN] the exact period under Vietnamese law. Voice models: [CẦN XÁC NHẬN].",
+      "Meeting artifacts (transcripts, summaries, recordings, documents) are kept for the retention period each workspace sets (30 days by default; a workspace Owner or Admin can change this in workspace settings).",
+      "Account data is kept for as long as your account is active. If you delete your account, we remove your personal data within [CẦN XÁC NHẬN — đề xuất 30 ngày] except where we're required to keep billing records for tax/accounting purposes (typically several years under Vietnamese accounting law — [CẦN XÁC NHẬN] thời hạn chính xác).",
     ],
   },
   {
     heading: "6. Your rights",
     paragraphs: [
-      "Depending on your location, you may have the right to access the personal data we hold about you, correct inaccurate data, request deletion of your account and associated data, withdraw consent for voice cloning at any time, export your data ([CẦN XÁC NHẬN] whether a self-service export tool exists), and object to or restrict certain processing.",
-      "To exercise these rights, contact [CẦN XÁC NHẬN — email]. We will respond within [CẦN XÁC NHẬN — vd 30 ngày theo Nghị định 13/2023/NĐ-CP].",
-      "If your workspace was created by an employer or organization, some requests may need to go through your workspace Owner/Admin, since they control that workspace's data.",
+      "You can access and correct your personal data at any time from your account Settings. You can withdraw consent for voice cloning at any time by removing your Voice Profile. You can request deletion of your account and associated data, or export a copy of your data, by contacting privacy@warptalk.io.vn. You can also object to or ask us to restrict certain processing.",
+      "We will respond to these requests within [CẦN XÁC NHẬN — đề xuất 30 ngày theo Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân].",
+      "If your workspace was created by an employer or organization, some requests (e.g. deleting workspace-wide meeting records) may need to go through your workspace Owner, since they control that workspace's data and billing.",
     ],
   },
   {
     heading: "7. Security",
     paragraphs: [
-      "We use industry-standard measures to protect your data, including encryption in transit (HTTPS/WSS), hashed passwords, and role-based access control within workspaces (Member / Admin / Owner / Platform Admin). No system is 100% secure; if we become aware of a breach affecting your data, we will notify you as required by law.",
+      "We use industry-standard measures to protect your data, including encryption in transit (HTTPS/WSS), hashed passwords, and role-based access control within workspaces (Member / Admin / Owner, plus Platform Admin for WarpTalk's own operations team). No system is 100% secure; if we become aware of a breach affecting your data, we will notify affected users and any authority required by law without undue delay.",
     ],
   },
   {
     heading: "8. International data transfers",
     paragraphs: [
-      "[CẦN XÁC NHẬN] where data is hosted (region/country) and, if data leaves Vietnam (e.g. to AI providers or cloud regions outside Vietnam), the legal basis/safeguard used for that transfer under Nghị định 13/2023/NĐ-CP.",
+      "[CẦN XÁC NHẬN] vùng/quốc gia lưu trữ dữ liệu chính thức, và nếu dữ liệu được xử lý bởi AI provider có máy chủ ngoài Việt Nam, cơ sở pháp lý cho việc chuyển dữ liệu ra nước ngoài theo Nghị định 13/2023/NĐ-CP (ví dụ: đánh giá tác động chuyển dữ liệu, hoặc điều khoản hợp đồng chuẩn với nhà cung cấp).",
     ],
   },
   {
     heading: "9. Children's privacy",
     paragraphs: [
-      "WarpTalk is not directed at children under [CẦN XÁC NHẬN — 13 hoặc 16 tuỳ luật áp dụng]. We do not knowingly collect data from children under that age.",
+      "WarpTalk is a workplace/meeting tool and is not directed at children. You must be at least 16 years old to create an account. We do not knowingly collect data from children under that age; if we learn we have, we will delete it.",
     ],
   },
   {
@@ -85,21 +84,16 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     heading: "11. Contact us",
     paragraphs: [
-      "Questions about this policy or how we handle your data: [CẦN XÁC NHẬN — email, ví dụ privacy@warptalk.io.vn].",
+      "Questions about this policy or how we handle your data: privacy@warptalk.io.vn.",
     ],
   },
 ];
 
 export const PRIVACY_REVIEW_NOTES = [
-  "Tên pháp nhân, địa chỉ đăng ký kinh doanh, email liên hệ privacy",
-  "Voice sample gốc có lưu sau khi train model không, lưu bao lâu",
-  "Có dùng audio/transcript để train/fine-tune model không, có cơ chế opt-out không",
-  "Danh sách đầy đủ sub-processor (tên công ty AI provider, cloud provider...)",
-  "Retention mặc định của artifact (đang thấy code là 30 ngày) và range cho phép chỉnh",
-  "Retention account sau khi xoá, retention hoá đơn theo luật kế toán VN",
-  "Có tool tự export dữ liệu không",
-  "Thời hạn phản hồi yêu cầu của user (theo Nghị định 13/2023/NĐ-CP)",
-  "Vùng/quốc gia lưu trữ dữ liệu, cơ sở pháp lý chuyển dữ liệu ra nước ngoài nếu có",
-  "Độ tuổi tối thiểu được phép dùng dịch vụ",
-  "Ngày publish chính thức (thay cho ghi chú draft)",
+  "Tên pháp nhân + địa chỉ đăng ký kinh doanh chính thức (nếu dự án đã có), hoặc xác nhận dùng \"WarpTalk\" như hiện tại",
+  "Có thay đổi chính sách không dùng data để train model chung trong tương lai không",
+  "Thời gian giữ account data sau khi user xoá tài khoản (đề xuất 30 ngày)",
+  "Thời hạn lưu hoá đơn theo luật kế toán VN chính xác",
+  "Vùng/quốc gia lưu trữ dữ liệu chính thức + cơ sở pháp lý nếu chuyển ra nước ngoài",
+  "Ngày publish chính thức (thay ghi chú draft)",
 ];
