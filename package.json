@@ -256,7 +256,7 @@
     "test:download-blob": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/ui/__tests__/download-blob.test.ts",
     "test:apply-selected-workspace": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/apply-selected-workspace.test.ts",
     "test:workspace-slug": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/workspace/__tests__/workspace-slug.test.ts",
-    "test:sentence-flow": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/sentence-flow.test.ts src/lib/transcript/__tests__/merged-correction.test.ts",
+    "test:sentence-flow": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/transcript/__tests__/sentence-flow.test.ts src/lib/transcript/__tests__/merged-correction.test.ts src/lib/transcript/__tests__/clean-transcript.test.ts",
     "test:profile-status": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/voice/__tests__/profile-status.test.ts",
     "test:clone-failure": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/voice/__tests__/clone-failure.test.ts",
     "test:post-login-destination": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test src/lib/auth/__tests__/post-login-destination.test.ts",
