@@ -45,6 +45,18 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     ],
   },
   {
+    id: "inbox",
+    kind: "page",
+    href: "/admin/inbox",
+    labelKey: "inbox",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "inbox", "pending", "to do", "todo", "tasks", "queue", "waiting", "work", "assigned", "follow up", "sla",
+      "hộp việc", "việc cần xử lý", "việc đang chờ", "công việc", "hàng đợi", "cần làm",
+      "受信トレイ", "保留", "タスク", "対応待ち",
+    ],
+  },
+  {
     id: "workspaces",
     kind: "page",
     href: "/admin/workspaces",
@@ -103,6 +115,19 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
       "top up", "top-up", "refund", "usage alerts", "balance",
       "hoá đơn", "hóa đơn", "sổ cái", "giao dịch", "thanh toán", "tín dụng", "nạp tiền", "số dư", "công nợ", "hoàn tiền",
       "請求", "請求書", "台帳", "取引", "支払い", "クレジット",
+    ],
+  },
+  {
+    id: "operatingCosts",
+    kind: "page",
+    href: "/admin/finance/expenses",
+    labelKey: "operatingCosts",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: [
+      "operating costs", "expenses", "expense", "costs", "opex", "budget", "budgets", "vendors", "receipts", "salaries",
+      "servers", "saas", "profit and loss", "p&l", "net result", "finance",
+      "chi phí", "chi phí vận hành", "ngân sách", "nhà cung cấp", "hoá đơn chi", "lương", "lãi lỗ", "tài chính",
+      "経費", "運営費", "予算", "損益", "財務",
     ],
   },
   {
@@ -256,6 +281,30 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
  * once and then removes, so a reload does not reopen the dialog.
  */
 export const ADMIN_PALETTE_ACTIONS: readonly AdminPaletteEntry[] = [
+  {
+    id: "myInbox",
+    kind: "action",
+    href: "/admin/inbox?scope=mine",
+    labelKey: "myInbox",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["my inbox", "assigned to me", "my tasks", "việc của tôi", "giao cho tôi", "自分の担当"],
+  },
+  {
+    id: "recordExpense",
+    kind: "action",
+    href: "/admin/finance/expenses?action=record-expense",
+    labelKey: "recordExpense",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["record expense", "add expense", "new expense", "log cost", "ghi chi phí", "thêm chi phí", "経費登録"],
+  },
+  {
+    id: "importExpenses",
+    kind: "action",
+    href: "/admin/finance/expenses?tab=import",
+    labelKey: "importExpenses",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["import expenses", "upload csv", "expense csv", "nhập chi phí", "nhập csv", "経費インポート"],
+  },
   {
     id: "adjustCredit",
     kind: "action",
@@ -457,6 +506,8 @@ export const ADMIN_SEARCHABLE_LISTS: readonly { id: string; href: string; labelK
   { id: "globalGlossary", href: "/admin/global-glossary", labelKey: "globalGlossary" },
   { id: "plugins", href: "/admin/plugins", labelKey: "plugins" },
   { id: "staff", href: "/admin/staff", labelKey: "staff" },
+  { id: "inbox", href: "/admin/inbox", labelKey: "inbox" },
+  { id: "operatingCosts", href: "/admin/finance/expenses", labelKey: "operatingCosts" },
 ];
 
 export function listSearchHref(href: string, query: string): string {

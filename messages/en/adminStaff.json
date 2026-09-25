@@ -182,11 +182,13 @@
     "accounts": "Accounts",
     "meetings": "Meetings",
     "billing": "Billing",
+    "finance": "Finance",
     "plugins": "Plugins",
     "content": "Content",
     "glossary": "Glossary",
     "settings": "Settings",
     "operations": "Operations",
+    "inbox": "Inbox",
     "audit": "Audit",
     "staff": "Staff",
     "assistant": "WarpBot"

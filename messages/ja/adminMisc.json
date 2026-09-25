@@ -322,7 +322,22 @@
       "staff_role_created": "スタッフロールを作成",
       "staff_role_updated": "スタッフロールを編集",
       "staff_role_duplicated": "スタッフロールを複製",
-      "staff_role_deleted": "スタッフロールを削除"
+      "staff_role_deleted": "スタッフロールを削除",
+      "expense_created": "経費を記録",
+      "expense_updated": "経費を更新",
+      "expense_deleted": "経費を削除",
+      "expense_marked_paid": "経費を支払済みに",
+      "expense_imported": "経費をインポート",
+      "expense_receipt_attached": "領収書を添付",
+      "expense_receipt_removed": "領収書を削除",
+      "expense_category_created": "経費カテゴリを作成",
+      "expense_category_updated": "経費カテゴリを更新",
+      "expense_budget_set": "予算を設定",
+      "inbox_assigned": "項目を割り当て",
+      "inbox_snoozed": "項目をスヌーズ",
+      "inbox_done": "項目を完了",
+      "inbox_reopened": "項目を再開",
+      "inbox_note_added": "項目にメモを追加"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -347,7 +362,11 @@
       "fx_rate": "為替レート",
       "staff_member": "スタッフ",
       "staff_role": "スタッフロール",
-      "staff_invitation": "スタッフ招待"
+      "staff_invitation": "スタッフ招待",
+      "operating_expense": "運営経費",
+      "expense_category": "経費カテゴリ",
+      "expense_budget": "経費予算",
+      "inbox_item": "受信トレイ項目"
     },
     "sources": {
       "workspace_service": "ワークスペース",

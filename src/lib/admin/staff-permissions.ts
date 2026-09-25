@@ -20,11 +20,13 @@ export type PermissionArea =
   | "accounts"
   | "meetings"
   | "billing"
+  | "finance"
   | "plugins"
   | "content"
   | "glossary"
   | "settings"
   | "operations"
+  | "inbox"
   | "audit"
   | "staff"
   | "assistant";
@@ -34,11 +36,13 @@ export const PERMISSION_AREAS: readonly PermissionArea[] = [
   "accounts",
   "meetings",
   "billing",
+  "finance",
   "plugins",
   "content",
   "glossary",
   "settings",
   "operations",
+  "inbox",
   "audit",
   "staff",
   "assistant",
@@ -74,6 +78,10 @@ export const ADMIN_PERMISSIONS = {
   staffRead: "staff.read",
   staffManage: "staff.manage",
   warpbotUse: "warpbot.use",
+  financeRead: "finance.read",
+  financeManage: "finance.manage",
+  inboxRead: "inbox.read",
+  inboxManage: "inbox.manage",
 } as const;
 
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[keyof typeof ADMIN_PERMISSIONS];
@@ -146,6 +154,9 @@ export const ADMIN_ROUTE_PERMISSIONS: readonly { href: string; permission: Admin
   { href: "/admin/global-glossary", permission: ADMIN_PERMISSIONS.glossaryRead },
   { href: "/admin/staff", permission: ADMIN_PERMISSIONS.staffRead },
   { href: "/admin/roles", permission: ADMIN_PERMISSIONS.staffRead },
+  // G12 internal management. The inbox shows each person only the sources their role can read.
+  { href: "/admin/inbox", permission: ADMIN_PERMISSIONS.inboxRead },
+  { href: "/admin/finance", permission: ADMIN_PERMISSIONS.financeRead },
 ];
 
 function routeEntryFor(pathname: string) {
@@ -190,6 +201,9 @@ export const ADMIN_PALETTE_ACTION_PERMISSIONS: Readonly<Record<string, AdminPerm
   newSalesLeads: ADMIN_PERMISSIONS.billingRead,
   inviteStaff: ADMIN_PERMISSIONS.staffManage,
   createRole: ADMIN_PERMISSIONS.staffManage,
+  recordExpense: ADMIN_PERMISSIONS.financeManage,
+  importExpenses: ADMIN_PERMISSIONS.financeManage,
+  myInbox: ADMIN_PERMISSIONS.inboxRead,
 };
 
 export function canUsePaletteEntry(

@@ -322,7 +322,22 @@
       "staff_role_created": "Staff role created",
       "staff_role_updated": "Staff role edited",
       "staff_role_duplicated": "Staff role duplicated",
-      "staff_role_deleted": "Staff role deleted"
+      "staff_role_deleted": "Staff role deleted",
+      "expense_created": "Expense recorded",
+      "expense_updated": "Expense updated",
+      "expense_deleted": "Expense deleted",
+      "expense_marked_paid": "Expense marked paid",
+      "expense_imported": "Expenses imported",
+      "expense_receipt_attached": "Receipt attached",
+      "expense_receipt_removed": "Receipt removed",
+      "expense_category_created": "Expense category created",
+      "expense_category_updated": "Expense category updated",
+      "expense_budget_set": "Budgets set",
+      "inbox_assigned": "Inbox item assigned",
+      "inbox_snoozed": "Inbox item snoozed",
+      "inbox_done": "Inbox item closed",
+      "inbox_reopened": "Inbox item reopened",
+      "inbox_note_added": "Inbox note added"
     },
     "entities": {
       "workspace": "Workspace",
@@ -347,7 +362,11 @@
       "fx_rate": "Exchange rate",
       "staff_member": "Staff member",
       "staff_role": "Staff role",
-      "staff_invitation": "Staff invitation"
+      "staff_invitation": "Staff invitation",
+      "operating_expense": "Operating expense",
+      "expense_category": "Expense category",
+      "expense_budget": "Expense budget",
+      "inbox_item": "Inbox item"
     },
     "sources": {
       "workspace_service": "Workspace",

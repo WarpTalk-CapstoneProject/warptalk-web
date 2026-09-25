@@ -133,7 +133,10 @@
       "lockedAccounts": "Xem tài khoản bị khoá",
       "newSalesLeads": "Xem khách hàng tiềm năng mới",
       "inviteStaff": "Mời nhân viên",
-      "createRole": "Tạo vai trò nhân sự"
+      "createRole": "Tạo vai trò nhân sự",
+      "myInbox": "Việc của tôi",
+      "recordExpense": "Ghi một khoản chi",
+      "importExpenses": "Nhập chi phí từ CSV"
     }
   }
 }
