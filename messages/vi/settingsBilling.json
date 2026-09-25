@@ -124,7 +124,7 @@
   },
   "frozen": {
     "kept": "Đã giữ lại {credits} credit — gia hạn để dùng tiếp",
-    "keptDetail": "Gói đăng ký của bạn đã hết hạn vào {date}. Credit bạn đã mua và credit của gói trong hạn mức chuyển tiếp được giữ lại, và sẽ được trả lại ngay khi bạn gia hạn.",
+    "keptDetail": "Gói đăng ký của bạn đã hết hạn vào {date}. Số credit này được giữ lại cho bạn và sẽ được trả lại ngay khi bạn gia hạn.",
     "dormant": "Số credit này đã chờ từ {date}; chúng vẫn thuộc về bạn và vẫn được trả lại khi bạn gia hạn.",
     "pendingTitle": "Credit từ gói trước",
     "pendingDescription": "{credits} credit được giữ lại từ gói đăng ký trước đang được cộng vào gói này."
