@@ -1,0 +1,156 @@
+{
+  "status": {
+    "scheduled": "Scheduled",
+    "waiting": "Waiting",
+    "open": "Open",
+    "inProgress": "In Progress",
+    "paused": "Paused",
+    "ended": "Ended",
+    "cancelled": "Cancelled",
+    "expired": "Expired",
+    "failed": "Failed",
+    "timeout": "Timed Out"
+  },
+  "presence": {
+    "inRoom": "In Room",
+    "connected": "Connected",
+    "lobby": "Waiting in Lobby",
+    "notInRoom": "Not in room",
+    "disconnected": "Disconnected",
+    "left": "Left"
+  },
+  "loading": "Loading room…",
+  "copiedSuffix": "{label} copied",
+  "editRoom": "Edit room",
+  "startingLabel": "Starting...",
+  "startError": "Could not start the meeting.",
+  "occupancyNoun": {
+    "attended": "attended",
+    "inRoom": "in room"
+  },
+  "outdatedLink": {
+    "message": "This meeting link is out of date, so we can't open the room from it. Open the meeting from your Meetings list, or ask whoever invited you to share it again.",
+    "goToMeetings": "Go to Meetings"
+  },
+  "noAccess": {
+    "message": "You don't have access to this room yet. If a teammate shared this link with you, you can ask the host to let you in.",
+    "asking": "Asking…",
+    "askToJoin": "Ask to join",
+    "joinError": "This room is not available to join.",
+    "participantFallback": "Participant"
+  },
+  "people": {
+    "panelTitle": "People",
+    "participantsCount": "Participants: {label}",
+    "noneInvited": "No one else invited yet.",
+    "groupCount": "{label}: {count}",
+    "groups": {
+      "waitingToBeAdmitted": "Waiting to be admitted",
+      "inRoom": "In room",
+      "attended": "Attended",
+      "left": "Left",
+      "accepted": "Accepted",
+      "awaitingReply": "Awaiting reply",
+      "didNotAttend": "Did not attend",
+      "notInRoom": "Not in room"
+    },
+    "role": {
+      "host": "Host",
+      "invitee": "Invitee"
+    },
+    "unnamedParticipant": "Unnamed participant",
+    "currentUser": "Current user"
+  },
+  "record": {
+    "heading": "Meeting record",
+    "sectionsAriaLabel": "Meeting record sections",
+    "tabs": {
+      "recap": "Recap",
+      "minutes": "Minutes",
+      "artifacts": "Artifacts"
+    },
+    "expand": {
+      "showDetails": "Show the meeting details again",
+      "giveFullWidth": "Give the record the full width",
+      "collapse": "Collapse the record",
+      "expand": "Expand the record"
+    },
+    "writingUp": {
+      "title": "Still writing this up",
+      "body": "The transcript and the AI summary are produced after a meeting ends — usually within a minute. This page updates on its own."
+    },
+    "sharing": {
+      "badgePublished": "Published",
+      "badgeDraft": "Draft",
+      "badgeSharedByHost": "Shared by host",
+      "badgeNotSharedYet": "Not shared yet",
+      "actionUnpublish": "Unpublish",
+      "actionPublish": "Publish to participants",
+      "messageHostShared": "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
+      "messageHostDraft": "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
+      "messageParticipantWithheld": "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
+      "badgeScheduledHost": "Shares when the meeting ends",
+      "badgeScheduledParticipant": "Shared when the meeting ends",
+      "messageScheduled": "Everyone who took part will be able to read the transcript, AI summary and recording as soon as the meeting ends. Keep it private if this meeting should stay with you.",
+      "actionKeepPrivate": "Keep private",
+      "saving": "Saving…",
+      "toastUnpublished": "Record unpublished. Only you can see it now.",
+      "toastKeptPrivate": "Record kept private. It will not be shared when the meeting ends.",
+      "toastPublished": "Record published. Everyone who took part can read it.",
+      "toastShareChangeFailed": "Could not change who this record is shared with."
+    },
+    "seekUnavailable": {
+      "unalignable": "You can watch this recording, but jumping to a moment is not available for it — this meeting was transcribed before WarpTalk started recording where a video's timeline begins.",
+      "multiple": "This meeting has more than one recording, so jumping to a moment is not available yet — a timestamp cannot be matched to the right file."
+    },
+    "recordingFailure": {
+      "all": "This meeting was recorded, but the recording failed — no video file was produced, so there is nothing to watch or download.",
+      "some": "Part of this meeting's recording failed — one of its recordings produced no video file. The recordings that were saved are still available."
+    },
+    "toasts": {
+      "momentNotInTranscript": "That moment is not in the saved transcript.",
+      "momentHasNoLine": "That moment has no line in the transcript.",
+      "momentScrollFailed": "Could not scroll to that moment in the transcript.",
+      "versionNotWritten": "That version could not be written.",
+      "readLanguageFailed": "Could not read this meeting in that language.",
+      "versionNotArrived": "That version has not arrived. Try again.",
+      "rewriteFailed": "Could not rewrite the summary.",
+      "rewriteFailureReason": "The summary could not be rewritten.",
+      "rewriting": "Rewriting the summary…"
+    }
+  },
+  "notes": {
+    "heading": "Room notes",
+    "placeholderEditable": "Add agenda, context, decisions, or review notes...",
+    "placeholderReadOnly": "No room notes yet.",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "toolbar": {
+      "textStyle": "Aa",
+      "text": "Text",
+      "heading1": "Heading 1",
+      "heading2": "Heading 2",
+      "heading3": "Heading 3",
+      "bold": "Bold",
+      "italic": "Italic",
+      "underline": "Underline",
+      "strikethrough": "Strikethrough",
+      "quote": "Quote",
+      "inlineCode": "Inline code",
+      "codeBlock": "Code block",
+      "bulletList": "Bullet list",
+      "numberedList": "Numbered list",
+      "link": "Link",
+      "linkPlaceholder": "Paste a link...",
+      "apply": "Apply"
+    }
+  },
+  "actionsMenu": {
+    "moreActions": "More actions",
+    "copyInviteLink": "Copy invite link",
+    "inviteLinkLabel": "Invite link",
+    "downloadIcs": "Download .ics",
+    "addToGoogleCalendar": "Add to Google Calendar",
+    "endMeeting": "End meeting"
+  }
+}

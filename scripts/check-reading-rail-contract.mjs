@@ -28,6 +28,7 @@ const sync = read("src/components/rooms/transcript-reading-sync.tsx");
 const player = read("src/components/rooms/meeting-record-panels.tsx");
 const roomDetail = read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx");
 const logic = read("src/lib/transcript/document-reading.ts");
+const meetingSummaryEn = JSON.parse(read("messages/en/meetingSummary.json"));
 
 // ── The measure: characters, never a percentage ─────────────────────────────
 
@@ -194,12 +195,15 @@ assert.doesNotMatch(
   "Every summary point must render in the rail. A point with no moment loses its jump, not its "
     + "place in the document.",
 );
+// "no moment recorded" moved into i18n (t("claim.noMoment")) — assert the rail still calls that
+// key, and the English catalog still carries the wording.
 assert.match(
   rail,
-  /no moment recorded/,
+  /claim\.atMs === null \? t\("claim\.noMoment"\) : formatCitationTime\(claim\.atMs\)/,
   "A point with no moment must say so in place of a timestamp, so it cannot be mistaken for one "
     + "the transcript vouches for.",
 );
+assert.equal(meetingSummaryEn.claim?.noMoment, "no moment recorded");
 assert.match(
   rail,
   /uncitedCount/,
@@ -291,13 +295,28 @@ assert.match(
 );
 assert.match(
   rail,
-  /<optgroup label="Available">[\s\S]*<optgroup label="Can be written">/,
+  /<optgroup label=\{t\("languageGroups\.available"\)\}>[\s\S]*<optgroup label=\{t\("languageGroups\.canBeWritten"\)\}>/,
   "Readable and writable languages are offered as two separate groups.",
+);
+assert.equal(
+  meetingSummaryEn.languageGroups?.available,
+  "Available",
+  "The English catalog must still call the readable group \"Available\".",
+);
+assert.equal(
+  meetingSummaryEn.languageGroups?.canBeWritten,
+  "Can be written",
+  "The English catalog must still call the generatable group \"Can be written\".",
 );
 assert.match(
   rail,
-  /<option value="">As spoken<\/option>/,
+  /<option value="">\{t\("asSpoken"\)\}<\/option>/,
   "\"As spoken\" is always offered, ahead of both groups.",
+);
+assert.equal(
+  meetingSummaryEn.asSpoken,
+  "As spoken",
+  "The English catalog must still call the transcript-language option \"As spoken\".",
 );
 assert.match(
   rail,

@@ -200,6 +200,13 @@ function BillingLedgerPage() {
   const t = useTranslations("adminBillingLedger");
   const router = useRouter();
   const pathname = usePathname();
+  // This page is mounted at both /admin/billing (inside the system-admin portal's own layout,
+  // src/app/(app)/admin/layout.tsx) and the legacy /billing (src/app/(internal)/layout.tsx,
+  // its own separate sidebar). A hardcoded "/billing/..." link would always jump OUT of
+  // whichever layout is currently showing, which is what silently swapped the sidebar out from
+  // under an admin browsing from /admin/billing. Staying on the same base keeps the sidebar the
+  // person is already looking at.
+  const basePath = pathname.startsWith("/admin") ? "/admin/billing" : "/billing";
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
@@ -271,7 +278,7 @@ function BillingLedgerPage() {
         description={t("header.description")}
         actions={
           <>
-            <Link href="/billing/plans">
+            <Link href={`${basePath}/plans`}>
               <Button variant="outline" className="rounded-md h-9 px-4">
                 <Settings className="mr-2 h-4 w-4 text-primary" />{" "}
                 {t("actions.managePlans")}
@@ -362,7 +369,7 @@ function BillingLedgerPage() {
         </TabsContent>
 
         <TabsContent value="ledger" className="mt-2 outline-none">
-          <LedgerTab metrics={metrics} exportOpen={isExportOpen} onExportOpenChange={setIsExportOpen} />
+          <LedgerTab metrics={metrics} exportOpen={isExportOpen} onExportOpenChange={setIsExportOpen} basePath={basePath} />
         </TabsContent>
 
         <TabsContent value="invoices" className="mt-2 outline-none">
@@ -385,10 +392,12 @@ function LedgerTab({
   metrics,
   exportOpen,
   onExportOpenChange,
+  basePath,
 }: {
   metrics: GlobalBillingMetricsDto | undefined;
   exportOpen: boolean;
   onExportOpenChange: (open: boolean) => void;
+  basePath: string;
 }) {
   const t = useTranslations("adminBillingLedger");
   const list = useAdminListState(LEDGER_LIST_CONFIG);
@@ -512,7 +521,7 @@ function LedgerTab({
       header: t("ledger.table.workspace"),
       cell: (log) =>
         log.workspaceId ? (
-          <Link href={`/billing/workspace/${log.workspaceId}`} className="block hover:opacity-80 transition-opacity">
+          <Link href={`${basePath}/workspace/${log.workspaceId}`} className="block hover:opacity-80 transition-opacity">
             <IdBadge id={log.workspaceId} type="workspace" name={log.workspaceName} />
           </Link>
         ) : (

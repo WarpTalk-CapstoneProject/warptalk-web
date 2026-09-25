@@ -34,8 +34,27 @@ export const NOT_AVAILABLE_NOTE = "Not available yet";
 /** What a row says when workspace-service could not name the workspace. The link still uses the id. */
 export const UNKNOWN_WORKSPACE = "Unknown workspace";
 
-export function workspaceLabel(name: string | null | undefined): string {
-  return name?.trim() || UNKNOWN_WORKSPACE;
+/**
+ * Translator shape matching `useTranslations("adminOps.insights")` from next-intl. Optional and
+ * defaulted to the pre-catalog English strings throughout this file, same convention as
+ * `getPlanDescription` in `src/lib/utils.ts` — see `.agents/page-docs/i18n-localization.md`. The
+ * page (`insights-dashboard.tsx`) passes the real translator; the node tests here call every
+ * function without one and get the exact English wording they have always pinned.
+ */
+export type InsightsTranslator = (key: string, values?: Record<string, string | number>) => string;
+
+/** `t(key, values)` when a translator was given, else the English `fallback` — never invented text. */
+function say(
+  t: InsightsTranslator | undefined,
+  key: string,
+  fallback: string,
+  values?: Record<string, string | number>,
+): string {
+  return t ? t(key, values) : fallback;
+}
+
+export function workspaceLabel(name: string | null | undefined, t?: InsightsTranslator): string {
+  return name?.trim() || say(t, "common.unknownWorkspace", UNKNOWN_WORKSPACE);
 }
 
 /** Joins the parts that say something, " · " between them; null when none does. */
@@ -78,16 +97,21 @@ export function deltaTone(delta: InsightsDelta, higherIsBetter: boolean): DeltaT
   return (delta.direction === "up") === higherIsBetter ? "success" : "danger";
 }
 
-export function deltaText(delta: InsightsDelta): string {
+export function deltaText(delta: InsightsDelta, t?: InsightsTranslator): string {
   switch (delta.kind) {
     case "none":
-      return "no figure last period";
+      return say(t, "delta.noFigure", "no figure last period");
     case "flat":
-      return "no change";
-    case "fromZero":
-      return `${delta.direction === "up" ? "▲" : "▼"} from 0`;
-    case "change":
-      return `${delta.direction === "up" ? "▲" : "▼"} ${delta.percent.toFixed(1)}%`;
+      return say(t, "delta.noChange", "no change");
+    case "fromZero": {
+      const arrow = delta.direction === "up" ? "▲" : "▼";
+      return say(t, "delta.fromZero", `${arrow} from 0`, { arrow });
+    }
+    case "change": {
+      const arrow = delta.direction === "up" ? "▲" : "▼";
+      const percent = delta.percent.toFixed(1);
+      return say(t, "delta.change", `${arrow} ${percent}%`, { arrow, percent });
+    }
   }
 }
 
@@ -172,38 +196,61 @@ export function valueTone(id: string, value: number | null | undefined): ValueTo
 /** "yesterday 4,480,000 ₫" plus whatever today's and yesterday's notes say. */
 export function revenueTodaySub(
   snapshot: Pick<BillingSnapshotDto, "revenueToday" | "revenueTodayNote" | "revenueYesterday" | "revenueYesterdayNote">,
+  t?: InsightsTranslator,
 ): string {
+  const yesterdayValue = formatInsightValue(snapshot.revenueYesterday, "money");
   return joinNotes(
-    snapshot.revenueToday === null && !snapshot.revenueTodayNote ? "today cannot be totalled" : snapshot.revenueTodayNote,
-    `yesterday ${formatInsightValue(snapshot.revenueYesterday, "money")}`,
-    snapshot.revenueYesterdayNote ? `yesterday ${snapshot.revenueYesterdayNote}` : null,
+    snapshot.revenueToday === null && !snapshot.revenueTodayNote
+      ? say(t, "revenueToday.cannotTotal", "today cannot be totalled")
+      : snapshot.revenueTodayNote,
+    say(t, "revenueToday.yesterday", `yesterday ${yesterdayValue}`, { value: yesterdayValue }),
+    snapshot.revenueYesterdayNote
+      ? say(t, "revenueToday.yesterdayNote", `yesterday ${snapshot.revenueYesterdayNote}`, { note: snapshot.revenueYesterdayNote })
+      : null,
   ) as string;
 }
 
-export function mrrSub(snapshot: Pick<BillingSnapshotDto, "mrr" | "mrrNote">): string {
-  return snapshot.mrrNote?.trim() || (snapshot.mrr === null ? "Cannot be totalled in VND" : "Monthly recurring revenue");
+export function mrrSub(snapshot: Pick<BillingSnapshotDto, "mrr" | "mrrNote">, t?: InsightsTranslator): string {
+  return (
+    snapshot.mrrNote?.trim() ||
+    (snapshot.mrr === null ? say(t, "mrr.cannotTotal", "Cannot be totalled in VND") : say(t, "mrr.note", "Monthly recurring revenue"))
+  );
 }
 
-export function churnSub(churn: BillingSnapshotDto["churnRateMonth"]): string {
+export function churnSub(churn: BillingSnapshotDto["churnRateMonth"], t?: InsightsTranslator): string {
   return joinNotes(
-    `${formatCount(churn.cancelled)} cancelled / ${formatCount(churn.atMonthStart)} at month start`,
-    churn.rate === null ? "no rate without paying subscriptions at month start" : null,
+    say(
+      t,
+      "churn.breakdown",
+      `${formatCount(churn.cancelled)} cancelled / ${formatCount(churn.atMonthStart)} at month start`,
+      { cancelled: formatCount(churn.cancelled), atMonthStart: formatCount(churn.atMonthStart) },
+    ),
+    churn.rate === null ? say(t, "churn.noRate", "no rate without paying subscriptions at month start") : null,
   ) as string;
 }
 
-export function outstandingSub(invoices: BillingSnapshotDto["outstandingInvoices"]): string {
+export function outstandingSub(invoices: BillingSnapshotDto["outstandingInvoices"], t?: InsightsTranslator): string {
   return joinNotes(
-    `${formatCount(invoices.count)} ${invoices.count === 1 ? "invoice" : "invoices"}`,
-    `${formatCount(invoices.pastDueCount)} past due`,
-    invoices.amountNote ?? (invoices.amount === null ? "amount cannot be totalled in VND" : null),
+    say(t, "outstanding.invoiceCount", `${formatCount(invoices.count)} ${invoices.count === 1 ? "invoice" : "invoices"}`, {
+      count: invoices.count,
+    }),
+    say(t, "outstanding.pastDueCount", `${formatCount(invoices.pastDueCount)} past due`, { count: invoices.pastDueCount }),
+    invoices.amountNote ?? (invoices.amount === null ? say(t, "outstanding.cannotTotal", "amount cannot be totalled in VND") : null),
   ) as string;
 }
 
 /** "N,NNN ₫ outstanding", or what is known when the amount could not be totalled. */
-function outstandingAmountText(invoices: BillingSnapshotDto["outstandingInvoices"]): string {
-  return invoices.amount === null
-    ? `Amount not totalled${invoices.amountNote ? ` (${invoices.amountNote})` : ""}`
-    : `${formatInsightValue(invoices.amount, "money")} outstanding`;
+function outstandingAmountText(invoices: BillingSnapshotDto["outstandingInvoices"], t?: InsightsTranslator): string {
+  if (invoices.amount === null) {
+    if (invoices.amountNote) {
+      return say(t, "outstanding.amountNotTotalledWithNote", `Amount not totalled (${invoices.amountNote})`, {
+        note: invoices.amountNote,
+      });
+    }
+    return say(t, "outstanding.amountNotTotalled", "Amount not totalled");
+  }
+  const value = formatInsightValue(invoices.amount, "money");
+  return say(t, "outstanding.amountOutstanding", `${value} outstanding`, { value });
 }
 
 // ── Cartesia ─────────────────────────────────────────────────────────────────
@@ -340,7 +387,7 @@ export interface PeriodCardView {
   note: string | null;
 }
 
-export function periodCardView(spec: PeriodCardSpec, sources: PeriodSources): PeriodCardView {
+export function periodCardView(spec: PeriodCardSpec, sources: PeriodSources, t?: InsightsTranslator): PeriodCardView {
   const source = sources[spec.source];
   const metric = findMetric(source, spec.id);
   if (!metric) {
@@ -354,7 +401,7 @@ export function periodCardView(spec: PeriodCardSpec, sources: PeriodSources): Pe
       delta: { kind: "none" },
       deltaTone: "neutral",
       valueTone: "neutral",
-      note: NOT_AVAILABLE_NOTE,
+      note: say(t, "common.notAvailable", NOT_AVAILABLE_NOTE),
     };
   }
   const delta = computeDelta(metric.value, metric.previous);
@@ -362,7 +409,7 @@ export function periodCardView(spec: PeriodCardSpec, sources: PeriodSources): Pe
   if (spec.id === "payments") {
     const failed = findMetric(source, "failedPayments");
     if (failed?.value != null) {
-      const failedNote = `${formatCount(failed.value)} failed`;
+      const failedNote = say(t, "periodCards.failedCount", `${formatCount(failed.value)} failed`, { count: failed.value });
       note = note ? `${failedNote} · ${note}` : failedNote;
     }
   }
@@ -483,22 +530,24 @@ const plural = (count: number, one: string, many: string) =>
  * a source that did not answer adds nothing and is named in `unavailable` instead, so "nothing
  * needs attention" is only ever said when every source actually said so.
  */
-export function assembleNeedsAttention(input: AttentionInputs): AttentionResult {
+export function assembleNeedsAttention(input: AttentionInputs, t?: InsightsTranslator): AttentionResult {
   const items: AttentionItem[] = [];
   const unavailable: string[] = [];
   const { snapshot, links } = input;
 
   // Monitoring that could not be read is not an outage — it is a source we could not ask.
   if (!input.health || !input.health.monitoringAvailable) {
-    unavailable.push("system health");
+    unavailable.push(say(t, "common.systemHealth", "system health"));
   } else {
     const down = input.health.targets.filter((target) => !target.isUp);
     if (down.length > 0) {
       items.push({
         key: "targets-down",
-        title: `${plural(down.length, "service", "services")} not answering`,
+        title: say(t, "needsAttention.targetsDown", `${plural(down.length, "service", "services")} not answering`, {
+          count: down.length,
+        }),
         detail: down.slice(0, 3).map((target) => target.job).join(", ") + (down.length > 3 ? ", …" : ""),
-        tag: "Health",
+        tag: say(t, "needsAttention.tagHealth", "Health"),
         tone: "danger",
         href: links.health,
       });
@@ -506,9 +555,9 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
     for (const alert of input.health.alerts.filter((a) => a.state.toLowerCase() === "firing")) {
       items.push({
         key: `alert-${alert.name}`,
-        title: `Alert firing: ${alert.name}`,
-        detail: alert.summary ?? `Severity ${alert.severity}`,
-        tag: "Health",
+        title: say(t, "needsAttention.alertFiring", `Alert firing: ${alert.name}`, { name: alert.name }),
+        detail: alert.summary ?? say(t, "needsAttention.severity", `Severity ${alert.severity}`, { severity: alert.severity }),
+        tag: say(t, "needsAttention.tagHealth", "Health"),
         tone: alert.severity.toLowerCase() === "critical" ? "danger" : "warning",
         href: links.health,
       });
@@ -519,23 +568,36 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
     const invoices = snapshot.outstandingInvoices;
     if (invoices && invoices.pastDueCount > 0) {
       // A past-due invoice always belongs to a workspace; a null name means it could not be looked up.
-      const oldest = invoices.oldestPastDueDays != null
-        ? [workspaceLabel(invoices.oldestPastDueWorkspace), plural(invoices.oldestPastDueDays, "day", "days")]
-        : [];
+      const oldestWorkspace = invoices.oldestPastDueDays != null ? workspaceLabel(invoices.oldestPastDueWorkspace, t) : null;
+      const oldestDays =
+        invoices.oldestPastDueDays != null
+          ? say(t, "needsAttention.days", plural(invoices.oldestPastDueDays, "day", "days"), { count: invoices.oldestPastDueDays })
+          : null;
       items.push({
         key: "invoices-past-due",
-        title: `${plural(invoices.pastDueCount, "invoice", "invoices")} past due`,
-        detail: oldest.length ? `Oldest: ${oldest.join(" · ")}` : outstandingAmountText(invoices),
-        tag: "Past due",
+        title: say(t, "needsAttention.invoicesPastDue", `${plural(invoices.pastDueCount, "invoice", "invoices")} past due`, {
+          count: invoices.pastDueCount,
+        }),
+        detail:
+          oldestWorkspace !== null && oldestDays !== null
+            ? say(t, "needsAttention.oldest", `Oldest: ${oldestWorkspace} · ${oldestDays}`, {
+                workspace: oldestWorkspace,
+                days: oldestDays,
+              })
+            : outstandingAmountText(invoices, t),
+        tag: say(t, "needsAttention.tagPastDue", "Past due"),
         tone: "danger",
         href: null,
       });
     } else if (invoices && invoices.count > 0) {
+      const amount = outstandingAmountText(invoices, t);
       items.push({
         key: "invoices-open",
-        title: `${plural(invoices.count, "invoice", "invoices")} awaiting payment`,
-        detail: `${outstandingAmountText(invoices)}, none past due`,
-        tag: "Invoices",
+        title: say(t, "needsAttention.invoicesAwaiting", `${plural(invoices.count, "invoice", "invoices")} awaiting payment`, {
+          count: invoices.count,
+        }),
+        detail: say(t, "needsAttention.noneOfPastDue", `${amount}, none past due`, { amount }),
+        tag: say(t, "needsAttention.tagInvoices", "Invoices"),
         tone: "warning",
         href: null,
       });
@@ -543,9 +605,11 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
     if (snapshot.pastDue > 0) {
       items.push({
         key: "subscriptions-past-due",
-        title: `${plural(snapshot.pastDue, "subscription", "subscriptions")} past due`,
-        detail: "Payment failed or overdue on renewal",
-        tag: "Past due",
+        title: say(t, "needsAttention.subscriptionsPastDue", `${plural(snapshot.pastDue, "subscription", "subscriptions")} past due`, {
+          count: snapshot.pastDue,
+        }),
+        detail: say(t, "needsAttention.subscriptionsPastDueDetail", "Payment failed or overdue on renewal"),
+        tag: say(t, "needsAttention.tagPastDue", "Past due"),
         tone: "danger",
         href: null,
       });
@@ -553,42 +617,58 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
     if (snapshot.suspended > 0) {
       items.push({
         key: "subscriptions-suspended",
-        title: `${plural(snapshot.suspended, "subscription", "subscriptions")} suspended`,
-        detail: "AI services are paused until the subscription is resumed",
-        tag: "Suspended",
+        title: say(
+          t,
+          "needsAttention.subscriptionsSuspended",
+          `${plural(snapshot.suspended, "subscription", "subscriptions")} suspended`,
+          { count: snapshot.suspended },
+        ),
+        detail: say(t, "needsAttention.subscriptionsSuspendedDetail", "AI services are paused until the subscription is resumed"),
+        tag: say(t, "needsAttention.tagSuspended", "Suspended"),
         tone: "danger",
         href: links.subscriptions,
       });
     }
   } else {
-    unavailable.push("invoices and subscriptions");
+    unavailable.push(say(t, "common.invoicesAndSubscriptions", "invoices and subscriptions"));
   }
 
   if (input.suspendedWorkspaces === undefined) {
-    unavailable.push("suspended workspaces");
+    unavailable.push(say(t, "common.suspendedWorkspaces", "suspended workspaces"));
   } else if (input.suspendedWorkspaces > 0) {
     // The old Overview's banner, folded in. Its point still stands: nothing lifts a suspension on
     // its own, so it stays on this list until somebody acts.
     items.push({
       key: "workspaces-suspended",
-      title: `${plural(input.suspendedWorkspaces, "workspace", "workspaces")} suspended`,
-      detail: "Each stays closed until an admin reactivates it",
-      tag: "Suspended",
+      title: say(t, "needsAttention.workspacesSuspended", `${plural(input.suspendedWorkspaces, "workspace", "workspaces")} suspended`, {
+        count: input.suspendedWorkspaces,
+      }),
+      detail: say(t, "needsAttention.workspacesSuspendedDetail", "Each stays closed until an admin reactivates it"),
+      tag: say(t, "needsAttention.tagSuspended", "Suspended"),
       tone: "danger",
       href: links.suspendedWorkspaces,
     });
   }
 
   if (input.deadLetters === undefined) {
-    unavailable.push("event outbox");
+    unavailable.push(say(t, "common.eventOutbox", "event outbox"));
   } else if (input.deadLetters.length > 0) {
     const count = input.deadLetters.length;
     const newest = input.deadLetters[0];
+    const title = input.deadLettersCapped
+      ? say(t, "needsAttention.deadLetterEventsCapped", `${formatCount(count)}+ dead-letter events`, { count })
+      : say(t, "needsAttention.deadLetterEvents", `${formatCount(count)} dead-letter ${count === 1 ? "event" : "events"}`, { count });
+    const attempts = say(t, "needsAttention.attempts", plural(newest.attemptCount, "attempt", "attempts"), {
+      count: newest.attemptCount,
+    });
     items.push({
       key: "dead-letters",
-      title: `${input.deadLettersCapped ? `${formatCount(count)}+` : formatCount(count)} dead-letter ${count === 1 && !input.deadLettersCapped ? "event" : "events"}`,
-      detail: `${newest.eventType} · ${plural(newest.attemptCount, "attempt", "attempts")}`,
-      tag: "Outbox",
+      title,
+      detail: say(t, "needsAttention.attemptsDetail", `${newest.eventType} · ${plural(newest.attemptCount, "attempt", "attempts")}`, {
+        eventType: newest.eventType,
+        attempts,
+      }),
+      tag: say(t, "needsAttention.tagOutbox", "Outbox"),
       tone: "warning",
       href: links.deadLetters,
     });
@@ -608,14 +688,20 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
         reason: alert.reason ?? null,
       }));
   if (highUsage === undefined) {
-    unavailable.push("usage alerts");
+    unavailable.push(say(t, "common.usageAlerts", "usage alerts"));
   } else {
     for (const alert of highUsage) {
+      const workspace = workspaceLabel(alert.workspaceName, t);
       items.push({
         key: `usage-${alert.workspaceId}`,
-        title: `High usage: ${workspaceLabel(alert.workspaceName)}`,
-        detail: [`${formatCount(alert.credits)} credits in 24h`, alert.reason].filter(Boolean).join(" · "),
-        tag: "Usage",
+        title: say(t, "needsAttention.highUsageTitle", `High usage: ${workspace}`, { workspace }),
+        detail: [
+          say(t, "needsAttention.highUsageCredits", `${formatCount(alert.credits)} credits in 24h`, { credits: formatCount(alert.credits) }),
+          alert.reason,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        tag: say(t, "needsAttention.tagUsage", "Usage"),
         tone: "warning",
         href: links.workspace(alert.workspaceId),
       });
@@ -623,13 +709,15 @@ export function assembleNeedsAttention(input: AttentionInputs): AttentionResult 
   }
 
   if (input.newSalesLeads === undefined) {
-    unavailable.push("sales leads");
+    unavailable.push(say(t, "common.salesLeads", "sales leads"));
   } else if (input.newSalesLeads > 0) {
     items.push({
       key: "sales-leads",
-      title: `${plural(input.newSalesLeads, "new sales lead", "new sales leads")}`,
-      detail: "Waiting for a reply",
-      tag: "Leads",
+      title: say(t, "needsAttention.newSalesLeads", `${plural(input.newSalesLeads, "new sales lead", "new sales leads")}`, {
+        count: input.newSalesLeads,
+      }),
+      detail: say(t, "needsAttention.salesLeadsDetail", "Waiting for a reply"),
+      tag: say(t, "needsAttention.tagLeads", "Leads"),
       tone: "success",
       href: links.newSalesLeads,
     });

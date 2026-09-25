@@ -9,12 +9,13 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), "utf8");
 }
 
-const [layout, overview, sidebar, appLayout, commonEn] = await Promise.all([
+const [layout, overview, sidebar, appLayout, commonEn, adminOpsEn] = await Promise.all([
   source("src/app/(app)/admin/layout.tsx"),
   source("src/app/(app)/admin/page.tsx"),
   source("src/components/layout/linear-sidebar.tsx"),
   source("src/app/(app)/layout.tsx"),
   source("messages/en/common.json").then(JSON.parse),
+  source("messages/en/adminOps.json").then(JSON.parse),
 ]);
 
 assert.match(layout, /useIsSystemAdmin/, "admin layout must enforce the system-admin gate");
@@ -46,7 +47,16 @@ assert.match(overview, /getUsageAlerts/, "insights must keep the usage alerts wh
 assert.match(dashboard, /assembleNeedsAttention\(/, "insights must assemble Needs attention");
 // A source that errors must degrade to "not available", not take the page down.
 assert.match(overview, /isError \? \{ status: "unavailable" \}/, "an errored source must render as unavailable");
-assert.match(dashboard, /NOT_AVAILABLE_NOTE/, "unavailable sources must say so");
+// NOT_AVAILABLE_NOTE moved into i18n on the dashboard side (t("common.notAvailable")) — it still
+// exists in insights-metrics.ts as the untranslated default, but the dashboard now renders the
+// translated key. Assert both: the dashboard calls the key, and the English catalog still
+// carries the "not available" wording it renders when unavailable.
+assert.match(dashboard, /t\("common\.notAvailable"\)/, "unavailable sources must say so");
+assert.equal(
+  adminOpsEn.insights?.common?.notAvailable,
+  "Not available yet",
+  "the English catalog must still carry the 'not available' wording",
+);
 // i18n: these labels render through t("adminNav.items.*") rather than as literal source text —
 // see messages/en/common.json for the English wording each assertion below still pins.
 const adminNavItems = commonEn.sidebar?.adminNav?.items ?? {};

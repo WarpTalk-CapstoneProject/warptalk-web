@@ -20,6 +20,7 @@ import {
   type Participant,
 } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   INITIAL_STICKY_SPEAKER,
@@ -111,6 +112,7 @@ export function LiveKitMeetingStage({
   bottomInset?: number;
   onRetry: () => void;
 }) {
+  const t = useTranslations("meetingCallChrome.stage");
   const connectionState = useConnectionState();
   const room = useMaybeRoomContext();
   // Read once for the whole stage. `renderTile` is a nested function, so it cannot call the hook
@@ -352,7 +354,7 @@ export function LiveKitMeetingStage({
             />
             {isThumbnail ? null : (
               <div className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[12px] font-medium text-ink-muted">
-                Camera is off
+                {t("cameraOff")}
               </div>
             )}
           </div>
@@ -366,7 +368,7 @@ export function LiveKitMeetingStage({
           {isFeatured ? (
             <span
               className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-primary shadow-sm backdrop-blur"
-              title={isSpotlight ? "Spotlighted by host" : "Pinned"}
+              title={isSpotlight ? t("spotlightedByHost") : t("pinned")}
             >
               {isSpotlight ? (
                 <Star className="h-3.5 w-3.5" weight="fill" />
@@ -435,7 +437,7 @@ export function LiveKitMeetingStage({
             playsInline
           />
           <div className="absolute left-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
-            You are presenting
+            {t("presenting")}
           </div>
         </div>
 
@@ -583,7 +585,7 @@ export function LiveKitMeetingStage({
       </p>
       <p className="mt-1 flex items-center gap-2 text-[13px] text-ink-subtle">
         {isJoining && <SpinnerGap className="h-3.5 w-3.5 animate-spin" />}
-        {error || liveKitStateLabel(connectionState)}
+        {error || liveKitStateLabel(connectionState, t)}
       </p>
       {error && (
         <button
@@ -591,18 +593,21 @@ export function LiveKitMeetingStage({
           onClick={onRetry}
           className="mt-4 rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-surface-2 shadow-sm"
         >
-          Retry connection
+          {t("retryConnection")}
         </button>
       )}
     </div>
   );
 }
 
-function liveKitStateLabel(state: ConnectionState) {
-  if (state === ConnectionState.Connected) return "Connected";
-  if (state === ConnectionState.Connecting) return "Connecting";
-  if (state === ConnectionState.Reconnecting) return "Reconnecting";
-  return "Waiting for LiveKit";
+function liveKitStateLabel(
+  state: ConnectionState,
+  t: ReturnType<typeof useTranslations>,
+) {
+  if (state === ConnectionState.Connected) return t("connectionState.connected");
+  if (state === ConnectionState.Connecting) return t("connectionState.connecting");
+  if (state === ConnectionState.Reconnecting) return t("connectionState.reconnecting");
+  return t("connectionState.waiting");
 }
 
 function gridClassName(count: number) {

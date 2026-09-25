@@ -65,6 +65,47 @@ export type RecordSharingView = {
 };
 
 /**
+ * Translator shape shared with `getPlanDescription`/`buildFeatureList` (src/lib/utils.ts),
+ * matching `useTranslations("meetingRoomPage.record.sharing")` from next-intl. Optional and
+ * defaulted below so `describeRecordSharing`'s existing callers — and this file's own
+ * node:test suite, which asserts the literal English strings — keep working unchanged. See
+ * `.agents/page-docs/i18n-localization.md` for the pattern.
+ */
+type RecordSharingTranslator = (key: string) => string;
+
+const DEFAULT_RECORD_SHARING_TEXT: Record<string, string> = {
+  badgePublished: "Published",
+  badgeDraft: "Draft",
+  badgeSharedByHost: "Shared by host",
+  badgeNotSharedYet: "Not shared yet",
+  actionUnpublish: "Unpublish",
+  actionPublish: "Publish to participants",
+  // Says what changed and what still can: after sharing, every later edit is an edit to
+  // something other people have already read.
+  messageHostShared:
+    "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
+  // Names who is NOT seeing it. The screen said nothing at all before, so a host had no
+  // reason to think the record was private and every reason to assume it was not.
+  messageHostDraft:
+    "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
+  // "Unauthorized" was the old answer and it is the wrong sentence for the case that
+  // actually happens: somebody who WAS in the meeting, reading the record of the meeting
+  // they attended. It reads as a broken product rather than as a decision the host owns.
+  messageParticipantWithheld:
+    "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
+  // WT-826: a record that is not shared yet but will be the moment the meeting ends.
+  badgeScheduledHost: "Shares when the meeting ends",
+  badgeScheduledParticipant: "Shared when the meeting ends",
+  messageScheduled:
+    "Everyone who took part will be able to read the transcript, AI summary and recording as soon as the meeting ends. Keep it private if this meeting should stay with you.",
+  actionKeepPrivate: "Keep private",
+};
+
+function defaultRecordSharingText(key: string): string {
+  return DEFAULT_RECORD_SHARING_TEXT[key] ?? key;
+}
+
+/**
  * WT-826: whether this record will be shared by the room itself when the meeting ends.
  *
  * Only while the meeting is still running, only when it is not already shared, and only when the
@@ -95,6 +136,7 @@ export function describeRecordSharing({
   isHost,
   isEnded,
   autoShareRecord,
+  t = defaultRecordSharingText,
 }: {
   artifactAccess?: string | null;
   isHost: boolean;
@@ -105,6 +147,7 @@ export function describeRecordSharing({
   isEnded?: boolean;
   /** WT-826: the room's "share automatically" toggle, as the server reports it. */
   autoShareRecord?: boolean | null;
+  t?: RecordSharingTranslator;
 }): RecordSharingView {
   const shared = isRecordShared(artifactAccess);
 
@@ -114,15 +157,14 @@ export function describeRecordSharing({
   if (sharesWhenMeetingEnds({ artifactAccess, isEnded, autoShareRecord })) {
     return isHost
       ? {
-          badge: "Shares when the meeting ends",
+          badge: t("badgeScheduledHost"),
           tone: "scheduled",
-          message:
-            "Everyone who took part will be able to read the transcript, AI summary and recording as soon as the meeting ends. Keep it private if this meeting should stay with you.",
-          action: "Keep private",
+          message: t("messageScheduled"),
+          action: t("actionKeepPrivate"),
           nextLevel: ARTIFACT_ACCESS.hostOnly,
         }
       : {
-          badge: "Shared when the meeting ends",
+          badge: t("badgeScheduledParticipant"),
           tone: null,
           message: null,
           action: null,
@@ -133,23 +175,17 @@ export function describeRecordSharing({
   if (isHost) {
     return shared
       ? {
-          badge: "Published",
+          badge: t("badgePublished"),
           tone: "shared",
-          // Says what changed and what still can: after sharing, every later edit is an edit to
-          // something other people have already read.
-          message:
-            "Everyone who took part can read this record. You can still edit it — changes show up for them straight away.",
-          action: "Unpublish",
+          message: t("messageHostShared"),
+          action: t("actionUnpublish"),
           nextLevel: ARTIFACT_ACCESS.hostOnly,
         }
       : {
-          badge: "Draft",
+          badge: t("badgeDraft"),
           tone: "draft",
-          // Names who is NOT seeing it. The screen said nothing at all before, so a host had no
-          // reason to think the record was private and every reason to assume it was not.
-          message:
-            "Only you can see this record. Publish it to share the transcript, AI summary and recording with everyone who took part.",
-          action: "Publish to participants",
+          message: t("messageHostDraft"),
+          action: t("actionPublish"),
           nextLevel: ARTIFACT_ACCESS.allParticipants,
         };
   }
@@ -158,15 +194,11 @@ export function describeRecordSharing({
   // nothing worth saying: they can simply read it, and a banner explaining that they are allowed
   // to read what is in front of them is noise.
   return shared
-    ? { badge: "Shared by host", tone: null, message: null, action: null, nextLevel: null }
+    ? { badge: t("badgeSharedByHost"), tone: null, message: null, action: null, nextLevel: null }
     : {
-        badge: "Not shared yet",
+        badge: t("badgeNotSharedYet"),
         tone: "withheld",
-        // "Unauthorized" was the old answer and it is the wrong sentence for the case that
-        // actually happens: somebody who WAS in the meeting, reading the record of the meeting
-        // they attended. It reads as a broken product rather than as a decision the host owns.
-        message:
-          "The host has not shared this meeting's record yet. You will be able to read it here once they do.",
+        message: t("messageParticipantWithheld"),
         action: null,
         nextLevel: null,
       };

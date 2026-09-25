@@ -12,6 +12,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { useTranslations } from "next-intl";
 import { CaretDown, ListBullets } from "@phosphor-icons/react/dist/ssr";
 import { useTranslationRoomStore } from "@/stores/translationRoom-store";
 import { identityFor } from "@/lib/meeting/participant-identity";
@@ -126,6 +127,7 @@ export function LiveSubtitleOverlay({
    */
   onOpenTranscript?: () => void;
 }) {
+  const t = useTranslations("meetingCallChrome.captions");
   // The caption lane, not the transcript lane: captions keep running while the transcript is
   // paused, and this list is the one a pause never withholds from. See captionSegments.
   const segments = useTranslationRoomStore((state) => state.captionSegments);
@@ -315,7 +317,7 @@ export function LiveSubtitleOverlay({
       >
         {browsing ? (
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/70 px-3 py-1.5">
-            <p className="text-[12px] font-medium text-ink-muted">Earlier captions</p>
+            <p className="text-[12px] font-medium text-ink-muted">{t("earlierCaptions")}</p>
             <div className="flex items-center gap-1">
               {onOpenTranscript ? (
                 <button
@@ -324,14 +326,14 @@ export function LiveSubtitleOverlay({
                   className="inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium text-ink transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   <ListBullets className="size-3.5" weight="bold" />
-                  Full transcript
+                  {t("fullTranscript")}
                 </button>
               ) : null}
               <button
                 type="button"
                 onClick={jumpToLatest}
-                aria-label="Close caption history and follow live captions"
-                title="Back to live captions"
+                aria-label={t("closeHistoryAria")}
+                title={t("backToLive")}
                 className="grid size-7 place-items-center rounded-full text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <CaretDown className="size-3.5" weight="bold" />
@@ -344,8 +346,8 @@ export function LiveSubtitleOverlay({
           <button
             type="button"
             onClick={onOpenTranscript}
-            aria-label="Open full transcript"
-            title="Open full transcript"
+            aria-label={t("openFullTranscript")}
+            title={t("openFullTranscript")}
             className="absolute right-1.5 top-1.5 z-10 grid size-7 place-items-center rounded-full text-ink-subtle transition-colors hover:bg-surface-1 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <ListBullets className="size-4" weight="bold" />
@@ -355,7 +357,7 @@ export function LiveSubtitleOverlay({
         <div
           ref={scrollRef}
           role="region"
-          aria-label="Live captions. Scroll up for earlier captions."
+          aria-label={t("liveRegionAria")}
           // Focusable so the history is reachable without a wheel: arrows and PageUp open it,
           // End or Escape close it (captionKeyAction).
           tabIndex={0}
@@ -373,7 +375,7 @@ export function LiveSubtitleOverlay({
           <div className="flex min-h-full max-w-3xl flex-col justify-end gap-1.5">
             {lines.length === 0 ? (
               <p className="text-[13px] text-ink-subtle">
-                Captions will appear here as people speak.
+                {t("emptyState")}
               </p>
             ) : (
               lines.map((line, index) => (

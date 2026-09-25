@@ -1,0 +1,131 @@
+{
+  "translation": {
+    "start": "Bắt đầu dịch",
+    "stop": "Dừng dịch"
+  },
+  "hostControls": {
+    "label": "Điều khiển của host",
+    "menuAriaLabel": "Điều khiển của host",
+    "lockRoom": {
+      "lockedLabel": "Phòng đã khóa",
+      "unlockedLabel": "Khóa phòng",
+      "description": "Chặn người mới vào trong khi bật."
+    },
+    "muteOnEntry": {
+      "label": "Tắt mic khi vào phòng",
+      "description": "Người mới vào sẽ tắt mic sẵn."
+    },
+    "muteAll": {
+      "label": "Tắt mic tất cả",
+      "description": "Tắt mic mọi người trừ bạn — họ có thể tự bật lại."
+    }
+  },
+  "recording": {
+    "pending": "Đang xử lý yêu cầu ghi hình",
+    "stop": "Dừng ghi hình",
+    "start": "Bắt đầu ghi hình"
+  },
+  "captions": {
+    "hide": "Ẩn phụ đề (bản ghi vẫn tiếp tục)",
+    "show": "Hiện phụ đề"
+  },
+  "screenShare": {
+    "stop": "Dừng trình chiếu",
+    "start": "Trình chiếu màn hình"
+  },
+  "raiseHand": {
+    "lower": "Hạ tay xuống",
+    "raise": "Giơ tay"
+  },
+  "reactions": {
+    "send": "Gửi biểu cảm"
+  },
+  "cloneCapture": {
+    "dismissAriaLabel": "Đóng trạng thái thu giọng nói"
+  },
+  "trackControls": {
+    "muteMicrophone": "Tắt mic",
+    "unmuteMicrophone": "Bật mic",
+    "turnCameraOff": "Tắt camera",
+    "turnCameraOn": "Bật camera",
+    "chooseMicrophoneAndSpeaker": "Chọn micro và loa",
+    "chooseCamera": "Chọn camera"
+  },
+  "settingsButton": "Cài đặt",
+  "settingsMenu": {
+    "noiseSuppression": {
+      "label": "Khử tiếng ồn",
+      "on": "Bật",
+      "off": "Tắt"
+    },
+    "micNoiseFilter": {
+      "row": "Lọc ồn cho micro",
+      "submenuHeader": "Lọc ồn cho micro",
+      "description": "Lọc micro của bạn trước khi được phiên âm. Ảnh hưởng đến độ chính xác khi nhận diện lời nói — không ảnh hưởng đến những gì người khác nghe được."
+    },
+    "backgroundBlur": {
+      "label": "Làm mờ nền",
+      "on": "Bật",
+      "off": "Tắt"
+    },
+    "layout": {
+      "label": "Bố cục",
+      "submenuHeader": "Bố cục",
+      "auto": "Tự động",
+      "grid": "Lưới",
+      "spotlight": "Nổi bật",
+      "sidebar": "Thanh bên"
+    },
+    "voice": {
+      "label": "Giọng nói",
+      "submenuHeader": "Giọng nói"
+    },
+    "transcript": {
+      "resume": "Tiếp tục ghi bản ghi",
+      "pause": "Tạm dừng bản ghi",
+      "paused": "Đã tạm dừng",
+      "recording": "Đang ghi"
+    },
+    "copyJoinLink": "Sao chép link tham gia",
+    "copyRoomCode": "Sao chép mã phòng",
+    "joinLinkToastLabel": "Link tham gia",
+    "roomCodeToastLabel": "Mã phòng"
+  },
+  "roomSpeed": {
+    "heading": "Tốc độ phòng",
+    "flashMode": {
+      "label": "Chế độ dịch nhanh",
+      "editable": "Bắt đầu dịch ngay khi mọi người còn đang nói. Nhanh hơn, nhưng vẫn đang thử nghiệm.",
+      "room": "Do host thiết lập. Bản dịch bắt đầu ngay khi mọi người còn đang nói.",
+      "deployment": "Theo mặc định của nền tảng. Bản dịch bắt đầu ngay khi mọi người còn đang nói.",
+      "unknown": "Hiện chưa xác định — phòng đang dùng theo mặc định của nền tảng."
+    }
+  },
+  "languagePicker": {
+    "triggerTitle": "Chọn ngôn ngữ của bạn",
+    "setLanguage": "Chọn ngôn ngữ",
+    "myLanguage": {
+      "title": "Ngôn ngữ của tôi",
+      "hint": "Ngôn ngữ bạn nói, và ngôn ngữ mọi người khác được dịch sang cho bạn."
+    },
+    "otherLanguages": {
+      "title": "Ngôn ngữ khác",
+      "hint": "Phòng này không cung cấp sẵn, nhưng vẫn được dịch cho bạn.",
+      "disclosure": "Ngôn ngữ khác"
+    }
+  },
+  "micCheck": {
+    "title": "Kiểm tra mic",
+    "providerKrisp": "Krisp",
+    "providerBrowser": "Trình duyệt",
+    "liveLevelAriaLabel": "Mức âm lượng micro trực tiếp, như người khác nghe thấy",
+    "prompt": "Hãy nói thử — các cột sóng là những gì người khác nghe được.",
+    "off": "Mic của bạn đang tắt — hãy bật lại để kiểm tra.",
+    "background": {
+      "silent": "Tiếng nền: im lặng — khử ồn đang hoạt động tốt.",
+      "low": "Tiếng nền: thấp.",
+      "noticeable": "Tiếng nền: rõ rệt — người khác có thể nghe thấy tiếng ồn quanh bạn.",
+      "loud": "Tiếng nền: to — hãy kiểm tra xem micro của bạn đang đặt gần gì."
+    }
+  }
+}

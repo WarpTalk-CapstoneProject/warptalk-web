@@ -8,6 +8,40 @@
     "exportReport": "Export Report",
     "managePlans": "Manage Plans"
   },
+  "adjustCredits": {
+    "trigger": "Adjust Credits",
+    "title": "Adjust Credits",
+    "description": "Manually add or remove credits. This action will be recorded in the audit trail.",
+    "descriptionWithTarget": "Manually add or remove credits for workspace {workspaceId}. This action will be recorded in the audit trail.",
+    "confirmHeading": "Confirm this credit adjustment",
+    "confirmWorkspace": "Workspace: {name}",
+    "confirmAmount": "{sign}{amount} credits",
+    "confirmReason": "Reason: {reason}",
+    "workspaceLabel": "Workspace",
+    "workspaceLoading": "Loading workspaces…",
+    "workspaceLoadError": "Workspaces could not be loaded",
+    "workspacePlaceholder": "Choose a workspace…",
+    "workspaceOption": "{name} ({slug})",
+    "workspaceOptionSuspended": "{name} ({slug}) — suspended",
+    "amountLabel": "Amount",
+    "amountPlaceholder": "e.g. 500 or -500",
+    "amountHint": "Use negative values to deduct credits.",
+    "reasonLabel": "Reason (Required)",
+    "reasonPlaceholder": "e.g. Compensation for downtime",
+    "cancel": "Cancel",
+    "back": "Back",
+    "reviewAdjustment": "Review Adjustment",
+    "confirmAdjustment": "Confirm Adjustment",
+    "processing": "Processing...",
+    "success": "Successfully adjusted {sign}{amount} credits.",
+    "errors": {
+      "chooseWorkspace": "Choose a workspace.",
+      "invalidAmount": "Please enter a valid whole-number amount (non-zero).",
+      "amountTooLarge": "A single adjustment cannot exceed {max} credits.",
+      "reasonRequired": "Reason is required for audit trail.",
+      "adjustFailed": "Failed to adjust credits. Please try again."
+    }
+  },
   "metrics": {
     "totalIssuedCredits": {
       "label": "Total Issued Credits",
