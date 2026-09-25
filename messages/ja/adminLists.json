@@ -131,7 +131,9 @@
       "exportLedger": "請求台帳をエクスポート",
       "suspendedWorkspaces": "停止中のワークスペースを表示",
       "lockedAccounts": "ロックされたアカウントを表示",
-      "newSalesLeads": "新規の営業リードを表示"
+      "newSalesLeads": "新規の営業リードを表示",
+      "inviteStaff": "スタッフを招待",
+      "createRole": "スタッフロールを作成"
     }
   }
 }

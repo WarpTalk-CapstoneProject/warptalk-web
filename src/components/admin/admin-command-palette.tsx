@@ -19,6 +19,9 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { canUsePaletteEntry, canViewAdminPath } from "@/lib/admin/staff-permissions";
 import { useEffect, useState, type ReactNode } from "react";
 
 import {
@@ -308,6 +311,7 @@ function useEntityResults(query: string, open: boolean) {
 export function AdminCommandPalette() {
   const t = useTranslations("adminLists.palette");
   const tNav = useTranslations("common.sidebar.adminNav.items");
+  const { access: staffAccess } = useStaffAccess();
   const router = useRouter();
   const open = useUIStore((state) => state.searchMeetingModalOpen);
   const setOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
@@ -348,12 +352,16 @@ export function AdminCommandPalette() {
 
   const trimmed = query.trim();
   // Fifteen pages and ten actions: ranking them on every keystroke costs nothing worth memoising.
+  // G10: only what this person's staff role may open. The server refuses the rest anyway; the
+  // palette should not offer a command that can only end in "you don't have access".
+  const allowedPages = ADMIN_PALETTE_PAGES.filter((entry) => canUsePaletteEntry(staffAccess, entry));
+  const allowedActions = ADMIN_PALETTE_ACTIONS.filter((entry) => canUsePaletteEntry(staffAccess, entry));
   const pages = trimmed
-    ? rankPaletteEntries(trimmed, ADMIN_PALETTE_PAGES, labelOf).map((r) => r.entry)
-    : ADMIN_PALETTE_PAGES;
+    ? rankPaletteEntries(trimmed, allowedPages, labelOf).map((r) => r.entry)
+    : allowedPages;
   const actions = trimmed
-    ? rankPaletteEntries(trimmed, ADMIN_PALETTE_ACTIONS, labelOf).map((r) => r.entry)
-    : ADMIN_PALETTE_ACTIONS.slice(0, 4);
+    ? rankPaletteEntries(trimmed, allowedActions, labelOf).map((r) => r.entry)
+    : allowedActions.slice(0, 4);
   const entityGroups = useEntityResults(debounced, open);
 
   const go = (item: AdminRecentItem) => {
@@ -461,7 +469,7 @@ export function AdminCommandPalette() {
 
           {trimmed.length >= MIN_QUERY ? (
             <CommandGroup heading={t("groups.searchIn")}>
-              {ADMIN_SEARCHABLE_LISTS.map((target) => (
+              {ADMIN_SEARCHABLE_LISTS.filter((target) => canViewAdminPath(staffAccess, target.href)).map((target) => (
                 <CommandItem
                   key={`search:${target.id}`}
                   value={`search:${target.id}`}

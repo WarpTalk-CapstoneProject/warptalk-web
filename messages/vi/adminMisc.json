@@ -310,7 +310,19 @@
       "audit_log_exported": "Xuất nhật ký kiểm toán",
       "fx_rate_refreshed": "Làm mới tỷ giá từ Stripe",
       "fx_rate_overridden": "Ghi đè tỷ giá",
-      "fx_rate_override_cleared": "Bỏ ghi đè tỷ giá"
+      "fx_rate_override_cleared": "Bỏ ghi đè tỷ giá",
+      "staff_granted": "Cấp quyền nhân sự",
+      "staff_invited": "Mời làm nhân viên",
+      "staff_invitation_revoked": "Thu hồi lời mời nhân sự",
+      "staff_invitation_accepted": "Nhận lời mời nhân sự",
+      "staff_role_changed": "Đổi vai trò nhân sự",
+      "staff_suspended": "Tạm ngưng quyền nhân sự",
+      "staff_reactivated": "Kích hoạt lại quyền nhân sự",
+      "staff_removed": "Gỡ quyền nhân sự",
+      "staff_role_created": "Tạo vai trò nhân sự",
+      "staff_role_updated": "Sửa vai trò nhân sự",
+      "staff_role_duplicated": "Nhân bản vai trò nhân sự",
+      "staff_role_deleted": "Xoá vai trò nhân sự"
     },
     "entities": {
       "workspace": "Workspace",
@@ -332,7 +344,10 @@
       "glossary_term": "Thuật ngữ",
       "notification": "Thông báo chung",
       "audit_log": "Nhật ký kiểm toán",
-      "fx_rate": "Tỷ giá"
+      "fx_rate": "Tỷ giá",
+      "staff_member": "Nhân viên",
+      "staff_role": "Vai trò nhân sự",
+      "staff_invitation": "Lời mời nhân sự"
     },
     "sources": {
       "workspace_service": "Workspace",

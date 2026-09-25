@@ -1,0 +1,265 @@
+{
+  "gate": {
+    "noPermissionTitle": "Not part of your role",
+    "noPermissionBody": "Your staff role ({role}) does not include this page. Ask a Super Admin if you need it.",
+    "goToAllowed": "Go to a page you can use"
+  },
+  "status": {
+    "active": "Active",
+    "suspended": "Suspended",
+    "accountDeactivated": "Account deactivated"
+  },
+  "roleChoice": {
+    "allPermissions": "All permissions",
+    "permissionCount": "{count} of {total} permissions",
+    "current": "Current role",
+    "beyondYou": "Grants permissions you do not hold yourself"
+  },
+  "reasonDialog": {
+    "reasonLabel": "Reason (recorded in the audit log)",
+    "reasonPlaceholder": "Why is this being done?",
+    "reasonTooShort": "Write at least {count} characters. The reason is the only record of why.",
+    "genericError": "Nothing was changed. The server refused the request or could not record it in the audit log.",
+    "back": "Back"
+  },
+  "invite": {
+    "title": "Invite staff",
+    "description": "An address that already has a WarpTalk account gets access at once. Any other address gets an invitation that activates the first time someone signs in with it, verified, within 7 days.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "name@warptalk.vn",
+    "roleLabel": "Role",
+    "noteLabel": "Note (optional, recorded in the audit log)",
+    "notePlaceholder": "New support hire starting Monday",
+    "invalidEmail": "Enter a valid email address.",
+    "chooseRole": "Choose a role.",
+    "grantedToast": "{email} now has staff access.",
+    "invitedToast": "Invitation sent to {email}.",
+    "emailNotSent": "The email could not be sent. The access stands; tell them yourself.",
+    "genericError": "The invitation was not created.",
+    "cancel": "Cancel",
+    "sending": "Inviting…",
+    "send": "Invite"
+  },
+  "changeRole": {
+    "title": "Change {name}'s role",
+    "description": "Takes effect on every service within 30 seconds. Their next sign-in shows the new role.",
+    "chooseRole": "Choose a different role.",
+    "doneToast": "{name}'s role was changed.",
+    "saving": "Saving…",
+    "save": "Change role"
+  },
+  "staff": {
+    "eyebrow": "Team",
+    "title": "Staff",
+    "description": "The people who run WarpTalk, the role each one holds, and when they last used the portal.",
+    "refresh": "Refresh",
+    "invite": "Invite staff",
+    "filterLabel": "Filter staff by status",
+    "statusTabs": {
+      "all": "All ({count})",
+      "active": "Active ({count})",
+      "suspended": "Suspended ({count})"
+    },
+    "filters": {
+      "role": "Role",
+      "lastActive": "Last active",
+      "lastActiveOptions": {
+        "7d": "In the last 7 days",
+        "30d": "In the last 30 days",
+        "90d": "In the last 90 days",
+        "inactive30d": "Not in the last 30 days",
+        "never": "Never"
+      }
+    },
+    "columns": {
+      "person": "Person",
+      "role": "Role",
+      "status": "Status",
+      "lastActive": "Last active",
+      "lastSignIn": "Last sign-in",
+      "added": "Added",
+      "actions": "Actions"
+    },
+    "you": "(you)",
+    "never": "Never",
+    "source": {
+      "migrated": "Former system admin",
+      "invited": "Invited",
+      "invitation_accepted": "Accepted invitation",
+      "legacy_bridge": "Former system admin"
+    },
+    "searchPlaceholder": "Search name, email or role",
+    "count": "{count, plural, one {# staff member} other {# staff members}}",
+    "sort": {
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "lastActive": "Last active",
+      "lastSignIn": "Last sign-in",
+      "created": "Date added"
+    },
+    "emptyTitle": "No staff match",
+    "emptyDescription": "Clear the search or filters to see everyone.",
+    "invitations": {
+      "title": "Pending invitations",
+      "description": "Addresses with no WarpTalk account yet. Each activates on its first verified sign-in.",
+      "expired": "Expired",
+      "expires": "Expires {date}",
+      "revoke": "Revoke"
+    },
+    "menu": {
+      "open": "Actions for {name}",
+      "activity": "View activity",
+      "changeRole": "Change role",
+      "suspend": "Suspend",
+      "reactivate": "Reactivate",
+      "remove": "Remove staff access"
+    }
+  },
+  "actions": {
+    "suspend": {
+      "title": "Suspend staff access",
+      "description": "They keep their WarpTalk account but lose the admin portal on every service within 30 seconds. You can reactivate them later.",
+      "confirm": "Suspend",
+      "pending": "Suspending…",
+      "done": "{name} was suspended."
+    },
+    "reactivate": {
+      "title": "Reactivate staff access",
+      "description": "Their role applies again on every service within 30 seconds.",
+      "confirm": "Reactivate",
+      "pending": "Reactivating…",
+      "done": "{name} was reactivated."
+    },
+    "remove": {
+      "title": "Remove staff access",
+      "description": "Their account stays; only the staff access goes. The audit log keeps everything they did.",
+      "confirm": "Remove access",
+      "pending": "Removing…",
+      "done": "{name} is no longer staff."
+    },
+    "revoke": {
+      "title": "Revoke invitation",
+      "description": "The address will not get staff access when it signs in.",
+      "confirm": "Revoke",
+      "pending": "Revoking…",
+      "done": "The invitation to {email} was revoked."
+    }
+  },
+  "roleEditor": {
+    "viewTitle": "Role",
+    "editTitle": "Edit role",
+    "createTitle": "New role",
+    "builtInDescription": "Built-in roles cannot be changed. Duplicate this one to make a custom role you can edit.",
+    "ownRoleDescription": "This is your own role, so you cannot edit it. Ask another administrator.",
+    "description": "Choose what people with this role may see and do. You can grant only permissions you hold yourself.",
+    "nameLabel": "Name",
+    "namePlaceholder": "Tier 2 support",
+    "descriptionLabel": "What it is for",
+    "descriptionPlaceholder": "Escalations that need account actions",
+    "superAdminNote": "Super Admin holds every permission, including ones added in the future.",
+    "matrixPermission": "Permission",
+    "matrixGranted": "Granted",
+    "clearArea": "Clear area",
+    "selectArea": "Select area",
+    "kindView": "View",
+    "kindChange": "Change",
+    "notGrantable": "You do not hold this permission",
+    "nameRequired": "Give the role a name.",
+    "permissionsRequired": "Choose at least one permission.",
+    "savedToast": "{name} was saved.",
+    "createdToast": "{name} was created.",
+    "genericError": "The role was not saved.",
+    "duplicate": "Duplicate",
+    "close": "Close",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save",
+    "create": "Create role"
+  },
+  "areas": {
+    "workspaces": "Workspaces",
+    "accounts": "Accounts",
+    "meetings": "Meetings",
+    "billing": "Billing",
+    "plugins": "Plugins",
+    "content": "Content",
+    "glossary": "Glossary",
+    "settings": "Settings",
+    "operations": "Operations",
+    "audit": "Audit",
+    "staff": "Staff",
+    "assistant": "WarpBot"
+  },
+  "holders": {
+    "loading": "Loading…",
+    "error": "Could not load who holds this permission.",
+    "roles": "{count, plural, one {# role grants it} other {# roles grant it}}",
+    "members": "{count, plural, one {# person holds it} other {# people hold it}}",
+    "nobody": "Nobody holds it right now.",
+    "openStaff": "Open Staff"
+  },
+  "roles": {
+    "eyebrow": "Team",
+    "title": "Roles",
+    "description": "What each staff role may see and do. Built-in roles are read-only; duplicate one to start a custom role.",
+    "create": "Create role",
+    "viewLabel": "Roles or permissions",
+    "views": {
+      "roles": "Roles",
+      "permissions": "Permissions"
+    },
+    "filters": {
+      "kind": "Type",
+      "builtIn": "Built-in",
+      "custom": "Custom"
+    },
+    "columns": {
+      "role": "Role",
+      "permissions": "Permissions",
+      "members": "People",
+      "updated": "Updated",
+      "actions": "Actions"
+    },
+    "builtIn": "Built-in",
+    "custom": "Custom",
+    "all": "All",
+    "permissionCount": "{count} of {total}",
+    "pendingInvites": "{count, plural, one {# invitation} other {# invitations}}",
+    "menu": {
+      "open": "Actions for {name}",
+      "edit": "Edit",
+      "view": "View",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "deleteInUse": "In use, cannot delete"
+    },
+    "duplicatedToast": "{name} was created. Edit it below.",
+    "duplicateError": "The role was not duplicated.",
+    "permissionColumns": {
+      "permission": "Permission",
+      "roles": "Roles",
+      "members": "People",
+      "who": "Holders"
+    },
+    "whoHasIt": "Who has it",
+    "searchPlaceholder": "Search roles",
+    "count": "{count, plural, one {# role} other {# roles}}",
+    "sort": {
+      "name": "Name",
+      "permissions": "Permissions",
+      "members": "People",
+      "updated": "Last updated"
+    },
+    "emptyTitle": "No roles",
+    "emptyFilteredTitle": "No roles match",
+    "emptyDescription": "Clear the search or filters to see every role.",
+    "deleteDialog": {
+      "title": "Delete {name}",
+      "description": "Only a role nobody holds can be deleted. It disappears from the lists; the audit log keeps its history.",
+      "confirm": "Delete role",
+      "pending": "Deleting…",
+      "done": "{name} was deleted."
+    }
+  }
+}

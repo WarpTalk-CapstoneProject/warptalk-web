@@ -310,7 +310,19 @@
       "audit_log_exported": "監査ログを書き出し",
       "fx_rate_refreshed": "Stripeから為替レートを更新",
       "fx_rate_overridden": "為替レートを上書き",
-      "fx_rate_override_cleared": "為替レートの上書きを解除"
+      "fx_rate_override_cleared": "為替レートの上書きを解除",
+      "staff_granted": "スタッフ権限を付与",
+      "staff_invited": "スタッフに招待",
+      "staff_invitation_revoked": "スタッフ招待を取り消し",
+      "staff_invitation_accepted": "スタッフ招待を承諾",
+      "staff_role_changed": "スタッフロールを変更",
+      "staff_suspended": "スタッフ権限を停止",
+      "staff_reactivated": "スタッフ権限を再開",
+      "staff_removed": "スタッフ権限を削除",
+      "staff_role_created": "スタッフロールを作成",
+      "staff_role_updated": "スタッフロールを編集",
+      "staff_role_duplicated": "スタッフロールを複製",
+      "staff_role_deleted": "スタッフロールを削除"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -332,7 +344,10 @@
       "glossary_term": "用語",
       "notification": "お知らせ",
       "audit_log": "監査ログ",
-      "fx_rate": "為替レート"
+      "fx_rate": "為替レート",
+      "staff_member": "スタッフ",
+      "staff_role": "スタッフロール",
+      "staff_invitation": "スタッフ招待"
     },
     "sources": {
       "workspace_service": "ワークスペース",
