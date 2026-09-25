@@ -42,8 +42,16 @@ import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identit
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
 import { buildParticipantIdentities } from "@/lib/meeting/participant-identity";
-import { groupTranscriptSegments } from "@/lib/transcript/transcript-display";
+import { groupTranscriptSegments, mergeTranslations } from "@/lib/transcript/transcript-display";
+import {
+  buildCleanTranscriptView,
+  withAbsorbedSegmentIds,
+  type CleanTranscriptView,
+} from "@/lib/transcript/clean-transcript";
+import { TranscriptViewModeToggle } from "@/components/rooms/transcript-clean-controls";
+import { useTranscriptViewMode } from "@/hooks/use-transcripts";
 import { useAuthStore } from "@/stores/auth-store";
+import type { TranscriptSegmentDto } from "@/types/realtime";
 
 import { WidgetTranscriptBubble } from "./transcript/widget-transcript-bubble";
 import { WidgetTranscriptPausedNotice } from "./transcript/widget-transcript-paused-notice";
@@ -60,7 +68,15 @@ import { useBridgeWidget } from "./widget-context";
 const STICK_TO_BOTTOM_PX = 48;
 
 export function TranscriptPane(): JSX.Element {
-  const { segments, readerLanguage, transcriptPaused, transcriptPausedSince } = useBridgeWidget();
+  const { segments, cleanSentences, readerLanguage, transcriptPaused, transcriptPausedSince } =
+    useBridgeWidget();
+  /**
+   * WT-716. The same reader preference the in-meeting panel uses — one key in localStorage, and
+   * this window is the same origin, so switching in either one switches both (the `storage` event
+   * reaches the other window). A separate choice per window would be two transcripts of one
+   * meeting on one desk.
+   */
+  const [viewMode, setViewMode] = useTranscriptViewMode();
   const user = useAuthStore((state) => state.user);
   const currentUserId = user?.id;
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -83,7 +99,27 @@ export function TranscriptPane(): JSX.Element {
    * bubble per recogniser chunk — per breath, for a Vietnamese speaker. It also drops the
    * pipeline's own `__MEETING_END__` rows, which the saved transcript this window reads does hold.
    */
-  const bubbles = useMemo(() => groupTranscriptSegments(segments), [segments]);
+  const cleanView = useMemo<CleanTranscriptView<TranscriptSegmentDto> | null>(
+    () =>
+      viewMode === "clean"
+        ? buildCleanTranscriptView(segments, cleanSentences, {
+            idOf: (segment) => segment.segmentId,
+            // The far side's translation rides on the segment; folding keeps it when a merged
+            // sentence swallows that segment.
+            absorb: (head, absorbed) => ({
+              ...head,
+              translations: mergeTranslations(head.translations, absorbed.translations),
+              confidence: Math.min(head.confidence, absorbed.confidence),
+            }),
+          })
+        : null,
+    [viewMode, segments, cleanSentences],
+  );
+
+  const bubbles = useMemo(() => {
+    const grouped = groupTranscriptSegments(cleanView ? cleanView.segments : segments);
+    return cleanView ? withAbsorbedSegmentIds(grouped, cleanView) : grouped;
+  }, [cleanView, segments]);
 
   /**
    * Faces for this window, which has no meeting roster to build them from.
@@ -150,6 +186,12 @@ export function TranscriptPane(): JSX.Element {
             happening. */}
         {transcriptPaused ? <WidgetTranscriptPausedNotice since={transcriptPausedSince} /> : null}
 
+        {/* At 460px there is no toolbar to put this in, so it sits above the scroller where the
+            in-meeting panel puts its own — same place, same words, same choice. */}
+        <div className="flex shrink-0 justify-end px-3 pt-2">
+          <TranscriptViewModeToggle value={viewMode} onChange={setViewMode} />
+        </div>
+
         {/* `relative` because the chip floats over the bottom of this scroller. */}
         <div className="relative min-h-0 flex-1">
           <div
@@ -183,6 +225,7 @@ export function TranscriptPane(): JSX.Element {
                     key={segment.segmentId}
                     segment={segment}
                     readerLanguage={readerLanguage}
+                    cleanView={cleanView}
                     // Saved lines carry `speakerParticipantId` as `speakerId` (toLiveSegment), and
                     // the room record compares that same field against the user id.
                     isSelf={Boolean(currentUserId) && segment.speakerId === currentUserId}

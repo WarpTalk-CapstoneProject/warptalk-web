@@ -110,5 +110,13 @@
     "cancel": "Cancel",
     "saving": "Saving…",
     "save": "Save correction"
+  },
+  "cleanView": {
+    "groupLabel": "Transcript wording",
+    "clean": "Clean",
+    "cleanTitle": "Fillers and repeated words removed, one sentence per line. Only changes your view.",
+    "verbatim": "Verbatim",
+    "verbatimTitle": "Exactly what the speech recogniser wrote down. Only changes your view.",
+    "selfRepair": "The speaker corrected themselves. As said: \"{rawText}\""
   }
 }
