@@ -159,6 +159,7 @@ export const ADMIN_ROUTE_PERMISSIONS: readonly { href: string; permission: Admin
   // G12 internal management. The inbox shows each person only the sources their role can read.
   { href: "/admin/inbox", permission: ADMIN_PERMISSIONS.inboxRead },
   { href: "/admin/finance", permission: ADMIN_PERMISSIONS.financeRead },
+  { href: "/admin/finance/expenses", permission: ADMIN_PERMISSIONS.financeRead },
 ];
 
 function routeEntryFor(pathname: string) {
