@@ -131,7 +131,7 @@ interface NavItem {
  */
 function navRowTone(active: boolean): string {
   return active
-    ? "bg-surface-3 text-ink [&_svg]:text-ink [&_span]:text-ink"
+    ? "bg-surface-3 text-ink [&>a_svg]:text-ink [&>a_span]:text-ink"
     : "hover:bg-surface-3/60";
 }
 
@@ -158,7 +158,10 @@ function NavBadge({ count, collapsed = false }: { count: string; collapsed?: boo
     <span
       aria-label={`${count} pending`}
       className={cn(
-        "grid h-[18px] min-w-[18px] place-items-center rounded-full bg-ink px-[5px] text-[11px] font-semibold leading-none text-panel",
+        // A quiet count, Linear-style. It is NOT a descendant of the row's link, so the active row's
+        // `[&>a_span]:text-ink` cannot reach it: that selector used to be `[&_span]`, which painted
+        // the number ink-on-ink the moment the row became active — the count "vanished" on click.
+        "grid h-[18px] min-w-[18px] place-items-center rounded-full bg-ink/[0.08] px-1.5 text-[11px] font-medium leading-none tabular-nums text-ink-muted",
         collapsed && "pointer-events-none absolute -right-1 -top-1 h-4 min-w-4 px-1 text-[10px]",
       )}
     >
