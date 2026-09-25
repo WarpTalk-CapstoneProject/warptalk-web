@@ -771,6 +771,25 @@ export const API = {
     enable: (code: string) => `/admin/languages/${encodeURIComponent(code)}/enable`,
     disable: (code: string) => `/admin/languages/${encodeURIComponent(code)}/disable`,
   },
+  /**
+   * The platform settings console (workspace service AdminPlatformSettingsController). Keys are
+   * dotted (`security.lockout.duration_minutes`) and travel in the path.
+   */
+  adminPlatformSettings: {
+    base: "/admin/settings",
+    history: "/admin/settings/history",
+    byKey: (key: string) => `/admin/settings/${encodeURIComponent(key)}`,
+    reset: (key: string) => `/admin/settings/${encodeURIComponent(key)}/reset`,
+    revert: (changeId: string) => `/admin/settings/history/${encodeURIComponent(changeId)}/revert`,
+    export: "/admin/settings/export",
+    import: "/admin/settings/import",
+    integrations: "/admin/settings/integrations",
+    testIntegration: (key: string) => `/admin/settings/integrations/${encodeURIComponent(key)}/test`,
+  },
+  /** Anonymous: maintenance banner, support address, whether Google sign-in is offered. */
+  platformStatus: {
+    base: "/platform/status",
+  },
   /** Voice-clone consent, counts only. No user ids cross this boundary. */
   adminVoiceConsent: {
     summary: "/admin/voice-consent/summary",

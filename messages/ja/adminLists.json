@@ -96,7 +96,8 @@
       "salesLeads": "営業リード",
       "feedback": "フィードバック",
       "glossary": "用語",
-      "searchIn": "一覧で検索"
+      "searchIn": "一覧で検索",
+      "settings": "プラットフォーム設定"
     },
     "searchIn": "{page}で「{query}」を検索",
     "searching": "検索中…",
@@ -119,7 +120,8 @@
       "ledger": "台帳エントリ",
       "salesLead": "営業リード",
       "feedback": "フィードバック",
-      "glossaryTerm": "用語"
+      "glossaryTerm": "用語",
+      "setting": "設定"
     },
     "actions": {
       "adjustCredit": "クレジットを調整…",
@@ -138,7 +140,10 @@
       "recordExpense": "経費を記録",
       "importExpenses": "CSVから経費をインポート",
       "createCreditPack": "クレジットパックを作成",
-      "createCoupon": "クーポンを作成"
+      "createCoupon": "クーポンを作成",
+      "changedPlatformSettings": "変更されたプラットフォーム設定を表示",
+      "exportPlatformSettings": "プラットフォーム設定をエクスポート (JSON)",
+      "importPlatformSettings": "プラットフォーム設定をインポート (JSON)"
     }
   }
 }

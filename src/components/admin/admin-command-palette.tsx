@@ -8,6 +8,7 @@ import {
   ClockCounterClockwise,
   CreditCard,
   FileText,
+  GearSix,
   Handshake,
   Lightning,
   MagnifyingGlass,
@@ -21,6 +22,8 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { useStaffAccess } from "@/hooks/use-staff-access";
+import { ADMIN_PLATFORM_SETTINGS_KEYS } from "@/hooks/use-admin-platform-settings";
+import { rankSettings, settingHref } from "@/lib/admin/platform-settings";
 import { canUsePaletteEntry, canViewAdminPath } from "@/lib/admin/staff-permissions";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -49,6 +52,7 @@ import {
 } from "@/lib/admin/command-palette";
 import { looksLikeGuid, matchesSearch } from "@/lib/admin/search-text";
 import { adminFeedbackService } from "@/services/admin-feedback.service";
+import { adminPlatformSettingsService } from "@/services/admin-platform-settings.service";
 import { adminPluginCatalogService } from "@/services/admin-plugin-catalog.service";
 import { adminPricingService } from "@/services/admin-pricing.service";
 import { adminSalesLeadService } from "@/services/admin-sales-lead.service";
@@ -73,6 +77,7 @@ const KIND_ICON: Record<AdminRecentKind, ReactNode> = {
   salesLead: <Handshake size={15} />,
   feedback: <ChatCircleText size={15} />,
   glossaryTerm: <BookOpen size={15} />,
+  setting: <GearSix size={15} />,
 };
 
 function readRecent(): AdminRecentItem[] {
@@ -102,7 +107,7 @@ interface PaletteResult extends AdminRecentItem {
  * parameter ignores it and returns the newest rows instead, and listing five unrelated invoices
  * under "INV-2026-0042" would be worse than listing none.
  */
-function useEntityResults(query: string, open: boolean) {
+function useEntityResults(query: string, open: boolean, canReadSettings: boolean) {
   const enabled = open && query.length >= MIN_QUERY;
   const guid = looksLikeGuid(query);
 
@@ -162,10 +167,36 @@ function useEntityResults(query: string, open: boolean) {
     enabled,
     staleTime: 30_000,
   });
+  // Every platform setting, searched in the browser: the registry is a few dozen rows and the
+  // settings page caches it under the same key. Only for staff who may read settings — the
+  // endpoint would refuse anyone else, and a group that can only fail is noise.
+  const settings = useQuery({
+    queryKey: ADMIN_PLATFORM_SETTINGS_KEYS.console,
+    queryFn: () => adminPlatformSettingsService.get(),
+    enabled: enabled && canReadSettings,
+    staleTime: 60_000,
+  });
 
   const groups: { id: string; kind: AdminRecentKind; results: PaletteResult[]; loading: boolean; failed: boolean }[] =
     enabled
       ? [
+          ...(canReadSettings
+            ? [
+                {
+                  id: "settings",
+                  kind: "setting" as const,
+                  loading: settings.isFetching && !settings.data,
+                  failed: settings.isError,
+                  results: rankSettings(query, settings.data?.settings ?? [], PER_SOURCE).map((setting) => ({
+                    id: `setting:${setting.key}`,
+                    kind: "setting" as const,
+                    href: settingHref(setting.key),
+                    label: setting.label,
+                    detail: setting.key,
+                  })),
+                },
+              ]
+            : []),
           {
             id: "workspaces",
             kind: "workspace",
@@ -362,7 +393,7 @@ export function AdminCommandPalette() {
   const actions = trimmed
     ? rankPaletteEntries(trimmed, allowedActions, labelOf).map((r) => r.entry)
     : allowedActions.slice(0, 4);
-  const entityGroups = useEntityResults(debounced, open);
+  const entityGroups = useEntityResults(debounced, open, canViewAdminPath(staffAccess, "/admin/settings"));
 
   const go = (item: AdminRecentItem) => {
     const next = pushRecent(readRecent(), item);

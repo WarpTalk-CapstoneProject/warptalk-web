@@ -48,6 +48,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
 import { useGoogleLogin } from "@react-oauth/google";
+import { useGoogleSignInOffered } from "@/components/platform/platform-status-banner";
 
 import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
@@ -209,6 +210,8 @@ function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false);
   // An invitation is proof of the address, so there is no email to ask for.
   const [step, setStep] = useState<Step>(hasToken ? "details" : "email");
+  // Platform setting security.oauth.google_enabled: off hides the button (the server refuses it too).
+  const googleOffered = useGoogleSignInOffered();
 
   const registerSchema = useMemo(() => getRegisterSchema(hasToken, tv), [hasToken, tv]);
   const {
@@ -381,19 +384,23 @@ function RegisterForm() {
                 transition={{ duration: 0.2 }}
                 className="space-y-4"
               >
-                {GOOGLE_CLIENT_ID ? (
-                  <RegisterGoogleButton rawCallbackUrl={rawCallbackUrl} />
-                ) : (
-                  <RegisterGoogleUnavailableButton />
-                )}
+                {googleOffered ? (
+                  <>
+                    {GOOGLE_CLIENT_ID ? (
+                      <RegisterGoogleButton rawCallbackUrl={rawCallbackUrl} />
+                    ) : (
+                      <RegisterGoogleUnavailableButton />
+                    )}
 
-                <div className="flex items-center gap-4 py-2">
-                  <div className="h-[1px] flex-1 bg-neutral-200" />
-                  <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">
-                    {t("or")}
-                  </span>
-                  <div className="h-[1px] flex-1 bg-neutral-200" />
-                </div>
+                    <div className="flex items-center gap-4 py-2">
+                      <div className="h-[1px] flex-1 bg-neutral-200" />
+                      <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-500">
+                        {t("or")}
+                      </span>
+                      <div className="h-[1px] flex-1 bg-neutral-200" />
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="space-y-2">
                   <input

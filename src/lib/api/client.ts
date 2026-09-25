@@ -18,6 +18,7 @@ import {
   resolveAccessTokenExpiryMs,
   setAccessTokenCookie,
 } from "@/lib/auth/session-cookie";
+import { isMaintenanceBody, maintenanceMessageOf, reportMaintenance } from "@/lib/platform/maintenance-signal";
 
 /**
  * Client-side Axios instance with token interceptors.
@@ -589,6 +590,14 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
+    // Maintenance mode: the gateway refused this call on purpose. Tell the banner, then fail the
+    // call as before — the caller's own error handling still runs, and getErrorMessage already
+    // reads the maintenance message out of the body.
+    if (isMaintenanceBody(error.response?.status, error.response?.data)) {
+      reportMaintenance(maintenanceMessageOf(error.response?.data));
+      return Promise.reject(error);
+    }
+
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };

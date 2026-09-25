@@ -72,6 +72,8 @@ export const ADMIN_PERMISSIONS = {
   glossaryManage: "glossary.manage",
   settingsRead: "settings.read",
   settingsManage: "settings.manage",
+  /** The Security & auth category of platform settings, on top of settings.manage. */
+  settingsSecurity: "settings.security",
   healthRead: "health.read",
   healthOperate: "health.operate",
   providersRead: "providers.read",
@@ -210,6 +212,9 @@ export const ADMIN_PALETTE_ACTION_PERMISSIONS: Readonly<Record<string, AdminPerm
   recordExpense: ADMIN_PERMISSIONS.financeManage,
   importExpenses: ADMIN_PERMISSIONS.financeManage,
   myInbox: ADMIN_PERMISSIONS.inboxRead,
+  exportPlatformSettings: ADMIN_PERMISSIONS.settingsManage,
+  importPlatformSettings: ADMIN_PERMISSIONS.settingsManage,
+  changedPlatformSettings: ADMIN_PERMISSIONS.settingsRead,
 };
 
 export function canUsePaletteEntry(

@@ -32,6 +32,7 @@ import { z } from "zod";
 import { useTranslations } from "next-intl";
 
 import { useGoogleLogin } from "@react-oauth/google";
+import { useGoogleSignInOffered } from "@/components/platform/platform-status-banner";
 
 import { AnimatedHalftone } from "@/components/auth/animated-halftone";
 import { GoogleAuthIcon } from "@/components/auth/cinematic-auth-shell";
@@ -177,6 +178,8 @@ function LoginForm() {
   const login = useAuthStore((s) => s.login);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "password">("email");
+  // Platform setting security.oauth.google_enabled: off hides the button (the server refuses it too).
+  const googleOffered = useGoogleSignInOffered();
 
   const {
     register,
@@ -307,20 +310,24 @@ function LoginForm() {
                 className="space-y-4"
               >
                 {/* Social Login */}
-                {GOOGLE_CLIENT_ID ? (
-                  <GoogleLoginButton rawCallbackUrl={rawCallbackUrl} />
-                ) : (
-                  <GoogleLoginUnavailableButton />
-                )}
+                {googleOffered ? (
+                  <>
+                    {GOOGLE_CLIENT_ID ? (
+                      <GoogleLoginButton rawCallbackUrl={rawCallbackUrl} />
+                    ) : (
+                      <GoogleLoginUnavailableButton />
+                    )}
 
-                {/* Divider */}
-                <div className="flex items-center gap-4 py-2">
-                  <div className="h-[1px] flex-1 bg-neutral-200" />
-                  <span className="text-[11px] font-medium uppercase text-neutral-500 tracking-wider">
-                    {t("or")}
-                  </span>
-                  <div className="h-[1px] flex-1 bg-neutral-200" />
-                </div>
+                    {/* Divider */}
+                    <div className="flex items-center gap-4 py-2">
+                      <div className="h-[1px] flex-1 bg-neutral-200" />
+                      <span className="text-[11px] font-medium uppercase text-neutral-500 tracking-wider">
+                        {t("or")}
+                      </span>
+                      <div className="h-[1px] flex-1 bg-neutral-200" />
+                    </div>
+                  </>
+                ) : null}
 
                 {/* Email Input */}
                 <div className="space-y-2">
