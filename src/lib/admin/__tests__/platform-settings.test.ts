@@ -374,3 +374,13 @@ test("an import file must be the export's format", () => {
   const noValue = JSON.stringify({ format: PLATFORM_SETTINGS_EXPORT_FORMAT, settings: [{ key: "billing.trial.days" }] });
   assert.deepEqual(parseImportFile(noValue), { ok: false, error: { code: "badEntry", index: 1, reason: "value" } });
 });
+
+test("an audit entry about a setting links to its row; an import or export opens the console", async () => {
+  const { auditEntityHref, AUDIT_ENTITY_LABELS } = await import("../audit-log.ts");
+  const ref = (key: string | null) => ({ type: "platform_setting", id: null, key, workspaceId: null, workspaceSlug: null });
+  assert.equal(auditEntityHref(ref("security.lockout.duration_minutes")), "/admin/settings?key=security.lockout.duration_minutes");
+  assert.equal(auditEntityHref(ref(`limits.document_upload_mb@workspace:${WS}`)), "/admin/settings?key=limits.document_upload_mb");
+  assert.equal(auditEntityHref(ref("settings")), "/admin/settings");
+  assert.equal(auditEntityHref(ref(null)), "/admin/settings");
+  assert.equal(AUDIT_ENTITY_LABELS.platform_setting, "Platform setting");
+});
