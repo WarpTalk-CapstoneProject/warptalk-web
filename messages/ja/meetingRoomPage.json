@@ -1,0 +1,156 @@
+{
+  "status": {
+    "scheduled": "予定済み",
+    "waiting": "待機中",
+    "open": "オープン",
+    "inProgress": "進行中",
+    "paused": "一時停止中",
+    "ended": "終了",
+    "cancelled": "キャンセル済み",
+    "expired": "期限切れ",
+    "failed": "失敗",
+    "timeout": "タイムアウト"
+  },
+  "presence": {
+    "inRoom": "ルーム内",
+    "connected": "接続済み",
+    "lobby": "ロビーで待機中",
+    "notInRoom": "ルームにいません",
+    "disconnected": "切断",
+    "left": "退出済み"
+  },
+  "loading": "ルームを読み込み中…",
+  "copiedSuffix": "{label}をコピーしました",
+  "editRoom": "ルームを編集",
+  "startingLabel": "開始しています...",
+  "startError": "ミーティングを開始できませんでした。",
+  "occupancyNoun": {
+    "attended": "参加",
+    "inRoom": "在室"
+  },
+  "outdatedLink": {
+    "message": "このミーティングのリンクは古くなっているため、ここからルームを開けません。ミーティング一覧から開くか、招待した相手にリンクを再送してもらってください。",
+    "goToMeetings": "ミーティング一覧へ"
+  },
+  "noAccess": {
+    "message": "このルームへのアクセス権がまだありません。チームメンバーからこのリンクを共有された場合は、ホストに参加を許可してもらえます。",
+    "asking": "リクエスト送信中…",
+    "askToJoin": "参加をリクエスト",
+    "joinError": "このルームには現在参加できません。",
+    "participantFallback": "参加者"
+  },
+  "people": {
+    "panelTitle": "参加者",
+    "participantsCount": "参加者: {label}",
+    "noneInvited": "まだ他に招待された人はいません。",
+    "groupCount": "{label}: {count}",
+    "groups": {
+      "waitingToBeAdmitted": "入室許可待ち",
+      "inRoom": "ルーム内",
+      "attended": "参加済み",
+      "left": "退出済み",
+      "accepted": "承諾済み",
+      "awaitingReply": "返信待ち",
+      "didNotAttend": "不参加",
+      "notInRoom": "ルームにいません"
+    },
+    "role": {
+      "host": "ホスト",
+      "invitee": "招待された人"
+    },
+    "unnamedParticipant": "名前未設定の参加者",
+    "currentUser": "自分"
+  },
+  "record": {
+    "heading": "ミーティング記録",
+    "sectionsAriaLabel": "ミーティング記録のセクション",
+    "tabs": {
+      "recap": "要約",
+      "minutes": "議事録",
+      "artifacts": "成果物"
+    },
+    "expand": {
+      "showDetails": "ミーティング情報を再表示",
+      "giveFullWidth": "記録欄を全幅に広げる",
+      "collapse": "記録欄を折りたたむ",
+      "expand": "記録欄を広げる"
+    },
+    "writingUp": {
+      "title": "記録を作成しています",
+      "body": "文字起こしとAI要約はミーティング終了後、通常1分以内に作成されます。このページは自動的に更新されます。"
+    },
+    "sharing": {
+      "badgePublished": "公開済み",
+      "badgeDraft": "下書き",
+      "badgeSharedByHost": "ホストが共有済み",
+      "badgeNotSharedYet": "まだ共有されていません",
+      "actionUnpublish": "公開を取り消す",
+      "actionPublish": "参加者に公開する",
+      "messageHostShared": "参加した全員がこの記録を読めます。編集も引き続き可能です — 変更内容はすぐに相手にも反映されます。",
+      "messageHostDraft": "この記録はあなただけが見られます。公開すると、参加した全員に文字起こし、AI要約、録画を共有できます。",
+      "messageParticipantWithheld": "ホストはまだこのミーティングの記録を共有していません。共有され次第、ここで読めるようになります。",
+      "badgeScheduledHost": "ミーティング終了時に共有されます",
+      "badgeScheduledParticipant": "ミーティング終了時に共有されました",
+      "messageScheduled": "ミーティングが終了し次第、参加した全員が文字起こし、AI要約、録画を読めるようになります。この記録を非公開のままにしたい場合は非公開を維持してください。",
+      "actionKeepPrivate": "非公開のまま",
+      "saving": "保存中…",
+      "toastUnpublished": "記録の公開を取り消しました。現在はあなただけが見られます。",
+      "toastKeptPrivate": "記録を非公開のままにしました。ミーティング終了時にも共有されません。",
+      "toastPublished": "記録を公開しました。参加した全員が読めます。",
+      "toastShareChangeFailed": "この記録の共有設定を変更できませんでした。"
+    },
+    "seekUnavailable": {
+      "unalignable": "この録画は視聴できますが、特定の時点にジャンプすることはできません — このミーティングは、WarpTalkが動画の開始位置を記録するようになる前に文字起こしされたものです。",
+      "multiple": "このミーティングには複数の録画があるため、特定の時点へのジャンプは現在利用できません — タイムスタンプを正しいファイルに一致させられません。"
+    },
+    "recordingFailure": {
+      "all": "このミーティングは録画されましたが、録画に失敗しました — 動画ファイルが作成されなかったため、視聴やダウンロードはできません。",
+      "some": "このミーティングの録画の一部が失敗しました — 一部の録画で動画ファイルが作成されませんでした。保存できた録画は引き続き視聴できます。"
+    },
+    "toasts": {
+      "momentNotInTranscript": "その時点は保存された文字起こしに含まれていません。",
+      "momentHasNoLine": "その時点に対応する文字起こしの行がありません。",
+      "momentScrollFailed": "文字起こし内のその時点までスクロールできませんでした。",
+      "versionNotWritten": "そのバージョンを保存できませんでした。",
+      "readLanguageFailed": "その言語でこのミーティングを読み込めませんでした。",
+      "versionNotArrived": "そのバージョンはまだ届いていません。もう一度お試しください。",
+      "rewriteFailed": "要約を書き直せませんでした。",
+      "rewriteFailureReason": "この要約は書き直せませんでした。",
+      "rewriting": "要約を書き直しています…"
+    }
+  },
+  "notes": {
+    "heading": "ルームのメモ",
+    "placeholderEditable": "議題、背景、決定事項、確認事項などを追加...",
+    "placeholderReadOnly": "まだルームのメモはありません。",
+    "saving": "保存中...",
+    "saved": "保存しました",
+    "toolbar": {
+      "textStyle": "Aa",
+      "text": "テキスト",
+      "heading1": "見出し1",
+      "heading2": "見出し2",
+      "heading3": "見出し3",
+      "bold": "太字",
+      "italic": "斜体",
+      "underline": "下線",
+      "strikethrough": "取り消し線",
+      "quote": "引用",
+      "inlineCode": "インラインコード",
+      "codeBlock": "コードブロック",
+      "bulletList": "箇条書き",
+      "numberedList": "番号付きリスト",
+      "link": "リンク",
+      "linkPlaceholder": "リンクを貼り付け...",
+      "apply": "適用"
+    }
+  },
+  "actionsMenu": {
+    "moreActions": "その他の操作",
+    "copyInviteLink": "招待リンクをコピー",
+    "inviteLinkLabel": "招待リンク",
+    "downloadIcs": ".icsファイルをダウンロード",
+    "addToGoogleCalendar": "Googleカレンダーに追加",
+    "endMeeting": "ミーティングを終了"
+  }
+}

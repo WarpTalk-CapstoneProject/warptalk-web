@@ -57,6 +57,7 @@ import { format } from "date-fns";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "@/lib/format/currency";
 
@@ -92,6 +93,11 @@ export default function AdminWorkspaceBillingPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const pathname = usePathname();
+  // Mounted at both /admin/billing/workspace/[id] and the legacy /billing/workspace/[id] — see
+  // the matching note in src/app/(internal)/billing/page.tsx. Stay on whichever base is already
+  // showing so the "Back" arrow below doesn't jump the person into the other layout's sidebar.
+  const basePath = pathname.startsWith("/admin") ? "/admin/billing" : "/billing";
   const queryClient = useQueryClient();
   const [isExportOpen, setIsExportOpen] = useState(false);
   const [exportNote, setExportNote] = useState("");
@@ -443,7 +449,7 @@ export default function AdminWorkspaceBillingPage({
       <div className="flex items-center justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3 mb-1">
-            <Link href="/billing">
+            <Link href={basePath}>
               <Button
                 variant="ghost"
                 size="sm"

@@ -67,23 +67,53 @@ export function describeSummaryAbsence(input: SummaryAbsenceInput): SummaryAbsen
   return "absent";
 }
 
-export function summaryAbsenceMessage(absence: SummaryAbsence): string {
-  switch (absence) {
-    case "generating":
-      return "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute.";
-    case "failed":
-      return "Summary generation did not complete for this meeting. The transcript is still available.";
-    case "insufficient-data":
-      return "There wasn't enough transcript content in this meeting to generate a summary.";
-    case "withheld":
-      // Names the likely cause and who can change it, rather than the flat denial that sent
-      // people looking for a broken generator.
-      return "A summary was produced for this meeting, but it is not shared with you. The meeting host controls who can read it.";
-    case "no-transcript":
-      // Says which of the two things is missing. "No summary" alone sends the reader after a
-      // broken generator; the transcript being empty is the whole explanation.
-      return "Nobody spoke in this meeting, so there is no transcript and nothing to summarise.";
-    case "absent":
-      return "This meeting ended without a summary artifact.";
-  }
+/**
+ * Translator shape shared with `getPlanDescription`/`buildFeatureList` in `src/lib/utils.ts`,
+ * matching `useTranslations("meetingSummary")` from next-intl — so a caller already holding
+ * `const t = useTranslations("meetingSummary")` can pass it straight through. Optional and
+ * defaulted below so this pure lib function — and the node:test file that asserts its literal
+ * English output — keep working unmodified for callers that have not (yet) started passing a
+ * translator. See `.agents/page-docs/i18n-localization.md` for the pattern.
+ *
+ * The key handed to `t` is the leaf under the `meetingSummary.absence.*` catalog namespace
+ * (e.g. `t("absence.withheld")`), which is also how the default copy below is keyed.
+ */
+type SummaryAbsenceTranslator = (key: string) => string;
+
+/** `SummaryAbsence` value → the leaf key under `meetingSummary.absence.*`. Kept as its own map
+ *  because `SummaryAbsence`'s values are hyphenated and JSON catalog keys are camelCase. */
+const ABSENCE_KEY: Record<SummaryAbsence, string> = {
+  generating: "generating",
+  failed: "failed",
+  "insufficient-data": "insufficientData",
+  withheld: "withheld",
+  "no-transcript": "noTranscript",
+  absent: "absent",
+};
+
+const DEFAULT_ABSENCE_COPY: Record<string, string> = {
+  generating:
+    "WarpTalk's AI assistant is analyzing the transcript. This usually takes under a minute.",
+  failed: "Summary generation did not complete for this meeting. The transcript is still available.",
+  insufficientData: "There wasn't enough transcript content in this meeting to generate a summary.",
+  // Names the likely cause and who can change it, rather than the flat denial that sent
+  // people looking for a broken generator.
+  withheld:
+    "A summary was produced for this meeting, but it is not shared with you. The meeting host controls who can read it.",
+  // Says which of the two things is missing. "No summary" alone sends the reader after a
+  // broken generator; the transcript being empty is the whole explanation.
+  noTranscript: "Nobody spoke in this meeting, so there is no transcript and nothing to summarise.",
+  absent: "This meeting ended without a summary artifact.",
+};
+
+function defaultAbsenceCopy(key: string): string {
+  const leaf = key.startsWith("absence.") ? key.slice("absence.".length) : key;
+  return DEFAULT_ABSENCE_COPY[leaf] ?? key;
+}
+
+export function summaryAbsenceMessage(
+  absence: SummaryAbsence,
+  t: SummaryAbsenceTranslator = defaultAbsenceCopy,
+): string {
+  return t(`absence.${ABSENCE_KEY[absence]}`);
 }

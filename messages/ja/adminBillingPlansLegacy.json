@@ -1,0 +1,89 @@
+{
+  "header": {
+    "badge": "管理パネル",
+    "title": "サブスクリプションプラン",
+    "description": "商用パッケージ、利用上限、Stripe連携を管理します",
+    "addNewPlan": "新規プランを追加"
+  },
+  "list": {
+    "title": "全パッケージ",
+    "description": "ユーザー向けパッケージの閲覧と編集を行います。",
+    "empty": "サブスクリプションパッケージが見つかりません。",
+    "createFirst": "最初のプランを作成",
+    "columns": {
+      "name": "名前",
+      "tier": "ティア",
+      "price": "価格",
+      "creditsPerCycle": "クレジット/サイクル",
+      "limits": "制限（音声クローン / 用語集 / ACL）",
+      "status": "ステータス",
+      "actions": "操作"
+    },
+    "free": "無料",
+    "voiceClone": "音声クローン: {status}",
+    "glossaryAccess": "用語集アクセス: {status}",
+    "enabled": "有効",
+    "disabled": "無効",
+    "active": "有効",
+    "inactive": "無効"
+  },
+  "dialog": {
+    "editTitle": "サブスクリプションプランを編集",
+    "createTitle": "新規サブスクリプションプランを作成",
+    "description": "プランの価格、制限、AI機能フラグを設定します。",
+    "fields": {
+      "planName": "プラン名",
+      "planNamePlaceholder": "例: Startup, Enterprise",
+      "slug": "スラッグ（URL識別子）",
+      "slugPlaceholder": "例: startup-plan, enterprise-tier",
+      "price": "価格",
+      "currency": "通貨",
+      "currencyPlaceholder": "通貨を選択",
+      "billingCycle": "請求サイクル",
+      "billingCyclePlaceholder": "サイクルを選択",
+      "billingCycleMonthly": "毎月",
+      "billingCycleSemiannual": "6か月ごと",
+      "billingCycleYearly": "毎年",
+      "creditsPerCycle": "クレジット/サイクル",
+      "tierLevel": "ティアレベル",
+      "tierLevelPlaceholder": "例: Pro, Premium",
+      "maxParticipants": "最大参加人数",
+      "maxLanguages": "最大言語数"
+    },
+    "featureFlags": {
+      "heading": "機能権限フラグ",
+      "voiceCloning": "音声クローン",
+      "voiceCloningHint": "AIによる音声の模倣を許可します",
+      "aiAssistant": "AIアシスタント",
+      "aiAssistantHint": "ミーティング内でのインタラクティブAI",
+      "glossaryAccess": "用語集アクセス",
+      "glossaryAccessHint": "企業固有の用語を定義します"
+    },
+    "sortOrder": "並び順（表示順序）",
+    "highlights": "プランのハイライト（1行につき1項目）",
+    "highlightsPlaceholder": "例: 最大5人まで参加可能&#10;リアルタイム翻訳&#10;標準ニューラルTTS",
+    "activeStatus": "有効ステータス",
+    "activeStatusHint": "ユーザーが閲覧・購入できるようにするには有効のままにします",
+    "cancel": "キャンセル",
+    "save": "パッケージを保存",
+    "saving": "保存中..."
+  },
+  "errors": {
+    "nameRequired": "名前は必須です。",
+    "nameTooLong": "名前は100文字以内で入力してください。",
+    "slugRequired": "スラッグは必須です。",
+    "slugTooLong": "スラッグは50文字以内で入力してください。",
+    "slugInvalid": "スラッグは半角小文字・数字・ハイフンのみ使用できます（例: 'gold-tier'）。",
+    "tierRequired": "ティアは必須です。",
+    "tierTooLong": "ティアは20文字以内で入力してください。",
+    "currencyInvalid": "通貨は3文字のISOコードで指定してください。",
+    "billingCycleInvalid": "請求サイクルは 'monthly'、'semiannual'、'yearly' のいずれかを指定してください。",
+    "priceTooLow": "Stripeの決済制約により、{currency}の価格は最低{minPrice}である必要があります。",
+    "creditsNegative": "クレジットは0以上である必要があります。",
+    "maxParticipantsTooLow": "最大参加人数は2人以上である必要があります。",
+    "maxLanguagesTooLow": "最大言語数は1以上である必要があります。",
+    "sortOrderNegative": "並び順は0以上である必要があります。",
+    "createFailed": "プランの作成に失敗しました。",
+    "updateFailed": "プランの更新に失敗しました。"
+  }
+}

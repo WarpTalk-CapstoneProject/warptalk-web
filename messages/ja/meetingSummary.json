@@ -1,0 +1,72 @@
+{
+  "recording": {
+    "label": "録画",
+    "hideTitle": "録画を非表示にして文字起こしを広げる",
+    "showTitle": "文字起こしの横に録画を表示する",
+    "hide": "非表示",
+    "show": "表示"
+  },
+  "rail": {
+    "ariaLabel": "会議の要約パネル",
+    "summaryTab": "要約",
+    "talkTimeTab": "発言時間"
+  },
+  "toasts": {
+    "copySuccess": "要約をコピーしました。",
+    "copyError": "要約をコピーできませんでした。"
+  },
+  "empty": {
+    "generating": "要約を生成しています…",
+    "withheld": "この要約はあなたと共有されていません",
+    "noTranscript": "要約できる発言がありませんでした",
+    "noSummary": "まだ要約がありません"
+  },
+  "asSpoken": "話された言語のまま",
+  "languageGroups": {
+    "available": "利用可能",
+    "canBeWritten": "作成可能"
+  },
+  "controls": {
+    "shapeAriaLabel": "要約の形式",
+    "shapeTitle": "この会議を別の形式で読む",
+    "languageAriaLabel": "要約の言語",
+    "languageTitle": "この会議を別の言語で読む",
+    "copyTitle": "要約をテキストとしてコピー",
+    "copyAriaLabel": "要約をテキストとしてコピー",
+    "downloadTitle": "要約ファイルをダウンロード",
+    "downloadAriaLabel": "要約ファイルをダウンロード"
+  },
+  "rendering": {
+    "writing": "このバージョンを作成しています…",
+    "ownVersion": "これはあなた専用のバージョンです。ホストが公開した要約は変更されていません。"
+  },
+  "copyText": {
+    "titleLine": "{title} — AIによる会議の要約",
+    "noOverview": "(概要なし)",
+    "noneRecorded": "(記録なし)"
+  },
+  "narrative": {
+    "hint": "文をクリックすると、その出どころを確認できます。",
+    "jumpTitle": "この文の元になった箇所に移動"
+  },
+  "claim": {
+    "jumpTitle": "文字起こしのこの箇所に移動",
+    "noMoment": "時点の記録なし"
+  },
+  "noCitations": "この要約は引用機能が導入される前に作成されたため、いずれの項目も文字起こしまでたどることはできません。",
+  "uncited": "{count, plural, other {このうち#件の項目には時点が記録されていないため、文字起こしと照合できません。}}",
+  "talkTime": {
+    "empty": "この会議で発言が記録された人はいません。",
+    "heading": "発言時間の割合",
+    "percentAriaLabel": "発言時間の{percent}%",
+    "footnote": "文字起こしから算出しているため、会議への参加時間ではなく実際に発言していた時間を示します。"
+  },
+  "absence": {
+    "generating": "WarpTalkのAIアシスタントが文字起こしを解析しています。通常は1分もかかりません。",
+    "failed": "この会議の要約生成が完了しませんでした。文字起こしは引き続きご覧いただけます。",
+    "insufficientData": "この会議は文字起こしの内容が少なく、要約を生成できませんでした。",
+    "withheld": "この会議の要約は作成されていますが、あなたとは共有されていません。閲覧できる範囲はホストが管理しています。",
+    "noTranscript": "この会議では誰も発言しなかったため、文字起こしがなく、要約する内容もありませんでした。",
+    "absent": "この会議は要約が作成されないまま終了しました。"
+  }
+}

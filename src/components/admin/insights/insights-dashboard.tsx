@@ -43,7 +43,6 @@ import {
   insightsCsv,
   joinNotes,
   mrrSub,
-  NOT_AVAILABLE_NOTE,
   outstandingSub,
   PERIOD_CARDS,
   periodCardView,
@@ -151,6 +150,7 @@ const CARD_LINK =
 // ── header + period bar ──────────────────────────────────────────────────────
 
 function UpdatedPulse({ updatedAt }: { updatedAt: number }) {
+  const t = useTranslations("adminOps.insights");
   return (
     <span className="flex items-center gap-1.5 text-[11px] tabular-nums text-ink-muted">
       <span
@@ -160,8 +160,10 @@ function UpdatedPulse({ updatedAt }: { updatedAt: number }) {
         )}
       />
       {updatedAt > 0
-        ? `Updated ${new Date(updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
-        : "Loading…"}
+        ? t("common.updated", {
+            time: new Date(updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          })
+        : t("common.loading")}
     </span>
   );
 }
@@ -183,6 +185,7 @@ function PeriodBar({
   onChoosePeriod: (choice: PeriodChoice) => void;
   onExport: () => void;
 }) {
+  const t = useTranslations("adminOps.insights");
   const [customOpen, setCustomOpen] = useState(period.period === "custom");
   const [draftFrom, setDraftFrom] = useState(period.customFrom);
   const [draftTo, setDraftTo] = useState(period.customTo);
@@ -190,14 +193,14 @@ function PeriodBar({
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-2.5">
-        <div role="group" aria-label="Period" className="inline-flex flex-wrap overflow-hidden rounded-lg border border-hairline bg-surface-1">
+        <div role="group" aria-label={t("periodBar.groupLabel")} className="inline-flex flex-wrap overflow-hidden rounded-lg border border-hairline bg-surface-1">
           <button type="button" className={SEGMENT} aria-pressed={period.period === "today"} onClick={() => onChoosePeriod({ period: "today" })}>
-            Today
+            {t("periodBar.today")}
           </button>
           <button type="button" className={SEGMENT} aria-pressed={period.period === "7d"} onClick={() => onChoosePeriod({ period: "7d" })}>
-            7 days
+            {t("periodBar.days7")}
           </button>
-          <button type="button" className={cn(SEGMENT, "px-2.5")} aria-label="Previous month" onClick={() => onChoosePeriod({ period: "month", month: period.prevMonth })}>
+          <button type="button" className={cn(SEGMENT, "px-2.5")} aria-label={t("periodBar.previousMonth")} onClick={() => onChoosePeriod({ period: "month", month: period.prevMonth })}>
             <CaretLeft size={14} />
           </button>
           <button type="button" className={SEGMENT} aria-pressed={period.period === "month"} onClick={() => onChoosePeriod({ period: "month", month: period.month })}>
@@ -206,15 +209,15 @@ function PeriodBar({
           <button
             type="button"
             className={cn(SEGMENT, "px-2.5")}
-            aria-label="Next month"
+            aria-label={t("periodBar.nextMonth")}
             disabled={!period.nextMonth}
-            title={period.nextMonth ? undefined : "This is the current month"}
+            title={period.nextMonth ? undefined : t("periodBar.currentMonthTitle")}
             onClick={() => period.nextMonth && onChoosePeriod({ period: "month", month: period.nextMonth })}
           >
             <CaretRight size={14} />
           </button>
           <button type="button" className={SEGMENT} aria-pressed={period.period === "6m"} onClick={() => onChoosePeriod({ period: "6m" })}>
-            6 months
+            {t("periodBar.months6")}
           </button>
           <button
             type="button"
@@ -224,7 +227,7 @@ function PeriodBar({
             onClick={() => setCustomOpen((open) => !open)}
           >
             <CalendarBlank size={14} />
-            Custom
+            {t("periodBar.custom")}
           </button>
         </div>
         <span className="text-[13px] text-ink-muted">{period.caption}</span>
@@ -234,7 +237,7 @@ function PeriodBar({
           className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-lg bg-ink px-3.5 text-[13px] font-medium text-panel transition-opacity hover:opacity-85"
         >
           <DownloadSimple size={14} />
-          Export
+          {t("periodBar.export")}
         </button>
       </div>
 
@@ -247,7 +250,7 @@ function PeriodBar({
           }}
         >
           <label className="text-[11px] text-ink-muted">
-            From
+            {t("periodBar.from")}
             <input
               type="date"
               value={draftFrom}
@@ -256,7 +259,7 @@ function PeriodBar({
             />
           </label>
           <label className="text-[11px] text-ink-muted">
-            To (inclusive)
+            {t("periodBar.to")}
             <input
               type="date"
               value={draftTo}
@@ -269,7 +272,7 @@ function PeriodBar({
             disabled={!draftFrom || !draftTo}
             className="h-8 rounded-md bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
-            Show this range
+            {t("periodBar.showRange")}
           </button>
         </form>
       ) : null}
@@ -327,6 +330,7 @@ function CardLabel({ label, note }: { label: ReactNode; note?: string | null }) 
 }
 
 function PeriodCards({ props }: { props: InsightsDashboardProps }) {
+  const t = useTranslations("adminOps.insights");
   const sources = {
     billing: dataOf(props.billing),
     users: dataOf(props.users),
@@ -337,7 +341,7 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {PERIOD_CARDS.map((spec) => {
         const state = props[spec.source];
-        const view = periodCardView(spec, sources);
+        const view = periodCardView(spec, sources, t);
         const loading = state.status === "loading";
         return (
           <CardShell
@@ -345,7 +349,7 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             href={metricHref(spec.id)}
             className={cn(state.status === "ready" && state.refreshing && "opacity-60")}
           >
-            <CardLabel label={spec.label} note={loading ? null : view.note} />
+            <CardLabel label={t(`periodCards.${spec.id}`)} note={loading ? null : view.note} />
             <div
               className={cn(
                 "mt-2 truncate text-[21px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
@@ -357,8 +361,8 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             </div>
             {view.available ? (
               <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] tabular-nums text-ink-muted">
-                <span className={DELTA_TONE_CLASS[view.deltaTone]}>{deltaText(view.delta)}</span>
-                <span>last period {view.previous}</span>
+                <span className={DELTA_TONE_CLASS[view.deltaTone]}>{deltaText(view.delta, t)}</span>
+                <span>{t("periodCards.lastPeriod", { value: view.previous })}</span>
               </div>
             ) : null}
             {!loading && spec.id === "aiProviderCost" ? (
@@ -447,6 +451,7 @@ interface SnapshotCardSpec {
 }
 
 function SnapshotCard({ spec }: { spec: SnapshotCardSpec }) {
+  const t = useTranslations("adminOps.insights");
   const loading = spec.state.status === "loading";
   const unavailable = spec.state.status === "unavailable";
   const href = spec.state.status === "ready" ? metricHref(spec.id) : null;
@@ -463,7 +468,7 @@ function SnapshotCard({ spec }: { spec: SnapshotCardSpec }) {
         {spec.state.status === "ready" ? (spec.display ?? "—") : "—"}
       </div>
       {unavailable ? (
-        <div className="mt-1.5 text-[11px] text-ink-muted">{NOT_AVAILABLE_NOTE}</div>
+        <div className="mt-1.5 text-[11px] text-ink-muted">{t("common.notAvailable")}</div>
       ) : spec.state.status === "ready" && spec.sub ? (
         <div className="mt-1.5 truncate text-[11px] text-ink-muted" title={spec.sub}>
           {spec.sub}
@@ -534,11 +539,12 @@ function SourceBody<T>({
   isEmpty: (data: T) => boolean;
   children: (data: T) => ReactNode;
 }) {
+  const t = useTranslations("adminOps.insights");
   if (state.status === "loading") {
     return <div className="animate-pulse rounded-md bg-surface-2" style={{ height }} />;
   }
   if (state.status === "unavailable") {
-    return <ChartEmpty height={height}>{NOT_AVAILABLE_NOTE}</ChartEmpty>;
+    return <ChartEmpty height={height}>{t("common.notAvailable")}</ChartEmpty>;
   }
   if (isEmpty(state.data)) return <ChartEmpty height={height}>{empty}</ChartEmpty>;
   return <div className={cn(state.refreshing && "opacity-60")}>{children(state.data)}</div>;
@@ -549,7 +555,7 @@ const dateTime = (iso: string) =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
 
 /** The five largest services, then "Other" — ranked bars, one hue: the rank is the length. */
-function creditsByServiceRows(rows: BillingInsightsDto["creditsByService"]): BarListRow[] {
+function creditsByServiceRows(rows: BillingInsightsDto["creditsByService"], otherLabel: string): BarListRow[] {
   const grouped = new Map<string, { label: string; value: number }>();
   for (const row of rows) {
     const service = usageServiceOf(row.usageType);
@@ -565,7 +571,7 @@ function creditsByServiceRows(rows: BillingInsightsDto["creditsByService"]): Bar
   }));
   const rest = sorted.slice(5).reduce((sum, [, entry]) => sum + entry.value, 0);
   if (rest > 0) {
-    result.push({ key: "other", label: "Other", segments: [{ key: "other", label: "Other", value: rest, color: "var(--usage-service-other)" }] });
+    result.push({ key: "other", label: otherLabel, segments: [{ key: "other", label: otherLabel, value: rest, color: "var(--usage-service-other)" }] });
   }
   return result;
 }
@@ -579,13 +585,15 @@ function dayKeyTitle(key: string): string {
 const moneyVnd = (value: number) => formatMoney(value, "VND");
 const moneyAxis = (value: number) => compactMoney(value, "VND");
 
-const SUBSCRIPTION_SEGMENTS = [
-  { key: "active", label: "Active", color: CHART_COLORS.primary },
-  // A lighter step of the same hue: a trial is an account that has not paid yet, not another kind.
-  { key: "trial", label: "Trial", color: "color-mix(in srgb, var(--viz-1) 40%, var(--surface-1))" },
-  // Status, not identity: past due is the one state that needs acting on.
-  { key: "pastDue", label: "Past due", color: "var(--warning)" },
-] as const;
+function subscriptionSegments(t: ReturnType<typeof useTranslations>) {
+  return [
+    { key: "active", label: t("charts.legendActive"), color: CHART_COLORS.primary },
+    // A lighter step of the same hue: a trial is an account that has not paid yet, not another kind.
+    { key: "trial", label: t("charts.legendTrial"), color: "color-mix(in srgb, var(--viz-1) 40%, var(--surface-1))" },
+    // Status, not identity: past due is the one state that needs acting on.
+    { key: "pastDue", label: t("charts.legendPastDue"), color: "var(--warning)" },
+  ] as const;
+}
 
 function Rows({ children }: { children: ReactNode }) {
   return <ul className="max-h-[252px] overflow-auto">{children}</ul>;
@@ -633,6 +641,7 @@ function ListEmpty({ children }: { children: ReactNode }) {
 }
 
 function ListState<T>({ state, children }: { state: SourceState<T>; children: (data: T) => ReactNode }) {
+  const t = useTranslations("adminOps.insights");
   if (state.status === "loading") {
     return (
       <div className="space-y-2 px-4 py-3">
@@ -642,7 +651,7 @@ function ListState<T>({ state, children }: { state: SourceState<T>; children: (d
       </div>
     );
   }
-  if (state.status === "unavailable") return <ListEmpty>{NOT_AVAILABLE_NOTE}</ListEmpty>;
+  if (state.status === "unavailable") return <ListEmpty>{t("common.notAvailable")}</ListEmpty>;
   return <>{children(state.data)}</>;
 }
 
@@ -1018,6 +1027,7 @@ function findPnlMetric(data: ProfitAndLossDto, id: string) {
 // ── the page ─────────────────────────────────────────────────────────────────
 
 export function InsightsDashboard(props: InsightsDashboardProps) {
+  const t = useTranslations("adminOps.insights");
   const { period } = props;
   const billing = dataOf(props.billing);
   const snapshot = dataOf(props.snapshot);
@@ -1029,25 +1039,28 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
 
   const attention = useMemo(
     () =>
-      assembleNeedsAttention({
-        snapshot,
-        suspendedWorkspaces: dataOf(props.suspendedWorkspaces),
-        deadLetters,
-        deadLettersCapped,
-        usageAlerts: dataOf(props.usageAlerts),
-        newSalesLeads: dataOf(props.newSalesLeads),
-        health,
-        links: {
-          health: insightsHref("health"),
-          suspendedWorkspaces: insightsHref("suspendedWorkspaces"),
-          // No drill-down: the Event outbox page was retired (2026-09-24). The count stays here.
-          deadLetters: null,
-          newSalesLeads: insightsHref("newSalesLeads"),
-          subscriptions: insightsHref("subscriptions"),
-          workspace: workspaceHref,
+      assembleNeedsAttention(
+        {
+          snapshot,
+          suspendedWorkspaces: dataOf(props.suspendedWorkspaces),
+          deadLetters,
+          deadLettersCapped,
+          usageAlerts: dataOf(props.usageAlerts),
+          newSalesLeads: dataOf(props.newSalesLeads),
+          health,
+          links: {
+            health: insightsHref("health"),
+            suspendedWorkspaces: insightsHref("suspendedWorkspaces"),
+            // No drill-down: the Event outbox page was retired (2026-09-24). The count stays here.
+            deadLetters: null,
+            newSalesLeads: insightsHref("newSalesLeads"),
+            subscriptions: insightsHref("subscriptions"),
+            workspace: workspaceHref,
+          },
         },
-      }),
-    [snapshot, props.suspendedWorkspaces, deadLetters, deadLettersCapped, props.usageAlerts, props.newSalesLeads, health],
+        t,
+      ),
+    [snapshot, props.suspendedWorkspaces, deadLetters, deadLettersCapped, props.usageAlerts, props.newSalesLeads, health, t],
   );
   const attentionLoading =
     [props.snapshot, props.suspendedWorkspaces, props.deadLetters, props.newSalesLeads, props.health].some(
@@ -1079,109 +1092,109 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   const snapshotCards: SnapshotCardSpec[] = [
     {
       id: "revenueToday",
-      label: "Revenue today",
+      label: t("cards.revenueToday"),
       state: props.snapshot,
       value: snapshot?.revenueToday,
       display: formatInsightValue(snapshot?.revenueToday, "money"),
-      sub: snapshot ? revenueTodaySub(snapshot) : null,
+      sub: snapshot ? revenueTodaySub(snapshot, t) : null,
     },
     {
       id: "mrr",
-      label: "MRR",
+      label: t("cards.mrr"),
       state: props.snapshot,
       value: snapshot?.mrr,
       display: formatInsightValue(snapshot?.mrr, "money"),
-      sub: snapshot ? mrrSub(snapshot) : null,
+      sub: snapshot ? mrrSub(snapshot, t) : null,
     },
     {
       id: "activeSubscriptions",
-      label: "Active subscriptions",
+      label: t("cards.activeSubscriptions"),
       state: props.snapshot,
       value: snapshot?.activeSubscriptions,
       display: formatInsightValue(snapshot?.activeSubscriptions, "count"),
       sub: snapshot
         ? [
-            `${formatCount(snapshot.activeByCycle.monthly)} monthly`,
-            `${formatCount(snapshot.activeByCycle.yearly)} yearly`,
-            snapshot.activeByCycle.other > 0 ? `${formatCount(snapshot.activeByCycle.other)} other` : null,
+            t("cards.monthlyCount", { count: formatCount(snapshot.activeByCycle.monthly) }),
+            t("cards.yearlyCount", { count: formatCount(snapshot.activeByCycle.yearly) }),
+            snapshot.activeByCycle.other > 0 ? t("cards.otherCount", { count: formatCount(snapshot.activeByCycle.other) }) : null,
           ].filter(Boolean).join(" · ")
         : null,
     },
     {
       id: "churnRate",
-      label: "Churn rate (month)",
+      label: t("cards.churnRate"),
       state: props.snapshot,
       value: snapshot?.churnRateMonth.rate,
       display: formatInsightValue(snapshot?.churnRateMonth.rate, "percent"),
-      sub: snapshot ? churnSub(snapshot.churnRateMonth) : null,
+      sub: snapshot ? churnSub(snapshot.churnRateMonth, t) : null,
     },
   ];
 
   const opsCards: SnapshotCardSpec[] = [
     {
       id: "liveMeetings",
-      label: "Live meetings",
+      label: t("cards.liveMeetings"),
       state: liveState,
       value: live?.liveNow,
       display: formatInsightValue(live?.liveNow, "count"),
-      sub: live ? `${formatCount(live.startedToday)} started today` : null,
+      sub: live ? t("cards.startedToday", { count: live.startedToday }) : null,
       tone: "neutral",
     },
     {
       id: "outstandingInvoices",
-      label: "Outstanding invoices",
+      label: t("cards.outstandingInvoices"),
       state: props.snapshot,
       value: snapshot?.outstandingInvoices.count,
       display: formatInsightValue(snapshot?.outstandingInvoices.amount, "money"),
-      sub: snapshot ? outstandingSub(snapshot.outstandingInvoices) : null,
+      sub: snapshot ? outstandingSub(snapshot.outstandingInvoices, t) : null,
     },
     {
       id: "openSalesLeads",
-      label: "Open sales leads",
+      label: t("cards.openSalesLeads"),
       state: props.newSalesLeads,
       value: dataOf(props.newSalesLeads),
       display: formatInsightValue(dataOf(props.newSalesLeads), "count"),
-      sub: "New, waiting for a reply",
+      sub: t("cards.newWaitingReply"),
     },
     {
       id: "deadLetters",
-      label: "Dead-letter events",
+      label: t("cards.deadLetters"),
       state: props.deadLetters,
       value: deadLetters?.length,
       display: deadLetters ? `${formatCount(deadLetters.length)}${deadLettersCapped ? "+" : ""}` : "—",
-      sub: "Workspace event outbox",
+      sub: t("cards.workspaceEventOutbox"),
     },
   ];
 
   const moreCards: SnapshotCardSpec[] = [
     {
       id: "trials",
-      label: "Trials",
+      label: t("cards.trials"),
       state: props.snapshot,
       display: formatInsightValue(snapshot?.trials, "count"),
-      sub: snapshot ? `${formatCount(snapshot.trialsEndingThisWeek)} end this week` : null,
+      sub: snapshot ? t("cards.endThisWeek", { count: snapshot.trialsEndingThisWeek }) : null,
     },
     {
       id: "pastDue",
-      label: "Past due subscriptions",
+      label: t("cards.pastDue"),
       state: props.snapshot,
       value: snapshot?.pastDue,
       display: formatInsightValue(snapshot?.pastDue, "count"),
-      sub: snapshot ? `${formatCount(snapshot.suspended)} suspended` : null,
+      sub: snapshot ? t("cards.suspendedCount", { count: snapshot.suspended }) : null,
     },
     {
       id: "activeWorkspaces",
-      label: "Active workspaces",
+      label: t("cards.activeWorkspaces"),
       state: props.snapshot,
       display: formatInsightValue(snapshot?.activeWorkspaces, "count"),
-      sub: "With an active subscription",
+      sub: t("cards.withActiveSubscription"),
     },
     {
       id: "platformCreditBalance",
-      label: "Platform credit balance",
+      label: t("cards.platformCreditBalance"),
       state: props.snapshot,
       display: formatInsightValue(snapshot?.platformCreditBalance, "credits"),
-      sub: "Credits across all workspaces",
+      sub: t("cards.creditsAcrossWorkspaces"),
     },
   ];
 
@@ -1190,7 +1203,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
   return (
     <div className="flex flex-col gap-3.5 text-ink">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">Insights</h1>
+        <h1 className="text-[22px] font-semibold leading-[1.25] tracking-[-0.4px]">{t("title")}</h1>
         <UpdatedPulse updatedAt={props.updatedAt} />
       </div>
 
@@ -1211,8 +1224,8 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       <details className="group">
         <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 px-0.5 py-1 text-[13px] font-medium text-ink-muted hover:text-ink [&::-webkit-details-marker]:hidden">
           <CaretRight size={14} className="transition-transform group-open:rotate-90" />
-          <span className="group-open:hidden">Show 4 more metrics</span>
-          <span className="hidden group-open:inline">Hide 4 more metrics</span>
+          <span className="group-open:hidden">{t("periodCards.showMore", { count: moreCards.length })}</span>
+          <span className="hidden group-open:inline">{t("periodCards.hideMore", { count: moreCards.length })}</span>
         </summary>
         <div className="mt-2.5">
           <SnapshotGrid cards={moreCards} />
@@ -1220,12 +1233,12 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </details>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <Panel chart title="Revenue, 6 months" link={{ href: insightsHref("subscriptions"), label: "Subscriptions" }}>
+        <Panel chart title={t("charts.revenue6mTitle")} link={{ href: insightsHref("subscriptions"), label: t("links.subscriptions") }}>
           <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
               height={240}
-              empty="No revenue in these six months."
+              empty={t("charts.noRevenue6m")}
               isEmpty={(data) => (data.revenueByMonth ?? []).length === 0}
             >
               {(data) => {
@@ -1234,14 +1247,14 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                   <>
                     <ChartFigure
                       value={formatInsightValue(sumKnown(months.map((row) => row.revenue)), "money")}
-                      caption={joinNotes("Successful payments, by month", data.revenueByMonthNote)}
+                      caption={joinNotes(t("charts.revenueByMonthSubtitle"), data.revenueByMonthNote)}
                     />
                     <TimeSeriesChart
                       variant="bar"
-                      ariaLabel="Revenue per month"
+                      ariaLabel={t("charts.ariaRevenueByMonth")}
                       height={180}
                       labels={months.map((row) => monthKeyLabel(row.month))}
-                      series={[{ key: "revenue", label: "Revenue", values: months.map((row) => row.revenue) }]}
+                      series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: months.map((row) => row.revenue) }]}
                       formatValue={moneyVnd}
                       formatAxis={moneyAxis}
                     />
@@ -1251,12 +1264,12 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
             </SourceBody>
           </div>
         </Panel>
-        <Panel chart title="Revenue per day" link={{ href: insightsHref("billingLedger"), label: "Ledger" }}>
+        <Panel chart title={t("charts.revenuePerDayTitle")} link={{ href: insightsHref("billingLedger"), label: t("links.ledger") }}>
           <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
               height={240}
-              empty="No days in this period."
+              empty={t("charts.noDaysInPeriod")}
               isEmpty={(data) => (data.revenueByDay ?? []).length === 0}
             >
               {(data) => {
@@ -1267,20 +1280,20 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                     <ChartFigure
                       value={formatInsightValue(sumKnown(days.map((day) => day.row?.revenue ?? null)), "money")}
                       caption={joinNotes(
-                        isMonth ? `${period.label} — days still to come are left blank, not drawn as 0` : period.label,
+                        isMonth ? t("charts.revenuePerDayNote", { label: period.label }) : period.label,
                         data.revenueByDayNote,
                       )}
                     />
                     <TimeSeriesChart
                       variant="area"
-                      ariaLabel="Revenue per day"
+                      ariaLabel={t("charts.ariaRevenuePerDay")}
                       height={180}
                       labels={days.map((day) => day.label)}
                       titles={days.map((day) => dayKeyTitle(day.key))}
-                      series={[{ key: "revenue", label: "Revenue", values: days.map((day) => day.row?.revenue ?? null) }]}
+                      series={[{ key: "revenue", label: t("charts.revenueSeriesLabel"), values: days.map((day) => day.row?.revenue ?? null) }]}
                       formatValue={moneyVnd}
                       formatAxis={moneyAxis}
-                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
+                      describeGap={(index) => (days[index]?.future ? t("charts.stillToComeShort") : t("charts.noFigure"))}
                     />
                   </>
                 );
@@ -1293,48 +1306,49 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       <ProfitAndLossSection props={props} />
 
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel chart title="Credits by AI service" link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
+        <Panel chart title={t("charts.creditsByServiceTitle")} link={{ href: insightsHref("workspaces"), label: t("links.workspaces") }}>
           <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
               height={200}
-              empty="No credits consumed in this period."
-              isEmpty={(data) => creditsByServiceRows(data.creditsByService ?? []).length === 0}
+              empty={t("charts.noCreditsConsumed")}
+              isEmpty={(data) => creditsByServiceRows(data.creditsByService ?? [], t("charts.otherService")).length === 0}
             >
               {(data) => {
-                const rows = creditsByServiceRows(data.creditsByService);
+                const rows = creditsByServiceRows(data.creditsByService, t("charts.otherService"));
                 const total = rows.reduce((sum, row) => sum + row.segments[0].value, 0);
                 return (
                   <>
-                    <ChartFigure value={formatCount(total)} caption={`Credits consumed · ${period.label}`} />
-                    <BarList ariaLabel="Credits by AI service" rows={rows} formatValue={formatCount} showShare />
+                    <ChartFigure value={formatCount(total)} caption={t("charts.creditsByServiceSubtitle", { period: period.label })} />
+                    <BarList ariaLabel={t("charts.ariaCreditsByService")} rows={rows} formatValue={formatCount} showShare />
                   </>
                 );
               }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel chart title="Subscriptions by plan" link={{ href: insightsHref("plans"), label: "Plans" }}>
+        <Panel chart title={t("charts.subscriptionsByPlanTitle")} link={{ href: insightsHref("plans"), label: t("links.plans") }}>
           <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.snapshot}
               height={200}
-              empty="No subscriptions yet."
+              empty={t("charts.noSubscriptionsYet")}
               isEmpty={(data) => (data.subscriptionsByPlan ?? []).length === 0}
             >
               {(data) => {
                 const total = data.subscriptionsByPlan.reduce((sum, plan) => sum + plan.active + plan.trial + plan.pastDue, 0);
+                const segments = subscriptionSegments(t);
                 return (
                   <>
-                    <ChartFigure value={formatCount(total)} caption="Active · trial · past due, right now" />
+                    <ChartFigure value={formatCount(total)} caption={t("charts.subscriptionsByPlanSubtitle")} />
                     <BarList
-                      ariaLabel="Subscriptions by plan and status"
-                      legend={SUBSCRIPTION_SEGMENTS.map((segment) => ({ ...segment }))}
+                      ariaLabel={t("charts.ariaSubscriptionsByPlan")}
+                      legend={segments.map((segment) => ({ ...segment }))}
                       formatValue={formatCount}
                       rows={data.subscriptionsByPlan.map((plan) => ({
                         key: plan.planSlug,
                         label: plan.planName,
-                        segments: SUBSCRIPTION_SEGMENTS.map((segment) => ({
+                        segments: segments.map((segment) => ({
                           key: segment.key,
                           label: segment.label,
                           color: segment.color,
@@ -1349,12 +1363,12 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           </div>
         </Panel>
         {/* No link: the platform meeting directory was retired (2026-09-24). */}
-        <Panel chart title="Meetings per day">
+        <Panel chart title={t("charts.meetingsPerDayTitle")}>
           <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.meetings}
               height={200}
-              empty="No days in this period."
+              empty={t("charts.noDaysInPeriod")}
               isEmpty={(data) => (data.meetingsByDay ?? []).length === 0}
             >
               {(data) => {
@@ -1364,21 +1378,21 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                   <>
                     <ChartFigure
                       value={formatInsightValue(sumKnown(days.map((day) => day.row?.meetings ?? null)), "count")}
-                      caption={`Meetings held · ${formatInsightValue(hours, "hours")} translated`}
+                      caption={t("charts.meetingsPerDayCaption", { hours: formatInsightValue(hours, "hours") })}
                     />
                     <TimeSeriesChart
                       variant="bar"
                       integer
-                      ariaLabel="Meetings per day"
+                      ariaLabel={t("charts.ariaMeetingsPerDay")}
                       height={220}
                       labels={days.map((day) => day.label)}
                       titles={days.map((day) => dayKeyTitle(day.key))}
-                      series={[{ key: "meetings", label: "meetings", values: days.map((day) => day.row?.meetings ?? null) }]}
+                      series={[{ key: "meetings", label: t("charts.meetingsSeriesLabel"), values: days.map((day) => day.row?.meetings ?? null) }]}
                       formatValue={formatCount}
-                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
+                      describeGap={(index) => (days[index]?.future ? t("charts.stillToComeShort") : t("charts.noFigure"))}
                       tooltipFooter={(index) => {
                         const row = days[index]?.row;
-                        return row ? `${formatInsightValue(row.hours, "hours")} translated` : null;
+                        return row ? t("charts.hoursTranslatedSuffix", { hours: formatInsightValue(row.hours, "hours") }) : null;
                       }}
                     />
                   </>
@@ -1390,14 +1404,14 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
-        <Panel title="Needs attention" subtitle="Things an operator should act on today">
+        <Panel title={t("needsAttention.title")} subtitle={t("needsAttention.subtitle")}>
           {attentionLoading ? (
             <ListState state={{ status: "loading" }}>{() => null}</ListState>
           ) : attention.items.length === 0 ? (
             <ListEmpty>
               {attention.unavailable.length === 0
-                ? "Nothing needs attention right now."
-                : "Nothing needs attention in the sources that answered."}
+                ? t("needsAttention.nothingNow")
+                : t("needsAttention.nothingAnswered")}
             </ListEmpty>
           ) : (
             <Rows>
@@ -1411,26 +1425,26 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           )}
           {!attentionLoading && attention.unavailable.length > 0 ? (
             <footer className="border-t border-hairline px-4 py-2 text-[11px] text-ink-muted">
-              Not checked, not available yet: {attention.unavailable.join(", ")}
+              {t("needsAttention.notChecked", { sources: attention.unavailable.join(", ") })}
             </footer>
           ) : null}
         </Panel>
 
-        <Panel title="Top workspaces by credits" subtitle={period.label} link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
+        <Panel title={t("panels.topWorkspacesTitle")} subtitle={period.label} link={{ href: insightsHref("workspaces"), label: t("links.workspaces") }}>
           <ListState state={props.billing}>
             {(data) => {
               const top = data.topWorkspaces ?? [];
-              if (top.length === 0) return <ListEmpty>No credits consumed in this period.</ListEmpty>;
+              if (top.length === 0) return <ListEmpty>{t("charts.noCreditsConsumed")}</ListEmpty>;
               return (
                 <div className="px-4 py-3">
                   <BarList
-                    ariaLabel="Top workspaces by credits"
+                    ariaLabel={t("panels.topWorkspacesTitle")}
                     formatValue={formatCount}
                     rows={top.map((row, index) => ({
                       key: row.workspaceId,
-                      label: `${index + 1}. ${workspaceLabel(row.workspaceName)}`,
+                      label: `${index + 1}. ${workspaceLabel(row.workspaceName, t)}`,
                       href: workspaceHref(row.workspaceId),
-                      segments: [{ key: "credits", label: "Credits", value: row.credits }],
+                      segments: [{ key: "credits", label: t("panels.creditsSegmentLabel"), value: row.credits }],
                     }))}
                   />
                 </div>
@@ -1439,11 +1453,11 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
           </ListState>
         </Panel>
 
-        <Panel title="Recent payments" subtitle="Across all workspaces" link={{ href: insightsHref("billingLedger"), label: "Ledger" }}>
+        <Panel title={t("panels.recentPaymentsTitle")} subtitle={t("panels.recentPaymentsSubtitle")} link={{ href: insightsHref("billingLedger"), label: t("links.ledger") }}>
           <ListState state={props.snapshot}>
             {(data) =>
               (data.recentPayments ?? []).length === 0 ? (
-                <ListEmpty>No payments yet.</ListEmpty>
+                <ListEmpty>{t("panels.noPaymentsYet")}</ListEmpty>
               ) : (
                 <Rows>
                   {data.recentPayments.map((payment, index) => {
@@ -1452,7 +1466,7 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
                     return (
                       <Row key={`${payment.workspaceId}-${payment.at}-${index}`} href={workspaceHref(payment.workspaceId)}>
                         <RowText
-                          title={payment.workspaceId ? workspaceLabel(payment.workspaceName) : "No workspace"}
+                          title={payment.workspaceId ? workspaceLabel(payment.workspaceName, t) : t("panels.noWorkspace")}
                           detail={[dateTime(payment.at), payment.method].filter(Boolean).join(" · ")}
                         />
                         <div className="text-right text-[13px] tabular-nums text-ink">
@@ -1471,21 +1485,24 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         </Panel>
 
         <Panel
-          title="Subscriptions ending soon"
-          subtitle="Soonest first · up to 8 paid subscriptions whose period ends within 14 days · trials not included"
-          link={{ href: insightsHref("subscriptionsEndingSoon"), label: "Subscriptions" }}
+          title={t("panels.endingSoonTitle")}
+          subtitle={t("panels.endingSoonSubtitle")}
+          link={{ href: insightsHref("subscriptionsEndingSoon"), label: t("links.subscriptions") }}
         >
           <ListState state={props.snapshot}>
             {(data) =>
               (data.endingSoon ?? []).length === 0 ? (
-                <ListEmpty>No paid subscription reaches the end of its period in the next 14 days.</ListEmpty>
+                <ListEmpty>{t("panels.noEndingSoon")}</ListEmpty>
               ) : (
                 <Rows>
                   {data.endingSoon.map((row) => (
                     <Row key={`${row.workspaceId}-${row.endsAt}`} href={workspaceHref(row.workspaceId)}>
                       <RowText
-                        title={workspaceLabel(row.workspaceName)}
-                        detail={`${row.planName} · ${row.cancelAtPeriodEnd ? "will not renew" : "renews"}`}
+                        title={workspaceLabel(row.workspaceName, t)}
+                        detail={t("panels.planRenewal", {
+                          plan: row.planName,
+                          renewal: row.cancelAtPeriodEnd ? t("panels.willNotRenew") : t("panels.renews"),
+                        })}
                       />
                       <div className={cn("text-right text-[13px] tabular-nums", row.cancelAtPeriodEnd ? "text-warning" : "text-ink")}>
                         {dayShort(new Date(row.endsAt))}

@@ -1,0 +1,114 @@
+{
+  "absence": {
+    "withheld": "Cuộc họp này có bản ghi, nhưng chưa được chia sẻ với bạn. Chỉ những người đã tham gia mới có thể đọc — hãy hỏi người tổ chức nếu bạn cần quyền truy cập.",
+    "unavailable": "Không thể tải bản ghi ngay lúc này. Hãy làm mới trang để thử lại.",
+    "notYet": "Bản ghi sẽ xuất hiện ở đây khi cuộc họp được chuyển thành văn bản.",
+    "notKept": "Cuộc họp này được đặt là không lưu bản ghi. Phụ đề và dịch vẫn hoạt động trực tiếp, nhưng không có gì được lưu lại, nên không có bản ghi, tóm tắt AI hay biên bản.",
+    "paused": "Không có bản ghi nào được lưu. Bản ghi đã bị tạm dừng trong cuộc họp này, và không có gì được nói trong lúc đó được ghi lại.",
+    "none": "Không có bản ghi nào được thu lại cho cuộc họp này vì không ai phát biểu khi nó diễn ra. WarpTalk lưu lại lời nói dù Bắt đầu dịch có được bật hay không, nên cũng không có gì để viết tóm tắt AI."
+  },
+  "followPlayback": {
+    "srTitle": "Cuộn theo bản ghi âm một lần nữa",
+    "label": "Theo dõi bản ghi"
+  },
+  "toolbar": {
+    "entriesChip": "{isEnded, select, true {Đã lưu} other {Đang diễn ra}} · {count, plural, other {# mục}}",
+    "durationTitle": "Cuộc họp diễn ra bao lâu, từ lúc bắt đầu đến lúc kết thúc",
+    "duration": "Thời lượng {duration}",
+    "translationStarted": "Bắt đầu dịch lúc {time}",
+    "finalizedTitle": "Nội dung đã được phê duyệt và khóa lại. Không thể chỉnh sửa thêm.",
+    "finalized": "Đã hoàn tất & khóa",
+    "findAria": "Tìm trong bản ghi này",
+    "copy": "Sao chép",
+    "copyLabel": "Bản ghi",
+    "download": "Tải xuống",
+    "discard": "Hủy bỏ",
+    "saving": "Đang lưu…",
+    "doneSaveAll": "Xong & lưu tất cả",
+    "editAll": "Sửa tất cả",
+    "finalizeButtonTitle": "Phê duyệt nội dung và khóa lại. Sau đó sẽ không thể chỉnh sửa được nữa.",
+    "finalizing": "Đang hoàn tất…",
+    "finalizeAndLock": "Hoàn tất & khóa"
+  },
+  "finalizeDialog": {
+    "title": "Hoàn tất và khóa bản ghi này?",
+    "description": "Sau khi hoàn tất, bản ghi được xem là đã phê duyệt và bị khóa. Sẽ không thể chỉnh sửa thêm.",
+    "cancel": "Hủy",
+    "confirm": "Xác nhận"
+  },
+  "toasts": {
+    "correctionTooShort": "Chỉnh sửa này xóa đi quá nhiều nội dung của dòng để có thể lưu. Hãy giữ lại ít nhất một từ trong mỗi câu.",
+    "correctionSaved": "Đã lưu chỉnh sửa. Các bản dịch đang được thực hiện lại.",
+    "correctionSaveFailed": "Không thể lưu chỉnh sửa bản ghi.",
+    "batchUnsplittable": "Đã lưu {saved} dòng, nhưng {count, plural, other {# dòng bị xóa}} quá nhiều nội dung nên không thể lưu. Hãy giữ lại ít nhất một từ trong mỗi câu.",
+    "batchSaved": "Đã lưu {count, plural, other {# chỉnh sửa}}. Các bản dịch đang được thực hiện lại.",
+    "batchPartialFailure": "Đã lưu {saved} dòng, nhưng {failed} dòng không thể lưu. Nội dung bạn đã sửa vẫn còn ở đây — hãy thử lại.",
+    "finalizeSuccess": "Đã hoàn tất và khóa bản ghi.",
+    "finalizeFailed": "Không thể hoàn tất bản ghi."
+  },
+  "sessionDivider": {
+    "label": "Lượt dịch {number}",
+    "now": "hiện tại"
+  },
+  "languageStatus": {
+    "translating": "Đang dịch phần còn lại của cuộc họp sang {name} — {done} trên {total} mục đã sẵn sàng.",
+    "translatingAria": "Đang dịch sang {name}",
+    "budgetExhausted": "Bản ghi này đã đạt giới hạn dịch trong ngày hôm nay. {count, plural, other {# mục}} vẫn giữ nguyên ngôn ngữ gốc, với nội dung gốc chỉ cách một cú nhấp chuột.",
+    "failed": "{count, plural, other {# mục}} không thể dịch sang {name}.",
+    "tryAgain": "Thử lại",
+    "notFullyCovered": "{missing} trên {total} mục chưa được dịch đầy đủ sang {name} — đã được đánh dấu, với nội dung gốc chỉ cách một cú nhấp chuột.",
+    "notYetTranslated": "{missing} trên {total} mục chưa được dịch sang {name}.",
+    "translateAction": "{count, plural, other {Dịch}}"
+  },
+  "languageMenu": {
+    "asSpoken": "Như lời nói",
+    "asSpokenDetail": "Mỗi dòng theo đúng ngôn ngữ gốc của nó",
+    "readIn": "Đọc bản ghi này bằng",
+    "inThisTranscript": "Trong bản ghi này",
+    "notTranslatedYetGroup": "Chưa được dịch",
+    "translatingNow": "Đang dịch",
+    "wholeMeeting": "Toàn bộ cuộc họp",
+    "notTranslatedYet": "Chưa được dịch",
+    "partialDetail": "{done} trên {total} mục"
+  },
+  "layoutToggle": {
+    "conversation": "Chế độ hội thoại",
+    "document": "Chế độ tài liệu",
+    "timeline": "Chế độ dòng thời gian"
+  },
+  "speaker": {
+    "you": "Bạn",
+    "unknownSpeaker": "Người nói không xác định",
+    "unknownSpeakerLower": "người nói không xác định"
+  },
+  "line": {
+    "editAria": "Sửa dòng bản ghi",
+    "editTitle": "Sửa dòng này",
+    "editByAria": "Sửa dòng bản ghi của {speaker}",
+    "playFromHere": "Phát bản ghi âm từ đây",
+    "playFromHereAt": "Phát bản ghi âm từ đây — {time}",
+    "translatedPartialTitle": "Một phần của dòng này chưa được dịch — hiện toàn bộ nội dung đã nói, bằng {language}",
+    "translatedTitle": "Được dịch từ {language} — hiện nội dung đã nói",
+    "untranslatedTitle": "Dòng này chưa được dịch — đang hiển thị bằng {language}, như lời nói"
+  },
+  "findBar": {
+    "placeholder": "Tìm trong bản ghi này — không cần gõ dấu",
+    "closeAria": "Đóng ô tìm kiếm"
+  },
+  "versionHistory": {
+    "aria": "Lịch sử phiên bản",
+    "triggerTitle": "Dòng này đã được chỉnh sửa — xem lịch sử phiên bản",
+    "label": "Lịch sử phiên bản",
+    "heading": "Lịch sử phiên bản",
+    "subheading": "Mới nhất trước. Mỗi mục là một lần chỉnh sửa đã lưu.",
+    "loading": "Đang tải…",
+    "loadError": "Không thể tải lịch sử phiên bản. Hãy đóng lại và thử lại.",
+    "empty": "Không có chỉnh sửa nào được ghi nhận cho dòng này."
+  },
+  "editor": {
+    "editingTranslated": "Đang sửa nội dung đã nói, bằng {language}. Các bản dịch sẽ được viết lại từ đây.",
+    "cancel": "Hủy",
+    "saving": "Đang lưu…",
+    "save": "Lưu chỉnh sửa"
+  }
+}

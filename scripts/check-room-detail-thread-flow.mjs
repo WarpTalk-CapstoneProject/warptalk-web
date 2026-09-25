@@ -13,6 +13,9 @@ const meetingEndpoints = await readFile(
   path.join(root, "src/lib/api/endpoints.ts"),
   "utf8",
 );
+const meetingRoomPageEn = JSON.parse(
+  await readFile(path.join(root, "messages/en/meetingRoomPage.json"), "utf8"),
+);
 
 // The transcript panel's own props, so a host gate cannot be added to it without failing a check.
 const transcriptPanelStart = sidePanel.indexOf("<TranscriptPanel");
@@ -25,7 +28,9 @@ const checks = [
   // the old `UserChip` name asserted a shape rather than the behaviour this line is named for.
   // What must stay true is that a person's chip opens a popover — check that, not the symbol.
   ["user chips open a popover profile dropdown", page.includes("function PersonPopover(") && page.includes("<PopoverTrigger") && page.includes("<PopoverContent")],
-  ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes("Room notes") && page.includes("useEditor(")],
+  // "Room notes" moved into i18n (t("notes.heading")) — check the page still calls that key,
+  // and the English catalog still carries the wording.
+  ["room description has a rich-text notes editor", page.includes("function RoomNotesEditor(") && page.includes('t("notes.heading")') && page.includes("useEditor(") && meetingRoomPageEn.notes?.heading === "Room notes"],
   ["room detail does not render inferred activity", !page.includes("function RoomThread(") && !page.includes("buildThreadEvents(")],
   ["room detail does not label synthesized room data as activity", !page.includes("Room events and participant changes.") && !page.includes(">Activity<")],
   // WT-197 moved this button into a shared `RoomEntryButton` so the promoted header copy and

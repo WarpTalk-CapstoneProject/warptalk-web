@@ -1,3 +1,4 @@
+import { useTranslations } from "next-intl";
 import { LanguageSelector } from "@/components/rooms/create/language-selector";
 import { useUpdateTranslationRoomSettings } from "@/hooks/use-translationRooms";
 import { StatusPanel } from "../StatusPanel";
@@ -5,7 +6,7 @@ import { TranslationRoomDto, TranslationRoomParticipantDto } from "@/types/trans
 import { Calendar as CalendarIcon, Copy, Tag, Users } from "@phosphor-icons/react/dist/ssr";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { meetingTypeByValue } from "@/lib/meeting/meeting-types";
+import { meetingTypeByValue, MEETING_TYPE_I18N_KEYS } from "@/lib/meeting/meeting-types";
 import { UserChip, type UserChipIdentity } from "@/components/user/user-chip";
 
 /**
@@ -54,12 +55,17 @@ export function MeetingPropertiesPills({
   /** WT-310(12) — the page's copy handler, so the room-code pill reuses its confirmation. */
   onCopy: (text: string, label: string) => void;
 }) {
+  const t = useTranslations("rooms.create.templatePicker");
+
   // The day this meeting runs: its scheduled time when it has one, otherwise the day it was
   // created — which for an ad-hoc room is the same thing.
   const meetingDate = new Date(room.scheduledAt ?? room.createdAt);
 
   // null for a type this build's registry does not know — the chip is then simply not rendered.
   const meetingType = meetingTypeByValue(room.translationRoomType);
+  const meetingTypeLabel = meetingType
+    ? t(`types.${MEETING_TYPE_I18N_KEYS[meetingType.value]}`)
+    : null;
 
   const updateSettings = useUpdateTranslationRoomSettings();
 
@@ -93,7 +99,7 @@ export function MeetingPropertiesPills({
           title={`Meeting type — sets the lobby, mute on entry, recording, breakouts and the ${meetingType.defaults.maxParticipants}-seat capacity`}
         >
           <Tag size={12} weight="regular" className="text-ink-muted" aria-hidden />
-          <span className="text-[12px] font-medium text-ink">{meetingType.label}</span>
+          <span className="text-[12px] font-medium text-ink">{meetingTypeLabel}</span>
         </div>
       )}
 

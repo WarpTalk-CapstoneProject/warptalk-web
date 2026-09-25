@@ -1,0 +1,114 @@
+{
+  "absence": {
+    "withheld": "This meeting has a transcript, but it is not shared with you. Only the people who took part can read it — ask the host if you need access.",
+    "unavailable": "The transcript could not be loaded right now. Refresh to try again.",
+    "notYet": "The transcript is saved here as the meeting is transcribed.",
+    "notKept": "This meeting was set not to keep a transcript. Subtitles and translation ran live, but nothing was saved, so there is no transcript, AI summary or minutes.",
+    "paused": "No transcript was saved. The transcript was paused during this meeting, and nothing was said while it was recording.",
+    "none": "No transcript was captured for this meeting because nobody spoke while it was open. WarpTalk saves what people say whether or not translation is started, so there was also nothing for an AI summary to be written from."
+  },
+  "followPlayback": {
+    "srTitle": "Scroll with the recording again",
+    "label": "Follow playback"
+  },
+  "toolbar": {
+    "entriesChip": "{isEnded, select, true {Saved} other {Live}} · {count, plural, one {# entry} other {# entries}}",
+    "durationTitle": "How long the meeting ran, from when it was started to when it was ended",
+    "duration": "Duration {duration}",
+    "translationStarted": "Translation started {time}",
+    "finalizedTitle": "The wording is approved and locked. No further edits are possible.",
+    "finalized": "Finalized & locked",
+    "findAria": "Find in this transcript",
+    "copy": "Copy",
+    "copyLabel": "Transcript",
+    "download": "Download",
+    "discard": "Discard",
+    "saving": "Saving…",
+    "doneSaveAll": "Done & save all",
+    "editAll": "Edit all",
+    "finalizeButtonTitle": "Approve the wording and lock it. No further edits are possible afterwards.",
+    "finalizing": "Finalizing…",
+    "finalizeAndLock": "Finalize & lock"
+  },
+  "finalizeDialog": {
+    "title": "Finalize and lock this transcript?",
+    "description": "Once finalized, the transcript is approved and locked. No further edits are possible.",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
+  },
+  "toasts": {
+    "correctionTooShort": "This edit removes too much of the line to save. Keep at least a word per sentence.",
+    "correctionSaved": "Correction saved. Its translations are being redone.",
+    "correctionSaveFailed": "Could not save the transcript correction.",
+    "batchUnsplittable": "Saved {saved}, but {count, plural, one {# line removes} other {# lines remove}} too much to save. Keep at least a word per sentence.",
+    "batchSaved": "Saved {count, plural, one {# correction} other {# corrections}}. Their translations are being redone.",
+    "batchPartialFailure": "Saved {saved}, but {failed} could not be saved. Their edits are still here — try again.",
+    "finalizeSuccess": "Transcript finalized and locked.",
+    "finalizeFailed": "Could not finalize the transcript."
+  },
+  "sessionDivider": {
+    "label": "Translation {number}",
+    "now": "now"
+  },
+  "languageStatus": {
+    "translating": "Translating the rest of this meeting into {name} — {done} of {total} entries ready.",
+    "translatingAria": "Translating into {name}",
+    "budgetExhausted": "This transcript has reached its translation limit for today. {count, plural, one {# entry stays} other {# entries stay}} as spoken, with the original words one click away.",
+    "failed": "{count, plural, one {# entry} other {# entries}} could not be translated into {name}.",
+    "tryAgain": "Try again",
+    "notFullyCovered": "{missing} of {total} entries {missing, plural, one {is} other {are}} not fully in {name} — marked, with the spoken words one click away.",
+    "notYetTranslated": "{missing} of {total} entries {missing, plural, one {is} other {are}} not in {name} yet.",
+    "translateAction": "{count, plural, one {Translate it} other {Translate them}}"
+  },
+  "languageMenu": {
+    "asSpoken": "As spoken",
+    "asSpokenDetail": "Every line in its own language",
+    "readIn": "Read this transcript in",
+    "inThisTranscript": "In this transcript",
+    "notTranslatedYetGroup": "Not translated yet",
+    "translatingNow": "Translating now",
+    "wholeMeeting": "The whole meeting",
+    "notTranslatedYet": "Not translated yet",
+    "partialDetail": "{done} of {total} {total, plural, one {entry} other {entries}}"
+  },
+  "layoutToggle": {
+    "conversation": "Conversation view",
+    "document": "Document view",
+    "timeline": "Timeline view"
+  },
+  "speaker": {
+    "you": "You",
+    "unknownSpeaker": "Unknown speaker",
+    "unknownSpeakerLower": "unknown speaker"
+  },
+  "line": {
+    "editAria": "Edit transcript line",
+    "editTitle": "Edit this line",
+    "editByAria": "Edit transcript line by {speaker}",
+    "playFromHere": "Play the recording from here",
+    "playFromHereAt": "Play the recording from here — {time}",
+    "translatedPartialTitle": "Part of this line was never translated — show all of what was said, in {language}",
+    "translatedTitle": "Translated from {language} — show what was said",
+    "untranslatedTitle": "This line was never translated — it is shown in {language}, as spoken"
+  },
+  "findBar": {
+    "placeholder": "Find in this transcript — accents optional",
+    "closeAria": "Close find"
+  },
+  "versionHistory": {
+    "aria": "Version history",
+    "triggerTitle": "This line was corrected — show its version history",
+    "label": "Version history",
+    "heading": "Version history",
+    "subheading": "Newest first. Each entry is one saved correction.",
+    "loading": "Loading…",
+    "loadError": "Could not load the version history. Close this and try again.",
+    "empty": "No corrections are recorded for this line."
+  },
+  "editor": {
+    "editingTranslated": "Editing what was said, in {language}. The translations are rewritten from it.",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save correction"
+  }
+}

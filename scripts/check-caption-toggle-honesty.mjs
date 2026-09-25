@@ -18,23 +18,35 @@
 import { readFileSync } from "node:fs";
 
 const FILE = "src/components/rooms/live/meeting-control-bar.tsx";
+const CATALOG_FILE = "messages/en/meetingControlBar.json";
 const source = readFileSync(FILE, "utf8");
+const catalog = JSON.parse(readFileSync(CATALOG_FILE, "utf8"));
 
 const failures = [];
 
-// The label expression for the CC control, whatever its exact wording.
+// The label expression for the CC control now resolves through i18n (see
+// .agents/page-docs/i18n-localization.md's "Contract tests updated to stay meaningful" note) —
+// assert both halves: the component still branches on subtitlesEnabled to pick the translation
+// key, AND the English catalog still carries wording that keeps the CC button honest.
 const labelMatch = source.match(
-  /subtitlesEnabled\s*\n?\s*\?\s*"([^"]+)"\s*\n?\s*:\s*"([^"]+)"/,
+  /subtitlesEnabled\s*\n?\s*\?\s*t\("captions\.hide"\)\s*\n?\s*:\s*t\("captions\.show"\)/,
 );
 
 if (!labelMatch) {
-  failures.push(`could not find the CC control's label expression in ${FILE}`);
-} else {
-  const [, whenOn, whenOff] = labelMatch;
+  failures.push(
+    `could not find the CC control's subtitlesEnabled ? t("captions.hide") : t("captions.show") label expression in ${FILE}`,
+  );
+}
 
+const whenOn = catalog.captions?.hide;
+const whenOff = catalog.captions?.show;
+
+if (typeof whenOn !== "string" || typeof whenOff !== "string") {
+  failures.push(`${CATALOG_FILE} is missing captions.hide/captions.show`);
+} else {
   if (!/transcript/i.test(whenOn)) {
     failures.push(
-      `the "hide" label is "${whenOn}" — it must state that the transcript keeps recording, ` +
+      `${CATALOG_FILE}'s captions.hide is "${whenOn}" — it must state that the transcript keeps recording, ` +
         "because turning this off does NOT stop transcript capture",
     );
   }

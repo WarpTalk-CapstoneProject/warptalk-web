@@ -88,7 +88,13 @@ export function participantPresence(
   return PRESENCE_BY_STATUS[normalizeStatus(status)] ?? "not-in-room";
 }
 
-/** The one wording of each presence. Surfaces render this, they do not invent their own. */
+/**
+ * The one wording of each presence, in English. Surfaces render this, they do not invent their
+ * own. Left untranslated deliberately: this module is pure and `node --test`-able (see the file
+ * comment above), and this constant's exact English values are pinned by this file's own test
+ * suite. Call sites that read from a translation catalog use `presenceLabel` below instead —
+ * same one-wording rule, with a locale attached.
+ */
 export const PRESENCE_LABELS: Record<ParticipantPresence, string> = {
   "in-room": "In Room",
   connected: "Connected",
@@ -97,6 +103,37 @@ export const PRESENCE_LABELS: Record<ParticipantPresence, string> = {
   disconnected: "Disconnected",
   left: "Left",
 };
+
+/**
+ * Translator shape shared with `getPlanDescription`/`buildFeatureList` (src/lib/utils.ts) and
+ * `describeRecordSharing` (record-sharing.ts), matching a next-intl `useTranslations(...)`
+ * already scoped to `meetingRoomPage.presence` (e.g. `t("connected")`). Optional and defaulted to
+ * `PRESENCE_LABELS` so this stays the one wording of each presence — a caller with no translator
+ * gets exactly what `PRESENCE_LABELS` always gave.
+ */
+type PresenceLabelTranslator = (key: string) => string;
+
+const PRESENCE_LABEL_KEYS: Record<ParticipantPresence, string> = {
+  "in-room": "inRoom",
+  connected: "connected",
+  lobby: "lobby",
+  "not-in-room": "notInRoom",
+  disconnected: "disconnected",
+  left: "left",
+};
+
+/**
+ * The one wording of a presence, translated. Surfaces that read from the i18n catalog call this
+ * instead of indexing `PRESENCE_LABELS` directly, so the translated surface and the pinned
+ * English constant cannot drift into two different sets of words for the same six states.
+ */
+export function presenceLabel(
+  presence: ParticipantPresence,
+  t?: PresenceLabelTranslator,
+): string {
+  if (!t) return PRESENCE_LABELS[presence];
+  return t(PRESENCE_LABEL_KEYS[presence]);
+}
 
 function normalizeStatus(status?: string | null): string {
   return typeof status === "string" ? status.trim().toLowerCase() : "";
