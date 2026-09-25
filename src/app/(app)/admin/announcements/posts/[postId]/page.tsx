@@ -31,7 +31,6 @@ import {
   Eye,
   FloppyDisk,
   ImageSquare,
-  MagnifyingGlass,
   Megaphone,
   Moon,
   PaperPlaneTilt,
@@ -57,6 +56,8 @@ import {
 } from "@/components/admin/cms/cms-editor";
 import { AuditHistory } from "@/components/admin/cms/cms-history";
 import { CmsChip, EditedBy } from "@/components/admin/cms/cms-shared";
+import { PlanPicker, WorkspacePicker } from "@/components/admin/cms/audience-pickers";
+import { EmailInboxPreviewDialog } from "@/components/admin/cms/email-inbox-preview";
 import { MarkdownEditor } from "@/components/admin/cms/markdown-editor";
 import { AnnouncementIcon, resolveImage, type AnnouncementViewModel } from "@/components/announcements/announcement-surfaces";
 import { Button } from "@/components/ui/button";
@@ -75,8 +76,9 @@ import {
   useUpdateAnnouncement,
   useUploadAnnouncementAsset,
 } from "@/hooks/use-admin-announcement-cms";
-import { useAdminPlans } from "@/hooks/use-admin-pricing";
-import { useAdminWorkspaceByRef, useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
+import { useAdminEmailTemplates } from "@/hooks/use-admin-email-templates";
+import { useCan } from "@/hooks/use-staff-access";
+import { ADMIN_PERMISSIONS } from "@/lib/admin/staff-permissions";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   AUDIENCE_MODES,
@@ -259,7 +261,9 @@ function Editor({ announcement, backLink }: { announcement: AdminAnnouncementCms
   const askPublishNow = () =>
     confirm({
       title: t("confirm.publishTitle", { title: draft.title || tEditor("newTitle") }),
-      description: t("confirm.publishDescription"),
+      description: draft.emailTemplateKey
+        ? `${t("confirm.publishDescription")} ${tEditor("email.alsoSends")}`
+        : t("confirm.publishDescription"),
       confirmLabel: dirty && announcement ? tEditor("saveAndPublish") : t("actions.publishNow"),
       onConfirm: () =>
         run(t("toasts.published"), async () => {
@@ -271,7 +275,9 @@ function Editor({ announcement, backLink }: { announcement: AdminAnnouncementCms
   const askSchedule = () =>
     confirm({
       title: tEditor("scheduleDialog.title"),
-      description: tEditor("scheduleDialog.description", { date: new Date(scheduledStart ?? "").toLocaleString() }),
+      description: draft.emailTemplateKey
+        ? `${tEditor("scheduleDialog.description", { date: new Date(scheduledStart ?? "").toLocaleString() })} ${tEditor("email.alsoSendsAtStart")}`
+        : tEditor("scheduleDialog.description", { date: new Date(scheduledStart ?? "").toLocaleString() }),
       confirmLabel: tEditor("schedule"),
       onConfirm: () =>
         run(t("toasts.scheduled"), async () => {
@@ -406,7 +412,7 @@ function Editor({ announcement, backLink }: { announcement: AdminAnnouncementCms
         {announcement ? (
           <>
             <CmsTabPanel value="history" active={tab}>
-              <AuditHistory entityType="Announcement" entityId={announcement.id} />
+              <AuditHistory entityType="announcement" entityId={announcement.id} />
             </CmsTabPanel>
             <CmsTabPanel value="analytics" active={tab}>
               <AnalyticsTab announcementId={announcement.id} />
@@ -937,7 +943,76 @@ function ScheduleTab({ draft, set, canSchedule }: { draft: AnnouncementDraft; se
           </div>
         </div>
       </AdminPanel>
+
+      <EmailChannel draft={draft} set={set} />
     </div>
+  );
+}
+
+/**
+ * The optional email channel: a custom email template (published in English) sent to the same
+ * audience when the announcement goes live. It needs content.email_send; the server checks it
+ * too, and withdraws the email if the announcement is unpublished before it starts.
+ */
+function EmailChannel({ draft, set }: { draft: AnnouncementDraft; set: Setter }) {
+  const t = useTranslations("adminCms.announcements.editor.email");
+  const canSend = useCan(ADMIN_PERMISSIONS.contentEmailSend);
+  const templates = useAdminEmailTemplates();
+  const [previewing, setPreviewing] = useState(false);
+  const eligible = (templates.data ?? []).filter(
+    (template) =>
+      template.isCustom &&
+      template.status !== "DELETED" &&
+      template.variants.some((variant) => variant.locale === "en" && variant.status === "ACTIVE" && variant.publishedVersion > 0),
+  );
+  const chosen = eligible.find((template) => template.key === draft.emailTemplateKey);
+  const missing = draft.emailTemplateKey && !chosen && templates.data;
+
+  return (
+    <AdminPanel className="space-y-3 p-4">
+      <div>
+        <h3 className="text-[13px] font-semibold">{t("title")}</h3>
+        <p className="mt-0.5 text-[12px] text-ink-muted">{t("description")}</p>
+      </div>
+      {!canSend ? (
+        <p className="text-[12px] text-ink-subtle">{t("noPermission")}</p>
+      ) : templates.isError ? (
+        <p className="text-[12px] text-destructive">{t("loadError")}</p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label={t("title")}
+              value={draft.emailTemplateKey}
+              onChange={(event) => set("emailTemplateKey", event.target.value)}
+              className="h-9 min-w-[260px] rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink"
+            >
+              <option value="">{t("none")}</option>
+              {eligible.map((template) => (
+                <option key={template.key} value={template.key}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+            {chosen ? (
+              <Button variant="outline" size="sm" onClick={() => setPreviewing(true)}>
+                <Eye size={14} />
+                {t("preview")}
+              </Button>
+            ) : null}
+            <Link href="/admin/email-templates" className="text-[12px] text-ink-muted underline hover:text-ink">
+              {t("manage")}
+            </Link>
+          </div>
+          {eligible.length === 0 && templates.data ? <p className="text-[12px] text-ink-subtle">{t("noneEligible")}</p> : null}
+          {missing ? <p className="text-[12px] text-amber-700 dark:text-amber-300">{t("unavailable")}</p> : null}
+          {chosen ? <p className="text-[12px] text-ink-subtle">{t("when")}</p> : null}
+        </>
+      )}
+      {previewing && chosen ? (
+        <EmailInboxPreviewDialog open onOpenChange={setPreviewing} templateKey={chosen.key} templateName={chosen.name} canSendTest={false} />
+      ) : null}
+    </AdminPanel>
   );
 }
 
@@ -1068,118 +1143,6 @@ function AnalyticsTab({ announcementId }: { announcementId: string }) {
           <ChartEmpty height={220}>{analytics.isPending ? t("loading") : t("empty")}</ChartEmpty>
         )}
       </AdminPanel>
-    </div>
-  );
-}
-
-/** Plans come from the billing catalogue; a slug already on the announcement stays even if retired. */
-function PlanPicker({ selected, onChange }: { selected: string[]; onChange: (slugs: string[]) => void }) {
-  const t = useTranslations("adminCms.announcements.editor.plans");
-  const plans = useAdminPlans();
-  const catalog = plans.data ?? [];
-  const known = new Set(catalog.map((plan) => plan.slug.toLowerCase()));
-  const orphans = selected.filter((slug) => !known.has(slug.toLowerCase()));
-
-  const toggle = (slug: string) => onChange(selected.includes(slug) ? selected.filter((value) => value !== slug) : [...selected, slug]);
-
-  if (plans.isError) return <p className="text-[12px] text-destructive">{t("error")}</p>;
-  if (plans.isPending) return <p className="text-[12px] text-ink-muted">{t("loading")}</p>;
-
-  return (
-    <div>
-      <p className="text-[12px] text-ink-muted">{t("label")}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {catalog.map((plan) => {
-          const slug = plan.slug.toLowerCase();
-          const on = selected.includes(slug);
-          return (
-            <button
-              key={plan.id}
-              type="button"
-              onClick={() => toggle(slug)}
-              aria-pressed={on}
-              className={cn(
-                "rounded-full border px-3 py-1 text-[12px] transition-colors",
-                on ? "border-ink bg-ink text-surface-1" : "border-border hover:bg-surface-2",
-                !plan.isActive && "opacity-60",
-              )}
-            >
-              {plan.name} <span className={on ? "text-surface-1/70" : "text-ink-subtle"}>· {slug}</span>
-            </button>
-          );
-        })}
-        {orphans.map((slug) => (
-          <button key={slug} type="button" onClick={() => toggle(slug)} className="rounded-full border border-ink bg-ink px-3 py-1 text-[12px] text-surface-1" title={t("retired")}>
-            {slug}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function WorkspaceChip({ id, onRemove }: { id: string; onRemove: () => void }) {
-  const workspace = useAdminWorkspaceByRef(id);
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-border bg-surface-2 py-0.5 pl-2.5 pr-1 text-[12px]">
-      <span className="max-w-[220px] truncate">{workspace.data?.name ?? id.slice(0, 8)}</span>
-      <button type="button" onClick={onRemove} className="rounded-full p-0.5 text-ink-subtle hover:bg-surface-3 hover:text-ink">
-        <X size={11} />
-      </button>
-    </span>
-  );
-}
-
-function WorkspacePicker({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) {
-  const t = useTranslations("adminCms.announcements.editor.workspaces");
-  const [search, setSearch] = useState("");
-  const query = useMemo(() => ({ page: 1, pageSize: 8, search: search.trim() }), [search]);
-  const directory = useAdminWorkspaceDirectory(query, { enabled: Boolean(search.trim()) });
-  const results = search.trim() ? (directory.data?.items ?? []) : [];
-
-  return (
-    <div className="space-y-2">
-      {selected.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {selected.map((id) => (
-            <WorkspaceChip key={id} id={id} onRemove={() => onChange(selected.filter((value) => value !== id))} />
-          ))}
-        </div>
-      ) : null}
-      <div className="relative">
-        <MagnifyingGlass size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle" />
-        <Input className="pl-8" placeholder={t("searchPlaceholder")} value={search} onChange={(event) => setSearch(event.target.value)} />
-      </div>
-      {search.trim() ? (
-        <div className="max-h-52 overflow-y-auto rounded-lg border border-border">
-          {directory.isPending ? (
-            <p className="px-3 py-3 text-[12px] text-ink-muted">{t("searching")}</p>
-          ) : directory.isError ? (
-            <p className="px-3 py-3 text-[12px] text-destructive">{t("error")}</p>
-          ) : results.length === 0 ? (
-            <p className="px-3 py-3 text-[12px] text-ink-muted">{t("noMatch")}</p>
-          ) : (
-            <ul>
-              {results.map((workspace) => {
-                const added = selected.includes(workspace.id);
-                return (
-                  <li key={workspace.id}>
-                    <button
-                      type="button"
-                      disabled={added}
-                      onClick={() => onChange([...selected, workspace.id])}
-                      className="flex w-full items-center justify-between gap-3 border-b border-border/60 px-3 py-2 text-left last:border-b-0 hover:bg-surface-2 disabled:opacity-50"
-                    >
-                      <span className="truncate text-[13px] text-ink">{workspace.name}</span>
-                      <span className="shrink-0 text-[11px] text-ink-subtle">{added ? t("added") : t("memberCount", { count: workspace.memberCount })}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -116,16 +116,22 @@ export function sameContent(a: TemplateContent, b: TemplateContent): boolean {
 
 // ── Lists ────────────────────────────────────────────────────────────────────────────────────
 
-export type TemplateFilter = "all" | "live" | "dormant" | "customized" | "draft";
+export type TemplateFilter = "all" | "live" | "dormant" | "customized" | "draft" | "custom" | "builtIn" | "archived";
 
 export interface TemplateCardFacts {
   isLive: boolean;
   /** Any published variant. */
   isCustomized: boolean;
   hasDraftChanges: boolean;
+  /** Created by an admin (v3). */
+  isCustom?: boolean;
+  /** A soft-deleted custom template: only the Archived filter shows it. */
+  isDeleted?: boolean;
 }
 
 export function matchesFilter(template: TemplateCardFacts, filter: TemplateFilter): boolean {
+  if (filter === "archived") return Boolean(template.isDeleted);
+  if (template.isDeleted) return false;
   switch (filter) {
     case "live":
       return template.isLive;
@@ -135,6 +141,10 @@ export function matchesFilter(template: TemplateCardFacts, filter: TemplateFilte
       return template.isCustomized;
     case "draft":
       return template.hasDraftChanges;
+    case "custom":
+      return Boolean(template.isCustom);
+    case "builtIn":
+      return !template.isCustom;
     default:
       return true;
   }

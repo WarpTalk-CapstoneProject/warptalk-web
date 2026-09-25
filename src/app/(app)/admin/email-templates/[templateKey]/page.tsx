@@ -16,7 +16,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
@@ -24,9 +24,11 @@ import {
   ArrowCounterClockwise,
   ArrowLeft,
   Copy,
+  EnvelopeOpen,
   EnvelopeSimple,
   Eye,
   FloppyDisk,
+  PaperPlaneRight,
   PaperPlaneTilt,
   Plus,
   Trash,
@@ -55,7 +57,13 @@ import {
   PreviewControls,
   type PreviewOptions,
 } from "@/components/admin/cms/email-preview-frame";
+import { CustomTemplateDetails } from "@/components/admin/cms/custom-template-details";
+import { EmailInboxPreviewDialog } from "@/components/admin/cms/email-inbox-preview";
+import { EmailSendDialog } from "@/components/admin/cms/email-send-dialog";
 import { SendTestEmailDialog } from "@/components/admin/cms/email-send-test-dialog";
+import { EmailSendsPanel } from "@/components/admin/cms/email-sends-panel";
+import { EmailTemplateDeleteDialog } from "@/components/admin/cms/email-template-delete-dialog";
+import { Tooltip } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,8 +84,12 @@ import {
   useRestoreEmailVersion,
   useSaveEmailDraft,
   useSaveSampleSet,
+  useRestoreCustomEmail,
   useUnarchiveEmail,
 } from "@/hooks/use-admin-email-templates";
+import { useCan } from "@/hooks/use-staff-access";
+import { isCustomTemplate, isDeletedTemplate } from "@/lib/admin/email-library";
+import { ADMIN_PERMISSIONS } from "@/lib/admin/staff-permissions";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import {
   blockInclude,
@@ -102,7 +114,9 @@ import {
   type EmailVariantDto,
 } from "@/types/admin-cms";
 
-const TABS = ["content", "layout", "variables", "preview", "history", "analytics"] as const;
+const TABS = ["content", "details", "layout", "variables", "preview", "sends", "history", "analytics"] as const;
+/** Details and Sends exist only for templates an admin created. */
+const CUSTOM_ONLY: readonly string[] = ["details", "sends"];
 type Tab = (typeof TABS)[number];
 
 const BUILT_IN_SET = "00000000-0000-0000-0000-000000000000";
@@ -220,7 +234,9 @@ function Editor({
   const t = useTranslations("adminCms.emailEditor");
   const tCommon = useTranslations("adminCms.common");
   const { template } = detail;
-  const [tab, setTab] = useHashTab(TABS, "content");
+  const [rawTab, setTab] = useHashTab(TABS, "content");
+  // A built-in template has no Details or Sends tab; a link to one lands on Content.
+  const tab: Tab = !isCustomTemplate(template) && CUSTOM_ONLY.includes(rawTab) ? "content" : rawTab;
 
   const initial = useMemo(() => contentFrom(variant?.draft ?? detail.default), [variant, detail.default]);
   const initialLayout = variant?.draft.layoutId ?? null;
@@ -249,7 +265,16 @@ function Editor({
   // Unsaved: what is on screen differs from the saved draft (or, for a locale never written, from
   // the built-in wording it starts from).
   const savedDirty = !sameContent(effective, initial) || layoutId !== initialLayout;
-  const archived = variant?.status === "ARCHIVED";
+  const custom = isCustomTemplate(template);
+  const deleted = isDeletedTemplate(template);
+  const archived = variant?.status === "ARCHIVED" || deleted;
+  const canSend = useCan(ADMIN_PERMISSIONS.contentEmailSend);
+  const englishPublished = detail.variants.some((v) => v.locale === "en" && v.status === "ACTIVE" && v.publishedVersion > 0);
+  const [asReceived, setAsReceived] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const restoreTemplate = useRestoreCustomEmail();
+  const router = useRouter();
   const localIssues = checkTemplate(template.variables, effective);
   const state = localeState(variant ?? undefined);
   const sentAs = sentVersionFor(locale, detail.variants);
@@ -494,7 +519,20 @@ function Editor({
             : t("sentAs.builtIn", { locale: locale.toUpperCase() })}
       </p>
 
-      {archived ? (
+      {deleted ? (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface-2 px-4 py-3 text-[12.5px] text-ink-muted">
+          <span className="flex-1">{t("deletedNotice", { reason: template.deleteReason ?? "—" })}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={restoreTemplate.isPending}
+            onClick={() => void run(t("toasts.restoredTemplate"), () => restoreTemplate.mutateAsync(template.key))}
+          >
+            <ArrowCounterClockwise size={14} />
+            {t("actions.restoreTemplate")}
+          </Button>
+        </div>
+      ) : archived ? (
         <p className="mt-3 rounded-lg border border-border bg-surface-2 px-4 py-3 text-[12.5px] text-ink-muted">{t("archivedNotice")}</p>
       ) : null}
 
@@ -503,7 +541,7 @@ function Editor({
           label={t("tabsLabel")}
           value={tab}
           onChange={setTab}
-          tabs={TABS.map((value) => ({
+          tabs={TABS.filter((value) => custom || !CUSTOM_ONLY.includes(value)).map((value) => ({
             value,
             label: t(`tabs.${value}`),
             badge: value === "content" && localIssues.length + serverIssues.length > 0 ? localIssues.length + serverIssues.length : undefined,
@@ -598,6 +636,17 @@ function Editor({
           />
         </CmsTabPanel>
 
+        {custom ? (
+          <>
+            <CmsTabPanel value="details" active={tab}>
+              <CustomTemplateDetails key={template.updatedAt ?? ""} template={template} disabled={deleted} />
+            </CmsTabPanel>
+            <CmsTabPanel value="sends" active={tab}>
+              <EmailSendsPanel templateKey={template.key} canSend={canSend} onNewSend={englishPublished && !deleted ? () => setSendingEmail(true) : undefined} />
+            </CmsTabPanel>
+          </>
+        ) : null}
+
         <CmsTabPanel value="variables" active={tab}>
           <VariablesTab detail={detail} sampleSetId={sampleSetId} onSampleSet={setSampleSetId} />
         </CmsTabPanel>
@@ -611,7 +660,13 @@ function Editor({
                 <SampleSetSelect sets={detail.sampleSets} value={sampleSetId} onChange={setSampleSetId} />
               }
             />
-            <span className="text-[12px] text-ink-subtle">{savedDirty ? t("previewOfDraftUnsaved") : t("previewOfDraft")}</span>
+            <span className="flex items-center gap-2 text-[12px] text-ink-subtle">
+              {savedDirty ? t("previewOfDraftUnsaved") : t("previewOfDraft")}
+              <Button variant="outline" size="sm" onClick={() => setAsReceived(true)}>
+                <EnvelopeOpen size={14} />
+                {t("actions.asReceived")}
+              </Button>
+            </span>
           </div>
           {preview.isError ? (
             <p className="text-[12.5px] text-destructive">{getErrorMessage(preview.error, t("previewError"))}</p>
@@ -663,12 +718,41 @@ function Editor({
             {archived ? t("actions.unarchive") : t("actions.archive")}
           </Button>
         ) : null}
-        {variant && !archived ? (
+        {variant && !archived && !custom ? (
           <Button variant="outline" size="sm" onClick={askReset} disabled={busy}>
             <ArrowCounterClockwise size={14} />
             {t("actions.reset")}
           </Button>
         ) : null}
+        {custom && canSend && !deleted ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSendingEmail(true)}
+            disabled={busy || !englishPublished}
+            title={englishPublished ? undefined : t("sendNeedsPublish")}
+          >
+            <PaperPlaneRight size={14} />
+            {t("actions.sendEmail")}
+          </Button>
+        ) : null}
+        {custom ? (
+          !deleted ? (
+            <Button variant="destructive" size="sm" onClick={() => setDeleting(true)} disabled={busy}>
+              <Trash size={14} />
+              {t("actions.deleteTemplate")}
+            </Button>
+          ) : null
+        ) : (
+          <Tooltip content={t("builtInNoDelete", { service: template.service })}>
+            <span>
+              <Button variant="outline" size="sm" disabled aria-label={t("actions.deleteTemplate")}>
+                <Trash size={14} />
+                {t("actions.deleteTemplate")}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
         {variant?.hasDraftChanges && !archived ? (
           <Button variant="destructive" size="sm" onClick={askDiscard} disabled={busy}>
             <Trash size={14} />
@@ -695,6 +779,23 @@ function Editor({
           locale={locale}
           content={fieldsFrom(effective, layoutId)}
           sampleSetId={sampleSetId === BUILT_IN_SET ? null : sampleSetId}
+        />
+      ) : null}
+      {asReceived ? (
+        <EmailInboxPreviewDialog open onOpenChange={setAsReceived} templateKey={template.key} templateName={template.name} initialLocale={locale} />
+      ) : null}
+      {sendingEmail ? (
+        <EmailSendDialog open onOpenChange={setSendingEmail} template={template} onStarted={() => setTab("sends")} />
+      ) : null}
+      {deleting ? (
+        <EmailTemplateDeleteDialog
+          open
+          onOpenChange={setDeleting}
+          templateKey={template.key}
+          templateName={template.name}
+          onDeleted={(permanent) => {
+            if (permanent) router.push("/admin/email-templates");
+          }}
         />
       ) : null}
       {confirmDialog}
@@ -1111,7 +1212,7 @@ function HistoryTab({
       </section>
       <section>
         <h3 className="mb-3 text-[13px] font-semibold">{t("history.audit")}</h3>
-        <AuditHistory entityType="EmailTemplate" entityId={templateKey} />
+        <AuditHistory entityType="email_template" entityId={templateKey} />
       </section>
     </div>
   );

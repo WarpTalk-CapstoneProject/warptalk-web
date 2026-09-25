@@ -25,7 +25,6 @@ import {
   Copy,
   EnvelopeSimple,
   Eye,
-  PaperPlaneTilt,
   PencilSimple,
   Plus,
   Stack,
@@ -52,7 +51,13 @@ import {
   useListView,
 } from "@/components/admin/cms/cms-list";
 import { CHIP_TONES, CmsCard, CmsCardGrid, CmsChip, EditedBy, useCmsDateFormatter } from "@/components/admin/cms/cms-shared";
+import { BlockPreviewDialog, EmailInboxPreviewDialog } from "@/components/admin/cms/email-inbox-preview";
+import { EmailSendDialog } from "@/components/admin/cms/email-send-dialog";
 import { SendTestEmailDialog } from "@/components/admin/cms/email-send-test-dialog";
+import { EmailStatusChips, EmailTemplateCard, LocalePills } from "@/components/admin/cms/email-template-card";
+import { EmailTemplateDeleteDialog } from "@/components/admin/cms/email-template-delete-dialog";
+import { EmailTemplateWizard } from "@/components/admin/cms/email-template-wizard";
+import { BlockThumbnail, TemplateThumbnail } from "@/components/admin/cms/email-thumbnail";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,19 +70,20 @@ import {
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAdminEmailTemplates, useEmailBulk, useResetEmailToDefault } from "@/hooks/use-admin-email-templates";
+import { useAdminEmailTemplates, useEmailBulk, useResetEmailToDefault, useRestoreCustomEmail } from "@/hooks/use-admin-email-templates";
+import { useCan } from "@/hooks/use-staff-access";
+import { isCustomTemplate, isDeletedTemplate } from "@/lib/admin/email-library";
+import { ADMIN_PERMISSIONS } from "@/lib/admin/staff-permissions";
 import { useCreateEmailBlock, useEmailBlockBulk, useEmailBlocks } from "@/hooks/use-admin-email-blocks";
 import { prune, toggleAll, toggleOne } from "@/lib/admin/cms-selection";
 import {
   BLOCK_KEY_PATTERN,
   blockStatus,
   compareTemplates,
-  localeState,
   matchesFilter,
   matchesSearch,
   slugify,
   type BlockStatus,
-  type LocaleState,
   type TemplateFilter,
   type TemplateSort,
 } from "@/lib/admin/email-template-editor";
@@ -92,7 +98,9 @@ export default function EmailTemplatesPage() {
   const t = useTranslations("adminCms.emails");
   const [section, setSection] = useHashTab(SECTIONS, "emails");
   const [creating, setCreating] = useState<EmailBlockKind | null>(null);
+  const [wizard, setWizard] = useState(false);
   const templates = useAdminEmailTemplates();
+  const takenKeys = useMemo(() => new Set((templates.data ?? []).map((template) => template.key)), [templates.data]);
   const layouts = useEmailBlocks("LAYOUT");
   const blocks = useEmailBlocks("PARTIAL");
 
@@ -104,7 +112,12 @@ export default function EmailTemplatesPage() {
         title={t("title")}
         description={t("description")}
         actions={
-          section === "emails" ? null : (
+          section === "emails" ? (
+            <Button size="sm" onClick={() => setWizard(true)}>
+              <Plus size={14} />
+              {t("newTemplate")}
+            </Button>
+          ) : (
             <Button size="sm" onClick={() => setCreating(section === "layouts" ? "LAYOUT" : "PARTIAL")}>
               <Plus size={14} />
               {section === "layouts" ? t("newLayout") : t("newBlock")}
@@ -131,19 +144,22 @@ export default function EmailTemplatesPage() {
       {section === "blocks" ? <BlocksSection kind="PARTIAL" onCreate={() => setCreating("PARTIAL")} /> : null}
 
       <CreateBlockDialog kind={creating} onClose={() => setCreating(null)} />
+      <EmailTemplateWizard open={wizard} onOpenChange={setWizard} takenKeys={takenKeys} />
     </AdminPage>
   );
 }
 
 // ── Emails ──────────────────────────────────────────────────────────────────────────────────
 
-const EMAIL_FILTERS: readonly TemplateFilter[] = ["all", "live", "dormant", "customized", "draft"];
+const EMAIL_FILTERS: readonly TemplateFilter[] = ["all", "custom", "builtIn", "live", "dormant", "customized", "draft", "archived"];
 
 function facts(template: EmailTemplateListItemDto) {
   return {
     isLive: template.isLive,
     isCustomized: template.variants.some((variant) => variant.publishedVersion > 0),
     hasDraftChanges: template.hasDraftChanges,
+    isCustom: isCustomTemplate(template),
+    isDeleted: isDeletedTemplate(template),
   };
 }
 
@@ -166,6 +182,12 @@ function EmailsSection() {
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkLocale, setBulkLocale] = useState<string>("");
   const [testing, setTesting] = useState<EmailTemplateListItemDto | null>(null);
+  const [previewing, setPreviewing] = useState<EmailTemplateListItemDto | null>(null);
+  const [sending, setSending] = useState<EmailTemplateListItemDto | null>(null);
+  const [deleting, setDeleting] = useState<EmailTemplateListItemDto | null>(null);
+  const restore = useRestoreCustomEmail();
+  const canSend = useCan(ADMIN_PERMISSIONS.contentEmailSend);
+  const router = useRouter();
   // Read by the duplicate dialog's confirm: the dialog captures its request when it opens.
   const duplicateTarget = useRef("vi");
 
@@ -175,7 +197,7 @@ function EmailsSection() {
       all
         .filter((template) => matchesFilter(facts(template), filter))
         .filter((template) =>
-          matchesSearch([template.name, template.key, template.description, template.subject, template.service, template.trigger], search),
+          matchesSearch([template.name, template.key, template.description, template.renderedSubject, template.subject, template.service, template.trigger], search),
         )
         .sort((a, b) =>
           compareTemplates(sort, { name: a.name, updatedAt: a.updatedAt, sent: a.last30Days.sent }, { name: b.name, updatedAt: b.updatedAt, sent: b.last30Days.sent }),
@@ -241,6 +263,31 @@ function EmailsSection() {
         }
       },
     });
+  };
+
+  const askArchiveAll = (template: EmailTemplateListItemDto) =>
+    confirm({
+      title: t("archiveAllDialog.title", { name: template.name }),
+      description: t("archiveAllDialog.description", { service: template.service }),
+      confirmLabel: t("archiveAllDialog.confirm"),
+      destructive: true,
+      onConfirm: async () => {
+        try {
+          const result = await bulk.mutateAsync({ action: "archive", keys: [template.key], locale: null, targetLocale: null });
+          reportBulk(result, t("toasts.archivedAll"), (failed, first) => tCommon("bulk.partial", { failed, error: first }));
+        } catch (caught) {
+          toast.error(getErrorMessage(caught, tCommon("toasts.failed")));
+        }
+      },
+    });
+
+  const doRestore = async (template: EmailTemplateListItemDto) => {
+    try {
+      await restore.mutateAsync(template.key);
+      toast.success(t("toasts.restored"));
+    } catch (caught) {
+      toast.error(getErrorMessage(caught, tCommon("toasts.failed")));
+    }
   };
 
   const askReset = (template: EmailTemplateListItemDto) =>
@@ -337,13 +384,29 @@ function EmailsSection() {
             </div>
             <CmsCardGrid>
               {visible.map((template) => (
-                <EmailCard
+                <EmailTemplateCard
                   key={template.key}
                   template={template}
                   selected={selected.includes(template.key)}
                   onSelect={() => setSelected(toggleOne(selected, template.key))}
-                  onSendTest={() => setTesting(template)}
-                  onReset={() => askReset(template)}
+                  canSend={canSend}
+                  thumbnail={
+                    <TemplateThumbnail
+                      templateKey={template.key}
+                      label={template.name}
+                      onOpen={() => setPreviewing(template)}
+                      height={180}
+                    />
+                  }
+                  actions={{
+                    onPreview: () => setPreviewing(template),
+                    onSendTest: () => setTesting(template),
+                    onReset: () => askReset(template),
+                    onArchiveAll: () => askArchiveAll(template),
+                    onDelete: () => setDeleting(template),
+                    onRestore: () => void doRestore(template),
+                    onSendEmail: () => setSending(template),
+                  }}
                 />
               ))}
             </CmsCardGrid>
@@ -417,124 +480,32 @@ function EmailsSection() {
           templateName={testing.name}
         />
       ) : null}
+      {previewing ? (
+        <EmailInboxPreviewDialog
+          open
+          onOpenChange={(open) => (!open ? setPreviewing(null) : undefined)}
+          templateKey={previewing.key}
+          templateName={previewing.name}
+        />
+      ) : null}
+      {sending ? (
+        <EmailSendDialog
+          open
+          onOpenChange={(open) => (!open ? setSending(null) : undefined)}
+          template={sending}
+          onStarted={() => router.push(`/admin/email-templates/${encodeURIComponent(sending.key)}#sends`)}
+        />
+      ) : null}
+      {deleting ? (
+        <EmailTemplateDeleteDialog
+          open
+          onOpenChange={(open) => (!open ? setDeleting(null) : undefined)}
+          templateKey={deleting.key}
+          templateName={deleting.name}
+        />
+      ) : null}
       {confirmDialog}
     </>
-  );
-}
-
-const LOCALE_DOT: Record<LocaleState, string> = {
-  PUBLISHED: "bg-emerald-500",
-  CHANGES: "bg-amber-500",
-  DRAFT_ONLY: "bg-sky-500",
-  ARCHIVED: "bg-ink-subtle/50",
-  MISSING: "border border-border bg-transparent",
-};
-
-function LocalePills({ template }: { template: EmailTemplateListItemDto }) {
-  const t = useTranslations("adminCms.emails.localeStates");
-  return (
-    <span className="flex flex-wrap gap-1">
-      {EMAIL_LOCALES.map((code) => {
-        const state = localeState(template.variants.find((variant) => variant.locale === code));
-        return (
-          <span
-            key={code}
-            title={`${code.toUpperCase()}: ${t(state)}`}
-            className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[10.5px] font-medium uppercase text-ink-muted"
-          >
-            <span className={cn("size-1.5 rounded-full", LOCALE_DOT[state])} aria-hidden />
-            {code}
-            <span className="sr-only">{t(state)}</span>
-          </span>
-        );
-      })}
-    </span>
-  );
-}
-
-function StatusChips({ template }: { template: EmailTemplateListItemDto }) {
-  const t = useTranslations("adminCms.emails.chips");
-  const customized = template.variants.some((variant) => variant.publishedVersion > 0);
-  return (
-    <span className="flex flex-wrap items-center gap-1">
-      <CmsChip className={template.isLive ? CHIP_TONES.positive : CHIP_TONES.neutral}>{template.isLive ? t("live") : t("dormant")}</CmsChip>
-      {customized ? <CmsChip className={CHIP_TONES.accent}>{t("customized")}</CmsChip> : null}
-      {template.hasDraftChanges ? <CmsChip className={CHIP_TONES.warning}>{t("draft")}</CmsChip> : null}
-    </span>
-  );
-}
-
-function EmailCard({
-  template,
-  selected,
-  onSelect,
-  onSendTest,
-  onReset,
-}: {
-  template: EmailTemplateListItemDto;
-  selected: boolean;
-  onSelect: () => void;
-  onSendTest: () => void;
-  onReset: () => void;
-}) {
-  const t = useTranslations("adminCms.emails");
-  const href = `/admin/email-templates/${encodeURIComponent(template.key)}`;
-  return (
-    <CmsCard className={cn(selected && "border-primary/50 ring-1 ring-primary/30")}>
-      <div className="flex flex-1 flex-col p-4">
-        <div className="flex items-start gap-2.5">
-          <CmsSelectBox checked={selected} onChange={onSelect} label={t("selectOne", { name: template.name })} className="mt-0.5" />
-          <div className="min-w-0 flex-1">
-            <Link href={href} className="block truncate text-[14px] font-semibold text-ink hover:underline">
-              {template.name}
-            </Link>
-            <p className="mt-0.5 truncate font-mono text-[11px] text-ink-subtle">{template.key}</p>
-          </div>
-          <StatusChips template={template} />
-        </div>
-        <p className="mt-3 line-clamp-2 text-[12.5px] text-ink-muted">{template.description}</p>
-        <div className="mt-3 rounded-md border border-border bg-surface-2/60 px-3 py-2">
-          <p className="text-[10.5px] uppercase tracking-wide text-ink-subtle">{t("card.subject")}</p>
-          <p className="mt-0.5 truncate text-[12.5px] text-ink" title={template.subject}>
-            {template.subject}
-          </p>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink-muted">
-          <LocalePills template={template} />
-          <span>
-            {template.service} · {template.provider}
-            {template.layoutName ? ` · ${template.layoutName}` : ""}
-          </span>
-        </div>
-        <div className="mt-2 flex items-center justify-between gap-2 text-[11.5px] text-ink-subtle">
-          <span className="tabular-nums">
-            {t("card.sent30", { sent: template.last30Days.sent, failed: template.last30Days.failed })}
-          </span>
-          <EditedBy at={template.updatedAt} by={template.updatedBy} />
-        </div>
-        {!template.isLive && template.dormantReason ? (
-          <p className="mt-2 text-[11.5px] italic text-ink-subtle">{template.dormantReason}</p>
-        ) : null}
-      </div>
-      <div className="flex flex-wrap items-center gap-1 border-t border-border px-2 py-1.5">
-        <Link href={href} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-          <PencilSimple size={14} />
-          {t("actions.edit")}
-        </Link>
-        <Link href={`${href}#preview`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
-          <Eye size={14} />
-          {t("actions.preview")}
-        </Link>
-        <Button variant="ghost" size="sm" onClick={onSendTest}>
-          <PaperPlaneTilt size={14} />
-          {t("actions.sendTest")}
-        </Button>
-        <Button variant="ghost" size="sm" className="ml-auto text-ink-muted" onClick={onReset}>
-          <ArrowCounterClockwise size={14} />
-          {t("actions.reset")}
-        </Button>
-      </div>
-    </CmsCard>
   );
 }
 
@@ -560,10 +531,10 @@ function EmailRow({
         <Link href={href} onClick={(event) => event.stopPropagation()} className="font-medium text-ink hover:underline">
           {template.name}
         </Link>
-        <p className="max-w-[340px] truncate text-[11.5px] text-ink-subtle">{template.subject}</p>
+        <p className="max-w-[340px] truncate text-[11.5px] text-ink-subtle">{template.renderedSubject || template.subject}</p>
       </CmsTd>
       <CmsTd>
-        <StatusChips template={template} />
+        <EmailStatusChips template={template} />
       </CmsTd>
       <CmsTd>
         <LocalePills template={template} />
@@ -607,6 +578,7 @@ function BlocksSection({ kind, onCreate }: { kind: EmailBlockKind; onCreate: () 
   const [sort, setSort] = useState<BlockSort>("name");
   const [view, setView] = useListView(`wt.admin.email-${kind.toLowerCase()}.view`);
   const [selected, setSelected] = useState<string[]>([]);
+  const [previewing, setPreviewing] = useState<EmailBlockDto | null>(null);
   const noun = kind === "LAYOUT" ? "layout" : "block";
 
   const all = useMemo(() => list.data ?? [], [list.data]);
@@ -736,7 +708,13 @@ function BlocksSection({ kind, onCreate }: { kind: EmailBlockKind; onCreate: () 
             </div>
             <CmsCardGrid>
               {visible.map((block) => (
-                <BlockCard key={block.id} block={block} selected={selected.includes(block.id)} onSelect={() => setSelected(toggleOne(selected, block.id))} />
+                <BlockCard
+                  key={block.id}
+                  block={block}
+                  selected={selected.includes(block.id)}
+                  onSelect={() => setSelected(toggleOne(selected, block.id))}
+                  onPreview={() => setPreviewing(block)}
+                />
               ))}
             </CmsCardGrid>
           </>
@@ -786,27 +764,47 @@ function BlocksSection({ kind, onCreate }: { kind: EmailBlockKind; onCreate: () 
           </Button>
         ) : null}
       </CmsBulkBar>
+      {previewing ? (
+        <BlockPreviewDialog
+          open
+          onOpenChange={(open) => (!open ? setPreviewing(null) : undefined)}
+          blockId={previewing.id}
+          blockName={previewing.name}
+          editHref={`/admin/email-templates/blocks/${previewing.id}`}
+        />
+      ) : null}
       {confirmDialog}
     </>
   );
 }
 
-function BlockCard({ block, selected, onSelect }: { block: EmailBlockDto; selected: boolean; onSelect: () => void }) {
+function BlockCard({
+  block,
+  selected,
+  onSelect,
+  onPreview,
+}: {
+  block: EmailBlockDto;
+  selected: boolean;
+  onSelect: () => void;
+  onPreview: () => void;
+}) {
   const t = useTranslations("adminCms.blocks");
   const status = blockStatus(block);
   const href = `/admin/email-templates/blocks/${block.id}`;
   return (
-    <CmsCard className={cn("min-h-[200px]", selected && "border-primary/50 ring-1 ring-primary/30")}>
-      <div className="flex flex-1 flex-col p-4">
+    <CmsCard className={cn("min-h-0", selected && "border-primary/50 ring-1 ring-primary/30")}>
+      <div className="p-3 pb-0">
+        <BlockThumbnail blockId={block.id} label={block.name} onOpen={onPreview} height={160} />
+      </div>
+      <div className="flex flex-1 flex-col p-4 pt-3">
         <div className="flex items-start gap-2.5">
           <CmsSelectBox checked={selected} onChange={onSelect} label={t("selectOne", { name: block.name })} className="mt-0.5" />
           <div className="min-w-0 flex-1">
             <Link href={href} className="block truncate text-[14px] font-semibold text-ink hover:underline">
               {block.name}
             </Link>
-            <p className="mt-0.5 truncate font-mono text-[11px] text-ink-subtle">
-              {block.kind === "PARTIAL" ? `{{> ${block.key}}}` : block.key}
-            </p>
+            <p className="mt-0.5 truncate text-[11.5px] text-ink-subtle">{block.description || t(`kinds.${block.kind}`)}</p>
           </div>
           <span className="flex flex-wrap items-center gap-1">
             {block.isDefault ? (
@@ -818,7 +816,6 @@ function BlockCard({ block, selected, onSelect }: { block: EmailBlockDto; select
             <CmsChip className={BLOCK_STATUS_TONE[status]}>{t(`statuses.${status}`)}</CmsChip>
           </span>
         </div>
-        {block.description ? <p className="mt-3 line-clamp-2 text-[12.5px] text-ink-muted">{block.description}</p> : null}
         <p className="mt-3 text-[11.5px] text-ink-muted">
           {block.usedBy.length > 0 ? t("usedBy", { count: block.usedBy.length, first: block.usedBy.slice(0, 2).join(", ") }) : t("unused")}
         </p>
@@ -832,10 +829,10 @@ function BlockCard({ block, selected, onSelect }: { block: EmailBlockDto; select
           <PencilSimple size={14} />
           {t("actions.edit")}
         </Link>
-        <Link href={`${href}#preview`} className={buttonVariants({ variant: "ghost", size: "sm" })}>
+        <Button variant="ghost" size="sm" onClick={onPreview}>
           <Eye size={14} />
           {t("actions.preview")}
-        </Link>
+        </Button>
       </div>
     </CmsCard>
   );

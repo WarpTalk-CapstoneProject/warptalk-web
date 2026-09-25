@@ -127,7 +127,10 @@
       "live": "Đang dùng",
       "dormant": "Không hoạt động",
       "customized": "Đã tuỳ chỉnh",
-      "draft": "Thay đổi chưa xuất bản"
+      "draft": "Thay đổi chưa xuất bản",
+      "custom": "Tạo tại đây",
+      "builtIn": "Có sẵn",
+      "archived": "Đã lưu trữ"
     },
     "searchPlaceholder": "Tìm email",
     "sort": {
@@ -154,7 +157,8 @@
       "live": "Đang dùng",
       "dormant": "Không hoạt động",
       "customized": "Đã tuỳ chỉnh",
-      "draft": "Thay đổi chưa xuất bản"
+      "draft": "Thay đổi chưa xuất bản",
+      "archived": "Đã lưu trữ"
     },
     "localeStates": {
       "PUBLISHED": "Đã xuất bản",
@@ -212,7 +216,15 @@
       "discarded": "Đã huỷ bản nháp.",
       "archived": "Đã lưu trữ.",
       "duplicated": "Đã chép vào bản nháp của ngôn ngữ kia.",
-      "reset": "Bản nháp tiếng Anh đã về nội dung có sẵn. Hãy xuất bản để gửi."
+      "reset": "Bản nháp tiếng Anh đã về nội dung có sẵn. Hãy xuất bản để gửi.",
+      "archivedAll": "Đã lưu trữ. Hệ thống gửi nay dùng nội dung có sẵn.",
+      "restored": "Đã khôi phục. Mẫu đã trở lại danh sách."
+    },
+    "newTemplate": "Mẫu mới",
+    "archiveAllDialog": {
+      "title": "Lưu trữ mọi ngôn ngữ của “{name}”?",
+      "description": "Dịch vụ {service} vẫn tiếp tục gửi email này — bằng nội dung có sẵn thay cho phần bạn đã sửa, ở mọi ngôn ngữ, cho đến khi bạn bỏ lưu trữ.",
+      "confirm": "Lưu trữ và dùng nội dung có sẵn"
     }
   },
   "blocks": {
@@ -312,6 +324,10 @@
     "actions": {
       "edit": "Sửa",
       "preview": "Xem trước"
+    },
+    "kinds": {
+      "LAYOUT": "Bố cục",
+      "PARTIAL": "Khối dùng lại"
     }
   },
   "emailEditor": {
@@ -344,7 +360,9 @@
       "variables": "Biến",
       "preview": "Xem trước",
       "history": "Lịch sử",
-      "analytics": "Thống kê"
+      "analytics": "Thống kê",
+      "details": "Thông tin",
+      "sends": "Lượt gửi"
     },
     "fields": {
       "subject": "Tiêu đề",
@@ -446,7 +464,11 @@
       "discard": "Huỷ thay đổi",
       "deleteDraft": "Xoá bản nháp",
       "publish": "Xuất bản",
-      "saveAndPublish": "Lưu & xuất bản"
+      "saveAndPublish": "Lưu & xuất bản",
+      "restoreTemplate": "Khôi phục mẫu",
+      "asReceived": "Xem như người nhận",
+      "sendEmail": "Gửi email…",
+      "deleteTemplate": "Xoá mẫu"
     },
     "publishBlocked": "Hãy sửa các lỗi ở tab Nội dung trước.",
     "publishDialog": {
@@ -497,8 +519,12 @@
       "archived": "Đã lưu trữ. Không còn được gửi.",
       "unarchived": "Đã bỏ lưu trữ.",
       "reset": "Bản nháp đã về nội dung có sẵn.",
-      "restored": "Đã khôi phục v{version} vào bản nháp."
-    }
+      "restored": "Đã khôi phục v{version} vào bản nháp.",
+      "restoredTemplate": "Đã khôi phục mẫu."
+    },
+    "deletedNotice": "Mẫu này đã bị xoá và chỉ đọc (lý do: {reason}). Khôi phục để sửa hoặc gửi.",
+    "sendNeedsPublish": "Hãy xuất bản bản tiếng Anh trước.",
+    "builtInNoDelete": "Do dịch vụ {service} gửi nên không thể xoá. Hãy đặt lại về nội dung có sẵn, hoặc lưu trữ một ngôn ngữ để quay về nội dung đó."
   },
   "blockEditor": {
     "back": "Mẫu email",
@@ -1014,7 +1040,282 @@
         "noMatch": "Không có không gian làm việc phù hợp.",
         "added": "Đã thêm",
         "memberCount": "{count} thành viên"
+      },
+      "email": {
+        "title": "Gửi kèm email",
+        "description": "Gửi email cho cùng đối tượng khi thông báo này hiển thị, bằng một mẫu email của bạn.",
+        "noPermission": "Gửi email tới một đối tượng cần quyền “Gửi email tới đối tượng”.",
+        "loadError": "Không tải được mẫu email của bạn.",
+        "none": "Không gửi email",
+        "preview": "Xem trước email",
+        "manage": "Quản lý mẫu email",
+        "noneEligible": "Chưa có mẫu nào dùng được: hãy tạo mẫu trong Mẫu email và xuất bản bản tiếng Anh.",
+        "unavailable": "Mẫu đã chọn đã bị xoá hoặc không còn xuất bản; hãy chọn mẫu khác hoặc không gửi email.",
+        "when": "Email được gửi vào thời điểm bắt đầu tới mọi người trong đối tượng chưa tắt email thông báo. Huỷ xuất bản trước thời điểm đó sẽ huỷ lượt gửi.",
+        "alsoSends": "Thông báo cũng gửi email tới đối tượng ngay bây giờ.",
+        "alsoSendsAtStart": "Email được gửi cùng lúc."
       }
+    }
+  },
+  "library": {
+    "categories": {
+      "BUILT_IN": "Có sẵn",
+      "TRANSACTIONAL_CUSTOM": "Giao dịch",
+      "MARKETING": "Tiếp thị",
+      "ANNOUNCEMENT": "Email thông báo"
+    },
+    "thumbnail": {
+      "error": "Không xem trước được",
+      "open": "Xem “{name}” như người nhận",
+      "preview": "Xem trước"
+    },
+    "card": {
+      "sentByYou": "Do bạn gửi tới một đối tượng",
+      "deletedBecause": "Đã xoá: {reason}",
+      "restore": "Khôi phục",
+      "more": "Thao tác khác",
+      "sendEmail": "Gửi email…",
+      "publishFirst": "Hãy xuất bản bản tiếng Anh trước",
+      "archiveAll": "Lưu trữ (dùng nội dung có sẵn)",
+      "archiveAllHint": "Hệ thống gửi quay về nội dung có sẵn",
+      "delete": "Xoá",
+      "builtInNoDelete": "Do dịch vụ {service} sử dụng — hãy đặt lại hoặc lưu trữ thay vì xoá"
+    },
+    "inbox": {
+      "dialogTitle": "“{name}” như người nhận thấy",
+      "frameTitle": "Nội dung của “{name}”",
+      "language": "Ngôn ngữ",
+      "sampleData": "Dữ liệu mẫu",
+      "defaultSample": "Mẫu mặc định",
+      "to": "tới",
+      "preheader": "Dòng xem trước",
+      "formatHtml": "Email",
+      "formatText": "Văn bản thuần",
+      "error": "Không dựng được email này.",
+      "openInNewTab": "Mở trong tab mới",
+      "sendTest": "Gửi thử",
+      "edit": "Sửa",
+      "previewWith": "Bên trong",
+      "sampleContent": "Nội dung mẫu",
+      "source": {
+        "published": "Bản đang gửi v{version}",
+        "fallback": "Chưa viết {locale} — đang gửi {used}",
+        "draft": "Bản nháp — chưa được gửi",
+        "builtIn": "Nội dung có sẵn"
+      }
+    },
+    "send": {
+      "title": "Gửi “{name}”",
+      "description": "Chỉ bản đã xuất bản được gửi: mỗi người nhận ngôn ngữ của mình, hoặc tiếng Anh.",
+      "steps": "Các bước",
+      "stepNames": {
+        "audience": "Ai nhận",
+        "values": "Chi tiết",
+        "confirm": "Xác nhận"
+      },
+      "who": "Ai nhận email",
+      "when": "Gửi lúc (không bắt buộc)",
+      "whenHint": "Để trống sẽ gửi ngay. Thời gian theo múi giờ của bạn.",
+      "errors": {
+        "plans": "Chọn ít nhất một gói.",
+        "workspaces": "Chọn ít nhất một không gian làm việc.",
+        "past": "Chọn một thời điểm trong tương lai.",
+        "required": "Bắt buộc.",
+        "notALink": "Nhập liên kết đầy đủ (https://…).",
+        "notANumber": "Nhập một số.",
+        "notADate": "Nhập một ngày.",
+        "tooLong": "Quá dài."
+      },
+      "noValues": "Mẫu này không cần thêm gì: tên và địa chỉ của mỗi người được tự điền.",
+      "automatic": "Tên và địa chỉ người nhận được tự điền cho từng người.",
+      "reaches": "{count} người",
+      "optedOut": "{count} người đã tắt loại email này và được bỏ qua.",
+      "fallback": "{locales}: chưa có bản xuất bản ở ngôn ngữ này, nên họ nhận bản tiếng Anh.",
+      "startsAt": "Bắt đầu lúc {date}.",
+      "duration": "Mất khoảng {minutes} phút với tốc độ {rate} email mỗi phút.",
+      "nobody": "Không ai trong đối tượng này nhận được email.",
+      "acknowledge": "Tôi hiểu thao tác này gửi email tới {count} người.",
+      "recount": "Máy chủ đếm lại khi gửi; nếu số người thay đổi quá {tolerance}, bạn sẽ xác nhận con số mới.",
+      "back": "Quay lại",
+      "cancel": "Huỷ",
+      "next": "Tiếp",
+      "counting": "Đang đếm…",
+      "review": "Xem lại",
+      "send": "Gửi tới {count} người",
+      "schedule": "Lên lịch gửi tới {count} người",
+      "started": "Đang gửi tới {count} người. Theo dõi ở tab Lượt gửi.",
+      "scheduled": "Đã lên lịch. Theo dõi ở tab Lượt gửi.",
+      "startFailed": "Không bắt đầu gửi được.",
+      "estimateFailed": "Không đếm được đối tượng."
+    },
+    "sends": {
+      "noPermission": "Bạn không thể gửi email tới đối tượng",
+      "noPermissionHint": "Cần quyền “Gửi email tới đối tượng”.",
+      "loadError": "Không tải được các lượt gửi.",
+      "empty": "Chưa gửi lần nào",
+      "emptyHint": "Mọi lượt gửi — do bạn, hoặc kèm thông báo — đều được liệt kê ở đây cùng kết quả của từng người nhận.",
+      "newSend": "Gửi email…",
+      "statuses": {
+        "QUEUED": "Đang chờ",
+        "SENDING": "Đang gửi",
+        "COMPLETED": "Hoàn tất",
+        "CANCELLED": "Đã huỷ",
+        "FAILED": "Thất bại"
+      },
+      "fromAnnouncement": "Kèm thông báo",
+      "scheduledFor": "Lên lịch lúc {date}",
+      "startedAt": "Bắt đầu {date}",
+      "counts": "{sent} đã gửi · {failed} lỗi · {skipped} bỏ qua / {total}",
+      "back": "Mọi lượt gửi",
+      "cancelTitle": "Huỷ lượt gửi này?",
+      "cancelDescription": "{pending} email chưa gửi sẽ bị bỏ qua. Email đã gửi không thể thu hồi.",
+      "cancel": "Huỷ lượt gửi",
+      "cancelled": "Đã huỷ lượt gửi.",
+      "audience": "Đối tượng",
+      "created": "Tạo lúc",
+      "values": "Giá trị",
+      "recipientFilter": "Lọc người nhận",
+      "allRecipients": "Tất cả",
+      "recipientStatuses": {
+        "SENT": "Đã gửi",
+        "FAILED": "Lỗi",
+        "SKIPPED": "Bỏ qua",
+        "PENDING": "Đang chờ"
+      },
+      "resolving": "Đang xác định ai thuộc đối tượng…",
+      "noRecipients": "Không có người nhận phù hợp.",
+      "recipient": "Người nhận",
+      "language": "Ngôn ngữ",
+      "status": "Trạng thái",
+      "when": "Gửi lúc",
+      "pageOf": "Trang {page}/{totalPages}",
+      "previous": "Trước",
+      "next": "Sau",
+      "audiencePlans": "Gói: {plans}",
+      "audienceWorkspaces": "{count} không gian làm việc",
+      "audienceAll": "Mọi người",
+      "audienceNew": "Tham gia trong {days} ngày gần nhất"
+    },
+    "delete": {
+      "title": "Xoá “{name}”?",
+      "description": "Email có sẵn không thể xoá; mẫu này được tạo tại đây.",
+      "how": "Cách xoá",
+      "archive": "Chuyển vào Đã lưu trữ",
+      "archiveHint": "Mẫu không còn được đề xuất và có thể khôi phục từ bộ lọc Đã lưu trữ. Nhật ký gửi được giữ lại.",
+      "purge": "Xoá vĩnh viễn",
+      "purgeHint": "Mẫu chưa từng gửi email nào, nên có thể xoá cùng bản nháp, phiên bản và dữ liệu mẫu.",
+      "purgeUnavailable": "Chỉ mẫu chưa từng gửi gì mới xoá vĩnh viễn được.",
+      "checking": "Đang kiểm tra mẫu đã từng gửi chưa…",
+      "reason": "Lý do (lưu trong nhật ký kiểm tra)",
+      "reasonPlaceholder": "Chiến dịch đã kết thúc, được thay bằng…",
+      "archived": "Đã chuyển vào Đã lưu trữ.",
+      "purged": "Đã xoá vĩnh viễn.",
+      "confirmArchive": "Chuyển vào Đã lưu trữ",
+      "confirmPurge": "Xoá vĩnh viễn"
+    },
+    "details": {
+      "variablesHint": "Những gì lượt gửi cần hỏi, ngoài phần được tự điền. Biến bắt buộc phải có giá trị khi gửi.",
+      "save": "Lưu thông tin",
+      "saved": "Đã lưu thông tin.",
+      "saveFailed": "Không lưu được thông tin."
+    },
+    "wizard": {
+      "title": "Mẫu email mới",
+      "description": "Mẫu được lưu dạng bản nháp. Chưa có gì được gửi cho đến khi bạn xuất bản và gửi tới một đối tượng hoặc kèm thông báo.",
+      "stepsLabel": "Các bước",
+      "steps": {
+        "basics": "Cơ bản",
+        "layout": "Bố cục",
+        "variables": "Biến",
+        "content": "Nội dung",
+        "review": "Xem lại"
+      },
+      "cancel": "Huỷ",
+      "back": "Quay lại",
+      "next": "Tiếp",
+      "saving": "Đang lưu…",
+      "saveDraft": "Lưu nháp",
+      "created": "Đã tạo mẫu dạng bản nháp.",
+      "createFailed": "Không tạo được mẫu.",
+      "name": "Tên",
+      "namePlaceholder": "Cập nhật sản phẩm mùa thu",
+      "key": "Khoá",
+      "keyHint": "Gợi ý từ tên. Chữ thường, chữ số, dấu chấm, gạch ngang; không đổi được về sau.",
+      "category": "Loại email",
+      "categories": {
+        "TRANSACTIONAL_CUSTOM": {
+          "label": "Giao dịch",
+          "hint": "Thông điệp vận hành, ví dụ thay đổi chính sách. Gửi tới mọi người được chọn."
+        },
+        "MARKETING": {
+          "label": "Tiếp thị",
+          "hint": "Ưu đãi và tin tức. Người đã tắt email khuyến mãi sẽ được bỏ qua."
+        },
+        "ANNOUNCEMENT": {
+          "label": "Email thông báo",
+          "hint": "Gửi kèm thông báo; có thể dùng tiêu đề, nội dung và liên kết của thông báo."
+        }
+      },
+      "descriptionLabel": "Mô tả (không bắt buộc)",
+      "howItSends": "Mẫu tạo tại đây không có bộ gửi tự động: nó chỉ được gửi khi bạn gửi tới một đối tượng, hoặc làm email của một thông báo.",
+      "defaultLayout": "Bố cục mặc định",
+      "defaultLayoutHint": "Theo bố cục đang là mặc định.",
+      "builtInLayout": "Bố cục WarpTalk",
+      "automaticVariables": "Được tự điền",
+      "implicit": {
+        "RecipientName": "Tên người nhận",
+        "RecipientEmail": "Email người nhận",
+        "AnnouncementTitle": "Tiêu đề thông báo",
+        "AnnouncementText": "Nội dung thông báo",
+        "AnnouncementLink": "Liên kết thông báo"
+      },
+      "variableName": "Tên (trong mẫu)",
+      "variableLabel": "Nhãn (trong biểu mẫu gửi)",
+      "variableType": "Kiểu",
+      "variableSample": "Giá trị mẫu",
+      "variableRequired": "Bắt buộc",
+      "removeVariable": "Xoá biến",
+      "addVariable": "Thêm biến",
+      "types": {
+        "TEXT": "Văn bản",
+        "URL": "Liên kết",
+        "DATE": "Ngày",
+        "NUMBER": "Số",
+        "MULTILINE": "Đoạn văn"
+      },
+      "language": "Ngôn ngữ",
+      "languages": {
+        "en": "English",
+        "vi": "Tiếng Việt",
+        "ja": "日本語"
+      },
+      "optional": "không bắt buộc",
+      "fallbackHint": "Không bắt buộc: người dùng ngôn ngữ này nhận bản tiếng Anh cho đến khi bản này được viết và xuất bản.",
+      "subject": "Tiêu đề",
+      "preheader": "Dòng xem trước",
+      "heading": "Đề mục",
+      "body": "Nội dung (HTML)",
+      "bodyHint": "Bấm một biến để chèn vào vị trí con trỏ. Bạn có thể chỉnh mọi thứ và xem như người nhận sau khi lưu.",
+      "languagesWritten": "Các ngôn ngữ đã viết",
+      "noVariables": "Không có",
+      "reviewHint": "Lưu chỉ tạo bản nháp. Tiếp theo: xuất bản bản tiếng Anh, rồi dùng Gửi email hoặc chọn làm email của một thông báo.",
+      "errors": {
+        "nameRequired": "Hãy đặt tên cho mẫu.",
+        "keyInvalid": "Khoá phải gồm 3–60 chữ thường, chữ số, dấu chấm hoặc gạch ngang.",
+        "keyTaken": "Một mẫu khác đã dùng khoá này.",
+        "variableNameInvalid": "Tên biến gồm chữ, số và _, bắt đầu bằng chữ.",
+        "variableImplicit": "Biến đó được tự điền; hãy chọn tên khác.",
+        "variableDuplicate": "Có hai biến trùng tên.",
+        "variableSampleInvalid": "Một giá trị mẫu không khớp kiểu của nó.",
+        "tooManyVariables": "Khai báo tối đa 20 biến.",
+        "englishRequired": "Hãy viết bản tiếng Anh: mọi ngôn ngữ đều dùng nó làm dự phòng.",
+        "subjectRequired": "Ngôn ngữ đã viết cần có tiêu đề.",
+        "bodyRequired": "Ngôn ngữ đã viết cần có nội dung.",
+        "unknownVariable": "Nội dung dùng một biến chưa được khai báo."
+      },
+      "bodyView": "Chế độ nội dung",
+      "quickLook": "Xem nhanh",
+      "write": "Soạn"
     }
   }
 }
