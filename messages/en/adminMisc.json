@@ -310,7 +310,19 @@
       "audit_log_exported": "Audit log exported",
       "fx_rate_refreshed": "Exchange rate refreshed from Stripe",
       "fx_rate_overridden": "Exchange rate overridden",
-      "fx_rate_override_cleared": "Exchange rate override removed"
+      "fx_rate_override_cleared": "Exchange rate override removed",
+      "staff_granted": "Staff access granted",
+      "staff_invited": "Invited to staff",
+      "staff_invitation_revoked": "Staff invitation revoked",
+      "staff_invitation_accepted": "Staff invitation accepted",
+      "staff_role_changed": "Staff role changed",
+      "staff_suspended": "Staff access suspended",
+      "staff_reactivated": "Staff access reactivated",
+      "staff_removed": "Staff access removed",
+      "staff_role_created": "Staff role created",
+      "staff_role_updated": "Staff role edited",
+      "staff_role_duplicated": "Staff role duplicated",
+      "staff_role_deleted": "Staff role deleted"
     },
     "entities": {
       "workspace": "Workspace",
@@ -332,7 +344,10 @@
       "glossary_term": "Glossary term",
       "notification": "Announcement",
       "audit_log": "Audit log",
-      "fx_rate": "Exchange rate"
+      "fx_rate": "Exchange rate",
+      "staff_member": "Staff member",
+      "staff_role": "Staff role",
+      "staff_invitation": "Staff invitation"
     },
     "sources": {
       "workspace_service": "Workspace",

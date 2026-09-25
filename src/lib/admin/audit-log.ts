@@ -81,6 +81,19 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "announcement.sent": "Announcement sent",
   // The audit log itself
   "audit_log.exported": "Audit log exported",
+  // Platform staff and roles (auth, G10)
+  "staff.granted": "Staff access granted",
+  "staff.invited": "Invited to staff",
+  "staff.invitation_revoked": "Staff invitation revoked",
+  "staff.invitation_accepted": "Staff invitation accepted",
+  "staff.role_changed": "Staff role changed",
+  "staff.suspended": "Staff access suspended",
+  "staff.reactivated": "Staff access reactivated",
+  "staff.removed": "Staff access removed",
+  "staff_role.created": "Staff role created",
+  "staff_role.updated": "Staff role edited",
+  "staff_role.duplicated": "Staff role duplicated",
+  "staff_role.deleted": "Staff role deleted",
 };
 
 /** Mirrors AdminAuditEntityTypes on the backend. */
@@ -105,6 +118,9 @@ export const AUDIT_ENTITY_LABELS: Readonly<Record<string, string>> = {
   glossary_term: "Glossary term",
   notification: "Announcement",
   audit_log: "Audit log",
+  staff_member: "Staff member",
+  staff_role: "Staff role",
+  staff_invitation: "Staff invitation",
 };
 
 export const AUDIT_SOURCE_LABELS: Readonly<Record<string, string>> = {
@@ -209,6 +225,11 @@ export function auditEntityHref(entity: AuditSubjectRef, before?: Summary, after
       return entity.id ? `/admin/announcements/${encodeURIComponent(entity.id)}` : "/admin/announcements";
     case "sales_lead":
       return "/admin/sales-leads";
+    case "staff_member":
+    case "staff_invitation":
+      return "/admin/staff";
+    case "staff_role":
+      return "/admin/roles";
     default:
       return null;
   }
