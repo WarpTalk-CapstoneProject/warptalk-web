@@ -89,7 +89,9 @@ function InboxPage() {
   const canManage = useCan(ADMIN_PERMISSIONS.inboxManage);
   const [openKey, setOpenKey] = useState<string | null>(null);
 
-  const now = useMemo(() => new Date(inbox.dataUpdatedAt || Date.now()), [inbox.dataUpdatedAt]);
+  // "Now" is when the server built the list: ages and SLA states stay consistent with the data shown.
+  const generatedAt = inbox.data?.generatedAt;
+  const now = useMemo(() => (generatedAt ? new Date(generatedAt) : new Date(0)), [generatedAt]);
   const viewerId = inbox.data?.viewerId ?? null;
   const itemState = (enumValue(state.filters, "state") as InboxState | undefined) ?? "open";
   const scope = (enumValue(state.filters, "scope") as "all" | "mine" | undefined) ?? "all";
