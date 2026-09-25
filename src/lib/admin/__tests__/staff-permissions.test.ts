@@ -36,9 +36,9 @@ const SUPER: StaffAccessSnapshot = {
 };
 
 describe("staff permissions (G10)", () => {
-  it("has 29 unique codes, each in exactly one area group", () => {
-    assert.equal(ALL_ADMIN_PERMISSIONS.length, 29);
-    assert.equal(new Set(ALL_ADMIN_PERMISSIONS).size, 29);
+  it("has 30 unique codes, each in exactly one area group", () => {
+    assert.equal(ALL_ADMIN_PERMISSIONS.length, 30);
+    assert.equal(new Set(ALL_ADMIN_PERMISSIONS).size, 30);
     const grouped = permissionsByArea().flatMap((group) => group.permissions);
     assert.deepEqual([...grouped].sort(), [...ALL_ADMIN_PERMISSIONS].sort());
   });

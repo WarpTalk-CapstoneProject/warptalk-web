@@ -322,7 +322,25 @@
       "staff_role_created": "スタッフロールを作成",
       "staff_role_updated": "スタッフロールを編集",
       "staff_role_duplicated": "スタッフロールを複製",
-      "staff_role_deleted": "スタッフロールを削除"
+      "staff_role_deleted": "スタッフロールを削除",
+      "credit_pack_created": "クレジットパックを作成",
+      "credit_pack_updated": "クレジットパックを編集",
+      "credit_pack_duplicated": "クレジットパックを複製",
+      "credit_pack_archived": "クレジットパックをアーカイブ",
+      "credit_pack_unarchived": "クレジットパックを復元",
+      "credit_pack_stripe_synced": "クレジットパックを Stripe に同期",
+      "addon_created": "アドオンを作成",
+      "addon_updated": "アドオンを編集",
+      "addon_duplicated": "アドオンを複製",
+      "addon_archived": "アドオンをアーカイブ",
+      "addon_unarchived": "アドオンを復元",
+      "addon_stripe_synced": "アドオンを Stripe に同期",
+      "coupon_created": "クーポンを作成",
+      "coupon_updated": "クーポンを編集",
+      "coupon_duplicated": "クーポンを複製",
+      "coupon_archived": "クーポンをアーカイブ",
+      "coupon_unarchived": "クーポンを復元",
+      "coupon_stripe_synced": "クーポンを Stripe に同期"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -347,7 +365,10 @@
       "fx_rate": "為替レート",
       "staff_member": "スタッフ",
       "staff_role": "スタッフロール",
-      "staff_invitation": "スタッフ招待"
+      "staff_invitation": "スタッフ招待",
+      "credit_pack": "クレジットパック",
+      "addon": "アドオン",
+      "coupon": "クーポン"
     },
     "sources": {
       "workspace_service": "ワークスペース",

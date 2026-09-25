@@ -322,7 +322,25 @@
       "staff_role_created": "Staff role created",
       "staff_role_updated": "Staff role edited",
       "staff_role_duplicated": "Staff role duplicated",
-      "staff_role_deleted": "Staff role deleted"
+      "staff_role_deleted": "Staff role deleted",
+      "credit_pack_created": "Credit pack created",
+      "credit_pack_updated": "Credit pack edited",
+      "credit_pack_duplicated": "Credit pack duplicated",
+      "credit_pack_archived": "Credit pack archived",
+      "credit_pack_unarchived": "Credit pack restored",
+      "credit_pack_stripe_synced": "Credit pack synced to Stripe",
+      "addon_created": "Add-on created",
+      "addon_updated": "Add-on edited",
+      "addon_duplicated": "Add-on duplicated",
+      "addon_archived": "Add-on archived",
+      "addon_unarchived": "Add-on restored",
+      "addon_stripe_synced": "Add-on synced to Stripe",
+      "coupon_created": "Coupon created",
+      "coupon_updated": "Coupon edited",
+      "coupon_duplicated": "Coupon duplicated",
+      "coupon_archived": "Coupon archived",
+      "coupon_unarchived": "Coupon restored",
+      "coupon_stripe_synced": "Coupon synced to Stripe"
     },
     "entities": {
       "workspace": "Workspace",
@@ -347,7 +365,10 @@
       "fx_rate": "Exchange rate",
       "staff_member": "Staff member",
       "staff_role": "Staff role",
-      "staff_invitation": "Staff invitation"
+      "staff_invitation": "Staff invitation",
+      "credit_pack": "Credit pack",
+      "addon": "Add-on",
+      "coupon": "Coupon"
     },
     "sources": {
       "workspace_service": "Workspace",
