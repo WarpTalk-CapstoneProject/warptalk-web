@@ -67,6 +67,11 @@ export interface AdminPluginCatalogListItemDto {
   pluginKey: string;
   label: string;
   description: string;
+  /**
+   * The row's icon. Null for a row without one; `PluginGlyph` then draws the bundled brand mark for
+   * the key. Optional because a server older than the marketplace icons does not send it.
+   */
+  avatarUrl?: string | null;
   kind: AdminPluginKind;
   provider: string;
   isActive: boolean;
@@ -77,14 +82,25 @@ export interface AdminPluginCatalogListItemDto {
   hasClientId: boolean;
   hasClientSecret: boolean;
   toolCount: number;
+  /** Users who have it installed now; a removed installation is not counted. */
   installationCount: number;
   /**
-   * How many workspaces have added this plugin to their list. Explicit lists only: a workspace that
-   * has never edited its list is still on the pre-marketplace "every plugin" default and is not
-   * counted. Optional because a server older than the marketplace does not send it.
+   * "Workspaces using it": workspaces the platform lets have the plugin AND that have it — on the
+   * Owner's list, or connected by at least one active member. Null when the workspace service could
+   * not be reached (render "—", never "no workspaces"). Optional for an older server.
    */
-  workspaceCount?: number;
+  workspaceCount?: number | null;
+  /** The platform default. Optional for a server older than per-workspace availability. */
+  workspaceDefault?: AdminPluginWorkspaceDefault;
+  /** The plan rule; null means every plan. */
+  allowedPlans?: string[] | null;
 }
+
+/**
+ * Which workspaces a marketplace plugin reaches by default. `retired` is `isActive: false`;
+ * `opt_in` hides it from every workspace a platform admin has not enabled it for.
+ */
+export type AdminPluginWorkspaceDefault = "available" | "opt_in" | "retired";
 
 /** One row in full, with the tool manifest `PUT .../tools` replaces. */
 export interface AdminPluginCatalogDetailDto {
@@ -128,6 +144,10 @@ export interface AdminPluginCatalogDetailDto {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The platform default. Optional for a server older than per-workspace availability. */
+  workspaceDefault?: AdminPluginWorkspaceDefault;
+  /** The plan rule; null means every plan. */
+  allowedPlans?: string[] | null;
 }
 
 /**

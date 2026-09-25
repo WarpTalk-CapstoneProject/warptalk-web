@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { meetingTypeByLabel, isExternalBridge } from "@/lib/meeting/meeting-types";
+import { planBridgeRoomLanguages } from "@/lib/meeting/bridge-far-side-language";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -114,6 +115,12 @@ export function CreateRoomDialog() {
   // value DESTROYS something — no transcript means no summary, no minutes and no knowledge-base
   // entry — so it starts true and is only put on the wire when somebody changes it.
   const [saveTranscript, setSaveTranscript] = useState(true);
+  // WT-826: share the record with participants when the meeting ends. On unless the host turns
+  // it off, and — like saveTranscript — only put on the wire when somebody changes it, so the
+  // server's own default decides for everyone who never opened the menu.
+  const [autoShareRecord, setAutoShareRecord] = useState(true);
+  // What the room being edited already holds, so an edit sends the toggle only when it moved.
+  const [loadedAutoShareRecord, setLoadedAutoShareRecord] = useState<boolean | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const [meetingTemplate, setMeetingTemplate] = useState("Event");
@@ -170,6 +177,10 @@ export function CreateRoomDialog() {
     setScheduledAt(
       editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null,
     );
+    // Absent reads as ON: a room created before the toggle is shared when it ends, like a new one.
+    const storedAutoShare = editRoomData.settings?.autoShareRecord ?? true;
+    setAutoShareRecord(storedAutoShare);
+    setLoadedAutoShareRecord(storedAutoShare);
   }
 
   if (
@@ -328,8 +339,24 @@ export function CreateRoomDialog() {
       // declared language (an internal fallback for the audio-route mesh), and the full
       // declared set is sent as targetLanguages.
       const languages = Array.from(new Set(meetingLanguages));
-      const sourceLanguage = languages[0];
-      const targetLanguages = languages;
+      let sourceLanguage = languages[0];
+      let targetLanguages = languages;
+      // A bridge room's second seat is the other side of the external call, and its language is
+      // the only thing that makes the room translate. Positional targets seeded it with the host's
+      // own language (languages[0] is both the source and the first target), so it is now named:
+      // the first declared language that is not the host's, or the workspace-aware default.
+      // Same rule as the desktop's automatic Meet room (lib/meeting/bridge-auto-room).
+      let externalMeetingLanguage: string | undefined;
+      if (bridgeSelected && !editRoomId) {
+        const bridgeLanguages = planBridgeRoomLanguages({
+          speak: sourceLanguage,
+          candidates: languages,
+          allowedLanguages: allowedTargetLanguages ?? [],
+        });
+        sourceLanguage = bridgeLanguages.sourceLanguage;
+        targetLanguages = bridgeLanguages.targetLanguages;
+        externalMeetingLanguage = bridgeLanguages.externalMeetingLanguage;
+      }
 
       if (editRoomId) {
         await updateRoomMutation.mutateAsync({
@@ -341,6 +368,11 @@ export function CreateRoomDialog() {
             targetLanguages: targetLanguages,
             scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
             invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+            // WT-826: a settings PATCH, so only the field that moved. The server carries the
+            // room's sharing level with the toggle while the meeting has not happened yet.
+            ...(loadedAutoShareRecord !== null && autoShareRecord !== loadedAutoShareRecord
+              ? { settings: { autoShareRecord } }
+              : {}),
           },
         });
         toast.success(t("toasts.roomUpdated"));
@@ -364,6 +396,7 @@ export function CreateRoomDialog() {
           translationRoomType: meetingTypeByLabel(meetingTemplate).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
+          ...(externalMeetingLanguage ? { externalMeetingLanguage } : {}),
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
           // WT-341. Sent only when the host actually chose: RoomSettingsRequest makes every
           // member nullable precisely so "not sent" stays distinguishable from "sent false", and
@@ -372,7 +405,8 @@ export function CreateRoomDialog() {
           settings:
             requiresApproval === null &&
             !participantsCanStartTranslation &&
-            saveTranscript
+            saveTranscript &&
+            autoShareRecord
               ? undefined
               : {
                   ...(requiresApproval === null ? {} : { requiresApproval }),
@@ -383,6 +417,8 @@ export function CreateRoomDialog() {
                   // it back would pin the value against any future change — the same reasoning
                   // as requiresApproval above.
                   ...(saveTranscript ? {} : { saveTranscript: false }),
+                  // WT-826: likewise sent only as `false`.
+                  ...(autoShareRecord ? {} : { autoShareRecord: false }),
                 },
         };
 
@@ -660,6 +696,8 @@ export function CreateRoomDialog() {
                   }
                   saveTranscript={saveTranscript}
                   onSaveTranscriptChange={setSaveTranscript}
+                  autoShareRecord={autoShareRecord}
+                  onAutoShareRecordChange={setAutoShareRecord}
                   onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>

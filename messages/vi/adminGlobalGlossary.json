@@ -39,11 +39,6 @@
     "viewAuditHistory": "Xem lịch sử thay đổi",
     "delete": "Xóa"
   },
-  "pagination": {
-    "previous": "Trước",
-    "next": "Sau",
-    "summary": "Trang {page}/{totalPages} ({count, plural, other {# thuật ngữ}})"
-  },
   "fields": {
     "term": "Thuật ngữ",
     "termPlaceholder": "vd. architect",
@@ -115,5 +110,26 @@
     "bulkImported": "Đã nhập {imported}, bỏ qua {skipped}.",
     "bulkImportIssues": "{count, plural, other {# dòng}} gặp lỗi — kiểm tra console.",
     "bulkImportFailed": "Nhập hàng loạt thất bại."
+  },
+  "list": {
+    "termCount": "{count, plural, other {# thuật ngữ}}",
+    "emptyDescription": "Thêm một thuật ngữ hoặc nhập tệp CSV để thiết lập bộ thuật ngữ nền cho toàn nền tảng.",
+    "anyLanguage": "Mọi ngôn ngữ",
+    "noDomainGroup": "Không có lĩnh vực",
+    "filters": {
+      "domain": "Lĩnh vực",
+      "language": "Ngôn ngữ"
+    },
+    "sortFields": {
+      "priority": "Độ ưu tiên (cao nhất trước)",
+      "updated": "Cập nhật gần đây",
+      "created": "Tạo gần đây",
+      "term": "Thuật ngữ"
+    },
+    "columns": {
+      "languages": "Ngôn ngữ",
+      "updated": "Cập nhật",
+      "created": "Ngày tạo"
+    }
   }
 }

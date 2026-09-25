@@ -85,34 +85,39 @@
     },
     "adminNav": {
       "backToApp": "アプリに戻る",
-      "platformConsole": "プラットフォームコンソール",
-      "platformName": "WarpTalk Platform",
+      "productName": "WarpTalk",
+      "erpBadge": "ERP",
       "logOut": "ログアウト",
       "platformAdmin": "プラットフォーム管理者",
       "sections": {
         "platform": "プラットフォーム",
         "revenue": "収益",
         "operations": "運用",
-        "configuration": "構成"
+        "configuration": "構成",
+        "team": "チーム"
       },
       "items": {
         "insights": "インサイト",
+        "inbox": "受信トレイ",
         "workspaces": "ワークスペース",
         "accounts": "アカウント",
         "subscriptions": "サブスクリプション",
         "plansAndPricing": "プランと価格",
         "billingLedger": "請求台帳",
         "salesLeads": "セールスリード",
-        "meetings": "ミーティング",
+        "operatingCosts": "運営費",
         "systemHealth": "システムの状態",
-        "eventOutbox": "イベント送信キュー",
+        "providers": "プロバイダー",
         "feedback": "フィードバック",
         "auditLog": "監査ログ",
         "announcements": "お知らせ",
         "emailTemplates": "メールテンプレート",
         "platformSettings": "プラットフォーム設定",
         "plugins": "プラグイン",
-        "globalGlossary": "グローバル用語集"
+        "globalGlossary": "グローバル用語集",
+        "staff": "スタッフ",
+        "roles": "ロール",
+        "packages": "パッケージ"
       }
     },
     "settingsNav": {
@@ -125,6 +130,8 @@
       "notifications": "通知",
       "connectedAccounts": "連携アカウント",
       "sessionsDevices": "セッションとデバイス",
+      "myConnections": "マイ接続",
+      "workspacePlugins": "ワークスペースのプラグイン",
       "plugins": "プラグイン",
       "workspaceSettingsCollapsed": "ワークスペース設定",
       "workspaceSettingsExpanded": "ワークスペース設定",
@@ -298,5 +305,23 @@
     "workspaceSettings": "ワークスペース設定",
     "billing": "請求",
     "signOut": "サインアウト"
+  },
+  "announcements": {
+    "regionLabel": "お知らせ",
+    "readMore": "続きを読む",
+    "pagerLabel": "その他のお知らせ",
+    "previous": "前のお知らせ",
+    "next": "次のお知らせ",
+    "position": "{current} / {total}",
+    "dismiss": "閉じる",
+    "dontShowAgain": "今後表示しない",
+    "close": "閉じる",
+    "badge": "お知らせ",
+    "types": {
+      "ANNOUNCEMENT": "お知らせ",
+      "FEATURE": "新機能",
+      "MAINTENANCE": "メンテナンス",
+      "PROMOTION": "キャンペーン"
+    }
   }
 }

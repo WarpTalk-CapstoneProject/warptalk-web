@@ -67,6 +67,40 @@
       "pageOf": "{page} / {totalPages} ページ",
       "previous": "前へ",
       "next": "次へ"
+    },
+    "columns": {
+      "plan": "プラン",
+      "status": "ステータス",
+      "value": "月額",
+      "credits": "残りクレジット",
+      "periodEnd": "期間終了",
+      "actions": "操作"
+    },
+    "filters": {
+      "plan": "プラン",
+      "service": "サービス状態",
+      "serviceStates": {
+        "healthy": "正常",
+        "low_balance": "残高不足",
+        "in_overage": "超過利用中",
+        "suspended": "サービス停止中"
+      },
+      "cycle": "請求サイクル",
+      "cycles": {
+        "monthly": "月払い",
+        "yearly": "年払い"
+      },
+      "autoRenew": "自動更新",
+      "renews": "更新する",
+      "doesNotRenew": "更新しない",
+      "workspace": "ワークスペース",
+      "workspacePlaceholder": "名前またはスラッグでワークスペースを検索…",
+      "periodEnd": "期間終了"
+    },
+    "sortFields": {
+      "periodEnd": "期間終了日",
+      "created": "作成日",
+      "credits": "残りクレジット"
     }
   },
   "lifecycleDialog": {

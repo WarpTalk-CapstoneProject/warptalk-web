@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "In progress",
+    "open": "Open",
     "waiting": "Waiting",
     "scheduled": "Scheduled",
     "ended": "Ended",
@@ -142,7 +143,11 @@
       "saveTranscript": "Save the meeting transcript",
       "saveTranscriptHint": "Subtitles and translation still work. This meeting will have no transcript, summary or minutes afterwards.",
       "keepTranscript": "Keep a transcript of this meeting",
-      "dontKeepTranscript": "Do not keep a record of this meeting"
+      "dontKeepTranscript": "Do not keep a record of this meeting",
+      "autoShareRecord": "Share the record with participants automatically",
+      "autoShareRecordOffHint": "Only you will see the transcript, AI summary and recording until you publish them.",
+      "keepRecordPrivate": "Keep the record private until I publish it",
+      "shareRecordAutomatically": "Share the record with participants when the meeting ends"
     },
     "startTime": {
       "label": "Start time",
@@ -158,7 +163,9 @@
   },
   "startedBanner": {
     "title": "A meeting has started",
+    "openedTitle": "A meeting is open",
     "joinNow": "Join now",
+    "setUpAndJoin": "Set up & join",
     "openFromNotifications": "Open it from your notifications.",
     "dismissAria": "Dismiss"
   },
@@ -245,5 +252,16 @@
     },
     "searching": "Searching meetings...",
     "empty": "No meetings found. Try a room title, code, or one of the quick actions above."
+  },
+  "bridgeFarSide": {
+    "label": "They speak",
+    "ariaLabel": "They speak {language}. Change what the other side of the call speaks",
+    "hint": "What the other side of the call speaks",
+    "connecting": "Connecting to WarpTalk…",
+    "notSet": "Set",
+    "menuHint": "Your speech is translated into this language, and theirs is translated into yours.",
+    "failed": "Could not change what the other side speaks",
+    "sameLanguage": "You and the other side are both set to {language}, so nothing will be translated. Choose what they speak.",
+    "singleLanguageWorkspace": "This workspace only allows {language}, so there is nothing to translate into. Ask a workspace admin to allow a second language."
   }
 }

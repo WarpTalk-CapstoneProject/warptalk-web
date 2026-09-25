@@ -16,7 +16,10 @@ export function WarpTalkBrand({ compact = false, className }: WarpTalkBrandProps
         fill
         priority
         sizes={compact ? "18px" : "65px"}
-        className="object-contain object-left mix-blend-multiply"
+        // The PNGs are black on an opaque white ground. Multiply drops the white on a light
+        // surface; on a dark one it would leave a black mark on black, so dark mode inverts it to
+        // white on black and screens the black away.
+        className="object-contain object-left mix-blend-multiply dark:invert dark:mix-blend-screen"
       />
     </span>
   );

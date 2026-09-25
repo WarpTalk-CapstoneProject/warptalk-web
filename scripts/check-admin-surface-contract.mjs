@@ -74,7 +74,9 @@ checks.push([
 ]);
 checks.push([
   "the admin sidebar offers a way back to the app",
-  /isAdminPage && isSystemAdmin[\s\S]{0,7000}?t\("adminNav\.backToApp"\)/.test(sidebar) &&
+  // The window spans the whole admin nav block, so it grows with each row added (9000 since
+  // /admin/packages, G11); what it pins is that the link lives in that block, not its offset.
+  /isAdminPage && isSystemAdmin[\s\S]{0,9000}?t\("adminNav\.backToApp"\)/.test(sidebar) &&
     commonEn.sidebar?.adminNav?.backToApp === "Back to app",
 ]);
 
@@ -190,6 +192,14 @@ const NAV_EXEMPT = new Set([
   // Reached from /admin/announcements by clicking a row. One notice's full record, not a
   // destination of its own.
   `${ADMIN_ROOT}/announcements/[id]/page.tsx`,
+  // The announcements CMS editor (`new` or an id), reached from a card or "New announcement" on
+  // /admin/announcements.
+  `${ADMIN_ROOT}/announcements/posts/[postId]/page.tsx`,
+  // One email layout or block, reached from the Layouts / Blocks sections of
+  // /admin/email-templates. Same reasoning as the posts editor above.
+  `${ADMIN_ROOT}/email-templates/blocks/[blockId]/page.tsx`,
+  // One email's editor, reached from its card on /admin/email-templates.
+  `${ADMIN_ROOT}/email-templates/[templateKey]/page.tsx`,
 ]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;

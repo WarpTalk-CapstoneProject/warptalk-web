@@ -1,7 +1,7 @@
 {
   "header": {
-    "title": "Plugins",
-    "subtitle": "Work with WarpBot across your favorite tools."
+    "title": "My connections",
+    "subtitle": "Your own accounts WarpBot can use — connect the plugins your workspace offers."
   },
   "search": {
     "placeholder": "Filter plugins"
@@ -29,13 +29,15 @@
     "manage": "Manage",
     "reconnect": "Reconnect",
     "request": "Request",
-    "requested": "Requested"
+    "requested": "Requested",
+    "add": "Add"
   },
   "memberAction": {
     "addedByWorkspace": "Added by your workspace",
     "notAddedYet": "Not added to {workspaceName} yet",
     "waitingForOwner": "Waiting for your workspace owner",
-    "thisWorkspace": "this workspace"
+    "thisWorkspace": "this workspace",
+    "disabledByPlatform": "Turned off for this workspace by WarpTalk. Your connection is kept, but WarpBot won't use it here."
   },
   "consentNotice": {
     "awaitingHeadline": "Finish connecting {label} in your browser",
@@ -70,6 +72,8 @@
     "couldNotStartConnection": "Could not start the {label} connection.",
     "requestSent": "Request sent to your workspace owner",
     "couldNotAsk": "Could not ask for {label}.",
+    "added": "{label} added to this workspace",
+    "couldNotAdd": "Could not add {label}.",
     "disconnected": "{label} disconnected",
     "couldNotDisconnect": "Could not disconnect {label}.",
     "removed": "{label} removed",

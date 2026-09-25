@@ -55,7 +55,10 @@ test("WT-538: the grace window keeps the old 09:05 argument true", () => {
 });
 
 test("a room that is open now is live, whatever its slot said", () => {
-  for (const status of ["in_progress", "waiting", "paused"] as const) {
+  // WT-612 / WT-621: `open` is in this list and is the one that would otherwise be wrong twice —
+  // it is the status a SCHEDULED room decays into at its own slot, so without it the grace window
+  // would report a room standing wide open as `missed`.
+  for (const status of ["in_progress", "waiting", "paused", "open"] as const) {
     assert.equal(
       resolve(meeting({ status, occursAt: at(-30 * 24 * 60 * 60 * 1000) })),
       "live",

@@ -1,7 +1,7 @@
 {
   "header": {
-    "title": "Plugin",
-    "subtitle": "Làm việc cùng WarpBot trên các công cụ bạn yêu thích."
+    "title": "Kết nối của tôi",
+    "subtitle": "Các tài khoản của riêng bạn mà WarpBot có thể dùng — kết nối những plugin workspace của bạn cung cấp."
   },
   "search": {
     "placeholder": "Lọc plugin"
@@ -29,13 +29,15 @@
     "manage": "Quản lý",
     "reconnect": "Kết nối lại",
     "request": "Yêu cầu",
-    "requested": "Đã yêu cầu"
+    "requested": "Đã yêu cầu",
+    "add": "Thêm"
   },
   "memberAction": {
     "addedByWorkspace": "Được thêm bởi không gian làm việc của bạn",
     "notAddedYet": "Chưa được thêm vào {workspaceName}",
     "waitingForOwner": "Đang chờ chủ sở hữu không gian làm việc của bạn",
-    "thisWorkspace": "không gian làm việc này"
+    "thisWorkspace": "không gian làm việc này",
+    "disabledByPlatform": "WarpTalk đã tắt plugin này cho workspace này. Kết nối của bạn được giữ, nhưng WarpBot sẽ không dùng ở đây."
   },
   "consentNotice": {
     "awaitingHeadline": "Hoàn tất kết nối {label} trong trình duyệt của bạn",
@@ -70,6 +72,8 @@
     "couldNotStartConnection": "Không thể bắt đầu kết nối {label}.",
     "requestSent": "Đã gửi yêu cầu đến chủ sở hữu không gian làm việc của bạn",
     "couldNotAsk": "Không thể gửi yêu cầu {label}.",
+    "added": "Đã thêm {label} vào không gian làm việc này",
+    "couldNotAdd": "Không thể thêm {label}.",
     "disconnected": "Đã ngắt kết nối {label}",
     "couldNotDisconnect": "Không thể ngắt kết nối {label}.",
     "removed": "Đã xóa {label}",

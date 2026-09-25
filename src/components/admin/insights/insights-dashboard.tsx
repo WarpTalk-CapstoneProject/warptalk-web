@@ -17,26 +17,26 @@ import {
   CaretLeft,
   CaretRight,
   DownloadSimple,
+  Info,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { BarList, type BarListRow } from "@/components/admin/charts/bar-list";
 import {
+  CHART_COLORS,
   ChartEmpty,
-  DailyLine,
-  Donut,
-  StackedBars,
-  ValueBars,
-  type DonutPart,
-} from "@/components/admin/insights/insights-charts";
+  ChartFigure,
+  TimeSeriesChart,
+} from "@/components/admin/charts/time-series-chart";
+import { compactMoney, sumKnown } from "@/lib/admin/chart-scale";
 import { insightsHref, metricHref, workspaceHref } from "@/lib/admin/insights-links";
 import {
   aiCostBasisView,
   assembleNeedsAttention,
   cartesiaLineView,
   churnSub,
-  compactNumber,
   deltaText,
   formatCount,
   formatInsightValue,
@@ -55,12 +55,22 @@ import {
   type ValueTone,
 } from "@/lib/admin/insights-metrics";
 import {
+  costPerMeetingHourByDay,
+  fxLineView,
+  pnlCards,
+  providerColors,
+  providerCostSeries,
+  providerLabel,
+  type CostCurrency,
+} from "@/lib/admin/insights-pnl";
+import {
   monthKeyLabel,
   seriesAxis,
   type InsightsPeriod,
   type ResolvedInsightsPeriod,
 } from "@/lib/admin/insights-period";
 import { usageServiceOf } from "@/lib/billing/usage-labels";
+import { Tooltip } from "@/components/ui/tooltip";
 import { formatMoney } from "@/lib/format/currency";
 import { downloadBlob } from "@/lib/ui/download-blob";
 import { cn } from "@/lib/utils";
@@ -71,6 +81,7 @@ import type {
   BillingInsightsDto,
   BillingSnapshotDto,
   MeetingsInsightsDto,
+  ProfitAndLossDto,
   UsersInsightsDto,
   WorkspacesInsightsDto,
 } from "@/types/admin-insights";
@@ -99,6 +110,8 @@ export interface InsightsDashboardProps {
   users: SourceState<UsersInsightsDto>;
   workspaces: SourceState<WorkspacesInsightsDto>;
   meetings: SourceState<MeetingsInsightsDto>;
+  /** Profit and loss (revenue, AI cost, margin, providers, plans, workspace trend). Absent = unavailable. */
+  pnl?: SourceState<ProfitAndLossDto>;
   meetingCounts: SourceState<AdminMeetingCountsDto>;
   deadLetters: SourceState<WorkspaceOutboxDeadLetterDto[]>;
   deadLettersLimit: number;
@@ -285,6 +298,34 @@ function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * A card's label, with its fine print behind an info icon. The server's notes run to a paragraph
+ * (coverage, pro-rating, FX); printed in the card they pushed every card in the row to their
+ * height. The icon sits inside a card that is itself a link, so a click on it must not navigate.
+ */
+function CardLabel({ label, note }: { label: ReactNode; note?: string | null }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <Eyebrow>{label}</Eyebrow>
+      {note ? (
+        <Tooltip content={note} side="bottom" className="max-w-[320px]">
+          <span
+            role="img"
+            aria-label={note}
+            className="-m-1 inline-flex shrink-0 cursor-help rounded p-1 text-ink-subtle outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+          >
+            <Info size={13} weight="bold" aria-hidden />
+          </span>
+        </Tooltip>
+      ) : null}
+    </div>
+  );
+}
+
 function PeriodCards({ props }: { props: InsightsDashboardProps }) {
   const sources = {
     billing: dataOf(props.billing),
@@ -304,7 +345,7 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             href={metricHref(spec.id)}
             className={cn(state.status === "ready" && state.refreshing && "opacity-60")}
           >
-            <Eyebrow>{spec.label}</Eyebrow>
+            <CardLabel label={spec.label} note={loading ? null : view.note} />
             <div
               className={cn(
                 "mt-2 truncate text-[21px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
@@ -323,7 +364,6 @@ function PeriodCards({ props }: { props: InsightsDashboardProps }) {
             {!loading && spec.id === "aiProviderCost" ? (
               <AiCostBasisLine basis={sources.billing?.aiProviderCostBasis} />
             ) : null}
-            {!loading && view.note ? <div className="mt-1.5 text-[11px] text-ink-muted">{view.note}</div> : null}
           </CardShell>
         );
       })}
@@ -449,18 +489,23 @@ function Panel({
   title,
   subtitle,
   link,
+  chart = false,
   children,
   className,
 }: {
   title: string;
   subtitle?: string;
   link?: { href: string; label: string };
+  /** A chart card: no rule under the title, so the headline figure reads as part of it. */
+  chart?: boolean;
   children: ReactNode;
   className?: string;
 }) {
   return (
+    // overflow-hidden keeps row hovers inside the rounded corners. It cannot clip a chart's hover
+    // readout any more: that is portalled to <body> (components/admin/charts/chart-tooltip).
     <section className={cn("min-w-0 overflow-hidden rounded-xl border border-hairline bg-surface-1", className)}>
-      <header className="flex items-start justify-between gap-2.5 border-b border-hairline px-4 py-2.5">
+      <header className={cn("flex items-start justify-between gap-2.5 px-4", chart ? "pt-3.5" : "border-b border-hairline py-2.5")}>
         <div className="min-w-0">
           <h2 className="text-[13px] font-medium text-ink">{title}</h2>
           {subtitle ? <p className="mt-0.5 text-[11px] text-ink-muted">{subtitle}</p> : null}
@@ -503,15 +548,8 @@ const dayShort = (date: Date) => new Intl.DateTimeFormat("en-US", { month: "shor
 const dateTime = (iso: string) =>
   new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso));
 
-const SERVICE_COLORS = [
-  "var(--usage-service-1)",
-  "var(--usage-service-2)",
-  "var(--usage-service-3)",
-  "var(--usage-service-4)",
-  "var(--usage-service-5)",
-];
-
-function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"]): DonutPart[] {
+/** The five largest services, then "Other" — ranked bars, one hue: the rank is the length. */
+function creditsByServiceRows(rows: BillingInsightsDto["creditsByService"]): BarListRow[] {
   const grouped = new Map<string, { label: string; value: number }>();
   for (const row of rows) {
     const service = usageServiceOf(row.usageType);
@@ -520,11 +558,34 @@ function creditsByServiceParts(rows: BillingInsightsDto["creditsByService"]): Do
     grouped.set(service.key, entry);
   }
   const sorted = [...grouped.entries()].filter(([, entry]) => entry.value > 0).sort((a, b) => b[1].value - a[1].value);
-  const parts: DonutPart[] = sorted.slice(0, 5).map(([key, entry], index) => ({ key, label: entry.label, value: entry.value, color: SERVICE_COLORS[index] }));
+  const result: BarListRow[] = sorted.slice(0, 5).map(([key, entry]) => ({
+    key,
+    label: entry.label,
+    segments: [{ key, label: entry.label, value: entry.value }],
+  }));
   const rest = sorted.slice(5).reduce((sum, [, entry]) => sum + entry.value, 0);
-  if (rest > 0) parts.push({ key: "other", label: "Other", value: rest, color: "var(--usage-service-other)" });
-  return parts;
+  if (rest > 0) {
+    result.push({ key: "other", label: "Other", segments: [{ key: "other", label: "Other", value: rest, color: "var(--usage-service-other)" }] });
+  }
+  return result;
 }
+
+/** "Tue, Sep 16" from a server day key, for tooltip titles. */
+function dayKeyTitle(key: string): string {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric" }).format(new Date(year, month - 1, day));
+}
+
+const moneyVnd = (value: number) => formatMoney(value, "VND");
+const moneyAxis = (value: number) => compactMoney(value, "VND");
+
+const SUBSCRIPTION_SEGMENTS = [
+  { key: "active", label: "Active", color: CHART_COLORS.primary },
+  // A lighter step of the same hue: a trial is an account that has not paid yet, not another kind.
+  { key: "trial", label: "Trial", color: "color-mix(in srgb, var(--viz-1) 40%, var(--surface-1))" },
+  // Status, not identity: past due is the one state that needs acting on.
+  { key: "pastDue", label: "Past due", color: "var(--warning)" },
+] as const;
 
 function Rows({ children }: { children: ReactNode }) {
   return <ul className="max-h-[252px] overflow-auto">{children}</ul>;
@@ -585,6 +646,375 @@ function ListState<T>({ state, children }: { state: SourceState<T>; children: (d
   return <>{children(state.data)}</>;
 }
 
+
+// ── profit and loss ──────────────────────────────────────────────────────────
+
+const moneyUsd = (value: number) => formatMoney(Math.round(value * 100) / 100, "USD");
+const usdAxis = (value: number) => compactMoney(value, "USD");
+const percentText = (value: number | null | undefined) =>
+  value === null || value === undefined ? "—" : `${new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value)}%`;
+const instantText = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+/**
+ * Where the USD→VND rate every figure below converts with came from, and when. Amber, with the
+ * server's own warning, whenever Stripe has not answered for a day — the rate is then the last known
+ * one, and the admin is told, not left to assume.
+ */
+function FxLine({ pnl }: { pnl: ProfitAndLossDto }) {
+  const view = fxLineView(pnl.fx, instantText);
+  if (!view) return null;
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-baseline gap-x-2.5 gap-y-1 rounded-xl border px-4 py-2.5 text-[12px] tabular-nums",
+        view.tone === "warning" ? "border-warning/40 bg-warning/10" : "border-hairline bg-surface-1",
+      )}
+    >
+      <span className="text-[11px] font-medium uppercase tracking-[0.4px] text-ink-muted">USD → VND</span>
+      <span className={cn("font-semibold", view.tone === "warning" ? "text-warning" : "text-ink")}>{view.rate}</span>
+      <span className="text-ink-muted">
+        {[view.source, view.asOf ? `as of ${view.asOf}` : null, pnl.fxNote].filter(Boolean).join(" · ")}
+      </span>
+      {view.warning ? <span className="min-w-0 text-warning">{view.warning}</span> : null}
+      <Link href="/admin/settings" className="ml-auto whitespace-nowrap text-[11px] text-primary hover:underline">
+        Rate settings →
+      </Link>
+    </div>
+  );
+}
+
+function ProfitAndLossSection({ props }: { props: InsightsDashboardProps }) {
+  const state: SourceState<ProfitAndLossDto> = props.pnl ?? { status: "unavailable" };
+  const pnl = dataOf(state);
+  const meetings = dataOf(props.meetings);
+  const { period } = props;
+  const [currency, setCurrency] = useState<CostCurrency>("VND");
+  const cards = pnlCards(pnl, meetings);
+  const loading = state.status === "loading";
+
+  return (
+    <section aria-labelledby="pnl-heading" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="pnl-heading" className="text-[15px] font-semibold text-ink">Profit and loss</h2>
+        {pnl ? (
+          <span className="text-[11px] text-ink-muted">
+            AI cost covers {percentText(pnl.costCoveragePercent)} of consumed credits
+            {pnl.costCoveragePercent < 100 ? " — margins are overstated by the rest" : ""}
+          </span>
+        ) : null}
+      </div>
+      {pnl ? <FxLine pnl={pnl} /> : null}
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {cards.map((card) => (
+          <div key={card.id} className={cn(CARD, state.status === "ready" && state.refreshing && "opacity-60")}>
+            <CardLabel label={card.label} note={loading ? null : card.note} />
+            <div
+              className={cn(
+                "mt-2 truncate text-[21px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
+                loading ? "animate-pulse text-ink-muted" : VALUE_TONE_CLASS[card.tone],
+              )}
+              title={card.value}
+            >
+              {card.value}
+            </div>
+            {card.available ? (
+              <div className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] tabular-nums text-ink-muted">
+                <span className={DELTA_TONE_CLASS[card.deltaTone]}>{deltaText(card.delta)}</span>
+                <span>last period {card.previous}</span>
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Panel chart title="Revenue and AI cost per day" link={{ href: insightsHref("billingLedger"), label: "Ledger" }}>
+          <div className="px-4 pb-3 pt-2">
+            <SourceBody state={state} height={240} empty="No days in this period." isEmpty={(data) => data.days.length === 0}>
+              {(data) => {
+                const days = seriesAxis(data.days.map((row) => ({ ...row, date: row.key })), period.axisEndDay);
+                const perHour = costPerMeetingHourByDay(data.days, meetings?.meetingsByDay);
+                const perHourByKey = new Map(data.days.map((row, index) => [row.key, perHour[index]]));
+                const margin = findPnlMetric(data, "grossMargin");
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(margin?.value, "money")}
+                      caption={joinNotes("Gross margin · revenue minus AI provider cost", margin?.note)}
+                    />
+                    <TimeSeriesChart
+                      variant="line"
+                      ariaLabel="Revenue and AI provider cost per day"
+                      height={200}
+                      labels={days.map((d) => d.label)}
+                      titles={days.map((d) => dayKeyTitle(d.key))}
+                      series={[
+                        { key: "revenue", label: "Revenue", values: days.map((d) => d.row?.revenue ?? null) },
+                        { key: "aiCost", label: "AI provider cost", values: days.map((d) => d.row?.aiCost ?? null) },
+                      ]}
+                      formatValue={moneyVnd}
+                      formatAxis={moneyAxis}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
+                      tooltipFooter={(index) => {
+                        const row = days[index]?.row;
+                        if (!row) return null;
+                        const hourCost = perHourByKey.get(row.key);
+                        return [
+                          `Margin ${percentText(row.marginPercent)}`,
+                          hourCost != null ? `${moneyVnd(hourCost)} per meeting-hour` : null,
+                          row.fxRate ? `${new Intl.NumberFormat("en-US").format(row.fxRate)} VND/USD` : null,
+                        ].filter(Boolean).join(" · ");
+                      }}
+                    />
+                  </>
+                );
+              }}
+            </SourceBody>
+          </div>
+        </Panel>
+        <Panel chart title="Profit and loss, 6 months">
+          <div className="px-4 pb-3 pt-2">
+            <SourceBody state={state} height={240} empty="No months." isEmpty={(data) => data.months.length === 0}>
+              {(data) => {
+                const months = data.months;
+                const margins = months.map((m) => m.grossMargin);
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(margins), "money")}
+                      caption="Gross margin over six months · revenue vs AI cost"
+                    />
+                    <TimeSeriesChart
+                      variant="bar"
+                      ariaLabel="Revenue and AI provider cost per month"
+                      height={180}
+                      labels={months.map((m) => monthKeyLabel(m.key))}
+                      series={[
+                        { key: "revenue", label: "Revenue", values: months.map((m) => m.revenue) },
+                        { key: "aiCost", label: "AI provider cost", values: months.map((m) => m.aiCost) },
+                      ]}
+                      formatValue={moneyVnd}
+                      formatAxis={moneyAxis}
+                      tooltipFooter={(index) => {
+                        const row = months[index];
+                        return row
+                          ? `Margin ${formatInsightValue(row.grossMargin, "money")} (${percentText(row.marginPercent)}) · ARPA ${formatInsightValue(row.arpa, "money")}`
+                          : null;
+                      }}
+                    />
+                  </>
+                );
+              }}
+            </SourceBody>
+          </div>
+        </Panel>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <Panel chart title="AI provider cost over time">
+          <div className="px-4 pb-3 pt-2">
+            <SourceBody state={state} height={240} empty="No provider cost in this period." isEmpty={(data) => data.providers.length === 0}>
+              {(data) => {
+                const days = seriesAxis(data.days.map((row) => ({ ...row, date: row.key })), period.axisEndDay);
+                const rows = days.map((d) => d.row).filter((row): row is NonNullable<typeof row> => row !== null);
+                const series = providerCostSeries(rows, currency);
+                const colors = providerColors(series.map((s) => s.key));
+                const pad = days.length - rows.length;
+                const format = currency === "USD" ? moneyUsd : moneyVnd;
+                return (
+                  <>
+                    <div className="mb-1 flex items-start justify-between gap-3">
+                      <ChartFigure
+                        value={currency === "USD" ? moneyUsd(data.aiCostUsd) : formatInsightValue(findPnlMetric(data, "aiProviderCost")?.value, "money")}
+                        caption="AI provider cost, by provider"
+                      />
+                      <div role="group" aria-label="Currency" className="inline-flex overflow-hidden rounded-md border border-hairline">
+                        {(["VND", "USD"] as const).map((code) => (
+                          <button
+                            key={code}
+                            type="button"
+                            aria-pressed={currency === code}
+                            onClick={() => setCurrency(code)}
+                            className="px-2.5 py-1 text-[11px] font-medium text-ink-muted aria-pressed:bg-surface-3 aria-pressed:text-ink"
+                          >
+                            {code}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <TimeSeriesChart
+                      variant="line"
+                      ariaLabel={`AI provider cost per day in ${currency}, by provider`}
+                      height={200}
+                      labels={days.map((d) => d.label)}
+                      titles={days.map((d) => dayKeyTitle(d.key))}
+                      series={series.map((s) => ({
+                        key: s.key,
+                        label: s.label,
+                        color: colors[s.key],
+                        values: [...s.values, ...Array<number | null>(pad).fill(null)],
+                      }))}
+                      formatValue={format}
+                      formatAxis={currency === "USD" ? usdAxis : moneyAxis}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No USD→VND rate")}
+                    />
+                  </>
+                );
+              }}
+            </SourceBody>
+          </div>
+        </Panel>
+        <Panel chart title="Credits by AI provider">
+          <div className="px-4 pb-3 pt-2">
+            <SourceBody state={state} height={200} empty="No credits consumed in this period." isEmpty={(data) => data.providers.length === 0}>
+              {(data) => {
+                const colors = providerColors(data.providers.map((p) => p.provider));
+                const services = [...new Set(data.providers.flatMap((p) => p.services.map((s) => s.service)))];
+                const serviceColor = (index: number) => `color-mix(in srgb, var(--viz-1) ${100 - index * 22}%, var(--surface-1))`;
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatCount(data.providers.reduce((sum, p) => sum + p.credits, 0))}
+                      caption="Credits consumed · STT / MT / TTS / LLM split"
+                    />
+                    <BarList
+                      ariaLabel="Credits consumed by AI provider"
+                      formatValue={formatCount}
+                      legend={services.map((service, index) => ({ key: service, label: service, color: serviceColor(index) }))}
+                      rows={data.providers.map((provider) => ({
+                        key: provider.provider,
+                        label: providerLabel(provider.provider),
+                        valueText: `${formatCount(provider.credits)} · ${moneyUsd(provider.costUsd)}${provider.costVnd === null ? "" : ` · ${moneyVnd(provider.costVnd)}`}`,
+                        segments: provider.services.map((service) => ({
+                          key: `${provider.provider}-${service.chargeType}`,
+                          label: `${service.service} (${service.chargeType})`,
+                          value: service.credits,
+                          color: services.length > 1 ? serviceColor(services.indexOf(service.service)) : colors[provider.provider],
+                        })),
+                      }))}
+                    />
+                    {data.providers.some((p) => p.note) ? (
+                      <ul className="mt-2 space-y-1 text-[11px] text-ink-muted">
+                        {data.providers.filter((p) => p.note).map((p) => (
+                          <li key={p.provider}>
+                            <b className="font-medium text-ink">{providerLabel(p.provider)}</b>: {p.note}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                );
+              }}
+            </SourceBody>
+          </div>
+        </Panel>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <Panel title="Gross margin by plan" subtitle={`${period.label} · AI cost allocated by each plan's usage`} link={{ href: insightsHref("plans"), label: "Plans" }}>
+          <ListState state={state}>
+            {(data) =>
+              data.plans.length === 0 ? (
+                <ListEmpty>No revenue or usage in this period.</ListEmpty>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px] tabular-nums">
+                    <thead className="text-left text-[11px] text-ink-muted">
+                      <tr className="border-b border-hairline">
+                        <th scope="col" className="px-4 py-2 font-medium">Plan</th>
+                        <th scope="col" className="px-2 py-2 text-right font-medium">Revenue</th>
+                        <th scope="col" className="px-2 py-2 text-right font-medium">AI cost</th>
+                        <th scope="col" className="px-2 py-2 text-right font-medium">Margin</th>
+                        <th scope="col" className="px-2 py-2 text-right font-medium">%</th>
+                        <th scope="col" className="px-4 py-2 text-right font-medium">ARPA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.plans.map((plan) => (
+                        <tr key={plan.planId ?? plan.planSlug} className="border-b border-hairline last:border-b-0" title={plan.note ?? undefined}>
+                          <th scope="row" className="max-w-[180px] truncate px-4 py-2 text-left font-medium text-ink">
+                            {plan.planName}
+                            <small className="block text-[11px] font-normal text-ink-muted">
+                              {formatCount(plan.activeWorkspaces)} active · {formatCount(plan.credits)} credits
+                            </small>
+                          </th>
+                          <td className="px-2 py-2 text-right">{formatInsightValue(plan.revenue, "money")}</td>
+                          <td className="px-2 py-2 text-right">{formatInsightValue(plan.aiCost, "money")}</td>
+                          <td className={cn("px-2 py-2 text-right", plan.grossMargin !== null && plan.grossMargin < 0 ? "text-destructive" : "text-ink")}>
+                            {formatInsightValue(plan.grossMargin, "money")}
+                          </td>
+                          <td className="px-2 py-2 text-right">{percentText(plan.marginPercent)}</td>
+                          <td className="px-4 py-2 text-right">{formatInsightValue(plan.arpa, "money")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            }
+          </ListState>
+        </Panel>
+
+        <Panel chart title="Credits per workspace" link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
+          <div className="px-4 pb-3 pt-2">
+            <SourceBody state={state} height={220} empty="No credits consumed in this period." isEmpty={(data) => data.topWorkspaces.length === 0}>
+              {(data) => {
+                const days = seriesAxis(data.days.map((row) => ({ ...row, date: row.key })), period.axisEndDay);
+                // Colour follows the workspace: slots in name order, so a re-ranking does not repaint.
+                const ordered = [...data.topWorkspaces].sort((a, b) =>
+                  workspaceLabel(a.workspaceName).localeCompare(workspaceLabel(b.workspaceName)) || a.workspaceId.localeCompare(b.workspaceId));
+                const color = new Map(ordered.map((w, index) => [w.workspaceId, `var(--viz-${index + 1})`]));
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatCount(data.topWorkspaces.reduce((sum, w) => sum + w.credits, 0))}
+                      caption={`Top ${data.topWorkspaces.length} workspaces by credits · ${period.label}`}
+                    />
+                    <TimeSeriesChart
+                      variant="line"
+                      integer
+                      ariaLabel="Credits per day for the top workspaces"
+                      height={170}
+                      labels={days.map((d) => d.label)}
+                      titles={days.map((d) => dayKeyTitle(d.key))}
+                      series={data.topWorkspaces.map((w) => ({
+                        key: w.workspaceId,
+                        label: workspaceLabel(w.workspaceName),
+                        color: color.get(w.workspaceId),
+                        values: days.map((d, index) => (d.future ? null : (w.days[index] ?? null))),
+                      }))}
+                      formatValue={formatCount}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
+                    />
+                    <div className="mt-3">
+                      <BarList
+                        ariaLabel="Top workspaces by credits"
+                        formatValue={formatCount}
+                        rows={data.topWorkspaces.map((w, index) => ({
+                          key: w.workspaceId,
+                          label: `${index + 1}. ${workspaceLabel(w.workspaceName)}${w.planName ? ` · ${w.planName}` : ""}`,
+                          href: workspaceHref(w.workspaceId),
+                          segments: [{ key: "credits", label: "Credits", value: w.credits, color: color.get(w.workspaceId) }],
+                        }))}
+                      />
+                    </div>
+                  </>
+                );
+              }}
+            </SourceBody>
+          </div>
+        </Panel>
+      </div>
+    </section>
+  );
+}
+
+function findPnlMetric(data: ProfitAndLossDto, id: string) {
+  return data.metrics.find((metric) => metric.id === id) ?? null;
+}
+
 // ── the page ─────────────────────────────────────────────────────────────────
 
 export function InsightsDashboard(props: InsightsDashboardProps) {
@@ -610,7 +1040,8 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
         links: {
           health: insightsHref("health"),
           suspendedWorkspaces: insightsHref("suspendedWorkspaces"),
-          deadLetters: insightsHref("deadLetters"),
+          // No drill-down: the Event outbox page was retired (2026-09-24). The count stays here.
+          deadLetters: null,
           newSalesLeads: insightsHref("newSalesLeads"),
           subscriptions: insightsHref("subscriptions"),
           workspace: workspaceHref,
@@ -789,139 +1220,168 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
       </details>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-        <Panel
-          title="Revenue, 6 months"
-          subtitle={joinNotes("Successful payments, by month", billing?.revenueByMonthNote) ?? undefined}
-          link={{ href: insightsHref("subscriptions"), label: "Subscriptions" }}
-        >
-          <div className="px-4 py-3.5">
+        <Panel chart title="Revenue, 6 months" link={{ href: insightsHref("subscriptions"), label: "Subscriptions" }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
-              height={220}
+              height={240}
               empty="No revenue in these six months."
               isEmpty={(data) => (data.revenueByMonth ?? []).length === 0}
             >
-              {(data) => (
-                <ValueBars
-                  ariaLabel="Revenue per month"
-                  color="var(--success)"
-                  data={data.revenueByMonth.map((row) => ({
-                    key: row.month,
-                    label: monthKeyLabel(row.month),
-                    value: row.revenue,
-                    title: `${monthKeyLabel(row.month)}: ${row.revenue === null ? "no figure" : formatMoney(row.revenue, "VND")}`,
-                  }))}
-                />
-              )}
+              {(data) => {
+                const months = data.revenueByMonth;
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(months.map((row) => row.revenue)), "money")}
+                      caption={joinNotes("Successful payments, by month", data.revenueByMonthNote)}
+                    />
+                    <TimeSeriesChart
+                      variant="bar"
+                      ariaLabel="Revenue per month"
+                      height={180}
+                      labels={months.map((row) => monthKeyLabel(row.month))}
+                      series={[{ key: "revenue", label: "Revenue", values: months.map((row) => row.revenue) }]}
+                      formatValue={moneyVnd}
+                      formatAxis={moneyAxis}
+                    />
+                  </>
+                );
+              }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel
-          title="Revenue per day"
-          subtitle={joinNotes(
-            isMonth ? `${period.label} — days still to come are left blank, not drawn as 0` : period.label,
-            billing?.revenueByDayNote,
-          ) ?? undefined}
-          link={{ href: insightsHref("billingLedger"), label: "Ledger" }}
-        >
-          <div className="px-4 py-3.5">
+        <Panel chart title="Revenue per day" link={{ href: insightsHref("billingLedger"), label: "Ledger" }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
-              height={220}
+              height={240}
               empty="No days in this period."
               isEmpty={(data) => (data.revenueByDay ?? []).length === 0}
             >
-              {(data) => (
+              {(data) => {
                 // The server's own local days (of the tz the page sent), labelled from their keys.
-                <DailyLine
-                  ariaLabel="Revenue per day"
-                  formatValue={(value) => formatMoney(value, "VND")}
-                  points={seriesAxis(data.revenueByDay, period.axisEndDay).map((day) => ({
-                    key: day.key,
-                    label: day.label,
-                    value: day.row?.revenue ?? null,
-                  }))}
-                />
-              )}
+                const days = seriesAxis(data.revenueByDay, period.axisEndDay);
+                return (
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(days.map((day) => day.row?.revenue ?? null)), "money")}
+                      caption={joinNotes(
+                        isMonth ? `${period.label} — days still to come are left blank, not drawn as 0` : period.label,
+                        data.revenueByDayNote,
+                      )}
+                    />
+                    <TimeSeriesChart
+                      variant="area"
+                      ariaLabel="Revenue per day"
+                      height={180}
+                      labels={days.map((day) => day.label)}
+                      titles={days.map((day) => dayKeyTitle(day.key))}
+                      series={[{ key: "revenue", label: "Revenue", values: days.map((day) => day.row?.revenue ?? null) }]}
+                      formatValue={moneyVnd}
+                      formatAxis={moneyAxis}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
+                    />
+                  </>
+                );
+              }}
             </SourceBody>
           </div>
         </Panel>
       </div>
 
+      <ProfitAndLossSection props={props} />
+
       <div className="grid gap-3 lg:grid-cols-3">
-        <Panel title="Credits by AI service" subtitle={`Credits consumed · ${period.label}`} link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
-          <div className="px-4 py-3.5">
+        <Panel chart title="Credits by AI service" link={{ href: insightsHref("workspaces"), label: "Workspaces" }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.billing}
-              height={170}
+              height={200}
               empty="No credits consumed in this period."
-              isEmpty={(data) => creditsByServiceParts(data.creditsByService ?? []).length === 0}
+              isEmpty={(data) => creditsByServiceRows(data.creditsByService ?? []).length === 0}
             >
               {(data) => {
-                const parts = creditsByServiceParts(data.creditsByService);
-                const total = parts.reduce((sum, part) => sum + part.value, 0);
-                return <Donut ariaLabel="Credits by AI service" parts={parts} centerLabel={compactNumber(total)} />;
+                const rows = creditsByServiceRows(data.creditsByService);
+                const total = rows.reduce((sum, row) => sum + row.segments[0].value, 0);
+                return (
+                  <>
+                    <ChartFigure value={formatCount(total)} caption={`Credits consumed · ${period.label}`} />
+                    <BarList ariaLabel="Credits by AI service" rows={rows} formatValue={formatCount} showShare />
+                  </>
+                );
               }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel title="Subscriptions by plan" subtitle="Active · trial · past due, right now" link={{ href: insightsHref("plans"), label: "Plans" }}>
-          <div className="px-4 py-3.5">
+        <Panel chart title="Subscriptions by plan" link={{ href: insightsHref("plans"), label: "Plans" }}>
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.snapshot}
-              height={170}
+              height={200}
               empty="No subscriptions yet."
               isEmpty={(data) => (data.subscriptionsByPlan ?? []).length === 0}
             >
-              {(data) => (
-                <>
-                  <StackedBars
-                    ariaLabel="Subscriptions by plan and status"
-                    rows={data.subscriptionsByPlan.map((plan) => ({
-                      key: plan.planSlug,
-                      label: plan.planName,
-                      segments: [
-                        { key: "active", label: "Active", value: plan.active, color: "var(--primary)" },
-                        { key: "trial", label: "Trial", value: plan.trial, color: "var(--info)", opacity: 0.45 },
-                        { key: "pastDue", label: "Past due", value: plan.pastDue, color: "var(--warning)" },
-                      ],
-                    }))}
-                  />
-                  <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-ink-muted">
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-primary" />Active</span>
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-info opacity-45" />Trial</span>
-                    <span className="inline-flex items-center gap-1.5"><i className="inline-block size-[9px] rounded-[2px] bg-warning" />Past due</span>
-                  </div>
-                </>
-              )}
+              {(data) => {
+                const total = data.subscriptionsByPlan.reduce((sum, plan) => sum + plan.active + plan.trial + plan.pastDue, 0);
+                return (
+                  <>
+                    <ChartFigure value={formatCount(total)} caption="Active · trial · past due, right now" />
+                    <BarList
+                      ariaLabel="Subscriptions by plan and status"
+                      legend={SUBSCRIPTION_SEGMENTS.map((segment) => ({ ...segment }))}
+                      formatValue={formatCount}
+                      rows={data.subscriptionsByPlan.map((plan) => ({
+                        key: plan.planSlug,
+                        label: plan.planName,
+                        segments: SUBSCRIPTION_SEGMENTS.map((segment) => ({
+                          key: segment.key,
+                          label: segment.label,
+                          color: segment.color,
+                          value: plan[segment.key],
+                        })),
+                      }))}
+                    />
+                  </>
+                );
+              }}
             </SourceBody>
           </div>
         </Panel>
-        <Panel title="Meetings per day" subtitle="Meetings held · hours translated" link={{ href: insightsHref("meetings"), label: "Meetings" }}>
-          <div className="px-4 py-3.5">
+        {/* No link: the platform meeting directory was retired (2026-09-24). */}
+        <Panel chart title="Meetings per day">
+          <div className="px-4 pb-3 pt-2">
             <SourceBody
               state={props.meetings}
-              height={170}
+              height={200}
               empty="No days in this period."
               isEmpty={(data) => (data.meetingsByDay ?? []).length === 0}
             >
               {(data) => {
                 const days = seriesAxis(data.meetingsByDay, period.axisEndDay);
+                const hours = sumKnown(days.map((day) => day.row?.hours ?? null));
                 return (
-                  <ValueBars
-                    ariaLabel="Meetings per day"
-                    color="var(--primary)"
-                    height={170}
-                    showValues={days.length <= 16}
-                    data={days.map((day) => ({
-                      key: day.key,
-                      label: day.label,
-                      value: day.row?.meetings ?? null,
-                      title: day.row
-                        ? `${day.label}: ${formatCount(day.row.meetings)} meetings · ${formatInsightValue(day.row.hours, "hours")}`
-                        : `${day.label}: still to come`,
-                    }))}
-                  />
+                  <>
+                    <ChartFigure
+                      value={formatInsightValue(sumKnown(days.map((day) => day.row?.meetings ?? null)), "count")}
+                      caption={`Meetings held · ${formatInsightValue(hours, "hours")} translated`}
+                    />
+                    <TimeSeriesChart
+                      variant="bar"
+                      integer
+                      ariaLabel="Meetings per day"
+                      height={220}
+                      labels={days.map((day) => day.label)}
+                      titles={days.map((day) => dayKeyTitle(day.key))}
+                      series={[{ key: "meetings", label: "meetings", values: days.map((day) => day.row?.meetings ?? null) }]}
+                      formatValue={formatCount}
+                      describeGap={(index) => (days[index]?.future ? "Still to come" : "No figure")}
+                      tooltipFooter={(index) => {
+                        const row = days[index]?.row;
+                        return row ? `${formatInsightValue(row.hours, "hours")} translated` : null;
+                      }}
+                    />
+                  </>
                 );
               }}
             </SourceBody>
@@ -961,23 +1421,19 @@ export function InsightsDashboard(props: InsightsDashboardProps) {
             {(data) => {
               const top = data.topWorkspaces ?? [];
               if (top.length === 0) return <ListEmpty>No credits consumed in this period.</ListEmpty>;
-              const max = Math.max(1, ...top.map((row) => row.credits));
               return (
-                <Rows>
-                  {top.map((row, index) => (
-                    <Row key={row.workspaceId} href={workspaceHref(row.workspaceId)}>
-                      <div className="min-w-0">
-                        <b className="block truncate text-[13px] font-medium text-ink">
-                          {index + 1}. {workspaceLabel(row.workspaceName)}
-                        </b>
-                        <span className="mt-1.5 block h-[3px] rounded-full bg-surface-3">
-                          <span className="block h-[3px] rounded-full bg-primary" style={{ width: `${Math.max(2, (row.credits / max) * 100)}%` }} />
-                        </span>
-                      </div>
-                      <div className="text-right text-[13px] tabular-nums text-ink">{formatCount(row.credits)}</div>
-                    </Row>
-                  ))}
-                </Rows>
+                <div className="px-4 py-3">
+                  <BarList
+                    ariaLabel="Top workspaces by credits"
+                    formatValue={formatCount}
+                    rows={top.map((row, index) => ({
+                      key: row.workspaceId,
+                      label: `${index + 1}. ${workspaceLabel(row.workspaceName)}`,
+                      href: workspaceHref(row.workspaceId),
+                      segments: [{ key: "credits", label: "Credits", value: row.credits }],
+                    }))}
+                  />
+                </div>
               );
             }}
           </ListState>

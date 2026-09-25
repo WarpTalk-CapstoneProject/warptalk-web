@@ -15,6 +15,7 @@ import type {
   SendAssistantMessageResponse,
   UpdatePrivatePluginRequest,
   WorkspacePluginItemDto,
+  WorkspacePluginMemberDto,
   WorkspacePluginRequestDto,
   WorkspacePluginsOverviewDto,
   WorkspacePluginToolAuditDto,
@@ -74,6 +75,32 @@ export const assistantService = {
 
   archiveConversation(id: string) {
     return apiClient.delete<void>(API.assistant.conversation(id));
+  },
+
+  /**
+   * Platform-scope WarpBot — a system admin in the admin portal. Its own endpoints and store: no
+   * workspace id, and a send carries text only (no page context, mentions, attachments or plugin
+   * switches, each of which names workspace content). The server enforces the admin role.
+   */
+  platform: {
+    listConversations() {
+      return apiClient.get<AssistantConversationDto[]>(API.assistant.platform.conversations);
+    },
+    getConversation(id: string) {
+      return apiClient.get<AssistantConversationDetailDto>(API.assistant.platform.conversation(id));
+    },
+    createConversation() {
+      return apiClient.post<AssistantConversationDto>(API.assistant.platform.conversations, {});
+    },
+    sendMessage(conversationId: string, content: string) {
+      return apiClient.post<SendAssistantMessageResponse>(
+        API.assistant.platform.sendMessage(conversationId),
+        { content },
+      );
+    },
+    archiveConversation(id: string) {
+      return apiClient.delete<void>(API.assistant.platform.conversation(id));
+    },
   },
 
   getSkills() {
@@ -153,6 +180,11 @@ export const assistantService = {
   /** Removes a marketplace plugin from the workspace; a private plugin is retired. */
   removeWorkspacePlugin(workspaceId: string, pluginKey: string) {
     return apiClient.delete<void>(API.assistant.workspacePlugins.plugin(workspaceId, pluginKey));
+  },
+
+  /** Members who connected the plugin, most recently used first. Owner or Admin. */
+  listWorkspacePluginMembers(workspaceId: string, pluginKey: string) {
+    return apiClient.get<WorkspacePluginMemberDto[]>(API.assistant.workspacePlugins.members(workspaceId, pluginKey));
   },
 
   createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {

@@ -33,6 +33,7 @@
     "source": {
       "unknown": { "label": "Không rõ", "detail": "Nguồn của giá trị này không được báo cáo." },
       "plan": { "label": "Gói", "detail": "Được đặt bởi gói {name}." },
+      "addon": { "label": "Tiện ích bổ sung", "detail": "Được nâng bởi tiện ích bổ sung {name} mà workspace đã mua." },
       "platformDefault": {
         "label": "Mặc định nền tảng",
         "detail": "Không có gói hoặc hợp đồng đang hoạt động nào đặt giá trị này, nên mặc định của nền tảng được áp dụng."

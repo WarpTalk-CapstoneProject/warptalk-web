@@ -1,0 +1,1020 @@
+{
+  "common": {
+    "editedBy": "{name} sửa lúc {date}",
+    "editedAt": "Sửa lúc {date}",
+    "retry": "Thử lại",
+    "toasts": {
+      "failed": "Không thực hiện được. Hãy thử lại."
+    },
+    "list": {
+      "view": "Kiểu xem",
+      "cards": "Thẻ",
+      "table": "Bảng",
+      "clearSearch": "Xoá tìm kiếm",
+      "sortBy": "Sắp xếp",
+      "selectAll": "Chọn tất cả trên trang này",
+      "clearFilters": "Xoá bộ lọc"
+    },
+    "bulk": {
+      "label": "Thao tác hàng loạt",
+      "selected": "Đã chọn {count}",
+      "clear": "Bỏ chọn",
+      "partial": "{failed} mục không thay đổi được: {error}"
+    },
+    "editor": {
+      "actions": "Thao tác",
+      "unsaved": "Có thay đổi chưa lưu",
+      "saved": "Đã lưu mọi thay đổi",
+      "saveShortcut": "⌘S / Ctrl+S",
+      "cancel": "Huỷ"
+    },
+    "history": {
+      "noChanges": "Không có thay đổi.",
+      "unchangedLines": "{count} dòng không đổi",
+      "loadError": "Không tải được lịch sử phiên bản.",
+      "noVersions": "Chưa xuất bản lần nào",
+      "noVersionsHint": "Mỗi lần xuất bản sẽ thêm một phiên bản vào đây, và có thể khôi phục bất kỳ phiên bản nào vào bản nháp.",
+      "actions": {
+        "published": "Đã xuất bản",
+        "restored": "Đã khôi phục",
+        "reset": "Đã đặt lại",
+        "other": "Đã lưu"
+      },
+      "compareWith": "So sánh với",
+      "comparePrevious": "so với v{version}",
+      "compareFirst": "Phiên bản đầu tiên",
+      "compareDraft": "so với bản nháp hiện tại",
+      "restore": "Khôi phục v{version} vào bản nháp",
+      "restoreHint": "Khôi phục sẽ sao chép phiên bản này vào bản nháp. Nội dung gửi đi không đổi cho đến khi bạn xuất bản.",
+      "auditError": "Không tải được nhật ký kiểm tra.",
+      "retry": "Thử lại",
+      "noAudit": "Chưa có thay đổi nào được ghi lại",
+      "noAuditHint": "Mọi thay đổi của quản trị viên tại đây đều được ghi vào nhật ký kiểm tra của nền tảng.",
+      "auditFooter": "Lấy từ nhật ký kiểm tra của nền tảng. Bản đầy đủ, có bộ lọc và xuất file, nằm ở mục Nhật ký kiểm tra.",
+      "failed": "thất bại",
+      "hideChanges": "Ẩn thay đổi",
+      "showChanges": "Xem {count} thay đổi"
+    },
+    "preview": {
+      "device": "Thiết bị",
+      "desktop": "Máy tính",
+      "mobile": "Điện thoại",
+      "theme": "Giao diện",
+      "light": "Sáng",
+      "dark": "Tối",
+      "format": "Định dạng",
+      "html": "HTML",
+      "text": "Văn bản thuần",
+      "noPreheader": "Không có dòng xem trước — hộp thư sẽ hiện dòng đầu của nội dung",
+      "layout": "Bố cục: {name}"
+    },
+    "markdown": {
+      "mode": "Chế độ soạn thảo",
+      "write": "Soạn",
+      "preview": "Xem trước",
+      "bold": "In đậm",
+      "boldPlaceholder": "chữ đậm",
+      "italic": "In nghiêng",
+      "italicPlaceholder": "chữ nghiêng",
+      "heading": "Tiêu đề",
+      "link": "Liên kết",
+      "linkPlaceholder": "chữ liên kết",
+      "bulleted": "Danh sách dấu chấm",
+      "numbered": "Danh sách đánh số",
+      "quote": "Trích dẫn",
+      "code": "Mã",
+      "image": "Tải ảnh lên",
+      "imageType": "Hãy tải ảnh PNG, JPEG, GIF hoặc WebP.",
+      "imageTooLarge": "Ảnh phải nhỏ hơn hoặc bằng 2 MB.",
+      "uploadFailed": "Không tải được ảnh lên.",
+      "nothingToPreview": "Chưa có gì để xem trước.",
+      "hint": "Markdown: **đậm**, _nghiêng_, danh sách, liên kết. Dán hoặc kéo thả ảnh để tải lên."
+    },
+    "sendTest": {
+      "title": "Gửi thử “{name}”",
+      "descriptionDraft": "Gửi đúng những gì đang hiển thị — dù đã lưu hay chưa — với dữ liệu mẫu. Không lưu gì cả.",
+      "descriptionSaved": "Gửi bản nháp đã lưu của ngôn ngữ bạn chọn, với dữ liệu mẫu.",
+      "recipients": "Gửi tới",
+      "recipientsHint": "Tối đa {max} địa chỉ, ngăn cách bằng dấu phẩy hoặc xuống dòng.",
+      "invalid": "Không phải địa chỉ email: {addresses}",
+      "tooMany": "Chỉ gửi tới tối đa {max} địa chỉ.",
+      "locale": "Ngôn ngữ",
+      "sampleData": "Dữ liệu mẫu",
+      "builtInSamples": "Mẫu có sẵn",
+      "cancel": "Huỷ",
+      "send": "Gửi thử",
+      "sending": "Đang gửi…",
+      "sent": "Đã gửi thử tới {count} địa chỉ.",
+      "partial": "Đã gửi tới {sent}; không gửi được tới {failed}.",
+      "failed": "Không gửi được email thử."
+    }
+  },
+  "emails": {
+    "eyebrow": "Nội dung",
+    "title": "Mẫu email",
+    "description": "Mọi email nền tảng gửi đi, bằng tiếng Anh, tiếng Việt và tiếng Nhật. Chỉnh sửa nằm trong bản nháp cho đến khi bạn xuất bản; hệ thống gửi chỉ dùng phiên bản đã xuất bản.",
+    "newLayout": "Bố cục mới",
+    "newBlock": "Khối mới",
+    "sectionsLabel": "Email, bố cục và khối",
+    "sections": {
+      "emails": "Email",
+      "layouts": "Bố cục",
+      "blocks": "Khối"
+    },
+    "filterLabel": "Lọc email",
+    "filters": {
+      "all": "Tất cả",
+      "live": "Đang dùng",
+      "dormant": "Không hoạt động",
+      "customized": "Đã tuỳ chỉnh",
+      "draft": "Thay đổi chưa xuất bản"
+    },
+    "searchPlaceholder": "Tìm email",
+    "sort": {
+      "name": "Tên",
+      "updated": "Sửa gần nhất",
+      "sent": "Gửi nhiều nhất"
+    },
+    "loadError": "Không tải được mẫu email.",
+    "empty": {
+      "none": "Không có email",
+      "filtered": "Không có email phù hợp",
+      "filteredHint": "Thử bộ lọc khác hoặc xoá tìm kiếm."
+    },
+    "table": {
+      "email": "Email",
+      "status": "Trạng thái",
+      "locales": "Ngôn ngữ",
+      "sender": "Dịch vụ gửi",
+      "sent30": "Đã gửi (30 ngày)",
+      "updated": "Sửa gần nhất"
+    },
+    "selectOne": "Chọn {name}",
+    "chips": {
+      "live": "Đang dùng",
+      "dormant": "Không hoạt động",
+      "customized": "Đã tuỳ chỉnh",
+      "draft": "Thay đổi chưa xuất bản"
+    },
+    "localeStates": {
+      "PUBLISHED": "Đã xuất bản",
+      "CHANGES": "Đã xuất bản, có thay đổi chưa xuất bản",
+      "DRAFT_ONLY": "Chỉ có bản nháp — chưa gửi",
+      "ARCHIVED": "Đã lưu trữ",
+      "MISSING": "Chưa viết — dùng bản dự phòng"
+    },
+    "card": {
+      "subject": "Tiêu đề (tiếng Anh, như đang gửi)",
+      "sent30": "Đã gửi {sent, number} · lỗi {failed, number} trong 30 ngày"
+    },
+    "actions": {
+      "edit": "Sửa",
+      "preview": "Xem trước",
+      "sendTest": "Gửi thử",
+      "reset": "Đặt lại mặc định"
+    },
+    "resetDialog": {
+      "title": "Đặt lại “{name}” về nội dung có sẵn?",
+      "description": "Bản nháp tiếng Anh được thay bằng tiêu đề và nội dung có sẵn. Người nhận không thấy thay đổi cho đến khi bạn xuất bản.",
+      "confirm": "Đặt lại bản nháp"
+    },
+    "bulk": {
+      "localeLabel": "Ngôn ngữ áp dụng thao tác",
+      "allLocales": "Mọi ngôn ngữ",
+      "publish": {
+        "action": "Xuất bản bản nháp",
+        "title": "Xuất bản {count} email?",
+        "description": "Mọi bản nháp chưa xuất bản bằng {locale} sẽ được dùng. Hệ thống gửi áp dụng trong khoảng 30 giây.",
+        "confirm": "Xuất bản"
+      },
+      "discard": {
+        "action": "Huỷ bản nháp",
+        "title": "Huỷ bản nháp của {count} email?",
+        "description": "Các thay đổi chưa xuất bản bằng {locale} sẽ bị bỏ. Phần đã xuất bản giữ nguyên.",
+        "confirm": "Huỷ bản nháp"
+      },
+      "archive": {
+        "action": "Lưu trữ",
+        "title": "Lưu trữ {count} email?",
+        "description": "Các ngôn ngữ đã lưu trữ ({locale}) sẽ ngừng gửi; người nhận chuyển sang tiếng Anh, rồi đến nội dung có sẵn.",
+        "confirm": "Lưu trữ"
+      },
+      "duplicate": {
+        "action": "Sao chép sang ngôn ngữ",
+        "title": "Sao chép {count} email sang ngôn ngữ khác?",
+        "description": "Bản nháp {locale} được chép vào bản nháp của ngôn ngữ bạn chọn và thay thế nó. Không xuất bản gì cả.",
+        "target": "Chép vào",
+        "confirm": "Sao chép"
+      }
+    },
+    "toasts": {
+      "published": "Đã xuất bản. Hệ thống gửi áp dụng trong khoảng 30 giây.",
+      "discarded": "Đã huỷ bản nháp.",
+      "archived": "Đã lưu trữ.",
+      "duplicated": "Đã chép vào bản nháp của ngôn ngữ kia.",
+      "reset": "Bản nháp tiếng Anh đã về nội dung có sẵn. Hãy xuất bản để gửi."
+    }
+  },
+  "blocks": {
+    "layoutIntro": "Bố cục là phần khung bao quanh mọi email: HTML bao ngoài nội dung, khung văn bản thuần và kiểu cho chế độ tối. Một bố cục là mặc định; từng email có thể chọn bố cục khác.",
+    "blockIntro": "Khối là đoạn nội dung dùng lại — chữ ký, chân trang, dòng pháp lý — mà email hoặc bố cục chèn bằng '{{> key}}'. Xuất bản một khối sẽ cập nhật mọi email dùng nó.",
+    "filterLabel": "Lọc",
+    "filters": {
+      "all": "Tất cả",
+      "PUBLISHED": "Đã xuất bản",
+      "CHANGES": "Thay đổi chưa xuất bản",
+      "DRAFT": "Chưa xuất bản",
+      "ARCHIVED": "Đã lưu trữ"
+    },
+    "searchPlaceholder": "Tìm theo tên hoặc khoá",
+    "sort": {
+      "name": "Tên",
+      "updated": "Sửa gần nhất"
+    },
+    "loadError": "Không tải được dữ liệu.",
+    "empty": {
+      "layout": "Chưa có bố cục",
+      "layoutHint": "Email dùng bố cục WarpTalk có sẵn cho đến khi bạn xuất bản một bố cục và đặt làm mặc định.",
+      "block": "Chưa có khối",
+      "blockHint": "Hãy tạo khối cho những phần mà nhiều email lặp lại.",
+      "filtered": "Không có mục phù hợp"
+    },
+    "create": {
+      "layout": "Bố cục mới",
+      "block": "Khối mới",
+      "layoutTitle": "Bố cục mới",
+      "layoutDescription": "Bắt đầu từ một khung hoạt động được với '{{content}}' là nơi đặt nội dung từng email. Chưa email nào dùng cho đến khi bạn xuất bản.",
+      "blockTitle": "Khối mới",
+      "blockDescription": "Email chèn khối bằng khoá của nó. Chưa email nào dùng cho đến khi bạn xuất bản.",
+      "name": "Tên",
+      "key": "Khoá",
+      "keyHintBlock": "Email chèn khối là '{{> '{key}'}}'. Chữ thường, chữ số, - và _.",
+      "keyHintLayout": "Chữ thường, chữ số, - và _. Không đổi được về sau.",
+      "descriptionLabel": "Mô tả (không bắt buộc)",
+      "submit": "Tạo",
+      "created": "Đã tạo dưới dạng bản nháp."
+    },
+    "table": {
+      "name": "Tên",
+      "status": "Trạng thái",
+      "version": "Đã xuất bản",
+      "usedBy": "Dùng bởi",
+      "updated": "Sửa gần nhất"
+    },
+    "nouns": {
+      "layout": "bố cục",
+      "block": "khối"
+    },
+    "bulk": {
+      "publish": {
+        "action": "Xuất bản",
+        "title": "Xuất bản {count} {noun}?",
+        "description": "Mọi email dùng chúng sẽ thay đổi trong khoảng 30 giây.",
+        "confirm": "Xuất bản"
+      },
+      "duplicate": {
+        "action": "Nhân bản",
+        "title": "Nhân bản {count} {noun}?",
+        "description": "Mỗi bản sao là một bản nháp mới chưa xuất bản.",
+        "confirm": "Nhân bản"
+      },
+      "archive": {
+        "action": "Lưu trữ",
+        "title": "Lưu trữ {count} {noun}?",
+        "description": "Mục còn đang được dùng, hoặc bố cục mặc định, sẽ được bỏ qua và báo lại.",
+        "confirm": "Lưu trữ"
+      },
+      "delete": {
+        "action": "Xoá",
+        "title": "Xoá {count} {noun}?",
+        "description": "Chỉ xoá bản nháp chưa từng xuất bản; các mục khác được bỏ qua. Không thể hoàn tác.",
+        "confirm": "Xoá"
+      }
+    },
+    "toasts": {
+      "publish": "Đã xuất bản.",
+      "duplicate": "Đã nhân bản thành bản nháp.",
+      "archive": "Đã lưu trữ.",
+      "delete": "Đã xoá."
+    },
+    "selectOne": "Chọn {name}",
+    "default": "Mặc định",
+    "statuses": {
+      "PUBLISHED": "Đã xuất bản",
+      "CHANGES": "Thay đổi chưa xuất bản",
+      "DRAFT": "Chưa xuất bản",
+      "ARCHIVED": "Đã lưu trữ"
+    },
+    "usedBy": "{count, plural, one {Dùng bởi {first}} other {Dùng bởi {first} và thêm nữa (#)}}",
+    "unused": "Chưa email nào dùng",
+    "version": "Đang dùng v{version}",
+    "neverPublished": "Chưa xuất bản",
+    "actions": {
+      "edit": "Sửa",
+      "preview": "Xem trước"
+    }
+  },
+  "emailEditor": {
+    "back": "Mẫu email",
+    "notFound": "Nền tảng không gửi email nào có tên này.",
+    "loadError": "Không tải được email.",
+    "retry": "Thử lại",
+    "eyebrow": "Nội dung email",
+    "live": "Đang dùng",
+    "dormant": "Không hoạt động",
+    "locale": "Ngôn ngữ",
+    "switchLocaleUnsaved": "Ngôn ngữ này có thay đổi chưa lưu. Vẫn chuyển và bỏ các thay đổi đó?",
+    "localeStates": {
+      "PUBLISHED": "Đã xuất bản",
+      "CHANGES": "Có thay đổi chưa xuất bản",
+      "DRAFT_ONLY": "Chỉ có bản nháp",
+      "ARCHIVED": "Đã lưu trữ",
+      "MISSING": "Chưa viết"
+    },
+    "sentAs": {
+      "own": "Người nhận dùng {locale} được gửi phiên bản đã xuất bản v{version}.",
+      "english": "{locale} chưa có gì được xuất bản, nên người nhận nhận bản tiếng Anh.",
+      "builtIn": "Cả {locale} và tiếng Anh đều chưa xuất bản, nên người nhận nhận nội dung có sẵn."
+    },
+    "archivedNotice": "Ngôn ngữ này đã lưu trữ: không được gửi và chỉ đọc. Bỏ lưu trữ để sửa hoặc xuất bản.",
+    "tabsLabel": "Các phần của email",
+    "tabs": {
+      "content": "Nội dung",
+      "layout": "Bố cục",
+      "variables": "Biến",
+      "preview": "Xem trước",
+      "history": "Lịch sử",
+      "analytics": "Thống kê"
+    },
+    "fields": {
+      "subject": "Tiêu đề",
+      "subjectHint": "Một dòng. Có thể dùng biến.",
+      "preheader": "Dòng xem trước",
+      "preheaderHint": "Dòng chữ xám hộp thư hiện sau tiêu đề.",
+      "heading": "Đề mục",
+      "headingHint": "Tiêu đề bên trong email. Không bắt buộc.",
+      "bodyHtml": "Nội dung (HTML)",
+      "bodyHtmlHint": "Được đặt vào bố cục. Giá trị được mã hoá HTML khi gửi.",
+      "textBody": "Phiên bản văn bản thuần",
+      "deriveText": "Tạo từ HTML",
+      "derivedHint": "Phần văn bản thuần được tạo tự động từ nội dung HTML. Tắt mục này để tự viết."
+    },
+    "issuesTitle": "Hãy sửa trước khi xuất bản",
+    "issues": {
+      "UNKNOWN_VARIABLE": "'{{'{variable}'}}' không phải biến của email này.",
+      "MISSING_REQUIRED_VARIABLE": "'{{'{variable}'}}' phải xuất hiện — đó là thứ email này cần gửi đi.",
+      "REQUIRED": "Trường này là bắt buộc.",
+      "LINE_BREAK": "Chỉ được viết một dòng."
+    },
+    "insert": {
+      "variables": "Biến",
+      "variablesHint": "Bấm để chèn vào vị trí con trỏ của trường bạn đang sửa. * là bắt buộc.",
+      "blocks": "Khối",
+      "noBlocks": "Chưa có khối nào được xuất bản.",
+      "manageBlocks": "Quản lý khối"
+    },
+    "layout": {
+      "title": "Bố cục",
+      "description": "Phần khung bao quanh email này. Chỉ chọn được bố cục đã xuất bản.",
+      "defaultOption": "Bố cục mặc định ({name})",
+      "builtIn": "có sẵn",
+      "defaultOptionHint": "Luôn theo bố cục đang là mặc định, bây giờ và sau này.",
+      "chosenUnavailable": "Bố cục mà bản nháp này dùng không còn được xuất bản; email sẽ được gửi bằng bố cục mặc định.",
+      "manage": "Quản lý bố cục",
+      "blocksTitle": "Khối",
+      "blocksDescription": "Chèn một khối đã xuất bản vào nội dung. Xuất bản khối về sau cũng cập nhật email này.",
+      "insert": "Chèn",
+      "noBlocks": "Chưa có khối nào được xuất bản."
+    },
+    "variables": {
+      "title": "Biến",
+      "description": "Những gì email này có thể nói. Hệ thống gửi sẽ điền vào; biến bắt buộc phải xuất hiện, nếu không email không xuất bản được.",
+      "name": "Biến",
+      "meaning": "Ý nghĩa",
+      "required": "Bắt buộc",
+      "requiredYes": "Bắt buộc"
+    },
+    "samples": {
+      "label": "Dữ liệu mẫu",
+      "builtIn": "Mẫu có sẵn",
+      "title": "Bộ dữ liệu mẫu",
+      "description": "Các bộ giá trị có tên để xem trước và gửi thử — tên dài, tên tiếng Nhật, liên kết đã hết hạn.",
+      "name": "Tên bộ",
+      "namePlaceholder": "Tên tiếng Việt dài",
+      "save": "Lưu bộ",
+      "saveAsNew": "Lưu thành bộ mới",
+      "saved": "Đã lưu bộ dữ liệu mẫu.",
+      "delete": "Xoá bộ",
+      "deleteTitle": "Xoá “{name}”?",
+      "deleteDescription": "Các bản xem trước và gửi thử đang dùng nó sẽ quay về mẫu có sẵn.",
+      "deleted": "Đã xoá bộ dữ liệu mẫu."
+    },
+    "previewOfDraft": "Đang hiển thị bản nháp đã lưu.",
+    "previewOfDraftUnsaved": "Đang hiển thị nội dung trên màn hình, kể cả thay đổi chưa lưu.",
+    "previewError": "Không dựng được bản xem trước.",
+    "history": {
+      "versions": "Các phiên bản đã xuất bản ({locale})",
+      "audit": "Nhật ký kiểm tra"
+    },
+    "analytics": {
+      "description": "Số email hệ thống gửi đã giao cho nhà cung cấp mỗi ngày. Lỗi là khi nhà cung cấp từ chối.",
+      "range": "Khoảng thời gian",
+      "lastDays": "{days} ngày gần nhất",
+      "error": "Không tải được số liệu gửi.",
+      "figureCaption": "{failed} lỗi · tỷ lệ lỗi {rate}",
+      "sent": "Đã gửi",
+      "failed": "Lỗi",
+      "chartLabel": "Số email gửi và lỗi mỗi ngày",
+      "byLocale": "Theo ngôn ngữ",
+      "loading": "Đang tải…",
+      "empty": "Không có email nào được gửi trong khoảng này."
+    },
+    "status": {
+      "published": "Đã xuất bản v{version}",
+      "DRAFT_ONLY": "Chưa xuất bản",
+      "ARCHIVED": "Đã lưu trữ",
+      "MISSING": "Chưa viết — bắt đầu từ nội dung có sẵn"
+    },
+    "actions": {
+      "saveDraft": "Lưu nháp",
+      "preview": "Xem trước",
+      "sendTest": "Gửi thử",
+      "duplicate": "Sao chép sang ngôn ngữ",
+      "archive": "Lưu trữ ngôn ngữ",
+      "unarchive": "Bỏ lưu trữ",
+      "reset": "Đặt lại mặc định",
+      "discard": "Huỷ thay đổi",
+      "deleteDraft": "Xoá bản nháp",
+      "publish": "Xuất bản",
+      "saveAndPublish": "Lưu & xuất bản"
+    },
+    "publishBlocked": "Hãy sửa các lỗi ở tab Nội dung trước.",
+    "publishDialog": {
+      "title": "Xuất bản phiên bản {locale}?",
+      "description": "Mọi email “{name}” ở ngôn ngữ này sẽ dùng nó trong khoảng 30 giây.",
+      "note": "Ghi chú thay đổi (không bắt buộc)",
+      "notePlaceholder": "Đã đổi gì và vì sao — hiển thị trong lịch sử",
+      "confirm": "Xuất bản"
+    },
+    "duplicateDialog": {
+      "title": "Sao chép sang ngôn ngữ khác",
+      "description": "Nội dung {locale} được chép vào bản nháp của ngôn ngữ bạn chọn. Không xuất bản gì cả.",
+      "target": "Chép vào",
+      "overwrites": "thay thế bản nháp của nó",
+      "confirm": "Sao chép"
+    },
+    "discardDialog": {
+      "title": "Huỷ các thay đổi chưa xuất bản?",
+      "description": "Bản nháp quay về phiên bản đã xuất bản. Không thể hoàn tác.",
+      "descriptionNeverPublished": "Ngôn ngữ này chưa từng xuất bản, nên bản nháp bị xoá và người nhận tiếp tục dùng bản dự phòng.",
+      "confirm": "Huỷ thay đổi"
+    },
+    "archiveDialog": {
+      "title": "Lưu trữ phiên bản {locale}?",
+      "description": "Ngừng gửi ngay; người nhận chuyển sang tiếng Anh, rồi đến nội dung có sẵn. Lịch sử được giữ lại.",
+      "confirm": "Lưu trữ"
+    },
+    "unarchiveDialog": {
+      "title": "Bỏ lưu trữ ngôn ngữ này?",
+      "description": "Phiên bản đã xuất bản sẽ được gửi lại trong khoảng 30 giây.",
+      "confirm": "Bỏ lưu trữ"
+    },
+    "resetDialog": {
+      "title": "Đặt lại bản nháp về nội dung có sẵn?",
+      "description": "Bản nháp được thay bằng tiêu đề và nội dung có sẵn. Người nhận không thấy thay đổi cho đến khi bạn xuất bản.",
+      "confirm": "Đặt lại bản nháp"
+    },
+    "restoreDialog": {
+      "title": "Khôi phục v{version} vào bản nháp?",
+      "description": "Bản nháp trở thành bản sao của phiên bản đó. Hãy xuất bản để gửi.",
+      "confirm": "Khôi phục"
+    },
+    "toasts": {
+      "saved": "Đã lưu nháp. Người nhận vẫn nhận phiên bản đã xuất bản.",
+      "published": "Đã xuất bản {locale}. Hệ thống gửi áp dụng trong khoảng 30 giây.",
+      "duplicated": "Đã sao chép. Bạn đang sửa bản nháp của ngôn ngữ đó.",
+      "discarded": "Đã huỷ thay đổi.",
+      "archived": "Đã lưu trữ. Không còn được gửi.",
+      "unarchived": "Đã bỏ lưu trữ.",
+      "reset": "Bản nháp đã về nội dung có sẵn.",
+      "restored": "Đã khôi phục v{version} vào bản nháp."
+    }
+  },
+  "blockEditor": {
+    "back": "Mẫu email",
+    "notFound": "Bố cục hoặc khối này không tồn tại.",
+    "loadError": "Không tải được.",
+    "retry": "Thử lại",
+    "eyebrowLayout": "Bố cục email",
+    "eyebrowBlock": "Khối email",
+    "descriptionLayout": "Phần khung HTML bao quanh email. '{{content}}' là nơi đặt nội dung từng email; cũng có thể dùng '{{heading}}', '{{preheader}}' và '{{subject}}'.",
+    "descriptionBlock": "Một đoạn dùng lại. Email và bố cục chèn nó bằng {include}.",
+    "default": "Bố cục mặc định",
+    "statuses": {
+      "PUBLISHED": "Đã xuất bản",
+      "CHANGES": "Thay đổi chưa xuất bản",
+      "DRAFT": "Chưa xuất bản",
+      "ARCHIVED": "Đã lưu trữ"
+    },
+    "usedByCount": "Dùng bởi {count} email",
+    "unused": "Chưa email nào dùng",
+    "archivedNotice": "Đã lưu trữ: không email nào dùng và chỉ đọc. Bỏ lưu trữ để sửa.",
+    "tabsLabel": "Các phần",
+    "tabs": {
+      "content": "Nội dung",
+      "preview": "Xem trước",
+      "usage": "Dùng bởi",
+      "history": "Lịch sử"
+    },
+    "fields": {
+      "name": "Tên",
+      "description": "Mô tả",
+      "html": "HTML",
+      "htmlHintLayout": "Phải có '{{content}}' đúng một lần.",
+      "htmlHintBlock": "Không dùng ô của bố cục, và không chèn khối khác.",
+      "text": "Khung văn bản thuần",
+      "textHint": "Bao quanh phần văn bản thuần. Phải có '{{content}}'.",
+      "darkCss": "CSS chế độ tối",
+      "darkCssHint": "Áp dụng khi prefers-color-scheme: dark."
+    },
+    "previewWith": "Xem trước với",
+    "previewSample": "Nội dung mẫu",
+    "previewLocale": "Ngôn ngữ",
+    "previewError": "Không dựng được bản xem trước.",
+    "usage": {
+      "none": "Chưa có gì dùng mục này",
+      "noneLayout": "Chọn nó ở tab Bố cục của một email, hoặc đặt làm bố cục mặc định.",
+      "noneBlock": "Thêm {include} vào một email hoặc bố cục.",
+      "description": "Xuất bản phiên bản mới sẽ thay đổi tất cả các mục này trong khoảng 30 giây."
+    },
+    "history": {
+      "versions": "Các phiên bản đã xuất bản",
+      "audit": "Nhật ký kiểm tra"
+    },
+    "status": {
+      "published": "Đã xuất bản v{version}",
+      "never": "Chưa xuất bản"
+    },
+    "actions": {
+      "saveDraft": "Lưu nháp",
+      "preview": "Xem trước",
+      "duplicate": "Nhân bản",
+      "makeDefault": "Đặt làm mặc định",
+      "archive": "Lưu trữ",
+      "unarchive": "Bỏ lưu trữ",
+      "discard": "Huỷ thay đổi",
+      "delete": "Xoá",
+      "publish": "Xuất bản",
+      "saveAndPublish": "Lưu & xuất bản"
+    },
+    "publishDialog": {
+      "title": "Xuất bản “{name}”?",
+      "descriptionUsed": "{count} email sẽ thay đổi trong khoảng 30 giây: {list}.",
+      "descriptionUnused": "Chưa có gì dùng nó, nên không email nào thay đổi.",
+      "note": "Ghi chú thay đổi (không bắt buộc)",
+      "confirm": "Xuất bản"
+    },
+    "copyName": "{name} (bản sao)",
+    "duplicateDialog": {
+      "title": "Nhân bản",
+      "description": "Bản sao là một bản nháp mới chưa xuất bản, có khoá riêng.",
+      "name": "Tên bản sao",
+      "confirm": "Nhân bản"
+    },
+    "archiveDialog": {
+      "title": "Lưu trữ “{name}”?",
+      "description": "Mục này không được đang dùng hoặc là bố cục mặc định. Lịch sử được giữ lại.",
+      "confirm": "Lưu trữ"
+    },
+    "unarchiveDialog": {
+      "title": "Bỏ lưu trữ?",
+      "description": "Có thể sửa, xuất bản và chọn lại mục này.",
+      "confirm": "Bỏ lưu trữ"
+    },
+    "deleteDialog": {
+      "title": "Xoá “{name}”?",
+      "description": "Mục này chưa từng xuất bản nên không có gì dùng nó. Không thể hoàn tác.",
+      "confirm": "Xoá"
+    },
+    "discardDialog": {
+      "title": "Huỷ các thay đổi chưa xuất bản?",
+      "description": "Bản nháp quay về v{version} đã xuất bản.",
+      "confirm": "Huỷ thay đổi"
+    },
+    "defaultDialog": {
+      "title": "Đặt “{name}” làm bố cục mặc định?",
+      "description": "Mọi email theo bố cục mặc định sẽ chuyển sang nó trong khoảng 30 giây.",
+      "confirm": "Đặt làm mặc định"
+    },
+    "restoreDialog": {
+      "title": "Khôi phục v{version} vào bản nháp?",
+      "description": "Bản nháp trở thành bản sao của phiên bản đó. Hãy xuất bản để dùng.",
+      "confirm": "Khôi phục"
+    },
+    "toasts": {
+      "saved": "Đã lưu nháp. Email vẫn dùng phiên bản đã xuất bản.",
+      "published": "Đã xuất bản. Email áp dụng trong khoảng 30 giây.",
+      "duplicated": "Đã nhân bản thành bản nháp.",
+      "archived": "Đã lưu trữ.",
+      "unarchived": "Đã bỏ lưu trữ.",
+      "deleted": "Đã xoá.",
+      "discarded": "Đã huỷ thay đổi.",
+      "defaulted": "Đây là bố cục mặc định.",
+      "restored": "Đã khôi phục v{version} vào bản nháp."
+    }
+  },
+  "announcements": {
+    "eyebrow": "Nội dung",
+    "title": "Thông báo",
+    "description": "Những gì ứng dụng nói với người dùng — ra mắt, bảo trì, ưu đãi — dưới dạng dải trên cùng, hộp thoại, toast, thẻ trong trung tâm thông báo hoặc thẻ ở trang chủ. Soạn, xem trước, chọn đối tượng, lên lịch và đo lường tại đây.",
+    "inboxBroadcast": "Gửi vào hộp thư",
+    "new": "Thông báo mới",
+    "viewAria": "Thông báo hoặc tin gửi vào hộp thư",
+    "views": {
+      "cms": "Thông báo",
+      "broadcasts": "Tin gửi vào hộp thư"
+    },
+    "statusAria": "Lọc theo trạng thái",
+    "statuses": {
+      "ALL": "Tất cả",
+      "DRAFT": "Bản nháp",
+      "SCHEDULED": "Đã lên lịch",
+      "PUBLISHED": "Đang hiển thị",
+      "ENDED": "Đã kết thúc",
+      "ARCHIVED": "Đã lưu trữ"
+    },
+    "searchPlaceholder": "Tìm theo tiêu đề",
+    "filters": {
+      "type": "Loại",
+      "anyType": "Mọi loại",
+      "placement": "Vị trí",
+      "anyPlacement": "Mọi vị trí"
+    },
+    "sort": {
+      "updated": "Sửa gần nhất",
+      "created": "Ngày tạo",
+      "starts": "Thời điểm bắt đầu",
+      "priority": "Độ ưu tiên",
+      "title": "Tiêu đề",
+      "descending": "Giảm dần",
+      "ascending": "Tăng dần"
+    },
+    "loadError": "Không tải được thông báo.",
+    "empty": {
+      "none": "Chưa có thông báo",
+      "noneHint": "Thông báo bạn xuất bản sẽ hiển thị trong ứng dụng cho đúng người cần xem.",
+      "filtered": "Không có mục phù hợp với bộ lọc",
+      "filteredHint": "Thử trạng thái, loại hoặc vị trí khác, hoặc xoá tìm kiếm."
+    },
+    "table": {
+      "title": "Tiêu đề",
+      "status": "Trạng thái",
+      "placement": "Vị trí",
+      "audience": "Đối tượng",
+      "window": "Thời gian",
+      "priority": "Ưu tiên"
+    },
+    "selectOne": "Chọn “{title}”",
+    "pageOf": "Trang {page}/{totalPages}",
+    "previous": "Trước",
+    "next": "Sau",
+    "card": {
+      "placement": "Hiển thị dạng",
+      "priority": "ưu tiên {priority}",
+      "audience": "Đối tượng",
+      "window": "Thời gian"
+    },
+    "audience": {
+      "all": "Mọi người dùng",
+      "plans": "Gói: {plans}",
+      "workspaces": "{count} không gian làm việc",
+      "roles": "Vai trò: {roles}",
+      "locales": "Ngôn ngữ: {locales}",
+      "newUsers": "Tham gia trong {days} ngày gần nhất"
+    },
+    "window": {
+      "scheduled": "Bắt đầu {date}",
+      "liveUntil": "Hiển thị đến {date}",
+      "liveSince": "Hiển thị từ {date}",
+      "ended": "Kết thúc {date}",
+      "archived": "Lưu trữ {date}",
+      "draftWindow": "Thời gian: {start} → {end}",
+      "onPublish": "khi xuất bản",
+      "noEnd": "không kết thúc",
+      "notPublished": "Chưa xuất bản"
+    },
+    "actions": {
+      "edit": "Sửa",
+      "preview": "Xem trước",
+      "publishNow": "Xuất bản ngay",
+      "unpublish": "Chuyển về bản nháp",
+      "restore": "Khôi phục về bản nháp",
+      "duplicate": "Nhân bản",
+      "archive": "Lưu trữ",
+      "delete": "Xoá bản nháp",
+      "more": "Thao tác khác"
+    },
+    "confirm": {
+      "publishTitle": "Xuất bản “{title}” ngay?",
+      "publishDescription": "Thông báo hiển thị ngay cho đối tượng, tại vị trí đã chọn, cho đến thời điểm kết thúc.",
+      "unpublishTitle": "Chuyển “{title}” về bản nháp?",
+      "unpublishDescription": "Ngừng hiển thị ngay. Số liệu thống kê được giữ lại.",
+      "archiveTitle": "Lưu trữ “{title}”?",
+      "archiveDescription": "Ngừng hiển thị và chỉ đọc. Có thể khôi phục về bản nháp sau."
+    },
+    "bulk": {
+      "publish": {
+        "action": "Xuất bản",
+        "title": "Xuất bản {count} thông báo?",
+        "description": "Thông báo có thời điểm bắt đầu trong tương lai sẽ được lên lịch; số còn lại hiển thị ngay. Thông báo đang hiển thị được bỏ qua.",
+        "confirm": "Xuất bản",
+        "done": "Đã xuất bản {count} thông báo."
+      },
+      "duplicate": {
+        "action": "Nhân bản",
+        "title": "Nhân bản {count} thông báo?",
+        "description": "Mỗi bản sao là một bản nháp mới.",
+        "confirm": "Nhân bản",
+        "done": "Đã tạo {count} bản sao."
+      },
+      "archive": {
+        "action": "Lưu trữ",
+        "title": "Lưu trữ {count} thông báo?",
+        "description": "Ngừng hiển thị ngay. Mục đã lưu trữ được bỏ qua.",
+        "confirm": "Lưu trữ",
+        "done": "Đã lưu trữ {count} thông báo."
+      },
+      "delete": {
+        "action": "Xoá bản nháp",
+        "title": "Xoá {count} bản nháp?",
+        "description": "Chỉ xoá bản nháp; mục đã từng xuất bản được bỏ qua — hãy lưu trữ chúng. Không thể hoàn tác.",
+        "confirm": "Xoá",
+        "done": "Đã xoá {count} bản nháp."
+      }
+    },
+    "toasts": {
+      "saved": "Đã lưu.",
+      "published": "Đã xuất bản. Thông báo đang hiển thị cho đối tượng.",
+      "scheduled": "Đã lên lịch.",
+      "unpublished": "Đã chuyển về bản nháp. Không còn hiển thị.",
+      "restored": "Đã khôi phục về bản nháp.",
+      "duplicated": "Đã nhân bản thành bản nháp mới.",
+      "archived": "Đã lưu trữ. Không còn hiển thị.",
+      "deleted": "Đã xoá bản nháp."
+    },
+    "deleteDialog": {
+      "title": "Xoá bản nháp này?",
+      "description": "“{title}” sẽ bị xoá vĩnh viễn. Thông báo đã xuất bản không xoá được — hãy lưu trữ chúng.",
+      "confirm": "Xoá bản nháp"
+    },
+    "errors": {
+      "titleRequired": "Cần có tiêu đề.",
+      "titleTooLong": "Tiêu đề tối đa 200 ký tự.",
+      "bodyRequired": "Cần có nội dung.",
+      "bodyTooLong": "Nội dung tối đa 20.000 ký tự.",
+      "plansRequired": "Chọn ít nhất một gói.",
+      "workspacesRequired": "Chọn ít nhất một không gian làm việc.",
+      "tooManyAudience": "Chọn tối đa 200 gói hoặc không gian làm việc.",
+      "labelWithoutLink": "Nút cần có liên kết.",
+      "linkWithoutLabel": "Liên kết cần có nhãn nút.",
+      "labelTooLong": "Nhãn nút tối đa 60 ký tự.",
+      "linkInvalid": "Liên kết phải là địa chỉ https:// hoặc http://, hoặc đường dẫn trong ứng dụng bắt đầu bằng /.",
+      "secondaryNeedsPrimary": "Hãy thêm nút chính trước nút thứ hai.",
+      "secondaryIncomplete": "Nút thứ hai cần cả nhãn và liên kết.",
+      "secondaryLinkInvalid": "Liên kết của nút thứ hai phải là địa chỉ https:// hoặc http://, hoặc đường dẫn bắt đầu bằng /.",
+      "windowInverted": "Thời điểm kết thúc phải sau thời điểm bắt đầu.",
+      "imageInvalid": "Ảnh phải là ảnh đã tải lên hoặc địa chỉ https://.",
+      "priorityOutOfRange": "Độ ưu tiên phải từ 0 đến 100.",
+      "newUsersOutOfRange": "“Tham gia trong … ngày gần nhất” phải từ 1 đến 365, hoặc để trống."
+    },
+    "preview": {
+      "frameLabel": "Xem trước {placement}, {device}",
+      "placementLabel": "Vị trí",
+      "chosen": "đã chọn",
+      "otherPlacement": "Đang hiển thị một vị trí mà thông báo này không dùng — đổi ở tab Thiết kế.",
+      "placements": {
+        "TOP_BANNER": "Dải trên cùng",
+        "MODAL": "Hộp thoại",
+        "TOAST": "Toast",
+        "NOTIFICATION_CENTER": "Trung tâm thông báo",
+        "DASHBOARD_CARD": "Thẻ trang chủ"
+      },
+      "devices": {
+        "desktop": "máy tính",
+        "mobile": "điện thoại"
+      }
+    },
+    "analytics": {
+      "description": "Lượt hiển thị được tính một lần cho mỗi người trong mỗi phiên trình duyệt; lượt bấm và lượt đóng được tính khi xảy ra.",
+      "range": "Khoảng thời gian",
+      "lastDays": "{days} ngày gần nhất",
+      "error": "Không tải được số liệu.",
+      "impressions": "Lượt hiển thị",
+      "uniqueViewers": "{count} người",
+      "ctaClicks": "Lượt bấm nút",
+      "secondaryClicks": "{count} lượt ở nút thứ hai",
+      "clickThrough": "Tỷ lệ bấm",
+      "uniqueClickers": "{count} người đã bấm",
+      "dismissals": "Lượt đóng",
+      "dismissRate": "{rate} người xem",
+      "chartLabel": "Lượt hiển thị và lượt bấm mỗi ngày",
+      "loading": "Đang tải…",
+      "empty": "Không có hoạt động trong khoảng này."
+    },
+    "editor": {
+      "back": "Thông báo",
+      "notFound": "Thông báo này không tồn tại.",
+      "loadError": "Không tải được thông báo.",
+      "retry": "Thử lại",
+      "newTitle": "Thông báo mới",
+      "description": "Viết nội dung, thiết kế, chọn ai thấy và khi nào, rồi kiểm tra mọi vị trí trước khi hiển thị.",
+      "saveDraft": "Lưu nháp",
+      "saveAndPublish": "Lưu & xuất bản ngay",
+      "notSavedYet": "Chưa lưu",
+      "archivedNotice": "Thông báo này đã lưu trữ và chỉ đọc. Khôi phục về bản nháp để sửa hoặc xuất bản lại.",
+      "tabsLabel": "Các phần của thông báo",
+      "tabs": {
+        "content": "Nội dung",
+        "design": "Thiết kế",
+        "audience": "Đối tượng",
+        "schedule": "Lịch",
+        "preview": "Xem trước",
+        "history": "Lịch sử",
+        "analytics": "Thống kê"
+      },
+      "previewTitle": "Xem trước",
+      "openPreview": "Mọi vị trí",
+      "previewPlaceholderTitle": "Tiêu đề của bạn",
+      "previewPlaceholderBody": "Nội dung thông báo sẽ hiện ở đây.",
+      "schedule": "Lên lịch",
+      "scheduleHint": "Lên lịch sẽ tự hiển thị vào thời điểm bắt đầu — không cần quay lại.",
+      "scheduleNeedsFuture": "Đặt thời điểm bắt đầu trong tương lai để lên lịch.",
+      "scheduleDialog": {
+        "title": "Lên lịch thông báo này?",
+        "description": "Thông báo tự hiển thị lúc {date} và kéo dài đến thời điểm kết thúc."
+      },
+      "fields": {
+        "type": "Loại",
+        "title": "Tiêu đề",
+        "titlePlaceholder": "Phụ đề trực tiếp nay có 40 ngôn ngữ",
+        "body": "Nội dung",
+        "bodyPlaceholder": "Điều gì đã thay đổi, dành cho ai, và cần làm gì tiếp theo.",
+        "buttons": "Nút",
+        "buttonsHint": "Không bắt buộc. Nút thứ hai cần có nút thứ nhất.",
+        "primary": "Nút chính",
+        "secondary": "Nút thứ hai",
+        "ctaLabel": "Nhãn",
+        "ctaLabelPlaceholder": "Dùng thử",
+        "ctaUrl": "Liên kết",
+        "ctaUrlPlaceholder": "/settings hoặc https://…",
+        "audience": "Ai thấy thông báo",
+        "window": "Khi nào hiển thị",
+        "windowHint": "Để trống thời điểm bắt đầu để hiển thị ngay khi xuất bản, và để trống thời điểm kết thúc để hiển thị đến khi huỷ xuất bản hoặc lưu trữ. Thời gian theo múi giờ của bạn.",
+        "startsAt": "Bắt đầu",
+        "endsAt": "Kết thúc"
+      },
+      "types": {
+        "ANNOUNCEMENT": {
+          "label": "Thông báo",
+          "hint": "Tin tức chung về nền tảng."
+        },
+        "FEATURE": {
+          "label": "Tính năng mới",
+          "hint": "Điều mới mà mọi người có thể dùng."
+        },
+        "MAINTENANCE": {
+          "label": "Bảo trì",
+          "hint": "Thời gian ngừng dịch vụ hoặc suy giảm theo kế hoạch."
+        },
+        "PROMOTION": {
+          "label": "Ưu đãi",
+          "hint": "Nâng cấp gói, giảm giá hoặc chiến dịch."
+        }
+      },
+      "audienceModes": {
+        "ALL": {
+          "label": "Mọi người",
+          "hint": "Mọi người dùng đã đăng nhập."
+        },
+        "PLANS": {
+          "label": "Gói",
+          "hint": "Thành viên của không gian làm việc dùng các gói này."
+        },
+        "WORKSPACES": {
+          "label": "Không gian làm việc",
+          "hint": "Thành viên của các không gian làm việc này."
+        }
+      },
+      "design": {
+        "placement": "Vị trí",
+        "placementHint": "Nơi thông báo xuất hiện trong ứng dụng. Vị trí nào cũng hiển thị cho đối tượng bạn chọn.",
+        "placementHints": {
+          "TOP_BANNER": "Một dải ngang ở đầu mọi trang.",
+          "MODAL": "Hộp thoại nổi trên trang khi mở ứng dụng. Nên dùng hạn chế.",
+          "TOAST": "Một thẻ nhỏ ở góc dưới.",
+          "NOTIFICATION_CENTER": "Một thẻ ở đầu bảng chuông thông báo, kèm chấm trên chuông.",
+          "DASHBOARD_CARD": "Một thẻ ở trang chủ không gian làm việc."
+        },
+        "variant": "Kiểu",
+        "variants": {
+          "SUBTLE": {
+            "label": "Nhẹ",
+            "hint": "Nền pha màu."
+          },
+          "SOLID": {
+            "label": "Đặc",
+            "hint": "Tô kín bằng màu. Nổi bật nhất."
+          },
+          "OUTLINE": {
+            "label": "Viền",
+            "hint": "Viền có màu."
+          }
+        },
+        "color": "Màu",
+        "colors": {
+          "BRAND": "Thương hiệu",
+          "BLUE": "Xanh dương",
+          "GREEN": "Xanh lá",
+          "AMBER": "Hổ phách",
+          "RED": "Đỏ",
+          "VIOLET": "Tím",
+          "NEUTRAL": "Trung tính"
+        },
+        "icon": "Biểu tượng",
+        "iconDefault": "Theo loại",
+        "image": "Hình ảnh",
+        "imageHint": "Hiển thị ở đầu hộp thoại và cạnh thẻ trang chủ. Tải ảnh lên (PNG, JPEG, GIF hoặc WebP, tối đa 2 MB) hoặc dùng địa chỉ https://.",
+        "imageUrl": "Địa chỉ ảnh",
+        "uploadImage": "Tải lên",
+        "removeImage": "Bỏ ảnh",
+        "imageNotShown": "Vị trí này không hiển thị ảnh; ảnh chỉ hiện ở hộp thoại và thẻ trang chủ."
+      },
+      "targeting": {
+        "title": "Thu hẹp đối tượng",
+        "description": "Tất cả đều không bắt buộc, và phải khớp tất cả.",
+        "roles": "Vai trò trong không gian làm việc",
+        "roleNames": {
+          "Owner": "Chủ sở hữu",
+          "Admin": "Quản trị viên",
+          "Member": "Thành viên"
+        },
+        "rolesAny": "Mọi vai trò.",
+        "rolesSome": "Chỉ người có một trong các vai trò này ở ít nhất một không gian làm việc.",
+        "locales": "Ngôn ngữ ứng dụng",
+        "localeNames": {
+          "en": "English",
+          "vi": "Tiếng Việt",
+          "ja": "日本語"
+        },
+        "localesAny": "Mọi ngôn ngữ.",
+        "localesSome": "Chỉ người dùng ứng dụng bằng một trong các ngôn ngữ này.",
+        "newUsers": "Tham gia trong … ngày gần nhất",
+        "newUsersPlaceholder": "Mọi tài khoản",
+        "newUsersHint": "Dành cho mẹo làm quen: chỉ tài khoản tạo trong số ngày này (1–365)."
+      },
+      "delivery": {
+        "title": "Cách hiển thị",
+        "description": "Mỗi người thấy bao lâu một lần, thông báo nào ưu tiên khi nhiều thông báo cùng vị trí, và có đóng được không.",
+        "frequency": "Hiển thị",
+        "frequencies": {
+          "UNTIL_DISMISSED": {
+            "label": "Đến khi đóng",
+            "hint": "Mỗi lần truy cập cho đến khi người dùng đóng nó."
+          },
+          "ONCE": {
+            "label": "Một lần",
+            "hint": "Một phiên trình duyệt cho mỗi người."
+          },
+          "EVERY_SESSION": {
+            "label": "Mỗi phiên",
+            "hint": "Hiện lại mỗi phiên mới, kể cả sau khi đóng."
+          },
+          "DAILY": {
+            "label": "Mỗi ngày một lần",
+            "hint": "Tối đa một lần mỗi 24 giờ cho mỗi người."
+          }
+        },
+        "priority": "Độ ưu tiên",
+        "priorityHint": "0–100. Cao hơn hiển thị trước; hộp thoại hiện từng cái một.",
+        "dismissible": "Có thể đóng",
+        "dismissibleOn": "Người dùng có thể đóng hẳn",
+        "dismissibleOff": "Hiển thị đến khi kết thúc",
+        "dismissibleHint": "Hộp thoại và toast luôn đóng được cho lần truy cập hiện tại."
+      },
+      "plans": {
+        "label": "Thành viên của mọi không gian làm việc dùng các gói đã chọn sẽ thấy thông báo.",
+        "loading": "Đang tải gói…",
+        "error": "Không tải được danh mục gói.",
+        "retired": "Không có trong danh mục gói hiện tại"
+      },
+      "workspaces": {
+        "searchPlaceholder": "Tìm không gian làm việc theo tên",
+        "searching": "Đang tìm…",
+        "error": "Không tìm được trong danh bạ không gian làm việc.",
+        "noMatch": "Không có không gian làm việc phù hợp.",
+        "added": "Đã thêm",
+        "memberCount": "{count} thành viên"
+      }
+    }
+  }
+}

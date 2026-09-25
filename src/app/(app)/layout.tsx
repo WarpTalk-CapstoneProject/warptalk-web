@@ -25,14 +25,17 @@ import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
 import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { AnnouncementHost } from "@/components/announcements/announcement-host";
 import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { AdminCommandPalette, AdminHeaderSearch } from "@/components/admin/admin-command-palette";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { adminPageLabelKey } from "@/lib/admin/admin-page-title";
 import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
@@ -589,29 +592,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               if (segments.length >= 1) {
                 const firstSeg = segments[0];
                 if (firstSeg === "admin") {
-                  const ADMIN_LABEL_KEYS: Record<string, string> = {
-                    workspaces: "workspaces",
-                    users: "accounts",
-                    subscriptions: "subscriptions",
-                    plans: "plansAndPricing",
-                    billing: "billingLedger",
-                    "sales-leads": "salesLeads",
-                    meetings: "meetings",
-                    health: "systemHealth",
-                    outbox: "eventOutbox",
-                    feedback: "feedback",
-                    audit: "auditLog",
-                    announcements: "announcements",
-                    "email-templates": "emailTemplates",
-                    settings: "platformSettings",
-                    plugins: "plugins",
-                    "global-glossary": "globalGlossary",
-                  };
-                  const adminSeg = segments[1];
-                  const key = adminSeg ? ADMIN_LABEL_KEYS[adminSeg] : undefined;
-                  parts.push({
-                    label: key ? t(`sidebar.adminNav.items.${key}`) : t("sidebar.adminNav.items.insights"),
-                  });
+                  // One map for every admin page (lib/admin/admin-page-title.ts); "Insights" is
+                  // /admin's own title, never the fallback for a page the map does not know.
+                  const key = adminPageLabelKey(pathname);
+                  if (key) parts.push({ label: t(`sidebar.adminNav.items.${key}`) });
+                } else if (firstSeg === "settings" && segments[1] === "plugins") {
+                  // The personal page, outside any workspace slug: "My connections", never the raw
+                  // segment, and never "Plugins", which is the workspace page's name.
+                  parts.push({ label: t("sidebar.settingsNav.myConnections") });
                 } else if (firstSeg === "voice-profiles") {
                   parts.push({ label: t("sidebar.nav.voiceProfiles") });
                 } else if (firstSeg === "join") {
@@ -655,7 +643,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   } else if (feature === "settings") {
                     const sub = segments[2];
                     const SETTINGS_SUB_KEYS: Record<string, string> = {
-                      plugins: "plugins",
+                      plugins: "workspacePlugins",
                       "plugin-activity": "pluginActivity",
                       billing: "billing",
                       features: "features",
@@ -739,7 +727,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             what gives up space on a narrow window.
           */}
           <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-            <HeaderSearch />
+            {/* The admin portal has no rooms to paste a code for: its box opens the admin command
+                palette (pages, records, actions) instead. See admin-command-palette.tsx. */}
+            {isAdminRoute ? <AdminHeaderSearch /> : <HeaderSearch />}
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
@@ -779,6 +769,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               content area — the meeting notices — stays put while the page scrolls under
               it. `<main>` itself cannot serve: it IS the scroll container. */}
           <div className="relative flex min-w-0 flex-1 flex-col">
+          {/* Published announcements (admin → Announcements): the top banner sits above the
+              scroll container so it stays put while the page scrolls; the modal and toasts float.
+              Not on the admin console, where the CMS previews them, and not inside a live
+              meeting, where nothing should compete. The bell panel and the workspace home render
+              the other two placements. */}
+          <AnnouncementHost enabled={!isAdminRoute && !isLiveMeetingRoute && !isOnboardingRoute} />
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (
@@ -856,7 +852,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <CreateRoomDialog />
-      <SearchMeetingDialog />
+      {/* One palette per shell, never both: each owns ⌘K, and two would answer the same keypress. */}
+      {isAdminRoute ? <AdminCommandPalette /> : <SearchMeetingDialog />}
       <SetupRoomModal />
     </div>
   );

@@ -35,6 +35,7 @@ import { useAdminMeetingCounts } from "@/hooks/use-admin-meetings";
 import {
   ADMIN_INSIGHTS_REFRESH_MS,
   useAdminBillingInsights,
+  useAdminProfitAndLoss,
   useAdminBillingSnapshot,
   useAdminMeetingsInsights,
   useAdminUsersInsights,
@@ -114,6 +115,7 @@ function InsightsRoute() {
   const users = useAdminUsersInsights(query);
   const workspaces = useAdminWorkspacesInsights(query);
   const meetings = useAdminMeetingsInsights(query);
+  const pnl = useAdminProfitAndLoss(query);
 
   const meetingCounts = useAdminMeetingCounts();
   const deadLetters = useAdminOutboxDeadLetters(DEAD_LETTER_LIMIT, {
@@ -144,6 +146,7 @@ function InsightsRoute() {
     users.dataUpdatedAt,
     workspaces.dataUpdatedAt,
     meetings.dataUpdatedAt,
+    pnl.dataUpdatedAt,
     meetingCounts.dataUpdatedAt,
     deadLetters.dataUpdatedAt,
     newSalesLeads.dataUpdatedAt,
@@ -166,6 +169,7 @@ function InsightsRoute() {
       users={stateOf(users)}
       workspaces={stateOf(workspaces)}
       meetings={stateOf(meetings)}
+      pnl={stateOf(pnl)}
       meetingCounts={stateOf(meetingCounts)}
       deadLetters={stateOf(deadLetters)}
       deadLettersLimit={DEAD_LETTER_LIMIT}

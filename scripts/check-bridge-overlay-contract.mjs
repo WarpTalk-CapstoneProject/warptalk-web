@@ -228,6 +228,10 @@ if (!shell) {
     ["DockSessionControls", "Start/Stop translation and Pause transcript"],
     ["EndSessionButton", "End, the only exit from a bridge room"],
     ["EndedView", "the screen that says the Google Meet call is still going"],
+    // The far side's language is the whole translation in a bridge room. Without this slot the
+    // stand-in keeps whatever language the room was created with, for the entire call.
+    ["DockFarSideLanguagePill", "\"They speak\", the only way to say what the other side of the call speaks"],
+    ["FarSideLanguageNotice", "the sentence that says a room with both sides on one language translates nothing"],
   ]) {
     if (!new RegExp(`<${slot}\\b`).test(code)) {
       failures.push(
@@ -236,6 +240,19 @@ if (!shell) {
       );
     }
   }
+}
+
+// "They speak" must actually move the stand-in: a pill that only changed local state would show
+// the new language while the mesh kept routing (or not routing) the old one.
+const FAR_SIDE = `${WIDGET_DIR}/dock-far-side-language-pill.tsx`;
+const farSide = read(FAR_SIDE);
+if (!farSide) {
+  failures.push(`${FAR_SIDE} is missing; the widget shell renders it as the dock's "They speak" slot.`);
+} else if (!/\.invoke\(\s*"SetExternalMeetingLanguage"/.test(stripComments(farSide))) {
+  failures.push(
+    `${FAR_SIDE} no longer invokes SetExternalMeetingLanguage. That hub method is what persists the `
+      + `far side's language and rebuilds the audio routes; without it the pick is cosmetic.`,
+  );
 }
 
 if (!dock) {

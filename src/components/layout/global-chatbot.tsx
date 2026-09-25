@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
+import { usePathname } from "next/navigation";
 import {
   ArrowUp,
   ArrowSquareOut,
@@ -44,6 +45,12 @@ import {
 } from "@/lib/meeting/assistant-tool-labels";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { composerReadiness } from "@/lib/assistant/composer-readiness";
+import {
+  assistantScopeFor,
+  PLATFORM_SCOPE_LABEL,
+  PLATFORM_SUGGESTED_PROMPTS,
+} from "@/lib/assistant/assistant-scope";
+import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
 import { useAssistantContextStore } from "@/stores/assistant-context-store";
 import {
   useWorkspaceMembers,
@@ -54,10 +61,14 @@ import {
   useAssistantConversations,
   useAssistantPlugins,
   useCreateAssistantConversation,
+  useCreatePlatformAssistantConversation,
   useInstallAssistantPlugin,
   useLoadAssistantConversation,
+  useLoadPlatformAssistantConversation,
+  usePlatformAssistantConversations,
   usePluginConnectUrl,
   useSendAssistantMessage,
+  useSendPlatformAssistantMessage,
   useUpdatePluginToolPolicy,
 } from "@/hooks/use-assistant";
 import { isDesktopApp } from "@/lib/desktop/bridge";
@@ -106,6 +117,7 @@ import { MessageMentionChips } from "@/components/assistant/message-mention-chip
 import { mentionCompletion } from "@/lib/assistant/mention-completion";
 import { parseMessageMentions } from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
+import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
 import {
   pluginWritesAlwaysAllowed,
   readDisabledPluginKeys,
@@ -446,11 +458,23 @@ export function GlobalChatbot() {
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
+  /**
+   * Platform scope — a system admin on /admin — talks to a SEPARATE conversation store about the
+   * whole platform, with read-only admin tools. Everywhere else the widget is exactly what it was.
+   * Presentation only: AssistantService refuses the platform routes to anyone without the
+   * platform "admin" role, whatever this decides. See lib/assistant/assistant-scope.
+   */
+  const pathname = usePathname();
+  const isSystemAdmin = useIsSystemAdmin();
+  const assistantScope = assistantScopeFor({ pathname, isSystemAdmin });
+  const isPlatformScope = assistantScope === "platform";
   // WT-541: one answer to "can this send", shared by the button and by sendMessage.
   const composerState = composerReadiness({
     text: inputValue,
-    attachmentCount: attachments.length,
+    // A platform turn is text only; files dropped in cannot ride along, so they cannot enable it.
+    attachmentCount: isPlatformScope ? 0 : attachments.length,
     activeWorkspaceId,
+    scope: assistantScope,
   });
   const ambientPageContext = useAssistantContextStore(
     (state) => state.pageContext,
@@ -578,6 +602,9 @@ export function GlobalChatbot() {
   const createConversation = useCreateAssistantConversation();
   const sendAssistantMessage = useSendAssistantMessage();
   const loadConversation = useLoadAssistantConversation();
+  const createPlatformConversation = useCreatePlatformAssistantConversation();
+  const sendPlatformMessage = useSendPlatformAssistantMessage();
+  const loadPlatformConversation = useLoadPlatformAssistantConversation();
   // Scoped to the active workspace, exactly as the Plugins settings page reads it. Unscoped, the
   // API has no policy to apply and answers with every row unblocked — so a workspace that had
   // turned plugins off still had them offered here, and the install and connect below went through
@@ -608,8 +635,15 @@ export function GlobalChatbot() {
     () => assistantPlugins.map(withEffectiveConnectionStatus),
     [assistantPlugins],
   );
+  // The plugin menu and, through it, the @mention list. A plugin this workspace has not added is left
+  // out even when the member installed it: the server refuses its tools here, so its switch would do
+  // nothing and its mention would go nowhere. It stays on the Plugins page, where it is revoked.
+  // Past messages still resolve their chips against the whole catalog (`catalogPlugins`).
   const installedAssistantPlugins = useMemo(
-    () => catalogPlugins.filter((plugin) => plugin.installationStatus === "installed"),
+    () =>
+      catalogPlugins.filter(
+        (plugin) => plugin.installationStatus === "installed" && isOfferedInWorkspaceChat(plugin),
+      ),
     [catalogPlugins],
   );
   // Only a plugin that's actually usable can be @mentioned — mentioning a disconnected plugin
@@ -620,9 +654,18 @@ export function GlobalChatbot() {
   );
 
   // Only fetch the conversation list while the history menu is actually open.
-  const conversationsQuery = useAssistantConversations(
-    historyMenuOpen ? activeWorkspaceId : null,
+  // One list per scope, each fetched only in its own mode: a platform thread is never listed
+  // among a workspace's, nor the other way round.
+  const workspaceConversationsQuery = useAssistantConversations(
+    historyMenuOpen && !isPlatformScope ? activeWorkspaceId : null,
   );
+  const platformConversationsQuery = usePlatformAssistantConversations(
+    historyMenuOpen && isPlatformScope,
+  );
+  const conversationsQuery = isPlatformScope
+    ? platformConversationsQuery
+    : workspaceConversationsQuery;
+  const conversationLoader = isPlatformScope ? loadPlatformConversation : loadConversation;
   const visibleConversations = (conversationsQuery.data ?? []).filter(
     (conversation) => !conversation.isArchived,
   );
@@ -757,12 +800,25 @@ export function GlobalChatbot() {
     shouldAutoScrollRef.current = true;
   };
 
+  /**
+   * Crossing between /admin and a workspace page switches conversation STORES. The open thread
+   * belongs to the scope it was started in, so it is closed rather than continued in the other —
+   * a workspace thread's id sent to the platform routes (or the reverse) is simply not found.
+   */
+  const lastScopeRef = useRef(assistantScope);
+  const resetForScopeChange = useEffectEvent(() => startNewConversation());
+  useEffect(() => {
+    if (lastScopeRef.current === assistantScope) return;
+    lastScopeRef.current = assistantScope;
+    resetForScopeChange();
+  }, [assistantScope]);
+
   const openConversationFromHistory = (conversation: AssistantConversationDto) =>
     openConversationById(conversation.id);
 
   const openConversationById = async (id: string) => {
     try {
-      const detail = await loadConversation.mutateAsync(id);
+      const detail = await conversationLoader.mutateAsync(id);
       clearResponseTimeout();
       setMessages(
         detail.messages
@@ -901,8 +957,11 @@ export function GlobalChatbot() {
     () => getPageContextKey(ambientPageContext),
     [ambientPageContext],
   );
+  // Never in platform scope: page context names a workspace entity, and a platform turn carries
+  // none (the platform send has no field for it).
   const effectivePageContext =
-    ambientPageContextKey && disabledPageContextKey === ambientPageContextKey
+    isPlatformScope ||
+    (ambientPageContextKey && disabledPageContextKey === ambientPageContextKey)
       ? null
       : ambientPageContext;
   const isPageContextVisible = Boolean(effectivePageContext);
@@ -1232,7 +1291,8 @@ export function GlobalChatbot() {
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPosition);
 
-    const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+    // No @mentions in platform scope: everything mentionable is a workspace entity or a plugin.
+    const mentionMatch = isPlatformScope ? null : textBeforeCursor.match(/@(\w*)$/);
     if (mentionMatch) {
       setMentionMenuOpen(true);
       setMentionQuery(mentionMatch[1]);
@@ -1474,7 +1534,8 @@ export function GlobalChatbot() {
    * never received.
    */
   const addFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+    // A platform turn is text only; a file chip here would promise an attachment never sent.
+    if (files.length === 0 || isPlatformScope) return;
 
     let accepted = attachments.length;
     for (const file of files) {
@@ -1525,18 +1586,19 @@ export function GlobalChatbot() {
     // that looked alive.
     const readiness = composerReadiness({
       text: content,
-      attachmentCount: attachments.length,
+      attachmentCount: isPlatformScope ? 0 : attachments.length,
       activeWorkspaceId,
+      scope: assistantScope,
     });
     if (!readiness.canSend) return;
     // The id travels with the yes, so this handler cannot disagree with the check above about
-    // which workspace the turn belongs to.
-    const sendWorkspaceId = readiness.workspaceId;
+    // which workspace the turn belongs to — and a platform yes carries no workspace at all.
+    const platformTurn = readiness.scope === "platform";
 
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
     // unrelated message too.
-    const mentions: AssistantMentionDto[] = selectedContexts
+    const mentions: AssistantMentionDto[] = platformTurn ? [] : selectedContexts
       .filter(
         (
           ctx,
@@ -1553,7 +1615,7 @@ export function GlobalChatbot() {
 
     // Captured before the state is cleared, for the same reason mentions are: this handler runs
     // against pre-update state and the request is built further down.
-    const sentAttachments = attachments;
+    const sentAttachments = platformTurn ? [] : attachments;
 
     setInputValue("");
     setMentionMenuOpen(false);
@@ -1564,7 +1626,9 @@ export function GlobalChatbot() {
     if (!convId) {
       try {
         const conversation =
-          await createConversation.mutateAsync(sendWorkspaceId);
+          readiness.scope === "platform"
+            ? await createPlatformConversation.mutateAsync()
+            : await createConversation.mutateAsync(readiness.workspaceId);
         convId = conversation.id;
         // Saved before the id lands in state, so the effect that reloads switches on an id change
         // reads back the ones the user set in this still-unsaved chat instead of clearing them.
@@ -1614,14 +1678,18 @@ export function GlobalChatbot() {
       // Ambient page context (e.g. "user is looking at this room") rides along with every
       // message automatically — no explicit @-mention needed. It's a hint, not a hard fact:
       // .NET re-validates it against the conversation's own workspace before forwarding it.
-      await sendAssistantMessage.mutateAsync({
-        conversationId: convId,
-        content,
-        pageContext: effectivePageContext,
-        mentions,
-        attachments: sentAttachments,
-        disabledPluginKeys,
-      });
+      if (platformTurn) {
+        await sendPlatformMessage.mutateAsync({ conversationId: convId, content });
+      } else {
+        await sendAssistantMessage.mutateAsync({
+          conversationId: convId,
+          content,
+          pageContext: effectivePageContext,
+          mentions,
+          attachments: sentAttachments,
+          disabledPluginKeys,
+        });
+      }
       // The assistant's reply streams in over AssistantHub — see the connection effect above.
     } catch {
       clearResponseTimeout();
@@ -1705,8 +1773,18 @@ export function GlobalChatbot() {
             >
               {/* Chat Header */}
               <div className="flex items-center justify-between h-[48px] px-4 shrink-0">
-                <span className="font-semibold text-[13px] text-ink truncate">
-                  {conversationTitle}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="font-semibold text-[13px] text-ink truncate">
+                    {conversationTitle}
+                  </span>
+                  {isPlatformScope ? (
+                    <span
+                      data-testid="warpbot-scope-chip"
+                      className="shrink-0 rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] font-medium text-ink-subtle"
+                    >
+                      {PLATFORM_SCOPE_LABEL}
+                    </span>
+                  ) : null}
                 </span>
                 <div className="flex items-center gap-1">
                   <button
@@ -1746,6 +1824,23 @@ export function GlobalChatbot() {
                 onScroll={handleMessagesScroll}
                 className="min-h-0 flex-1 overflow-y-auto px-2 flex flex-col gap-4"
               >
+                {isPlatformScope && messages.length === 0 && !isAiTyping ? (
+                  <div
+                    data-testid="warpbot-platform-suggestions"
+                    className="mt-auto flex flex-col items-start gap-1.5 px-2 pb-2"
+                  >
+                    {PLATFORM_SUGGESTED_PROMPTS.map((prompt) => (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => void sendMessage(prompt)}
+                        className="rounded-full border border-hairline bg-surface-1 px-3 py-1 text-left text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
                 {messages.length > 0 &&
                   messages.map((msg) => (
                     <div
@@ -2193,6 +2288,10 @@ export function GlobalChatbot() {
                       }}
                     />
                     <div className="flex items-center gap-0.5">
+                    {/* Platform scope is text only and has no plugins: the paperclip and the
+                        Tools menu would offer workspace things a platform turn cannot carry. */}
+                    {!isPlatformScope ? (
+                    <>
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -2364,6 +2463,8 @@ export function GlobalChatbot() {
                         </div>
                       </PopoverContent>
                     </Popover>
+                    </>
+                    ) : null}
                     </div>
 
                     <div className="flex items-center gap-1">
@@ -2379,7 +2480,7 @@ export function GlobalChatbot() {
                             : t("showPageContext")
                         }
                         onClick={togglePageContextVisibility}
-                        disabled={!ambientPageContextKey}
+                        disabled={isPlatformScope || !ambientPageContextKey}
                         className="flex items-center justify-center size-7 rounded-full bg-surface-2 text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
                       >
                         {isPageContextVisible ? (
@@ -2423,7 +2524,7 @@ export function GlobalChatbot() {
             <PopoverTrigger
               aria-label={t("chatHistory")}
               title={t("chatHistory")}
-              disabled={!activeWorkspaceId}
+              disabled={!isPlatformScope && !activeWorkspaceId}
               className="flex items-center justify-center size-[26px] rounded-[6px] text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors disabled:opacity-50"
             >
               <ClockCounterClockwise weight="regular" size={14} />
@@ -2433,7 +2534,7 @@ export function GlobalChatbot() {
               sideOffset={8}
               className="p-1.5 w-[280px] max-h-[320px] overflow-y-auto bg-surface-1 border border-border shadow-xl rounded-xl"
             >
-              {conversationsQuery.isLoading || loadConversation.isPending ? (
+              {conversationsQuery.isLoading || conversationLoader.isPending ? (
                 <div className="px-2.5 py-3 text-center text-[12px] text-ink-subtle">
                   {t("loadingConversations")}
                 </div>

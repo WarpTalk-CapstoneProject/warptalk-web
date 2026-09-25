@@ -1,27 +1,30 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowsClockwise,
+  CalendarBlank,
+  ClockCounterClockwise,
   LockOpen,
-  MagnifyingGlass,
+  ShieldCheck,
+  SignIn,
   SignOut,
   UserCircleMinus,
   UserCirclePlus,
   Users as UsersIcon,
-  WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
+import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import {
-  AdminFilterTabs,
-  AdminPage,
-  AdminPageHeader,
-  AdminPanel,
-} from "@/components/admin/admin-page-chrome";
+  AdminDataTable,
+  AdminListToolbar,
+  AdminStatusTabs,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import { UserStatusBadge } from "@/components/admin/UserStatusBadge";
 import {
   AdminUserActionDialog,
@@ -33,44 +36,59 @@ import {
   useSetAdminUserActive,
   useUnlockAdminUser,
 } from "@/hooks/use-admin-users";
+import {
+  booleanValue,
+  dateRangeBounds,
+  dateRangeValue,
+  enumValue,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
 import { cn } from "@/lib/utils";
 import type {
+  AdminUserDirectoryQuery,
   AdminUserSort,
   AdminUserStatusFilter,
   AdminUserSummaryDto,
 } from "@/types/admin-user";
+import { useCan } from "@/hooks/use-staff-access";
+import { ADMIN_PERMISSIONS } from "@/lib/admin/staff-permissions";
 
 const PAGE_SIZE = 20;
 
-// Values only — labels are looked up via adminUsers.list.statusTabs / sortOptions so they
-// translate, while these arrays stay the stable source of truth for URL parsing/validation.
+// Values only — labels are looked up via adminUsers.list.statusTabs so they translate.
 const STATUS_TAB_VALUES = ["all", "active", "locked", "unverified", "deactivated", "deleted"] as const;
 
-const SORT_OPTION_VALUES = [
-  "created_desc",
-  "created_asc",
-  "last_login_desc",
-  "last_login_asc",
-  "name_asc",
-  "name_desc",
-] as const;
-
-// camelCase keys matching adminUsers.list.sortOptions in the message catalog.
-const SORT_OPTION_KEYS: Record<(typeof SORT_OPTION_VALUES)[number], string> = {
-  created_desc: "createdDesc",
-  created_asc: "createdAsc",
-  last_login_desc: "lastLoginDesc",
-  last_login_asc: "lastLoginAsc",
-  name_asc: "nameAsc",
-  name_desc: "nameDesc",
+/**
+ * The directory's whole view in the URL. Every filter is server-side (UserRepository.ApplyFilters
+ * in the auth service); this page only ever holds one page of accounts.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: ["active", "locked", "unverified", "deactivated", "deleted"] },
+    // An open set — platform roles are the server's to define.
+    { key: "role", kind: "enum" },
+    { key: "neverSignedIn", kind: "boolean" },
+    { key: "lastLogin", kind: "dateRange" },
+    { key: "created", kind: "dateRange" },
+  ],
+  sortFields: ["created", "name", "lastLogin"],
+  defaultSort: { field: "created", direction: "desc" },
+  columns: [
+    { id: "user" },
+    { id: "status" },
+    { id: "roles" },
+    { id: "sessions" },
+    { id: "lastLogin" },
+    { id: "created", defaultHidden: true },
+    { id: "actions" },
+  ],
+  groupings: ["status"],
 };
 
-function isStatusFilter(value: string | null): value is AdminUserStatusFilter {
-  return STATUS_TAB_VALUES.some((tab) => tab === value);
-}
-
-function isSort(value: string | null): value is AdminUserSort {
-  return SORT_OPTION_VALUES.some((option) => option === value);
+function apiSort(field: string, direction: "asc" | "desc"): AdminUserSort {
+  if (field === "name") return direction === "asc" ? "name_asc" : "name_desc";
+  if (field === "lastLogin") return direction === "asc" ? "last_login_asc" : "last_login_desc";
+  return direction === "asc" ? "created_asc" : "created_desc";
 }
 
 function formatDate(value: string) {
@@ -124,49 +142,44 @@ function RolesCell({ roles }: { roles: string[] }) {
 
 function UsersDirectory() {
   const t = useTranslations("adminUsers.list");
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const list = useAdminListState(LIST_CONFIG);
+  const { state } = list;
 
-  // The URL is the source of truth, matching the workspace directory beside it: a shared or
-  // refreshed link restores the same tab, search, sort and page.
-  const statusParam = searchParams.get("status");
-  const sortParam = searchParams.get("sort");
-  const status: AdminUserStatusFilter = isStatusFilter(statusParam) ? statusParam : "all";
-  const sort: AdminUserSort = isSort(sortParam) ? sortParam : "created_desc";
-  const search = searchParams.get("q") ?? "";
-  const role = searchParams.get("role") ?? "";
-  const parsedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const status = (enumValue(state.filters, "status") ?? "all") as AdminUserStatusFilter;
+  const role = enumValue(state.filters, "role");
+  const created = dateRangeBounds(dateRangeValue(state.filters, "created") ?? {});
+  const neverSignedIn = booleanValue(state.filters, "neverSignedIn");
+  // The server refuses "never signed in" together with a last-login window (they cannot both
+  // hold), so the window is dropped rather than turned into a 400.
+  const lastLogin = neverSignedIn ? {} : dateRangeBounds(dateRangeValue(state.filters, "lastLogin") ?? {});
 
-  // The input is a draft until submitted, but back/forward changes ?q= behind it — adjust during
-  // render rather than in an effect so the two never disagree.
-  const [searchDraft, setSearchDraft] = useState(search);
-  const [appliedSearch, setAppliedSearch] = useState(search);
-  if (search !== appliedSearch) {
-    setAppliedSearch(search);
-    setSearchDraft(search);
-  }
-
-  const updateParams = (next: Record<string, string | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(next)) {
-      if (value === undefined || value === "") params.delete(key);
-      else params.set(key, value);
-    }
-    const queryString = params.toString();
-    router.replace(queryString ? `/admin/users?${queryString}` : "/admin/users");
-  };
-
-  const query = useMemo(
+  const query = useMemo<AdminUserDirectoryQuery>(
     () => ({
-      page,
+      page: state.page,
       pageSize: PAGE_SIZE,
       status,
-      sort,
-      search: search || undefined,
-      role: role || undefined,
+      sort: apiSort(state.sort.field, state.sort.direction),
+      search: state.search || undefined,
+      role,
+      createdFrom: created.from,
+      createdTo: created.toExclusive,
+      lastLoginFrom: lastLogin.from,
+      lastLoginTo: lastLogin.toExclusive,
+      neverSignedIn,
     }),
-    [page, status, sort, search, role],
+    [
+      state.page,
+      status,
+      state.sort.field,
+      state.sort.direction,
+      state.search,
+      role,
+      created.from,
+      created.toExclusive,
+      lastLogin.from,
+      lastLogin.toExclusive,
+      neverSignedIn,
+    ],
   );
 
   const directoryQuery = useAdminUserDirectory(query);
@@ -197,9 +210,116 @@ function UsersDirectory() {
         return setActive.mutateAsync({ userId: user.id, isActive: true, request });
     }
   };
-  const items = directoryQuery.data?.items ?? [];
+  const items = useMemo(() => directoryQuery.data?.items ?? [], [directoryQuery.data]);
   const total = directoryQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  // Platform roles are an open set the server owns. "admin" is always offered (it is the one
+  // that matters here); anything else seen on this page, or already in the URL, joins it.
+  const roleOptions = useMemo(() => {
+    const seen = new Set<string>(["admin"]);
+    for (const user of items) for (const r of user.roles) seen.add(r);
+    if (role) seen.add(role);
+    return Array.from(seen).map((value) => ({
+      value,
+      label: value === "admin" ? t("filters.platformAdmin") : value,
+    }));
+  }, [items, role, t]);
+
+  const filterFields = useMemo<AdminFilterField[]>(
+    () => [
+      { key: "role", label: t("filters.role"), icon: <ShieldCheck size={13} />, kind: "enum", options: roleOptions },
+      {
+        key: "neverSignedIn",
+        label: t("filters.signedIn"),
+        icon: <SignIn size={13} />,
+        kind: "boolean",
+        trueLabel: t("filters.neverSignedIn"),
+        falseLabel: t("filters.hasSignedIn"),
+      },
+      { key: "lastLogin", label: t("filters.lastLogin"), icon: <ClockCounterClockwise size={13} />, kind: "dateRange" },
+      { key: "created", label: t("filters.created"), icon: <CalendarBlank size={13} />, kind: "dateRange" },
+    ],
+    [roleOptions, t],
+  );
+
+  const columns = useMemo<AdminColumn<AdminUserSummaryDto>[]>(
+    () => [
+      {
+        id: "user",
+        header: t("columns.user"),
+        primary: true,
+        sortField: "name",
+        cell: (user) => (
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-2 text-[11px] font-semibold uppercase text-ink-muted">
+              {user.fullName.slice(0, 2)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-medium text-ink">{user.fullName}</p>
+              <p className="truncate text-[11px] text-ink-subtle">{user.email}</p>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: t("columns.status"),
+        className: "w-[120px]",
+        cell: (user) => <UserStatusBadge status={user.status} />,
+      },
+      {
+        id: "roles",
+        header: t("columns.roles"),
+        className: "w-[160px]",
+        cell: (user) => <RolesCell roles={user.roles} />,
+      },
+      {
+        id: "sessions",
+        header: t("columns.sessions"),
+        align: "right",
+        className: "w-[110px]",
+        // Live sessions, not a login count. Zero is meaningful — it is what "signed out
+        // everywhere" looks like — so it is printed rather than blanked.
+        cell: (user) => (
+          <span className={cn("text-[13px]", user.activeSessionCount === 0 ? "text-ink-subtle" : "text-ink-muted")}>
+            {t("sessionCount", { count: user.activeSessionCount })}
+          </span>
+        ),
+      },
+      {
+        id: "lastLogin",
+        header: t("columns.lastLogin"),
+        align: "right",
+        className: "w-[140px]",
+        sortField: "lastLogin",
+        defaultDirection: "desc",
+        cell: (user) => <LastLoginCell value={user.lastLoginAt} />,
+      },
+      {
+        id: "created",
+        header: t("columns.created"),
+        align: "right",
+        className: "w-[130px]",
+        sortField: "created",
+        defaultDirection: "desc",
+        cell: (user) => <span className="text-[13px] text-ink-muted">{formatDate(user.createdAt)}</span>,
+      },
+      {
+        id: "actions",
+        header: t("columns.actions"),
+        align: "right",
+        className: "w-[250px]",
+        cell: (user) => <UserActions user={user} onAction={(target, action) => setPending({ user: target, action })} />,
+      },
+    ],
+    [t],
+  );
+
+  const statusTabs = useMemo(
+    () => STATUS_TAB_VALUES.map((value) => ({ value, label: t(`statusTabs.${value}`) })),
+    [t],
+  );
 
   return (
     <AdminPage>
@@ -224,125 +344,54 @@ function UsersDirectory() {
         }
       />
 
-      <AdminFilterTabs
-        tabs={STATUS_TAB_VALUES.map((value) => ({
-          value,
-          label: t(`statusTabs.${value}`),
-        }))}
-        value={status}
-        onChange={(value) =>
-          updateParams({ status: value === "all" ? undefined : value, page: undefined })
-        }
-        label={t("statusTabsLabel")}
-        trailing={
-          directoryQuery.isPending
-            ? t("loading")
-            : t("accountCount", { count: total })
-        }
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("statusTabsLabel")} />
+
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("searchPlaceholder")}
+        filters={filterFields}
+        count={directoryQuery.isPending ? null : total}
+        countLabel={t("accountCount", { count: total })}
+        isFetching={directoryQuery.isFetching && !directoryQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "created", label: t("sortFields.created") },
+            { field: "name", label: t("sortFields.name") },
+            { field: "lastLogin", label: t("sortFields.lastLogin") },
+          ],
+          groupOptions: [{ key: "status", label: t("columns.status") }],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
       />
 
-      <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <form
-          className="relative flex-1 lg:max-w-md"
-          onSubmit={(event) => {
-            event.preventDefault();
-            updateParams({ q: searchDraft.trim() || undefined, page: undefined });
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={items}
+          rowKey={(user) => user.id}
+          rowHref={(user) => `/admin/users/${user.id}`}
+          isPending={directoryQuery.isPending}
+          isError={directoryQuery.isError}
+          onRetry={() => void directoryQuery.refetch()}
+          empty={{
+            title: t("emptyTitle"),
+            description: t("emptyDescription"),
+            icon: <UsersIcon size={20} weight="duotone" />,
           }}
-        >
-          <MagnifyingGlass
-            size={15}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-subtle"
-          />
-          <input
-            type="search"
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder={t("searchPlaceholder")}
-            aria-label={t("searchAriaLabel")}
-            className="h-9 w-full rounded-lg border border-border bg-surface-1 pl-8 pr-3 text-[13px] text-ink outline-none transition-colors placeholder:text-ink-subtle focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
-          />
-        </form>
-
-        <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-          {t("sortLabel")}
-          <select
-            value={sort}
-            onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
-            className="h-9 rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
-          >
-            {SORT_OPTION_VALUES.map((value) => (
-              <option key={value} value={value}>
-                {t(`sortOptions.${SORT_OPTION_KEYS[value]}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <AdminPanel className="mt-4">
-        {directoryQuery.isError ? (
-          <div className="flex items-start gap-3 px-4 py-10 text-sm">
-            <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
-            <div>
-              <p className="font-medium">{t("loadErrorTitle")}</p>
-              <p className="mt-1 text-ink-muted">{t("loadErrorDescription")}</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void directoryQuery.refetch()}
-              >
-                {t("tryAgain")}
-              </Button>
-            </div>
-          </div>
-        ) : directoryQuery.isPending ? (
-          <ul>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <li
-                key={index}
-                className="flex items-center gap-4 border-b border-hairline/60 px-4 py-3 last:border-b-0"
-              >
-                <div className="h-8 w-8 animate-pulse rounded-full bg-surface-2" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-44 animate-pulse rounded bg-surface-2" />
-                  <div className="h-2.5 w-28 animate-pulse rounded bg-surface-2" />
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : items.length === 0 ? (
-          <div className="grid place-items-center px-4 py-14 text-center">
-            <div>
-              <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-                <UsersIcon size={20} weight="duotone" />
-              </span>
-              <p className="mt-3 text-sm font-medium">{t("emptyTitle")}</p>
-              <p className="mt-1 text-xs text-ink-muted">{t("emptyDescription")}</p>
-            </div>
-          </div>
-        ) : (
-          <div>
-            <div className="hidden border-b border-hairline/80 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-subtle md:flex md:items-center">
-              <div className="flex-1">{t("columns.user")}</div>
-              <div className="w-[110px] shrink-0">{t("columns.status")}</div>
-              <div className="w-[160px] shrink-0">{t("columns.roles")}</div>
-              <div className="w-[90px] shrink-0 text-right">{t("columns.sessions")}</div>
-              <div className="w-[130px] shrink-0 text-right">{t("columns.lastLogin")}</div>
-              <div className="w-[230px] shrink-0 text-right">{t("columns.actions")}</div>
-            </div>
-            <ul>
-              {items.map((user) => (
-                <li key={user.id}>
-                  <UserRow
-                    user={user}
-                    onAction={(target, action) => setPending({ user: target, action })}
-                  />
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+          groupings={{
+            status: {
+              keyOf: (user) => user.status,
+              label: (key) => t(`statusTabs.${key}`),
+              order: ["active", "locked", "unverified", "deactivated", "deleted"],
+            },
+          }}
+          pagination={{ page: state.page, pageCount: totalPages, total, pageSize: PAGE_SIZE }}
+          caption={t("title")}
+          minWidth={960}
+        />
       </AdminPanel>
 
       <AdminUserActionDialog
@@ -354,35 +403,17 @@ function UsersDirectory() {
         onSubmit={runPendingAction}
         isSaving={revokeSessions.isPending || setActive.isPending || unlock.isPending}
       />
-
-      {totalPages > 1 ? (
-        <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>{t("pagination.pageOf", { page, totalPages })}</span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => updateParams({ page: String(page - 1) })}
-            >
-              {t("pagination.previous")}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => updateParams({ page: String(page + 1) })}
-            >
-              {t("pagination.next")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
     </AdminPage>
   );
 }
 
-function UserRow({
+/**
+ * A deleted account offers nothing: every action here would be acting on somebody who is already
+ * gone, and the endpoints refuse it. Unlock appears only while there is a lockout to clear, so the
+ * row never offers a no-op. The NAME cell carries the row link; these are buttons beside it, never
+ * inside it (an anchor wrapping buttons is invalid HTML that browsers resolve by dropping one).
+ */
+function UserActions({
   user,
   onAction,
 }: {
@@ -390,82 +421,37 @@ function UserRow({
   onAction: (user: AdminUserSummaryDto, action: AdminUserAction) => void;
 }) {
   const t = useTranslations("adminUsers.list");
+  // G10: sign-out, deactivate, reactivate and unlock need accounts.manage (the server checks too).
+  const canManage = useCan(ADMIN_PERMISSIONS.accountsManage);
+  if (!canManage) return null;
+  if (user.status === "deleted") {
+    return <span className="text-[11px] text-ink-subtle">{t("noActionsAvailable")}</span>;
+  }
   return (
-    <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
-      {/* The NAME is the link, not the row. Four action buttons sit at the other end of this
-          strip, and an anchor wrapping them would be an interactive element inside an interactive
-          element — invalid HTML that browsers resolve by dropping one of the two. */}
-      <Link
-        href={`/admin/users/${user.id}`}
-        className="group flex min-w-0 flex-1 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-      >
-        <span className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface-2 text-[11px] font-semibold uppercase text-ink-muted">
-          {user.fullName.slice(0, 2)}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate text-[13px] font-medium text-ink group-hover:underline">
-            {user.fullName}
-          </p>
-          <p className="truncate text-[11px] text-ink-subtle">{user.email}</p>
-        </div>
-      </Link>
-
-      <div className="w-[110px] shrink-0">
-        <UserStatusBadge status={user.status} />
-      </div>
-
-      <div className="w-[160px] shrink-0">
-        <RolesCell roles={user.roles} />
-      </div>
-
-      {/* Live sessions, not a login count. Zero is meaningful — it is what "signed out
-          everywhere" looks like — so it is printed rather than blanked. */}
-      <div className="w-[90px] shrink-0 text-[13px] tabular-nums text-ink-muted md:text-right">
-        {user.activeSessionCount === 0 ? (
-          <span className="text-ink-subtle">{t("sessionCount", { count: 0 })}</span>
-        ) : (
-          t("sessionCount", { count: user.activeSessionCount })
-        )}
-      </div>
-
-      <div className="w-[130px] shrink-0 md:text-right">
-        <LastLoginCell value={user.lastLoginAt} />
-      </div>
-
-      {/* A deleted account offers nothing: every action here would be acting on somebody who is
-          already gone, and the endpoints refuse it. Unlock appears only while there is a lockout
-          to clear, so the row never offers a no-op. */}
-      <div className="w-[230px] shrink-0 flex items-center justify-end gap-1.5">
-        {user.status === "deleted" ? (
-          <span className="text-[11px] text-ink-subtle">{t("noActionsAvailable")}</span>
-        ) : (
-          <>
-            {user.status === "locked" ? (
-              <Button variant="outline" size="sm" onClick={() => onAction(user, "unlock")}>
-                <LockOpen size={13} />
-                {t("unlock")}
-              </Button>
-            ) : null}
-            {user.activeSessionCount > 0 ? (
-              <Button variant="outline" size="sm" onClick={() => onAction(user, "revoke-sessions")}>
-                <SignOut size={13} />
-                {t("signOut")}
-              </Button>
-            ) : null}
-            {user.status === "deactivated" ? (
-              <Button variant="outline" size="sm" onClick={() => onAction(user, "reactivate")}>
-                <UserCirclePlus size={13} />
-                {t("reactivate")}
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => onAction(user, "deactivate")}>
-                <UserCircleMinus size={13} />
-                {t("deactivate")}
-              </Button>
-            )}
-          </>
-        )}
-      </div>
+    <div className="flex items-center justify-end gap-1.5">
+      {user.status === "locked" ? (
+        <Button variant="outline" size="sm" onClick={() => onAction(user, "unlock")}>
+          <LockOpen size={13} />
+          {t("unlock")}
+        </Button>
+      ) : null}
+      {user.activeSessionCount > 0 ? (
+        <Button variant="outline" size="sm" onClick={() => onAction(user, "revoke-sessions")}>
+          <SignOut size={13} />
+          {t("signOut")}
+        </Button>
+      ) : null}
+      {user.status === "deactivated" ? (
+        <Button variant="outline" size="sm" onClick={() => onAction(user, "reactivate")}>
+          <UserCirclePlus size={13} />
+          {t("reactivate")}
+        </Button>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => onAction(user, "deactivate")}>
+          <UserCircleMinus size={13} />
+          {t("deactivate")}
+        </Button>
+      )}
     </div>
   );
 }

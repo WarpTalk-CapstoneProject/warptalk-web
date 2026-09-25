@@ -388,6 +388,15 @@ export const API = {
     conversations: "/assistant/conversations",
     conversation: (id: string) => `/assistant/conversations/${id}`,
     sendMessage: (id: string) => `/assistant/conversations/${id}/messages`,
+    /**
+     * Platform-scope WarpBot (system admins, admin portal). A separate store behind the
+     * system-admin policy — never the workspace routes above with an empty workspace id.
+     */
+    platform: {
+      conversations: "/assistant/platform/conversations",
+      conversation: (id: string) => `/assistant/platform/conversations/${id}`,
+      sendMessage: (id: string) => `/assistant/platform/conversations/${id}/messages`,
+    },
     skills: "/assistant/skills",
     plugins: "/assistant/plugins",
     installPlugin: (pluginKey: string) =>
@@ -433,6 +442,9 @@ export const API = {
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/private`,
       privatePlugin: (workspaceId: string, pluginKey: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/private/${encodeURIComponent(pluginKey)}`,
+      /** Members who connected the plugin — Owner or Admin; connection metadata only. */
+      members: (workspaceId: string, pluginKey: string) =>
+        `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/members`,
       requests: (workspaceId: string) =>
         `/assistant/workspaces/${encodeURIComponent(workspaceId)}/plugins/requests`,
       myRequests: (workspaceId: string) =>
@@ -469,10 +481,51 @@ export const API = {
       `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/audits`,
   },
   /**
+   * Which workspaces a marketplace plugin reaches (2026-09-25): its default, per-workspace
+   * overrides (bulk by id and/or plan), and both views. Platform-admin only. The workspace-centric
+   * routes live under `/assistant/admin/workspaces` so no literal sits beside `{pluginKey}`.
+   */
+  adminPluginWorkspaceAccess: {
+    workspaces: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/workspaces`,
+    availability: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/availability`,
+    overrides: (pluginKey: string) =>
+      `/assistant/plugins/catalog/${encodeURIComponent(pluginKey)}/workspaces/overrides`,
+    workspacePlugins: (workspaceId: string) =>
+      `/assistant/admin/workspaces/${encodeURIComponent(workspaceId)}/plugins`,
+    workspaceOverride: (workspaceId: string, pluginKey: string) =>
+      `/assistant/admin/workspaces/${encodeURIComponent(workspaceId)}/plugins/${encodeURIComponent(pluginKey)}/override`,
+  },
+  /**
    * The platform user directory (auth service). The account actions below audit over gRPC to
    * the workspace service's audit store — the transport that can refuse — which is what ended
    * the "no bus, so no privileged actions" era.
    */
+  /**
+   * Platform staff, roles and the permission catalog (auth `AdminStaffController`, G10). Reads
+   * need staff.read, every write staff.manage; every write takes a reason and is audited before it
+   * commits. The server also refuses self-changes, grants beyond the caller's own permissions and
+   * anything that would leave no active Super Admin.
+   */
+  adminStaff: {
+    base: "/admin/staff",
+    detail: (userId: string) => `/admin/staff/${userId}`,
+    role: (userId: string) => `/admin/staff/${userId}/role`,
+    suspend: (userId: string) => `/admin/staff/${userId}/suspend`,
+    reactivate: (userId: string) => `/admin/staff/${userId}/reactivate`,
+    remove: (userId: string) => `/admin/staff/${userId}/remove`,
+    invitations: "/admin/staff/invitations",
+    revokeInvitation: (id: string) => `/admin/staff/invitations/${id}/revoke`,
+    roles: "/admin/staff/roles",
+    roleDetail: (id: string) => `/admin/staff/roles/${id}`,
+    duplicateRole: (id: string) => `/admin/staff/roles/${id}/duplicate`,
+    deleteRole: (id: string) => `/admin/staff/roles/${id}/delete`,
+    permissions: "/admin/staff/permissions",
+    permissionHolders: (code: string) => `/admin/staff/permissions/${encodeURIComponent(code)}/holders`,
+    /** GET, any signed-in user: the caller's own staff access. What the portal renders from. */
+    me: "/auth/staff-access",
+  },
   adminUsers: {
     base: "/admin/users",
     detail: (id: string) => `/admin/users/${id}`,
@@ -490,6 +543,12 @@ export const API = {
     deactivate: (id: string) => `/admin/users/${id}/deactivate`,
     reactivate: (id: string) => `/admin/users/${id}/reactivate`,
     unlock: (id: string) => `/admin/users/${id}/unlock`,
+    /**
+     * POST `{ userIds, reason }`. Force sign-out from the admin workspace page — one member or all
+     * of them. Each account gets the same audited revoke as `revokeSessions`, filed under the
+     * workspace in the route so it appears on that workspace's timeline.
+     */
+    workspaceSignOut: (workspaceId: string) => `/admin/users/workspaces/${workspaceId}/revoke-sessions`,
   },
   /** Platform subscription directory and revenue summary (billing service). Read-only. */
   /**
@@ -514,13 +573,62 @@ export const API = {
     rateCardProviderCost: (id: string) => `/usages/rate-card/${id}/provider-cost`,
     pricingConfig: "/usages/pricing-config",
   },
-  /** Platform meeting directory (translation-room). Metadata only, read-only. */
-  /** The platform audit log. Read-only; the store is append-only. */
   /** Platform announcements. Read-only in the UI; sending is its own release. */
   adminAnnouncements: {
     base: "/admin/notifications",
     detail: (id: string) => `/admin/notifications/${encodeURIComponent(id)}`,
   },
+  /**
+   * The announcements CMS (notification service). Nested under /admin/notifications so it rides
+   * the gateway route that already exists rather than widening the approved admin surface.
+   */
+  adminAnnouncementCms: {
+    base: "/admin/notifications/announcements",
+    detail: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}`,
+    publish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/publish`,
+    unpublish: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/unpublish`,
+    archive: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/archive`,
+    duplicate: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/duplicate`,
+    analytics: (id: string) => `/admin/notifications/announcements/${encodeURIComponent(id)}/analytics`,
+    bulk: "/admin/notifications/announcements/bulk",
+    assets: "/admin/notifications/announcements/assets",
+  },
+  /**
+   * Email content (CMS v2): every catalog email, per locale, with a draft side only the admin sees
+   * and a published side every sender reads.
+   */
+  adminEmailTemplates: {
+    base: "/admin/notifications/email-templates",
+    bulk: "/admin/notifications/email-templates/bulk",
+    detail: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}`,
+    stats: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/stats`,
+    preview: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/preview`,
+    test: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/test`,
+    sampleSets: (key: string) => `/admin/notifications/email-templates/${encodeURIComponent(key)}/sample-sets`,
+    sampleSet: (key: string, id: string) =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/sample-sets/${encodeURIComponent(id)}`,
+    locale: (key: string, locale: string, action: "draft" | "publish" | "discard-draft" | "archive" | "unarchive" | "duplicate" | "reset-to-default" | "versions") =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/locales/${encodeURIComponent(locale)}/${action}`,
+    restore: (key: string, locale: string, version: number) =>
+      `/admin/notifications/email-templates/${encodeURIComponent(key)}/locales/${encodeURIComponent(locale)}/versions/${version}/restore`,
+  },
+  /** Email templates (CMS v2): layouts and reusable blocks, managed apart from any email's wording. */
+  adminEmailBlocks: {
+    base: "/admin/notifications/email-blocks",
+    bulk: "/admin/notifications/email-blocks/bulk",
+    preview: "/admin/notifications/email-blocks/preview",
+    detail: (id: string) => `/admin/notifications/email-blocks/${encodeURIComponent(id)}`,
+    action: (id: string, action: "draft" | "publish" | "discard-draft" | "duplicate" | "archive" | "unarchive" | "set-default" | "versions") =>
+      `/admin/notifications/email-blocks/${encodeURIComponent(id)}/${action}`,
+    restore: (id: string, version: number) =>
+      `/admin/notifications/email-blocks/${encodeURIComponent(id)}/versions/${version}/restore`,
+  },
+  /** Announcements as the signed-in user sees them, and what they did with them. */
+  announcements: {
+    active: "/notifications/announcements",
+    events: (id: string) => `/notifications/announcements/${encodeURIComponent(id)}/events`,
+  },
+
   /**
    * The workspace service's transactional outbox, dead-lettered half. Not under /admin: the
    * controller lives on the workspace service's own prefix and is gated there. Other services'
@@ -528,13 +636,18 @@ export const API = {
    */
   adminWorkspaceOutbox: {
     deadLetters: "/workspaces/outbox/dead-letters",
-    replay: (eventId: string) => `/workspaces/outbox/${encodeURIComponent(eventId)}/replay`,
   },
+  /**
+   * The platform audit log (workspace service). GET only: a cursor-paged list, one entry, the
+   * values each filter offers, and a CSV export that is itself recorded.
+   */
   adminAuditLog: {
     base: "/admin/audit-log",
+    entry: (id: string) => `/admin/audit-log/${encodeURIComponent(id)}`,
+    facets: "/admin/audit-log/facets",
+    export: "/admin/audit-log/export",
   },
   adminMeetings: {
-    base: "/admin/meetings",
     counts: "/admin/meetings/counts",
   },
   /**
@@ -548,6 +661,37 @@ export const API = {
     users: "/admin/users/insights",
     workspaces: "/admin/workspaces/insights",
     meetings: "/admin/meetings/insights",
+    pnl: "/admin/billing/insights/pnl",
+  },
+  /** The USD→VND rate: Stripe's by default, recorded daily, overridable. System admin only. */
+  /**
+   * G11 — /admin/packages: credit packs, add-ons and coupons. Every write is audited server-side
+   * and guarded by billing.packages_manage; reads by billing.read. Nothing here deletes: an item
+   * is archived, and its Stripe objects are deactivated, never removed.
+   */
+  adminPackages: {
+    options: "/admin/billing/packages/options",
+    creditPacks: "/admin/billing/packages/credit-packs",
+    creditPack: (id: string) => `/admin/billing/packages/credit-packs/${id}`,
+    addons: "/admin/billing/packages/addons",
+    addon: (id: string) => `/admin/billing/packages/addons/${id}`,
+    coupons: "/admin/billing/packages/coupons",
+    coupon: (id: string) => `/admin/billing/packages/coupons/${id}`,
+  },
+  /**
+   * G11 — what a workspace can buy besides its plan. Buying goes through /payments/checkout with
+   * paymentType CreditPack / AddOn; the server prices the item, never the browser.
+   */
+  billingCatalog: {
+    catalog: (workspaceId: string) => `/payments/workspace/${workspaceId}/catalog`,
+    couponPreview: (workspaceId: string) => `/payments/workspace/${workspaceId}/coupon-preview`,
+    cancelAddon: (workspaceId: string, workspaceAddonId: string) =>
+      `/payments/workspace/${workspaceId}/addons/${workspaceAddonId}/cancel`,
+  },
+  adminFx: {
+    status: "/admin/billing/fx",
+    refresh: "/admin/billing/fx/refresh",
+    override: "/admin/billing/fx/override",
   },
   /**
    * The platform's own vitals, read back out of the metrics store. Query-only: nothing behind
@@ -555,6 +699,46 @@ export const API = {
    */
   adminPlatformHealth: {
     base: "/admin/platform-health",
+  },
+  /**
+   * External providers (OpenAI, Cartesia, LiveKit, Stripe): usage, cost, our calls' success rate and
+   * a 90-day uptime row. Read-only; billing-service owns it, the gateway forwards the prefix.
+   */
+  adminProviders: {
+    base: "/admin/providers",
+    series: (key: string) => `/admin/providers/${encodeURIComponent(key)}/series`,
+    breakdown: (key: string) => `/admin/providers/${encodeURIComponent(key)}/breakdown`,
+    uptime: (key: string) => `/admin/providers/${encodeURIComponent(key)}/uptime`,
+  },
+  /**
+   * G12 operating costs and expenses (billing). Reads need finance.read, writes finance.manage —
+   * salaries live here, so not billing.read. Receipts are multipart uploads to object storage.
+   */
+  adminExpenses: {
+    base: "/admin/billing/expenses",
+    detail: (id: string) => `/admin/billing/expenses/${encodeURIComponent(id)}`,
+    markPaid: (id: string) => `/admin/billing/expenses/${encodeURIComponent(id)}/mark-paid`,
+    receipt: (id: string) => `/admin/billing/expenses/${encodeURIComponent(id)}/receipt`,
+    categories: "/admin/billing/expenses/categories",
+    category: (id: string) => `/admin/billing/expenses/categories/${encodeURIComponent(id)}`,
+    budgets: "/admin/billing/expenses/budgets",
+    report: "/admin/billing/expenses/report",
+    pnl: "/admin/billing/expenses/pnl",
+    importPreview: "/admin/billing/expenses/import/preview",
+    import: "/admin/billing/expenses/import",
+  },
+  /**
+   * G12 pending-work inbox (workspace service): aggregated live from each owning service with the
+   * caller's token. Item keys contain ':' so they travel in bodies and query strings.
+   */
+  adminInbox: {
+    base: "/admin/inbox",
+    summary: "/admin/inbox/summary",
+    notes: "/admin/inbox/notes",
+    assign: "/admin/inbox/assign",
+    snooze: "/admin/inbox/snooze",
+    done: "/admin/inbox/done",
+    reopen: "/admin/inbox/reopen",
   },
   /** Product feedback, aggregated. Read-only; comments carry no user id. */
   adminFeedback: {
@@ -618,8 +802,13 @@ export const API = {
    */
   adminInvoices: {
     workspace: (workspaceId: string) => `/invoices/workspace/${workspaceId}`,
-    /** POST, no body. Marks the invoice and its payment paid. Idempotent on a paid invoice. */
-    markPaid: (invoiceId: string) => `/invoices/${invoiceId}/mark-paid`,
+    /**
+     * POST `{ reason }`. The audited door to mark-paid: system-admin POLICY (not the role string
+     * the bare `/invoices/{id}/mark-paid` still carries), scoped to the workspace in the route, and
+     * recorded in the platform audit log before the invoice and its payment are settled.
+     */
+    markPaid: (workspaceId: string, invoiceId: string) =>
+      `/admin/billing/workspaces/${workspaceId}/invoices/${invoiceId}/mark-paid`,
   },
   /**
    * The platform-wide sales lead inbox (billing `AdminSalesLeadsController`). Under
@@ -634,6 +823,23 @@ export const API = {
     analytics: (id: string) => `/admin/billing/workspaces/${id}/analytics`,
     creditTransactions: (id: string) => `/admin/billing/workspaces/${id}/credit-transactions`,
   },
+  /**
+   * The admin workspace page's billing half (billing `AdminWorkspaceBillingController`): the money
+   * overview the page leads with, and its money actions. Every write takes a reason and is recorded
+   * in the platform audit log before it is saved.
+   */
+  adminWorkspaceBilling: {
+    /** GET `?from&to` (default the last 30 days): revenue, credits + burn, plan, invoices, AI cost, P&L. */
+    overview: (id: string) => `/admin/billing/workspaces/${id}/overview`,
+    /** POST `{ amount, reason }`. Wired to CreditService; negative deducts; the ledger row is returned. */
+    adjustCredits: (id: string) => `/admin/billing/workspaces/${id}/credits/adjust`,
+    changePlan: (id: string) => `/admin/billing/workspaces/${id}/subscription/change-plan`,
+    extendTrial: (id: string) => `/admin/billing/workspaces/${id}/subscription/extend-trial`,
+    /** POST `{ periods, reason }`. Free months: paid-through date and credits, no invoice. */
+    comp: (id: string) => `/admin/billing/workspaces/${id}/subscription/comp`,
+    /** PUT `{ overrides, reason }`: contract entitlement overrides; null clears a key. */
+    entitlements: (id: string) => `/admin/billing/workspaces/${id}/subscription/entitlements`,
+  },
   adminWorkspaces: {
     base: "/admin/workspaces",
     detail: (id: string) => `/admin/workspaces/${id}`,
@@ -646,6 +852,13 @@ export const API = {
     // Membership facts only. The knowledge route that used to sit beside these is gone:
     // tenant content stays out of the admin portal (2026-08-17).
     members: (id: string) => `/admin/workspaces/${id}/members`,
+    // The admin workspace page's workspace-service actions. Each is audited; the export is a POST
+    // because it carries a reason and is itself a recorded action.
+    transferOwnership: (id: string) => `/admin/workspaces/${id}/transfer-ownership`,
+    notices: (id: string) => `/admin/workspaces/${id}/notices`,
+    notes: (id: string) => `/admin/workspaces/${id}/notes`,
+    timeline: (id: string) => `/admin/workspaces/${id}/timeline`,
+    export: (id: string) => `/admin/workspaces/${id}/export`,
   },
   /**
    * A workspace's own payments and invoices (billing service; gateway routes `/payments/**` and

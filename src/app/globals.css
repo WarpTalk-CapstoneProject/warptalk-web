@@ -187,6 +187,18 @@
   --usage-service-5: #4a8fdb;
   --usage-service-other: #9ca3af;
 
+  /* Admin chart series — components/admin/charts. Slot 1 is every single-series chart; slot 2 is
+     the second line of a pair. Checked with the dataviz palette validator against --surface-1 in
+     each theme (lightness band, chroma, CVD and normal-vision separation, 3:1 contrast), which is
+     why dark mode has its own, lighter steps rather than the same hex. */
+  --viz-1: #5e6ad2;
+  --viz-2: #2f9e8f;
+  /* Slots 3–5 (profit and loss: providers, top workspaces), in this order. Validated as the 5-slot
+     sequence #5e6ad2,#2f9e8f,#eb6834,#b8448f,#c98500 on #ffffff: every check passes. */
+  --viz-3: #eb6834;
+  --viz-4: #b8448f;
+  --viz-5: #c98500;
+
   /* Status tones — see --color-success in @theme. Picked to read on --surface-1 in each theme. */
   --success: #27a644;
   --warning: #d97706;
@@ -234,6 +246,12 @@
   --usage-service-4: #e07aa8;
   --usage-service-5: #6aa8ec;
   --usage-service-other: #6b7079;
+  --viz-1: #7780e3;
+  --viz-2: #35a898;
+  /* 5-slot dark sequence validated on #131415: all checks pass. */
+  --viz-3: #d95926;
+  --viz-4: #c45aa8;
+  --viz-5: #c98500;
   --success: #3fbf5f;
   --warning: #f59e0b;
   --info: #6ba4f0;

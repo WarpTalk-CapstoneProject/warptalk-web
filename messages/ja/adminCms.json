@@ -1,0 +1,1020 @@
+{
+  "common": {
+    "editedBy": "{date} に {name} が編集",
+    "editedAt": "{date} に編集",
+    "retry": "再試行",
+    "toasts": {
+      "failed": "うまくいきませんでした。もう一度お試しください。"
+    },
+    "list": {
+      "view": "表示",
+      "cards": "カード",
+      "table": "表",
+      "clearSearch": "検索をクリア",
+      "sortBy": "並べ替え",
+      "selectAll": "このページをすべて選択",
+      "clearFilters": "フィルターをクリア"
+    },
+    "bulk": {
+      "label": "一括操作",
+      "selected": "{count} 件選択中",
+      "clear": "選択を解除",
+      "partial": "{failed} 件を変更できませんでした: {error}"
+    },
+    "editor": {
+      "actions": "操作",
+      "unsaved": "未保存の変更",
+      "saved": "すべて保存済み",
+      "saveShortcut": "⌘S / Ctrl+S",
+      "cancel": "キャンセル"
+    },
+    "history": {
+      "noChanges": "変更はありません。",
+      "unchangedLines": "変更のない {count} 行",
+      "loadError": "バージョン履歴を読み込めませんでした。",
+      "noVersions": "まだ公開されていません",
+      "noVersionsHint": "公開するたびにここにバージョンが追加され、どのバージョンも下書きに復元できます。",
+      "actions": {
+        "published": "公開",
+        "restored": "復元",
+        "reset": "リセット",
+        "other": "保存"
+      },
+      "compareWith": "比較対象",
+      "comparePrevious": "v{version} と比較",
+      "compareFirst": "最初のバージョン",
+      "compareDraft": "現在の下書きと比較",
+      "restore": "v{version} を下書きに復元",
+      "restoreHint": "復元するとこのバージョンが下書きにコピーされます。公開するまで送信内容は変わりません。",
+      "auditError": "監査ログを読み込めませんでした。",
+      "retry": "再試行",
+      "noAudit": "記録された変更はまだありません",
+      "noAuditHint": "ここで管理者が行った変更はすべてプラットフォームの監査ログに記録されます。",
+      "auditFooter": "プラットフォームの監査ログより。フィルターやエクスポートを含む全記録は「監査ログ」にあります。",
+      "failed": "失敗",
+      "hideChanges": "変更を隠す",
+      "showChanges": "{count} 件の変更を表示"
+    },
+    "preview": {
+      "device": "デバイス",
+      "desktop": "デスクトップ",
+      "mobile": "モバイル",
+      "theme": "テーマ",
+      "light": "ライト",
+      "dark": "ダーク",
+      "format": "形式",
+      "html": "HTML",
+      "text": "プレーンテキスト",
+      "noPreheader": "プリヘッダーなし — 受信箱には本文の最初の行が表示されます",
+      "layout": "レイアウト: {name}"
+    },
+    "markdown": {
+      "mode": "エディターモード",
+      "write": "編集",
+      "preview": "プレビュー",
+      "bold": "太字",
+      "boldPlaceholder": "太字のテキスト",
+      "italic": "斜体",
+      "italicPlaceholder": "斜体のテキスト",
+      "heading": "見出し",
+      "link": "リンク",
+      "linkPlaceholder": "リンクのテキスト",
+      "bulleted": "箇条書き",
+      "numbered": "番号付きリスト",
+      "quote": "引用",
+      "code": "コード",
+      "image": "画像をアップロード",
+      "imageType": "PNG、JPEG、GIF、WebP 画像をアップロードしてください。",
+      "imageTooLarge": "画像は 2 MB 以下にしてください。",
+      "uploadFailed": "画像をアップロードできませんでした。",
+      "nothingToPreview": "プレビューする内容がまだありません。",
+      "hint": "Markdown: **太字**、_斜体_、リスト、リンク。画像を貼り付けるかドロップするとアップロードされます。"
+    },
+    "sendTest": {
+      "title": "「{name}」をテスト送信",
+      "descriptionDraft": "画面に表示中の内容を、保存の有無にかかわらずサンプルデータで送信します。何も保存されません。",
+      "descriptionSaved": "選んだ言語の保存済み下書きをサンプルデータで送信します。",
+      "recipients": "送信先",
+      "recipientsHint": "最大 {max} 件。カンマまたは改行で区切ってください。",
+      "invalid": "メールアドレスではありません: {addresses}",
+      "tooMany": "送信先は {max} 件以下にしてください。",
+      "locale": "言語",
+      "sampleData": "サンプルデータ",
+      "builtInSamples": "組み込みサンプル",
+      "cancel": "キャンセル",
+      "send": "テスト送信",
+      "sending": "送信中…",
+      "sent": "{count} 件のアドレスにテストを送信しました。",
+      "partial": "{sent} に送信しました。{failed} への送信に失敗しました。",
+      "failed": "テストメールを送信できませんでした。"
+    }
+  },
+  "emails": {
+    "eyebrow": "コンテンツ",
+    "title": "メールテンプレート",
+    "description": "プラットフォームが送信するすべてのメールを英語・ベトナム語・日本語で管理します。編集は公開するまで下書きのままで、送信には公開済みのバージョンだけが使われます。",
+    "newLayout": "新しいレイアウト",
+    "newBlock": "新しいブロック",
+    "sectionsLabel": "メール、レイアウト、ブロック",
+    "sections": {
+      "emails": "メール",
+      "layouts": "レイアウト",
+      "blocks": "ブロック"
+    },
+    "filterLabel": "メールを絞り込む",
+    "filters": {
+      "all": "すべて",
+      "live": "使用中",
+      "dormant": "休止中",
+      "customized": "カスタマイズ済み",
+      "draft": "未公開の変更あり"
+    },
+    "searchPlaceholder": "メールを検索",
+    "sort": {
+      "name": "名前",
+      "updated": "最終編集",
+      "sent": "送信数が多い順"
+    },
+    "loadError": "メールテンプレートを読み込めませんでした。",
+    "empty": {
+      "none": "メールがありません",
+      "filtered": "一致するメールがありません",
+      "filteredHint": "別のフィルターを試すか、検索をクリアしてください。"
+    },
+    "table": {
+      "email": "メール",
+      "status": "状態",
+      "locales": "言語",
+      "sender": "送信元",
+      "sent30": "送信数（30 日）",
+      "updated": "最終編集"
+    },
+    "selectOne": "{name} を選択",
+    "chips": {
+      "live": "使用中",
+      "dormant": "休止中",
+      "customized": "カスタマイズ済み",
+      "draft": "未公開の変更あり"
+    },
+    "localeStates": {
+      "PUBLISHED": "公開済み",
+      "CHANGES": "公開済み（未公開の変更あり）",
+      "DRAFT_ONLY": "下書きのみ — 未送信",
+      "ARCHIVED": "アーカイブ済み",
+      "MISSING": "未作成 — フォールバック"
+    },
+    "card": {
+      "subject": "件名（英語、送信中のもの）",
+      "sent30": "30 日間で {sent, number} 件送信・{failed, number} 件失敗"
+    },
+    "actions": {
+      "edit": "編集",
+      "preview": "プレビュー",
+      "sendTest": "テスト送信",
+      "reset": "既定に戻す"
+    },
+    "resetDialog": {
+      "title": "「{name}」を組み込みの文面に戻しますか？",
+      "description": "英語の下書きが組み込みの件名と本文に置き換わります。公開するまで受信者への送信内容は変わりません。",
+      "confirm": "下書きをリセット"
+    },
+    "bulk": {
+      "localeLabel": "操作の対象言語",
+      "allLocales": "すべての言語",
+      "publish": {
+        "action": "下書きを公開",
+        "title": "{count} 件のメールを公開しますか？",
+        "description": "{locale} の未公開の下書きがすべて公開されます。約 30 秒で送信に反映されます。",
+        "confirm": "公開"
+      },
+      "discard": {
+        "action": "下書きを破棄",
+        "title": "{count} 件のメールの下書きを破棄しますか？",
+        "description": "{locale} の未公開の変更が破棄されます。公開済みの内容はそのままです。",
+        "confirm": "下書きを破棄"
+      },
+      "archive": {
+        "action": "アーカイブ",
+        "title": "{count} 件のメールをアーカイブしますか？",
+        "description": "アーカイブされた言語（{locale}）は送信されなくなり、受信者には英語、次に組み込みの文面が送られます。",
+        "confirm": "アーカイブ"
+      },
+      "duplicate": {
+        "action": "他の言語へコピー",
+        "title": "{count} 件のメールを別の言語へコピーしますか？",
+        "description": "{locale} の下書きを選んだ言語の下書きにコピーし、置き換えます。何も公開されません。",
+        "target": "コピー先",
+        "confirm": "コピー"
+      }
+    },
+    "toasts": {
+      "published": "公開しました。約 30 秒で送信に反映されます。",
+      "discarded": "下書きを破棄しました。",
+      "archived": "アーカイブしました。",
+      "duplicated": "別の言語の下書きにコピーしました。",
+      "reset": "英語の下書きを組み込みの文面に戻しました。送信するには公開してください。"
+    }
+  },
+  "blocks": {
+    "layoutIntro": "レイアウトはすべてのメールを包む枠です。本文を囲む HTML、プレーンテキストの枠、ダークモードのスタイルからなります。1 つが既定で、メールごとに別のレイアウトを選べます。",
+    "blockIntro": "ブロックは署名・フッター・法的表記などの再利用できる断片で、メールやレイアウトから '{{> key}}' で挿入します。ブロックを公開すると、それを使うすべてのメールが更新されます。",
+    "filterLabel": "絞り込み",
+    "filters": {
+      "all": "すべて",
+      "PUBLISHED": "公開済み",
+      "CHANGES": "未公開の変更あり",
+      "DRAFT": "未公開",
+      "ARCHIVED": "アーカイブ済み"
+    },
+    "searchPlaceholder": "名前またはキーで検索",
+    "sort": {
+      "name": "名前",
+      "updated": "最終編集"
+    },
+    "loadError": "読み込めませんでした。",
+    "empty": {
+      "layout": "レイアウトはまだありません",
+      "layoutHint": "レイアウトを公開して既定に設定するまで、メールには WarpTalk の組み込みレイアウトが使われます。",
+      "block": "ブロックはまだありません",
+      "blockHint": "複数のメールで繰り返す内容をブロックにしましょう。",
+      "filtered": "一致するものがありません"
+    },
+    "create": {
+      "layout": "新しいレイアウト",
+      "block": "新しいブロック",
+      "layoutTitle": "新しいレイアウト",
+      "layoutDescription": "各メールの本文が入る '{{content}}' を含む、動作する枠から始まります。公開するまでどのメールにも使われません。",
+      "blockTitle": "新しいブロック",
+      "blockDescription": "メールはキーでこのブロックを挿入します。公開するまでどのメールにも使われません。",
+      "name": "名前",
+      "key": "キー",
+      "keyHintBlock": "メールからは '{{> '{key}'}}' で挿入します。小文字、数字、- と _ が使えます。",
+      "keyHintLayout": "小文字、数字、- と _ が使えます。後から変更できません。",
+      "descriptionLabel": "説明（任意）",
+      "submit": "作成",
+      "created": "下書きとして作成しました。"
+    },
+    "table": {
+      "name": "名前",
+      "status": "状態",
+      "version": "公開",
+      "usedBy": "使用先",
+      "updated": "最終編集"
+    },
+    "nouns": {
+      "layout": "レイアウト",
+      "block": "ブロック"
+    },
+    "bulk": {
+      "publish": {
+        "action": "公開",
+        "title": "{count} 件の{noun}を公開しますか？",
+        "description": "それを使うすべてのメールが約 30 秒で変わります。",
+        "confirm": "公開"
+      },
+      "duplicate": {
+        "action": "複製",
+        "title": "{count} 件の{noun}を複製しますか？",
+        "description": "コピーはそれぞれ未公開の新しい下書きになります。",
+        "confirm": "複製"
+      },
+      "archive": {
+        "action": "アーカイブ",
+        "title": "{count} 件の{noun}をアーカイブしますか？",
+        "description": "使用中のものや既定のレイアウトはスキップされ、報告されます。",
+        "confirm": "アーカイブ"
+      },
+      "delete": {
+        "action": "削除",
+        "title": "{count} 件の{noun}を削除しますか？",
+        "description": "一度も公開されていない下書きだけが削除され、それ以外はスキップされます。元に戻せません。",
+        "confirm": "削除"
+      }
+    },
+    "toasts": {
+      "publish": "公開しました。",
+      "duplicate": "下書きとして複製しました。",
+      "archive": "アーカイブしました。",
+      "delete": "削除しました。"
+    },
+    "selectOne": "{name} を選択",
+    "default": "既定",
+    "statuses": {
+      "PUBLISHED": "公開済み",
+      "CHANGES": "未公開の変更あり",
+      "DRAFT": "未公開",
+      "ARCHIVED": "アーカイブ済み"
+    },
+    "usedBy": "{count, plural, other {{first} ほか（#）で使用}}",
+    "unused": "どのメールにも使われていません",
+    "version": "v{version} 公開中",
+    "neverPublished": "未公開",
+    "actions": {
+      "edit": "編集",
+      "preview": "プレビュー"
+    }
+  },
+  "emailEditor": {
+    "back": "メールテンプレート",
+    "notFound": "この名前のメールはプラットフォームから送信されていません。",
+    "loadError": "メールを読み込めませんでした。",
+    "retry": "再試行",
+    "eyebrow": "メールコンテンツ",
+    "live": "使用中",
+    "dormant": "休止中",
+    "locale": "言語",
+    "switchLocaleUnsaved": "この言語には未保存の変更があります。破棄して切り替えますか？",
+    "localeStates": {
+      "PUBLISHED": "公開済み",
+      "CHANGES": "未公開の変更あり",
+      "DRAFT_ONLY": "下書きのみ",
+      "ARCHIVED": "アーカイブ済み",
+      "MISSING": "未作成"
+    },
+    "sentAs": {
+      "own": "{locale} の受信者には公開バージョン v{version} が送信されます。",
+      "english": "{locale} は未公開のため、受信者には英語版が送信されます。",
+      "builtIn": "{locale} も英語も未公開のため、受信者には組み込みの文面が送信されます。"
+    },
+    "archivedNotice": "この言語はアーカイブ済みです。送信されず、読み取り専用です。編集や公開をするにはアーカイブを解除してください。",
+    "tabsLabel": "メールのセクション",
+    "tabs": {
+      "content": "コンテンツ",
+      "layout": "レイアウト",
+      "variables": "変数",
+      "preview": "プレビュー",
+      "history": "履歴",
+      "analytics": "分析"
+    },
+    "fields": {
+      "subject": "件名",
+      "subjectHint": "1 行。変数を使えます。",
+      "preheader": "プリヘッダー",
+      "preheaderHint": "受信箱で件名の後に表示される灰色の行。",
+      "heading": "見出し",
+      "headingHint": "メール内のタイトル。任意。",
+      "bodyHtml": "本文（HTML）",
+      "bodyHtmlHint": "レイアウトに流し込まれます。送信時に値は HTML エスケープされます。",
+      "textBody": "プレーンテキスト版",
+      "deriveText": "HTML から生成",
+      "derivedHint": "プレーンテキスト部分は HTML 本文から生成されます。自分で書く場合はオフにしてください。"
+    },
+    "issuesTitle": "公開前に修正してください",
+    "issues": {
+      "UNKNOWN_VARIABLE": "'{{'{variable}'}}' はこのメールの変数ではありません。",
+      "MISSING_REQUIRED_VARIABLE": "'{{'{variable}'}}' を必ず含めてください — このメールが届けるための情報です。",
+      "REQUIRED": "この項目は必須です。",
+      "LINE_BREAK": "1 行で入力してください。"
+    },
+    "insert": {
+      "variables": "変数",
+      "variablesHint": "クリックすると、直前に編集していた項目のカーソル位置に挿入します。* は必須です。",
+      "blocks": "ブロック",
+      "noBlocks": "公開済みのブロックはまだありません。",
+      "manageBlocks": "ブロックを管理"
+    },
+    "layout": {
+      "title": "レイアウト",
+      "description": "このメールを包む枠です。公開済みのレイアウトだけを選べます。",
+      "defaultOption": "既定のレイアウト（{name}）",
+      "builtIn": "組み込み",
+      "defaultOptionHint": "現在も今後も、既定になっているレイアウトに従います。",
+      "chosenUnavailable": "この下書きが使うレイアウトは公開されていないため、既定のレイアウトで送信されます。",
+      "manage": "レイアウトを管理",
+      "blocksTitle": "ブロック",
+      "blocksDescription": "公開済みのブロックを本文に挿入します。後でブロックを公開すると、このメールも更新されます。",
+      "insert": "挿入",
+      "noBlocks": "公開済みのブロックはまだありません。"
+    },
+    "variables": {
+      "title": "変数",
+      "description": "このメールで使える情報です。送信側が値を入れます。必須の変数が含まれていないと公開できません。",
+      "name": "変数",
+      "meaning": "意味",
+      "required": "必須",
+      "requiredYes": "必須"
+    },
+    "samples": {
+      "label": "サンプルデータ",
+      "builtIn": "組み込みサンプル",
+      "title": "サンプルデータセット",
+      "description": "プレビューやテスト送信用の名前付きの値のセット — 長い名前、日本語の名前、期限切れのリンクなど。",
+      "name": "セット名",
+      "namePlaceholder": "長いベトナム語の名前",
+      "save": "セットを保存",
+      "saveAsNew": "新しいセットとして保存",
+      "saved": "サンプルセットを保存しました。",
+      "delete": "セットを削除",
+      "deleteTitle": "「{name}」を削除しますか？",
+      "deleteDescription": "これを使っていたプレビューとテストは組み込みサンプルに戻ります。",
+      "deleted": "サンプルセットを削除しました。"
+    },
+    "previewOfDraft": "保存済みの下書きを表示しています。",
+    "previewOfDraftUnsaved": "未保存の変更を含め、画面上の内容を表示しています。",
+    "previewError": "プレビューを生成できませんでした。",
+    "history": {
+      "versions": "公開バージョン（{locale}）",
+      "audit": "監査ログ"
+    },
+    "analytics": {
+      "description": "送信側がプロバイダーに渡したメールの日別件数です。失敗はプロバイダーが受け付けなかったものです。",
+      "range": "期間",
+      "lastDays": "過去 {days} 日",
+      "error": "送信数を読み込めませんでした。",
+      "figureCaption": "{failed} 件失敗・失敗率 {rate}",
+      "sent": "送信",
+      "failed": "失敗",
+      "chartLabel": "日別の送信数と失敗数",
+      "byLocale": "言語別",
+      "loading": "読み込み中…",
+      "empty": "この期間の送信はありません。"
+    },
+    "status": {
+      "published": "v{version} 公開中",
+      "DRAFT_ONLY": "未公開",
+      "ARCHIVED": "アーカイブ済み",
+      "MISSING": "未作成 — 組み込みの文面から開始"
+    },
+    "actions": {
+      "saveDraft": "下書きを保存",
+      "preview": "プレビュー",
+      "sendTest": "テスト送信",
+      "duplicate": "他の言語へコピー",
+      "archive": "この言語をアーカイブ",
+      "unarchive": "アーカイブを解除",
+      "reset": "既定に戻す",
+      "discard": "変更を破棄",
+      "deleteDraft": "下書きを削除",
+      "publish": "公開",
+      "saveAndPublish": "保存して公開"
+    },
+    "publishBlocked": "先に「コンテンツ」タブの問題を修正してください。",
+    "publishDialog": {
+      "title": "{locale} 版を公開しますか？",
+      "description": "この言語の「{name}」メールすべてに約 30 秒で反映されます。",
+      "note": "変更メモ（任意）",
+      "notePlaceholder": "何をなぜ変えたか — 履歴に表示されます",
+      "confirm": "公開"
+    },
+    "duplicateDialog": {
+      "title": "別の言語へコピー",
+      "description": "{locale} の内容を選んだ言語の下書きにコピーします。何も公開されません。",
+      "target": "コピー先",
+      "overwrites": "下書きを置き換えます",
+      "confirm": "コピー"
+    },
+    "discardDialog": {
+      "title": "未公開の変更を破棄しますか？",
+      "description": "下書きは公開済みのバージョンに戻ります。元に戻せません。",
+      "descriptionNeverPublished": "この言語は一度も公開されていないため、下書きは削除され、受信者には引き続きフォールバックが送られます。",
+      "confirm": "破棄"
+    },
+    "archiveDialog": {
+      "title": "{locale} 版をアーカイブしますか？",
+      "description": "すぐに送信されなくなり、受信者には英語、次に組み込みの文面が送られます。履歴は残ります。",
+      "confirm": "アーカイブ"
+    },
+    "unarchiveDialog": {
+      "title": "この言語のアーカイブを解除しますか？",
+      "description": "約 30 秒で公開バージョンの送信が再開されます。",
+      "confirm": "アーカイブを解除"
+    },
+    "resetDialog": {
+      "title": "下書きを組み込みの文面に戻しますか？",
+      "description": "下書きが組み込みの件名と本文に置き換わります。公開するまで受信者への送信内容は変わりません。",
+      "confirm": "下書きをリセット"
+    },
+    "restoreDialog": {
+      "title": "v{version} を下書きに復元しますか？",
+      "description": "下書きがそのバージョンのコピーになります。送信するには公開してください。",
+      "confirm": "復元"
+    },
+    "toasts": {
+      "saved": "下書きを保存しました。受信者には引き続き公開バージョンが送られます。",
+      "published": "{locale} を公開しました。約 30 秒で送信に反映されます。",
+      "duplicated": "コピーしました。その言語の下書きを編集しています。",
+      "discarded": "変更を破棄しました。",
+      "archived": "アーカイブしました。送信されなくなりました。",
+      "unarchived": "アーカイブを解除しました。",
+      "reset": "下書きを組み込みの文面に戻しました。",
+      "restored": "v{version} を下書きに復元しました。"
+    }
+  },
+  "blockEditor": {
+    "back": "メールテンプレート",
+    "notFound": "このレイアウトまたはブロックは存在しません。",
+    "loadError": "読み込めませんでした。",
+    "retry": "再試行",
+    "eyebrowLayout": "メールレイアウト",
+    "eyebrowBlock": "メールブロック",
+    "descriptionLayout": "メールを包む HTML の枠です。'{{content}}' に各メールの本文が入ります。'{{heading}}'、'{{preheader}}'、'{{subject}}' も使えます。",
+    "descriptionBlock": "再利用できる断片です。メールとレイアウトから {include} で挿入します。",
+    "default": "既定のレイアウト",
+    "statuses": {
+      "PUBLISHED": "公開済み",
+      "CHANGES": "未公開の変更あり",
+      "DRAFT": "未公開",
+      "ARCHIVED": "アーカイブ済み"
+    },
+    "usedByCount": "{count} 件のメールで使用",
+    "unused": "どのメールにも使われていません",
+    "archivedNotice": "アーカイブ済み: どのメールにも使われず、読み取り専用です。編集するにはアーカイブを解除してください。",
+    "tabsLabel": "セクション",
+    "tabs": {
+      "content": "コンテンツ",
+      "preview": "プレビュー",
+      "usage": "使用先",
+      "history": "履歴"
+    },
+    "fields": {
+      "name": "名前",
+      "description": "説明",
+      "html": "HTML",
+      "htmlHintLayout": "'{{content}}' をちょうど 1 回含めてください。",
+      "htmlHintBlock": "レイアウト用のスロットや他のブロックは使えません。",
+      "text": "プレーンテキストの枠",
+      "textHint": "プレーンテキスト部分を包みます。'{{content}}' を含めてください。",
+      "darkCss": "ダークモード CSS",
+      "darkCssHint": "prefers-color-scheme: dark のときに適用されます。"
+    },
+    "previewWith": "プレビューに使う内容",
+    "previewSample": "サンプル内容",
+    "previewLocale": "言語",
+    "previewError": "プレビューを生成できませんでした。",
+    "usage": {
+      "none": "まだ使われていません",
+      "noneLayout": "メールの「レイアウト」タブで選ぶか、既定のレイアウトにしてください。",
+      "noneBlock": "メールやレイアウトに {include} を追加してください。",
+      "description": "新しいバージョンを公開すると、これらすべてが約 30 秒で変わります。"
+    },
+    "history": {
+      "versions": "公開バージョン",
+      "audit": "監査ログ"
+    },
+    "status": {
+      "published": "v{version} 公開中",
+      "never": "未公開"
+    },
+    "actions": {
+      "saveDraft": "下書きを保存",
+      "preview": "プレビュー",
+      "duplicate": "複製",
+      "makeDefault": "既定にする",
+      "archive": "アーカイブ",
+      "unarchive": "アーカイブを解除",
+      "discard": "変更を破棄",
+      "delete": "削除",
+      "publish": "公開",
+      "saveAndPublish": "保存して公開"
+    },
+    "publishDialog": {
+      "title": "「{name}」を公開しますか？",
+      "descriptionUsed": "{count} 件のメールが約 30 秒で変わります: {list}。",
+      "descriptionUnused": "まだ何にも使われていないため、どのメールも変わりません。",
+      "note": "変更メモ（任意）",
+      "confirm": "公開"
+    },
+    "copyName": "{name}（コピー）",
+    "duplicateDialog": {
+      "title": "複製",
+      "description": "コピーは独自のキーを持つ未公開の新しい下書きになります。",
+      "name": "コピーの名前",
+      "confirm": "複製"
+    },
+    "archiveDialog": {
+      "title": "「{name}」をアーカイブしますか？",
+      "description": "使用中のものや既定のレイアウトはアーカイブできません。履歴は残ります。",
+      "confirm": "アーカイブ"
+    },
+    "unarchiveDialog": {
+      "title": "アーカイブを解除しますか？",
+      "description": "再び編集、公開、選択ができるようになります。",
+      "confirm": "アーカイブを解除"
+    },
+    "deleteDialog": {
+      "title": "「{name}」を削除しますか？",
+      "description": "一度も公開されていないため、何にも使われていません。元に戻せません。",
+      "confirm": "削除"
+    },
+    "discardDialog": {
+      "title": "未公開の変更を破棄しますか？",
+      "description": "下書きは公開済みの v{version} に戻ります。",
+      "confirm": "破棄"
+    },
+    "defaultDialog": {
+      "title": "「{name}」を既定のレイアウトにしますか？",
+      "description": "既定に従うすべてのメールが約 30 秒でこのレイアウトに切り替わります。",
+      "confirm": "既定にする"
+    },
+    "restoreDialog": {
+      "title": "v{version} を下書きに復元しますか？",
+      "description": "下書きがそのバージョンのコピーになります。使うには公開してください。",
+      "confirm": "復元"
+    },
+    "toasts": {
+      "saved": "下書きを保存しました。メールには引き続き公開バージョンが使われます。",
+      "published": "公開しました。約 30 秒でメールに反映されます。",
+      "duplicated": "下書きとして複製しました。",
+      "archived": "アーカイブしました。",
+      "unarchived": "アーカイブを解除しました。",
+      "deleted": "削除しました。",
+      "discarded": "変更を破棄しました。",
+      "defaulted": "既定のレイアウトになりました。",
+      "restored": "v{version} を下書きに復元しました。"
+    }
+  },
+  "announcements": {
+    "eyebrow": "コンテンツ",
+    "title": "お知らせ",
+    "description": "リリース、メンテナンス、キャンペーンなど、アプリからユーザーへのお知らせを、上部バナー・モーダル・トースト・通知センターのカード・ホームのカードとして表示します。作成、プレビュー、対象の指定、予約、効果測定をここで行います。",
+    "inboxBroadcast": "受信箱に一斉送信",
+    "new": "新しいお知らせ",
+    "viewAria": "お知らせまたは受信箱への一斉送信",
+    "views": {
+      "cms": "お知らせ",
+      "broadcasts": "受信箱への一斉送信"
+    },
+    "statusAria": "状態で絞り込む",
+    "statuses": {
+      "ALL": "すべて",
+      "DRAFT": "下書き",
+      "SCHEDULED": "予約済み",
+      "PUBLISHED": "公開中",
+      "ENDED": "終了",
+      "ARCHIVED": "アーカイブ済み"
+    },
+    "searchPlaceholder": "タイトルを検索",
+    "filters": {
+      "type": "種類",
+      "anyType": "すべての種類",
+      "placement": "表示位置",
+      "anyPlacement": "すべての表示位置"
+    },
+    "sort": {
+      "updated": "最終編集",
+      "created": "作成日",
+      "starts": "開始日時",
+      "priority": "優先度",
+      "title": "タイトル",
+      "descending": "降順",
+      "ascending": "昇順"
+    },
+    "loadError": "お知らせを読み込めませんでした。",
+    "empty": {
+      "none": "お知らせはまだありません",
+      "noneHint": "公開したお知らせは、対象のユーザーにアプリ内で表示されます。",
+      "filtered": "条件に一致するものがありません",
+      "filteredHint": "別の状態・種類・表示位置を試すか、検索をクリアしてください。"
+    },
+    "table": {
+      "title": "タイトル",
+      "status": "状態",
+      "placement": "表示位置",
+      "audience": "対象",
+      "window": "期間",
+      "priority": "優先度"
+    },
+    "selectOne": "「{title}」を選択",
+    "pageOf": "{page} / {totalPages} ページ",
+    "previous": "前へ",
+    "next": "次へ",
+    "card": {
+      "placement": "表示形式",
+      "priority": "優先度 {priority}",
+      "audience": "対象",
+      "window": "期間"
+    },
+    "audience": {
+      "all": "全ユーザー",
+      "plans": "プラン: {plans}",
+      "workspaces": "{count} 件のワークスペース",
+      "roles": "ロール: {roles}",
+      "locales": "言語: {locales}",
+      "newUsers": "過去 {days} 日以内に登録"
+    },
+    "window": {
+      "scheduled": "{date} に開始",
+      "liveUntil": "{date} まで公開",
+      "liveSince": "{date} から公開中",
+      "ended": "{date} に終了",
+      "archived": "{date} にアーカイブ",
+      "draftWindow": "期間: {start} → {end}",
+      "onPublish": "公開時",
+      "noEnd": "終了なし",
+      "notPublished": "未公開"
+    },
+    "actions": {
+      "edit": "編集",
+      "preview": "プレビュー",
+      "publishNow": "今すぐ公開",
+      "unpublish": "下書きに戻す",
+      "restore": "下書きに復元",
+      "duplicate": "複製",
+      "archive": "アーカイブ",
+      "delete": "下書きを削除",
+      "more": "その他の操作"
+    },
+    "confirm": {
+      "publishTitle": "「{title}」を今すぐ公開しますか？",
+      "publishDescription": "対象のユーザーに、選んだ表示位置で終了日時まで表示されます。",
+      "unpublishTitle": "「{title}」を下書きに戻しますか？",
+      "unpublishDescription": "すぐに表示されなくなります。分析データは残ります。",
+      "archiveTitle": "「{title}」をアーカイブしますか？",
+      "archiveDescription": "表示されなくなり、読み取り専用になります。後で下書きに復元できます。"
+    },
+    "bulk": {
+      "publish": {
+        "action": "公開",
+        "title": "{count} 件のお知らせを公開しますか？",
+        "description": "開始日時が未来のものは予約され、それ以外はすぐに公開されます。公開中のものはスキップされます。",
+        "confirm": "公開",
+        "done": "{count} 件のお知らせを公開しました。"
+      },
+      "duplicate": {
+        "action": "複製",
+        "title": "{count} 件のお知らせを複製しますか？",
+        "description": "コピーはそれぞれ新しい下書きになります。",
+        "confirm": "複製",
+        "done": "{count} 件のコピーを作成しました。"
+      },
+      "archive": {
+        "action": "アーカイブ",
+        "title": "{count} 件のお知らせをアーカイブしますか？",
+        "description": "すぐに表示されなくなります。アーカイブ済みのものはスキップされます。",
+        "confirm": "アーカイブ",
+        "done": "{count} 件のお知らせをアーカイブしました。"
+      },
+      "delete": {
+        "action": "下書きを削除",
+        "title": "{count} 件の下書きを削除しますか？",
+        "description": "削除されるのは下書きのみで、一度でも公開されたものはスキップされます（代わりにアーカイブしてください）。元に戻せません。",
+        "confirm": "削除",
+        "done": "{count} 件の下書きを削除しました。"
+      }
+    },
+    "toasts": {
+      "saved": "保存しました。",
+      "published": "公開しました。対象のユーザーに表示されています。",
+      "scheduled": "予約しました。",
+      "unpublished": "下書きに戻しました。表示されなくなりました。",
+      "restored": "下書きに復元しました。",
+      "duplicated": "新しい下書きとして複製しました。",
+      "archived": "アーカイブしました。表示されなくなりました。",
+      "deleted": "下書きを削除しました。"
+    },
+    "deleteDialog": {
+      "title": "この下書きを削除しますか？",
+      "description": "「{title}」は完全に削除されます。公開済みのお知らせは削除できません — アーカイブしてください。",
+      "confirm": "下書きを削除"
+    },
+    "errors": {
+      "titleRequired": "タイトルは必須です。",
+      "titleTooLong": "タイトルは 200 文字以内にしてください。",
+      "bodyRequired": "本文は必須です。",
+      "bodyTooLong": "本文は 20,000 文字以内にしてください。",
+      "plansRequired": "プランを 1 つ以上選んでください。",
+      "workspacesRequired": "ワークスペースを 1 つ以上選んでください。",
+      "tooManyAudience": "プランまたはワークスペースは 200 件までです。",
+      "labelWithoutLink": "ボタンのラベルにはリンクが必要です。",
+      "linkWithoutLabel": "リンクにはボタンのラベルが必要です。",
+      "labelTooLong": "ボタンのラベルは 60 文字以内にしてください。",
+      "linkInvalid": "リンクは https:// または http:// のアドレス、または / で始まるアプリ内のパスにしてください。",
+      "secondaryNeedsPrimary": "2 つ目のボタンの前にメインのボタンを追加してください。",
+      "secondaryIncomplete": "2 つ目のボタンにはラベルとリンクの両方が必要です。",
+      "secondaryLinkInvalid": "2 つ目のボタンのリンクは https:// または http:// のアドレス、または / で始まるパスにしてください。",
+      "windowInverted": "終了日時は開始日時より後にしてください。",
+      "imageInvalid": "画像はアップロードした画像か https:// のアドレスにしてください。",
+      "priorityOutOfRange": "優先度は 0〜100 にしてください。",
+      "newUsersOutOfRange": "「過去 … 日以内に登録」は 1〜365 にするか、空欄にしてください。"
+    },
+    "preview": {
+      "frameLabel": "{placement} のプレビュー（{device}）",
+      "placementLabel": "表示位置",
+      "chosen": "選択中",
+      "otherPlacement": "このお知らせが使っていない表示位置を表示しています — 「デザイン」タブで変更できます。",
+      "placements": {
+        "TOP_BANNER": "上部バナー",
+        "MODAL": "モーダル",
+        "TOAST": "トースト",
+        "NOTIFICATION_CENTER": "通知センター",
+        "DASHBOARD_CARD": "ホームのカード"
+      },
+      "devices": {
+        "desktop": "デスクトップ",
+        "mobile": "スマートフォン"
+      }
+    },
+    "analytics": {
+      "description": "表示回数はブラウザーセッションごとに 1 人 1 回として数え、クリックと閉じた回数は発生のたびに数えます。",
+      "range": "期間",
+      "lastDays": "過去 {days} 日",
+      "error": "分析データを読み込めませんでした。",
+      "impressions": "表示回数",
+      "uniqueViewers": "{count} 人",
+      "ctaClicks": "ボタンのクリック",
+      "secondaryClicks": "2 つ目のボタン {count} 回",
+      "clickThrough": "クリック率",
+      "uniqueClickers": "{count} 人がクリック",
+      "dismissals": "閉じた回数",
+      "dismissRate": "閲覧者の {rate}",
+      "chartLabel": "日別の表示回数とクリック数",
+      "loading": "読み込み中…",
+      "empty": "この期間のアクティビティはありません。"
+    },
+    "editor": {
+      "back": "お知らせ",
+      "notFound": "このお知らせは存在しません。",
+      "loadError": "お知らせを読み込めませんでした。",
+      "retry": "再試行",
+      "newTitle": "新しいお知らせ",
+      "description": "内容を書き、デザインし、誰にいつ表示するかを選び、公開前にすべての表示位置を確認します。",
+      "saveDraft": "下書きを保存",
+      "saveAndPublish": "保存して今すぐ公開",
+      "notSavedYet": "未保存",
+      "archivedNotice": "このお知らせはアーカイブ済みで読み取り専用です。編集や再公開をするには下書きに復元してください。",
+      "tabsLabel": "お知らせのセクション",
+      "tabs": {
+        "content": "コンテンツ",
+        "design": "デザイン",
+        "audience": "対象",
+        "schedule": "スケジュール",
+        "preview": "プレビュー",
+        "history": "履歴",
+        "analytics": "分析"
+      },
+      "previewTitle": "プレビュー",
+      "openPreview": "すべての表示位置",
+      "previewPlaceholderTitle": "タイトル",
+      "previewPlaceholderBody": "お知らせの本文がここに表示されます。",
+      "schedule": "予約",
+      "scheduleHint": "予約すると開始日時に自動で公開されます — 戻ってくる必要はありません。",
+      "scheduleNeedsFuture": "予約するには未来の開始日時を設定してください。",
+      "scheduleDialog": {
+        "title": "このお知らせを予約しますか？",
+        "description": "{date} に自動で公開され、終了日時まで表示されます。"
+      },
+      "fields": {
+        "type": "種類",
+        "title": "タイトル",
+        "titlePlaceholder": "ライブ字幕が 40 言語に対応しました",
+        "body": "本文",
+        "bodyPlaceholder": "何が変わったか、誰向けか、次に何をすればよいか。",
+        "buttons": "ボタン",
+        "buttonsHint": "任意。2 つ目のボタンには 1 つ目が必要です。",
+        "primary": "メインのボタン",
+        "secondary": "2 つ目のボタン",
+        "ctaLabel": "ラベル",
+        "ctaLabelPlaceholder": "試してみる",
+        "ctaUrl": "リンク",
+        "ctaUrlPlaceholder": "/settings または https://…",
+        "audience": "表示する相手",
+        "window": "表示する期間",
+        "windowHint": "開始を空欄にすると公開した時点から、終了を空欄にすると非公開またはアーカイブまで表示されます。時刻はあなたのタイムゾーンです。",
+        "startsAt": "開始",
+        "endsAt": "終了"
+      },
+      "types": {
+        "ANNOUNCEMENT": {
+          "label": "お知らせ",
+          "hint": "プラットフォームに関する一般的なニュース。"
+        },
+        "FEATURE": {
+          "label": "新機能",
+          "hint": "新しく使えるようになった機能。"
+        },
+        "MAINTENANCE": {
+          "label": "メンテナンス",
+          "hint": "計画的な停止やサービス低下。"
+        },
+        "PROMOTION": {
+          "label": "キャンペーン",
+          "hint": "プランのアップグレード、割引、キャンペーン。"
+        }
+      },
+      "audienceModes": {
+        "ALL": {
+          "label": "全員",
+          "hint": "ログインしているすべてのユーザー。"
+        },
+        "PLANS": {
+          "label": "プラン",
+          "hint": "これらのプランのワークスペースのメンバー。"
+        },
+        "WORKSPACES": {
+          "label": "ワークスペース",
+          "hint": "これらのワークスペースのメンバー。"
+        }
+      },
+      "design": {
+        "placement": "表示位置",
+        "placementHint": "アプリ内のどこに表示するか。どの表示位置でも、選んだ対象に表示されます。",
+        "placementHints": {
+          "TOP_BANNER": "すべてのページ上部の帯。",
+          "MODAL": "アプリを開いたときにページの上に表示されるダイアログ。控えめに使ってください。",
+          "TOAST": "画面下隅の小さなカード。",
+          "NOTIFICATION_CENTER": "ベルのパネル上部のカード。ベルにドットが付きます。",
+          "DASHBOARD_CARD": "ワークスペースのホームページのカード。"
+        },
+        "variant": "スタイル",
+        "variants": {
+          "SUBTLE": {
+            "label": "控えめ",
+            "hint": "色付きの背景。"
+          },
+          "SOLID": {
+            "label": "塗りつぶし",
+            "hint": "色で塗りつぶし。最も目立ちます。"
+          },
+          "OUTLINE": {
+            "label": "枠線",
+            "hint": "色付きの枠線。"
+          }
+        },
+        "color": "カラー",
+        "colors": {
+          "BRAND": "ブランド",
+          "BLUE": "ブルー",
+          "GREEN": "グリーン",
+          "AMBER": "アンバー",
+          "RED": "レッド",
+          "VIOLET": "バイオレット",
+          "NEUTRAL": "ニュートラル"
+        },
+        "icon": "アイコン",
+        "iconDefault": "種類の既定",
+        "image": "画像",
+        "imageHint": "モーダルの上部とホームのカードの横に表示されます。画像をアップロード（PNG、JPEG、GIF、WebP、最大 2 MB）するか、https:// のアドレスを使ってください。",
+        "imageUrl": "画像のアドレス",
+        "uploadImage": "アップロード",
+        "removeImage": "画像を削除",
+        "imageNotShown": "この表示位置では画像は表示されません。画像はモーダルとホームのカードで表示されます。"
+      },
+      "targeting": {
+        "title": "対象を絞り込む",
+        "description": "すべて任意で、指定した条件はすべて満たす必要があります。",
+        "roles": "ワークスペースのロール",
+        "roleNames": {
+          "Owner": "オーナー",
+          "Admin": "管理者",
+          "Member": "メンバー"
+        },
+        "rolesAny": "すべてのロール。",
+        "rolesSome": "いずれかのワークスペースでこれらのロールを持つ人だけ。",
+        "locales": "アプリの言語",
+        "localeNames": {
+          "en": "English",
+          "vi": "Tiếng Việt",
+          "ja": "日本語"
+        },
+        "localesAny": "すべての言語。",
+        "localesSome": "これらの言語でアプリを使っている人だけ。",
+        "newUsers": "過去 … 日以内に登録",
+        "newUsersPlaceholder": "登録時期を問わない",
+        "newUsersHint": "オンボーディング向け: この日数以内に作成されたアカウントのみ（1〜365）。"
+      },
+      "delivery": {
+        "title": "表示のしかた",
+        "description": "1 人に何回表示するか、同じ表示位置に複数あるときどれを優先するか、閉じられるかどうか。",
+        "frequency": "表示頻度",
+        "frequencies": {
+          "UNTIL_DISMISSED": {
+            "label": "閉じるまで",
+            "hint": "閉じるまで訪問のたびに表示。"
+          },
+          "ONCE": {
+            "label": "1 回",
+            "hint": "1 人につき 1 ブラウザーセッション。"
+          },
+          "EVERY_SESSION": {
+            "label": "毎セッション",
+            "hint": "閉じても新しいセッションごとに再表示。"
+          },
+          "DAILY": {
+            "label": "1 日 1 回",
+            "hint": "1 人につき 24 時間に最大 1 回。"
+          }
+        },
+        "priority": "優先度",
+        "priorityHint": "0〜100。高いほど先に表示され、モーダルは 1 つずつ表示されます。",
+        "dismissible": "閉じられる",
+        "dismissibleOn": "ユーザーは完全に閉じられます",
+        "dismissibleOff": "終了まで表示されます",
+        "dismissibleHint": "モーダルとトーストは、現在の訪問中はいつでも閉じられます。"
+      },
+      "plans": {
+        "label": "選択したプランのワークスペースのメンバーに表示されます。",
+        "loading": "プランを読み込み中…",
+        "error": "プランカタログを読み込めませんでした。",
+        "retired": "現在のプランカタログにありません"
+      },
+      "workspaces": {
+        "searchPlaceholder": "ワークスペースを名前で検索",
+        "searching": "検索中…",
+        "error": "ワークスペースを検索できませんでした。",
+        "noMatch": "一致するワークスペースがありません。",
+        "added": "追加済み",
+        "memberCount": "{count} 人のメンバー"
+      }
+    }
+  }
+}

@@ -38,11 +38,13 @@ for (const [key, target] of Object.entries(INSIGHTS_LINK_TARGETS)) {
     const source = pageSource(target.path);
     assert.ok(source, `${target.path} has a page under ${ADMIN_ROOT}`);
     for (const [param, value] of Object.entries(("params" in target ? target.params : {}) as Record<string, string>)) {
-      assert.match(
-        source,
-        new RegExp(`searchParams\\.get\\("${param}"\\)`),
-        `${target.path} reads ?${param}=`,
-      );
+      // Read by hand, or by the admin list toolkit: `useAdminListState` owns q/sort/dir/page and
+      // one param per filter the page's config declares (src/lib/admin/list-state.ts).
+      const readsByHand = new RegExp(`searchParams\\.get\\("${param}"\\)`).test(source);
+      const readsByToolkit =
+        /useAdminListState\(/.test(source) &&
+        (["q", "sort", "dir", "page"].includes(param) || new RegExp(`key: "${param}"`).test(source));
+      assert.ok(readsByHand || readsByToolkit, `${target.path} reads ?${param}=`);
       assert.ok(
         source.includes(`"${value}"`) || (param === "status" && target.path === "/admin/sales-leads"),
         `${target.path} knows the value ${param}=${value}`,
@@ -68,7 +70,7 @@ test("period metrics are not linked, because no admin list filters by date", () 
     assert.equal(metricHref(id), null, id);
   }
   // …and the claim holds: the list pages read no date range from the URL.
-  for (const route of ["/admin/meetings", "/admin/subscriptions", "/admin/users"]) {
+  for (const route of ["/admin/subscriptions", "/admin/users"]) {
     const source = pageSource(route) ?? "";
     assert.doesNotMatch(source, /searchParams\.get\("(from|to)"\)/, `${route} takes a date range now — link the period cards`);
   }
@@ -76,7 +78,16 @@ test("period metrics are not linked, because no admin list filters by date", () 
 
 test("snapshot figures link to their exact sets", () => {
   assert.equal(metricHref("activeSubscriptions"), "/admin/subscriptions?status=active");
-  assert.equal(metricHref("liveMeetings"), "/admin/meetings?status=live");
   assert.equal(metricHref("openSalesLeads"), "/admin/sales-leads?status=new");
-  assert.equal(metricHref("deadLetters"), "/admin/outbox");
+});
+
+test("nothing links into the retired meeting directory or event outbox", () => {
+  // Both pages were taken out of the portal on 2026-09-24 and their routes forward to /admin.
+  for (const target of Object.values(INSIGHTS_LINK_TARGETS)) {
+    assert.ok(!/^\/admin\/(meetings|outbox)(\/|$)/.test(target.path), target.path);
+  }
+  assert.equal(metricHref("liveMeetings"), null, "the live count stays, unlinked");
+  assert.equal(metricHref("deadLetters"), null, "the dead-letter count stays, unlinked");
+  assert.ok(!existsSync(path.join(root, ADMIN_ROOT, "meetings/page.tsx")));
+  assert.ok(!existsSync(path.join(root, ADMIN_ROOT, "outbox/page.tsx")));
 });

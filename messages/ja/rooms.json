@@ -44,6 +44,7 @@
   },
   "status": {
     "inProgress": "進行中",
+    "open": "入室可能",
     "waiting": "待機中",
     "scheduled": "予定あり",
     "ended": "終了",
@@ -142,7 +143,11 @@
       "saveTranscript": "ミーティングの文字起こしを保存する",
       "saveTranscriptHint": "字幕と翻訳は引き続き機能します。このミーティングには文字起こし、要約、議事録が残りません。",
       "keepTranscript": "このミーティングの記録を残す",
-      "dontKeepTranscript": "このミーティングの記録を残さない"
+      "dontKeepTranscript": "このミーティングの記録を残さない",
+      "autoShareRecord": "記録を参加者と自動的に共有する",
+      "autoShareRecordOffHint": "公開するまで、文字起こし・AI要約・録画はあなただけが閲覧できます。",
+      "keepRecordPrivate": "公開するまで記録を非公開にする",
+      "shareRecordAutomatically": "ミーティング終了時に記録を参加者と共有する"
     },
     "startTime": {
       "label": "開始時刻",
@@ -158,7 +163,9 @@
   },
   "startedBanner": {
     "title": "ミーティングが開始されました",
+    "openedTitle": "ミーティングが入室可能になりました",
     "joinNow": "今すぐ参加",
+    "setUpAndJoin": "設定して参加",
     "openFromNotifications": "通知から開いてください。",
     "dismissAria": "閉じる"
   },
@@ -245,5 +252,16 @@
     },
     "searching": "ミーティングを検索しています...",
     "empty": "ミーティングが見つかりません。ルーム名やコードを入力するか、上のクイックアクションをお試しください。"
+  },
+  "bridgeFarSide": {
+    "label": "相手の言語",
+    "ariaLabel": "相手は{language}を話しています。通話相手の言語を変更",
+    "hint": "通話の相手側が話している言語",
+    "connecting": "WarpTalk に接続しています…",
+    "notSet": "選択",
+    "menuHint": "あなたの発言はこの言語に翻訳され、相手の発言はあなたの言語に翻訳されます。",
+    "failed": "相手側の言語を変更できませんでした",
+    "sameLanguage": "あなたと相手側がどちらも{language}に設定されているため、何も翻訳されません。相手の言語を選択してください。",
+    "singleLanguageWorkspace": "このワークスペースでは{language}のみ許可されているため、翻訳先の言語がありません。ワークスペース管理者に2つ目の言語を許可するよう依頼してください。"
   }
 }

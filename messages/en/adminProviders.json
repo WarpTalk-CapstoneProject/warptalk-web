@@ -1,0 +1,164 @@
+{
+  "page": {
+    "eyebrow": "Operations",
+    "title": "Providers",
+    "description": "Every external service WarpTalk pays for: what it was used for, what it cost, and how our own calls to it went. Uptime comes from those calls, with the provider's status page beside it.",
+    "asOf": "as of {time}",
+    "refresh": "Refresh"
+  },
+  "controls": {
+    "period": "Period",
+    "periods": {
+      "today": "Today",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days",
+      "custom": "Custom"
+    },
+    "from": "From",
+    "to": "To",
+    "apply": "Apply",
+    "granularity": "Granularity",
+    "day": "Daily",
+    "hour": "Hourly",
+    "hourlyLimit": "Hourly buckets are available for 14 days or less",
+    "currency": "Currency",
+    "search": "Search providers",
+    "sort": "Sort",
+    "sorts": {
+      "status": "Status (worst first)",
+      "cost": "Cost today",
+      "name": "Name",
+      "uptime": "Uptime (lowest first)"
+    }
+  },
+  "status": {
+    "operational": "Operational",
+    "degraded": "Degraded",
+    "partial_outage": "Partial outage",
+    "major_outage": "Major outage",
+    "unknown": "Unknown",
+    "no_data": "No data"
+  },
+  "statusSource": {
+    "calls": "from our calls",
+    "statusPage": "from the provider's status page",
+    "both": "from our calls and the status page",
+    "none": "no signal yet"
+  },
+  "stats": {
+    "usageToday": "Usage today",
+    "costToday": "Cost today",
+    "liveRate": "Live rate (24 h)",
+    "errorRate": "Error rate (24 h)",
+    "latency": "p50 / p95 (24 h)",
+    "notTracked": "Not tracked",
+    "notMeasured": "Not measured",
+    "calls": "{count} calls"
+  },
+  "units": {
+    "credits": "credits",
+    "providerCredits": "Cartesia credits",
+    "participantMinutes": "participant min",
+    "payments": "payments"
+  },
+  "metrics": {
+    "usage": "Usage",
+    "billedCredits": "Credits billed",
+    "costUsd": "Cost",
+    "costVnd": "Cost",
+    "calls": "Calls",
+    "failures": "Failures",
+    "errorRate": "Error rate",
+    "p50Ms": "Latency p50",
+    "p95Ms": "Latency p95",
+    "roomMinutes": "Room minutes",
+    "recordings": "Recordings",
+    "failedPayments": "Failed payments",
+    "volumeVnd": "Payment volume"
+  },
+  "chart": {
+    "metricsLabel": "Metrics to draw",
+    "aria": "{provider} metrics over the period",
+    "indexed": "Lines of different units are scaled to their own peak in the period; hover for the real values.",
+    "indexedAxis": "% of peak",
+    "empty": "No usage recorded for this provider in the period.",
+    "pickMetric": "Pick at least one metric to draw.",
+    "stillToCome": "Still to come",
+    "notTracked": "Not tracked",
+    "loadFailed": "This chart could not be loaded."
+  },
+  "uptime": {
+    "aria": "{provider} daily status over the last {days} days",
+    "start": "{days} days ago",
+    "end": "Today",
+    "percent": "{percent} uptime",
+    "notTracked": "uptime not tracked",
+    "trackedSince": "Our calls tracked since {date}; earlier days show only the status page.",
+    "basis": {
+      "calls": "measured from our calls",
+      "statusPage": "from the provider's status page",
+      "none": "no signal"
+    },
+    "calls": "calls",
+    "failed": "failed",
+    "succeeded": "succeeded",
+    "p95": "p95",
+    "noCalls": "no calls recorded",
+    "incident": "{impact} incident: {name}",
+    "loadFailed": "The uptime row could not be loaded.",
+    "noStatusFeed": "{provider} publishes no machine-readable status, so its status and uptime are judged from WarpTalk's own calls to it."
+  },
+  "detail": {
+    "expand": "Show details",
+    "collapse": "Hide details",
+    "share": "Share of the period",
+    "by": {
+      "workspace": "Workspace",
+      "service": "Service",
+      "model": "Model",
+      "operation": "Operation",
+      "errorClass": "Error class"
+    },
+    "perBucket": "Per bucket",
+    "latency": "Latency over the period",
+    "p50": "p50",
+    "p95": "p95",
+    "p99": "p99",
+    "successRate": "Success rate",
+    "clientErrors": "Requests we got wrong",
+    "failures": "Failures by class",
+    "noFailures": "No failed call in the period.",
+    "topWorkspaces": "Top workspaces",
+    "workspace": "Workspace",
+    "value": "Usage",
+    "cost": "Cost",
+    "incidents": "Status page incidents",
+    "noIncidents": "No incident reported by the provider in the last 90 days.",
+    "noStatusPage": "This provider has no status page API configured.",
+    "ongoing": "ongoing",
+    "resolved": "resolved {time}",
+    "openStatusPage": "Open status page",
+    "config": "Configuration",
+    "configHint": "Whether something is set, never what it is.",
+    "unavailable": "Not available for this provider",
+    "total": "total"
+  },
+  "errorClasses": {
+    "quota": "Quota / credits (402)",
+    "rate_limited": "Rate limited (429)",
+    "auth": "Auth (401/403)",
+    "server_error": "Server error (5xx)",
+    "timeout": "Timeout",
+    "network_error": "Network",
+    "error": "Unclassified",
+    "client_error": "Our request (4xx)",
+    "declined": "Card declined (402)"
+  },
+  "errors": {
+    "loadTitle": "Providers could not be loaded.",
+    "loadDescription": "Check the billing service and that your session still holds the platform admin role.",
+    "retry": "Try again",
+    "noMatch": "No provider matches the search."
+  }
+}

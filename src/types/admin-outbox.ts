@@ -17,9 +17,3 @@ export interface WorkspaceOutboxDeadLetterDto {
   correlationId: string | null;
   workspaceId: string | null;
 }
-
-/** 202 Accepted body. The event is re-queued, not yet delivered. */
-export interface WorkspaceOutboxReplayResultDto {
-  eventId: string;
-  status: string;
-}

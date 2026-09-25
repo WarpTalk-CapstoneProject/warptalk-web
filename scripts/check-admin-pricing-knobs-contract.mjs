@@ -34,7 +34,9 @@ if (fieldList) {
   for (const key of ["creditValueVnd", "minimumPricePerCreditVnd"]) {
     check(`the pricing dialog does not edit ${key}`, !fieldList[1].includes(`"${key}"`));
   }
-  check("the pricing dialog still edits the FX rate", fieldList[1].includes('"fxRateUsdVnd"'));
+  // The FX rate is Stripe's now (billing records it daily). The dialog must not send it: any value
+  // there is read by billing as an explicit override, so an unrelated save would switch Stripe off.
+  check("the pricing dialog does not edit the FX rate", !fieldList[1].includes('"fxRateUsdVnd"'));
 }
 
 for (const [name, source] of [
@@ -48,10 +50,17 @@ for (const [name, source] of [
   );
 }
 
+// …and the rate, its source, as-of time and stale warning live on /admin/settings, with an explicit
+// override and a way back to Stripe.
+check("/admin/settings shows the Stripe FX rate row", /<FxRateRow\b/.test(settings));
+check("the FX row shows the server's stale warning", /view\?\.warning/.test(settings));
+check("the FX row offers going back to Stripe", /clearOverride/.test(settings));
+
 const request = types.match(/export interface UpdatePricingConfigRequest \{([\s\S]*?)\n\}/);
 check("UpdatePricingConfigRequest exists", Boolean(request));
 if (request) {
   check("creditValueVnd is optional on the request", /creditValueVnd\?:/.test(request[1]));
+  check("fxRateUsdVnd is optional on the request (omitted = keep Stripe's)", /fxRateUsdVnd\?:/.test(request[1]));
   check(
     "minimumPricePerCreditVnd is optional on the request",
     /minimumPricePerCreditVnd\?:/.test(request[1]),
@@ -63,4 +72,4 @@ if (failures.length > 0) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log("Admin pricing knobs contract: credit value and price floor are not editable in the admin UI.");
+console.log("Admin pricing knobs contract: credit value, price floor and FX rate are not edited by the pricing dialog; FX is Stripe's with an explicit override.");

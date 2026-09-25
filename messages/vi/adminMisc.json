@@ -18,16 +18,10 @@
     "statusUpdated": "Đã đánh dấu {company} là {status}",
     "statusUpdateFailed": "Không thể cập nhật trạng thái khách hàng tiềm năng.",
     "searchPlaceholder": "Tìm theo tên, email hoặc công ty",
-    "searchAria": "Tìm khách hàng tiềm năng",
-    "search": "Tìm kiếm",
     "error": {
       "title": "Không thể tải danh sách khách hàng tiềm năng.",
       "description": "Hãy kiểm tra dịch vụ thanh toán và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
       "retry": "Thử lại"
-    },
-    "empty": {
-      "title": "Không có khách hàng tiềm năng nào khớp với bộ lọc này",
-      "description": "Hãy chọn tab trạng thái khác hoặc xóa nội dung tìm kiếm."
     },
     "openWorkspace": "Mở workspace",
     "noWorkspaceYet": "Chưa có workspace",
@@ -38,53 +32,32 @@
     "statusAria": "Trạng thái của {company}",
     "seats": "{count, plural, other {# chỗ}}",
     "creditsPerMonth": "{count} tín dụng / tháng",
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
+    "list": {
+      "filters": {
+        "requestType": "Loại yêu cầu",
+        "source": "Nguồn",
+        "created": "Ngày tạo",
+        "workspace": "Không gian làm việc",
+        "workspacePlaceholder": "Tìm không gian làm việc…"
+      },
+      "sourceLabels": {
+        "landing_pricing": "Trang bảng giá"
+      },
+      "sortFields": {
+        "created": "Ngày tạo",
+        "company": "Công ty"
+      },
+      "columns": {
+        "lead": "Khách hàng",
+        "request": "Yêu cầu",
+        "source": "Nguồn",
+        "created": "Ngày tạo",
+        "status": "Trạng thái"
+      },
+      "boardPageNote": "Bảng hiển thị một trang tối đa {size} khách hàng tiềm năng, theo thứ tự của danh sách. Chuyển trang để xem phần còn lại.",
+      "emptyTitle": "Chưa có khách hàng tiềm năng nào",
+      "emptyDescription": "Các yêu cầu liên hệ bộ phận kinh doanh từ trang bảng giá sẽ xuất hiện tại đây."
     }
-  },
-  "meetings": {
-    "eyebrow": "Vận hành",
-    "title": "Cuộc họp",
-    "description": "Mọi phòng dịch trên nền tảng. Chỉ siêu dữ liệu — không có bản ghi âm, không điều khiển phòng.",
-    "refresh": "Làm mới",
-    "liveCount": "{count} đang diễn ra",
-    "startedToday": "{count} bắt đầu hôm nay",
-    "statusTabs": {
-      "all": "Tất cả",
-      "live": "Đang diễn ra",
-      "scheduled": "Đã lên lịch",
-      "ended": "Đã kết thúc",
-      "cancelled": "Đã hủy",
-      "failed": "Thất bại",
-      "expired": "Đã hết hạn"
-    },
-    "meetingStatusAria": "Trạng thái cuộc họp",
-    "loading": "Đang tải…",
-    "meetingCount": "{count, plural, other {# cuộc họp}}",
-    "sort": {
-      "label": "Sắp xếp",
-      "recentDesc": "Mới nhất",
-      "recentAsc": "Cũ nhất",
-      "durationDesc": "Dài nhất"
-    },
-    "error": {
-      "title": "Không thể tải danh sách cuộc họp.",
-      "description": "Hãy kiểm tra dịch vụ phòng dịch và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
-      "retry": "Thử lại"
-    },
-    "empty": {
-      "title": "Không có cuộc họp nào khớp với bộ lọc này",
-      "description": "Hãy chọn tab trạng thái khác."
-    },
-    "openWorkspace": "workspace",
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
-    },
-    "footerNote": "Không có cách nào để mở hoặc nghe lại một cuộc họp từ đây — đây là chủ ý thiết kế. Màn hình này chỉ ghi nhận rằng cuộc họp đã diễn ra; nội dung trao đổi thuộc về workspace đã tổ chức nó."
   },
   "feedback": {
     "eyebrow": "Vận hành",
@@ -126,16 +99,10 @@
     },
     "comments": {
       "title": "Bình luận",
-      "error": "Không thể tải bình luận.",
       "empty": "Chưa có ai để lại bình luận trong khoảng thời gian này.",
       "sortRecent": "Mới nhất",
       "sortLowest": "Điểm thấp nhất trước",
       "sortAria": "Thứ tự bình luận"
-    },
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
     },
     "footerNote": "Chỉ xem, và ẩn danh theo thiết kế — API không gửi kèm ai là người viết bình luận. Một đánh giá mà quản trị viên có thể sửa hoặc xóa sẽ không còn đáng tin để đọc.",
     "insights": {
@@ -146,61 +113,290 @@
       "lowConfidenceRule": "Một số liệu bị đánh dấu độ tin cậy thấp khi dưới {min} phản hồi hoặc tỷ lệ phản hồi dưới {rate}.",
       "noDataTitle": "{count, plural, other {# tiêu chí chưa có dữ liệu}}",
       "noDataBody": "{names}: không ai đánh giá trong kỳ này."
+    },
+    "list": {
+      "searchPlaceholder": "Tìm trong nhận xét hoặc tên cuộc họp",
+      "commentCount": "{count, plural, other {# nhận xét}}",
+      "filters": {
+        "rating": "Điểm đánh giá",
+        "ratingUnit": "sao",
+        "ratingPresets": {
+          "unhappy": "Không hài lòng (1–2)",
+          "neutral": "Bình thường (3)",
+          "happy": "Hài lòng (4–5)"
+        },
+        "workspace": "Không gian làm việc",
+        "workspacePlaceholder": "Tìm không gian làm việc…"
+      },
+      "columns": {
+        "rating": "Điểm",
+        "comment": "Nhận xét",
+        "meeting": "Cuộc họp",
+        "submitted": "Thời điểm gửi"
+      }
     }
   },
   "audit": {
     "eyebrow": "Vận hành",
     "title": "Nhật ký kiểm toán",
-    "description": "Mọi thao tác quản trị trên nền tảng, ai đã thực hiện và vì sao.",
+    "description": "Mọi thao tác quản trị trên nền tảng: ai thực hiện, trên đối tượng nào, vì sao và có thành công hay không.",
     "refresh": "Làm mới",
-    "resultTabs": {
-      "all": "Tất cả",
+    "live": {
+      "label": "Trực tiếp",
+      "on": "Mục mới xuất hiện mỗi 15 giây. Bấm để tạm dừng.",
+      "off": "Đang tạm dừng. Bấm để hiển thị mục mới ngay khi được ghi."
+    },
+    "export": {
+      "button": "Xuất CSV",
+      "exporting": "Đang xuất…",
+      "done": "{count, plural, other {Đã xuất # mục}}. Lần xuất này cũng được ghi vào nhật ký.",
+      "doneUnknown": "Đã tải tệp xuất. Lần xuất này cũng được ghi vào nhật ký.",
+      "truncated": "Chỉ {count} mục mới nhất được xuất. Hãy thu hẹp bộ lọc để xuất phần còn lại.",
+      "failed": "Xuất thất bại nên không có tệp nào được tải xuống.",
+      "tooltip": "Tải mọi mục khớp bộ lọc hiện tại (tối đa 10.000), không chỉ trang đang hiển thị."
+    },
+    "filters": {
+      "label": "Lọc nhật ký kiểm toán",
+      "searchPlaceholder": "Tìm theo lý do, đối tượng, quản trị viên, lỗi, mã yêu cầu hoặc IP…",
+      "searchAria": "Tìm trong nhật ký kiểm toán",
+      "rangeLabel": "Khoảng thời gian",
+      "range": {
+        "24h": "24 giờ",
+        "7d": "7 ngày",
+        "30d": "30 ngày",
+        "90d": "90 ngày",
+        "all": "Toàn bộ",
+        "custom": "Tuỳ chọn"
+      },
+      "from": "Từ",
+      "to": "Đến",
+      "invertedRange": "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
+      "actor": "Quản trị viên",
+      "anyActor": "Mọi quản trị viên",
+      "action": "Thao tác",
+      "anyAction": "Mọi thao tác",
+      "entity": "Đối tượng",
+      "anyEntity": "Mọi đối tượng",
+      "entityIdPlaceholder": "Mã hoặc khoá đối tượng",
+      "entityIdAria": "Lọc theo mã hoặc khoá đối tượng",
+      "resultLabel": "Kết quả",
+      "result": {
+        "all": "Tất cả",
+        "succeeded": "Thành công",
+        "failed": "Thất bại"
+      },
+      "workspaceChip": "Workspace: {name}",
+      "removeFilter": "Bỏ bộ lọc này",
+      "clear": "Xoá bộ lọc",
+      "count": "{count, plural, other {Đã tải # mục}}",
+      "countMore": "Đã tải {count}, còn nữa"
+    },
+    "table": {
+      "caption": "Các thao tác quản trị, mới nhất trước",
+      "when": "Thời điểm",
+      "action": "Thao tác",
+      "actor": "Quản trị viên",
+      "subject": "Đối tượng",
+      "reason": "Lý do và thay đổi",
+      "result": "Kết quả",
+      "open": "Xem chi tiết",
+      "loadMore": "Tải các mục cũ hơn",
+      "loadingMore": "Đang tải…",
+      "end": "Đó là toàn bộ các mục khớp bộ lọc này.",
+      "inWorkspace": "trong {name}"
+    },
+    "result": {
       "succeeded": "Thành công",
       "failed": "Thất bại"
     },
-    "actionResultAria": "Kết quả thao tác",
+    "actorUnknown": "Quản trị viên không xác định",
+    "noReason": "Không ghi lý do",
     "loading": "Đang tải…",
-    "entryCount": "{count, plural, other {# mục}}",
+    "empty": {
+      "title": "Không có thao tác quản trị nào khớp bộ lọc",
+      "description": "Hãy mở rộng khoảng thời gian hoặc bỏ bớt bộ lọc."
+    },
     "error": {
       "title": "Không thể tải nhật ký kiểm toán.",
       "description": "Hãy kiểm tra dịch vụ workspace và đảm bảo phiên đăng nhập của bạn vẫn giữ vai trò quản trị nền tảng.",
       "retry": "Thử lại"
     },
-    "empty": {
-      "title": "Không có thao tác quản trị nào khớp với bộ lọc này",
-      "description": "Chưa có gì được ghi nhận ở đây, hoặc bộ lọc đang loại trừ nó."
-    },
-    "noReasonRecorded": "— không có lý do được ghi nhận",
-    "failedBadge": "thất bại",
-    "pagination": {
-      "pageOf": "Trang {page} / {totalPages}",
-      "previous": "Trước",
-      "next": "Tiếp"
-    }
-  },
-  "emailTemplates": {
-    "eyebrow": "Vận hành",
-    "title": "Mẫu email",
-    "description": "Mọi email nền tảng gửi đi, nội dung được lưu ở đâu và những gì điền vào đó.",
-    "notEditableNotice": "Các email này được soạn trong mã nguồn bởi dịch vụ gửi chúng, nên không thể chỉnh sửa tại đây. Muốn đổi tiêu đề hoặc nội dung cần thay đổi mã nguồn của dịch vụ đó.",
-    "tabs": {
-      "all": "Tất cả",
-      "live": "Đang dùng",
-      "dormant": "Ngừng dùng"
-    },
-    "filterAria": "Lọc email theo trạng thái",
-    "emailCount": "{count, plural, other {# email}}",
-    "statusLive": "Đang dùng",
-    "statusDormant": "Ngừng dùng",
     "detail": {
-      "whyDormant": "Vì sao ngừng dùng",
-      "subject": "Tiêu đề",
-      "sentWhen": "Thời điểm gửi",
-      "sentBy": "Gửi bởi",
-      "sentByValue": "{service} qua {provider}",
-      "body": "Nội dung",
-      "variables": "Biến",
-      "source": "Nguồn"
+      "title": "Mục nhật ký kiểm toán",
+      "close": "Đóng",
+      "performedAt": "Thời điểm",
+      "source": "Ghi bởi",
+      "actor": "Quản trị viên",
+      "subject": "Đối tượng",
+      "workspace": "Workspace",
+      "reason": "Lý do",
+      "error": "Lý do thất bại",
+      "change": "Trước và sau",
+      "field": "Trường",
+      "before": "Trước",
+      "after": "Sau",
+      "noChange": "Thao tác này không ghi trạng thái trước/sau.",
+      "changeKind": {
+        "added": "đặt",
+        "removed": "xoá",
+        "changed": "đổi",
+        "unchanged": "giữ nguyên"
+      },
+      "request": "Yêu cầu",
+      "requestId": "Mã yêu cầu",
+      "ipAddress": "Địa chỉ IP",
+      "userAgent": "Trình duyệt",
+      "notRecorded": "Không được ghi",
+      "notRecordedHint": "Các mục ghi trước khi hệ thống lưu chi tiết yêu cầu sẽ không có thông tin này.",
+      "entryId": "Mã mục",
+      "copy": "Sao chép",
+      "copied": "Đã sao chép",
+      "openSubject": "Mở",
+      "filterSubject": "Xem mọi mục của đối tượng này",
+      "filterActor": "Xem mọi mục của quản trị viên này",
+      "loadError": "Không thể tải mục này."
+    },
+    "actions": {
+      "suspend": "Tạm ngưng workspace",
+      "reactivate": "Kích hoạt lại workspace",
+      "delete": "Xoá workspace",
+      "credit_adjusted": "Điều chỉnh tín dụng",
+      "subscription_plan_changed": "Đổi gói",
+      "subscription_trial_extended": "Gia hạn dùng thử",
+      "subscription_period_comped": "Miễn phí một kỳ",
+      "entitlements_overridden": "Ghi đè quyền lợi",
+      "invoice_marked_paid": "Đánh dấu hoá đơn đã thanh toán",
+      "ownership_transferred": "Chuyển quyền sở hữu",
+      "notice_sent": "Gửi thông báo cho chủ sở hữu",
+      "note_added": "Thêm ghi chú nội bộ",
+      "data_exported": "Xuất dữ liệu workspace",
+      "user_sessions_revoked": "Đăng xuất khỏi mọi phiên",
+      "user_deactivated": "Vô hiệu hoá tài khoản",
+      "user_reactivated": "Kích hoạt lại tài khoản",
+      "user_unlocked": "Mở khoá tài khoản",
+      "language_created": "Thêm ngôn ngữ",
+      "language_updated": "Sửa ngôn ngữ",
+      "language_enabled": "Bật ngôn ngữ",
+      "language_disabled": "Tắt ngôn ngữ",
+      "plugin_created": "Thêm plugin",
+      "plugin_updated": "Sửa plugin",
+      "plugin_retired": "Ngừng cung cấp plugin",
+      "plugin_reinstated": "Khôi phục plugin",
+      "plugin_deleted": "Xoá plugin",
+      "plugin_oauth_client_set": "Đặt OAuth client cho plugin",
+      "plugin_tools_replaced": "Thay danh sách công cụ plugin",
+      "plugin_rediscovered": "Dò lại công cụ plugin",
+      "plan_created": "Tạo gói",
+      "plan_updated": "Sửa gói",
+      "rate_card_upserted": "Công bố biểu giá",
+      "rate_card_deactivated": "Ngừng biểu giá",
+      "rate_card_provider_cost_set": "Đặt chi phí nhà cung cấp",
+      "pricing_config_updated": "Đổi thiết lập định giá",
+      "billing_policy_updated": "Đổi chính sách thanh toán",
+      "subscription_contract_created": "Tạo hợp đồng",
+      "subscription_contract_terms": "Đổi điều khoản hợp đồng",
+      "subscription_cancelled": "Huỷ gói đăng ký",
+      "subscription_reactivated": "Khôi phục gia hạn gói",
+      "subscription_resumed": "Mở lại dịch vụ AI",
+      "sales_lead_status_changed": "Đổi trạng thái khách hàng tiềm năng",
+      "payment_recorded": "Ghi nhận thanh toán",
+      "glossary_term_created": "Thêm thuật ngữ",
+      "glossary_term_updated": "Sửa thuật ngữ",
+      "glossary_term_deleted": "Xoá thuật ngữ",
+      "glossary_term_published": "Xuất bản thuật ngữ",
+      "glossary_term_archived": "Lưu trữ thuật ngữ",
+      "glossary_bulk_imported": "Nhập hàng loạt thuật ngữ",
+      "announcement_sent": "Gửi thông báo chung",
+      "audit_log_exported": "Xuất nhật ký kiểm toán",
+      "fx_rate_refreshed": "Làm mới tỷ giá từ Stripe",
+      "fx_rate_overridden": "Ghi đè tỷ giá",
+      "fx_rate_override_cleared": "Bỏ ghi đè tỷ giá",
+      "staff_granted": "Cấp quyền nhân sự",
+      "staff_invited": "Mời làm nhân viên",
+      "staff_invitation_revoked": "Thu hồi lời mời nhân sự",
+      "staff_invitation_accepted": "Nhận lời mời nhân sự",
+      "staff_role_changed": "Đổi vai trò nhân sự",
+      "staff_suspended": "Tạm ngưng quyền nhân sự",
+      "staff_reactivated": "Kích hoạt lại quyền nhân sự",
+      "staff_removed": "Gỡ quyền nhân sự",
+      "staff_role_created": "Tạo vai trò nhân sự",
+      "staff_role_updated": "Sửa vai trò nhân sự",
+      "staff_role_duplicated": "Nhân bản vai trò nhân sự",
+      "staff_role_deleted": "Xoá vai trò nhân sự",
+      "expense_created": "Đã ghi khoản chi",
+      "expense_updated": "Đã sửa khoản chi",
+      "expense_deleted": "Đã xoá khoản chi",
+      "expense_marked_paid": "Đã đánh dấu đã trả",
+      "expense_imported": "Đã nhập chi phí",
+      "expense_receipt_attached": "Đã đính kèm chứng từ",
+      "expense_receipt_removed": "Đã gỡ chứng từ",
+      "expense_category_created": "Đã tạo danh mục chi phí",
+      "expense_category_updated": "Đã sửa danh mục chi phí",
+      "expense_budget_set": "Đã đặt ngân sách",
+      "inbox_assigned": "Đã giao việc",
+      "inbox_snoozed": "Đã hoãn việc",
+      "inbox_done": "Đã đóng việc",
+      "inbox_reopened": "Đã mở lại việc",
+      "inbox_note_added": "Đã thêm ghi chú việc",
+      "credit_pack_created": "Đã tạo gói credit",
+      "credit_pack_updated": "Đã sửa gói credit",
+      "credit_pack_duplicated": "Đã nhân bản gói credit",
+      "credit_pack_archived": "Đã lưu trữ gói credit",
+      "credit_pack_unarchived": "Đã khôi phục gói credit",
+      "credit_pack_stripe_synced": "Đã đồng bộ gói credit lên Stripe",
+      "addon_created": "Đã tạo tiện ích bổ sung",
+      "addon_updated": "Đã sửa tiện ích bổ sung",
+      "addon_duplicated": "Đã nhân bản tiện ích bổ sung",
+      "addon_archived": "Đã lưu trữ tiện ích bổ sung",
+      "addon_unarchived": "Đã khôi phục tiện ích bổ sung",
+      "addon_stripe_synced": "Đã đồng bộ tiện ích bổ sung lên Stripe",
+      "coupon_created": "Đã tạo mã giảm giá",
+      "coupon_updated": "Đã sửa mã giảm giá",
+      "coupon_duplicated": "Đã nhân bản mã giảm giá",
+      "coupon_archived": "Đã lưu trữ mã giảm giá",
+      "coupon_unarchived": "Đã khôi phục mã giảm giá",
+      "coupon_stripe_synced": "Đã đồng bộ mã giảm giá lên Stripe"
+    },
+    "entities": {
+      "workspace": "Workspace",
+      "user": "Tài khoản",
+      "subscription": "Gói đăng ký",
+      "invoice": "Hoá đơn",
+      "credit_adjustment": "Tín dụng",
+      "workspace_note": "Ghi chú workspace",
+      "plan": "Gói",
+      "usage_rate": "Biểu giá",
+      "pricing_version": "Phiên bản giá",
+      "pricing_config": "Thiết lập định giá",
+      "billing_policy": "Chính sách thanh toán",
+      "payment_method": "Phương thức thanh toán",
+      "payment": "Thanh toán",
+      "sales_lead": "Khách hàng tiềm năng",
+      "supported_language": "Ngôn ngữ",
+      "plugin": "Plugin",
+      "glossary_term": "Thuật ngữ",
+      "notification": "Thông báo chung",
+      "audit_log": "Nhật ký kiểm toán",
+      "fx_rate": "Tỷ giá",
+      "staff_member": "Nhân viên",
+      "staff_role": "Vai trò nhân sự",
+      "staff_invitation": "Lời mời nhân sự",
+      "operating_expense": "Khoản chi vận hành",
+      "expense_category": "Danh mục chi phí",
+      "expense_budget": "Ngân sách chi phí",
+      "inbox_item": "Mục hộp việc",
+      "credit_pack": "Gói credit",
+      "addon": "Tiện ích bổ sung",
+      "coupon": "Mã giảm giá"
+    },
+    "sources": {
+      "workspace_service": "Workspace",
+      "billing_service": "Thanh toán",
+      "auth_service": "Tài khoản",
+      "translation_room_service": "Cuộc họp",
+      "assistant_service": "Trợ lý",
+      "transcript_service": "Bản ghi",
+      "notification_service": "Thông báo"
     }
   }
 }

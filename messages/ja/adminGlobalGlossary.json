@@ -39,11 +39,6 @@
     "viewAuditHistory": "変更履歴を表示",
     "delete": "削除"
   },
-  "pagination": {
-    "previous": "前へ",
-    "next": "次へ",
-    "summary": "{page} / {totalPages} ページ({count}件)"
-  },
   "fields": {
     "term": "用語",
     "termPlaceholder": "例: architect",
@@ -115,5 +110,26 @@
     "bulkImported": "{imported}件をインポートし、{skipped}件をスキップしました。",
     "bulkImportIssues": "{count}件の行で問題が発生しました — コンソールを確認してください。",
     "bulkImportFailed": "一括インポートに失敗しました。"
+  },
+  "list": {
+    "termCount": "{count, plural, other {# 件の用語}}",
+    "emptyDescription": "用語を追加するか CSV をインポートして、プラットフォーム全体の基準を設定してください。",
+    "anyLanguage": "すべての言語",
+    "noDomainGroup": "分野なし",
+    "filters": {
+      "domain": "分野",
+      "language": "言語"
+    },
+    "sortFields": {
+      "priority": "優先度 (高い順)",
+      "updated": "最近更新された順",
+      "created": "最近作成された順",
+      "term": "用語"
+    },
+    "columns": {
+      "languages": "言語",
+      "updated": "更新日",
+      "created": "作成日"
+    }
   }
 }

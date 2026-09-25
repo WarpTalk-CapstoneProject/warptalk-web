@@ -85,34 +85,39 @@
     },
     "adminNav": {
       "backToApp": "Back to app",
-      "platformConsole": "Platform console",
-      "platformName": "WarpTalk Platform",
+      "productName": "WarpTalk",
+      "erpBadge": "ERP",
       "logOut": "Log out",
       "platformAdmin": "Platform admin",
       "sections": {
         "platform": "Platform",
         "revenue": "Revenue",
         "operations": "Operations",
-        "configuration": "Configuration"
+        "configuration": "Configuration",
+        "team": "Team"
       },
       "items": {
         "insights": "Insights",
+        "inbox": "Inbox",
         "workspaces": "Workspaces",
         "accounts": "Accounts",
         "subscriptions": "Subscriptions",
         "plansAndPricing": "Plans & pricing",
         "billingLedger": "Billing ledger",
         "salesLeads": "Sales leads",
-        "meetings": "Meetings",
+        "operatingCosts": "Operating costs",
         "systemHealth": "System health",
-        "eventOutbox": "Event outbox",
+        "providers": "Providers",
         "feedback": "Feedback",
         "auditLog": "Audit log",
         "announcements": "Announcements",
         "emailTemplates": "Email templates",
         "platformSettings": "Platform settings",
         "plugins": "Plugins",
-        "globalGlossary": "Global glossary"
+        "globalGlossary": "Global glossary",
+      "staff": "Staff",
+      "roles": "Roles",
+      "packages": "Packages"
       }
     },
     "settingsNav": {
@@ -125,6 +130,8 @@
       "notifications": "Notifications",
       "connectedAccounts": "Connected accounts",
       "sessionsDevices": "Sessions & devices",
+      "myConnections": "My connections",
+      "workspacePlugins": "Workspace plugins",
       "plugins": "Plugins",
       "workspaceSettingsCollapsed": "Workspace settings",
       "workspaceSettingsExpanded": "Workspace Settings",
@@ -298,5 +305,23 @@
     "workspaceSettings": "Workspace settings",
     "billing": "Billing",
     "signOut": "Sign out"
+  },
+  "announcements": {
+    "regionLabel": "Announcements",
+    "readMore": "Read more",
+    "pagerLabel": "More announcements",
+    "previous": "Previous announcement",
+    "next": "Next announcement",
+    "position": "{current} of {total}",
+    "dismiss": "Dismiss",
+    "dontShowAgain": "Don't show this again",
+    "close": "Close",
+    "badge": "Announcement",
+    "types": {
+      "ANNOUNCEMENT": "Announcement",
+      "FEATURE": "New feature",
+      "MAINTENANCE": "Maintenance",
+      "PROMOTION": "Offer"
+    }
   }
 }

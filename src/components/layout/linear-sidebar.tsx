@@ -1,5 +1,6 @@
 "use client";
 
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,9 +24,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { useAdminInboxSummary } from "@/hooks/use-admin-inbox";
+import { inboxBadge } from "@/lib/admin/inbox";
+import { ADMIN_PERMISSIONS, canViewAdminPath, hasPermission } from "@/lib/admin/staff-permissions";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
-import { pendingRequestBadge } from "@/lib/assistant/plugin-availability";
+import { canManageWorkspacePlugins, pendingRequestBadge } from "@/lib/assistant/plugin-availability";
 import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { cn } from "@/lib/utils";
@@ -36,6 +41,8 @@ import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-stor
 import type { IconProps } from "@phosphor-icons/react";
 import {
   Archive,
+  ArrowUUpLeft,
+  Package,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -50,6 +57,7 @@ import {
   Globe,
   Handshake,
   Heartbeat,
+  Plugs,
   House,
   Keyboard,
   MagnifyingGlass,
@@ -63,7 +71,6 @@ import {
   Sliders,
   SquaresFour,
   Star,
-  Tray,
   User,
   Users,
   Waveform,
@@ -75,7 +82,10 @@ import {
   ListChecks,
   Bell,
   LinkSimple,
-  Devices,} from "@phosphor-icons/react/dist/ssr";
+  Devices,
+  IdentificationBadge,
+  UserGear,
+  Tray,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -251,6 +261,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isSystemAdmin = useIsSystemAdmin();
+  const { access: staffAccess } = useStaffAccess();
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -429,13 +440,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     pathname.includes("/settings") ||
     pathname.includes("/payment");
 
-  // Workspace → Plugins badge: requests from members waiting on the Owner. Owner/Admin only, and only
-  // while Settings is on screen — the one place the row is drawn — so no other page pays for the read.
+  // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
+  // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
+  // read. Counted only for whoever can answer them: an Admin sees the requests on the page but cannot
+  // act on one, so a count on their sidebar would never clear.
   const { data: workspacePluginsOverview } = useWorkspacePlugins(
     activeWorkspaceId,
     isOwnerOrAdmin && isSettingsPage,
   );
-  const pluginRequestBadge = pendingRequestBadge(workspacePluginsOverview);
+  const pluginRequestBadge = pendingRequestBadge(
+    workspacePluginsOverview,
+    canManageWorkspacePlugins(workspacePluginsOverview, role),
+  );
 
   /**
    * The platform admin console gets its own chrome — a third branch beside the app and Settings.
@@ -453,11 +469,19 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
    * SCOPE: this lists the routes that EXIST. Users, Subscriptions, Plans, Meetings, Health,
    * Audit and Announcements each add their own entry with the release that adds the page — a nav
    * row pointing at a 404 is the same defect as a button whose endpoint was never routed.
+   * Meetings and Event outbox were taken out again on 2026-09-24 (owner's call); their addresses
+   * forward to /admin in proxy.ts.
    */
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
+  // G12: the Inbox row's pill counts open items the person can see. Read only inside the portal and
+  // only for someone who holds inbox.read; the server caches the fan-out, so polling is cheap.
+  const { data: inboxSummary } = useAdminInboxSummary(
+    isAdminPage && isSystemAdmin && hasPermission(staffAccess, ADMIN_PERMISSIONS.inboxRead),
+  );
+
   if (isAdminPage && isSystemAdmin) {
-    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+    const allAdminSections: Array<{ section: string; items: NavItem[] }> = [
       {
         section: t("adminNav.sections.platform"),
         items: [
@@ -466,6 +490,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           // "Insights", not "Overview" (owner's call, 2026-09-17): the landing page became the
           // period-compared business insights page. The route did not move.
           { icon: Gauge, label: t("adminNav.items.insights"), href: "/admin", exact: true },
+          // G12: everything waiting on the platform team, aggregated from the pages that own it.
+          { icon: Tray, label: t("adminNav.items.inbox"), href: "/admin/inbox", badge: inboxBadge(inboxSummary?.counts) },
           { icon: Buildings, label: t("adminNav.items.workspaces"), href: "/admin/workspaces" },
           // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
           // "Users" is the same word the workspace sidebar uses for that workspace's members —
@@ -479,16 +505,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         items: [
           { icon: Gauge, label: t("adminNav.items.subscriptions"), href: "/admin/subscriptions" },
           { icon: FileText, label: t("adminNav.items.plansAndPricing"), href: "/admin/plans" },
+          { icon: Package, label: t("adminNav.items.packages"), href: "/admin/packages" },
           { icon: CreditCard, label: t("adminNav.items.billingLedger"), href: "/admin/billing" },
           { icon: Handshake, label: t("adminNav.items.salesLeads"), href: "/admin/sales-leads" },
+          // G12: company operating expenses, budgets and the P&L with them.
+          { icon: Receipt, label: t("adminNav.items.operatingCosts"), href: "/admin/finance/expenses" },
         ],
       },
       {
         section: t("adminNav.sections.operations"),
         items: [
-          { icon: SquaresFour, label: t("adminNav.items.meetings"), href: "/admin/meetings" },
           { icon: Heartbeat, label: t("adminNav.items.systemHealth"), href: "/admin/health" },
-          { icon: Tray, label: t("adminNav.items.eventOutbox"), href: "/admin/outbox" },
+          { icon: Plugs, label: t("adminNav.items.providers"), href: "/admin/providers" },
           { icon: Star, label: t("adminNav.items.feedback"), href: "/admin/feedback" },
           { icon: Archive, label: t("adminNav.items.auditLog"), href: "/admin/audit" },
           { icon: PaperPlaneTilt, label: t("adminNav.items.announcements"), href: "/admin/announcements" },
@@ -511,7 +539,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
         ],
       },
+      {
+        // G10: who works on the platform, and what each of them may do here.
+        section: t("adminNav.sections.team"),
+        items: [
+          { icon: IdentificationBadge, label: t("adminNav.items.staff"), href: "/admin/staff" },
+          { icon: UserGear, label: t("adminNav.items.roles"), href: "/admin/roles" },
+        ],
+      },
     ];
+
+    // G10: offer only the pages this person's staff role can read (the server enforces the same
+    // permission on every endpoint behind them). A section left with no rows is dropped entirely.
+    const adminSections = allAdminSections
+      .map((group) => ({ ...group, items: group.items.filter((item) => canViewAdminPath(staffAccess, item.href)) }))
+      .filter((group) => group.items.length > 0);
 
     // WT-444: "Back to app" pointed at /workspace whenever no workspace was active, and for the
     // only person who ever sees this button that is a loop. /workspace redirects a system admin
@@ -531,17 +573,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (collapsed) {
       return (
         <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
+          {/* The product mark, as in the expanded header; "Back to app" moves down beside Log out. */}
           <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
-            {backHref && (
-              <Link
-                href={backHref}
-                title={t("adminNav.backToApp")}
-                aria-label={t("adminNav.backToApp")}
-                className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <CaretLeft size={16} weight="bold" />
-              </Link>
-            )}
+            <Link
+              href="/admin"
+              title={`${t("adminNav.productName")} ${t("adminNav.erpBadge")}`}
+              aria-label={`${t("adminNav.productName")} ${t("adminNav.erpBadge")}`}
+              className="grid size-9 place-items-center rounded-[8px] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <WarpTalkBrand compact className="h-4 w-[21px]" />
+            </Link>
           </div>
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
             {adminSections.flatMap((group, groupIndex) =>
@@ -560,7 +601,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           {/* The exit. The expanded branch hangs it off the user card; collapsed has no card,
               so the button stands alone — an admin console with no way to sign out is how the
               portal shipped once already. */}
-          <div className="grid shrink-0 place-items-center border-t border-border/30 py-3">
+          <div className="flex shrink-0 flex-col items-center gap-1 border-t border-border/30 py-3">
+            {backHref && (
+              <Link
+                href={backHref}
+                title={t("adminNav.backToApp")}
+                aria-label={t("adminNav.backToApp")}
+                className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <CaretLeft size={16} weight="bold" />
+              </Link>
+            )}
             <button
               onClick={() => logout()}
               title={t("adminNav.logOut")}
@@ -576,34 +627,33 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
     return (
       <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
-        <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
+        {/* The product, not a tenant: the WarpTalk mark, its name and an "ERP" chip, at the same 48px
+            height and 14px semibold as the workspace switcher it stands in for. Deliberately NOT a
+            switcher — there is no workspace to switch, and a control that looked like one would
+            suggest this page is scoped to a tenant. "Back to app" rides on the right. */}
+        <div className="flex h-[48px] shrink-0 items-center justify-between gap-2 border-b border-border/30 px-3">
+          <Link
+            href="/admin"
+            className="-ml-1.5 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <WarpTalkBrand compact className="h-[15px] w-5" />
+            <span className="truncate text-[14px] font-semibold tracking-tight text-ink">
+              {t("adminNav.productName")}
+            </span>
+            <span className="shrink-0 rounded-[5px] border border-border bg-surface-2 px-[5px] text-[10px] font-semibold leading-[16px] tracking-[0.3px] text-ink-muted">
+              {t("adminNav.erpBadge")}
+            </span>
+          </Link>
           {backHref ? (
             <Link
               href={backHref}
-              className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              title={t("adminNav.backToApp")}
+              aria-label={t("adminNav.backToApp")}
+              className="grid size-7 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
-              <CaretLeft size={14} weight="bold" />
-              <span>{t("adminNav.backToApp")}</span>
+              <ArrowUUpLeft size={15} weight="bold" />
             </Link>
-          ) : (
-            // Same height and padding as the link so the header does not jump between an admin
-            // who has a workspace and one who does not.
-            <span className="-ml-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted/50">
-              {t("adminNav.platformConsole")}
-            </span>
-          )}
-        </div>
-
-        {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a
-            switcher: there is no workspace to switch, and a control that looks like one here
-            would suggest this page is scoped to a tenant. */}
-        <div className="flex items-center gap-2.5 border-b border-border/30 px-4 py-3">
-          <span className="grid size-[22px] shrink-0 place-items-center rounded-[6px] bg-primary text-primary-foreground">
-            <ShieldCheck size={13} weight="fill" />
-          </span>
-          <span className="truncate text-[13px] font-semibold tracking-tight text-ink">
-            {t("adminNav.platformName")}
-          </span>
+          ) : null}
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3">
@@ -694,8 +744,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           : "/workspace",
       },
       {
+        // "My connections", not "Plugins": the workspace section below has its own plugin list, and
+        // two rows both called "Plugins" read as the same page twice (owner report, 2026-09-24).
         icon: PlugsConnected,
-        label: t("settingsNav.plugins"),
+        label: t("settingsNav.myConnections"),
         href: "/settings/plugins",
       },
     ];
@@ -712,7 +764,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
-        label: t("settingsNav.plugins"),
+        label: t("settingsNav.workspacePlugins"),
         exact: true,
         href: `/${activeWorkspaceSlug}/settings/plugins`,
         badge: pluginRequestBadge,
@@ -904,7 +956,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  {t("settingsNav.plugins")}
+                  {t("settingsNav.myConnections")}
                 </span>
               </Link>
             </div>
@@ -935,7 +987,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/plugins`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <PuzzlePiece size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      {t("settingsNav.plugins")}
+                      {t("settingsNav.workspacePlugins")}
                     </span>
                   </Link>
                   {pluginRequestBadge ? <NavBadge count={pluginRequestBadge} /> : null}
