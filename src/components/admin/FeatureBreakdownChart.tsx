@@ -2,14 +2,9 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { billingService } from "@/services/billing.service";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { BarList, type BarListRow } from "@/components/admin/charts/bar-list";
+import { ChartFigure } from "@/components/admin/charts/time-series-chart";
+import { usageServiceOf } from "@/lib/billing/usage-labels";
 import {
   Card,
   CardContent,
@@ -26,15 +21,7 @@ interface FeatureBreakdownChartProps {
   className?: string;
 }
 
-const COLORS = [
-  "#3b82f6",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#ec4899",
-  "#14b8a6",
-  "#f43f5e",
-];
+const credits = (value: number) => value.toLocaleString("en-US");
 
 export function FeatureBreakdownChart({
   workspaceId,
@@ -52,29 +39,23 @@ export function FeatureBreakdownChart({
         : billingService.getGlobalUsageBreakdown(days),
   });
 
-  const chartData = useMemo(() => {
+  // Ranked bars, one hue: the rank is the length. The pie this replaced gave seven services seven
+  // hardcoded hexes, read nothing in dark mode, and its tooltip was clipped by the card.
+  const chartData = useMemo<BarListRow[]>(() => {
     if (!data) return [];
-
-    // Convert generic names to friendly names if needed
-    return data
-      .map((d) => {
-        let label = d.usageType;
-        if (label === "chat") label = "AI Chat";
-        else if (label === "translation" || label === "voice_translation")
-          label = "Translation";
-        else if (label === "summary" || label === "meeting_summary")
-          label = "AI Summary";
-        else if (label === "voice_clone" || label === "voice_cloning")
-          label = "Voice Clone";
-        else if (label === "text_to_speech") label = "AI Voice Synthesis";
-
-        return {
-          name: label,
-          value: d.totalCreditsConsumed,
-        };
-      })
-      .filter((d) => d.value > 0);
+    const grouped = new Map<string, { label: string; value: number }>();
+    for (const row of data) {
+      const service = usageServiceOf(row.usageType);
+      const entry = grouped.get(service.key) ?? { label: service.label, value: 0 };
+      entry.value += row.totalCreditsConsumed ?? 0;
+      grouped.set(service.key, entry);
+    }
+    return [...grouped.entries()]
+      .filter(([, entry]) => entry.value > 0)
+      .sort((a, b) => b[1].value - a[1].value)
+      .map(([key, entry]) => ({ key, label: entry.label, segments: [{ key, label: entry.label, value: entry.value }] }));
   }, [data]);
+  const total = chartData.reduce((sum, row) => sum + row.segments[0].value, 0);
 
   const hasData = chartData.length > 0;
 
@@ -122,50 +103,9 @@ export function FeatureBreakdownChart({
             No consumption recorded for this period
           </div>
         ) : (
-          <div className="h-[250px] w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="45%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                  nameKey="name"
-                  stroke="none"
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={COLORS[index % COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#0f172a",
-                    borderColor: "#334155",
-                    borderRadius: "8px",
-                    color: "#f8fafc",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                    fontSize: "13px",
-                  }}
-                  itemStyle={{ fontWeight: 500 }}
-                  formatter={(value) => [
-                    `${value?.toLocaleString()} Credits`,
-                    "Consumed",
-                  ]}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  height={36}
-                  iconType="circle"
-                  wrapperStyle={{ fontSize: "13px" }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="mt-2">
+            <ChartFigure value={credits(total)} caption={`Credits consumed · last ${days} days`} />
+            <BarList ariaLabel="Credit consumption by service" rows={chartData} formatValue={credits} showShare />
           </div>
         )}
       </CardContent>

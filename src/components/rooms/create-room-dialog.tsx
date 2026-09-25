@@ -11,11 +11,13 @@ import {
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import gsap from "gsap";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { meetingTypeByLabel, isExternalBridge } from "@/lib/meeting/meeting-types";
+import { MEETING_TYPES, meetingTypeByValue, isExternalBridge } from "@/lib/meeting/meeting-types";
+import { planBridgeRoomLanguages } from "@/lib/meeting/bridge-far-side-language";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -49,8 +51,10 @@ import {
 import { markInstantMeetingStarted } from "@/lib/meeting/instant-meeting-handoff";
 import {
   type DailyRecurrenceDraft,
+  describeDailyDraftProblem,
   detectTimeZone,
   firstOccurrenceDate,
+  validateDailyDraft,
 } from "@/lib/meeting/daily-recurrence";
 import { describeRecurrenceSentence } from "@/lib/meeting/recurrence";
 import { InvitePeoplePicker } from "./create/invite-people-picker";
@@ -68,6 +72,7 @@ function getDefaultStartTime() {
 }
 
 export function CreateRoomDialog() {
+  const t = useTranslations("rooms.create");
   const router = useRouter();
   const isOpen = useUIStore((state) => state.createRoomModalOpen);
   const setIsOpen = useUIStore((state) => state.setCreateRoomModalOpen);
@@ -77,7 +82,7 @@ export function CreateRoomDialog() {
     (state) => state.activeWorkspaceId,
   );
   const workspaceName =
-    useWorkspaceStore((state) => state.activeWorkspaceName) || "Workspace";
+    useWorkspaceStore((state) => state.activeWorkspaceName) || t("workspaceFallback");
   const activeWorkspaceSlug = useWorkspaceStore(
     (state) => state.activeWorkspaceSlug,
   );
@@ -110,9 +115,15 @@ export function CreateRoomDialog() {
   // value DESTROYS something — no transcript means no summary, no minutes and no knowledge-base
   // entry — so it starts true and is only put on the wire when somebody changes it.
   const [saveTranscript, setSaveTranscript] = useState(true);
+  // WT-826: share the record with participants when the meeting ends. On unless the host turns
+  // it off, and — like saveTranscript — only put on the wire when somebody changes it, so the
+  // server's own default decides for everyone who never opened the menu.
+  const [autoShareRecord, setAutoShareRecord] = useState(true);
+  // What the room being edited already holds, so an edit sends the toggle only when it moved.
+  const [loadedAutoShareRecord, setLoadedAutoShareRecord] = useState<boolean | null>(null);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [meetingTemplate, setMeetingTemplate] = useState("Event");
+  const [meetingTemplate, setMeetingTemplate] = useState(MEETING_TYPES[0].value);
   const [initializedEditRoomId, setInitializedEditRoomId] = useState<
     string | null
   >(null);
@@ -166,6 +177,10 @@ export function CreateRoomDialog() {
     setScheduledAt(
       editRoomData.scheduledAt ? new Date(editRoomData.scheduledAt) : null,
     );
+    // Absent reads as ON: a room created before the toggle is shared when it ends, like a new one.
+    const storedAutoShare = editRoomData.settings?.autoShareRecord ?? true;
+    setAutoShareRecord(storedAutoShare);
+    setLoadedAutoShareRecord(storedAutoShare);
   }
 
   if (
@@ -213,15 +228,16 @@ export function CreateRoomDialog() {
   //
   // WT-343: a workspace-wide default sat between these two for one release. Host approval is a
   // per-meeting decision and a second place to set it was one place too many.
+  const selectedMeetingType = meetingTypeByValue(meetingTemplate) ?? MEETING_TYPES[0];
   const effectiveRequiresApproval =
-    requiresApproval ?? meetingTypeByLabel(meetingTemplate).defaults.requiresApproval;
+    requiresApproval ?? selectedMeetingType.defaults.requiresApproval;
 
   // WT-525. The one type whose meeting does not happen on WarpTalk: the call is on Google Meet
   // and WarpTalk sits beside it, so the room is seeded with exactly two seats — the host, and a
   // stand-in that carries everyone on the far side. Several controls below mean something
   // different (or nothing) under it, and the host needs to know that before submitting rather
   // than after the room exists.
-  const bridgeSelected = isExternalBridge(meetingTypeByLabel(meetingTemplate).value);
+  const bridgeSelected = isExternalBridge(selectedMeetingType.value);
 
   // An instant meeting: no start time and no repeat rule, i.e. "now". This is the same
   // distinction the server draws at creation — `ScheduledAt.HasValue ? "SCHEDULED" : "WAITING"` —
@@ -234,9 +250,15 @@ export function CreateRoomDialog() {
   // three screens between the button and the meeting it promised.
   const isInstantMeeting = !editRoomId && !scheduledAt && !dailyRecurrence;
 
+  // WT-699: the repeat rule's own problem ("at most 365 days", a last date before the first
+  // meeting …) was shown in the options menu while this button stayed enabled, so the host could
+  // submit a draft the dialog had just called invalid and learn it from the server instead. The
+  // same verdict the menu prints now gates the submit.
+  const recurrenceProblem = dailyRecurrence ? validateDailyDraft(dailyRecurrence, new Date()) : null;
   const validation = {
     title: title.trim().length > 0,
     languages: meetingLanguages.length > 0,
+    recurrence: recurrenceProblem === null,
   };
   const canSubmit = Object.values(validation).every(Boolean);
   const inviteLink =
@@ -304,8 +326,12 @@ export function CreateRoomDialog() {
 
   async function handleSubmit() {
     setSubmitError(null);
+    if (recurrenceProblem) {
+      failSubmit(describeDailyDraftProblem(recurrenceProblem));
+      return;
+    }
     if (!canSubmit) {
-      failSubmit("Please complete all required fields.");
+      failSubmit(t("errors.requiredFields"));
       return;
     }
     try {
@@ -314,8 +340,24 @@ export function CreateRoomDialog() {
       // declared language (an internal fallback for the audio-route mesh), and the full
       // declared set is sent as targetLanguages.
       const languages = Array.from(new Set(meetingLanguages));
-      const sourceLanguage = languages[0];
-      const targetLanguages = languages;
+      let sourceLanguage = languages[0];
+      let targetLanguages = languages;
+      // A bridge room's second seat is the other side of the external call, and its language is
+      // the only thing that makes the room translate. Positional targets seeded it with the host's
+      // own language (languages[0] is both the source and the first target), so it is now named:
+      // the first declared language that is not the host's, or the workspace-aware default.
+      // Same rule as the desktop's automatic Meet room (lib/meeting/bridge-auto-room).
+      let externalMeetingLanguage: string | undefined;
+      if (bridgeSelected && !editRoomId) {
+        const bridgeLanguages = planBridgeRoomLanguages({
+          speak: sourceLanguage,
+          candidates: languages,
+          allowedLanguages: allowedTargetLanguages ?? [],
+        });
+        sourceLanguage = bridgeLanguages.sourceLanguage;
+        targetLanguages = bridgeLanguages.targetLanguages;
+        externalMeetingLanguage = bridgeLanguages.externalMeetingLanguage;
+      }
 
       if (editRoomId) {
         await updateRoomMutation.mutateAsync({
@@ -327,13 +369,18 @@ export function CreateRoomDialog() {
             targetLanguages: targetLanguages,
             scheduledAt: scheduledAt ? scheduledAt.toISOString() : undefined,
             invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
+            // WT-826: a settings PATCH, so only the field that moved. The server carries the
+            // room's sharing level with the toggle while the meeting has not happened yet.
+            ...(loadedAutoShareRecord !== null && autoShareRecord !== loadedAutoShareRecord
+              ? { settings: { autoShareRecord } }
+              : {}),
           },
         });
-        toast.success("Room updated successfully.");
+        toast.success(t("toasts.roomUpdated"));
         handleOpenChange(false);
       } else {
         if (!activeWorkspaceId) {
-          failSubmit("Please select a workspace before creating a room.");
+          failSubmit(t("errors.selectWorkspace"));
           return;
         }
         // Everything both paths send. `workspaceId` is deliberately NOT hoisted in here: it is
@@ -347,9 +394,10 @@ export function CreateRoomDialog() {
           // mute-on-entry, auto-record, breakouts and seat count server-side. It used to be
           // discarded here in favour of instant/scheduled, which is why every type behaved
           // identically.
-          translationRoomType: meetingTypeByLabel(meetingTemplate).value,
+          translationRoomType: (meetingTypeByValue(meetingTemplate) ?? MEETING_TYPES[0]).value,
           sourceLanguage: sourceLanguage,
           targetLanguages: targetLanguages,
+          ...(externalMeetingLanguage ? { externalMeetingLanguage } : {}),
           invitedEmails: invitedEmails.length > 0 ? invitedEmails : undefined,
           // WT-341. Sent only when the host actually chose: RoomSettingsRequest makes every
           // member nullable precisely so "not sent" stays distinguishable from "sent false", and
@@ -358,7 +406,8 @@ export function CreateRoomDialog() {
           settings:
             requiresApproval === null &&
             !participantsCanStartTranslation &&
-            saveTranscript
+            saveTranscript &&
+            autoShareRecord
               ? undefined
               : {
                   ...(requiresApproval === null ? {} : { requiresApproval }),
@@ -369,6 +418,8 @@ export function CreateRoomDialog() {
                   // it back would pin the value against any future change — the same reasoning
                   // as requiresApproval above.
                   ...(saveTranscript ? {} : { saveTranscript: false }),
+                  // WT-826: likewise sent only as `false`.
+                  ...(autoShareRecord ? {} : { autoShareRecord: false }),
                 },
         };
 
@@ -408,7 +459,11 @@ export function CreateRoomDialog() {
               : firstOccurrenceDate(dailyRecurrence.time, new Date()),
           );
           toast.success(
-            `${describeRecurrenceSentence(result.series)} at ${dailyRecurrence.time} — ${result.totalOccurrenceCount} meetings.`,
+            t("toasts.recurringCreated", {
+              sentence: describeRecurrenceSentence(result.series),
+              time: dailyRecurrence.time,
+              count: result.totalOccurrenceCount,
+            }),
           );
           return;
         }
@@ -442,7 +497,7 @@ export function CreateRoomDialog() {
             // completion screen this line switches to does not have. Reporting it there would be
             // reporting it nowhere.
             toast.error(
-              getErrorMessage(error, "Room created, but it could not be started."),
+              getErrorMessage(error, t("errors.startFailed")),
             );
             return;
           }
@@ -461,7 +516,7 @@ export function CreateRoomDialog() {
         setCreatedRoomCode(room.translationRoomCode);
         // Not instant, so `scheduledAt` is set — the time the host picked is the day to open.
         setCreatedRoomAt(scheduledAt);
-        toast.success("Room created successfully. Invites sent!");
+        toast.success(t("toasts.roomCreated"));
       }
     } catch (error) {
       // WT-270: the server explains itself — "Target language 'ko' is not allowed by the
@@ -472,7 +527,7 @@ export function CreateRoomDialog() {
       failSubmit(
         getErrorMessage(
           error,
-          `Failed to ${editRoomId ? "update" : "create"} room.`,
+          editRoomId ? t("errors.updateFailed") : t("errors.createFailed"),
         ),
       );
     }
@@ -480,7 +535,7 @@ export function CreateRoomDialog() {
 
   async function copyInviteLink() {
     await navigator.clipboard?.writeText(inviteLink);
-    toast.success("Invite link copied.");
+    toast.success(t("toasts.inviteLinkCopied"));
   }
 
   return (
@@ -498,10 +553,10 @@ export function CreateRoomDialog() {
         )}
       >
         <DialogTitle className="sr-only">
-          {editRoomId ? "Edit meeting" : "Create new meeting"}
+          {editRoomId ? t("editTitle") : t("createTitle")}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Configure and create a new translation room
+          {t("srDescription")}
         </DialogDescription>
 
         <div className="flex flex-col w-full relative h-full">
@@ -530,7 +585,7 @@ export function CreateRoomDialog() {
                 <button
                   onClick={() => setIsExpanded(!isExpanded)}
                   className="p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink transition-colors mr-6"
-                  title={isExpanded ? "Collapse" : "Expand"}
+                  title={isExpanded ? t("collapse") : t("expand")}
                 >
                   {isExpanded ? (
                     <ArrowsInSimple weight="bold" size={14} />
@@ -547,15 +602,14 @@ export function CreateRoomDialog() {
               {bridgeSelected && (
                 <div className="mx-5 mt-1 rounded-lg border border-border/60 bg-surface-2/60 px-3 py-2">
                   <p className="text-[12px] leading-relaxed text-ink-muted">
-                    Your call runs on <span className="text-ink font-medium">Google Meet</span>.
-                    WarpTalk sits beside it: this room gets two seats — you, and one stand-in for
-                    everyone on the other side.{" "}
-                    <span className="text-ink">Source</span> is the language you speak;{" "}
-                    <span className="text-ink">target</span> is what the call hears.
+                    {t.rich("bridgeNotice.line1", {
+                      meet: (chunks) => <span className="text-ink font-medium">{chunks}</span>,
+                      src: (chunks) => <span className="text-ink">{chunks}</span>,
+                      tgt: (chunks) => <span className="text-ink">{chunks}</span>,
+                    })}
                   </p>
                   <p className="mt-1 text-[11px] leading-relaxed text-ink-muted/70">
-                    Needs the two virtual audio devices installed, and Meet pointed at them. The
-                    setup check runs when you open the room.
+                    {t("bridgeNotice.line2")}
                   </p>
                 </div>
               )}
@@ -571,7 +625,7 @@ export function CreateRoomDialog() {
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Meeting title"
+                  placeholder={t("titlePlaceholder")}
                   className="w-full bg-transparent text-[18px] font-medium text-ink placeholder:text-ink-muted/50 outline-none border-none focus:ring-0 p-0 shrink-0"
                   autoFocus
                 />
@@ -579,7 +633,7 @@ export function CreateRoomDialog() {
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Add description..."
+                  placeholder={t("descriptionPlaceholder")}
                   className={cn(
                     "w-full bg-transparent text-[14px] text-ink placeholder:text-ink-muted/60 outline-none border-none focus:ring-0 p-0 resize-none transition-all",
                     isExpanded ? "flex-1 min-h-[300px]" : "min-h-[60px]",
@@ -617,7 +671,7 @@ export function CreateRoomDialog() {
                     onClick={() => setDailyRecurrence(null)}
                     label={
                       <span data-testid="daily-pill">
-                        Daily {dailyRecurrence.time}
+                        {t("dailyPill", { time: dailyRecurrence.time })}
                         <X weight="bold" className="ml-1 inline h-3 w-3 align-[-1px]" />
                       </span>
                     }
@@ -643,6 +697,8 @@ export function CreateRoomDialog() {
                   }
                   saveTranscript={saveTranscript}
                   onSaveTranscriptChange={setSaveTranscript}
+                  autoShareRecord={autoShareRecord}
+                  onAutoShareRecordChange={setAutoShareRecord}
                   onRequiresApprovalChange={setRequiresApproval}
                 />
               </div>
@@ -691,13 +747,13 @@ export function CreateRoomDialog() {
                     updateRoomMutation.isPending ||
                     startRoomMutation.isPending
                       ? isInstantMeeting
-                        ? "Starting..."
-                        : "Saving..."
+                        ? t("footer.starting")
+                        : t("footer.saving")
                       : editRoomId
-                        ? "Save Changes"
+                        ? t("footer.saveChanges")
                         : isInstantMeeting
-                          ? "Start meeting"
-                          : "Create Room"}
+                          ? t("footer.startMeeting")
+                          : t("footer.createRoom")}
                   </Button>
                 </div>
               </div>
@@ -716,7 +772,7 @@ export function CreateRoomDialog() {
 
               <div className="flex flex-col items-center w-full max-w-[320px]">
                 <h3 className="text-[18px] font-semibold text-foreground mb-1 tracking-tight">
-                  Meeting Created Successfully
+                  {t("success.title")}
                 </h3>
                 {/* This screen is normally reached only by a meeting booked for LATER — an
                     instant one goes straight into the call — so it says what was actually
@@ -727,14 +783,14 @@ export function CreateRoomDialog() {
                     been booked for a time nobody chose. The toast carries the reason. */}
                 <p className="text-[13px] text-muted-foreground mb-6">
                   {isInstantMeeting
-                    ? `“${title}” was created but is not open yet. Share the link, or start it from the meeting page.`
-                    : `“${title}” is booked. Share the link now; it opens when the meeting starts.`}
+                    ? t("success.instant", { title })
+                    : t("success.scheduled", { title })}
                 </p>
 
                 {/* Room Code Card */}
                 <div className="w-full bg-surface-1 border border-border/60 rounded-lg p-3 mb-8 flex flex-col items-center gap-2">
                   <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
-                    Room Code
+                    {t("success.roomCode")}
                   </p>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[16px] font-semibold text-foreground tracking-wide">
@@ -743,7 +799,7 @@ export function CreateRoomDialog() {
                     <button
                       onClick={copyInviteLink}
                       className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-surface-2"
-                      title="Copy Invite Link"
+                      title={t("success.copyInviteLink")}
                     >
                       <Copy weight="bold" className="h-4 w-4" />
                     </button>
@@ -763,7 +819,7 @@ export function CreateRoomDialog() {
                     className="flex-1 text-[13px] h-[34px] font-medium gap-2"
                   >
                     <SlidersHorizontal weight="bold" size={14} />
-                    Configure
+                    {t("success.configure")}
                   </Button>
                   {/* "Join" — to the room's own page — used to sit here, and for a BOOKING it was
                       the wrong offer twice over. It is not a meeting yet, so there is nothing to
@@ -796,7 +852,7 @@ export function CreateRoomDialog() {
                     )}
                   >
                     <CalendarCheck weight="bold" size={14} />
-                    View in calendar
+                    {t("success.viewInCalendar")}
                   </Link>
                 </div>
               </div>

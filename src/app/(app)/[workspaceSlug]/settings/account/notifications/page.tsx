@@ -20,8 +20,9 @@
  *   channel on) on GET and on PUT.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Spinner, Warning } from "@phosphor-icons/react";
 
 import { WorkspacePage } from "@/components/workspace/page-chrome";
@@ -37,25 +38,10 @@ import type { UpdateNotificationPreferenceRequest } from "@/types/notification";
 
 type Channel = keyof Required<UpdateNotificationPreferenceRequest>;
 
-const CHANNELS: { key: Channel; title: string; hint: string; enforced: boolean }[] = [
-  {
-    key: "emailEnabled",
-    title: "Email",
-    hint: "Send notifications to your account email address.",
-    enforced: true,
-  },
-  {
-    key: "pushEnabled",
-    title: "Push",
-    hint: "Browser and desktop push notifications.",
-    enforced: false,
-  },
-  {
-    key: "inAppEnabled",
-    title: "In-app",
-    hint: "The notification bell and pop-up alerts inside WarpTalk.",
-    enforced: false,
-  },
+const CHANNEL_DEFS: { key: Channel; messageKey: "email" | "push" | "inApp"; enforced: boolean }[] = [
+  { key: "emailEnabled", messageKey: "email", enforced: true },
+  { key: "pushEnabled", messageKey: "push", enforced: false },
+  { key: "inAppEnabled", messageKey: "inApp", enforced: false },
 ];
 
 /** The band divider, as on Security. */
@@ -88,8 +74,19 @@ function Row({
 }
 
 export default function PersonalNotificationsPage() {
+  const t = useTranslations("settingsNotifications");
   const preferencesQuery = useNotificationPreferences();
   const updateMutation = useUpdateNotificationPreferences();
+
+  const channels = useMemo(
+    () =>
+      CHANNEL_DEFS.map((channel) => ({
+        ...channel,
+        title: t(`channels.${channel.messageKey}.title`),
+        hint: t(`channels.${channel.messageKey}.hint`),
+      })),
+    [t],
+  );
 
   /**
    * The switches on screen, seeded from the server once. A mirror rather than the query itself so
@@ -123,7 +120,7 @@ export default function PersonalNotificationsPage() {
 
   const autoSave = useAutoSaveQueue<UpdateNotificationPreferenceRequest>({
     save: savePatch,
-    onError: (error) => toast.error(getErrorMessage(error, "Failed to save notification settings.")),
+    onError: (error) => toast.error(getErrorMessage(error, t("toasts.saveFailed"))),
   });
 
   const commit = (channel: Channel, value: boolean) => {
@@ -156,10 +153,9 @@ export default function PersonalNotificationsPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
               <Warning className="h-6 w-6" />
             </div>
-            <p className="text-sm font-semibold text-ink">Couldn&apos;t load notification settings</p>
+            <p className="text-sm font-semibold text-ink">{t("error.title")}</p>
             <p className="text-xs text-ink-muted">
-              Nothing is shown rather than defaults that may not be yours. Retry, and if it keeps
-              failing check that the notification service is reachable.
+              {t("error.hint")}
             </p>
             <button
               type="button"
@@ -167,7 +163,7 @@ export default function PersonalNotificationsPage() {
               disabled={preferencesQuery.isFetching}
               className="mt-2 inline-flex h-9 items-center rounded-md border border-hairline bg-surface-2 px-4 text-xs font-semibold transition hover:bg-surface-3 disabled:opacity-60"
             >
-              {preferencesQuery.isFetching ? "Retrying…" : "Retry"}
+              {preferencesQuery.isFetching ? t("error.retrying") : t("error.retry")}
             </button>
           </div>
         </div>
@@ -181,19 +177,18 @@ export default function PersonalNotificationsPage() {
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 text-ink">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-col gap-1">
-              <h1 className="text-xl font-bold tracking-tight text-ink">Notifications</h1>
+              <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
               <p className="text-xs text-ink-muted">
-                Choose which channels WarpTalk may use to reach you. These apply across every
-                workspace.
+                {t("header.subtitle")}
               </p>
             </div>
             <AutoSaveStatusBadge status={autoSave.status} onRetry={autoSave.retry} />
           </div>
 
           <div className="flex flex-col gap-3">
-            <SectionLabel>Channels</SectionLabel>
+            <SectionLabel>{t("channels.sectionTitle")}</SectionLabel>
             <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-linear">
-              {CHANNELS.map((channel) => (
+              {channels.map((channel) => (
                 <Row
                   key={channel.key}
                   title={
@@ -201,7 +196,7 @@ export default function PersonalNotificationsPage() {
                       {channel.title}
                       {!channel.enforced && (
                         <span className="rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-ink-muted">
-                          Not applied yet
+                          {t("channels.notAppliedYet")}
                         </span>
                       )}
                     </span>
@@ -209,11 +204,11 @@ export default function PersonalNotificationsPage() {
                   hint={
                     channel.enforced
                       ? channel.hint
-                      : `${channel.hint} Your choice is saved, but delivery does not read it yet.`
+                      : `${channel.hint} ${t("channels.notAppliedSuffix")}`
                   }
                 >
                   <Switch
-                    aria-label={`${channel.title} notifications`}
+                    aria-label={t("channels.ariaLabel", { title: channel.title })}
                     checked={draft[channel.key]}
                     onCheckedChange={(value) => commit(channel.key, value)}
                   />

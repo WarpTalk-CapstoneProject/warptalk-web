@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, X } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 /**
  * "Your meeting's ready" — the link, inside the meeting.
@@ -27,6 +28,8 @@ export function MeetingReadyCard({
   onInvite: () => void;
   onDismiss: () => void;
 }) {
+  const t = useTranslations("meetingCallChrome.readyCard");
+
   return (
     <div
       data-meeting-ready-card
@@ -35,15 +38,15 @@ export function MeetingReadyCard({
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={t("dismissAria")}
         className="absolute right-2.5 top-2.5 rounded-md p-1 text-ink-muted transition hover:bg-surface-2 hover:text-ink"
       >
         <X weight="bold" className="size-3.5" />
       </button>
 
-      <p className="text-[14px] font-semibold text-ink">Your meeting&rsquo;s ready</p>
+      <p className="text-[14px] font-semibold text-ink">{t("title")}</p>
       <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
-        Share this link with the people you want in the meeting.
+        {t("description")}
       </p>
 
       <button
@@ -69,7 +72,7 @@ export function MeetingReadyCard({
           onClick={onInvite}
           className="rounded-md px-2 py-1 text-[12px] font-medium text-primary transition hover:bg-primary/10"
         >
-          Add others
+          {t("addOthers")}
         </button>
       </div>
     </div>

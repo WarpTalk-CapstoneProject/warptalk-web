@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import gsap from "gsap";
 import { LinearSidebar } from "@/components/layout/linear-sidebar";
 import {
@@ -21,16 +22,20 @@ import { GlobalChatbot } from "@/components/layout/global-chatbot";
 import { NotificationPopover } from "@/components/notifications/notification-popover";
 import { NotificationSoundToggle } from "@/components/layout/notification-sound-toggle";
 import { ThemeToggleButton } from "@/components/layout/theme-toggle-button";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
+import { AnnouncementHost } from "@/components/announcements/announcement-host";
 import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
 import { WorkspaceMembersPanel } from "@/components/layout/workspace-members-panel";
 
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { AdminCommandPalette, AdminHeaderSearch } from "@/components/admin/admin-command-palette";
 import { startProactiveRefresh } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
+import { adminPageLabelKey } from "@/lib/admin/admin-page-title";
 import { isLiveMeetingPath, isWorkspaceActivationPath } from "@/lib/workspace/workspace-routes";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ProductTour } from "@/components/onboarding/product-tour";
@@ -162,6 +167,7 @@ function AnimatedWidthPanel({
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("common");
   const pathname = usePathname();
   const router = useRouter();
   const {
@@ -216,9 +222,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const roomQuery = useTranslationRoom(roomId ?? "");
   const roomTitle = roomId && roomQuery?.data ? roomQuery.data.title : undefined;
   const workspaceTabScope = activeWorkspaceSlug || "global";
+  const workspaceTabsT = useTranslations("common.workspaceTabs");
   const workspaceTabOptions = useMemo(
-    () => buildTabOptions(activeWorkspaceSlug || "workspace"),
-    [activeWorkspaceSlug]
+    () => buildTabOptions(activeWorkspaceSlug || "workspace", workspaceTabsT),
+    [activeWorkspaceSlug, workspaceTabsT]
   );
   const currentWorkspaceTab = useMemo(
     () => resolveCurrentTab(pathname, workspaceTabOptions),
@@ -573,8 +580,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button
               onClick={toggleLeftSidebar}
               className="flex size-6 items-center justify-center rounded-[6px] border border-transparent hover:bg-surface-2 hover:text-ink transition-colors mr-1"
-              title={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-              aria-label={leftSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+              title={leftSidebarOpen ? t("topbar.collapseSidebar") : t("topbar.expandSidebar")}
+              aria-label={leftSidebarOpen ? t("topbar.collapseSidebar") : t("topbar.expandSidebar")}
             >
               <SidebarSimple size={13} weight="bold" />
             </button>
@@ -584,67 +591,103 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
               if (segments.length >= 1) {
                 const firstSeg = segments[0];
-                if (firstSeg === "voice-profiles") {
-                  parts.push({ label: "Voice Profiles" });
+                if (firstSeg === "admin") {
+                  // One map for every admin page (lib/admin/admin-page-title.ts); "Insights" is
+                  // /admin's own title, never the fallback for a page the map does not know.
+                  const key = adminPageLabelKey(pathname);
+                  if (key) parts.push({ label: t(`sidebar.adminNav.items.${key}`) });
+                } else if (firstSeg === "settings" && segments[1] === "plugins") {
+                  // The personal page, outside any workspace slug: "My connections", never the raw
+                  // segment, and never "Plugins", which is the workspace page's name.
+                  parts.push({ label: t("sidebar.settingsNav.myConnections") });
+                } else if (firstSeg === "voice-profiles") {
+                  parts.push({ label: t("sidebar.nav.voiceProfiles") });
                 } else if (firstSeg === "join") {
-                  parts.push({ label: "Join Translation Room" });
+                  parts.push({ label: t("sidebar.joinDialog.title") });
                 } else if (firstSeg === "room") {
-                  parts.push({ label: "Meetings", href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
+                  parts.push({ label: t("sidebar.nav.meetings"), href: `/${activeWorkspaceSlug || "workspace"}/rooms` });
                   const rId = segments[1];
                   if (rId) {
-                    parts.push({ label: roomTitle || "Loading..." });
+                    parts.push({ label: roomTitle || t("topbar.loading") });
                   }
                 } else if (segments.length >= 2) {
                   const slug = firstSeg;
                   const feature = segments[1];
 
                   if (feature === "rooms") {
-                    parts.push({ label: "Meetings", href: `/${slug}/rooms` });
+                    parts.push({ label: t("sidebar.nav.meetings"), href: `/${slug}/rooms` });
                     const sub = segments[2];
                     if (sub) {
-                      parts.push({ label: roomTitle || "Loading..." });
+                      parts.push({ label: roomTitle || t("topbar.loading") });
                     }
                   } else if (feature === "artifacts") {
-                    parts.push({ label: "Artifacts" });
+                    parts.push({ label: t("sidebar.nav.artifacts") });
                   } else if (feature === "dashboard") {
-                    parts.push({ label: "Dashboard" });
+                    parts.push({ label: t("sidebar.nav.dashboard") });
                   } else if (feature === "home") {
-                    parts.push({ label: "Home" });
+                    parts.push({ label: t("sidebar.nav.home") });
                   } else if (feature === "members") {
-                    parts.push({ label: "Members" });
+                    parts.push({ label: t("sidebar.nav.members") });
                   } else if (feature === "documents") {
-                    parts.push({ label: "Documents" });
+                    parts.push({ label: t("sidebar.nav.documents") });
+                  } else if (feature === "schedules") {
+                    parts.push({ label: t("sidebar.nav.schedules") });
+                  } else if (feature === "voice-profiles") {
+                    parts.push({ label: t("sidebar.nav.voiceProfiles") });
+                  } else if (feature === "glossary") {
+                    parts.push({ label: t("sidebar.nav.glossary") });
+                  } else if (feature === "tasks") {
+                    parts.push({ label: t("sidebar.nav.myTasks") });
+                  } else if (feature === "knowledge") {
+                    parts.push({ label: t("sidebar.nav.knowledge") });
                   } else if (feature === "settings") {
                     const sub = segments[2];
+                    const SETTINGS_SUB_KEYS: Record<string, string> = {
+                      plugins: "workspacePlugins",
+                      "plugin-activity": "pluginActivity",
+                      billing: "billing",
+                      features: "features",
+                      "member-roles": "memberRoles",
+                      security: "security",
+                      "audit-log": "auditLog",
+                    };
+                    const ACCOUNT_LEAF_KEYS: Record<string, string> = {
+                      profile: "profile",
+                      preferences: "preferences",
+                      notifications: "notifications",
+                      "connected-accounts": "connectedAccounts",
+                      sessions: "sessionsDevices",
+                    };
                     if (sub === "account") {
-                      parts.push({ label: "Settings", href: `/${slug}/settings` });
+                      parts.push({ label: t("sidebar.settingsNav.settingsLabel"), href: `/${slug}/settings` });
                       const leaf = segments[3];
-                      if (leaf === "profile") {
-                        parts.push({ label: "Profile" });
-                      } else if (leaf === "preferences") {
-                        parts.push({ label: "Preferences" });
-                      } else {
-                        parts.push({ label: leaf || "Account" });
-                      }
+                      const leafKey = leaf ? ACCOUNT_LEAF_KEYS[leaf] : undefined;
+                      parts.push({ label: leafKey ? t(`sidebar.settingsNav.${leafKey}`) : t("topbar.account") });
                     } else {
-                      parts.push({ label: "Settings" });
+                      const subKey = sub ? SETTINGS_SUB_KEYS[sub] : undefined;
+                      if (subKey) {
+                        parts.push({ label: t("sidebar.settingsNav.settingsLabel"), href: `/${slug}/settings` });
+                        parts.push({ label: t(`sidebar.settingsNav.${subKey}`) });
+                      } else {
+                        parts.push({ label: t("sidebar.settingsNav.settingsLabel") });
+                      }
                     }
                   } else if (feature === "billing") {
-                    parts.push({ label: "Billing" });
+                    parts.push({ label: t("sidebar.settingsNav.billing") });
                   } else if (feature === "payment") {
-                    parts.push({ label: "Payment" });
+                    parts.push({ label: t("topbar.payment") });
                     const sub = segments[2];
                     if (sub) {
-                      parts.push({ label: sub === "plans" ? "Plans" : sub });
+                      parts.push({ label: sub === "plans" ? t("topbar.plans") : sub });
                     }
                   } else {
                     parts.push({ label: feature });
                   }
                 } else {
-                  parts.push({ label: "Workspace" });
+                  parts.push({ label: t("sidebar.workspaceFallback") });
                 }
               } else {
-                parts.push({ label: "Workspace" });
+                parts.push({ label: t("sidebar.workspaceFallback") });
               }
 
               return parts.map((part, index) => {
@@ -669,8 +712,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 type="button"
                 onClick={handleAddCurrentWorkspaceTab}
                 className="ml-0.5 grid size-5 shrink-0 place-items-center rounded-[6px] border border-transparent text-ink-muted transition-colors hover:border-border hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                title={`Add ${currentWorkspaceTab.title} tab`}
-                aria-label={`Add ${currentWorkspaceTab.title} tab`}
+                title={t("topbar.addTab", { title: currentWorkspaceTab.title })}
+                aria-label={t("topbar.addTab", { title: currentWorkspaceTab.title })}
               >
                 <Plus size={11} weight="bold" />
               </button>
@@ -684,13 +727,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             what gives up space on a narrow window.
           */}
           <div className="hidden min-w-0 flex-1 justify-center px-4 md:flex">
-            <HeaderSearch />
+            {/* The admin portal has no rooms to paste a code for: its box opens the admin command
+                palette (pages, records, actions) instead. See admin-command-palette.tsx. */}
+            {isAdminRoute ? <AdminHeaderSearch /> : <HeaderSearch />}
           </div>
 
           <div className="flex items-center justify-end gap-1.5 text-ink-muted">
             <NotificationPopover />
             <NotificationSoundToggle />
             <ThemeToggleButton />
+            <LanguageSwitcher compact />
             {/* This was a button with no onClick — the only affordance in the header that did
                 nothing at all. It opens the tour now, which is also where the tour's last step
                 points, so somebody who skipped it knows where it went. */}
@@ -698,8 +744,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               type="button"
               data-tour="help-button"
               onClick={openTour}
-              title="Show me around"
-              aria-label="Show me around"
+              title={t("topbar.showMeAround")}
+              aria-label={t("topbar.showMeAround")}
               className="flex size-6 items-center justify-center rounded-full border border-hairline bg-surface-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-surface-2 hover:text-ink transition-colors"
             >
               <Question size={12} weight="bold" />
@@ -723,6 +769,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               content area — the meeting notices — stays put while the page scrolls under
               it. `<main>` itself cannot serve: it IS the scroll container. */}
           <div className="relative flex min-w-0 flex-1 flex-col">
+          {/* Published announcements (admin → Announcements): the top banner sits above the
+              scroll container so it stays put while the page scrolls; the modal and toasts float.
+              Not on the admin console, where the CMS previews them, and not inside a live
+              meeting, where nothing should compete. The bell panel and the workspace home render
+              the other two placements. */}
+          <AnnouncementHost enabled={!isAdminRoute && !isLiveMeetingRoute && !isOnboardingRoute} />
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}
             {activeMeetingRoomId ? (
@@ -800,7 +852,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </div>
       <CreateRoomDialog />
-      <SearchMeetingDialog />
+      {/* One palette per shell, never both: each owns ⌘K, and two would answer the same keypress. */}
+      {isAdminRoute ? <AdminCommandPalette /> : <SearchMeetingDialog />}
       <SetupRoomModal />
     </div>
   );

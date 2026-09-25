@@ -108,11 +108,6 @@ export function PluginConnectionActionCard({
               <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
                 {message}
               </p>
-              {action.connectedAccountEmail ? (
-                <p className="mt-1 truncate text-[11px] text-ink-subtle">
-                  {action.connectedAccountEmail}
-                </p>
-              ) : null}
             </div>
             <button
               type="button"

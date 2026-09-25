@@ -1,5 +1,6 @@
 "use client";
 
+import { useLocale, useTranslations } from "next-intl";
 import { CopySimple } from "@phosphor-icons/react";
 
 import {
@@ -43,6 +44,8 @@ export function DocumentDuplicateDialog({
   onClose: () => void;
   onChoose: (strategy: DuplicateStrategy) => void | Promise<void>;
 }) {
+  const t = useTranslations("documents.duplicateDialog");
+  const locale = useLocale();
   const duplicate = conflict?.duplicate ?? null;
 
   return (
@@ -56,21 +59,16 @@ export function DocumentDuplicateDialog({
             <CopySimple className="h-5 w-5" />
           </div>
           <DialogTitle className="text-center text-base font-bold">
-            This file is already here
+            {t("title")}
           </DialogTitle>
           <DialogDescription className="text-center text-xs leading-normal text-ink-muted">
             {duplicate ? (
-              <>
-                The same file was uploaded as{" "}
-                <span className="font-semibold text-ink">{duplicate.name}</span> on{" "}
-                {new Date(duplicate.createdAt).toLocaleDateString()}. Nothing has been
-                stored yet.
-              </>
+              t.rich("descriptionKnown", {
+                name: () => <span className="font-semibold text-ink">{duplicate.name}</span>,
+                date: new Date(duplicate.createdAt).toLocaleDateString(locale),
+              })
             ) : (
-              <>
-                An identical file is already in this workspace, in a document you do not
-                have access to. Nothing has been stored yet.
-              </>
+              t("descriptionUnknown")
             )}
           </DialogDescription>
         </DialogHeader>
@@ -83,9 +81,9 @@ export function DocumentDuplicateDialog({
               onClick={() => onChoose(DUPLICATE_STRATEGY.SKIP)}
               className="flex flex-col items-start gap-0.5 rounded-xl border border-hairline bg-surface-2/40 px-3.5 py-2.5 text-left transition hover:bg-surface-2 disabled:opacity-50"
             >
-              <span className="text-xs font-bold text-ink">Keep the existing document</span>
+              <span className="text-xs font-bold text-ink">{t("keepExisting")}</span>
               <span className="text-[11px] leading-tight text-ink-muted">
-                Cancels this upload and opens {duplicate.name}.
+                {t("keepExistingDetail", { name: duplicate.name })}
               </span>
             </button>
           )}
@@ -98,10 +96,10 @@ export function DocumentDuplicateDialog({
               className="flex flex-col items-start gap-0.5 rounded-xl border border-hairline bg-surface-2/40 px-3.5 py-2.5 text-left transition hover:bg-surface-2 disabled:opacity-50"
             >
               <span className="text-xs font-bold text-ink">
-                Replace its file with this one
+                {t("replace")}
               </span>
               <span className="text-[11px] leading-tight text-ink-muted">
-                Keeps {duplicate.name} and its history, and sends it back for approval.
+                {t("replaceDetail", { name: duplicate.name })}
               </span>
             </button>
           )}
@@ -112,9 +110,9 @@ export function DocumentDuplicateDialog({
             onClick={() => onChoose(DUPLICATE_STRATEGY.CREATE_NEW)}
             className="flex flex-col items-start gap-0.5 rounded-xl border border-hairline bg-surface-2/40 px-3.5 py-2.5 text-left transition hover:bg-surface-2 disabled:opacity-50"
           >
-            <span className="text-xs font-bold text-ink">Upload it anyway</span>
+            <span className="text-xs font-bold text-ink">{t("uploadAnyway")}</span>
             <span className="text-[11px] leading-tight text-ink-muted">
-              Creates a second, separate document with the same contents.
+              {t("uploadAnywayDetail")}
             </span>
           </button>
         </div>
@@ -126,7 +124,7 @@ export function DocumentDuplicateDialog({
             disabled={isSubmitting}
             className="h-9 w-full rounded-xl border border-hairline bg-surface-1 text-xs font-semibold transition hover:bg-surface-2 disabled:opacity-50"
           >
-            Cancel
+            {t("cancel")}
           </button>
         </DialogFooter>
       </DialogContent>

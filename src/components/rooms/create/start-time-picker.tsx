@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { format, setHours, setMinutes } from "date-fns";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -7,6 +8,7 @@ import { PillButton } from "./pill-button";
 import { TimeField } from "./time-field";
 
 export function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduledAt: Date; onChange: (value: Date) => void; onRemove: () => void }) {
+  const t = useTranslations("rooms.create.startTime");
   const [timeStr, setTimeStr] = useState(format(scheduledAt, "HH:mm"));
 
   const handleTimeChange = (val: string) => {
@@ -48,15 +50,15 @@ export function StartTimePicker({ scheduledAt, onChange, onRemove }: { scheduled
           {/* WT-548: not `<input type="time">`. Its am/pm labels come from the BROWSER's
               language, so a Vietnamese Chrome rendered "09:00 SA" inside an English dialog. */}
           <TimeField
-            label="Start time"
+            label={t("label")}
             value={timeStr}
             onChange={handleTimeChange}
             className="flex-1"
           />
-          <button 
+          <button
             onClick={onRemove}
             className="p-1.5 text-red-500 hover:bg-red-500/10 rounded-md transition-colors shrink-0"
-            title="Remove schedule"
+            title={t("remove")}
           >
             <Trash weight="bold" size={14} />
           </button>

@@ -18,11 +18,13 @@ import {
   ARTIFACT_WITHHELD_FALLBACK,
   isArtifactWithheld,
 } from "@/lib/meeting/artifact-denial";
+import { releaseArtifactIfPermitted } from "@/lib/meeting/artifact-consent";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import {
   artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
+  recordingFailureText,
   canDownloadArtifact,
   pendingOutputs,
 } from "@/lib/meeting/meeting-artifacts";
@@ -92,14 +94,14 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
 
     setBusyArtifactId(artifact.id);
     try {
-      if (artifact.consentRequired) {
-        await translationRoomService.approveArtifactConsent(artifact.id);
-      }
+      const released = artifact.consentRequired
+        ? await releaseArtifactIfPermitted(artifact.id)
+        : false;
       const { data } = await translationRoomService.artifactDownload(
         artifact.id,
       );
       openArtifactDownload(data);
-      if (artifact.consentRequired) onConsentGranted?.();
+      if (released) onConsentGranted?.();
     } catch (error) {
       // A host-only artifact is withheld, not broken — the same distinction the history preview
       // and the Summary tab already draw. `error.message` was also the wrong source: on an axios
@@ -339,9 +341,9 @@ export function MeetingRecordingPlayer({
     if (!artifact || isLoading) return;
     setIsLoading(true);
     try {
-      if (artifact.consentRequired) {
-        await translationRoomService.approveArtifactConsent(artifact.id);
-      }
+      const released = artifact.consentRequired
+        ? await releaseArtifactIfPermitted(artifact.id)
+        : false;
       const { data } = await translationRoomService.artifactDownload(artifact.id);
       // `content` is the inline path used by the text exports; a recording always arrives as a
       // link, so an absent url here means the file is gone rather than that it is empty.
@@ -350,7 +352,7 @@ export function MeetingRecordingPlayer({
         return;
       }
       setLoaded({ artifactId: artifact.id, url: data.url });
-      if (artifact.consentRequired) onConsentGranted?.();
+      if (released) onConsentGranted?.();
     } catch (error) {
       // Withheld is a policy answer, not a failure — the same distinction the download path and
       // the Summary tab already draw.
@@ -843,6 +845,12 @@ export function ArtifactsPanel({
               <span className="mt-0.5 block text-[10px] text-ink-subtle">
                 {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
               </span>
+              {/* WT-824: a failed recording says why, not only that it failed. */}
+              {recordingFailureText(artifact) ? (
+                <span className="mt-0.5 block text-[10px] leading-snug text-ink-muted">
+                  {recordingFailureText(artifact)}
+                </span>
+              ) : null}
             </span>
             {busyArtifactId === artifact.id ? (
               <SpinnerGap size={14} className="animate-spin text-ink-muted" />

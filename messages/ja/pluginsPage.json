@@ -1,0 +1,124 @@
+{
+  "header": {
+    "title": "マイ接続",
+    "subtitle": "WarpBotが使えるあなた自身のアカウントです。ワークスペースが提供するプラグインを接続しましょう。"
+  },
+  "search": {
+    "placeholder": "プラグインを絞り込む"
+  },
+  "installed": {
+    "title": "インストール済み",
+    "empty": "まだプラグインがインストールされていません。"
+  },
+  "allPlugins": {
+    "title": "すべてのプラグイン"
+  },
+  "loading": "プラグインを読み込み中...",
+  "error": {
+    "message": "プラグインを読み込めませんでした。",
+    "retry": "再試行"
+  },
+  "empty": {
+    "withQuery": "「{query}」に一致するプラグインはこのカタログにありません。",
+    "withoutQuery": "まだ利用可能なプラグインはありません。",
+    "filterNote": "これは現在WarpTalkが提供しているプラグインを絞り込みます。より広いマーケットプレイスを検索するものではありません。",
+    "clearFilter": "絞り込みを解除"
+  },
+  "actionLabels": {
+    "connect": "接続",
+    "manage": "管理",
+    "reconnect": "再接続",
+    "request": "リクエスト",
+    "requested": "リクエスト済み",
+    "add": "追加"
+  },
+  "memberAction": {
+    "addedByWorkspace": "ワークスペースによって追加されました",
+    "notAddedYet": "まだ{workspaceName}に追加されていません",
+    "waitingForOwner": "ワークスペースのオーナーの承認待ちです",
+    "thisWorkspace": "このワークスペース",
+    "disabledByPlatform": "WarpTalkがこのワークスペースでこのプラグインをオフにしました。接続は保持されますが、WarpBotはここでは使用しません。"
+  },
+  "consentNotice": {
+    "awaitingHeadline": "ブラウザで{label}の接続を完了してください",
+    "blockedHeadline": "ブラウザが{label}のサインインウィンドウをブロックしました",
+    "blockedDetail": "WarpTalkのポップアップを許可するか、自分で開いてください。",
+    "unconfirmedHeadline": "WarpTalkは{label}の接続を受信できませんでした",
+    "unconfirmedDetail": "プロバイダーのページを閉じたりキャンセルした場合、何も変更されていません。",
+    "partialHeadline": "{label}には必要な権限がまだ不足しています",
+    "partialDetail": "アカウントは接続されていますが、このプラグインが要求する権限が承認されていません。",
+    "openBrowser": "ブラウザを開く",
+    "tryAgain": "再試行",
+    "dismissAria": "接続通知を閉じる"
+  },
+  "consentCallbackErrors": {
+    "access_denied": "サインインをキャンセルしたため、何も接続されませんでした。",
+    "permission_denied": "そのサインインリンクはすでに使用されたか、期限切れです。接続をもう一度開始してください。",
+    "unknown_plugin": "そのプラグインは利用できなくなりました。",
+    "plugin_not_installed": "そのプラグインはこのアカウント用にインストールされていません。インストールしてから接続してください。",
+    "connection_required": "プロバイダーが継続的なアクセス権を返しませんでした。もう一度接続してリクエストを承認してください。",
+    "provider_configuration": "このプロバイダーへのWarpTalkの接続が正しく設定されていません。アカウントには問題ありません。",
+    "provider_unavailable": "プロバイダーがサインインを完了できませんでした。しばらくしてからもう一度お試しください。",
+    "provider_account_mismatch": "すでに接続されているアカウントとは別のアカウントでサインインしました。まず接続済みのアカウントを切断してから、こちらを接続してください。",
+    "generic": "{label}を接続できませんでした。接続をもう一度開始してください。",
+    "refSuffix": "（参照番号 {ref}）"
+  },
+  "toasts": {
+    "defaultPluginLabel": "このプラグイン",
+    "partialPermission": "{label}は接続されましたが、必要な権限が承認されていません。",
+    "connected": "{label}を接続しました",
+    "couldNotConnect": "{label}を接続できませんでした。",
+    "couldNotConnectApiKey": "{label}を接続できませんでした。キーを確認して、もう一度お試しください。",
+    "couldNotStartConnection": "{label}の接続を開始できませんでした。",
+    "requestSent": "ワークスペースのオーナーにリクエストを送信しました",
+    "couldNotAsk": "{label}をリクエストできませんでした。",
+    "added": "{label}をこのワークスペースに追加しました",
+    "couldNotAdd": "{label}を追加できませんでした。",
+    "disconnected": "{label}を切断しました",
+    "couldNotDisconnect": "{label}を切断できませんでした。",
+    "removed": "{label}を削除しました",
+    "couldNotFinishRemoving": "{label}の削除を完了できませんでした。"
+  },
+  "permissionList": {
+    "empty": "このプラグインは接続時に権限を公開します。プロバイダーの同意画面には、承認前に要求している内容が正確に表示されます。",
+    "heading": "承認するとこのプラグインが可能になること"
+  },
+  "connectDialog": {
+    "closeAria": "プラグインダイアログを閉じる",
+    "titleWarpBot": "WarpBot",
+    "titleWantsAccess": "（WarpTalk提供）があなたの{label}へのアクセスを求めています",
+    "subtitleConnected": "WarpBotはあなたの代わりに{label}を使用できます。",
+    "subtitleReused": "{siblingLabel}向けにWarpTalkにすでに与えたサインインを使用します。新しいサインインは不要です。",
+    "subtitleApiKey": "ご自身の{label}アカウントのAPIキーを貼り付けてください。",
+    "subtitleDefault": "プロバイダー自身のページでサインインして確認します。",
+    "notOwned": "WarpTalkはこのプロバイダーを所有または運営していません。",
+    "tokensEncrypted": "トークンは暗号化されたまま保存されます。<b>書き込み</b>操作は、許可しない限り事前に確認を求めます。",
+    "sharedConnectionNote": "<b>{labels}</b>はこのサインインを再利用できますが、各プラグインは個別に接続・切断されます。",
+    "continueTo": "{label}へ進む",
+    "connectLabel": "{label}を接続",
+    "apiKey": {
+      "label": "{label}のAPIキー",
+      "empty": "先にAPIキーを貼り付けてください。",
+      "hint": "このキーを使うのはあなただけです。切断するとキーは削除されます。"
+    },
+    "connectedToWarpTalk": "WarpTalkに接続済み",
+    "partiallyGranted": "サインインしましたが、{label}が必要とする権限が承認されていません。続行して承認してください。",
+    "manageThisPlugin": "自分のアカウント用にこのプラグインを管理",
+    "disconnect": "切断",
+    "remove": "削除",
+    "cancel": "キャンセル",
+    "confirmDisconnect": "{label}を切断しますか？ アカウントを再接続するまでWarpBotはアクセスできなくなります。",
+    "confirmRemove": "{label}を削除しますか？ そのツールはWarpBotから消え、切断されます。"
+  },
+  "requestDialog": {
+    "closeAria": "リクエストダイアログを閉じる",
+    "ariaLabel": "{label}をリクエスト",
+    "title": "{label}をリクエスト",
+    "onlyOwnerCanAdd": "ワークスペースのオーナーのみが{workspaceName}にプラグインを追加できます。オーナーに通知が届き、結果にかかわらずあなたにも連絡があります。",
+    "defaultWorkspaceName": "このワークスペース",
+    "reasonLabel": "なぜ必要ですか？",
+    "optional": "任意",
+    "reasonPlaceholder": "例：会議のアクションアイテムで{label}を使用",
+    "sendRequest": "リクエストを送信"
+  }
+}

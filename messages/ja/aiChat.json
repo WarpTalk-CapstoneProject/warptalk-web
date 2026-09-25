@@ -1,0 +1,22 @@
+{
+  "conversations": "AIチャット",
+  "new": "新規",
+  "loadingConversations": "会話を読み込み中…",
+  "loadConversationsFailed": "会話を読み込めませんでした。",
+  "emptyConversations": "会話を作成して、このワークスペースについてWarpTalk AIに質問しましょう。",
+  "defaultTitle": "WarpTalk AI",
+  "loadingMessages": "メッセージを読み込み中…",
+  "loadMessagesFailed": "この会話を読み込めませんでした。",
+  "emptyMessages": "ミーティング、文字起こし、ワークスペースのドキュメントについて質問してください。",
+  "messageFailed": "メッセージの処理に失敗しました。",
+  "inputPlaceholder": "このワークスペースについてWarpTalk AIに質問…",
+  "sending": "送信中…",
+  "send": "送信",
+  "toasts": {
+    "pluginConnected": "プラグインを接続しました。",
+    "pluginConnectOpenBrowser": "ブラウザでこのプラグインの接続を完了してください。",
+    "pluginConnectBlocked": "ブラウザが同意ウィンドウをブロックしました。",
+    "pluginConnectBlockedAction": "開く",
+    "pluginConnectFailed": "プラグインの接続フローを開けませんでした。"
+  }
+}

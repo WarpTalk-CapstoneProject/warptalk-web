@@ -1,0 +1,135 @@
+{
+  "accessDenied": {
+    "title": "システム管理者権限が必要です",
+    "description": "共通用語集はすべてのワークスペースに適用されるシステム全体の基準です。閲覧・編集できるのはプラットフォーム管理者のみです。"
+  },
+  "header": {
+    "eyebrow": "プラットフォーム用語",
+    "title": "共通用語集",
+    "description": "すべてのワークスペースに適用されるシステム全体の用語基準です(ワークスペース側で除外している場合を除く)。ワークスペース独自の用語集は、一致する共通用語より常に優先されます。"
+  },
+  "actions": {
+    "bulkImportCsv": "CSVで一括インポート",
+    "newTerm": "新しい用語"
+  },
+  "filters": {
+    "statusLabel": "用語のステータス",
+    "status": {
+      "all": "すべて",
+      "draft": "下書き",
+      "published": "公開済み",
+      "archived": "アーカイブ済み"
+    },
+    "searchPlaceholder": "用語または訳語を検索…"
+  },
+  "table": {
+    "term": "用語",
+    "translation": "訳語",
+    "domain": "分野",
+    "priority": "優先度",
+    "status": "ステータス",
+    "actions": "操作",
+    "noDomain": "—",
+    "emptyTitle": "用語が見つかりません"
+  },
+  "rowActions": {
+    "edit": "編集",
+    "publish": "公開",
+    "archive": "アーカイブ",
+    "viewAuditHistory": "変更履歴を表示",
+    "delete": "削除"
+  },
+  "fields": {
+    "term": "用語",
+    "termPlaceholder": "例: architect",
+    "preferredTranslation": "推奨訳語",
+    "preferredTranslationPlaceholder": "例: architect(そのまま維持)",
+    "sourceLanguageOptional": "元の言語(任意)",
+    "targetLanguageOptional": "訳先の言語(任意)",
+    "sourceLanguage": "元の言語",
+    "targetLanguage": "訳先の言語",
+    "allLanguages": "すべての言語",
+    "businessDomainOptional": "業務分野(任意)",
+    "businessDomain": "業務分野",
+    "businessDomainPlaceholder": "例: IT、財務",
+    "definition": "定義",
+    "definitionPlaceholder": "公開前に必須",
+    "usageNoteOptional": "使用上のメモ(任意)",
+    "usageNote": "使用上のメモ",
+    "priority": "優先度(0〜10)"
+  },
+  "createDialog": {
+    "title": "新しい共通用語",
+    "description": "下書きとして作成されます — すべてのワークスペースに反映するには、明示的に公開してください。",
+    "cancel": "キャンセル",
+    "submit": "下書きを作成"
+  },
+  "editDialog": {
+    "title": "共通用語を編集",
+    "description": "変更は記録され、この用語が公開されていれば即座に反映されます。",
+    "cancel": "キャンセル",
+    "submit": "変更を保存"
+  },
+  "bulkImportDialog": {
+    "title": "一括インポート(CSV)",
+    "description": "列見出し: Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority(必須はTermとTranslationのみ)。インポートされた行は下書きとして登録されます。",
+    "cancel": "キャンセル",
+    "submit": "インポート"
+  },
+  "auditDialog": {
+    "title": "変更履歴",
+    "description": "誰が、いつこの用語を変更したか。",
+    "noEntries": "まだ変更履歴はありません。",
+    "actor": "実行者: {actorId}"
+  },
+  "deleteDialog": {
+    "title": "この用語を削除しますか?",
+    "description": "この操作により、<term></term>がすべてのワークスペースの共通用語集から削除されます。この操作は画面上から取り消せません。",
+    "cancel": "キャンセル",
+    "confirm": "削除"
+  },
+  "validation": {
+    "invalidLanguage": "システムが対応している言語を選択するか、「すべての言語」のままにしてください。",
+    "termMin": "用語は3文字以上で入力してください — 短すぎる・一般的すぎる単語は、あらゆる会議の音声認識を誤って占有するおそれがあります。",
+    "translationRequired": "推奨訳語は空にできません"
+  },
+  "toasts": {
+    "createdDraft": "用語「{term}」を下書きとして作成しました。",
+    "createFailed": "用語を作成できませんでした。",
+    "updated": "用語「{term}」を更新しました。",
+    "updateFailed": "用語を更新できませんでした。",
+    "published": "「{term}」を公開しました — 参加中のすべてのワークスペースに即時反映されます。",
+    "publishFailedDefault": "用語を公開できませんでした(定義の入力が必要です)。",
+    "archived": "「{term}」をアーカイブしました。",
+    "archiveFailed": "用語をアーカイブできませんでした。",
+    "deleted": "「{term}」を削除しました。",
+    "deleteFailed": "用語を削除できませんでした。",
+    "csvMissingColumns": "CSVには少なくともTerm列とTranslation列が必要です。",
+    "csvNoValidRows": "有効な行が見つかりませんでした。",
+    "csvUnknownLanguages": "不明な言語コードがあります: {codes}。{allowed} のいずれかを使用するか、すべての言語に適用する場合は列を空欄にしてください。",
+    "bulkImported": "{imported}件をインポートし、{skipped}件をスキップしました。",
+    "bulkImportIssues": "{count}件の行で問題が発生しました — コンソールを確認してください。",
+    "bulkImportFailed": "一括インポートに失敗しました。"
+  },
+  "list": {
+    "termCount": "{count, plural, other {# 件の用語}}",
+    "emptyDescription": "用語を追加するか CSV をインポートして、プラットフォーム全体の基準を設定してください。",
+    "anyLanguage": "すべての言語",
+    "noDomainGroup": "分野なし",
+    "filters": {
+      "domain": "分野",
+      "language": "言語"
+    },
+    "sortFields": {
+      "priority": "優先度 (高い順)",
+      "updated": "最近更新された順",
+      "created": "最近作成された順",
+      "term": "用語"
+    },
+    "columns": {
+      "languages": "言語",
+      "updated": "更新日",
+      "created": "作成日"
+    }
+  }
+}

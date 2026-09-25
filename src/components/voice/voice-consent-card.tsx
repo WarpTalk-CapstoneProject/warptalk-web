@@ -30,6 +30,7 @@
 
 import { CheckCircle, SpinnerGap } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { VoiceChip } from "@/components/voice/voice-line";
@@ -41,6 +42,7 @@ import {
 } from "@/hooks/use-voice-profiles";
 
 export function VoiceConsentCard() {
+  const t = useTranslations("voiceProfiles.consent");
   const { data, isLoading } = useVoiceConsent();
   const grant = useGrantVoiceConsent();
   const revoke = useRevokeVoiceConsent();
@@ -50,31 +52,31 @@ export function VoiceConsentCard() {
 
   return (
     <WorkspaceRailModule
-      title="Cloning you in a meeting"
+      title={t("title")}
       badge={
         isLoading ? null : granted ? (
           <VoiceChip tone="ready">
             <CheckCircle size={11} weight="fill" />
-            Allowed
+            {t("allowed")}
           </VoiceChip>
         ) : null
       }
       description={
         granted
-          ? "A meeting may build a voice model from the first seconds of your speech and dub you in it. That model is biometric data, is used only to dub what you say, and stops being used the moment you withdraw this."
-          : "Off. A meeting will not build a voice from your live speech — your translated words are read in a library voice instead. Uploading a voice below is a separate permission and works without this."
+          ? t("descriptionGranted")
+          : t("descriptionOff")
       }
     >
       {isLoading ? (
         <span className="inline-flex items-center gap-2 text-[12px] text-ink-muted">
           <SpinnerGap className="h-3.5 w-3.5 animate-spin" />
-          Loading…
+          {t("loading")}
         </span>
       ) : granted ? (
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-[11.5px] text-ink-subtle">
-            {data?.grantedAt ? new Date(data.grantedAt).toLocaleDateString() : "Granted"}
-            {data?.consentTextVersion ? ` · terms ${data.consentTextVersion}` : ""}
+            {data?.grantedAt ? new Date(data.grantedAt).toLocaleDateString() : t("granted")}
+            {data?.consentTextVersion ? ` ${t("termsVersion", { version: data.consentTextVersion })}` : ""}
           </span>
           <Button
             variant="ghost"
@@ -83,12 +85,12 @@ export function VoiceConsentCard() {
             disabled={pending}
             onClick={() =>
               revoke.mutate(undefined, {
-                onSuccess: () => toast.success("Withdrawn. Meetings will not clone your voice."),
-                onError: () => toast.error("Could not withdraw your consent. Try again."),
+                onSuccess: () => toast.success(t("toasts.withdrawn")),
+                onError: () => toast.error(t("toasts.withdrawFailed")),
               })
             }
           >
-            Withdraw
+            {t("withdraw")}
           </Button>
         </div>
       ) : (
@@ -98,12 +100,12 @@ export function VoiceConsentCard() {
           disabled={pending}
           onClick={() =>
             grant.mutate(undefined, {
-              onSuccess: () => toast.success("Meetings may now clone your voice."),
-              onError: () => toast.error("Could not record your consent. Try again."),
+              onSuccess: () => toast.success(t("toasts.granted")),
+              onError: () => toast.error(t("toasts.grantFailed")),
             })
           }
         >
-          Allow it
+          {t("allowIt")}
         </Button>
       )}
     </WorkspaceRailModule>

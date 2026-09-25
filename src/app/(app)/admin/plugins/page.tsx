@@ -1,26 +1,38 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import {
   ArrowsClockwise,
   CaretRight,
-  MagnifyingGlass,
+  Cpu,
   Plugs,
   Plus,
   PlugsConnected,
+  Key,
+  PuzzlePiece,
+  Star,
+  SquaresFour,
   Warning,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
 import {
-  AdminFilterTabs,
   AdminPage,
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
+import {
+  AdminListToolbar,
+  AdminStatusTabs,
+  useAdminActionIntent,
+  useAdminListState,
+  type AdminFilterField,
+} from "@/components/admin/list";
+import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,28 +55,66 @@ import { useAdminPluginCatalog, useCreateAdminPlugin } from "@/hooks/use-admin-p
 import {
   catalogRowCannotConnect,
   EMPTY_NEW_PLUGIN_DRAFT,
-  MISSING_CLIENT_ID_EXPLANATION,
-  OAUTH_CLIENT_SOURCE_LABELS,
-  PLUGIN_KIND_LABELS,
   RESERVED_PLUGIN_KEYS,
-  formatWorkspaceCount,
   toCreatePluginRequest,
   validateNewPlugin,
   type NewPluginDraft,
 } from "@/lib/admin/plugin-catalog";
+import {
+  applyClientListState,
+  type ClientListAccessors,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
+import { matchesSearch } from "@/lib/admin/search-text";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
 import type { AdminPluginCatalogListItemDto } from "@/types/admin-plugin-catalog";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
-const STATUS_TABS = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "retired", label: "Retired" },
-] as const;
+const STATUS_VALUES = ["all", "active", "retired"] as const;
 
-type StatusValue = (typeof STATUS_TABS)[number]["value"];
+/**
+ * The listing's search, filters and order, in the URL (`?q=`, `?status=retired`, `?kind=mcp`…) so
+ * the palette's `/admin/plugins?q=…` lands filtered. The catalogue is small and fetched whole, so it
+ * is filtered here with `applyClientListState`. Status keeps its tabs; the rest is the Filter menu.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: ["active", "retired"] },
+    { key: "kind", kind: "enum", multiple: true, values: ["mcp", "native"] },
+    { key: "provider", kind: "enum", multiple: true },
+    { key: "category", kind: "enum", multiple: true },
+    { key: "featured", kind: "boolean" },
+    { key: "oauthClient", kind: "boolean" },
+  ],
+  sortFields: ["order", "label", "installs"],
+  defaultSort: { field: "order", direction: "asc" },
+};
+
+const LIST_ACCESSORS: ClientListAccessors<AdminPluginCatalogListItemDto> = {
+  search: (row) => [row.label, row.pluginKey, row.provider],
+  filters: {
+    status: (row) => (row.isActive ? "active" : "retired"),
+    kind: (row) => row.kind,
+    provider: (row) => row.provider,
+    category: (row) => row.category,
+    featured: (row) => row.isFeatured,
+    oauthClient: (row) => row.hasClientId,
+  },
+  sort: {
+    order: (row) => row.sortOrder,
+    label: (row) => row.label,
+    installs: (row) => row.installationCount,
+  },
+};
+
+/** Distinct non-empty values of one column, as filter options. */
+function distinctValues(rows: readonly AdminPluginCatalogListItemDto[], valueOf: (row: AdminPluginCatalogListItemDto) => string | null) {
+  return Array.from(new Set(rows.map(valueOf).filter((value): value is string => Boolean(value))))
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value, label: value }));
+}
 
 function Pill({
   children,
@@ -93,36 +143,80 @@ function Pill({
 }
 
 export default function AdminPluginsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
+      <PluginCatalogList />
+    </Suspense>
+  );
+}
+
+function PluginCatalogList() {
+  const t = useTranslations("adminPlugins.list");
+  const tTable = useTranslations("adminLists.table");
   const catalogQuery = useAdminPluginCatalog();
-  const [status, setStatus] = useState<StatusValue>("all");
-  const [search, setSearch] = useState("");
+  const list = useAdminListState(LIST_CONFIG);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // The palette's "Add plugin" action.
+  useAdminActionIntent({ create: () => setCreateOpen(true) });
+
+  const statusTabs = useMemo(
+    () =>
+      STATUS_VALUES.map((value) => ({
+        value,
+        label: t(`tabs.${value}`),
+      })),
+    [t],
+  );
 
   const rows = useMemo(() => catalogQuery.data ?? [], [catalogQuery.data]);
 
   const broken = useMemo(() => rows.filter(catalogRowCannotConnect), [rows]);
 
-  const visible = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (status === "active" && !row.isActive) return false;
-      if (status === "retired" && row.isActive) return false;
-      if (needle.length === 0) return true;
-      return (
-        row.label.toLowerCase().includes(needle)
-        || row.pluginKey.toLowerCase().includes(needle)
-        || row.provider.toLowerCase().includes(needle)
-      );
-    });
-  }, [rows, search, status]);
+  const visible = useMemo(
+    () => applyClientListState(rows, list.state, LIST_ACCESSORS, matchesSearch),
+    [rows, list.state],
+  );
+
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "kind",
+      label: t("listControls.filters.kind"),
+      icon: <PuzzlePiece size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: [
+        { value: "mcp", label: t("kindLabels.mcp") },
+        { value: "native", label: t("kindLabels.native") },
+      ],
+    },
+    {
+      key: "provider",
+      label: t("listControls.filters.provider"),
+      icon: <Cpu size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctValues(rows, (row) => row.provider),
+    },
+    {
+      key: "category",
+      label: t("listControls.filters.category"),
+      icon: <SquaresFour size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctValues(rows, (row) => row.category),
+    },
+    { key: "featured", label: t("listControls.filters.featured"), icon: <Star size={13} />, kind: "boolean" },
+    { key: "oauthClient", label: t("listControls.filters.oauthClient"), icon: <Key size={13} />, kind: "boolean" },
+  ];
 
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Configuration"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<PlugsConnected size={14} weight="fill" />}
-        title="Plugin catalog"
-        description="The marketplace, retired rows included. Workspace owners add these to their workspace; members connect with their own accounts. Private plugins a workspace creates for itself are not listed here."
+        title={t("title")}
+        description={t("description")}
         actions={
           <>
             <Button
@@ -135,7 +229,7 @@ export default function AdminPluginsPage() {
                 size={14}
                 className={cn(catalogQuery.isFetching && "animate-spin")}
               />
-              Refresh
+              {t("refresh")}
             </Button>
             {/* The action the whole "the catalog is data, not code" claim rests on. Without it the
                 screen could edit, re-credential and retire a row it had no way to create, and
@@ -145,12 +239,12 @@ export default function AdminPluginsPage() {
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button size="sm" />}>
                 <Plus size={14} />
-                Create plugin
+                {t("createPlugin")}
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[200px]">
                 <DropdownMenuItem onClick={() => setCreateOpen(true)} className="cursor-pointer gap-2">
                   <Plugs size={14} />
-                  With MCP
+                  {t("withMcp")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -173,46 +267,36 @@ export default function AdminPluginsPage() {
             <Warning size={16} weight="duotone" className="mt-0.5 shrink-0 text-amber-600" />
             <div>
               <p className="font-medium">
-                {broken.length} row{broken.length === 1 ? "" : "s"} cannot complete an OAuth
-                connect.
+                {t("brokenHeading", { count: broken.length })}
               </p>
               <p className="mt-1 text-ink-muted">
-                {broken.map((row) => row.label).join(", ")} — marked pre-registered with no client
-                id, so the consent screen is built with an empty <span className="font-mono">client_id</span>{" "}
-                and the provider refuses it. Open the row and set the client id.
+                {t("brokenDetail", { labels: broken.map((row) => row.label).join(", ") })}
               </p>
             </div>
           </div>
         </AdminPanel>
       ) : null}
 
-      <AdminFilterTabs
-        tabs={STATUS_TABS}
-        value={status}
-        onChange={setStatus}
-        label="Filter the catalog by whether a row is active"
-        trailing={
-          catalogQuery.data
-            ? `${numberFormatter.format(visible.length)} of ${numberFormatter.format(rows.length)}`
-            : undefined
-        }
-      />
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filterAria")} />
 
-      <div className="my-3 flex items-center gap-2">
-        <div className="relative w-full max-w-sm">
-          <MagnifyingGlass
-            size={14}
-            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted"
-          />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by label, key or provider"
-            className="pl-8"
-            aria-label="Search the plugin catalog"
-          />
-        </div>
-      </div>
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("searchPlaceholder")}
+        filters={filterFields}
+        count={catalogQuery.data ? visible.length : null}
+        countLabel={t("trailingCount", {
+          visible: numberFormatter.format(visible.length),
+          total: numberFormatter.format(rows.length),
+        })}
+        isFetching={catalogQuery.isFetching && !catalogQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "order", label: t("listControls.sortFields.order") },
+            { field: "label", label: t("listControls.sortFields.label") },
+            { field: "installs", label: t("listControls.sortFields.installs") },
+          ],
+        }}
+      />
 
       <AdminPanel>
         {catalogQuery.isError ? (
@@ -223,18 +307,15 @@ export default function AdminPluginsPage() {
               className="mt-0.5 shrink-0 text-destructive"
             />
             <div>
-              <p className="font-medium">The plugin catalog could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the assistant service, and that your session still holds the platform admin
-                role.
-              </p>
+              <p className="font-medium">{t("error.title")}</p>
+              <p className="mt-1 text-ink-muted">{t("error.body")}</p>
               <Button
                 variant="outline"
                 size="sm"
                 className="mt-3"
                 onClick={() => void catalogQuery.refetch()}
               >
-                Try again
+                {t("error.tryAgain")}
               </Button>
             </div>
           </div>
@@ -247,24 +328,25 @@ export default function AdminPluginsPage() {
             ))}
           </ul>
         ) : rows.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            The catalog is empty. Nothing is on offer in WarpBot, for anyone.
-          </p>
+          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">{t("emptyCatalog")}</p>
         ) : visible.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            No row matches this filter.
-          </p>
+          <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+            <p className="text-[12px] text-ink-muted">{t("noMatch")}</p>
+            <Button variant="outline" size="sm" onClick={() => list.clearFilters()}>
+              {tTable("clearFilters")}
+            </Button>
+          </div>
         ) : (
           <>
             <div className="hidden border-b border-hairline/60 px-4 py-2 text-[11px] font-medium text-ink-muted md:flex">
-              <span className="flex-1">Plugin</span>
-              <span className="w-[70px]">Kind</span>
-              <span className="w-[110px]">Provider</span>
-              <span className="w-[90px]">State</span>
-              <span className="w-[140px]">OAuth client</span>
-              <span className="w-[90px] text-right">Workspaces</span>
-              <span className="w-[80px] text-right">Installs</span>
-              <span className="w-[70px] text-right">Tools</span>
+              <span className="flex-1">{t("columns.plugin")}</span>
+              <span className="w-[70px]">{t("columns.kind")}</span>
+              <span className="w-[110px]">{t("columns.provider")}</span>
+              <span className="w-[90px]">{t("columns.state")}</span>
+              <span className="w-[140px]">{t("columns.oauthClient")}</span>
+              <span className="w-[120px] text-right">{t("columns.workspaces")}</span>
+              <span className="w-[90px] text-right">{t("columns.installs")}</span>
+              <span className="w-[70px] text-right">{t("columns.tools")}</span>
               <span className="w-[24px]" />
             </div>
             <ul>
@@ -276,11 +358,7 @@ export default function AdminPluginsPage() {
         )}
       </AdminPanel>
 
-      <p className="mt-2 text-[12px] text-ink-muted">
-        A <span className="font-mono">native</span> row is served by compiled-in code and takes its
-        OAuth client from service configuration, not from the catalog — so this screen can neither
-        set nor vouch for one.
-      </p>
+      <p className="mt-2 text-[12px] text-ink-muted">{t("footerNote")}</p>
     </AdminPage>
   );
 }
@@ -335,6 +413,7 @@ function NewPluginDialog({
   existing: readonly AdminPluginCatalogListItemDto[];
   catalogLoaded: boolean;
 }) {
+  const t = useTranslations("adminPlugins.list.dialog");
   const router = useRouter();
   const mutation = useCreateAdminPlugin();
 
@@ -399,9 +478,7 @@ function NewPluginDialog({
   const submit = async () => {
     setAttempted(true);
     if (problemCount > 0) {
-      toast.error(
-        `${problemCount} field${problemCount === 1 ? "" : "s"} still ${problemCount === 1 ? "needs" : "need"} fixing. Nothing was sent.`,
-      );
+      toast.error(t("toast.problemCount", { count: problemCount }));
       return;
     }
 
@@ -409,14 +486,12 @@ function NewPluginDialog({
       const created = await mutation.mutateAsync(toCreatePluginRequest(draft));
       onOpenChange(false);
       resetDraft();
-      toast.success(
-        `${created.key} added to the catalog. It is live for every user immediately — no deploy.`,
-      );
+      toast.success(t("toast.success", { key: created.key }));
       // To the new row rather than back to the list: a fresh row has no tools and no client yet,
       // and its own page is where both are dealt with.
       router.push(`/admin/plugins/${encodeURIComponent(created.key)}`);
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not add the plugin to the catalog."));
+      toast.error(getErrorMessage(error, t("toast.errorFallback")));
     }
   };
 
@@ -424,47 +499,41 @@ function NewPluginDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Add an MCP app</DialogTitle>
-          <DialogDescription>
-            The row appears in every user&rsquo;s plugin list as soon as it is saved — no deploy and
-            no restart. It is created as an MCP row that takes its key as its OAuth provider, with
-            no tools: those arrive from the server&rsquo;s own{" "}
-            <span className="font-mono">tools/list</span> on the first connect, and can be written
-            by hand from the row&rsquo;s page.
-          </DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("intro")}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 md:grid-cols-2">
           <DraftField
-            label="Plugin key"
+            label={t("pluginKey.label")}
             htmlFor="new-plugin-key"
             error={errorFor("pluginKey")}
-            hint={
-              <>
-                Lower-case, and permanent: it is this row&rsquo;s URL and its OAuth provider name.
-                Reserved: <span className="font-mono">{RESERVED_PLUGIN_KEYS.join(", ")}</span>.
-              </>
-            }
+            hint={t("pluginKey.hint", { keys: RESERVED_PLUGIN_KEYS.join(", ") })}
           >
             <Input
               id="new-plugin-key"
-              placeholder="linear"
+              placeholder={t("pluginKey.placeholder")}
               maxLength={100}
               className="font-mono text-[12px]"
               {...bind("pluginKey")}
             />
           </DraftField>
 
-          <DraftField label="Label" htmlFor="new-plugin-label" error={errorFor("label")}>
-            <Input id="new-plugin-label" placeholder="Linear" maxLength={150} {...bind("label")} />
+          <DraftField label={t("label.label")} htmlFor="new-plugin-label" error={errorFor("label")}>
+            <Input
+              id="new-plugin-label"
+              placeholder={t("label.placeholder")}
+              maxLength={150}
+              {...bind("label")}
+            />
           </DraftField>
 
           <div className="md:col-span-2">
             <DraftField
-              label="Description"
+              label={t("description.label")}
               htmlFor="new-plugin-description"
               error={errorFor("description")}
-              hint="What a user reads in the catalog before installing it."
+              hint={t("description.hint")}
             >
               <Textarea
                 id="new-plugin-description"
@@ -477,14 +546,14 @@ function NewPluginDialog({
 
           <div className="md:col-span-2">
             <DraftField
-              label="MCP server URL"
+              label={t("mcpServerUrl.label")}
               htmlFor="new-plugin-server-url"
               error={errorFor("mcpServerUrl")}
-              hint="Absolute https://. The tokens this row carries travel over it, so http is refused — on localhost too."
+              hint={t("mcpServerUrl.hint")}
             >
               <Input
                 id="new-plugin-server-url"
-                placeholder="https://mcp.example.com/sse"
+                placeholder={t("mcpServerUrl.placeholder")}
                 className="font-mono text-[12px]"
                 {...bind("mcpServerUrl")}
               />
@@ -492,18 +561,18 @@ function NewPluginDialog({
           </div>
 
           <DraftField
-            label="Avatar URL"
+            label={t("avatarUrl.label")}
             htmlFor="new-plugin-avatar"
             error={errorFor("avatarUrl")}
-            hint="Optional. An http(s) URL or a site-relative path."
+            hint={t("avatarUrl.hint")}
           >
             <Input id="new-plugin-avatar" {...bind("avatarUrl")} />
           </DraftField>
 
           <DraftField
-            label="Required scopes"
+            label={t("requiredScopes.label")}
             htmlFor="new-plugin-scopes"
-            hint="Optional, one per line. Most MCP servers advertise their own on connect."
+            hint={t("requiredScopes.hint")}
           >
             <Textarea
               id="new-plugin-scopes"
@@ -514,8 +583,37 @@ function NewPluginDialog({
           </DraftField>
         </div>
 
-        <div className="rounded-lg border border-hairline bg-surface-2/50 px-3 py-3">
-          <label className="flex items-start gap-2 text-[12px]">
+        <fieldset className="rounded-lg border border-hairline bg-surface-2/50 px-3 py-3">
+          <legend className="px-1 text-[12px] font-medium text-ink">{t("authMode.legend")}</legend>
+          <div className="grid gap-2 md:grid-cols-2">
+            {(
+              [
+                ["oauth", t("authMode.oauthTitle"), t("authMode.oauthNote")],
+                ["api_key", t("authMode.apiKeyTitle"), t("authMode.apiKeyNote")],
+              ] as const
+            ).map(([mode, title, note]) => (
+              <label key={mode} className="flex items-start gap-2 text-[12px]">
+                <input
+                  type="radio"
+                  name="new-plugin-auth-mode"
+                  className="mt-0.5"
+                  checked={draft.authMode === mode}
+                  onChange={() => {
+                    update("authMode", mode);
+                    if (mode === "api_key") toggleOAuth(false);
+                  }}
+                />
+                <span>
+                  <span className="font-medium text-ink">{title}</span>
+                  <span className="mt-1 block leading-5 text-ink-muted">{note}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {draft.authMode === "api_key" ? null : (
+        <div className="rounded-lg border border-hairline bg-surface-2/50 px-3 py-3">          <label className="flex items-start gap-2 text-[12px]">
             <input
               type="checkbox"
               className="mt-0.5"
@@ -523,16 +621,8 @@ function NewPluginDialog({
               onChange={(event) => toggleOAuth(event.target.checked)}
             />
             <span>
-              <span className="font-medium text-ink">
-                This server needs a hand-registered OAuth client
-              </span>
-              <span className="mt-1 block leading-5 text-ink-muted">
-                Leave this off unless you know it does. The registration ladder runs on the first
-                connect and picks Client ID Metadata Documents or dynamic registration on its own;
-                supplying a client id here instead marks the row{" "}
-                <span className="font-mono">preregistered</span>, which is the state that must
-                always hold an id.
-              </span>
+              <span className="font-medium text-ink">{t("oauth.checkboxTitle")}</span>
+              <span className="mt-1 block leading-5 text-ink-muted">{t("oauth.checkboxBody")}</span>
             </span>
           </label>
 
@@ -540,7 +630,7 @@ function NewPluginDialog({
             <div className="mt-3 grid gap-4 border-t border-hairline/60 pt-3 md:grid-cols-2">
               <div className="md:col-span-2">
                 <DraftField
-                  label="Client id"
+                  label={t("oauth.clientId.label")}
                   htmlFor="new-plugin-client-id"
                   error={errorFor("clientId")}
                 >
@@ -554,9 +644,9 @@ function NewPluginDialog({
               </div>
               <div className="md:col-span-2">
                 <DraftField
-                  label="Client secret"
+                  label={t("oauth.clientSecret.label")}
                   htmlFor="new-plugin-client-secret"
-                  hint="Optional — leave blank for a public client. It goes in and does not come back: no endpoint ever returns it, and it can only be replaced or cleared from the row's page afterwards."
+                  hint={t("oauth.clientSecret.hint")}
                 >
                   <Input
                     id="new-plugin-client-secret"
@@ -568,10 +658,10 @@ function NewPluginDialog({
                 </DraftField>
               </div>
               <DraftField
-                label="Authorization endpoint"
+                label={t("oauth.authorizationEndpoint.label")}
                 htmlFor="new-plugin-authorization-endpoint"
                 error={errorFor("authorizationEndpoint")}
-                hint="Optional. Blank lets discovery find it."
+                hint={t("oauth.authorizationEndpoint.hint")}
               >
                 <Input
                   id="new-plugin-authorization-endpoint"
@@ -580,10 +670,10 @@ function NewPluginDialog({
                 />
               </DraftField>
               <DraftField
-                label="Token endpoint"
+                label={t("oauth.tokenEndpoint.label")}
                 htmlFor="new-plugin-token-endpoint"
                 error={errorFor("tokenEndpoint")}
-                hint="Optional."
+                hint={t("oauth.tokenEndpoint.hint")}
               >
                 <Input
                   id="new-plugin-token-endpoint"
@@ -593,10 +683,10 @@ function NewPluginDialog({
               </DraftField>
               <div className="md:col-span-2">
                 <DraftField
-                  label="Revoke endpoint"
+                  label={t("oauth.revokeEndpoint.label")}
                   htmlFor="new-plugin-revoke-endpoint"
                   error={errorFor("revokeEndpoint")}
-                  hint="Optional."
+                  hint={t("oauth.revokeEndpoint.hint")}
                 >
                   <Input
                     id="new-plugin-revoke-endpoint"
@@ -608,12 +698,10 @@ function NewPluginDialog({
             </div>
           ) : null}
         </div>
+        )}
 
         {!catalogLoaded ? (
-          <p className="text-[11px] leading-5 text-ink-muted">
-            The catalog has not loaded, so a key already taken by another row cannot be caught here
-            — the server will still refuse it.
-          </p>
+          <p className="text-[11px] leading-5 text-ink-muted">{t("catalogNotLoadedNote")}</p>
         ) : null}
 
         <DialogFooter>
@@ -622,10 +710,10 @@ function NewPluginDialog({
             onClick={() => handleOpenChange(false)}
             disabled={mutation.isPending}
           >
-            Cancel
+            {t("cancel")}
           </Button>
           <Button onClick={() => void submit()} disabled={mutation.isPending}>
-            {mutation.isPending ? "Adding…" : "Add to catalog"}
+            {mutation.isPending ? t("adding") : t("add")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -634,7 +722,12 @@ function NewPluginDialog({
 }
 
 function CatalogRow({ row }: { row: AdminPluginCatalogListItemDto }) {
+  const t = useTranslations("adminPlugins.list");
   const cannotConnect = catalogRowCannotConnect(row);
+  const workspaceCount =
+    typeof row.workspaceCount === "number" && Number.isFinite(row.workspaceCount)
+      ? t("workspaceCount", { count: row.workspaceCount })
+      : "—";
 
   return (
     <li className="border-b border-hairline/60 last:border-b-0">
@@ -647,50 +740,54 @@ function CatalogRow({ row }: { row: AdminPluginCatalogListItemDto }) {
           !row.isActive && "opacity-60",
         )}
       >
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-1 items-center gap-3">
+          {/* The same glyph, from the same source, as every member and Owner surface. */}
+          <PluginGlyph plugin={row} size="sm" />
+          <span className="flex min-w-0 flex-col">
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-medium text-ink">{row.label}</span>
             {cannotConnect ? (
-              <Pill tone="warning" title={MISSING_CLIENT_ID_EXPLANATION}>
+              <Pill tone="warning" title={t("missingClientIdExplanation")}>
                 <Warning size={11} weight="fill" />
-                no client id
+                {t("noClientIdBadge")}
               </Pill>
             ) : null}
-            {row.isFeatured ? <Pill tone="muted">featured</Pill> : null}
+            {row.isFeatured ? <Pill tone="muted">{t("featuredBadge")}</Pill> : null}
           </span>
           <span className="truncate font-mono text-[11px] text-ink-subtle">{row.pluginKey}</span>
+          </span>
         </span>
         <span className="w-[70px] shrink-0 text-[12px] text-ink-muted">
-          {PLUGIN_KIND_LABELS[row.kind] ?? row.kind}
+          {t(row.kind === "native" ? "kindLabels.native" : "kindLabels.mcp")}
         </span>
         <span className="w-[110px] shrink-0 truncate text-[12px] text-ink-muted">
           {row.provider}
         </span>
         <span className="w-[90px] shrink-0">
           {row.isActive ? (
-            <Pill tone="positive">active</Pill>
+            <Pill tone="positive">{t("state.active")}</Pill>
           ) : (
-            <Pill tone="muted">retired</Pill>
+            <Pill tone="muted">{t("state.retired")}</Pill>
           )}
         </span>
         <span className="w-[140px] shrink-0 text-[12px]">
           {row.kind === "native" ? (
-            <span className="text-ink-subtle">server config</span>
+            <span className="text-ink-subtle">{t("serverConfig")}</span>
           ) : (
             <span className={cn(cannotConnect ? "font-medium text-amber-600" : "text-ink-muted")}>
-              {OAUTH_CLIENT_SOURCE_LABELS[row.oAuthClientSource] ?? row.oAuthClientSource}
+              {t(`oauthSourceLabels.${row.oAuthClientSource}`)}
             </span>
           )}
         </span>
-        {/* Workspaces that have added the plugin to their list. A workspace still on the
-            pre-marketplace "every plugin" default has no list yet and is not counted. */}
+        {/* Workspaces that have the plugin, by the server's own rule: a list that holds it, or a
+            workspace that never edited its list and whose members already use it. */}
         <span
-          className="w-[90px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right"
-          title="Workspaces that have added this plugin"
+          className="w-[120px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right"
+          title={t("columns.workspaces")}
         >
-          {formatWorkspaceCount(row.workspaceCount)}
+          {workspaceCount}
         </span>
-        <span className="w-[80px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">
+        <span className="w-[90px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">
           {numberFormatter.format(row.installationCount)}
         </span>
         <span className="w-[70px] shrink-0 text-[12px] tabular-nums text-ink-muted md:text-right">

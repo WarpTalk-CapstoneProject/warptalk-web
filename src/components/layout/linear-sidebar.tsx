@@ -1,5 +1,6 @@
 "use client";
 
+import { WarpTalkBrand } from "@/components/layout/warptalk-brand";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,9 +24,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { useAdminInboxSummary } from "@/hooks/use-admin-inbox";
+import { inboxBadge } from "@/lib/admin/inbox";
+import { ADMIN_PERMISSIONS, canViewAdminPath, hasPermission } from "@/lib/admin/staff-permissions";
 import { useSelectWorkspace, useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
 import { useWorkspacePlugins } from "@/hooks/use-workspace-plugins";
-import { pendingRequestBadge } from "@/lib/assistant/plugin-availability";
+import { canManageWorkspacePlugins, pendingRequestBadge } from "@/lib/assistant/plugin-availability";
 import { INVITE_SNOOZE_DAYS, shouldSuggestInvite } from "@/lib/onboarding/invite-suggestion";
 import { applySelectedWorkspace } from "@/lib/workspace/apply-selected-workspace";
 import { cn } from "@/lib/utils";
@@ -36,6 +41,8 @@ import { useCanCreateMeetings, useWorkspaceStore } from "@/stores/workspace-stor
 import type { IconProps } from "@phosphor-icons/react";
 import {
   Archive,
+  ArrowUUpLeft,
+  Package,
   CalendarBlank,
   CaretDown,
   CaretLeft,
@@ -50,6 +57,7 @@ import {
   Globe,
   Handshake,
   Heartbeat,
+  Plugs,
   House,
   Keyboard,
   MagnifyingGlass,
@@ -63,7 +71,6 @@ import {
   Sliders,
   SquaresFour,
   Star,
-  Tray,
   User,
   Users,
   Waveform,
@@ -71,12 +78,14 @@ import {
   Brain,
   Buildings,
   ShieldCheck,
-  CheckSquare,
   Files,
   ListChecks,
   Bell,
   LinkSimple,
-  Devices,} from "@phosphor-icons/react/dist/ssr";
+  Devices,
+  IdentificationBadge,
+  UserGear,
+  Tray,} from "@phosphor-icons/react/dist/ssr";
 import { AvatarPresenceDot } from "@/components/presence/presence-dot";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { InviteMemberDialog } from "@/components/workspace/invite-member-dialog";
@@ -84,6 +93,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 type IconType = React.ElementType<IconProps>;
 
 interface NavItem {
@@ -123,6 +133,20 @@ function navRowTone(active: boolean): string {
   return active
     ? "bg-surface-3 text-ink [&_svg]:text-ink [&_span]:text-ink"
     : "hover:bg-surface-3/60";
+}
+
+type SidebarT = ReturnType<typeof useTranslations>;
+
+function roleLabel(t: SidebarT, role: string | null | undefined): string {
+  const key = role?.toLowerCase();
+  if (key && t.has(`roleLabels.${key}`)) return t(`roleLabels.${key}`);
+  return t("memberFallback");
+}
+
+function membershipLabel(t: SidebarT, membershipType: string | null | undefined): string {
+  const key = membershipType?.toLowerCase();
+  if (key && t.has(`membershipLabels.${key}`)) return t(`membershipLabels.${key}`);
+  return t("internalFallback");
 }
 
 /**
@@ -229,6 +253,7 @@ function NavLink({
 }
 
 export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
+  const t = useTranslations("common.sidebar");
   const pathname = usePathname();
   const setCreateRoomModalOpen = useUIStore((state) => state.setCreateRoomModalOpen);
   const canCreateMeetings = useCanCreateMeetings();
@@ -236,6 +261,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
   const isSystemAdmin = useIsSystemAdmin();
+  const { access: staffAccess } = useStaffAccess();
   const router = useRouter();
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
   const [joinCode, setJoinCode] = useState("");
@@ -254,14 +280,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
   const slug = activeWorkspaceSlug || "workspace";
 
   const mainNav: NavItem[] = [
-    { icon: House, label: "Home", href: `/${slug}/home` },
+    { icon: House, label: t("nav.home"), href: `/${slug}/home` },
     {
       icon: SquaresFour,
-      label: "Meetings",
+      label: t("nav.meetings"),
       href: `/${slug}/rooms`,
       tourId: "nav-meetings",
       actions: [
-        { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: "Join by code" },
+        { icon: Keyboard, onClick: () => setIsJoinModalOpen(true), title: t("nav.joinByCode") },
         // Join by code stays for everyone — an external collaborator is invited INTO meetings, they
         // just may not open them. WT-371 #2.
         ...(canCreateMeetings
@@ -269,7 +295,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               {
                 icon: Plus,
                 onClick: () => setCreateRoomModalOpen(true),
-                title: "Create Meeting",
+                title: t("nav.createMeeting"),
                 tourId: "nav-create-meeting",
               },
             ]
@@ -280,7 +306,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // month/week grid of meetings. The route keeps its path: links already sent and the
     // placeholder contract point at /schedules, and the name a user never types is not worth
     // breaking those for.
-    { icon: CalendarBlank, label: "Calendar", href: `/${slug}/schedules` },
+    { icon: CalendarBlank, label: t("nav.schedules"), href: `/${slug}/schedules` },
     // No History row: /history was a second, worse answer to the question Artifacts answers —
     // it listed meetings, which Meetings above already does, and its outputs rail could not show
     // minutes at all. Past meetings are still browsable on Meetings, which asks for ENDED.
@@ -293,8 +319,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     //
     // Directly under History because the two are one archive read two ways: History lists the
     // MEETINGS, this lists what they wrote down.
-    { icon: Files, label: "Artifacts", href: `/${slug}/artifacts` },
-    { icon: Waveform, label: "Voice Profiles", href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
+    { icon: Files, label: t("nav.artifacts"), href: `/${slug}/artifacts` },
+    { icon: Waveform, label: t("nav.voiceProfiles"), href: `/${slug}/voice-profiles`, tourId: "nav-voice-profiles" },
   ];
 
   const role = useWorkspaceStore((state) => state.role);
@@ -338,10 +364,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     try {
       const res = await selectWorkspaceMutation.mutateAsync(workspaceId);
       applySelectedWorkspace(res, setActiveWorkspace);
-      toast.success(`Switched to workspace "${res.name}"`);
+      toast.success(t("switchWorkspaceSuccess", { name: res.name }));
       router.push(`/${res.slug}/home`);
     } catch {
-      toast.error("Failed to switch workspace");
+      toast.error(t("switchWorkspaceError"));
     }
   };
 
@@ -363,14 +389,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // summarises.
     workspaceNav.push({
       icon: SquaresFour,
-      label: "Dashboard",
+      label: t("nav.dashboard"),
       href: `/${slug}/dashboard`,
       tourId: "nav-dashboard",
     });
   }
   workspaceNav.push(
-    { icon: Users, label: "Members", href: `/${slug}/members`, tourId: "nav-members" },
-    { icon: FileText, label: "Documents", href: `/${slug}/documents`, tourId: "nav-documents" },
+    { icon: Users, label: t("nav.members"), href: `/${slug}/members`, tourId: "nav-members" },
+    { icon: FileText, label: t("nav.documents"), href: `/${slug}/documents`, tourId: "nav-documents" },
     // Directly under Documents, and visible to every member — the two are constantly mistaken for
     // each other, and sitting them together is what makes the difference legible: Documents is
     // content the assistant retrieves from afterwards, Glossary is terminology applied to speech
@@ -379,12 +405,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // Its absence from this list is the whole reason the page was deleted as dead code, and the
     // whole reason it was then asked for: "tại k thấy ws glossary set up ở đâu". A feature nobody
     // can navigate to is indistinguishable from one that was never built.
-    { icon: BookOpen, label: "Glossary", href: `/${slug}/glossary`, tourId: "nav-glossary" },
-    // Work the meetings assigned to you, keyed on the person rather than the meeting. Listed here
-    // for the same reason Glossary is: an endpoint no navigation reaches is indistinguishable
-    // from one that was never built, and this list is the whole point of action items becoming
-    // rows instead of sentences.
-    { icon: CheckSquare, label: "My tasks", href: `/${slug}/tasks`, tourId: "nav-tasks" }
+    { icon: BookOpen, label: t("nav.glossary"), href: `/${slug}/glossary`, tourId: "nav-glossary" },
+    // No "My tasks" entry: taken off the main navigation on the owner's call (2026-09-23), and
+    // its old address forwards home in proxy.ts. Action items still live on each meeting's record.
   );
 
   if (isOwnerOrAdmin) {
@@ -392,13 +415,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     // "who is in this workspace" and "who is on the way in" were never two questions.
     // What the system has indexed from this workspace's documents and meetings. Owner/Admin
     // only, because the view crosses per-document access policies.
-    workspaceNav.push({ icon: Brain, label: "Knowledge", href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
+    workspaceNav.push({ icon: Brain, label: t("nav.knowledge"), href: `/${slug}/knowledge`, tourId: "nav-knowledge" });
     // No Billing entry: WT-380 moved it inside Workspace Settings, where a plan, an invoice and a
     // credit balance belong. It is reached through Settings now, not from the app's main nav.
     //
     // Last in the list, and pushed after everything else so it stays last as entries are added.
     // Settings is where you go to change the workspace, not one of the places in it.
-    workspaceNav.push({ icon: GearSix, label: "Settings", href: `/${slug}/settings` });
+    workspaceNav.push({ icon: GearSix, label: t("nav.settings"), href: `/${slug}/settings` });
   }
 
   /**
@@ -417,13 +440,18 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     pathname.includes("/settings") ||
     pathname.includes("/payment");
 
-  // Workspace → Plugins badge: requests from members waiting on the Owner. Owner/Admin only, and only
-  // while Settings is on screen — the one place the row is drawn — so no other page pays for the read.
+  // Workspace → Plugins badge: requests from members waiting on the Owner. Read for Owner/Admin, and
+  // only while Settings is on screen — the one place the row is drawn — so no other page pays for the
+  // read. Counted only for whoever can answer them: an Admin sees the requests on the page but cannot
+  // act on one, so a count on their sidebar would never clear.
   const { data: workspacePluginsOverview } = useWorkspacePlugins(
     activeWorkspaceId,
     isOwnerOrAdmin && isSettingsPage,
   );
-  const pluginRequestBadge = pendingRequestBadge(workspacePluginsOverview);
+  const pluginRequestBadge = pendingRequestBadge(
+    workspacePluginsOverview,
+    canManageWorkspacePlugins(workspacePluginsOverview, role),
+  );
 
   /**
    * The platform admin console gets its own chrome — a third branch beside the app and Settings.
@@ -441,63 +469,91 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
    * SCOPE: this lists the routes that EXIST. Users, Subscriptions, Plans, Meetings, Health,
    * Audit and Announcements each add their own entry with the release that adds the page — a nav
    * row pointing at a 404 is the same defect as a button whose endpoint was never routed.
+   * Meetings and Event outbox were taken out again on 2026-09-24 (owner's call); their addresses
+   * forward to /admin in proxy.ts.
    */
   const isAdminPage = pathname === "/admin" || pathname.startsWith("/admin/");
 
+  // G12: the Inbox row's pill counts open items the person can see. Read only inside the portal and
+  // only for someone who holds inbox.read; the server caches the fan-out, so polling is cheap.
+  const { data: inboxSummary } = useAdminInboxSummary(
+    isAdminPage && isSystemAdmin && hasPermission(staffAccess, ADMIN_PERMISSIONS.inboxRead),
+  );
+
   if (isAdminPage && isSystemAdmin) {
-    const adminSections: Array<{ section: string; items: NavItem[] }> = [
+    const allAdminSections: Array<{ section: string; items: NavItem[] }> = [
       {
-        section: "Platform",
+        section: t("adminNav.sections.platform"),
         items: [
           // Exact, or every /admin/* page lights this row up too: NavLink treats a non-exact item
           // as active for anything beneath its href, and every admin page is beneath /admin.
-          { icon: Gauge, label: "Overview", href: "/admin", exact: true },
-          { icon: Buildings, label: "Workspaces", href: "/admin/workspaces" },
+          // "Insights", not "Overview" (owner's call, 2026-09-17): the landing page became the
+          // period-compared business insights page. The route did not move.
+          { icon: Gauge, label: t("adminNav.items.insights"), href: "/admin", exact: true },
+          // G12: everything waiting on the platform team, aggregated from the pages that own it.
+          { icon: Tray, label: t("adminNav.items.inbox"), href: "/admin/inbox", badge: inboxBadge(inboxSummary?.counts) },
+          { icon: Buildings, label: t("adminNav.items.workspaces"), href: "/admin/workspaces" },
           // "Accounts", not "Users" (WT-444): this row lists every account on the platform, and
           // "Users" is the same word the workspace sidebar uses for that workspace's members —
           // two very different populations under one label, in a console where the difference is
           // the whole point. The route keeps its path; only what a person reads changes.
-          { icon: Users, label: "Accounts", href: "/admin/users" },
+          { icon: Users, label: t("adminNav.items.accounts"), href: "/admin/users" },
         ],
       },
       {
-        section: "Revenue",
+        section: t("adminNav.sections.revenue"),
         items: [
-          { icon: Gauge, label: "Subscriptions", href: "/admin/subscriptions" },
-          { icon: FileText, label: "Plans & pricing", href: "/admin/plans" },
-          { icon: CreditCard, label: "Billing ledger", href: "/admin/billing" },
-          { icon: Handshake, label: "Sales leads", href: "/admin/sales-leads" },
+          { icon: Gauge, label: t("adminNav.items.subscriptions"), href: "/admin/subscriptions" },
+          { icon: FileText, label: t("adminNav.items.plansAndPricing"), href: "/admin/plans" },
+          { icon: Package, label: t("adminNav.items.packages"), href: "/admin/packages" },
+          { icon: CreditCard, label: t("adminNav.items.billingLedger"), href: "/admin/billing" },
+          { icon: Handshake, label: t("adminNav.items.salesLeads"), href: "/admin/sales-leads" },
+          // G12: company operating expenses, budgets and the P&L with them.
+          { icon: Receipt, label: t("adminNav.items.operatingCosts"), href: "/admin/finance/expenses" },
         ],
       },
       {
-        section: "Operations",
+        section: t("adminNav.sections.operations"),
         items: [
-          { icon: SquaresFour, label: "Meetings", href: "/admin/meetings" },
-          { icon: Heartbeat, label: "System health", href: "/admin/health" },
-          { icon: Tray, label: "Event outbox", href: "/admin/outbox" },
-          { icon: Star, label: "Feedback", href: "/admin/feedback" },
-          { icon: Archive, label: "Audit log", href: "/admin/audit" },
-          { icon: PaperPlaneTilt, label: "Announcements", href: "/admin/announcements" },
-          { icon: EnvelopeSimple, label: "Email templates", href: "/admin/email-templates" },
+          { icon: Heartbeat, label: t("adminNav.items.systemHealth"), href: "/admin/health" },
+          { icon: Plugs, label: t("adminNav.items.providers"), href: "/admin/providers" },
+          { icon: Star, label: t("adminNav.items.feedback"), href: "/admin/feedback" },
+          { icon: Archive, label: t("adminNav.items.auditLog"), href: "/admin/audit" },
+          { icon: PaperPlaneTilt, label: t("adminNav.items.announcements"), href: "/admin/announcements" },
+          { icon: EnvelopeSimple, label: t("adminNav.items.emailTemplates"), href: "/admin/email-templates" },
         ],
       },
       {
-        section: "Configuration",
+        section: t("adminNav.sections.configuration"),
         items: [
           // One row, not two. "Platform config" was a second route for the same subject — the
           // read-only half — and an admin looking for what the platform is configured to do had to
           // guess which of the two words it lived under. Merged into the page below on 2026-09-16;
           // the read-only boundary is now a band inside it.
-          { icon: GearSix, label: "Platform settings", href: "/admin/settings" },
+          { icon: GearSix, label: t("adminNav.items.platformSettings"), href: "/admin/settings" },
           // Beside Platform config because it is the same kind of thing: reference data the whole
           // platform runs on. Unlike that page it is writable, which is the point of WT-646 — the
           // catalog could only ever be INSERTed into, so a wrong OAuth client id in production was
           // a SQL job rather than a screen.
-          { icon: PlugsConnected, label: "Plugins", href: "/admin/plugins" },
-          { icon: Globe, label: "Global glossary", href: "/admin/global-glossary" },
+          { icon: PlugsConnected, label: t("adminNav.items.plugins"), href: "/admin/plugins" },
+          { icon: Globe, label: t("adminNav.items.globalGlossary"), href: "/admin/global-glossary" },
+        ],
+      },
+      {
+        // G10: who works on the platform, and what each of them may do here.
+        section: t("adminNav.sections.team"),
+        items: [
+          { icon: IdentificationBadge, label: t("adminNav.items.staff"), href: "/admin/staff" },
+          { icon: UserGear, label: t("adminNav.items.roles"), href: "/admin/roles" },
         ],
       },
     ];
+
+    // G10: offer only the pages this person's staff role can read (the server enforces the same
+    // permission on every endpoint behind them). A section left with no rows is dropped entirely.
+    const adminSections = allAdminSections
+      .map((group) => ({ ...group, items: group.items.filter((item) => canViewAdminPath(staffAccess, item.href)) }))
+      .filter((group) => group.items.length > 0);
 
     // WT-444: "Back to app" pointed at /workspace whenever no workspace was active, and for the
     // only person who ever sees this button that is a loop. /workspace redirects a system admin
@@ -517,17 +573,16 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (collapsed) {
       return (
         <aside className="flex h-full w-16 shrink-0 select-none flex-col border-r border-border/40 bg-canvas text-ink">
+          {/* The product mark, as in the expanded header; "Back to app" moves down beside Log out. */}
           <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
-            {backHref && (
-              <Link
-                href={backHref}
-                title="Back to app"
-                aria-label="Back to app"
-                className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              >
-                <CaretLeft size={16} weight="bold" />
-              </Link>
-            )}
+            <Link
+              href="/admin"
+              title={`${t("adminNav.productName")} ${t("adminNav.erpBadge")}`}
+              aria-label={`${t("adminNav.productName")} ${t("adminNav.erpBadge")}`}
+              className="grid size-9 place-items-center rounded-[8px] transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              <WarpTalkBrand compact className="h-4 w-[21px]" />
+            </Link>
           </div>
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-3">
             {adminSections.flatMap((group, groupIndex) =>
@@ -546,11 +601,21 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           {/* The exit. The expanded branch hangs it off the user card; collapsed has no card,
               so the button stands alone — an admin console with no way to sign out is how the
               portal shipped once already. */}
-          <div className="grid shrink-0 place-items-center border-t border-border/30 py-3">
+          <div className="flex shrink-0 flex-col items-center gap-1 border-t border-border/30 py-3">
+            {backHref && (
+              <Link
+                href={backHref}
+                title={t("adminNav.backToApp")}
+                aria-label={t("adminNav.backToApp")}
+                className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <CaretLeft size={16} weight="bold" />
+              </Link>
+            )}
             <button
               onClick={() => logout()}
-              title="Log out"
-              aria-label="Log out"
+              title={t("adminNav.logOut")}
+              aria-label={t("adminNav.logOut")}
               className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <SignOut size={16} weight="duotone" />
@@ -562,34 +627,33 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
     return (
       <aside className="flex h-full w-[224px] shrink-0 select-none flex-col border-r border-border/40 bg-canvas font-sans text-ink antialiased">
-        <div className="flex h-[48px] shrink-0 items-center border-b border-border/30 px-3">
+        {/* The product, not a tenant: the WarpTalk mark, its name and an "ERP" chip, at the same 48px
+            height and 14px semibold as the workspace switcher it stands in for. Deliberately NOT a
+            switcher — there is no workspace to switch, and a control that looked like one would
+            suggest this page is scoped to a tenant. "Back to app" rides on the right. */}
+        <div className="flex h-[48px] shrink-0 items-center justify-between gap-2 border-b border-border/30 px-3">
+          <Link
+            href="/admin"
+            className="-ml-1.5 flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          >
+            <WarpTalkBrand compact className="h-[15px] w-5" />
+            <span className="truncate text-[14px] font-semibold tracking-tight text-ink">
+              {t("adminNav.productName")}
+            </span>
+            <span className="shrink-0 rounded-[5px] border border-border bg-surface-2 px-[5px] text-[10px] font-semibold leading-[16px] tracking-[0.3px] text-ink-muted">
+              {t("adminNav.erpBadge")}
+            </span>
+          </Link>
           {backHref ? (
             <Link
               href={backHref}
-              className="-ml-1.5 flex w-full cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
+              title={t("adminNav.backToApp")}
+              aria-label={t("adminNav.backToApp")}
+              className="grid size-7 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
-              <CaretLeft size={14} weight="bold" />
-              <span>Back to app</span>
+              <ArrowUUpLeft size={15} weight="bold" />
             </Link>
-          ) : (
-            // Same height and padding as the link so the header does not jump between an admin
-            // who has a workspace and one who does not.
-            <span className="-ml-1.5 flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-[13px] font-medium text-ink-muted/50">
-              Platform console
-            </span>
-          )}
-        </div>
-
-        {/* Names the console, where the app's chrome names the workspace. Deliberately NOT a
-            switcher: there is no workspace to switch, and a control that looks like one here
-            would suggest this page is scoped to a tenant. */}
-        <div className="flex items-center gap-2.5 border-b border-border/30 px-4 py-3">
-          <span className="grid size-[22px] shrink-0 place-items-center rounded-[6px] bg-primary text-primary-foreground">
-            <ShieldCheck size={13} weight="fill" />
-          </span>
-          <span className="truncate text-[13px] font-semibold tracking-tight text-ink">
-            WarpTalk Platform
-          </span>
+          ) : null}
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-3">
@@ -621,14 +685,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <p className="truncate text-[12.5px] font-medium text-ink">
                 {user.fullName || user.email}
               </p>
-              <p className="truncate text-[11px] text-ink-subtle">Platform admin</p>
+              <p className="truncate text-[11px] text-ink-subtle">{t("adminNav.platformAdmin")}</p>
             </div>
             {/* Always visible, not hover-revealed: this card is the ONLY exit from the portal,
                 and a control nobody can see shipped once already as "no way to sign out". */}
             <button
               onClick={() => logout()}
-              title="Log out"
-              aria-label="Log out"
+              title={t("adminNav.logOut")}
+              aria-label={t("adminNav.logOut")}
               className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <SignOut size={16} weight="duotone" />
@@ -646,42 +710,44 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     const settingsItems: NavItem[] = [
       {
         icon: Sliders,
-        label: "Preferences",
+        label: t("settingsNav.preferences"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/preferences`
           : "/workspace",
       },
       {
         icon: User,
-        label: "Profile",
+        label: t("settingsNav.profile"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/profile`
           : "/workspace",
       },
       {
         icon: Bell,
-        label: "Notifications",
+        label: t("settingsNav.notifications"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/notifications`
           : "/workspace",
       },
       {
         icon: LinkSimple,
-        label: "Connected accounts",
+        label: t("settingsNav.connectedAccounts"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/connected-accounts`
           : "/workspace",
       },
       {
         icon: Devices,
-        label: "Sessions & devices",
+        label: t("settingsNav.sessionsDevices"),
         href: activeWorkspaceSlug
           ? `/${activeWorkspaceSlug}/settings/account/sessions`
           : "/workspace",
       },
       {
+        // "My connections", not "Plugins": the workspace section below has its own plugin list, and
+        // two rows both called "Plugins" read as the same page twice (owner report, 2026-09-24).
         icon: PlugsConnected,
-        label: "Plugins",
+        label: t("settingsNav.myConnections"),
         href: "/settings/plugins",
       },
     ];
@@ -689,7 +755,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
       settingsItems.push({
         icon: GearSix,
-        label: "Workspace settings",
+        label: t("settingsNav.workspaceSettingsCollapsed"),
         // Exact, or `/settings/billing` would light this row up too — NavLink treats a nav item as
         // active for anything below its href, and every settings page is below this one.
         exact: true,
@@ -698,7 +764,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       // The workspace's plugin list (marketplace, 2026-09-17), with the requests waiting on it.
       settingsItems.push({
         icon: PuzzlePiece,
-        label: "Plugins",
+        label: t("settingsNav.workspacePlugins"),
         exact: true,
         href: `/${activeWorkspaceSlug}/settings/plugins`,
         badge: pluginRequestBadge,
@@ -706,12 +772,12 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       // Beside the workspace's plugin list because it is the record of what that list let through.
       settingsItems.push({
         icon: ClockCounterClockwise,
-        label: "Plugin activity",
+        label: t("settingsNav.pluginActivity"),
         href: `/${activeWorkspaceSlug}/settings/plugin-activity`,
       });
       settingsItems.push({
         icon: CreditCard,
-        label: "Billing",
+        label: t("settingsNav.billing"),
         // Exact now that Usage and Invoices live BELOW it. Without this, NavLink's
         // treat-descendants-as-active rule lights Billing up while the reader is on either child,
         // and two rows in the same group read as selected at once.
@@ -720,24 +786,24 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       });
       settingsItems.push({
         icon: ChartLine,
-        label: "Usage",
+        label: t("settingsNav.usage"),
         href: `/${activeWorkspaceSlug}/settings/billing/usage`,
       });
       settingsItems.push({
         icon: Receipt,
-        label: "Invoices",
+        label: t("settingsNav.invoices"),
         href: `/${activeWorkspaceSlug}/settings/billing/invoices`,
       });
       settingsItems.push({
         icon: ListChecks,
-        label: "Features",
+        label: t("settingsNav.features"),
         href: `/${activeWorkspaceSlug}/settings/features`,
       });
     }
     if (role?.toLowerCase() === "owner" && activeWorkspaceSlug) {
       settingsItems.push({
         icon: Users,
-        label: "Member roles",
+        label: t("settingsNav.memberRoles"),
         href: `/${activeWorkspaceSlug}/settings/member-roles`,
       });
     }
@@ -747,15 +813,11 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
     if (isOwnerOrAdmin && activeWorkspaceSlug) {
       settingsItems.push({
         icon: ShieldCheck,
-        label: "Security",
+        label: t("settingsNav.security"),
         href: `/${activeWorkspaceSlug}/settings/security`,
       });
-      // Staff actions on this workspace. Same audience as the endpoint behind it.
-      settingsItems.push({
-        icon: ClockCounterClockwise,
-        label: "Audit log",
-        href: `/${activeWorkspaceSlug}/settings/audit-log`,
-      });
+      // No Audit log entry: it only ever listed what WarpTalk staff did to the workspace — the
+      // platform's own trail, kept on /admin/audit. Its old address forwards in proxy.ts.
     }
 
     return (
@@ -763,8 +825,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         <div className="grid h-12 shrink-0 place-items-center border-b border-border/30">
           <Link
             href={appHref}
-            title="Back to app"
-            aria-label="Back to app"
+            title={t("settingsNav.backToApp")}
+            aria-label={t("settingsNav.backToApp")}
             className="grid size-9 place-items-center rounded-[8px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <CaretLeft size={16} weight="bold" />
@@ -790,8 +852,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 ? `/${activeWorkspaceSlug}/settings/account/profile`
                 : "/workspace"
             }
-            title={user.fullName || "Profile"}
-            aria-label={user.fullName || "Profile"}
+            title={user.fullName || t("profileFallback")}
+            aria-label={user.fullName || t("profileFallback")}
             className="m-3 grid size-10 place-items-center rounded-xl border border-border/50 bg-surface-1 transition hover:border-border/80 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <Avatar className="size-8 rounded-lg">
@@ -816,14 +878,14 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             className="flex items-center gap-2 px-1.5 py-1 -ml-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-ink hover:bg-surface-2 transition-colors cursor-pointer w-full"
           >
             <CaretLeft size={14} weight="bold" />
-            <span>Back to app</span>
+            <span>{t("settingsNav.backToApp")}</span>
           </Link>
         </div>
 
         {/* Settings Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <div className="px-2 mb-2 flex items-center h-[24px]">
-            <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Personal</span>
+            <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">{t("settingsNav.personal")}</span>
           </div>
 
           <div className="flex flex-col gap-px">
@@ -834,7 +896,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/preferences` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Sliders size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Settings
+                  {t("settingsNav.settingsLabel")}
                 </span>
               </Link>
             </div>
@@ -846,7 +908,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/profile` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <User size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Profile
+                  {t("settingsNav.profile")}
                 </span>
               </Link>
             </div>
@@ -858,7 +920,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/notifications` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Bell size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Notifications
+                  {t("settingsNav.notifications")}
                 </span>
               </Link>
             </div>
@@ -870,7 +932,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/connected-accounts` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <LinkSimple size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Connected accounts
+                  {t("settingsNav.connectedAccounts")}
                 </span>
               </Link>
             </div>
@@ -882,7 +944,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href={activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings/account/sessions` : "/workspace"} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <Devices size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Sessions &amp; devices
+                  {t("settingsNav.sessionsDevices")}
                 </span>
               </Link>
             </div>
@@ -894,7 +956,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <Link href="/settings/plugins" className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                 <PlugsConnected size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                 <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                  Plugins
+                  {t("settingsNav.myConnections")}
                 </span>
               </Link>
             </div>
@@ -903,7 +965,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {isOwnerOrAdmin && activeWorkspaceSlug && (
               <>
                 <div className="px-2 mt-6 mb-2 flex items-center h-[24px]">
-                  <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">Workspace</span>
+                  <span className="text-[12px] font-medium text-ink-subtle uppercase tracking-wider">{t("settingsNav.workspaceSection")}</span>
                 </div>
                 <div className={cn(
                   "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
@@ -912,7 +974,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <GearSix size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Workspace Settings
+                      {t("settingsNav.workspaceSettingsExpanded")}
                     </span>
                   </Link>
                 </div>
@@ -925,7 +987,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/plugins`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <PuzzlePiece size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Plugins
+                      {t("settingsNav.workspacePlugins")}
                     </span>
                   </Link>
                   {pluginRequestBadge ? <NavBadge count={pluginRequestBadge} /> : null}
@@ -939,7 +1001,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/plugin-activity`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Plugin activity
+                      {t("settingsNav.pluginActivity")}
                     </span>
                   </Link>
                 </div>
@@ -961,7 +1023,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/billing`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <CreditCard size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Billing
+                      {t("settingsNav.billing")}
                     </span>
                   </Link>
                 </div>
@@ -972,7 +1034,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/billing/usage`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ChartLine size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Usage
+                      {t("settingsNav.usage")}
                     </span>
                   </Link>
                 </div>
@@ -983,7 +1045,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/billing/invoices`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <Receipt size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Invoices
+                      {t("settingsNav.invoices")}
                     </span>
                   </Link>
                 </div>
@@ -994,7 +1056,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   <Link href={`/${activeWorkspaceSlug}/settings/features`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                     <ListChecks size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                     <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                      Features
+                      {t("settingsNav.features")}
                     </span>
                   </Link>
                 </div>
@@ -1005,7 +1067,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   )}>
                     <Link href={`/${activeWorkspaceSlug}/settings/member-roles`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <Users size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">Member roles</span>
+                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">{t("settingsNav.memberRoles")}</span>
                     </Link>
                   </div>
                 )}
@@ -1017,20 +1079,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                     <Link href={`/${activeWorkspaceSlug}/settings/security`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
                       <ShieldCheck size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
                       <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                        Security
-                      </span>
-                    </Link>
-                  </div>
-                )}
-                {isOwnerOrAdmin && (
-                  <div className={cn(
-                    "group flex items-center h-[30px] px-2 rounded-[8px] text-[13px] transition-colors relative",
-                    navRowTone(pathname === `/${activeWorkspaceSlug}/settings/audit-log`)
-                  )}>
-                    <Link href={`/${activeWorkspaceSlug}/settings/audit-log`} className="flex items-center gap-2.5 flex-1 min-w-0 h-full">
-                      <ClockCounterClockwise size={16} className="shrink-0 text-ink-muted/80 group-hover:text-ink/80 transition-colors" weight="duotone" />
-                      <span className="font-medium tracking-tight text-ink/90 group-hover:text-ink transition-colors truncate">
-                        Audit log
+                        {t("settingsNav.security")}
                       </span>
                     </Link>
                   </div>
@@ -1061,11 +1110,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   {user.email}
                 </span>
                 <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
-                  {role ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}` : "Member"}
+                  {roleLabel(t, role)}
                   {" · "}
-                  {membershipType
-                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-                    : "Internal"}
+                  {membershipLabel(t, membershipType)}
                 </span>
               </div>
               <button
@@ -1075,7 +1122,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
-                title="Sign out"
+                title={t("signOut")}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M120,216a8,8,0,0,1-8,8H48a8,8,0,0,1-8-8V40a8,8,0,0,1,8-8h64a8,8,0,0,1,0,16H56V208h56A8,8,0,0,1,120,216Zm109.66-93.66-40-40a8,8,0,0,0-11.32,11.32L204.69,120H104a8,8,0,0,0,0,16H204.69l-26.35,26.34a8,8,0,0,0,11.32,11.32l40-40A8,8,0,0,0,229.66,122.34Z"></path></svg>
               </button>
@@ -1104,10 +1151,10 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         <DropdownMenu>
           <DropdownMenuTrigger
             title={
-              collapsed ? activeWorkspaceName || "Switch workspace" : undefined
+              collapsed ? activeWorkspaceName || t("switchWorkspaceLabel") : undefined
             }
             aria-label={
-              collapsed ? activeWorkspaceName || "Switch workspace" : undefined
+              collapsed ? activeWorkspaceName || t("switchWorkspaceLabel") : undefined
             }
             className={cn(
               "flex min-w-0 cursor-pointer items-center gap-2 rounded-md transition-colors hover:bg-surface-2",
@@ -1129,7 +1176,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {!collapsed && (
               <>
                 <span className="text-[14px] font-semibold text-ink truncate tracking-tight">
-                  {activeWorkspaceName || "Workspace"}
+                  {activeWorkspaceName || t("workspaceFallback")}
                 </span>
                 <CaretDown
                   size={12}
@@ -1146,18 +1193,22 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 onClick={() => router.push(activeWorkspaceSlug ? `/${activeWorkspaceSlug}/settings` : "/workspace")}
                 className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
               >
-                <span>Settings</span>
+                <span>{t("workspaceMenu.settings")}</span>
                 <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">G then S</DropdownMenuShortcut>
               </DropdownMenuItem>
             )}
 
-            {/* 2. Invite and manage members */}
-            <DropdownMenuItem
-              onClick={() => setIsInviteModalOpen(true)}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
-            >
-              <span>Invite and manage members</span>
-            </DropdownMenuItem>
+            {/* 2. Invite and manage members (Owner & Admin only).
+                WT-699 TC0705: offered to every Member, whose invite the server then refused. The
+                same audience the Members page gives its Invite button and pending-invite rows. */}
+            {isOwnerOrAdmin && (
+              <DropdownMenuItem
+                onClick={() => setIsInviteModalOpen(true)}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
+              >
+                <span>{t("workspaceMenu.inviteAndManageMembers")}</span>
+              </DropdownMenuItem>
+            )}
 
             {/* 3. Download desktop app */}
             <DropdownMenuItem
@@ -1166,7 +1217,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               }}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <span>Download desktop app</span>
+              <span>{t("workspaceMenu.downloadDesktopApp")}</span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator className="bg-border/60 my-1" />
@@ -1174,7 +1225,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             {/* 4. Switch workspace (Submenu) */}
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]">
-                <span>Switch workspace</span>
+                <span>{t("workspaceMenu.switchWorkspace")}</span>
                 <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono mr-1">O then W</DropdownMenuShortcut>
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent className="w-[250px] bg-popover border border-border shadow-lg rounded-xl p-1 text-ink text-[13px]">
@@ -1212,7 +1263,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
 
                 <DropdownMenuSeparator className="bg-border/60 my-1" />
                 <div className="px-2.5 py-1 text-[11px] font-medium text-ink-subtle">
-                  Account
+                  {t("workspaceMenu.account")}
                 </div>
                 {/*
                   The gateway, not the create form. The label has always promised BOTH, and
@@ -1224,13 +1275,13 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   onClick={() => router.push("/workspace")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
-                  <span>Create or join a workspace...</span>
+                  <span>{t("workspaceMenu.createOrJoinWorkspace")}</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => router.push("/login")}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
                 >
-                  <span>Add an account...</span>
+                  <span>{t("workspaceMenu.addAnAccount")}</span>
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
@@ -1242,7 +1293,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               onClick={() => logout()}
               className="flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer hover:bg-surface-2 text-ink text-[13px]"
             >
-              <span>Log out</span>
+              <span>{t("workspaceMenu.logOut")}</span>
               <DropdownMenuShortcut className="text-[11px] text-ink-subtle font-mono">Alt ⇧ Q</DropdownMenuShortcut>
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -1251,7 +1302,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <div className="flex items-center gap-1.5 text-ink-muted shrink-0">
             <button
               onClick={() => setSearchMeetingModalOpen(true)}
-              aria-label="Search meetings"
+              aria-label={t("searchMeetings")}
               className="flex size-7 items-center justify-center rounded-[6px] hover:bg-surface-2 hover:text-ink transition-colors"
             >
               <MagnifyingGlass size={16} weight="regular" />
@@ -1266,8 +1317,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             onClick={() => setSearchMeetingModalOpen(true)}
-            title="Search meetings"
-            aria-label="Search meetings"
+            title={t("searchMeetings")}
+            aria-label={t("searchMeetings")}
             className="mb-2 grid size-9 w-full place-items-center rounded-[6px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <MagnifyingGlass size={16} weight="regular" />
@@ -1289,7 +1340,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
         ) : (
           <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
             <span className="text-[12px] font-medium text-ink-subtle">
-              Workspace
+              {t("workspaceSection")}
             </span>
           </div>
         )}
@@ -1311,7 +1362,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             ) : (
               <div className="mt-6 mb-1 px-2 flex items-center h-[24px]">
                 <span className="text-[12px] font-medium text-ink-subtle">
-                  Platform
+                  {t("platformSection")}
                 </span>
               </div>
             )}
@@ -1319,7 +1370,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Gauge,
-                  label: "Overview",
+                  label: t("adminNav.items.insights"),
                   href: "/admin",
                   exact: true,
                 }}
@@ -1329,7 +1380,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Users,
-                  label: "Workspaces",
+                  label: t("adminQuickLinks.workspaces"),
                   href: "/admin/workspaces",
                 }}
                 pathname={pathname}
@@ -1338,7 +1389,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: CreditCard,
-                  label: "Billing",
+                  label: t("adminQuickLinks.billing"),
                   href: "/admin/billing",
                 }}
                 pathname={pathname}
@@ -1347,7 +1398,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <NavLink
                 item={{
                   icon: Globe,
-                  label: "Global Glossary",
+                  label: t("adminQuickLinks.globalGlossary"),
                   href: "/admin/global-glossary",
                 }}
                 pathname={pathname}
@@ -1380,9 +1431,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               <span className="grid size-9 place-items-center rounded-full bg-surface-2 text-ink-muted transition group-hover:bg-primary/10 group-hover:text-primary">
                 <PaperPlaneTilt size={17} weight="duotone" />
               </span>
-              <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">Invite team members</span>
+              <span className="mt-3 block text-[13px] font-semibold leading-5 text-ink">{t("inviteTeamMembers")}</span>
               <span className="mt-1 block pr-5 text-[12px] leading-5 text-ink-muted">
-                Bring your team in to collaborate and share workspace rooms.
+                {t("inviteTeamMembersBody")}
               </span>
             </button>
             <button
@@ -1390,8 +1441,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
               onClick={() =>
                 dismissInviteSuggestion(activeWorkspaceId, Date.now())
               }
-              title={`Dismiss for ${INVITE_SNOOZE_DAYS} days`}
-              aria-label="Dismiss the invite suggestion"
+              title={t("dismissInvite", { days: INVITE_SNOOZE_DAYS })}
+              aria-label={t("dismissInviteAria")}
               className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-md text-ink-subtle opacity-0 transition hover:bg-surface-3 hover:text-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 group-hover:opacity-100"
             >
               <X size={11} weight="bold" />
@@ -1405,8 +1456,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
           <button
             type="button"
             onClick={() => setIsInviteModalOpen(true)}
-            title="Invite team members"
-            aria-label="Invite team members"
+            title={t("inviteTeamMembers")}
+            aria-label={t("inviteTeamMembers")}
             className="grid size-10 w-full place-items-center rounded-xl border border-border/50 bg-surface-1 text-ink-muted transition-colors hover:border-border/80 hover:bg-surface-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <PaperPlaneTilt size={17} weight="duotone" />
@@ -1428,8 +1479,8 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
             onSignOut={logout}
             trigger={
           <div
-            title={collapsed ? user.fullName || "Profile" : undefined}
-            aria-label={collapsed ? user.fullName || "Profile" : undefined}
+            title={collapsed ? user.fullName || t("profileFallback") : undefined}
+            aria-label={collapsed ? user.fullName || t("profileFallback") : undefined}
             className={cn(
               "flex items-center bg-surface-1 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border border-border/50 rounded-xl cursor-pointer transition-colors group relative hover:shadow-md hover:border-border/80",
               collapsed ? "justify-center p-1" : "gap-2.5 p-2",
@@ -1454,13 +1505,9 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   {user.email}
                 </span>
                 <span className="mt-0.5 truncate text-[10px] font-medium text-primary">
-                  {role
-                    ? `${role.charAt(0).toUpperCase()}${role.slice(1).toLowerCase()}`
-                    : "Member"}
+                  {roleLabel(t, role)}
                   {" · "}
-                  {membershipType
-                    ? `${membershipType.charAt(0).toUpperCase()}${membershipType.slice(1).toLowerCase()}`
-                    : "Internal"}
+                  {membershipLabel(t, membershipType)}
                 </span>
               </div>
             )}
@@ -1472,7 +1519,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                   logout();
                 }}
                 className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-surface-2 text-ink-muted hover:text-ink shrink-0 ml-1"
-                title="Sign out"
+                title={t("signOut")}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1495,17 +1542,17 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       <Dialog open={isJoinModalOpen} onOpenChange={setIsJoinModalOpen}>
         <DialogContent className="sm:max-w-[425px] !top-[25%] !translate-y-[-25%]">
           <DialogHeader>
-            <DialogTitle>Join Translation Room</DialogTitle>
+            <DialogTitle>{t("joinDialog.title")}</DialogTitle>
             <DialogDescription>
-              Enter the meeting code provided by your host to join the room.
+              {t("joinDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleJoin} className="grid gap-4 pt-2">
             <div className="grid gap-2">
-              <Label htmlFor="code" className="text-foreground font-medium text-[13px]">Meeting code</Label>
+              <Label htmlFor="code" className="text-foreground font-medium text-[13px]">{t("joinDialog.codeLabel")}</Label>
               <Input
                 id="code"
-                placeholder="e.g. ROOM-abc-123"
+                placeholder={t("joinDialog.codePlaceholder")}
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 autoComplete="off"
@@ -1519,7 +1566,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
                 disabled={!joinCode.trim()}
                 className="disabled:bg-surface-2 disabled:text-ink-muted disabled:opacity-100 min-w-[80px] text-white"
               >
-                Join
+                {t("joinDialog.join")}
               </Button>
             </div>
           </form>
@@ -1527,7 +1574,7 @@ export function LinearSidebar({ collapsed = false }: { collapsed?: boolean }) {
       </Dialog>
 
       <InviteMemberDialog
-        open={isInviteModalOpen}
+        open={isOwnerOrAdmin && isInviteModalOpen}
         onOpenChange={setIsInviteModalOpen}
         workspaceId={activeWorkspaceId || ""}
         workspaceName={activeWorkspaceName}

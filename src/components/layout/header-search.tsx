@@ -1,6 +1,7 @@
 "use client";
 
 import { MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 
 import { useUIStore } from "@/stores/ui-store";
 
@@ -17,17 +18,18 @@ import { useUIStore } from "@/stores/ui-store";
  * Anything the search should be able to do belongs in the dialog, not in a rival copy of it.
  */
 export function HeaderSearch() {
+  const t = useTranslations("common.topbar");
   const setSearchMeetingModalOpen = useUIStore((state) => state.setSearchMeetingModalOpen);
 
   return (
     <button
       type="button"
       onClick={() => setSearchMeetingModalOpen(true)}
-      aria-label="Search, or enter a room code"
+      aria-label={t("searchAria")}
       className="hidden h-7 w-full max-w-[420px] items-center gap-2 rounded-md border border-border bg-surface-1 px-2.5 text-[12px] text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink md:flex"
     >
       <MagnifyingGlass weight="light" className="h-3.5 w-3.5 shrink-0" />
-      <span className="flex-1 truncate text-left">Search, or paste a room code</span>
+      <span className="flex-1 truncate text-left">{t("searchPlaceholder")}</span>
       <kbd className="rounded-sm bg-surface-2 px-1.5 font-mono text-[10px] text-ink-muted">⌘K</kbd>
     </button>
   );

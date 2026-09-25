@@ -26,6 +26,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -126,6 +127,7 @@ function StateRow({
 }
 
 function SessionRow({ session }: { session: AdminUserSessionDto }) {
+  const t = useTranslations("adminUsers.detail");
   return (
     <li className="flex flex-col gap-1 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
       <span className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -135,11 +137,11 @@ function SessionRow({ session }: { session: AdminUserSessionDto }) {
         {/* The device string is whatever the client sent, so it can be absent. "Unknown device" is
             a fact about the record; an empty cell reads as a rendering bug. */}
         <span className="min-w-0 truncate text-[13px] text-ink">
-          {session.deviceInfo?.trim() || "Unknown device"}
+          {session.deviceInfo?.trim() || t("unknownDevice")}
         </span>
       </span>
       <span className="w-[150px] shrink-0 font-mono text-[12px] text-ink-muted">
-        {session.ipAddress?.trim() || "—"}
+        {session.ipAddress?.trim() || t("noIpAddress")}
       </span>
       <span className="w-[170px] shrink-0 text-[12px] text-ink-muted">
         {formatMoment(session.createdAt)}
@@ -152,6 +154,7 @@ function SessionRow({ session }: { session: AdminUserSessionDto }) {
 }
 
 export default function AdminUserDetailPage() {
+  const t = useTranslations("adminUsers.detail");
   const params = useParams<{ userId: string }>();
   const userId = params?.userId;
 
@@ -213,29 +216,27 @@ export default function AdminUserDetailPage() {
           className="inline-flex items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
         >
           <ArrowLeft size={13} />
-          Accounts
+          {t("backToDirectory")}
         </Link>
         <div className="mx-auto mt-10 max-w-lg rounded-2xl border border-hairline bg-surface-1 p-8 text-center shadow-linear">
           <span className="mx-auto grid size-11 place-items-center rounded-xl bg-destructive/10 text-destructive">
             <WarningCircle size={22} weight="duotone" />
           </span>
           <h1 className="mt-4 text-lg font-semibold">
-            {notFound ? "Account not found" : "This account could not be loaded"}
+            {notFound ? t("notFoundTitle") : t("loadErrorTitle")}
           </h1>
           <p className="mt-2 text-sm text-ink-muted">
-            {notFound
-              ? "No account carries this id. It may have been permanently removed, or the link is wrong."
-              : "Check the auth service, and that your session still holds the platform admin role."}
+            {notFound ? t("notFoundDescription") : t("loadErrorDescription")}
           </p>
           <div className="mt-5 flex justify-center gap-2">
             <Link href="/admin/users">
               <Button variant="outline" size="sm">
-                Back to directory
+                {t("backToDirectoryButton")}
               </Button>
             </Link>
             {!notFound ? (
               <Button size="sm" onClick={() => void detailQuery.refetch()}>
-                Try again
+                {t("tryAgain")}
               </Button>
             ) : null}
           </div>
@@ -254,12 +255,12 @@ export default function AdminUserDetailPage() {
         className="inline-flex items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
       >
         <ArrowLeft size={13} />
-        Accounts
+        {t("backToDirectory")}
       </Link>
 
       <div className="mt-3">
         <AdminPageHeader
-          eyebrow="Platform account"
+          eyebrow={t("eyebrow")}
           eyebrowIcon={<UserCircle size={14} weight="fill" />}
           title={user.fullName || user.email}
           description={user.email}
@@ -275,7 +276,7 @@ export default function AdminUserDetailPage() {
                   size={14}
                   className={cn(detailQuery.isFetching && "animate-spin")}
                 />
-                Refresh
+                {t("refresh")}
               </Button>
 
               {/* Unlock is offered only while a lockout is actually running — it clears itself when
@@ -288,7 +289,7 @@ export default function AdminUserDetailPage() {
                   disabled={isSaving}
                 >
                   <LockOpen size={14} />
-                  Unlock
+                  {t("unlock")}
                 </Button>
               ) : null}
 
@@ -299,7 +300,7 @@ export default function AdminUserDetailPage() {
                 disabled={isSaving}
               >
                 <SignOut size={14} />
-                End sessions
+                {t("endSessions")}
               </Button>
 
               {isActive ? (
@@ -310,12 +311,12 @@ export default function AdminUserDetailPage() {
                   disabled={isSaving}
                 >
                   <UserCircleMinus size={14} />
-                  Deactivate
+                  {t("deactivate")}
                 </Button>
               ) : (
                 <Button size="sm" onClick={() => setPendingAction("reactivate")} disabled={isSaving}>
                   <UserCirclePlus size={14} />
-                  Reactivate
+                  {t("reactivate")}
                 </Button>
               )}
             </div>
@@ -323,17 +324,17 @@ export default function AdminUserDetailPage() {
         />
       </div>
 
-      <h2 className="mt-6 text-sm font-semibold text-ink">Identity</h2>
+      <h2 className="mt-6 text-sm font-semibold text-ink">{t("identityHeading")}</h2>
       <AdminPanel className="mt-3">
         <div className="grid gap-5 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Fact label="Status">
+          <Fact label={t("facts.status")}>
             {/* The server derives this from five columns with a fixed precedence — deleted beats
                 locked beats deactivated beats unverified beats active. Shown, never recomputed. */}
             <UserStatusBadge status={user.status} />
           </Fact>
-          <Fact label="Platform roles">
+          <Fact label={t("facts.platformRoles")}>
             {user.roles.length === 0 ? (
-              <span className="text-ink-subtle">—</span>
+              <span className="text-ink-subtle">{t("noRoles")}</span>
             ) : (
               <span className="flex flex-wrap gap-1">
                 {user.roles.map((role) => (
@@ -352,63 +353,59 @@ export default function AdminUserDetailPage() {
               </span>
             )}
           </Fact>
-          <Fact label="Last signed in">
+          <Fact label={t("facts.lastSignedIn")}>
             {user.lastLoginAt ? (
               formatMoment(user.lastLoginAt)
             ) : (
-              <span className="italic text-ink-subtle">Never signed in</span>
+              <span className="italic text-ink-subtle">{t("neverSignedIn")}</span>
             )}
           </Fact>
-          <Fact label="Account created">{formatMoment(user.createdAt)}</Fact>
+          <Fact label={t("facts.accountCreated")}>{formatMoment(user.createdAt)}</Fact>
         </div>
       </AdminPanel>
 
-      <h2 className="mt-8 text-sm font-semibold text-ink">Access</h2>
+      <h2 className="mt-8 text-sm font-semibold text-ink">{t("accessHeading")}</h2>
       <AdminPanel className="mt-3">
         <StateRow
-          label="Email confirmed"
-          hint="Whether the person has ever completed the verification link."
-          value={emailVerified ? "Confirmed" : "Not confirmed"}
+          label={t("emailConfirmed.label")}
+          hint={t("emailConfirmed.hint")}
+          value={emailVerified ? t("emailConfirmed.confirmed") : t("emailConfirmed.notConfirmed")}
           tone={emailVerified ? "ok" : "muted"}
         />
         <StateRow
-          label="Sign-in allowed"
-          hint="Deactivating also ends every session already open."
-          value={isActive ? "Allowed" : "Deactivated"}
+          label={t("signInAllowed.label")}
+          hint={t("signInAllowed.hint")}
+          value={isActive ? t("signInAllowed.allowed") : t("signInAllowed.deactivated")}
           tone={isActive ? "ok" : "warn"}
         />
         <StateRow
-          label="Failed-login lockout"
+          label={t("lockout.label")}
           hint={
             isLockedOut && lockedUntil
-              ? `Clears itself at ${formatMoment(lockedUntil)}. Unlock does not wait for it.`
-              : "A lockout is temporary and clears itself once the window passes."
+              ? t("lockout.hintLocked", { time: formatMoment(lockedUntil) })
+              : t("lockout.hintClear")
           }
-          value={isLockedOut ? "Locked" : "None"}
+          value={isLockedOut ? t("lockout.locked") : t("lockout.none")}
           tone={isLockedOut ? "warn" : "muted"}
         />
       </AdminPanel>
 
       <h2 className="mt-8 flex items-baseline gap-2 text-sm font-semibold text-ink">
-        Sessions
+        {t("sessionsHeading")}
         <span className="text-[11px] font-normal text-ink-muted">
-          {activeSessions.length === 0
-            ? "none open"
-            : `${activeSessions.length} open right now`}
+          {t("sessionsOpenCount", { count: activeSessions.length })}
         </span>
       </h2>
       <AdminPanel className="mt-3">
         {activeSessions.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            No sessions are open. The account is not signed in anywhere.
-          </p>
+          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">{t("noSessionsOpen")}</p>
         ) : (
           <>
             <div className="hidden border-b border-hairline/60 px-4 py-2 text-[11px] font-medium text-ink-muted md:flex">
-              <span className="flex-1">Device</span>
-              <span className="w-[150px]">IP address</span>
-              <span className="w-[170px]">Signed in</span>
-              <span className="w-[170px]">Expires</span>
+              <span className="flex-1">{t("sessionColumns.device")}</span>
+              <span className="w-[150px]">{t("sessionColumns.ipAddress")}</span>
+              <span className="w-[170px]">{t("sessionColumns.signedIn")}</span>
+              <span className="w-[170px]">{t("sessionColumns.expires")}</span>
             </div>
             <ul>
               {activeSessions.map((session) => (
@@ -419,11 +416,7 @@ export default function AdminUserDetailPage() {
         )}
       </AdminPanel>
 
-      <p className="mt-3 text-[12px] text-ink-muted">
-        A session row never carries the token or its hash — an administrator needs to know a session
-        exists, not to be able to use it. Ending sessions does not lock the account or change the
-        password: the person can sign in again immediately.
-      </p>
+      <p className="mt-3 text-[12px] text-ink-muted">{t("footerNote")}</p>
 
       <AdminUserActionDialog
         user={pendingAction ? user : null}

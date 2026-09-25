@@ -25,6 +25,12 @@ const widget = await readFile(
   path.join(root, "src/components/layout/global-chatbot.tsx"),
   "utf8",
 );
+// i18n: "New chat" and the mention chip's remove control now render through next-intl
+// (t("newChat"), t("removeContextAria"/"removeContext")) rather than literal source text — see
+// common.json for the English wording the checks below still pin.
+const commonEn = JSON.parse(
+  await readFile(path.join(root, "messages/en/common.json"), "utf8"),
+);
 const recordPage = await readFile(
   path.join(root, "src/app/(app)/[workspaceSlug]/artifacts/[roomId]/page.tsx"),
   "utf8",
@@ -73,8 +79,10 @@ const checks = [
   ],
   [
     "the first message waits until this client has joined the hub group",
+    // Both sends — the workspace one and the platform-scope one (a system admin on /admin) —
+    // stream over the same hub group, so both must come after the join, not just the first.
     widget.includes("waitForConversationJoin") &&
-      /await waitForConversationJoin\(convId\);[\s\S]{0,400}sendAssistantMessage\.mutateAsync/.test(
+      /await waitForConversationJoin\(convId\);[\s\S]{0,600}sendPlatformMessage\.mutateAsync[\s\S]{0,200}sendAssistantMessage\.mutateAsync/.test(
         widget,
       ),
   ],
@@ -109,14 +117,15 @@ const checks = [
   // Fix 4 — re-opening keeps the conversation
   [
     "the Ask WarpBot trigger does not start a new conversation",
-    !/PopoverTrigger[\s\S]{0,200}aria-label="Ask WarpBot"[\s\S]{0,200}startNewConversation/.test(
+    !/PopoverTrigger[\s\S]{0,200}aria-label=\{t\("askWarpBot"\)\}[\s\S]{0,200}startNewConversation/.test(
       widget,
     ),
   ],
   [
     "a new conversation is still reachable from the panel header",
-    widget.includes('aria-label="New chat"') &&
-      widget.includes("onClick={startNewConversation}"),
+    widget.includes('aria-label={t("newChat")}') &&
+      widget.includes("onClick={startNewConversation}") &&
+      commonEn.chatbot?.newChat === "New chat",
   ],
 
   // Fix 5 — slash commands never swallow Enter
@@ -133,7 +142,9 @@ const checks = [
   ["no console.log left in the widget", !widget.includes("console.log")],
   [
     "the mention chip has a real remove control instead of a fake link",
-    widget.includes("Remove ${ctx.title}") && !widget.includes("ctx.link"),
+    widget.includes('t("removeContextAria", { title: ctx.title })') &&
+      !widget.includes("ctx.link") &&
+      commonEn.chatbot?.removeContextAria === "Remove {title} from this message",
   ],
   [
     "the handler-less paperclip button is gone",

@@ -15,15 +15,21 @@
  *
  * WHO: Owner and Admin can open it (the sidebar shows it to both); only the Owner can change it. The
  * server decides both from the workspace service; `canManage` on the response is its answer, and the
- * buttons follow it rather than a role string read here.
+ * buttons follow it (see `canManageWorkspacePlugins` for a response without it). An Admin gets the
+ * same page with every action taken away, including the request buttons and the sidebar's count.
  *
- * TRANSITION: a workspace that never touched this list is still on the old "Allow personal plugins"
- * default, so the server reports every marketplace plugin as added (or none, if the switch was off).
- * The first change here turns that into an explicit list without taking any other plugin away.
+ * TRANSITION: a workspace that never touched this list keeps only the marketplace plugins its
+ * members already use there (none, if the old "Allow personal plugins" switch is off). It used to be
+ * shown EVERY marketplace plugin as "in this workspace", over a list nobody had chosen — the owner
+ * called it fake. The first change here turns what is carried over into an explicit list.
+ *
+ * MANAGE shows who in the workspace has the plugin connected — name, face, when they connected and
+ * when they last used it here — from the server's member endpoint (connection metadata only).
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { useLocale, useTranslations } from "next-intl";
 import {
   Lock,
   Plugs,
@@ -31,12 +37,14 @@ import {
   SquaresFour,
   Spinner,
   Trash,
+  UsersThree,
   Warning,
   X,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -46,7 +54,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { WorkspacePage } from "@/components/workspace/page-chrome";
-import { useWorkspaceMembers } from "@/hooks/use-workspace";
 import { useWorkspaceRole, useWorkspaceRoleLoaded } from "@/hooks/use-workspace-role";
 import {
   useAddWorkspacePlugin,
@@ -54,19 +61,29 @@ import {
   useDecidePluginRequest,
   useRemoveWorkspacePlugin,
   useUpdatePrivatePlugin,
+  useWorkspaceMemberNames,
+  useWorkspaceMemberProfiles,
+  useWorkspacePluginMembers,
   useWorkspacePlugins,
 } from "@/hooks/use-workspace-plugins";
-import { getErrorMessage } from "@/lib/api/errors";
 import {
-  describeMembersUsed,
+  canManageWorkspacePlugins,
+  createPrivatePluginRequest,
+  pluginAddedByName,
+  privatePluginUpdateRequest,
   validatePrivatePluginDraft,
+  workspacePluginFacts,
+  workspacePluginMemberRows,
   workspacePluginSubtitle,
+  workspacePluginsTransitionNote,
   type PrivatePluginDraft,
   type PrivatePluginDraftErrors,
 } from "@/lib/assistant/plugin-availability";
+import { pluginErrorMessage } from "@/lib/assistant/plugin-errors";
+import { dateFnsCalendarLocale } from "@/lib/meeting/calendar-locale";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace-store";
-import type { WorkspacePluginItemDto, WorkspacePluginRequestDto } from "@/types/assistant";
+import type { PluginAuthMode, WorkspacePluginItemDto, WorkspacePluginRequestDto } from "@/types/assistant";
 
 type OpenDialog =
   | { kind: "marketplace" }
@@ -74,11 +91,26 @@ type OpenDialog =
   | { kind: "manage"; pluginKey: string }
   | null;
 
-const EMPTY_DRAFT: PrivatePluginDraft = { label: "", mcpServerUrl: "", description: "" };
+const EMPTY_DRAFT: PrivatePluginDraft = { label: "", mcpServerUrl: "", description: "", authMode: "oauth" };
+const NO_NAMES: Readonly<Record<string, string>> = {};
 
-function timeAgo(iso: string): string {
+/**
+ * The two ways a member can connect a private MCP server — the same choice the admin form offers.
+ *
+ * Only the modes live here; the wording is read from `workspacePlugins.authMode.*` at render time,
+ * because a module-scope constant cannot call `useTranslations` and a locale switch must change it.
+ */
+const AUTH_CHOICES: ReadonlyArray<{ mode: PluginAuthMode; titleKey: string; noteKey: string }> = [
+  { mode: "oauth", titleKey: "authMode.oauthTitle", noteKey: "authMode.oauthNote" },
+  { mode: "api_key", titleKey: "authMode.apiKeyTitle", noteKey: "authMode.apiKeyNote" },
+];
+
+/** "3 hours ago", in the reader's own UI locale — the same date-fns mapping the schedules use. */
+function timeAgo(iso: string, locale: string): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : formatDistanceToNow(date, { addSuffix: true });
+  return Number.isNaN(date.getTime())
+    ? ""
+    : formatDistanceToNow(date, { addSuffix: true, locale: dateFnsCalendarLocale(locale) });
 }
 
 /** The personal Plugins page's dialog frame, so both pages open the same shape. */
@@ -91,6 +123,7 @@ function DialogFrame({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("workspacePlugins");
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/35 px-4">
       <section
@@ -103,7 +136,7 @@ function DialogFrame({
           type="button"
           size="icon-sm"
           variant="ghost"
-          aria-label="Close"
+          aria-label={t("dialog.close")}
           onClick={onClose}
           className="absolute right-4 top-4"
         >
@@ -122,20 +155,21 @@ function AddPluginMenu({
   onPick: (kind: "marketplace" | "mcp") => void;
   align?: "end" | "center";
 }) {
+  const t = useTranslations("workspacePlugins");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button size="sm" />}>
         <Plus size={14} />
-        Add plugin
+        {t("addMenu.trigger")}
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="min-w-[220px]">
         <DropdownMenuItem onClick={() => onPick("marketplace")} className="cursor-pointer gap-2.5">
           <SquaresFour size={16} />
-          From marketplace
+          {t("addMenu.fromMarketplace")}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onPick("mcp")} className="cursor-pointer gap-2.5">
           <Plugs size={16} />
-          With MCP
+          {t("addMenu.withMcp")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -185,30 +219,35 @@ function RequestRow({
   busy: boolean;
   onDecide: (decision: "approve" | "decline") => void;
 }) {
+  const t = useTranslations("workspacePlugins");
+  const locale = useLocale();
   return (
     <div
       data-testid="plugin-request-row"
       className="grid grid-cols-[40px_minmax(0,1fr)] items-start gap-3 px-1 py-2.5 sm:grid-cols-[40px_minmax(0,1fr)_auto]"
     >
-      <PluginGlyph plugin={{ label: request.pluginLabel, avatarUrl: request.pluginAvatarUrl }} />
+      <PluginGlyph
+        plugin={{ label: request.pluginLabel, avatarUrl: request.pluginAvatarUrl, pluginKey: request.pluginKey }}
+      />
       <div className="min-w-0">
         <p className="text-sm text-ink">
           <span className="font-semibold">{requesterName}</span>{" "}
-          <span className="text-ink-muted">asked for</span>{" "}
+          <span className="text-ink-muted">{t("requests.askedFor")}</span>{" "}
           <span className="font-semibold">{request.pluginLabel}</span>{" "}
-          <span className="text-ink-muted">· {timeAgo(request.createdAt)}</span>
+          <span className="text-ink-muted">· {timeAgo(request.createdAt, locale)}</span>
         </p>
         {request.reason ? (
           <p className="mt-1 text-xs text-ink-muted">&ldquo;{request.reason}&rdquo;</p>
         ) : null}
       </div>
+      {/* An Admin reads the request and nothing else: no button that the server would refuse. */}
       {canManage ? (
         <div className="col-start-2 flex gap-1.5 self-center sm:col-start-auto">
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => onDecide("decline")}>
-            Decline
+            {t("requests.decline")}
           </Button>
           <Button type="button" size="sm" disabled={busy} onClick={() => onDecide("approve")}>
-            Add
+            {t("requests.approve")}
           </Button>
         </div>
       ) : null}
@@ -227,13 +266,12 @@ function MarketplaceDialog({
   onAdd: (plugin: WorkspacePluginItemDto) => void;
   onClose: () => void;
 }) {
+  const t = useTranslations("workspacePlugins");
   return (
-    <DialogFrame label="Add from marketplace" onClose={onClose}>
+    <DialogFrame label={t("marketplaceDialog.title")} onClose={onClose}>
       <div className="flex flex-col items-center gap-1.5 text-center">
-        <h2 className="text-lg font-semibold">Add from marketplace</h2>
-        <p className="max-w-[400px] text-sm text-ink-muted">
-          Members can connect it with their own accounts as soon as it&apos;s added.
-        </p>
+        <h2 className="text-lg font-semibold">{t("marketplaceDialog.title")}</h2>
+        <p className="max-w-[400px] text-sm text-ink-muted">{t("marketplaceDialog.subtitle")}</p>
       </div>
       {candidates.length ? (
         <div className="mt-4 flex flex-col">
@@ -251,38 +289,90 @@ function MarketplaceDialog({
                   onClick={() => onAdd(plugin)}
                 >
                   {busyKey === plugin.key ? <Spinner className="animate-spin" size={14} /> : null}
-                  Add
+                  {t("marketplace.add")}
                 </Button>
               }
             />
           ))}
         </div>
       ) : (
-        <p className="mt-6 text-center text-sm text-ink-muted">
-          Everything in the marketplace is already in this workspace.
-        </p>
+        <p className="mt-6 text-center text-sm text-ink-muted">{t("marketplace.allAdded")}</p>
       )}
     </DialogFrame>
   );
 }
 
+/**
+ * How members connect a private server. Sent as `authMode`; an edit sends it only when changed
+ * (see `privatePluginUpdateRequest`), because switching it can leave existing connections unusable.
+ */
+function AuthModeChoice({
+  value,
+  initial,
+  onChange,
+}: {
+  value: PluginAuthMode;
+  /** The saved mode when editing, to say what changing it means; null when creating. */
+  initial: PluginAuthMode | null;
+  onChange: (mode: PluginAuthMode) => void;
+}) {
+  const t = useTranslations("workspacePlugins");
+  const name = useId();
+  return (
+    <fieldset className="flex flex-col gap-1.5" data-testid="private-plugin-auth-mode">
+      <legend className="mb-1.5 text-sm font-medium">{t("authMode.legend")}</legend>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {AUTH_CHOICES.map(({ mode, titleKey, noteKey }) => (
+          <label
+            key={mode}
+            className={cn(
+              "flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors",
+              value === mode ? "border-primary bg-primary/5" : "border-border bg-surface-1 hover:bg-surface-2",
+            )}
+          >
+            <input
+              type="radio"
+              name={name}
+              value={mode}
+              checked={value === mode}
+              onChange={() => onChange(mode)}
+              className="mt-1 accent-primary"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-ink">{t(titleKey)}</span>
+              <span className="mt-0.5 block text-xs leading-5 text-ink-muted">{t(noteKey)}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+      {initial !== null && value !== initial ? (
+        <span className="text-xs text-ink-muted">{t("authMode.changeWarning")}</span>
+      ) : null}
+    </fieldset>
+  );
+}
+
 function PrivatePluginForm({
   initial,
+  savedAuthMode,
   submitLabel,
   busy,
   onSubmit,
   onCancel,
 }: {
   initial: PrivatePluginDraft;
+  /** The plugin's saved mode when editing; null when creating. */
+  savedAuthMode: PluginAuthMode | null;
   submitLabel: string;
   busy: boolean;
   onSubmit: (draft: PrivatePluginDraft) => void;
   onCancel: () => void;
 }) {
+  const t = useTranslations("workspacePlugins");
   const [draft, setDraft] = useState(initial);
   const [errors, setErrors] = useState<PrivatePluginDraftErrors>({});
 
-  const field = (key: keyof PrivatePluginDraft) => ({
+  const field = (key: "label" | "mcpServerUrl" | "description") => ({
     value: draft[key],
     onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
       setDraft((current) => ({ ...current, [key]: event.target.value })),
@@ -294,20 +384,20 @@ function PrivatePluginForm({
       className="mt-5 flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault();
-        const found = validatePrivatePluginDraft(draft);
+        const found = validatePrivatePluginDraft(draft, (key, values) => t(`form.errors.${key}`, values));
         setErrors(found);
         if (Object.keys(found).length === 0) onSubmit(draft);
       }}
     >
       <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Name
-        <Input placeholder="Internal CRM" className="bg-surface-1" {...field("label")} />
+        {t("form.nameLabel")}
+        <Input placeholder={t("form.namePlaceholder")} className="bg-surface-1" {...field("label")} />
         {errors.label ? <span className="text-xs font-normal text-destructive">{errors.label}</span> : null}
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
-        MCP server URL
+        {t("form.urlLabel")}
         <Input
-          placeholder="https://mcp.example.com/mcp"
+          placeholder={t("form.urlPlaceholder")}
           inputMode="url"
           className="bg-surface-1"
           {...field("mcpServerUrl")}
@@ -318,16 +408,26 @@ function PrivatePluginForm({
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         <span>
-          Description <span className="font-normal text-ink-muted">Optional</span>
+          {t("form.descriptionLabel")}{" "}
+          <span className="font-normal text-ink-muted">{t("form.optional")}</span>
         </span>
-        <Input placeholder="What WarpBot can do with it" className="bg-surface-1" {...field("description")} />
+        <Input
+          placeholder={t("form.descriptionPlaceholder")}
+          className="bg-surface-1"
+          {...field("description")}
+        />
         {errors.description ? (
           <span className="text-xs font-normal text-destructive">{errors.description}</span>
         ) : null}
       </label>
+      <AuthModeChoice
+        value={draft.authMode}
+        initial={savedAuthMode}
+        onChange={(authMode) => setDraft((current) => ({ ...current, authMode }))}
+      />
       <div className="mt-2 flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
-          Cancel
+          {t("form.cancel")}
         </Button>
         <Button type="submit" disabled={busy}>
           {busy ? <Spinner className="animate-spin" size={14} /> : null}
@@ -338,8 +438,91 @@ function PrivatePluginForm({
   );
 }
 
+/**
+ * Who in this workspace has the plugin connected: name, face, when they connected, and when they
+ * last used it here. Owner and Admin only — the server refuses anyone else — and it is connection
+ * metadata only: the server never sends a token or the member's account at the provider.
+ */
+function PluginMembersSection({ workspaceId, pluginKey }: { workspaceId: string | null; pluginKey: string }) {
+  const t = useTranslations("workspacePlugins.members");
+  const locale = useLocale();
+  const membersQuery = useWorkspacePluginMembers(workspaceId, pluginKey, true);
+  const userIds = useMemo(() => (membersQuery.data ?? []).map((member) => member.userId), [membersQuery.data]);
+  const profilesQuery = useWorkspaceMemberProfiles(workspaceId, userIds, userIds.length > 0);
+  const rows = workspacePluginMemberRows(membersQuery.data, profilesQuery.data ?? {});
+
+  let body: React.ReactNode;
+  if (membersQuery.isLoading) {
+    body = (
+      <p className="flex items-center gap-2 py-2 text-xs text-ink-muted">
+        <Spinner className="animate-spin" size={14} />
+        {t("loading")}
+      </p>
+    );
+  } else if (membersQuery.isError) {
+    body = (
+      <div className="flex items-center justify-between gap-3 py-1">
+        <span className="text-xs text-destructive">{t("loadError")}</span>
+        <Button type="button" size="sm" variant="ghost" onClick={() => void membersQuery.refetch()}>
+          {t("retry")}
+        </Button>
+      </div>
+    );
+  } else if (rows.length === 0) {
+    body = <p className="py-2 text-xs text-ink-muted">{t("empty")}</p>;
+  } else {
+    body = (
+      <ul className="flex max-h-[240px] flex-col divide-y divide-hairline overflow-y-auto" data-testid="plugin-members-list">
+        {rows.map((row) => {
+          const name = row.name ?? t("formerMember");
+          return (
+            <li key={row.userId} className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2.5 py-2">
+              <Avatar className="size-7 shrink-0 bg-primary/10" title={name}>
+                {/* No <AvatarImage> without a URL: an empty src resolves against the page. */}
+                {row.avatarUrl ? <AvatarImage src={row.avatarUrl} alt="" /> : null}
+                <AvatarFallback className="bg-transparent text-[11px] font-semibold uppercase text-primary">
+                  {name.charAt(0) || "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium text-ink">{name}</div>
+                <div className="truncate text-xs text-ink-muted">
+                  {t("connectedAgo", { when: timeAgo(row.connectedAt, locale) })}
+                  {" · "}
+                  {row.lastUsedAt
+                    ? t("lastUsedAgo", { when: timeAgo(row.lastUsedAt, locale) })
+                    : t("notUsedHereYet")}
+                </div>
+              </div>
+              {row.connectionStatus === "connected" ? null : (
+                <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-ink-muted">
+                  {row.connectionStatus === "expired" ? t("status.expired") : t("status.revoked")}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <section className="mt-5 flex flex-col gap-1" aria-label={t("title")}>
+      <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+          <UsersThree size={15} />
+          {t("title")}
+        </h3>
+        {rows.length ? <span className="text-xs text-ink-muted">{t("count", { count: rows.length })}</span> : null}
+      </div>
+      {body}
+    </section>
+  );
+}
+
 function ManageDialog({
   plugin,
+  workspaceId,
   workspaceName,
   addedByName,
   canManage,
@@ -350,6 +533,7 @@ function ManageDialog({
   onClose,
 }: {
   plugin: WorkspacePluginItemDto;
+  workspaceId: string | null;
   workspaceName: string;
   addedByName: string | null;
   canManage: boolean;
@@ -359,23 +543,28 @@ function ManageDialog({
   onSave: (draft: PrivatePluginDraft) => void;
   onClose: () => void;
 }) {
+  const t = useTranslations("workspacePlugins");
   const [confirming, setConfirming] = useState(false);
   const isPrivate = plugin.availability === "private";
-  const facts = [
-    describeMembersUsed(plugin.membersUsedCount),
-    addedByName ? `added by ${addedByName}` : null,
-    isPrivate ? "only this workspace" : null,
-  ].filter(Boolean);
+  const savedAuthMode: PluginAuthMode = plugin.authMode ?? "oauth";
 
   return (
-    <DialogFrame label={`Manage ${plugin.label}`} onClose={onClose}>
+    <DialogFrame label={t("manageDialog.ariaLabel", { label: plugin.label })} onClose={onClose}>
       <div className="flex flex-col items-center gap-3 text-center">
         <PluginGlyph plugin={plugin} size="lg" />
         <div>
           <h2 className="text-lg font-semibold">{plugin.label}</h2>
-          <p className="mt-1 text-sm text-ink-muted">{facts.join(" · ")}</p>
+          {/* Usage, not connections: connections are personal and the server cannot count them
+              per workspace, so "N of M connected" would be a number it made up. */}
+          <p className="mt-1 text-sm text-ink-muted">
+            {workspacePluginFacts(plugin, addedByName, (key, values) => t(`facts.${key}`, values))}
+          </p>
         </div>
       </div>
+
+      {/* Owner and Admin both reach this dialog (the page refuses everyone else), and both may see
+          who uses a plugin; only the Owner may change it. */}
+      <PluginMembersSection workspaceId={workspaceId} pluginKey={plugin.key} />
 
       {isPrivate && canManage ? (
         <PrivatePluginForm
@@ -383,8 +572,10 @@ function ManageDialog({
             label: plugin.label,
             mcpServerUrl: plugin.mcpServerUrl ?? "",
             description: plugin.description,
+            authMode: savedAuthMode,
           }}
-          submitLabel="Save"
+          savedAuthMode={savedAuthMode}
+          submitLabel={t("manageDialog.save")}
           busy={saving}
           onSubmit={onSave}
           onCancel={onClose}
@@ -396,16 +587,16 @@ function ManageDialog({
           <div className="flex flex-col gap-3 rounded-xl border border-border bg-surface-1 px-4 py-3">
             <p className="text-sm leading-6 text-ink-muted">
               {isPrivate
-                ? `Remove ${plugin.label}? Members can no longer see or use it, in ${workspaceName} or anywhere else.`
-                : `Remove ${plugin.label} from ${workspaceName}? WarpBot stops using it here. Members keep their own connection and can disconnect it from Plugins.`}
+                ? t("manageDialog.confirmPrivate", { label: plugin.label, workspaceName })
+                : t("manageDialog.confirmShared", { label: plugin.label, workspaceName })}
             </p>
             <div className="flex justify-end gap-2">
               <Button type="button" size="sm" variant="ghost" disabled={removing} onClick={() => setConfirming(false)}>
-                Cancel
+                {t("manageDialog.cancel")}
               </Button>
               <Button type="button" size="sm" variant="destructive" disabled={removing} onClick={onRemove}>
                 {removing ? <Spinner className="animate-spin" size={14} /> : null}
-                Remove
+                {t("manageDialog.remove")}
               </Button>
             </div>
           </div>
@@ -414,13 +605,13 @@ function ManageDialog({
             {canManage ? (
               <Button type="button" size="sm" variant="ghost" onClick={() => setConfirming(true)}>
                 <Trash size={15} />
-                Remove from workspace
+                {t("manageDialog.removeFromWorkspace")}
               </Button>
             ) : (
-              <span className="text-xs text-ink-muted">Only the workspace owner can change this.</span>
+              <span className="text-xs text-ink-muted">{t("manageDialog.readOnly")}</span>
             )}
             <Button type="button" size="sm" variant="outline" onClick={onClose}>
-              Close
+              {t("manageDialog.close")}
             </Button>
           </div>
         )}
@@ -430,14 +621,15 @@ function ManageDialog({
 }
 
 export function WorkspacePluginsPage() {
+  const t = useTranslations("workspacePlugins");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const workspaceName = useWorkspaceStore((state) => state.activeWorkspaceName) || "this workspace";
+  const activeWorkspaceName = useWorkspaceStore((state) => state.activeWorkspaceName);
+  const workspaceName = activeWorkspaceName || t("workspaceFallback");
   const role = useWorkspaceRole();
   const roleLoaded = useWorkspaceRoleLoaded();
   const isOwnerOrAdmin = role === "owner" || role === "admin";
 
   const overviewQuery = useWorkspacePlugins(workspaceId, roleLoaded && isOwnerOrAdmin);
-  const membersQuery = useWorkspaceMembers(roleLoaded && isOwnerOrAdmin ? workspaceId ?? undefined : undefined, 1, 100);
   const addPlugin = useAddWorkspacePlugin(workspaceId);
   const removePlugin = useRemoveWorkspacePlugin(workspaceId);
   const createPrivate = useCreatePrivatePlugin(workspaceId);
@@ -449,16 +641,22 @@ export function WorkspacePluginsPage() {
   const [busyRequestId, setBusyRequestId] = useState<string | null>(null);
 
   const overview = overviewQuery.data;
-  const canManage = overview?.canManage ?? false;
+  const canManage = canManageWorkspacePlugins(overview, role);
 
-  const nameOf = useMemo(() => {
-    const members = membersQuery.data?.items ?? [];
-    return (userId: string | null | undefined) => {
-      if (!userId) return null;
-      const member = members.find((entry) => entry.userId === userId);
-      return member ? member.fullName || member.email : null;
-    };
-  }, [membersQuery.data]);
+  // Everyone the page names: who asked, and who added a plugin the server did not name itself.
+  const peopleToName = useMemo(
+    () =>
+      overview
+        ? [
+            ...overview.pendingRequests.map((request) => request.requestedBy),
+            ...overview.inWorkspace.filter((plugin) => !plugin.addedByName?.trim()).map((plugin) => plugin.addedBy),
+          ]
+        : [],
+    [overview],
+  );
+  const namesQuery = useWorkspaceMemberNames(workspaceId, peopleToName, roleLoaded && isOwnerOrAdmin);
+  const memberNames = namesQuery.data ?? NO_NAMES;
+  const nameOf = (userId: string | null | undefined) => (userId ? memberNames[userId] ?? null : null);
 
   const managed = dialog?.kind === "manage"
     ? overview?.inWorkspace.find((plugin) => plugin.key === dialog.pluginKey) ?? null
@@ -468,9 +666,11 @@ export function WorkspacePluginsPage() {
     setBusyKey(plugin.key);
     try {
       await addPlugin.mutateAsync(plugin.key);
-      toast.success(`${plugin.label} added to ${workspaceName}`);
+      toast.success(t("toasts.added", { label: plugin.label, workspaceName }));
     } catch (error) {
-      toast.error(getErrorMessage(error, `Could not add ${plugin.label}.`));
+      // 409 `workspace_plugin_list_changed` and 503 `workspace_plugin_policy_unavailable` come back
+      // as text/plain; `pluginErrorMessage` shows what the server said instead of this fallback.
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotAdd", { label: plugin.label })));
     } finally {
       setBusyKey(null);
     }
@@ -480,23 +680,19 @@ export function WorkspacePluginsPage() {
     try {
       await removePlugin.mutateAsync(plugin.key);
       setDialog(null);
-      toast.success(`Removed from ${workspaceName}`);
+      toast.success(t("toasts.removed", { workspaceName }));
     } catch (error) {
-      toast.error(getErrorMessage(error, `Could not remove ${plugin.label}.`));
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotRemove", { label: plugin.label })));
     }
   }
 
   async function createMcp(draft: PrivatePluginDraft) {
     try {
-      const created = await createPrivate.mutateAsync({
-        label: draft.label.trim(),
-        mcpServerUrl: draft.mcpServerUrl.trim(),
-        description: draft.description.trim() || undefined,
-      });
+      const created = await createPrivate.mutateAsync(createPrivatePluginRequest(draft));
       setDialog(null);
-      toast.success(`${created.label} added to ${workspaceName}`);
+      toast.success(t("toasts.added", { label: created.label, workspaceName }));
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not add the plugin."));
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotAddPlugin")));
     }
   }
 
@@ -504,30 +700,27 @@ export function WorkspacePluginsPage() {
     try {
       await updatePrivate.mutateAsync({
         pluginKey: plugin.key,
-        request: {
-          label: draft.label.trim(),
-          description: draft.description.trim(),
-          mcpServerUrl: draft.mcpServerUrl.trim(),
-        },
+        request: privatePluginUpdateRequest(plugin, draft),
       });
-      toast.success(`${draft.label.trim()} saved`);
+      toast.success(t("toasts.saved", { label: draft.label.trim() }));
     } catch (error) {
-      toast.error(getErrorMessage(error, `Could not save ${plugin.label}.`));
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotSave", { label: plugin.label })));
     }
   }
 
   async function decideRequest(request: WorkspacePluginRequestDto, decision: "approve" | "decline") {
-    const who = nameOf(request.requestedBy) ?? "The member";
+    const who = nameOf(request.requestedBy) ?? t("requests.requesterFallbackSentence");
     setBusyRequestId(request.id);
     try {
       await decide.mutateAsync({ requestId: request.id, decision });
       toast.success(
         decision === "approve"
-          ? `${request.pluginLabel} added · ${who} was notified`
-          : `${who} was told it wasn't added`,
+          ? t("toasts.requestApproved", { label: request.pluginLabel, name: who })
+          : t("toasts.requestDeclined", { name: who }),
       );
     } catch (error) {
-      toast.error(getErrorMessage(error, "Could not update the request."));
+      // `plugin_request_by_owner` is one of the refusals the server words itself.
+      toast.error(pluginErrorMessage(error, t("toasts.couldNotDecide")));
     } finally {
       setBusyRequestId(null);
     }
@@ -536,14 +729,77 @@ export function WorkspacePluginsPage() {
   const header = (withMenu: boolean) => (
     <header className="flex flex-col items-start justify-between gap-4 sm:flex-row">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight text-ink">Plugins</h1>
-        <p className="text-xs text-ink-muted">
-          Choose which plugins members of {workspaceName} can connect. Each member signs in with their own account.
-        </p>
+        <h1 className="text-xl font-bold tracking-tight text-ink">{t("header.title")}</h1>
+        <p className="text-xs text-ink-muted">{t("header.subtitle", { workspaceName })}</p>
+        {canManage ? null : (
+          <p data-testid="workspace-plugins-read-only" className="text-xs text-ink-subtle">
+            {t("header.readOnly")}
+          </p>
+        )}
       </div>
       {withMenu && canManage ? <AddPluginMenu onPick={(kind) => setDialog({ kind })} /> : null}
     </header>
   );
+
+  const transitionNote = overview
+    ? workspacePluginsTransitionNote(overview, (key, values) => t(`transition.${key}`, values))
+    : null;
+  // The transition, said out loud: nothing here was chosen yet, it is the old default — and which
+  // old default, because "every plugin is available" is false for a workspace that had them off.
+  const transition = transitionNote ? (
+    <p data-testid="workspace-plugins-transition" className="-mt-4 text-xs text-ink-muted">
+      {transitionNote}
+    </p>
+  ) : null;
+
+  // Shown on the empty page too: the empty state's menu is one way in, and a list of what can be
+  // added is the other. Hiding it left an Owner with nothing added nothing to look at.
+  const marketplaceSection = overview ? (
+    <section className="flex flex-col gap-3">
+      <SectionHead title={t("marketplace.title")} note={t("marketplace.note")} />
+      {overview.marketplace.length ? (
+        <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
+          {overview.marketplace.map((plugin) => (
+            <PluginRow
+              key={plugin.key}
+              plugin={plugin}
+              subtitle={plugin.description}
+              action={
+                canManage ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busyKey !== null}
+                    onClick={() => void add(plugin)}
+                  >
+                    {busyKey === plugin.key ? <Spinner className="animate-spin" size={14} /> : null}
+                    {t("marketplace.add")}
+                  </Button>
+                ) : null
+              }
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-muted">{t("marketplace.allAdded")}</p>
+      )}
+    </section>
+  ) : null;
+
+  // Plugins WarpTalk turned off for this workspace after it had them. Shown, not hidden, so the
+  // Owner knows where a plugin went and that members' connections are kept; never addable.
+  const disabledByPlatform = overview?.disabledByPlatform ?? [];
+  const disabledByPlatformSection = disabledByPlatform.length ? (
+    <section data-testid="workspace-plugins-disabled-by-platform" className="flex flex-col gap-3">
+      <SectionHead title={t("disabledByPlatform.title")} note={t("disabledByPlatform.note")} />
+      <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
+        {disabledByPlatform.map((plugin) => (
+          <PluginRow key={plugin.key} plugin={plugin} subtitle={t("disabledByPlatform.row")} action={null} />
+        ))}
+      </div>
+    </section>
+  ) : null;
 
   let body: React.ReactNode;
   if (!workspaceId) {
@@ -552,15 +808,15 @@ export function WorkspacePluginsPage() {
     body = (
       <div className="flex items-center gap-2 py-8 text-sm text-ink-muted">
         <Spinner className="animate-spin" size={16} />
-        Loading plugins...
+        {t("states.loading")}
       </div>
     );
   } else if (!isOwnerOrAdmin || (overviewQuery.error as { response?: { status?: number } } | null)?.response?.status === 403) {
     body = (
       <div className="flex flex-col items-center gap-2 py-16 text-center">
         <Lock size={22} className="text-ink-muted" />
-        <p className="text-sm font-medium text-ink">Only workspace owners and admins can see this page</p>
-        <p className="text-xs text-ink-muted">Ask for a plugin from your own Plugins page instead.</p>
+        <p className="text-sm font-medium text-ink">{t("states.forbiddenTitle")}</p>
+        <p className="text-xs text-ink-muted">{t("states.forbiddenBody")}</p>
       </div>
     );
   } else if (overviewQuery.isError || !overview) {
@@ -568,10 +824,10 @@ export function WorkspacePluginsPage() {
       <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-1 px-4 py-3">
         <span className="flex items-center gap-2 text-sm text-destructive">
           <Warning size={16} />
-          Could not load this workspace&apos;s plugins.
+          {t("states.loadError")}
         </span>
         <Button type="button" size="sm" variant="outline" onClick={() => void overviewQuery.refetch()}>
-          Retry
+          {t("states.retry")}
         </Button>
       </div>
     );
@@ -579,40 +835,41 @@ export function WorkspacePluginsPage() {
     body = (
       <>
         {header(false)}
+        {transition}
         <div data-testid="workspace-plugins-empty" className="flex flex-col items-center gap-3.5 px-4 py-14 text-center">
           <span className="grid size-11 place-items-center rounded-[10px] border border-border bg-surface-2 text-ink">
             <SquaresFour size={22} />
           </span>
-          <p className="text-[15px] font-semibold text-ink">Add a plugin to this workspace</p>
+          <p className="text-[15px] font-semibold text-ink">{t("empty.title")}</p>
           {canManage ? (
             <AddPluginMenu align="center" onPick={(kind) => setDialog({ kind })} />
           ) : (
-            <p className="text-xs text-ink-muted">Only the workspace owner can add plugins.</p>
+            <p className="text-xs text-ink-muted">{t("empty.readOnly")}</p>
           )}
         </div>
+        {marketplaceSection}
+        {disabledByPlatformSection}
       </>
     );
   } else {
     body = (
       <>
         {header(true)}
-
-        {overview.isCurated ? null : (
-          // The transition, said out loud: nothing here was chosen yet, it is the old default.
-          <p className="-mt-4 text-xs text-ink-muted">
-            Every marketplace plugin is available here until you change this list.
-          </p>
-        )}
+        {transition}
 
         {overview.pendingRequests.length ? (
           <section className="flex flex-col gap-3">
-            <SectionHead title="Requests" note={`${overview.pendingRequests.length} waiting`} />
+            <SectionHead
+              title={t("requests.title")}
+              note={t("requests.waiting", { count: overview.pendingRequests.length })}
+            />
+            {canManage ? null : <p className="text-xs text-ink-muted">{t("requests.readOnly")}</p>}
             <div className="flex flex-col divide-y divide-hairline">
               {overview.pendingRequests.map((request) => (
                 <RequestRow
                   key={request.id}
                   request={request}
-                  requesterName={nameOf(request.requestedBy) ?? "A member"}
+                  requesterName={nameOf(request.requestedBy) ?? t("requests.requesterFallback")}
                   canManage={canManage}
                   busy={busyRequestId !== null}
                   onDecide={(decision) => void decideRequest(request, decision)}
@@ -624,8 +881,8 @@ export function WorkspacePluginsPage() {
 
         <section className="flex flex-col gap-3">
           <SectionHead
-            title="In this workspace"
-            note={`${overview.inWorkspace.length} plugin${overview.inWorkspace.length === 1 ? "" : "s"}`}
+            title={t("inWorkspace.title")}
+            note={t("inWorkspace.count", { count: overview.inWorkspace.length })}
           />
           {overview.inWorkspace.length ? (
             <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
@@ -633,7 +890,7 @@ export function WorkspacePluginsPage() {
                 <PluginRow
                   key={plugin.key}
                   plugin={plugin}
-                  subtitle={workspacePluginSubtitle(plugin)}
+                  subtitle={workspacePluginSubtitle(plugin, (key, values) => t(`facts.${key}`, values))}
                   action={
                     <Button
                       type="button"
@@ -641,47 +898,19 @@ export function WorkspacePluginsPage() {
                       variant="outline"
                       onClick={() => setDialog({ kind: "manage", pluginKey: plugin.key })}
                     >
-                      Manage
+                      {canManage ? t("inWorkspace.manage") : t("inWorkspace.view")}
                     </Button>
                   }
                 />
               ))}
             </div>
           ) : (
-            <p className="text-xs text-ink-muted">No plugins yet. Add one from the marketplace below.</p>
+            <p className="text-xs text-ink-muted">{t("inWorkspace.empty")}</p>
           )}
         </section>
 
-        <section className="flex flex-col gap-3">
-          <SectionHead title="Marketplace" note="Published by WarpTalk" />
-          {overview.marketplace.length ? (
-            <div className="grid gap-x-10 gap-y-3 md:grid-cols-2">
-              {overview.marketplace.map((plugin) => (
-                <PluginRow
-                  key={plugin.key}
-                  plugin={plugin}
-                  subtitle={plugin.description}
-                  action={
-                    canManage ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={busyKey !== null}
-                        onClick={() => void add(plugin)}
-                      >
-                        {busyKey === plugin.key ? <Spinner className="animate-spin" size={14} /> : null}
-                        Add
-                      </Button>
-                    ) : null
-                  }
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-ink-muted">Everything in the marketplace is already in this workspace.</p>
-          )}
-        </section>
+        {marketplaceSection}
+        {disabledByPlatformSection}
       </>
     );
   }
@@ -692,7 +921,7 @@ export function WorkspacePluginsPage() {
         <div className={cn("mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-8 text-ink")}>{body}</div>
       </div>
 
-      {dialog?.kind === "marketplace" && overview ? (
+      {dialog?.kind === "marketplace" && overview && canManage ? (
         <MarketplaceDialog
           candidates={overview.marketplace}
           busyKey={busyKey}
@@ -701,20 +930,21 @@ export function WorkspacePluginsPage() {
         />
       ) : null}
 
-      {dialog?.kind === "mcp" ? (
-        <DialogFrame label="Add your own MCP server" onClose={() => setDialog(null)}>
+      {dialog?.kind === "mcp" && canManage ? (
+        <DialogFrame label={t("mcpDialog.title")} onClose={() => setDialog(null)}>
           <div className="flex flex-col items-center gap-3 text-center">
             <span className="grid size-14 place-items-center rounded-xl border border-border bg-surface-1 text-ink">
               <Plugs size={24} />
             </span>
             <div>
-              <h2 className="text-lg font-semibold">Add your own MCP server</h2>
-              <p className="mt-1 text-sm text-ink-muted">Only members of {workspaceName} will see it.</p>
+              <h2 className="text-lg font-semibold">{t("mcpDialog.title")}</h2>
+              <p className="mt-1 text-sm text-ink-muted">{t("mcpDialog.subtitle", { workspaceName })}</p>
             </div>
           </div>
           <PrivatePluginForm
             initial={EMPTY_DRAFT}
-            submitLabel="Add plugin"
+            savedAuthMode={null}
+            submitLabel={t("mcpDialog.submit")}
             busy={createPrivate.isPending}
             onSubmit={(draft) => void createMcp(draft)}
             onCancel={() => setDialog(null)}
@@ -726,8 +956,9 @@ export function WorkspacePluginsPage() {
         <ManageDialog
           key={managed.key}
           plugin={managed}
+          workspaceId={workspaceId}
           workspaceName={workspaceName}
-          addedByName={nameOf(managed.addedBy)}
+          addedByName={pluginAddedByName(managed, memberNames)}
           canManage={canManage}
           removing={removePlugin.isPending}
           saving={updatePrivate.isPending}

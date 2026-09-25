@@ -1,0 +1,49 @@
+{
+  "header": {
+    "title": "Profile"
+  },
+  "toasts": {
+    "avatarUpdated": "Profile picture updated.",
+    "avatarUpdateFailed": "Could not update your profile picture.",
+    "loadFailed": "Failed to load user profile",
+    "fullNameRequired": "Full name is required",
+    "saveFailed": "Failed to update profile"
+  },
+  "avatar": {
+    "label": "Profile picture",
+    "uploading": "Uploading…",
+    "change": "Change",
+    "upload": "Upload"
+  },
+  "fields": {
+    "email": {
+      "label": "Email",
+      "cannotChange": "Email cannot be changed"
+    },
+    "fullName": {
+      "label": "Full name",
+      "placeholder": "Your full name"
+    },
+    "phone": {
+      "label": "Phone number",
+      "placeholder": "e.g. +84 987654321"
+    },
+    "preferredLanguage": {
+      "label": "Preferred language",
+      "placeholder": "Select language"
+    },
+    "timezone": {
+      "label": "Timezone",
+      "placeholder": "Select timezone"
+    }
+  },
+  "workspaceAccess": {
+    "sectionTitle": "Workspace access",
+    "workspace": "Workspace",
+    "workspaceFallback": "Current workspace",
+    "role": "Workspace role",
+    "roleFallback": "Member",
+    "membershipType": "Membership type",
+    "membershipTypeFallback": "Internal"
+  }
+}

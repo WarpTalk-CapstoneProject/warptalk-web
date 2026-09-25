@@ -43,7 +43,7 @@
  *   while making every sentence of it answerable.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CaretDown,
   CaretUp,
@@ -53,6 +53,7 @@ import {
   SpinnerGap,
   VideoCamera,
 } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import {
@@ -66,7 +67,11 @@ import {
   useReadingSync,
 } from "@/components/rooms/transcript-reading-sync";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
-import { languagesInScope } from "@/lib/language/languages";
+import { InlineMarkdown, SummaryMarkdown } from "@/components/markdown/document-markdown";
+import { useSummaryRenderings } from "@/hooks/use-summary-renderings";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
+import { normalizeLanguageCode } from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
@@ -87,6 +92,7 @@ import {
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -166,6 +172,7 @@ export function TranscriptReadingLayout({
   rewriteFailure,
   rendering,
   onSelectRendering,
+  generatableLanguages,
   speakerDirectory,
 }: {
   /** Built by the room page — see the note in transcript-reading-sync.tsx on why it arrives whole. */
@@ -224,6 +231,8 @@ export function TranscriptReadingLayout({
   rendering?: SummaryRenderingView | null;
   /** Ask to read another pair. Never rewrites the meeting's summary — see RailSummary. */
   onSelectRendering?: (templateKey: string, language: string) => void;
+  /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
+  generatableLanguages?: readonly string[] | null;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
@@ -272,6 +281,7 @@ export function TranscriptReadingLayout({
           rewriteFailure={rewriteFailure}
           rendering={rendering}
           onSelectRendering={onSelectRendering}
+          generatableLanguages={generatableLanguages}
           speakerDirectory={speakerDirectory}
         />
       </div>
@@ -297,6 +307,7 @@ function ReadingRail({
   rewriteFailure,
   rendering,
   onSelectRendering,
+  generatableLanguages,
   speakerDirectory,
 }: {
   record: EndedRoomHistoryItem | null;
@@ -321,10 +332,13 @@ function ReadingRail({
   rewriteFailure?: { token: number; reason: string } | null;
   rendering?: SummaryRenderingView | null;
   onSelectRendering?: (templateKey: string, language: string) => void;
+  /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
+  generatableLanguages?: readonly string[] | null;
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
+  const t = useTranslations("meetingSummary");
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
   /**
@@ -464,20 +478,16 @@ function ReadingRail({
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-subtle">
               <VideoCamera size={12} />
-              Recording
+              {t("recording.label")}
             </span>
             <button
               type="button"
               onClick={onTogglePip}
               aria-expanded={pipOpen}
-              title={
-                pipOpen
-                  ? "Hide the recording and widen the transcript"
-                  : "Show the recording beside the transcript"
-              }
+              title={pipOpen ? t("recording.hideTitle") : t("recording.showTitle")}
               className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
             >
-              {pipOpen ? "Hide" : "Show"}
+              {pipOpen ? t("recording.hide") : t("recording.show")}
               {pipOpen ? <CaretUp size={10} /> : <CaretDown size={10} />}
             </button>
           </div>
@@ -507,18 +517,18 @@ function ReadingRail({
       <div
         className="flex items-center gap-1 border-b border-border px-2"
         role="tablist"
-        aria-label="Meeting summary rail"
+        aria-label={t("rail.ariaLabel")}
       >
         <RailTabButton
           active={tab === "summary"}
           onClick={() => setTab("summary")}
-          label="Summary"
+          label={t("rail.summaryTab")}
           count={claims.length || undefined}
         />
         <RailTabButton
           active={tab === "talk"}
           onClick={() => setTab("talk")}
-          label="Talk time"
+          label={t("rail.talkTimeTab")}
           count={shares.length || undefined}
         />
       </div>
@@ -545,6 +555,7 @@ function ReadingRail({
             shownSummary={shownSummary}
             rendering={rendering}
             onSelectRendering={onSelectRendering}
+            generatableLanguages={generatableLanguages}
           />
         ) : (
           <RailTalkTime shares={shares} speakerDirectory={speakerDirectory} />
@@ -612,6 +623,7 @@ function RailSummary({
   shownSummary,
   rendering,
   onSelectRendering,
+  generatableLanguages,
 }: {
   record: EndedRoomHistoryItem | null;
   segments: readonly StalenessSegment[];
@@ -632,7 +644,10 @@ function RailSummary({
   shownSummary?: MeetingSummaryContent | null;
   rendering?: SummaryRenderingView | null;
   onSelectRendering?: (templateKey: string, language: string) => void;
+  /** WT-703: what the server will generate this meeting in; see artifact-language-options.ts. */
+  generatableLanguages?: readonly string[] | null;
 }) {
+  const t = useTranslations("meetingSummary");
   // The pair being READ, which the mid component already resolved: the published summary
   // unless a rendering is ready. Passed in rather than re-derived so the panel and the claims
   // beside it can never disagree about which summary is on screen.
@@ -712,23 +727,100 @@ function RailSummary({
   const isRendering = rendering?.status === "generating";
 
   /**
-   * Every language the product can translate into, not only the ones this meeting produced.
+   * WT-705 — the languages on offer follow the MEETING, not the product catalogue.
    *
-   * The same rule the transcript picker follows, and for the same reason: a summary is
-   * rewritten from the transcript on demand, so a language this meeting never touched is an
-   * offer rather than a dead end. "As spoken" is listed only when that is what the current
-   * summary actually is — offering it against a summary already written in a chosen language
-   * would be offering to un-choose, which no request can express.
+   * Languages narrow at every level: workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3). Two
+   * questions are kept apart here, because confusing them is the bug this replaces:
+   *
+   * - What can be READ: every rendering that already exists, in whatever language — never
+   *   re-filtered. A summary written in French stays readable after the workspace drops French.
+   * - What can be WRITTEN: only `room.artifactLanguages.generatable`, the server's set (the
+   *   meeting's languages still allowed by the workspace). Offering the whole catalogue meant
+   *   most choices ended in a 400 from the server.
+   *
+   * `record.id` is the room id — the same id the page reads renderings with.
    */
-  const languageOptions = useMemo(() => {
-    const offered = languagesInScope("chatTarget").map((language) => ({
-      code: language.code,
-      label: language.name,
-    }));
-    return currentLanguage
-      ? offered
-      : [{ code: "", label: "As spoken" }, ...offered];
-  }, [currentLanguage]);
+  const roomId = record?.id;
+  const { data: room } = useTranslationRoom(roomId ?? "");
+  const currentUserId = useAuthStore((state) => state.user?.id);
+  // Mirrors the room page's rule. Rewriting the meeting's summary is host-only on the server
+  // (403 otherwise), so nobody else is shown a button that can only fail.
+  const isHost = Boolean(room && (room.isHost || (currentUserId && room.hostId === currentUserId)));
+  /**
+   * The server's WT-703 set, and the only rule about which languages may be offered.
+   *
+   * It arrives as a prop from the room page; when a caller does not pass one, the room this rail
+   * already loads carries the very same field. Nothing else is consulted — `artifactLanguage-
+   * Options` below decides what a missing set means (every product language, because the server
+   * still enforces on each request and an empty picker would hide an allowed choice).
+   */
+  const serverLanguages = generatableLanguages ?? room?.artifactLanguages?.generatable;
+  /** What a NEW rendering may be written in. Deliberately without `keep`: this is the write test. */
+  const writableCodes = useMemo(
+    () => new Set(artifactLanguageOptions(serverLanguages).map((option) => option.code)),
+    [serverLanguages],
+  );
+  const { data: renderings, refetch: refetchRenderings } = useSummaryRenderings(roomId);
+
+  // A rendering that just finished is a new "Available" language — refresh the list so the
+  // picker moves it out of "Can be written".
+  const renderingReadyKey =
+    rendering?.status === "ready" ? `${rendering.templateKey}:${rendering.language}` : null;
+  useEffect(() => {
+    if (renderingReadyKey && roomId) void refetchRenderings();
+  }, [renderingReadyKey, roomId, refetchRenderings]);
+
+  /** Languages this template can be READ in right now. "As spoken" ("") is never in here. */
+  function existingLanguagesFor(templateKey: string): string[] {
+    const fromRenderings = (renderings ?? [])
+      .filter((item) => item.templateKey === templateKey)
+      .map((item) => item.language);
+    const published = record?.summary;
+    const fromPublished =
+      published && (published.templateKey ?? DEFAULT_SUMMARY_TEMPLATE) === templateKey
+        ? [published.summaryLanguage]
+        : [];
+    return [...fromRenderings, ...fromPublished].filter(
+      (code): code is string => Boolean(code),
+    );
+  }
+
+  // Cheap enough to derive on every render: a handful of renderings at most.
+  //
+  // `keep` is what must stay selectable whatever the server's set says — every rendering this
+  // template already has, the published summary's language, and the language on screen, because
+  // reading what exists is never re-filtered and a select whose value is missing renders blank.
+  const existingCodes = new Set(
+    [...existingLanguagesFor(currentTemplate), summary?.summaryLanguage]
+      .map((code) => normalizeLanguageCode(code ?? ""))
+      .filter(Boolean),
+  );
+  const offeredLanguages = artifactLanguageOptions(serverLanguages, [
+    ...existingLanguagesFor(currentTemplate),
+    summary?.summaryLanguage,
+    currentLanguage,
+  ]);
+  // "Available" is what is already written down; everything else on offer has to be written.
+  const languageGroups = {
+    existing: offeredLanguages.filter((option) => existingCodes.has(option.code)),
+    generatable: offeredLanguages.filter((option) => !existingCodes.has(option.code)),
+  };
+
+  /** The select's value must be one of its options; the groups carry normalized codes. */
+  const selectedLanguage = currentLanguage ? normalizeLanguageCode(currentLanguage) : "";
+
+  /**
+   * Changing the SHAPE keeps the language when that pair can be read or written. When it can do
+   * neither — a language that exists for the old shape only and is no longer generatable — the
+   * request falls back to "as spoken" instead of asking for a guaranteed 400.
+   */
+  function languageForTemplate(templateKey: string): string {
+    if (!currentLanguage) return "";
+    const target = normalizeLanguageCode(currentLanguage);
+    const readable = existingLanguagesFor(templateKey).map((code) => normalizeLanguageCode(code));
+    if (readable.includes(target)) return currentLanguage;
+    return writableCodes.has(target) ? currentLanguage : "";
+  }
 
   function selectRendering(template: string, language: string) {
     // Reading, not rewriting: nobody else's summary changes. The deadline and the polling live
@@ -739,24 +831,24 @@ function RailSummary({
   async function copyAsText() {
     if (!summary || !record) return;
     const lines = [
-      `${record.title} — AI meeting summary`,
+      t("copyText.titleLine", { title: record.title }),
       "",
       // The same substitution the panel makes: a summary whose narrative IS the overview would
       // otherwise be pasted with its opening paragraph printed twice.
-      ...(hasNarrative ? [] : [summary.summary || "(no overview)", ""]),
+      ...(hasNarrative ? [] : [summary.summary || t("copyText.noOverview"), ""]),
       ...(summary.sections ?? []).flatMap((section) => [
         section.title,
         ...(section.items.length
           ? section.items.map((item) => `- ${item.owner ? `${item.owner}: ` : ""}${item.text}`)
-          : ["(none recorded)"]),
+          : [t("copyText.noneRecorded")]),
         "",
       ]),
     ];
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
-      toast.success("Summary copied.");
+      toast.success(t("toasts.copySuccess"));
     } catch {
-      toast.error("Could not copy the summary.");
+      toast.error(t("toasts.copyError"));
     }
   }
 
@@ -770,15 +862,15 @@ function RailSummary({
         )}
         <h5 className="mt-3 text-[13px] font-semibold text-ink">
           {isGenerating
-            ? "Generating summary…"
+            ? t("empty.generating")
             : absence === "withheld"
-              ? "Summary not shared with you"
+              ? t("empty.withheld")
               : absence === "no-transcript"
-                ? "Nothing was said to summarise"
-                : "No summary yet"}
+                ? t("empty.noTranscript")
+                : t("empty.noSummary")}
         </h5>
         <p className="mt-1.5 text-[11.5px] leading-5 text-ink-muted">
-          {summaryAbsenceMessage(absence)}
+          {summaryAbsenceMessage(absence, t)}
         </p>
       </div>
     );
@@ -805,10 +897,10 @@ function RailSummary({
               onChange={(event) => {
                 const templateKey = event.target.value;
                 if (templateKey === currentTemplate) return;
-                selectRendering(templateKey, currentLanguage);
+                selectRendering(templateKey, languageForTemplate(templateKey));
               }}
-              aria-label="Summary shape"
-              title="Read this meeting in a different shape"
+              aria-label={t("controls.shapeAriaLabel")}
+              title={t("controls.shapeTitle")}
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
               {SUMMARY_TEMPLATES.map((template) => (
@@ -818,22 +910,38 @@ function RailSummary({
               ))}
             </select>
             <select
-              value={currentLanguage}
+              value={selectedLanguage}
               disabled={isRendering}
               onChange={(event) => {
                 const language = event.target.value;
-                if (language === currentLanguage) return;
+                if (language === selectedLanguage) return;
                 selectRendering(currentTemplate, language);
               }}
-              aria-label="Summary language"
-              title="Read this meeting in a different language"
+              aria-label={t("controls.languageAriaLabel")}
+              title={t("controls.languageTitle")}
               className="h-6 min-w-0 flex-1 rounded border border-border bg-surface-1 px-1 text-[10px] text-ink disabled:opacity-60"
             >
-              {languageOptions.map((language) => (
-                <option key={language.code || "as-spoken"} value={language.code}>
-                  {language.label}
-                </option>
-              ))}
+              {/* "As spoken" is always offered: it follows the transcript and is never outside
+                  the meeting's languages. */}
+              <option value="">{t("asSpoken")}</option>
+              {languageGroups.existing.length ? (
+                <optgroup label={t("languageGroups.available")}>
+                  {languageGroups.existing.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {languageGroups.generatable.length ? (
+                <optgroup label={t("languageGroups.canBeWritten")}>
+                  {languageGroups.generatable.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </select>
           </>
         ) : null}
@@ -843,8 +951,8 @@ function RailSummary({
         <button
           type="button"
           onClick={copyAsText}
-          title="Copy the summary as text"
-          aria-label="Copy the summary as text"
+          title={t("controls.copyTitle")}
+          aria-label={t("controls.copyAriaLabel")}
           className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
         >
           <Copy size={13} />
@@ -856,8 +964,8 @@ function RailSummary({
             type="button"
             onClick={() => onDownload(artifact)}
             disabled={!ready || downloading}
-            title="Download the summary file"
-            aria-label="Download the summary file"
+            title={t("controls.downloadTitle")}
+            aria-label={t("controls.downloadAriaLabel")}
             className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink disabled:opacity-60"
           >
             {downloading ? (
@@ -875,13 +983,14 @@ function RailSummary({
           beside it only ever serves the published one. */}
       {rendering && !rendering.isCanonical ? (
         <p className="border-b border-border px-2 pb-2 pt-1.5 text-[11px] leading-4 text-ink-muted">
-          {isRendering
-            ? "Writing this version for you…"
-            : "Your own version of this meeting. What the host published is unchanged."}
+          {isRendering ? t("rendering.writing") : t("rendering.ownVersion")}
         </p>
       ) : null}
 
-      {stale && onRewrite ? (
+      {/* Host-only, like the endpoint behind it (403 for anyone else). A reader who is not the
+          host still sees the summary is out of date through the transcript itself; offering them
+          a button that can only fail would be worse than offering nothing. */}
+      {stale && onRewrite && isHost ? (
         <div className="px-1 pt-2">
           <SummaryStalenessNotice
             busy={regenerating}
@@ -938,16 +1047,18 @@ function RailSummary({
           only the narrative version can be checked: printing the flat string above a citable copy
           of itself would put the unverifiable one first and largest, which is precisely the dead
           spot the narrative exists to remove. */}
+      {/* WT-697: rendered as markdown. The backend's untemplated FALLBACK summary — what a reader
+          sees first, right after the meeting ends — stores raw model markdown in this field, and a
+          <p> printed its `##` and `**` literally until a reload landed on the upgraded row. */}
       {summary?.summary && !hasNarrative ? (
-        <p className="border-b border-border px-2 pb-2.5 pt-2 text-[12.5px] leading-[1.55] text-ink">
+        <SummaryMarkdown className="border-b border-border px-2 pb-2.5 pt-2 text-[12.5px] leading-[1.55] text-ink">
           {summary.summary}
-        </p>
+        </SummaryMarkdown>
       ) : null}
 
       {claims.length === 0 ? (
         <p className="px-2 py-6 text-center text-[12px] leading-5 text-ink-muted">
-          This summary was written before citations were recorded, so none of its points can be
-          traced back to the transcript.
+          {t("noCitations")}
         </p>
       ) : (
         claims.map((claim) => (
@@ -962,7 +1073,7 @@ function RailSummary({
                 consecutive sentences is the same striped table the timestamps would have been. */}
             {claim.heading && claim.sectionKey === NARRATIVE_SECTION_KEY ? (
               <p className="mb-1 px-2.5 text-[10.5px] leading-4 text-ink-subtle">
-                Click a sentence to see where it came from.
+                {t("narrative.hint")}
               </p>
             ) : null}
             {claim.sectionKey === NARRATIVE_SECTION_KEY ? (
@@ -990,9 +1101,7 @@ function RailSummary({
       {uncitedCount > 0 ? (
         <div className="mt-3 border-t border-border px-2 pt-2.5">
           <p className="text-[11px] leading-5 text-ink-muted">
-            {uncitedCount} of these {uncitedCount === 1 ? "points has" : "points have"} no moment
-            recorded, so {uncitedCount === 1 ? "it" : "they"} cannot be checked against the
-            transcript.
+            {t("uncited", { count: uncitedCount })}
           </p>
         </div>
       ) : null}
@@ -1011,11 +1120,12 @@ function RailClaimButton({
   onMark: (atMs: number | null) => void;
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
 }) {
+  const t = useTranslations("meetingSummary");
   const body = (
     <>
       <span className="block text-[12.5px] leading-[1.55] text-ink">
         {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
+        <InlineMarkdown>{claim.text}</InlineMarkdown>
       </span>
       <span
         className={cn(
@@ -1023,7 +1133,7 @@ function RailClaimButton({
           claim.atMs === null ? "text-ink-subtle" : lit ? "text-ink" : "text-ink-subtle",
         )}
       >
-        {claim.atMs === null ? "no moment recorded" : formatCitationTime(claim.atMs)}
+        {claim.atMs === null ? t("claim.noMoment") : formatCitationTime(claim.atMs)}
       </span>
     </>
   );
@@ -1052,7 +1162,7 @@ function RailClaimButton({
       onFocus={() => onMark(atMs)}
       onBlur={() => onMark(null)}
       onClick={() => onJumpToMoment(atMs)}
-      title="Go to this moment in the transcript"
+      title={t("claim.jumpTitle")}
       className={cn(
         "mb-0.5 block w-full rounded-md border-l-2 px-2.5 py-2 text-left transition-colors",
         lit
@@ -1100,11 +1210,12 @@ function RailNarrativeSentence({
   onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
 }) {
+  const t = useTranslations("meetingSummary");
   if (claim.atMs === null) {
     return (
       <p className="mb-px block w-full rounded-md border-l-2 border-l-transparent px-2.5 py-1 text-left text-[12.5px] leading-[1.55] text-ink">
         {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
+        <InlineMarkdown>{claim.text}</InlineMarkdown>
       </p>
     );
   }
@@ -1127,7 +1238,7 @@ function RailNarrativeSentence({
       onFocus={() => onMark(atMs, claim.alsoAtMs)}
       onBlur={() => onMark(null)}
       onClick={() => onJumpToMoment(atMs, claim.alsoAtMs)}
-      title="Go to where this sentence came from"
+      title={t("narrative.jumpTitle")}
       className={cn(
         "group mb-px flex w-full items-baseline gap-2 rounded-md border-l-2 px-2.5 py-1 text-left transition-colors",
         lit
@@ -1137,7 +1248,7 @@ function RailNarrativeSentence({
     >
       <span className="min-w-0 flex-1 text-[12.5px] leading-[1.55] text-ink">
         {claim.owner ? <span className="font-medium">{claim.owner}: </span> : null}
-        {claim.text}
+        <InlineMarkdown>{claim.text}</InlineMarkdown>
       </span>
       {/* Held in the layout at rest, never unmounted. `lit` is the reverse direction — the reader
           is already reading the turn this came from, and offering to take them there would be
@@ -1172,10 +1283,11 @@ function RailTalkTime({
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
 }) {
+  const t = useTranslations("meetingSummary");
   if (shares.length === 0) {
     return (
       <p className="px-2 py-6 text-center text-[12px] leading-5 text-ink-muted">
-        Nobody was recorded speaking in this meeting.
+        {t("talkTime.empty")}
       </p>
     );
   }
@@ -1183,7 +1295,7 @@ function RailTalkTime({
   return (
     <div>
       <h5 className="mb-1.5 px-2 font-mono text-[10px] uppercase tracking-[0.09em] text-ink-subtle">
-        Share of the talking
+        {t("talkTime.heading")}
       </h5>
       {shares.map((share) => {
         const speaker = resolveTranscriptSpeaker(share.key, share.name, speakerDirectory);
@@ -1202,7 +1314,7 @@ function RailTalkTime({
             <span
               className="h-1 overflow-hidden rounded-full bg-surface-1"
               role="img"
-              aria-label={`${share.percent}% of the speaking`}
+              aria-label={t("talkTime.percentAriaLabel", { percent: share.percent })}
             >
               <span
                 className="block h-full rounded-full"
@@ -1219,8 +1331,7 @@ function RailTalkTime({
         );
       })}
       <p className="mt-2 px-2 text-[10.5px] leading-4 text-ink-subtle">
-        Measured from the transcript, so it counts time spent speaking rather than time spent in
-        the meeting.
+        {t("talkTime.footnote")}
       </p>
     </div>
   );

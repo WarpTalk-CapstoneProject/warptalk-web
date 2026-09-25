@@ -1,0 +1,135 @@
+{
+  "accessDenied": {
+    "title": "Cần quyền quản trị hệ thống",
+    "description": "Bộ thuật ngữ chung là nền tảng thuật ngữ áp dụng cho toàn bộ hệ thống, dùng chung cho mọi không gian làm việc. Chỉ quản trị viên nền tảng mới có thể xem hoặc chỉnh sửa bộ thuật ngữ này."
+  },
+  "header": {
+    "eyebrow": "Thuật ngữ nền tảng",
+    "title": "Bộ thuật ngữ chung",
+    "description": "Nền tảng thuật ngữ áp dụng cho toàn hệ thống, dùng cho mọi không gian làm việc (trừ khi không gian đó từ chối). Thuật ngữ riêng của một không gian làm việc luôn được ưu tiên hơn thuật ngữ chung trùng khớp."
+  },
+  "actions": {
+    "bulkImportCsv": "Nhập hàng loạt từ CSV",
+    "newTerm": "Thuật ngữ mới"
+  },
+  "filters": {
+    "statusLabel": "Trạng thái thuật ngữ",
+    "status": {
+      "all": "Tất cả",
+      "draft": "Bản nháp",
+      "published": "Đã xuất bản",
+      "archived": "Đã lưu trữ"
+    },
+    "searchPlaceholder": "Tìm thuật ngữ hoặc bản dịch…"
+  },
+  "table": {
+    "term": "Thuật ngữ",
+    "translation": "Bản dịch",
+    "domain": "Lĩnh vực",
+    "priority": "Ưu tiên",
+    "status": "Trạng thái",
+    "actions": "Thao tác",
+    "noDomain": "—",
+    "emptyTitle": "Không tìm thấy thuật ngữ nào"
+  },
+  "rowActions": {
+    "edit": "Chỉnh sửa",
+    "publish": "Xuất bản",
+    "archive": "Lưu trữ",
+    "viewAuditHistory": "Xem lịch sử thay đổi",
+    "delete": "Xóa"
+  },
+  "fields": {
+    "term": "Thuật ngữ",
+    "termPlaceholder": "vd. architect",
+    "preferredTranslation": "Bản dịch ưu tiên",
+    "preferredTranslationPlaceholder": "vd. architect (giữ nguyên văn)",
+    "sourceLanguageOptional": "Ngôn ngữ nguồn (t.chọn)",
+    "targetLanguageOptional": "Ngôn ngữ đích (t.chọn)",
+    "sourceLanguage": "Ngôn ngữ nguồn",
+    "targetLanguage": "Ngôn ngữ đích",
+    "allLanguages": "Mọi ngôn ngữ",
+    "businessDomainOptional": "Lĩnh vực kinh doanh (t.chọn)",
+    "businessDomain": "Lĩnh vực kinh doanh",
+    "businessDomainPlaceholder": "vd. CNTT, Tài chính",
+    "definition": "Định nghĩa",
+    "definitionPlaceholder": "bắt buộc trước khi xuất bản",
+    "usageNoteOptional": "Ghi chú sử dụng (t.chọn)",
+    "usageNote": "Ghi chú sử dụng",
+    "priority": "Mức ưu tiên (0-10)"
+  },
+  "createDialog": {
+    "title": "Thuật ngữ chung mới",
+    "description": "Được tạo ở dạng bản nháp — hãy xuất bản để áp dụng cho mọi không gian làm việc.",
+    "cancel": "Hủy",
+    "submit": "Tạo bản nháp"
+  },
+  "editDialog": {
+    "title": "Chỉnh sửa thuật ngữ chung",
+    "description": "Mọi thay đổi đều được ghi lại và có hiệu lực ngay khi thuật ngữ đã được xuất bản.",
+    "cancel": "Hủy",
+    "submit": "Lưu thay đổi"
+  },
+  "bulkImportDialog": {
+    "title": "Nhập hàng loạt (CSV)",
+    "description": "Cột tiêu đề: Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority (chỉ Term và Translation là bắt buộc). Các dòng được nhập sẽ ở dạng bản nháp.",
+    "cancel": "Hủy",
+    "submit": "Nhập"
+  },
+  "auditDialog": {
+    "title": "Lịch sử thay đổi",
+    "description": "Ai đã thay đổi thuật ngữ này, và vào lúc nào.",
+    "noEntries": "Chưa có lịch sử thay đổi nào.",
+    "actor": "Người thực hiện: {actorId}"
+  },
+  "deleteDialog": {
+    "title": "Xóa thuật ngữ?",
+    "description": "Thao tác này sẽ xóa <term></term> khỏi bộ thuật ngữ chung của mọi không gian làm việc. Không thể hoàn tác từ giao diện.",
+    "cancel": "Hủy",
+    "confirm": "Xóa"
+  },
+  "validation": {
+    "invalidLanguage": "Hãy chọn một ngôn ngữ hệ thống hỗ trợ, hoặc để nguyên là Mọi ngôn ngữ.",
+    "termMin": "Thuật ngữ phải có ít nhất 3 ký tự — từ ngắn/thông dụng có nguy cơ chiếm dụng nhận dạng giọng nói của mọi cuộc họp.",
+    "translationRequired": "Bản dịch ưu tiên không được để trống"
+  },
+  "toasts": {
+    "createdDraft": "Đã tạo thuật ngữ \"{term}\" ở dạng bản nháp.",
+    "createFailed": "Không thể tạo thuật ngữ.",
+    "updated": "Đã cập nhật thuật ngữ \"{term}\".",
+    "updateFailed": "Không thể cập nhật thuật ngữ.",
+    "published": "Đã xuất bản \"{term}\" — hiện đã áp dụng cho mọi không gian làm việc đã chọn tham gia.",
+    "publishFailedDefault": "Không thể xuất bản thuật ngữ (cần có định nghĩa).",
+    "archived": "Đã lưu trữ \"{term}\".",
+    "archiveFailed": "Không thể lưu trữ thuật ngữ.",
+    "deleted": "Đã xóa \"{term}\".",
+    "deleteFailed": "Không thể xóa thuật ngữ.",
+    "csvMissingColumns": "File CSV phải có ít nhất cột Term và Translation.",
+    "csvNoValidRows": "Không tìm thấy dòng dữ liệu hợp lệ nào.",
+    "csvUnknownLanguages": "Mã ngôn ngữ không hợp lệ: {codes}. Hãy dùng {allowed}, hoặc để trống cột này để áp dụng cho mọi ngôn ngữ.",
+    "bulkImported": "Đã nhập {imported}, bỏ qua {skipped}.",
+    "bulkImportIssues": "{count, plural, other {# dòng}} gặp lỗi — kiểm tra console.",
+    "bulkImportFailed": "Nhập hàng loạt thất bại."
+  },
+  "list": {
+    "termCount": "{count, plural, other {# thuật ngữ}}",
+    "emptyDescription": "Thêm một thuật ngữ hoặc nhập tệp CSV để thiết lập bộ thuật ngữ nền cho toàn nền tảng.",
+    "anyLanguage": "Mọi ngôn ngữ",
+    "noDomainGroup": "Không có lĩnh vực",
+    "filters": {
+      "domain": "Lĩnh vực",
+      "language": "Ngôn ngữ"
+    },
+    "sortFields": {
+      "priority": "Độ ưu tiên (cao nhất trước)",
+      "updated": "Cập nhật gần đây",
+      "created": "Tạo gần đây",
+      "term": "Thuật ngữ"
+    },
+    "columns": {
+      "languages": "Ngôn ngữ",
+      "updated": "Cập nhật",
+      "created": "Ngày tạo"
+    }
+  }
+}

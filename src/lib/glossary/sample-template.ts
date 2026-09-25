@@ -163,10 +163,25 @@ export function buildSampleTemplateRows(
   ];
 }
 
+/** Optional translator, defaulted to English so the node:test contract for this file (and any
+ * caller that has not been migrated to next-intl) keeps working unchanged. */
+type ExpectedPairTranslator = (
+  key: "expectedPairSame" | "expectedPairDifferent",
+  values: { source: string; target: string },
+) => string;
+
+const DEFAULT_EXPECTED_PAIR_COPY = {
+  expectedPairSame: ({ source, target }: { source: string; target: string }) =>
+    `This glossary is ${source} → ${target}, so the second column is what each term means rather than a translation.`,
+  expectedPairDifferent: ({ source, target }: { source: string; target: string }) =>
+    `This glossary is ${source} → ${target}. The second column should be ${target}.`,
+};
+
 /** What the import dialog should say the file is expected to contain. */
 export function describeExpectedPair(
   sourceLanguage: string | null | undefined,
   targetLanguage: string | null | undefined,
+  t: ExpectedPairTranslator = (key, values) => DEFAULT_EXPECTED_PAIR_COPY[key](values),
 ): string {
   const source = baseLanguage(sourceLanguage);
   const target = baseLanguage(targetLanguage);
@@ -175,7 +190,8 @@ export function describeExpectedPair(
   const sourceName = getLanguageName(source || undefined);
   const targetName = getLanguageName(target || undefined);
 
-  return source && source === target
-    ? `This glossary is ${sourceName} → ${targetName}, so the second column is what each term means rather than a translation.`
-    : `This glossary is ${sourceName} → ${targetName}. The second column should be ${targetName}.`;
+  return t(source && source === target ? "expectedPairSame" : "expectedPairDifferent", {
+    source: sourceName,
+    target: targetName,
+  });
 }

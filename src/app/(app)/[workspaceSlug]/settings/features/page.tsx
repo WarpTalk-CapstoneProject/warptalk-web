@@ -14,6 +14,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { ArrowRight, Info, Spinner, Warning } from "@phosphor-icons/react";
 
 import { useWorkspaceEntitlements } from "@/hooks/use-workspace";
@@ -31,6 +32,7 @@ type ApiErrorLike = { response?: { status?: number } };
 
 const SOURCE_CHIP_TONE: Record<EntitlementSourceKind, string> = {
   plan: "border-primary/25 bg-primary/10 text-primary",
+  addon: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   contract: "border-hairline bg-surface-2 text-ink",
   platform: "border-hairline bg-surface-2 text-ink-muted",
   workspace: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
@@ -65,6 +67,7 @@ function ValueText({ value, muted }: { value: FormattedEntitlementValue; muted?:
 }
 
 function FeatureRow({ row }: { row: EntitlementRow }) {
+  const t = useTranslations("settingsFeatures");
   return (
     <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-4 py-3.5">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -78,12 +81,12 @@ function FeatureRow({ row }: { row: EntitlementRow }) {
         </div>
         {row.ceiling ? (
           <span className="text-[11px] text-ink-muted">
-            {row.ceiling.source.label === "Plan" ? "Plan allows" : `${row.ceiling.source.label} allows`}{" "}
+            {t("ceilingAllows", { source: row.ceiling.source.label })}{" "}
             <ValueText value={row.ceiling.value} muted />
           </span>
         ) : null}
         {row.ceilingUnknown ? (
-          <span className="text-[11px] text-ink-muted">Lowered by the workspace owner</span>
+          <span className="text-[11px] text-ink-muted">{t("loweredByOwner")}</span>
         ) : null}
       </div>
     </div>
@@ -101,6 +104,8 @@ function CenteredNotice({ icon, title, body }: { icon: React.ReactNode; title: s
 }
 
 export default function WorkspaceFeaturesPage() {
+  const t = useTranslations("settingsFeatures");
+  const locale = useLocale();
   const params = useParams();
   const slugParam = params?.workspaceSlug;
   const routeSlug = Array.isArray(slugParam) ? slugParam[0] : slugParam;
@@ -113,7 +118,13 @@ export default function WorkspaceFeaturesPage() {
   if (!activeWorkspaceId) return null;
 
   const snapshot = entitlementsQuery.data;
-  const sections = snapshot?.isKnown ? buildEntitlementSections(snapshot.entitlements) : [];
+  const sections = snapshot?.isKnown
+    ? buildEntitlementSections(
+        snapshot.entitlements,
+        (key, values) => t(`entitlements.${key}`, values),
+        locale,
+      )
+    : [];
   const status = (entitlementsQuery.error as ApiErrorLike | null)?.response?.status;
 
   let body: React.ReactNode;
@@ -127,11 +138,11 @@ export default function WorkspaceFeaturesPage() {
     body = (
       <CenteredNotice
         icon={<Warning className="h-5 w-5" />}
-        title={status === 403 ? "You are not a member of this workspace" : "Features could not be loaded"}
+        title={status === 403 ? t("notMember.title") : t("loadError.title")}
         body={
           status === 403
-            ? "Only members of this workspace can see what it includes."
-            : "Something went wrong while loading this workspace's features. Try again in a moment."
+            ? t("notMember.body")
+            : t("loadError.body")
         }
       />
     );
@@ -139,8 +150,8 @@ export default function WorkspaceFeaturesPage() {
     body = (
       <CenteredNotice
         icon={<Info className="h-5 w-5" />}
-        title="Features are not available yet"
-        body="This workspace's plan has not been applied yet. This usually takes a few seconds after a plan starts; check back shortly."
+        title={t("notAvailable.title")}
+        body={t("notAvailable.body")}
       />
     );
   } else {
@@ -150,9 +161,9 @@ export default function WorkspaceFeaturesPage() {
           <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
             <Warning className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300" />
             <p className="text-xs text-ink">
-              This workspace has no active plan, so platform defaults apply and new meetings cannot start.{" "}
+              {t("noActivePlan")}{" "}
               <Link href={billingHref} className="font-semibold underline underline-offset-2">
-                Choose a plan
+                {t("choosePlan")}
               </Link>
             </p>
           </div>
@@ -160,7 +171,9 @@ export default function WorkspaceFeaturesPage() {
 
         {sections.map((section) => (
           <div key={section.group} className="flex flex-col gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">{section.group}</div>
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-subtle">
+              {t(`groups.${section.group}`)}
+            </div>
             <div className="divide-y divide-hairline overflow-hidden rounded-lg border border-hairline bg-surface-1 shadow-linear">
               {section.rows.map((row) => (
                 <FeatureRow key={row.key} row={row} />
@@ -171,10 +184,11 @@ export default function WorkspaceFeaturesPage() {
 
         {snapshot.resolvedAt ? (
           <p className="text-[11px] text-ink-subtle">
-            Last updated{" "}
-            {new Date(snapshot.resolvedAt).toLocaleString("en-US", {
-              dateStyle: "medium",
-              timeStyle: "short",
+            {t("lastUpdated", {
+              date: new Date(snapshot.resolvedAt).toLocaleString(locale, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }),
             })}
           </p>
         ) : null}
@@ -186,17 +200,16 @@ export default function WorkspaceFeaturesPage() {
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-8 text-ink">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-bold tracking-tight text-ink">Features</h1>
+          <h1 className="text-xl font-bold tracking-tight text-ink">{t("heading")}</h1>
           <p className="text-xs text-ink-muted">
-            What this workspace includes, and whether each limit comes from its plan, a contract, the platform
-            default or a limit set by the workspace.
+            {t("subheading")}
           </p>
         </div>
         <Link
           href={billingHref}
           className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-3 text-xs font-semibold text-ink transition hover:bg-surface-2"
         >
-          Upgrade in Billing
+          {t("upgradeInBilling")}
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>

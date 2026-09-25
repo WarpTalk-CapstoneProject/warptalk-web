@@ -1,0 +1,156 @@
+{
+  "eyebrow": "社内",
+  "title": "受信トレイ",
+  "description": "プラットフォームチームの対応待ちをすべて、担当ページから直接読み込みます。そこで対応すると項目は自動で消えます。",
+  "refresh": "更新",
+  "tiles": {
+    "open": "未対応",
+    "mine": "自分の担当",
+    "unassigned": "未割り当て",
+    "overdue": "SLA超過"
+  },
+  "statesAria": "項目の状態",
+  "states": {
+    "open": "未対応",
+    "snoozed": "スヌーズ中",
+    "done": "完了"
+  },
+  "scope": {
+    "aria": "担当範囲",
+    "all": "すべて",
+    "mine": "自分の担当"
+  },
+  "searchPlaceholder": "項目・顧客・担当者を検索…",
+  "itemCount": "{count, plural, other {# 件}}",
+  "filters": {
+    "type": "種類",
+    "priority": "優先度",
+    "assignee": "担当者",
+    "age": "経過",
+    "sla": "SLA",
+    "source": "ソース"
+  },
+  "assignee": {
+    "me": "自分",
+    "unassigned": "未割り当て",
+    "someone": "スタッフ"
+  },
+  "age": {
+    "today": "1日未満",
+    "days1to3": "1〜3日",
+    "days3to7": "3〜7日",
+    "week": "1週間以上"
+  },
+  "sla": {
+    "overdue": "期限超過",
+    "dueSoon": "24時間以内",
+    "onTrack": "期限内",
+    "none": "SLAなし"
+  },
+  "columns": {
+    "item": "項目",
+    "customer": "顧客",
+    "age": "経過",
+    "priority": "優先度",
+    "due": "期限",
+    "assignee": "担当者"
+  },
+  "unnamedWorkspace": "ワークスペース",
+  "ageUnits": {
+    "m": "{count}分",
+    "h": "{count}時間",
+    "d": "{count}日",
+    "w": "{count}週"
+  },
+  "notesCount": "{count, plural, other {メモ #件}}",
+  "empty": {
+    "open": {
+      "title": "対応待ちはありません",
+      "description": "閲覧できる範囲に未対応の項目はありません。"
+    },
+    "snoozed": {
+      "title": "スヌーズ中の項目はありません",
+      "description": "スヌーズした項目は指定時刻に戻ります。"
+    },
+    "done": {
+      "title": "手動で完了した項目はありません",
+      "description": "自動で閉じる項目はここに表示されません。"
+    }
+  },
+  "sourceUnavailable": "{source} を現在読み込めません。その項目は一覧にありません。",
+  "sourceTruncated": "{source} には返された以上の項目があります。緊急度の高いものを表示しています。",
+  "types": {
+    "sales_lead": "新規リード",
+    "invoice_past_due": "支払期限超過の請求書",
+    "invoice_awaiting_payment": "入金確認待ち",
+    "payment_disputed": "支払いの異議申し立て",
+    "trial_ending": "トライアル終了間近",
+    "subscription_ending": "契約終了間近",
+    "subscription_suspended": "サービス停止中",
+    "provider_incident": "プロバイダ障害",
+    "provider_quota": "プロバイダ上限 (402)",
+    "expense_due": "支払予定の経費",
+    "staff_invitation": "スタッフ招待",
+    "announcement_scheduled": "確認が必要なお知らせ",
+    "announcement_draft": "放置された下書き",
+    "broadcast_failed": "配信失敗",
+    "dead_letter": "デッドレターのイベント"
+  },
+  "priorities": {
+    "urgent": "緊急",
+    "high": "高",
+    "normal": "通常",
+    "low": "低"
+  },
+  "sources": {
+    "billing": "請求",
+    "providers": "プロバイダ",
+    "expenses": "運営費",
+    "staff": "スタッフ",
+    "content": "コンテンツ",
+    "operations": "運用"
+  },
+  "actionFailed": "操作に失敗しました。もう一度お試しください。",
+  "toasts": {
+    "assigned": "割り当てました",
+    "unassigned": "割り当てを解除しました",
+    "noteAdded": "メモを追加しました",
+    "snoozed": "スヌーズしました",
+    "woken": "受信トレイに戻しました",
+    "reopened": "再開しました",
+    "done": "完了にしました"
+  },
+  "detail": {
+    "detail": "詳細",
+    "amount": "金額",
+    "waitingSince": "待機開始",
+    "closesItself": "担当ページで対応すると、この項目は自動で受信トレイから消えます。",
+    "closesByHand": "担当ページではこの項目は閉じません。対応後にここで完了にしてください。"
+  },
+  "open": "対応ページを開く",
+  "triage": {
+    "title": "トリアージ",
+    "assignedTo": "担当",
+    "assignToMe": "自分に割り当て",
+    "assignTo": "割り当て先…",
+    "unassign": "割り当て解除",
+    "snoozedUntil": "{when} までスヌーズ",
+    "snooze": "スヌーズ",
+    "wake": "今すぐ戻す",
+    "reopen": "再開",
+    "markDone": "完了にする"
+  },
+  "snooze": {
+    "laterToday": "3時間後",
+    "tomorrow": "明日 9:00",
+    "nextWeek": "次の月曜",
+    "nextMonth": "30日後"
+  },
+  "notes": {
+    "title": "社内メモ",
+    "loading": "メモを読み込み中…",
+    "empty": "メモはまだありません。",
+    "placeholder": "対応内容、連絡先など…",
+    "add": "メモを追加"
+  }
+}

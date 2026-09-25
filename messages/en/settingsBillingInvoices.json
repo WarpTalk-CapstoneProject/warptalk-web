@@ -1,0 +1,44 @@
+{
+  "title": "Invoices",
+  "loading": "Loading…",
+  "countIssued": "{count, plural, one {# invoice issued to this workspace} other {# invoices issued to this workspace}}",
+  "accessDenied": "Only workspace Owners and Administrators can view invoices.",
+  "outstanding": {
+    "label": "Outstanding",
+    "awaitingPayment": "{count, plural, one {# invoice awaiting payment} other {# invoices awaiting payment}}",
+    "nothing": "Nothing awaiting payment"
+  },
+  "paidToDate": {
+    "label": "Paid to date",
+    "count": "{count, plural, one {# invoice} other {# invoices}}"
+  },
+  "table": {
+    "number": "Number",
+    "period": "Period",
+    "issued": "Issued",
+    "due": "Due",
+    "amount": "Amount",
+    "status": "Status",
+    "actionsSr": "Actions"
+  },
+  "noInvoices": "No invoice has been issued for this workspace yet.",
+  "status": {
+    "paid": "Paid",
+    "void": "Void",
+    "unpaid": "Unpaid"
+  },
+  "pay": "Pay",
+  "pdf": "PDF",
+  "pagination": {
+    "pageOf": "Page {page} of {totalPages}",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "checkoutError": "Could not start checkout for this invoice. Please try again.",
+  "paymentAttempts": {
+    "title": "Payment attempts that did not go through",
+    "subtitle": "On the current subscription",
+    "loadError": "Payment attempts could not be loaded.",
+    "tryAgain": "Try again"
+  }
+}

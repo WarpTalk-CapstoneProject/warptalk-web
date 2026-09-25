@@ -8,12 +8,14 @@ import type {
   AssistantPageContextDto,
   AssistantPluginCatalogItemDto,
   AssistantSkillDto,
+  CreateAssistantConversationOptions,
   CreatePrivatePluginRequest,
   PluginConnectResultDto,
   PluginToolPolicy,
   SendAssistantMessageResponse,
   UpdatePrivatePluginRequest,
   WorkspacePluginItemDto,
+  WorkspacePluginMemberDto,
   WorkspacePluginRequestDto,
   WorkspacePluginsOverviewDto,
   WorkspacePluginToolAuditDto,
@@ -31,8 +33,12 @@ export const assistantService = {
     return apiClient.get<AssistantConversationDetailDto>(API.assistant.conversation(id));
   },
 
-  createConversation(workspaceId: string) {
-    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, { workspaceId });
+  createConversation(workspaceId: string, options?: CreateAssistantConversationOptions) {
+    return apiClient.post<AssistantConversationDto>(API.assistant.conversations, {
+      workspaceId,
+      ...(options?.title ? { title: options.title } : {}),
+      ...(options?.seedMessages?.length ? { seedMessages: options.seedMessages } : {}),
+    });
   },
 
   sendMessage(
@@ -69,6 +75,32 @@ export const assistantService = {
 
   archiveConversation(id: string) {
     return apiClient.delete<void>(API.assistant.conversation(id));
+  },
+
+  /**
+   * Platform-scope WarpBot — a system admin in the admin portal. Its own endpoints and store: no
+   * workspace id, and a send carries text only (no page context, mentions, attachments or plugin
+   * switches, each of which names workspace content). The server enforces the admin role.
+   */
+  platform: {
+    listConversations() {
+      return apiClient.get<AssistantConversationDto[]>(API.assistant.platform.conversations);
+    },
+    getConversation(id: string) {
+      return apiClient.get<AssistantConversationDetailDto>(API.assistant.platform.conversation(id));
+    },
+    createConversation() {
+      return apiClient.post<AssistantConversationDto>(API.assistant.platform.conversations, {});
+    },
+    sendMessage(conversationId: string, content: string) {
+      return apiClient.post<SendAssistantMessageResponse>(
+        API.assistant.platform.sendMessage(conversationId),
+        { content },
+      );
+    },
+    archiveConversation(id: string) {
+      return apiClient.delete<void>(API.assistant.platform.conversation(id));
+    },
   },
 
   getSkills() {
@@ -114,6 +146,15 @@ export const assistantService = {
     });
   },
 
+  /** Answers with the catalog row. The key is checked against the MCP server and never sent back. */
+  connectPluginWithApiKey(pluginKey: string, apiKey: string, workspaceId?: string | null) {
+    return apiClient.post<AssistantPluginCatalogItemDto>(
+      API.assistant.pluginApiKey(pluginKey),
+      { apiKey },
+      { params: workspaceId ? { workspaceId } : undefined },
+    );
+  },
+
   disconnectPlugin(pluginKey: string) {
     return apiClient.delete<void>(API.assistant.pluginConnection(pluginKey));
   },
@@ -139,6 +180,11 @@ export const assistantService = {
   /** Removes a marketplace plugin from the workspace; a private plugin is retired. */
   removeWorkspacePlugin(workspaceId: string, pluginKey: string) {
     return apiClient.delete<void>(API.assistant.workspacePlugins.plugin(workspaceId, pluginKey));
+  },
+
+  /** Members who connected the plugin, most recently used first. Owner or Admin. */
+  listWorkspacePluginMembers(workspaceId: string, pluginKey: string) {
+    return apiClient.get<WorkspacePluginMemberDto[]>(API.assistant.workspacePlugins.members(workspaceId, pluginKey));
   },
 
   createPrivatePlugin(workspaceId: string, request: CreatePrivatePluginRequest) {

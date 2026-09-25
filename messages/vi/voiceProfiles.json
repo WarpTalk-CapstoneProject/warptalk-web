@@ -1,0 +1,150 @@
+{
+  "filters": {
+    "allVoices": "Tất cả giọng",
+    "mine": "Của tôi",
+    "library": "Thư viện",
+    "needsAttention": "Cần chú ý"
+  },
+  "search": { "placeholder": "Tìm giọng nói...", "ariaLabel": "Tìm giọng nói" },
+  "createProfile": "Tạo hồ sơ giọng",
+  "consent": {
+    "title": "Nhân bản giọng bạn trong cuộc họp",
+    "allowed": "Đã cho phép",
+    "descriptionGranted": "Một cuộc họp có thể xây dựng mô hình giọng nói từ vài giây đầu bạn nói và lồng tiếng bạn bằng giọng đó. Mô hình này là dữ liệu sinh trắc học, chỉ dùng để lồng tiếng lời bạn nói, và ngừng sử dụng ngay khi bạn thu hồi quyền này.",
+    "descriptionOff": "Đang tắt. Cuộc họp sẽ không tạo giọng nói từ giọng nói trực tiếp của bạn — lời dịch của bạn sẽ được đọc bằng giọng thư viện thay thế. Tải lên một giọng nói bên dưới là quyền riêng và hoạt động không cần bật mục này.",
+    "loading": "Đang tải…",
+    "granted": "Đã cấp quyền",
+    "termsVersion": "· điều khoản {version}",
+    "withdraw": "Thu hồi",
+    "allowIt": "Cho phép",
+    "toasts": {
+      "withdrawn": "Đã thu hồi. Cuộc họp sẽ không nhân bản giọng bạn.",
+      "withdrawFailed": "Không thể thu hồi quyền. Vui lòng thử lại.",
+      "granted": "Cuộc họp giờ có thể nhân bản giọng bạn.",
+      "grantFailed": "Không thể ghi nhận quyền. Vui lòng thử lại."
+    }
+  },
+  "dubPicker": {
+    "title": "Giọng lồng tiếng cho bạn",
+    "description": "Cách bạn nghe được với người nghe ngôn ngữ khác.",
+    "cloneLiveOption": "Nhân bản giọng tôi trực tiếp trong cuộc họp",
+    "myVoice": "Giọng của tôi",
+    "voiceYouPicked": "Giọng bạn đã chọn",
+    "yourVoicesGroup": "Giọng của bạn",
+    "libraryVoicesGroup": "Giọng thư viện · {language}",
+    "ariaLabel": "Giọng lồng tiếng cho bạn",
+    "cloneMeLiveInstead": "Nhân bản trực tiếp thay vào đó",
+    "toasts": {
+      "savedDubbed": "Đã lưu. Bạn sẽ được lồng tiếng bằng giọng này.",
+      "backToLiveClone": "Quay lại nhân bản giọng trực tiếp.",
+      "saveFailed": "Không thể lưu giọng lồng tiếng cho bạn."
+    },
+    "retryToasts": {
+      "queued": "Đã gửi lại để nhân bản.",
+      "failed": "Không thể gửi bản ghi để nhân bản."
+    }
+  },
+  "library": {
+    "title": "Giọng thư viện",
+    "languageAriaLabel": "Ngôn ngữ cho thư viện giọng nói",
+    "loading": "Đang tải giọng nói…",
+    "noVoicesTitle": "Không có giọng thư viện nào cho {language}",
+    "noVoicesDescription": "Cartesia chưa công bố giọng nào cho ngôn ngữ này, hoặc thư viện vẫn đang tải lại sau khi khởi động lại.",
+    "noMatch": "Không có giọng thư viện nào khớp tìm kiếm.",
+    "youHearThis": "Giọng thay thế",
+    "yourDefault": "Giọng thay thế của bạn",
+    "clear": "Xóa",
+    "use": "Dùng",
+    "toasts": {
+      "setAsHeard": "Đã lưu — dùng cho người nói ngôn ngữ này chưa có giọng riêng.",
+      "clearedAutomatic": "Đã xóa — quay về giọng tự động.",
+      "saveFailed": "Không thể lưu giọng thay thế."
+    }
+  },
+  "listeningSummary": {
+    "title": "Giọng thay thế",
+    "description": "Dùng cho người nói {language} chưa chọn giọng riêng. Ai đã chọn thì bạn sẽ nghe đúng giọng của họ.",
+    "automatic": "Tự động",
+    "loading": "Đang tải…",
+    "savedVoice": "Giọng đã lưu",
+    "unavailable": "Hiện chưa có cho {language}, nên giọng tự động được dùng cho đến khi có. Danh mục sẽ được lấp đầy sau bản dịch đầu tiên sang ngôn ngữ này.",
+    "clear": "Xóa",
+    "previewLabel": "giọng thay thế",
+    "hint": "Bấm Dùng trên một giọng thư viện để chọn cho ngôn ngữ này.",
+    "toasts": {
+      "cleared": "Đã xóa — quay về giọng tự động.",
+      "clearFailed": "Không thể xóa giọng thay thế."
+    }
+  },
+  "yourVoices": {
+    "title": "Giọng của bạn",
+    "loading": "Đang tải giọng của bạn…",
+    "emptyTitle": "Bạn chưa có giọng riêng nào",
+    "emptyDescription": "Ghi âm một mẫu rõ ràng và WarpTalk có thể đọc bản dịch bằng giọng của chính bạn. Đến lúc đó, một giọng thư viện sẽ được dùng.",
+    "noMatch": "Không có giọng nào khớp bộ lọc này.",
+    "untitledProfile": "Hồ sơ chưa đặt tên",
+    "thisVoiceProfile": "hồ sơ giọng nói này",
+    "dubbingYou": "Đang lồng tiếng cho bạn",
+    "noLanguage": "Chưa có ngôn ngữ",
+    "ready": "Sẵn sàng",
+    "couldNotClone": "Nhân bản thất bại",
+    "cloning": "Đang nhân bản",
+    "cloningDetail": "thường dưới một phút",
+    "reRecord": "Ghi âm lại",
+    "tryAgain": "Thử lại",
+    "cloneFailure": {
+      "planRequired": "Gói dịch vụ giọng nói hiện không hỗ trợ nhân bản. Bản ghi của bạn vẫn ổn — hãy thử lại sau khi quản trị viên nâng cấp gói.",
+      "outOfCredits": "Dịch vụ giọng nói đã hết credit. Bản ghi của bạn vẫn ổn — hãy thử lại sau khi quản trị viên nạp thêm.",
+      "providerRejected": "Dịch vụ giọng nói từ chối thông tin xác thực. Bản ghi của bạn vẫn ổn — hãy thử lại sau.",
+      "providerUnavailable": "Dịch vụ giọng nói tạm thời không khả dụng. Bản ghi của bạn vẫn ổn — hãy thử lại.",
+      "sampleRejected": "Dịch vụ giọng nói không dùng được bản ghi này. Hãy ghi lại rõ hơn và dài hơn.",
+      "sampleExpired": "Bản ghi không được xử lý kịp. Hãy thử lại.",
+      "unknown": "Dịch vụ giọng nói trả về lỗi không xác định. Hãy thử lại hoặc ghi lại.",
+      "notRecorded": "Không có lý do được lưu lại. Hãy thử lại hoặc ghi lại.",
+      "detail": "Chi tiết: {detail}"
+    },
+    "actionsFor": "Thao tác cho {name}",
+    "stopBeingDubbed": "Ngừng lồng tiếng bằng giọng này",
+    "beDubbedIn": "Lồng tiếng bằng giọng này",
+    "deleteProfile": "Xóa hồ sơ",
+    "profileCount": "{count, plural, other {# hồ sơ}}",
+    "usableToday": ", {count} có thể dùng ngay",
+    "tally": { "ready": "sẵn sàng", "cloning": "đang nhân bản", "failed": "thất bại" },
+    "toasts": {
+      "deleted": "Đã xóa hồ sơ giọng nói",
+      "deleteFailed": "Xóa hồ sơ giọng nói thất bại",
+      "savedDubbed": "Đã lưu. Bạn sẽ được lồng tiếng bằng giọng này.",
+      "backToLiveClone": "Quay lại nhân bản giọng trực tiếp.",
+      "saveFailed": "Không thể lưu giọng lồng tiếng cho bạn."
+    }
+  },
+  "createDialog": {
+    "title": "Tạo hồ sơ giọng nói",
+    "description": "Đặt tên, chọn ngôn ngữ giọng nói, và cho một mẫu rõ ràng của bạn nói.",
+    "nameLabel": "Tên",
+    "namePlaceholder": "Giọng thuyết trình của tôi",
+    "languageLabel": "Ngôn ngữ",
+    "selectLanguage": "Chọn ngôn ngữ…",
+    "sampleLabel": "Mẫu",
+    "record": "Ghi âm",
+    "stop": "Dừng",
+    "uploadFile": "Tải lên tệp",
+    "sampleInstructions": "Đọc bằng giọng bình thường: “WarpTalk giúp đội của tôi hiểu rõ mọi cuộc trò chuyện.” Một người nói, phòng yên tĩnh, 5–120 giây, tối đa 20 MB.",
+    "consentIntro": "Đồng ý cho bản ghi âm này. Tách biệt với việc cho phép cuộc họp nhân bản bạn trực tiếp, vốn luôn tắt trừ khi bạn tự bật.",
+    "allFiveConfirmed": "Đã xác nhận đủ 5 mục.",
+    "leftToConfirm": "Còn {count}/5 mục cần xác nhận.",
+    "saving": "Đang lưu…",
+    "agreeAndSave": "Đồng ý & lưu",
+    "recordingHint": "Đang ghi âm… hãy đọc câu bên dưới trong phòng yên tĩnh.",
+    "toasts": {
+      "sampleTooLarge": "Mẫu âm thanh phải dưới 20 MB.",
+      "recordingUnsupported": "Trình duyệt này không hỗ trợ ghi âm trực tiếp.",
+      "micDenied": "Quyền truy cập micro bị từ chối hoặc không khả dụng.",
+      "nameRequired": "Hãy đặt tên cho hồ sơ.",
+      "sampleRequired": "Hãy ghi âm hoặc tải lên một mẫu giọng rõ ràng trước.",
+      "consentRequired": "Hãy xác nhận đủ năm mục để tiếp tục.",
+      "created": "Đã lưu hồ sơ giọng nói. Đang nhân bản — thường dưới một phút.",
+      "createFailed": "Tạo hồ sơ giọng nói thất bại"
+    }
+  }
+}

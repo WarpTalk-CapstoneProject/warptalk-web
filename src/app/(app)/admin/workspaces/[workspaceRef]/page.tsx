@@ -3,26 +3,59 @@
 import {
   ArrowLeft,
   ArrowsClockwise,
-  ClockCounterClockwise,
+  CaretDown,
+  CurrencyCircleDollar,
+  DownloadSimple,
+  Gift,
+  HourglassMedium,
   Info,
+  Megaphone,
+  NotePencil,
+  PlusMinus,
   Prohibit,
   ShieldCheck,
+  SignOut,
+  SlidersHorizontal,
+  Swap,
+  Trash,
+  UserSwitch,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
-import { AdjustCreditModal } from "@/components/admin/AdjustCreditModal";
+import { TimeSeriesChart } from "@/components/admin/charts/time-series-chart";
 import { WorkspaceContractBilling } from "@/components/admin/workspace-contract-billing";
+import { CreditBurnChart } from "@/components/admin/workspace-detail/credit-burn-chart";
+import {
+  WorkspaceActionDialogs,
+  type OpenWorkspaceAction,
+} from "@/components/admin/workspace-detail/workspace-action-dialogs";
+import { WorkspaceTimeline } from "@/components/admin/workspace-detail/workspace-timeline";
+import { WorkspacePluginsTab } from "@/components/admin/workspaces/workspace-plugins-tab";
 import {
   WorkspaceLifecycleDialog,
   type WorkspaceLifecycleAction,
 } from "@/components/admin/WorkspaceLifecycleDialog";
 import { WorkspaceStatusBadge } from "@/components/admin/WorkspaceStatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useAdminWorkspaceBillingOverview,
+  useAdminWorkspaceMeetingTotals,
+} from "@/hooks/use-admin-workspace-actions";
 import {
   useAdminWorkspaceAnalytics,
   useAdminWorkspaceCreditTransactions,
@@ -32,12 +65,21 @@ import {
   useReactivateAdminWorkspace,
   useSuspendAdminWorkspace,
 } from "@/hooks/use-admin-workspaces";
+import { marginTone, transferCandidates } from "@/lib/admin/workspace-actions";
 import { workspaceRefKind } from "@/lib/admin/workspace-ref";
 import { getErrorMessage } from "@/lib/api/errors";
+import { formatAdminMoney } from "@/lib/billing/admin-money";
 import { cn } from "@/lib/utils";
-import type { AdminWorkspaceDetailDto } from "@/types/admin-workspace";
+import type { AdminWorkspaceDetailDto, AdminWorkspaceMemberDto } from "@/types/admin-workspace";
+import type {
+  AdminWorkspaceBillingOverviewDto,
+  AdminWorkspaceMoneyDto,
+} from "@/types/admin-workspace-actions";
+import { useStaffAccess } from "@/hooks/use-staff-access";
+import { ADMIN_PERMISSIONS, hasPermission, type AdminPermission } from "@/lib/admin/staff-permissions";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+const hoursFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -49,13 +91,43 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+/** A server money figure: "—" when it could not be computed, never a fabricated 0. */
+function money(value: AdminWorkspaceMoneyDto | undefined | null) {
+  if (!value || value.amount === null) return "—";
+  return formatAdminMoney({ amount: value.amount, currency: value.currency });
+}
+
+type Tone = "neutral" | "good" | "bad" | "warn";
+
+const TONE_VALUE: Record<Tone, string> = {
+  neutral: "text-ink",
+  good: "text-emerald-700 dark:text-emerald-300",
+  bad: "text-destructive",
+  warn: "text-amber-700 dark:text-amber-300",
+};
+
+function Stat({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+  title,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: Tone;
+  /** The server's note behind a figure, as a hover explanation. */
+  title?: string | null;
+}) {
   return (
-    <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">
-        {label}
-      </p>
-      <p className="mt-2 text-xl font-semibold tabular-nums text-ink">{value}</p>
+    <div className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear" title={title ?? undefined}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-subtle">{label}</p>
+      <p className={cn("mt-2 text-xl font-semibold tabular-nums", TONE_VALUE[tone])}>{value}</p>
       {hint ? <p className="mt-1 text-xs text-ink-muted">{hint}</p> : null}
     </div>
   );
@@ -67,6 +139,33 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-xs text-ink-muted">{label}</span>
       <span className="text-right text-[13px] text-ink">{value}</span>
     </div>
+  );
+}
+
+function Card({
+  title,
+  subtitle,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear", className)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink">{title}</h2>
+          {subtitle ? <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p> : null}
+        </div>
+        {action ? <div className="flex shrink-0 flex-wrap gap-1.5">{action}</div> : null}
+      </div>
+      <div className="mt-2">{children}</div>
+    </section>
   );
 }
 
@@ -87,6 +186,7 @@ function TabState({
   onRetry: () => void;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("adminWorkspaces.detail");
   if (isError) {
     return (
       <div className="flex items-start gap-3 rounded-xl border border-hairline bg-surface-1 px-4 py-10 text-sm shadow-linear">
@@ -94,7 +194,7 @@ function TabState({
         <div>
           <p className="font-medium">{errorText}</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
-            Try again
+            {t("tryAgain")}
           </Button>
         </div>
       </div>
@@ -127,165 +227,308 @@ function TabState({
   return <>{children}</>;
 }
 
-function OverviewTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
+
+/**
+ * The decision numbers, OpenBoox-customer-360 style: what this tenant has paid, what it holds,
+ * what it owes, what it uses, and whether it makes or loses money. Each figure is the server's;
+ * a null is "—" with the server's note on hover, never a 0.
+ */
+function KpiStrip({
+  workspace,
+  overview,
+  meetingsHeld,
+  hoursHeld,
+}: {
+  workspace: AdminWorkspaceDetailDto;
+  overview: AdminWorkspaceBillingOverviewDto | undefined;
+  meetingsHeld: number | null;
+  hoursHeld: number | null;
+}) {
+  const t = useTranslations("adminWorkspaces.detail.kpis");
+  const subscription = overview?.subscription ?? null;
+  const tone = overview ? marginTone(overview.grossMarginInPeriod) : "unknown";
+
+  return (
+    <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Stat
+        label={t("revenue")}
+        value={money(overview?.revenueLifetime)}
+        hint={overview ? t("revenueHint", { period: money(overview.revenueInPeriod), payments: overview.paymentsLifetime }) : undefined}
+        title={overview?.revenueLifetime.note}
+      />
+      <Stat
+        label={t("credits")}
+        value={subscription ? numberFormatter.format(subscription.creditsRemaining) : "—"}
+        hint={
+          subscription
+            ? t("creditsHint", {
+                used: numberFormatter.format(subscription.creditsUsedThisCycle),
+                perCycle: numberFormatter.format(subscription.creditsPerCycle),
+              })
+            : t("noSubscription")
+        }
+        tone={subscription && subscription.creditsRemaining <= 0 ? "bad" : "neutral"}
+      />
+      <Stat
+        label={t("plan")}
+        value={subscription?.planName ?? "—"}
+        hint={
+          subscription
+            ? subscription.isTrial && subscription.trialEndsAt
+              ? t("trialEnds", { date: formatDate(subscription.trialEndsAt) })
+              : t("periodEnds", { status: subscription.status, date: formatDate(subscription.currentPeriodEnd) })
+            : t("noSubscription")
+        }
+        tone={subscription?.serviceState === "suspended" ? "bad" : subscription?.isTrial ? "warn" : "neutral"}
+      />
+      <Stat
+        label={t("invoices")}
+        value={overview ? numberFormatter.format(overview.invoices.open) : "—"}
+        hint={
+          overview
+            ? t("invoicesHint", { outstanding: money(overview.invoices.outstanding), overdue: overview.invoices.overdue })
+            : undefined
+        }
+        tone={overview && overview.invoices.overdue > 0 ? "bad" : "neutral"}
+      />
+      <Stat
+        label={t("members")}
+        value={numberFormatter.format(workspace.memberCount)}
+        hint={t("membersHint", { internal: workspace.internalMemberCount, external: workspace.externalMemberCount })}
+      />
+      <Stat
+        label={t("meetings")}
+        value={meetingsHeld === null ? "—" : numberFormatter.format(meetingsHeld)}
+        hint={hoursHeld === null ? t("last30Days") : t("meetingsHint", { hours: hoursFormatter.format(hoursHeld) })}
+      />
+      <Stat
+        label={t("aiCost")}
+        value={money(overview?.aiProviderCostInPeriod)}
+        hint={t("last30Days")}
+        title={overview?.aiProviderCostInPeriod.note}
+      />
+      <Stat
+        label={t("profit")}
+        value={money(overview?.grossMarginInPeriod)}
+        hint={t("profitHint")}
+        tone={tone === "profit" ? "good" : tone === "loss" ? "bad" : "neutral"}
+        title={overview?.grossMarginInPeriod.note}
+      />
+    </div>
+  );
+}
+
+function OverviewTab({
+  workspace,
+  overview,
+  overviewError,
+  onAction,
+}: {
+  workspace: AdminWorkspaceDetailDto;
+  overview: AdminWorkspaceBillingOverviewDto | undefined;
+  overviewError: boolean;
+  onAction: (action: OpenWorkspaceAction) => void;
+}) {
+  const t = useTranslations("adminWorkspaces.detail.overview");
+  const subscription = overview?.subscription ?? null;
+
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Members"
-          value={numberFormatter.format(workspace.memberCount)}
-          hint={`${workspace.internalMemberCount} internal · ${workspace.externalMemberCount} external`}
-        />
-        <Stat
-          label="Pending invitations"
-          value={numberFormatter.format(workspace.pendingInvitationCount)}
-          hint="Sent but not yet accepted"
-        />
-        <Stat
-          label="Documents"
-          value={numberFormatter.format(workspace.documentCount)}
-          hint="Knowledge assets not deleted"
-        />
-        <Stat
-          label="Verified domains"
-          value={numberFormatter.format(workspace.verifiedDomainCount)}
-          hint="Verified and not revoked"
-        />
-      </div>
+      {overviewError ? (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm">
+          <WarningCircle size={18} weight="duotone" className="shrink-0 text-amber-600" />
+          {t("billingUnavailable")}
+        </div>
+      ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-          <h2 className="text-sm font-semibold text-ink">Workspace record</h2>
-          <div className="mt-2">
-            <Field label="Slug" value={<span className="font-mono text-xs">{workspace.slug}</span>} />
-            <Field
-              label="Owner"
-              value={
-                workspace.owner.resolved ? (
-                  <span>
-                    {workspace.owner.fullName}
-                    <span className="block text-xs text-ink-muted">{workspace.owner.email}</span>
-                  </span>
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card
+          title={t("subscriptionHeading")}
+          subtitle={subscription ? t("subscriptionSubtitle", { plan: subscription.planName, cycle: subscription.billingCycle }) : t("noSubscription")}
+          action={
+            subscription ? (
+              <>
+                <Button variant="outline" size="sm" onClick={() => onAction({ id: "changePlan" })}>
+                  <Swap size={13} />
+                  {t("changePlan")}
+                </Button>
+                {subscription.isTrial ? (
+                  <Button variant="outline" size="sm" onClick={() => onAction({ id: "extendTrial" })}>
+                    <HourglassMedium size={13} />
+                    {t("extendTrial")}
+                  </Button>
                 ) : (
-                  <span className="text-xs italic text-ink-subtle">
-                    Unavailable ({workspace.owner.id})
+                  <Button variant="outline" size="sm" onClick={() => onAction({ id: "compPeriod" })}>
+                    <Gift size={13} />
+                    {t("comp")}
+                  </Button>
+                )}
+              </>
+            ) : null
+          }
+        >
+          {subscription ? (
+            <>
+              <Field label={t("status")} value={`${subscription.status} · ${subscription.serviceState}`} />
+              {subscription.suspendedReason ? <Field label={t("suspendedReason")} value={subscription.suspendedReason} /> : null}
+              <Field
+                label={t("period")}
+                value={`${formatDate(subscription.currentPeriodStart)} → ${formatDate(subscription.currentPeriodEnd)}`}
+              />
+              {subscription.trialEndsAt ? <Field label={t("trialEnds")} value={formatDate(subscription.trialEndsAt)} /> : null}
+              <Field label={t("autoRenew")} value={subscription.autoRenew ? t("yes") : t("no")} />
+              <Field label={t("creditsPerCycle")} value={numberFormatter.format(subscription.creditsPerCycle)} />
+            </>
+          ) : (
+            <p className="py-4 text-[13px] text-ink-muted">{t("noSubscription")}</p>
+          )}
+        </Card>
+
+        <Card title={t("pnlHeading")} subtitle={t("pnlSubtitle")}>
+          <Field label={t("revenuePeriod")} value={money(overview?.revenueInPeriod)} />
+          <Field label={t("aiCostPeriod")} value={money(overview?.aiProviderCostInPeriod)} />
+          <Field
+            label={t("margin")}
+            value={
+              <span className={cn("font-semibold", overview && marginTone(overview.grossMarginInPeriod) === "loss" && "text-destructive")}>
+                {money(overview?.grossMarginInPeriod)}
+              </span>
+            }
+          />
+          <Field label={t("revenueLifetime")} value={money(overview?.revenueLifetime)} />
+          {[overview?.revenueInPeriod.note, overview?.aiProviderCostInPeriod.note, overview?.grossMarginInPeriod.note]
+            .filter(Boolean)
+            .map((note) => (
+              <p key={note} className="mt-2 text-[11px] leading-4 text-ink-subtle">
+                {note}
+              </p>
+            ))}
+        </Card>
+
+        <Card
+          title={t("entitlementsHeading")}
+          subtitle={t("entitlementsSubtitle")}
+          action={
+            subscription ? (
+              <Button variant="outline" size="sm" onClick={() => onAction({ id: "entitlements" })}>
+                <SlidersHorizontal size={13} />
+                {t("editOverrides")}
+              </Button>
+            ) : null
+          }
+        >
+          {(overview?.entitlements ?? []).map((entitlement) => (
+            <Field
+              key={entitlement.key}
+              label={entitlement.key}
+              value={
+                <span>
+                  {entitlement.value}
+                  <span className="ml-1.5 text-[11px] text-ink-subtle">
+                    {entitlement.contractOverride !== null ? t("overridden") : entitlement.source}
                   </span>
-                )
+                </span>
               }
             />
-            <Field label="Created" value={formatDateTime(workspace.createdAt)} />
-            <Field label="Last updated" value={formatDateTime(workspace.updatedAt)} />
-            <Field
-              label="Last activity"
-              value={formatDateTime(workspace.lastActivityAt)}
-            />
-            {workspace.deletedAt ? (
-              <Field label="Deleted" value={formatDateTime(workspace.deletedAt)} />
-            ) : null}
-          </div>
-        </section>
+          ))}
+          {!overview ? <p className="py-4 text-[13px] text-ink-muted">—</p> : null}
+        </Card>
+      </div>
 
-        <section className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-          <h2 className="text-sm font-semibold text-ink">Tenancy policy</h2>
-          <div className="mt-2">
-            <Field
-              label="External collaboration"
-              value={workspace.allowExternalCollaboration ? "Allowed" : "Blocked"}
-            />
-            <Field
-              label="Verified domain required for internal members"
-              value={workspace.requireVerifiedDomainForInternal ? "Required" : "Not required"}
-            />
-          </div>
-          <p className="mt-3 text-xs leading-5 text-ink-muted">
-            Last activity is the newest signal on the workspace record itself — member joins,
-            document uploads, and settings changes. Meeting-level activity arrives with the
-            per-workspace analytics API.
-          </p>
-        </section>
+      <Card
+        title={t("burnHeading")}
+        subtitle={t("burnSubtitle")}
+        action={
+          <Button variant="outline" size="sm" onClick={() => onAction({ id: "adjustCredits" })} disabled={!subscription}>
+            <PlusMinus size={13} />
+            {t("adjustCredits")}
+          </Button>
+        }
+      >
+        <CreditBurnChart points={overview?.burn ?? []} />
+      </Card>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card title={t("recordHeading")}>
+          <Field label={t("slug")} value={<span className="font-mono text-xs">{workspace.slug}</span>} />
+          <Field
+            label={t("owner")}
+            value={
+              workspace.owner.resolved ? (
+                <span>
+                  {workspace.owner.fullName}
+                  <span className="block text-xs text-ink-muted">{workspace.owner.email}</span>
+                </span>
+              ) : (
+                <span className="text-xs italic text-ink-subtle">{t("ownerUnavailable", { id: workspace.owner.id })}</span>
+              )
+            }
+          />
+          <Field label={t("created")} value={formatDateTime(workspace.createdAt)} />
+          <Field label={t("lastUpdated")} value={formatDateTime(workspace.updatedAt)} />
+          <Field label={t("lastActivity")} value={formatDateTime(workspace.lastActivityAt)} />
+          {workspace.deletedAt ? <Field label={t("deleted")} value={formatDateTime(workspace.deletedAt)} /> : null}
+          <Field label={t("pendingInvitations")} value={numberFormatter.format(workspace.pendingInvitationCount)} />
+          <Field label={t("documents")} value={numberFormatter.format(workspace.documentCount)} />
+        </Card>
+
+        <Card title={t("policyHeading")}>
+          <Field
+            label={t("externalCollaboration")}
+            value={workspace.allowExternalCollaboration ? t("allowed") : t("blocked")}
+          />
+          <Field
+            label={t("verifiedDomainRequired")}
+            value={workspace.requireVerifiedDomainForInternal ? t("required") : t("notRequired")}
+          />
+          <Field label={t("verifiedDomains")} value={numberFormatter.format(workspace.verifiedDomainCount)} />
+          <p className="mt-3 text-xs leading-5 text-ink-muted">{t("policyNote")}</p>
+        </Card>
       </div>
     </div>
   );
 }
 
-function AuditTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
-  if (workspace.lifecycleHistory.length === 0) {
-    return (
-      <div className="grid place-items-center rounded-xl border border-hairline bg-surface-1 px-6 py-14 text-center shadow-linear">
-        <div>
-          <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-            <ClockCounterClockwise size={20} weight="duotone" />
-          </span>
-          <p className="mt-3 text-sm font-medium text-ink">No administrative actions yet</p>
-          <p className="mt-1 text-xs text-ink-muted">
-            Suspending or reactivating this workspace records an entry here permanently.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <ol className="overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
-      {workspace.lifecycleHistory.map((event) => (
-        <li
-          key={event.id}
-          className="flex gap-3 border-b border-hairline/60 px-4 py-3 last:border-b-0"
-        >
-          <span
-            className={
-              event.action === "suspend"
-                ? "mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-amber-500/10 text-amber-600"
-                : event.action === "delete"
-                  ? "mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-destructive/10 text-destructive"
-                  : "mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600"
-            }
-          >
-            {event.action === "suspend" || event.action === "delete" ? (
-              <Prohibit size={14} weight="duotone" />
-            ) : (
-              <ShieldCheck size={14} weight="duotone" />
-            )}
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-medium text-ink">
-              {event.action === "suspend"
-                ? "Suspended"
-                : event.action === "delete"
-                  ? "Deleted"
-                  : "Reactivated"}
-            </p>
-            <p className="mt-0.5 text-[13px] leading-5 text-ink-muted">{event.reason}</p>
-            <p className="mt-1 font-mono text-[11px] text-ink-subtle">
-              {formatDateTime(event.performedAt)} · admin {event.performedBy}
-            </p>
-          </div>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 /**
- * The roster: membership facts only. The Knowledge tab that used to sit here is gone on
- * purpose — what a workspace has indexed is tenant content, and the admin portal reads a
+ * The roster: membership facts only, with the two per-member actions an operator needs — end a
+ * member's sessions, or hand them the workspace. The Knowledge tab that used to sit here is gone on
+ * purpose: what a workspace has indexed is tenant content, and the admin portal reads a
  * workspace's operational facts, never its content.
  */
-function MembersTab({ workspaceId }: { workspaceId: string }) {
+function MembersTab({
+  workspaceId,
+  deleted,
+  onAction,
+}: {
+  workspaceId: string;
+  deleted: boolean;
+  onAction: (action: OpenWorkspaceAction) => void;
+}) {
+  const t = useTranslations("adminWorkspaces.detail.members");
   const membersQuery = useAdminWorkspaceMembers(workspaceId);
   const members = membersQuery.data ?? [];
+  const candidates = new Set(transferCandidates(members).map((m) => m.userId));
 
   return (
     <TabState
       isError={membersQuery.isError}
       isPending={membersQuery.isPending}
       isEmpty={members.length === 0}
-      errorText="The member roster could not be loaded."
-      emptyText="No active members. A deleted workspace keeps no memberships."
+      errorText={t("errorText")}
+      emptyText={t("emptyText")}
       onRetry={() => void membersQuery.refetch()}
     >
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs text-ink-muted">{t("count", { count: members.length })}</p>
+        {!deleted ? (
+          <Button variant="outline" size="sm" onClick={() => onAction({ id: "signOutAll" })}>
+            <SignOut size={13} />
+            {t("signOutAll")}
+          </Button>
+        ) : null}
+      </div>
       <ol className="overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
-        {members.map((member) => (
+        {members.map((member: AdminWorkspaceMemberDto) => (
           <li
             key={member.userId}
             className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0"
@@ -301,9 +544,7 @@ function MembersTab({ workspaceId }: { workspaceId: string }) {
                     <p className="truncate text-[11px] text-ink-subtle">{member.email}</p>
                   </>
                 ) : (
-                  <p className="truncate text-xs italic text-ink-subtle">
-                    Unavailable ({member.userId})
-                  </p>
+                  <p className="truncate text-xs italic text-ink-subtle">{t("unavailable", { id: member.userId })}</p>
                 )}
               </div>
             </div>
@@ -319,12 +560,34 @@ function MembersTab({ workspaceId }: { workspaceId: string }) {
                 {member.role}
               </span>
             </div>
-            <div className="w-[110px] shrink-0 text-[12px] capitalize text-ink-muted">
-              {member.membershipType}
-            </div>
+            <div className="w-[100px] shrink-0 text-[12px] capitalize text-ink-muted">{member.membershipType}</div>
             <div className="w-[150px] shrink-0 text-[12px] text-ink-muted md:text-right">
-              joined {formatDateTime(member.joinedAt)}
+              {t("joined", { date: formatDateTime(member.joinedAt) })}
             </div>
+            {!deleted ? (
+              <div className="flex shrink-0 gap-1.5 md:ml-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onAction({ id: "signOutMember", memberId: member.userId })}
+                  title={t("signOut")}
+                >
+                  <SignOut size={13} />
+                  <span className="sr-only md:not-sr-only">{t("signOut")}</span>
+                </Button>
+                {candidates.has(member.userId) ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onAction({ id: "transferOwnership", memberId: member.userId })}
+                    title={t("makeOwner")}
+                  >
+                    <UserSwitch size={13} />
+                    <span className="sr-only md:not-sr-only">{t("makeOwner")}</span>
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </li>
         ))}
       </ol>
@@ -336,74 +599,77 @@ const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numer
 
 /** Billing-side usage for the last 30 days: totals, a daily bar strip, and the feature split. */
 function UsageTab({ workspaceId }: { workspaceId: string }) {
+  const t = useTranslations("adminWorkspaces.detail.usage");
   const analyticsQuery = useAdminWorkspaceAnalytics(workspaceId);
   const analytics = analyticsQuery.data;
-  const maxDaily = Math.max(1, ...(analytics?.consumptionSeries ?? []).map((p) => p.creditsConsumed));
 
   return (
     <TabState
       isError={analyticsQuery.isError}
       isPending={analyticsQuery.isPending}
       isEmpty={!analytics}
-      errorText="Usage analytics could not be loaded."
-      emptyText="No analytics available."
+      errorText={t("errorText")}
+      emptyText={t("emptyText")}
       onRetry={() => void analyticsQuery.refetch()}
     >
       {analytics ? (
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Stat
-              label="Credits consumed"
+              label={t("creditsConsumed")}
               value={numberFormatter.format(analytics.creditsConsumedInPeriod)}
-              hint="Last 30 days"
+              hint={t("last30Days")}
             />
             <Stat
-              label="Credits topped up"
+              label={t("creditsToppedUp")}
               value={numberFormatter.format(analytics.creditsToppedUpInPeriod)}
-              hint="Last 30 days"
+              hint={t("last30Days")}
             />
             <Stat
-              label="Meetings with billable usage"
+              label={t("meetingsWithBillableUsage")}
               value={numberFormatter.format(analytics.meetingsWithBillableUsage)}
-              hint="Rooms that produced a usage record"
+              hint={t("meetingsHint")}
             />
             <Stat
-              label="Members billed"
+              label={t("membersBilled")}
               value={numberFormatter.format(analytics.distinctUsersBilled)}
-              hint="Distinct accounts with usage"
+              hint={t("membersBilledHint")}
             />
           </div>
 
           <section className="rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
-            <h2 className="text-sm font-semibold text-ink">Daily consumption</h2>
+            <h2 className="text-sm font-semibold text-ink">{t("dailyConsumption")}</h2>
             {analytics.consumptionSeries.length === 0 ? (
-              <p className="mt-3 text-xs text-ink-muted">No billable usage in this window.</p>
+              <p className="mt-3 text-xs text-ink-muted">{t("noBillableUsage")}</p>
             ) : (
-              <div className="mt-4 flex h-28 items-end gap-[3px]">
-                {analytics.consumptionSeries.map((point) => (
-                  <div
-                    key={point.date}
-                    className="group relative flex-1"
-                    title={`${shortDate.format(new Date(point.date))} · ${numberFormatter.format(point.creditsConsumed)} cr · ${point.events} events`}
-                  >
-                    <div
-                      className="w-full rounded-sm bg-primary/70 transition-colors group-hover:bg-primary"
-                      style={{
-                        height: `${Math.max(2, (point.creditsConsumed / maxDaily) * 100)}%`,
-                      }}
-                    />
-                  </div>
-                ))}
+              <div className="mt-4">
+                <TimeSeriesChart
+                  variant="bar"
+                  height={140}
+                  ariaLabel={t("dailyConsumption")}
+                  labels={analytics.consumptionSeries.map((point) => shortDate.format(new Date(point.date)))}
+                  series={[
+                    {
+                      key: "credits",
+                      label: "",
+                      values: analytics.consumptionSeries.map((point) => point.creditsConsumed),
+                    },
+                  ]}
+                  formatValue={(value) => `${numberFormatter.format(value)} cr`}
+                  tooltipFooter={(index) =>
+                    t("tooltipEvents", { events: analytics.consumptionSeries[index]?.events ?? 0 })
+                  }
+                />
               </div>
             )}
           </section>
 
           <section className="overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
             <div className="border-b border-hairline px-4 py-3">
-              <h2 className="text-sm font-semibold text-ink">By service</h2>
+              <h2 className="text-sm font-semibold text-ink">{t("byService")}</h2>
             </div>
             {analytics.featureBreakdown.length === 0 ? (
-              <p className="px-4 py-6 text-xs text-ink-muted">Nothing billed in this window.</p>
+              <p className="px-4 py-6 text-xs text-ink-muted">{t("nothingBilled")}</p>
             ) : (
               <ol>
                 {analytics.featureBreakdown.map((feature) => (
@@ -415,10 +681,10 @@ function UsageTab({ workspaceId }: { workspaceId: string }) {
                       {feature.usageType}
                     </span>
                     <span className="w-[90px] shrink-0 text-right text-[12px] tabular-nums text-ink-muted">
-                      {numberFormatter.format(feature.events)} events
+                      {t("events", { count: numberFormatter.format(feature.events) })}
                     </span>
                     <span className="w-[110px] shrink-0 text-right text-[13px] font-medium tabular-nums text-ink">
-                      {numberFormatter.format(feature.creditsConsumed)} cr
+                      {t("credits", { count: numberFormatter.format(feature.creditsConsumed) })}
                     </span>
                   </li>
                 ))}
@@ -435,7 +701,20 @@ function UsageTab({ workspaceId }: { workspaceId: string }) {
  * Credit position and the ledger, with the Adjust Credits door pinned to THIS workspace — and the
  * contract and its invoices, for customers who pay by bank transfer.
  */
-function BillingTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
+
+/**
+ * Credit position and the ledger, with Adjust Credits pinned to THIS workspace — and the contract
+ * and its invoices, for customers who pay by bank transfer. Every adjustment appears in the ledger
+ * below the moment it is saved, and in the Timeline tab with its reason.
+ */
+function BillingTab({
+  workspace,
+  onAction,
+}: {
+  workspace: AdminWorkspaceDetailDto;
+  onAction: (action: OpenWorkspaceAction) => void;
+}) {
+  const t = useTranslations("adminWorkspaces.detail.billing");
   const workspaceId = workspace.id;
   const analyticsQuery = useAdminWorkspaceAnalytics(workspaceId);
   const [page, setPage] = useState(1);
@@ -451,34 +730,26 @@ function BillingTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
       {credits && !credits.subscriptionFound ? (
         <div className="flex items-center gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-sm">
           <WarningCircle size={18} weight="duotone" className="shrink-0 text-amber-600" />
-          This workspace has no billing subscription — it was never set up for billing.
+          {t("noSubscription")}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat
-          label="Credits remaining"
-          value={
-            credits?.creditsRemaining == null
-              ? "—"
-              : numberFormatter.format(credits.creditsRemaining)
-          }
+          label={t("creditsRemaining")}
+          value={credits?.creditsRemaining == null ? "—" : numberFormatter.format(credits.creditsRemaining)}
         />
         <Stat
-          label="Used this cycle"
-          value={
-            credits?.creditsUsedThisCycle == null
-              ? "—"
-              : numberFormatter.format(credits.creditsUsedThisCycle)
-          }
+          label={t("usedThisCycle")}
+          value={credits?.creditsUsedThisCycle == null ? "—" : numberFormatter.format(credits.creditsUsedThisCycle)}
         />
-        <Stat
-          label="Cycle ends"
-          value={credits?.currentPeriodEnd ? formatDateTime(credits.currentPeriodEnd) : "—"}
-        />
+        <Stat label={t("cycleEnds")} value={credits?.currentPeriodEnd ? formatDateTime(credits.currentPeriodEnd) : "—"} />
         <div className="flex items-center justify-center rounded-xl border border-hairline bg-surface-1 p-4 shadow-linear">
           {/* Pinned to this workspace: no picker, no chance of adjusting the wrong tenant. */}
-          <AdjustCreditModal workspaceId={workspaceId} />
+          <Button onClick={() => onAction({ id: "adjustCredits" })} disabled={credits ? !credits.subscriptionFound : false}>
+            <PlusMinus size={14} />
+            {t("adjustCredits")}
+          </Button>
         </div>
       </div>
 
@@ -492,30 +763,23 @@ function BillingTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
         isError={transactionsQuery.isError}
         isPending={transactionsQuery.isPending}
         isEmpty={transactions.length === 0}
-        errorText="The credit ledger could not be loaded."
-        emptyText="No credit transactions recorded for this workspace."
+        errorText={t("errorText")}
+        emptyText={t("emptyText")}
         onRetry={() => void transactionsQuery.refetch()}
       >
         <section className="overflow-hidden rounded-xl border border-hairline bg-surface-1 shadow-linear">
           <div className="border-b border-hairline px-4 py-3">
-            <h2 className="text-sm font-semibold text-ink">Credit ledger</h2>
+            <h2 className="text-sm font-semibold text-ink">{t("ledgerHeading")}</h2>
           </div>
           <ol>
             {transactions.map((tx) => (
-              <li
-                key={tx.id}
-                className="flex items-center gap-4 border-b border-hairline/60 px-4 py-2.5 last:border-b-0"
-              >
+              <li key={tx.id} className="flex items-center gap-4 border-b border-hairline/60 px-4 py-2.5 last:border-b-0">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] text-ink">
                     <span className="font-medium capitalize">{tx.type}</span>
-                    {tx.description ? (
-                      <span className="ml-2 text-ink-muted">{tx.description}</span>
-                    ) : null}
+                    {tx.description ? <span className="ml-2 text-ink-muted">{tx.description}</span> : null}
                   </p>
-                  <p className="mt-0.5 text-[11px] text-ink-subtle">
-                    {formatDateTime(tx.createdAt)}
-                  </p>
+                  <p className="mt-0.5 text-[11px] text-ink-subtle">{formatDateTime(tx.createdAt)}</p>
                 </div>
                 <span
                   className={cn(
@@ -535,25 +799,13 @@ function BillingTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
         </section>
         {totalPages > 1 ? (
           <div className="flex items-center justify-between text-[13px] text-ink-muted">
-            <span>
-              Page {page} of {totalPages}
-            </span>
+            <span>{t("pageOf", { page, totalPages })}</span>
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                {t("previous")}
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                {t("next")}
               </Button>
             </div>
           </div>
@@ -563,7 +815,19 @@ function BillingTab({ workspace }: { workspace: AdminWorkspaceDetailDto }) {
   );
 }
 
+/** Thirty days back from mount, to the minute — one stable window for the meeting totals. */
+function useLast30Days() {
+  const [window] = useState(() => {
+    const to = new Date();
+    to.setSeconds(0, 0);
+    const from = new Date(to.getTime() - 30 * 86_400_000);
+    return { from: from.toISOString(), to: to.toISOString() };
+  });
+  return window;
+}
+
 export default function AdminWorkspaceDetailPage() {
+  const t = useTranslations("adminWorkspaces.detail");
   const params = useParams();
   const router = useRouter();
   // WT-560: the URL names the workspace rather than carrying its primary key. It still accepts
@@ -574,6 +838,14 @@ export default function AdminWorkspaceDetailPage() {
 
   const detailQuery = useAdminWorkspaceByRef(workspaceRef);
   const workspace = detailQuery.data;
+
+  // Everything below is addressed by the workspace's own id — never the URL's, which may be a slug.
+  const overviewQuery = useAdminWorkspaceBillingOverview(workspace?.id);
+  const window30 = useLast30Days();
+  const meetingsQuery = useAdminWorkspaceMeetingTotals(workspace?.id, window30);
+  const membersQuery = useAdminWorkspaceMembers(workspace?.id);
+  const meetingsHeld = meetingsQuery.data?.metrics.find((m) => m.id === "meetingsHeld")?.value ?? null;
+  const hoursHeld = meetingsQuery.data?.metrics.find((m) => m.id === "hoursTranslated")?.value ?? null;
 
   // Lifecycle actions are addressed by id, which is the workspace's own — never the URL's,
   // which may be a slug.
@@ -589,6 +861,11 @@ export default function AdminWorkspaceDetailPage() {
     router.replace(`/admin/workspaces/${workspace.slug}`);
   }, [workspace, workspaceRef, router]);
 
+  const [tab, setTab] = useState("overview");
+  const [openAction, setOpenAction] = useState<OpenWorkspaceAction | null>(null);
+  // G10: offer only what this person's staff role allows; the server enforces the same permission.
+  const { access: staffAccess } = useStaffAccess();
+  const can = (permission: AdminPermission) => hasPermission(staffAccess, permission);
   const [dialogAction, setDialogAction] = useState<WorkspaceLifecycleAction | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const pending =
@@ -607,10 +884,10 @@ export default function AdminWorkspaceDetailPage() {
       await mutation.mutateAsync(reason);
       toast.success(
         dialogAction === "suspend"
-          ? "Workspace suspended."
+          ? t("toasts.suspended")
           : dialogAction === "delete"
-            ? "Workspace deleted."
-            : "Workspace reactivated.",
+            ? t("toasts.deleted")
+            : t("toasts.reactivated"),
       );
       setDialogAction(null);
     } catch (error) {
@@ -618,13 +895,18 @@ export default function AdminWorkspaceDetailPage() {
         getErrorMessage(
           error,
           dialogAction === "suspend"
-            ? "Could not suspend the workspace."
+            ? t("errors.suspend")
             : dialogAction === "delete"
-              ? "Could not delete the workspace."
-              : "Could not reactivate the workspace.",
+              ? t("errors.delete")
+              : t("errors.reactivate"),
         ),
       );
     }
+  };
+
+  const openLifecycle = (action: WorkspaceLifecycleAction) => {
+    setDialogError(null);
+    setDialogAction(action);
   };
 
   if (detailQuery.isError) {
@@ -637,23 +919,18 @@ export default function AdminWorkspaceDetailPage() {
             <WarningCircle size={22} weight="duotone" />
           </span>
           <h1 className="mt-4 text-lg font-semibold">
-            {notFound ? "Workspace not found" : "Workspace could not be loaded"}
+            {notFound ? t("notFoundTitle") : t("loadErrorTitle")}
           </h1>
           <p className="mt-2 text-sm text-ink-muted">
-            {notFound
-              ? "It may have been permanently removed, or the link is wrong."
-              : "Check the workspace service and that your session still holds the platform admin role."}
+            {notFound ? t("notFoundDescription") : t("loadErrorDescription")}
           </p>
           <div className="mt-5 flex justify-center gap-2">
-            <Link
-              href="/admin/workspaces"
-              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-            >
-              Back to directory
+            <Link href="/admin/workspaces" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+              {t("backToDirectoryButton")}
             </Link>
             {!notFound ? (
               <Button size="sm" onClick={() => void detailQuery.refetch()}>
-                Try again
+                {t("tryAgain")}
               </Button>
             ) : null}
           </div>
@@ -662,10 +939,10 @@ export default function AdminWorkspaceDetailPage() {
     );
   }
 
+  const deleted = workspace?.status === "deleted";
+  const subscription = overviewQuery.data?.subscription ?? null;
+
   return (
-    // Hand-rolls AdminPage's measure rather than using it — 1480px, but px-5 py-5 lg:px-7 where
-    // AdminPage says px-5 py-6 lg:px-8. Left as it is here so this release changes colour and
-    // nothing else; the divergence is worth collapsing when this page is rebuilt.
     <div className="min-h-full bg-panel text-ink">
       <div className="mx-auto w-full max-w-[1480px] px-5 py-5 lg:px-7">
         <Link
@@ -673,7 +950,7 @@ export default function AdminWorkspaceDetailPage() {
           className="inline-flex items-center gap-1.5 text-xs text-ink-muted transition-colors hover:text-ink"
         >
           <ArrowLeft size={13} />
-          Workspaces
+          {t("backToDirectory")}
         </Link>
 
         {detailQuery.isPending || !workspace ? (
@@ -687,92 +964,181 @@ export default function AdminWorkspaceDetailPage() {
           </div>
         ) : (
           <>
-            <header className="mt-3 flex flex-col gap-4 border-b border-hairline pb-4 lg:flex-row lg:items-end lg:justify-between">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <h1 className="text-2xl font-semibold tracking-tight">{workspace.name}</h1>
-                  <WorkspaceStatusBadge status={workspace.status} />
+            <header className="mt-3 flex flex-col gap-4 border-b border-hairline pb-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="grid size-12 shrink-0 place-items-center rounded-lg bg-surface-3 text-lg font-semibold text-ink">
+                  {(workspace.name || "?").trim().charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h1 className="text-2xl font-semibold tracking-tight">{workspace.name}</h1>
+                    <WorkspaceStatusBadge status={workspace.status} />
+                    {subscription ? (
+                      <span className="inline-flex items-center rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                        {subscription.planName}
+                        {subscription.isTrial ? ` · ${t("trialBadge")}` : ""}
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-ink-muted">
+                    <span className="font-mono text-ink-subtle">{workspace.slug}</span>
+                    <span>
+                      {t("ownerLine", {
+                        owner: workspace.owner.resolved
+                          ? `${workspace.owner.fullName} (${workspace.owner.email})`
+                          : workspace.owner.id,
+                      })}
+                    </span>
+                    <span>{t("createdLine", { date: formatDate(workspace.createdAt) })}</span>
+                    <span>{t("activityLine", { date: formatDateTime(workspace.lastActivityAt) })}</span>
+                  </div>
+                  {workspace.currentSuspension ? (
+                    <p className="mt-2 max-w-2xl rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                      {t("suspendedNotice", {
+                        date: formatDateTime(workspace.currentSuspension.performedAt),
+                        reason: workspace.currentSuspension.reason,
+                      })}
+                    </p>
+                  ) : null}
                 </div>
-                <p className="mt-1 font-mono text-xs text-ink-subtle">{workspace.slug}</p>
-                {workspace.currentSuspension ? (
-                  <p className="mt-2 max-w-2xl rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs leading-5 text-amber-700 dark:text-amber-300">
-                    Suspended {formatDateTime(workspace.currentSuspension.performedAt)} —{" "}
-                    {workspace.currentSuspension.reason}
-                  </p>
-                ) : null}
               </div>
 
-              <div className="flex shrink-0 items-center gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => void detailQuery.refetch()}
+                  onClick={() => {
+                    void detailQuery.refetch();
+                    void overviewQuery.refetch();
+                  }}
                   disabled={detailQuery.isFetching}
                 >
-                  <ArrowsClockwise
-                    size={14}
-                    className={detailQuery.isFetching ? "animate-spin" : undefined}
-                  />
-                  Refresh
+                  <ArrowsClockwise size={14} className={detailQuery.isFetching ? "animate-spin" : undefined} />
+                  {t("refresh")}
                 </Button>
-                {workspace.status === "active" ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setDialogError(null);
-                      setDialogAction("suspend");
-                    }}
-                  >
-                    <Prohibit size={14} />
-                    Suspend
-                  </Button>
-                ) : workspace.status === "suspended" ? (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setDialogError(null);
-                      setDialogAction("reactivate");
-                    }}
-                  >
-                    <ShieldCheck size={14} />
-                    Reactivate
-                  </Button>
-                ) : (
-                  <span className="text-xs text-ink-subtle">
-                    Deleted workspaces cannot change lifecycle state
-                  </span>
-                )}
-                {workspace.status !== "deleted" ? (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => {
-                      setDialogError(null);
-                      setDialogAction("delete");
-                    }}
-                  >
-                    Delete
-                  </Button>
+                {deleted ? (
+                  <span className="text-xs text-ink-subtle">{t("deletedCannotChange")}</span>
                 ) : null}
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button size="sm" />}>
+                    {t("actionsMenu")}
+                    <CaretDown size={12} />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[240px]">
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>{t("menu.billing")}</DropdownMenuLabel>
+                      <DropdownMenuItem disabled={!subscription || !can(ADMIN_PERMISSIONS.billingAdjustCredit)} onClick={() => setOpenAction({ id: "adjustCredits" })}>
+                        <PlusMinus size={14} />
+                        {t("menu.adjustCredits")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!subscription || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)} onClick={() => setOpenAction({ id: "changePlan" })}>
+                        <Swap size={14} />
+                        {t("menu.changePlan")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!subscription?.isTrial || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)} onClick={() => setOpenAction({ id: "extendTrial" })}>
+                        <HourglassMedium size={14} />
+                        {t("menu.extendTrial")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={!subscription || subscription.isTrial || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)}
+                        onClick={() => setOpenAction({ id: "compPeriod" })}
+                      >
+                        <Gift size={14} />
+                        {t("menu.compPeriod")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!subscription || !can(ADMIN_PERMISSIONS.billingSubscriptionsManage)} onClick={() => setOpenAction({ id: "entitlements" })}>
+                        <SlidersHorizontal size={14} />
+                        {t("menu.entitlements")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.billingRead)} onClick={() => setTab("billing")}>
+                        <CurrencyCircleDollar size={14} />
+                        {t("menu.invoices")}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>{t("menu.account")}</DropdownMenuLabel>
+                      <DropdownMenuItem disabled={deleted || !can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => setOpenAction({ id: "transferOwnership" })}>
+                        <UserSwitch size={14} />
+                        {t("menu.transferOwnership")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={deleted || !can(ADMIN_PERMISSIONS.accountsManage)} onClick={() => setOpenAction({ id: "signOutAll" })}>
+                        <SignOut size={14} />
+                        {t("menu.signOutAll")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={deleted || !can(ADMIN_PERMISSIONS.workspacesWrite)} onClick={() => setOpenAction({ id: "sendNotice" })}>
+                        <Megaphone size={14} />
+                        {t("menu.sendNotice")}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuGroup>
+                      <DropdownMenuLabel>{t("menu.data")}</DropdownMenuLabel>
+                      <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesWrite)} onClick={() => setOpenAction({ id: "exportSummary" })}>
+                        <DownloadSimple size={14} />
+                        {t("menu.exportSummary")}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesWrite)} onClick={() => setOpenAction({ id: "addNote" })}>
+                        <NotePencil size={14} />
+                        {t("menu.addNote")}
+                      </DropdownMenuItem>
+                    </DropdownMenuGroup>
+                    {!deleted ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuGroup>
+                          <DropdownMenuLabel>{t("menu.lifecycle")}</DropdownMenuLabel>
+                          {workspace.status === "active" ? (
+                            <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => openLifecycle("suspend")}>
+                              <Prohibit size={14} />
+                              {t("suspend")}
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem disabled={!can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => openLifecycle("reactivate")}>
+                              <ShieldCheck size={14} />
+                              {t("reactivate")}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem variant="destructive" disabled={!can(ADMIN_PERMISSIONS.workspacesLifecycle)} onClick={() => openLifecycle("delete")}>
+                            <Trash size={14} />
+                            {t("delete")}
+                          </DropdownMenuItem>
+                        </DropdownMenuGroup>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </header>
 
-            <Tabs defaultValue="overview" className="mt-4">
+            <KpiStrip
+              workspace={workspace}
+              overview={overviewQuery.data}
+              meetingsHeld={meetingsHeld}
+              hoursHeld={hoursHeld}
+            />
+
+            <Tabs value={tab} onValueChange={(value) => setTab(String(value))} className="mt-5">
               <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="members">Members</TabsTrigger>
-                <TabsTrigger value="usage">Usage</TabsTrigger>
-                <TabsTrigger value="billing">Billing</TabsTrigger>
-                <TabsTrigger value="audit">Audit</TabsTrigger>
+                <TabsTrigger value="overview">{t("tabs.overview")}</TabsTrigger>
+                <TabsTrigger value="members">{t("tabs.members")}</TabsTrigger>
+                <TabsTrigger value="usage">{t("tabs.usage")}</TabsTrigger>
+                <TabsTrigger value="billing">{t("tabs.billing")}</TabsTrigger>
+                <TabsTrigger value="plugins">{t("tabs.plugins")}</TabsTrigger>
+                <TabsTrigger value="audit">{t("tabs.audit")}</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="mt-4">
-                <OverviewTab workspace={workspace} />
+                <OverviewTab
+                  workspace={workspace}
+                  overview={overviewQuery.data}
+                  overviewError={overviewQuery.isError}
+                  onAction={setOpenAction}
+                />
               </TabsContent>
 
               <TabsContent value="members" className="mt-4">
-                <MembersTab workspaceId={workspace.id} />
+                <MembersTab workspaceId={workspace.id} deleted={deleted} onAction={setOpenAction} />
               </TabsContent>
 
               <TabsContent value="usage" className="mt-4">
@@ -780,13 +1146,26 @@ export default function AdminWorkspaceDetailPage() {
               </TabsContent>
 
               <TabsContent value="billing" className="mt-4">
-                <BillingTab workspace={workspace} />
+                <BillingTab workspace={workspace} onAction={setOpenAction} />
+              </TabsContent>
+
+              <TabsContent value="plugins" className="mt-4">
+                <WorkspacePluginsTab workspaceId={workspace.id} />
               </TabsContent>
 
               <TabsContent value="audit" className="mt-4">
-                <AuditTab workspace={workspace} />
+                <WorkspaceTimeline workspaceId={workspace.id} onAddNote={() => setOpenAction({ id: "addNote" })} />
               </TabsContent>
             </Tabs>
+
+            <WorkspaceActionDialogs
+              action={openAction}
+              onClose={() => setOpenAction(null)}
+              workspace={workspace}
+              overview={overviewQuery.data}
+              members={membersQuery.data ?? []}
+              meetings={meetingsQuery.data}
+            />
 
             <WorkspaceLifecycleDialog
               open={dialogAction !== null}

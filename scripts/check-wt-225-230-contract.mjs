@@ -14,6 +14,7 @@ const [
   voiceProfiles,
   voiceProfileDialog,
   packageJson,
+  meetingTranscriptEn,
 ] = await Promise.all([
   read("src/app/(app)/[workspaceSlug]/rooms/[id]/page.tsx"),
   read("src/components/rooms/meeting-transcript-panel.tsx"),
@@ -23,6 +24,7 @@ const [
   read("src/app/(app)/[workspaceSlug]/voice-profiles/page.tsx"),
   read("src/components/voice/create-voice-profile-dialog.tsx"),
   read("package.json"),
+  read("messages/en/meetingTranscript.json").then(JSON.parse),
 ]);
 
 const startedHandler = meetingSession.slice(
@@ -98,7 +100,10 @@ const checks = [
   [
     "WT-228 transcript review exposes editing and finalization actions",
     transcriptPanel.includes("finalizeTranscript()") &&
-      transcriptPanel.includes("Save correction") &&
+      // "Save correction" moved into i18n (t("editor.save")) — the panel must still call that
+      // key, and the English catalog must still carry the wording.
+      transcriptPanel.includes('t("editor.save")') &&
+      meetingTranscriptEn.editor?.save === "Save correction" &&
       // Still reached from the meeting's own page, which is the half that made the deleted
       // Transcripts route safe to remove.
       roomDetailPage.includes("<MeetingTranscriptArtifact"),

@@ -37,13 +37,18 @@ test("device labels name the specific browser before the generic one it imitates
  */
 test("the sessions page signs the current device out through logout(), not revokeSession", () => {
   const page = read("../../../app/(app)/[workspaceSlug]/settings/account/sessions/page.tsx");
+  // i18n: the button copy now lives in the translation catalog rather than as literal source
+  // text — see settingsSessions.json.
+  const sessionsMessagesEn = JSON.parse(read("../../../../messages/en/settingsSessions.json"));
 
   assert.match(page, /useAuthStore\(\(s\) => s\.logout\)/);
   assert.match(page, /pending\.kind === "sign-out-current"\) \{\s*setPending\(null\);\s*logout\(\);/);
   // Revoke is only offered on rows that are not the current session.
-  assert.match(page, /session\.isCurrent \? \([\s\S]*?Sign out[\s\S]*?\) : \([\s\S]*?kind: "revoke", session/);
+  assert.match(page, /session\.isCurrent \? \([\s\S]*?t\("signOut"\)[\s\S]*?\) : \([\s\S]*?kind: "revoke", session/);
+  assert.equal(sessionsMessagesEn.signOut, "Sign out");
   assert.match(page, /This device|SessionRow/);
-  assert.match(page, /Sign out of all other sessions/);
+  assert.match(page, /t\("signOutAllOthers"\)/);
+  assert.equal(sessionsMessagesEn.signOutAllOthers, "Sign out of all other sessions");
   // Sign-out-others is offered only when the server identified this device.
   assert.match(page, /hasCurrent && others\.length > 0/);
 

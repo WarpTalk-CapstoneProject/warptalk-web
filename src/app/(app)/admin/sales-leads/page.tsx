@@ -1,55 +1,86 @@
 "use client";
 
-import { Suspense, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowsClockwise,
+  Buildings,
+  CalendarBlank,
   Handshake,
-  MagnifyingGlass,
-  WarningCircle,
+  Megaphone,
+  Tag,
 } from "@phosphor-icons/react/dist/ssr";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import {
-  AdminFilterTabs,
-  AdminPage,
-  AdminPageHeader,
-  AdminPanel,
-} from "@/components/admin/admin-page-chrome";
+  AdminDataTable,
+  AdminListToolbar,
+  AdminStatusTabs,
+  resolveAdminWorkspaces,
+  searchAdminWorkspaces,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import { useAdminSalesLeads, useUpdateSalesLeadStatus } from "@/hooks/use-admin-sales-leads";
 import { getErrorMessage } from "@/lib/api/errors";
+import {
+  dateRangeBounds,
+  dateRangeValue,
+  entityValues,
+  enumValue,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
 import { cn } from "@/lib/utils";
 import {
+  SALES_LEAD_DEFAULT_SOURCE,
   SALES_LEAD_STATUSES,
   type SalesLeadDto,
+  type SalesLeadQuery,
+  type SalesLeadSort,
   type SalesLeadStatus,
 } from "@/types/admin-sales-lead";
 
 const PAGE_SIZE = 20;
+/**
+ * The board is a pipeline, and a pipeline of twenty cards is not one. Billing caps a page at 100
+ * (`SalesInquiryConstants.Defaults.MaxPageSize`), so the board asks for that; it is still one page,
+ * in the list's order, and the pager under it says so.
+ */
+const BOARD_PAGE_SIZE = 100;
 
-const STATUS_LABELS: Record<SalesLeadStatus, string> = {
-  new: "New",
-  reviewing: "Reviewing",
-  quoted: "Quoted",
-  converted: "Converted",
-  closed: "Closed",
+/**
+ * The inbox's view, all of it in the URL — `status=` is what the tabs write, so the palette's
+ * "New leads" saved view (`/admin/sales-leads?status=new`) is just a link.
+ *
+ * Every filter is server-side (billing's GET /admin/billing/sales-leads). Request type and source are
+ * open sets — the contact form decides them, not a CHECK constraint — so their defs carry no
+ * `values` and any value in a link is sent as typed; billing matches it case-insensitively.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: SALES_LEAD_STATUSES },
+    { key: "requestType", kind: "enum" },
+    { key: "source", kind: "enum" },
+    { key: "created", kind: "dateRange" },
+    { key: "workspace", kind: "entity" },
+  ],
+  sortFields: ["created", "company"],
+  defaultSort: { field: "created", direction: "desc" },
+  columns: [{ id: "lead" }, { id: "request" }, { id: "source", defaultHidden: true }, { id: "created" }, { id: "status" }],
+  groupings: ["status"],
+  views: ["list", "board"],
 };
 
-const STATUS_TABS = [
-  { value: "all", label: "All" },
-  ...SALES_LEAD_STATUSES.map((status) => ({ value: status, label: STATUS_LABELS[status] })),
-] as const;
-
-type StatusFilter = "all" | SalesLeadStatus;
+function apiSort(field: string, direction: "asc" | "desc"): SalesLeadSort {
+  if (field === "company") return direction === "asc" ? "company_asc" : "company_desc";
+  return direction === "asc" ? "created_asc" : "created_desc";
+}
 
 const numberFormatter = new Intl.NumberFormat("en-US");
-
-function isStatus(value: string | null): value is SalesLeadStatus {
-  return (SALES_LEAD_STATUSES as readonly string[]).includes(value ?? "");
-}
 
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -67,82 +98,226 @@ function formatDateTime(value: string) {
  * Only the two keys billing itself validates are read — anything else in that JSON is whatever the
  * form of the day sent, and guessing at it would put invented numbers beside a real request.
  */
-function requestedFigures(lead: SalesLeadDto): string[] {
+function requestedFigures(lead: SalesLeadDto, t: ReturnType<typeof useTranslations>): string[] {
   const estimate = lead.pricingEstimate;
   if (!estimate || typeof estimate !== "object") return [];
   const figures: string[] = [];
   const seats = Number(estimate.requestedWorkspaceMembers);
   if (Number.isFinite(seats) && seats > 0) {
-    figures.push(`${numberFormatter.format(seats)} seat${seats === 1 ? "" : "s"}`);
+    figures.push(t("seats", { count: seats }));
   }
   const credits = Number(estimate.requestedMonthlyCredits);
   if (Number.isFinite(credits) && credits > 0) {
-    figures.push(`${numberFormatter.format(credits)} credits / month`);
+    figures.push(t("creditsPerMonth", { count: numberFormatter.format(credits) }));
   }
   return figures;
 }
 
+/**
+ * Every value of an open-set property this page has seen, so the filter menu can offer them.
+ *
+ * Accumulated rather than read off the current page: once "Request type is enterprise" is applied
+ * every row on the page says enterprise, and a menu built from the page would offer nothing else.
+ * Adjusted during render (React's documented pattern for state derived from props), not in an effect.
+ */
+function useSeenValues(values: readonly string[], seed: readonly string[]): string[] {
+  const [seen, setSeen] = useState<string[]>(() => Array.from(new Set(seed)));
+  const missing = Array.from(new Set(values.filter((value) => value && !seen.includes(value))));
+  if (missing.length > 0) setSeen([...seen, ...missing]);
+  return missing.length > 0 ? [...seen, ...missing] : seen;
+}
+
 function SalesLeadsInbox() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const t = useTranslations("adminMisc.salesLeads");
+  const list = useAdminListState(LIST_CONFIG);
+  const { state } = list;
 
-  const statusParam = searchParams.get("status");
-  const status: StatusFilter = isStatus(statusParam) ? statusParam : "all";
-  const search = searchParams.get("q")?.trim() ?? "";
-  const parsedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const status = enumValue(state.filters, "status") as SalesLeadStatus | undefined;
+  const requestType = enumValue(state.filters, "requestType");
+  const source = enumValue(state.filters, "source");
+  const workspaceId = entityValues(state.filters, "workspace")[0];
+  const created = dateRangeBounds(dateRangeValue(state.filters, "created") ?? {});
+  const isBoard = state.view === "board";
+  const pageSize = isBoard ? BOARD_PAGE_SIZE : PAGE_SIZE;
 
-  const [searchDraft, setSearchDraft] = useState(search);
-
-  const updateParams = (next: Record<string, string | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(next)) {
-      if (value === undefined || value === "") params.delete(key);
-      else params.set(key, value);
-    }
-    const queryString = params.toString();
-    router.replace(queryString ? `/admin/sales-leads?${queryString}` : "/admin/sales-leads");
-  };
-
-  const query = useMemo(
+  const query = useMemo<SalesLeadQuery>(
     () => ({
-      page,
-      pageSize: PAGE_SIZE,
-      status: status === "all" ? undefined : status,
-      search: search || undefined,
+      page: state.page,
+      pageSize,
+      status,
+      search: state.search || undefined,
+      workspaceId,
+      requestType,
+      source,
+      createdFrom: created.from,
+      createdTo: created.toExclusive,
+      sort: apiSort(state.sort.field, state.sort.direction),
     }),
-    [page, status, search],
+    [
+      state.page,
+      pageSize,
+      status,
+      state.search,
+      workspaceId,
+      requestType,
+      source,
+      created.from,
+      created.toExclusive,
+      state.sort.field,
+      state.sort.direction,
+    ],
   );
 
   const leadsQuery = useAdminSalesLeads(query);
   const updateStatus = useUpdateSalesLeadStatus();
 
-  const items = leadsQuery.data?.items ?? [];
+  const items = useMemo(() => leadsQuery.data?.items ?? [], [leadsQuery.data]);
   const total = leadsQuery.data?.totalCount ?? 0;
   const totalPages = Math.max(1, leadsQuery.data?.totalPages ?? 1);
 
-  const submitSearch = (event: FormEvent) => {
-    event.preventDefault();
-    updateParams({ q: searchDraft.trim() || undefined, page: undefined });
-  };
+  // Switching to the board keeps the page number but multiplies the page size, so page 4 of the
+  // list can be past the board's last page. Land on the last real page instead of an empty board.
+  const { setPage } = list;
+  useEffect(() => {
+    if (leadsQuery.data && leadsQuery.data.totalPages > 0 && state.page > leadsQuery.data.totalPages) {
+      setPage(leadsQuery.data.totalPages);
+    }
+  }, [leadsQuery.data, state.page, setPage]);
+
+  const requestTypes = useSeenValues(
+    [...items.map((lead) => lead.requestType), ...(requestType ? [requestType] : [])],
+    [],
+  );
+  const sources = useSeenValues(
+    [...items.map((lead) => lead.source), ...(source ? [source] : [])],
+    [SALES_LEAD_DEFAULT_SOURCE],
+  );
+
+  const statusLabels: Record<SalesLeadStatus, string> = useMemo(
+    () => ({
+      new: t("statusLabels.new"),
+      reviewing: t("statusLabels.reviewing"),
+      quoted: t("statusLabels.quoted"),
+      converted: t("statusLabels.converted"),
+      closed: t("statusLabels.closed"),
+    }),
+    [t],
+  );
+
+  const statusTabs = useMemo(
+    () => [
+      { value: "all" as const, label: t("allTab") },
+      ...SALES_LEAD_STATUSES.map((value) => ({ value, label: statusLabels[value] })),
+    ],
+    [t, statusLabels],
+  );
+
+  const sourceLabel = (value: string) =>
+    value === SALES_LEAD_DEFAULT_SOURCE ? t("list.sourceLabels.landing_pricing") : value;
+
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "requestType",
+      label: t("list.filters.requestType"),
+      icon: <Tag size={13} />,
+      kind: "enum",
+      options: requestTypes
+        .slice()
+        .sort((a, b) => a.localeCompare(b))
+        .map((value) => ({ value, label: value })),
+    },
+    {
+      key: "source",
+      label: t("list.filters.source"),
+      icon: <Megaphone size={13} />,
+      kind: "enum",
+      options: sources
+        .slice()
+        .sort((a, b) => a.localeCompare(b))
+        .map((value) => ({ value, label: sourceLabel(value), hint: value === sourceLabel(value) ? undefined : value })),
+    },
+    { key: "created", label: t("list.filters.created"), icon: <CalendarBlank size={13} />, kind: "dateRange" },
+    {
+      key: "workspace",
+      label: t("list.filters.workspace"),
+      icon: <Buildings size={13} />,
+      kind: "entity",
+      placeholder: t("list.filters.workspacePlaceholder"),
+      search: searchAdminWorkspaces,
+      resolve: resolveAdminWorkspaces,
+    },
+  ];
 
   const changeStatus = async (lead: SalesLeadDto, next: SalesLeadStatus) => {
     if (next === lead.status) return;
     try {
       await updateStatus.mutateAsync({ id: lead.id, status: next });
-      toast.success(`${lead.company} marked ${STATUS_LABELS[next].toLowerCase()}`);
+      toast.success(t("statusUpdated", { company: lead.company, status: statusLabels[next].toLowerCase() }));
     } catch (error) {
-      toast.error(getErrorMessage(error, "The lead status could not be updated."));
+      toast.error(getErrorMessage(error, t("statusUpdateFailed")));
     }
   };
+
+  const columns: AdminColumn<SalesLeadDto>[] = [
+    {
+      id: "lead",
+      header: t("list.columns.lead"),
+      primary: true,
+      sortField: "company",
+      className: "w-[250px]",
+      cell: (lead) => <LeadIdentity lead={lead} />,
+    },
+    {
+      id: "request",
+      header: t("list.columns.request"),
+      cell: (lead) => <LeadRequest lead={lead} compact={isBoard} />,
+    },
+    {
+      id: "source",
+      header: t("list.columns.source"),
+      className: "w-[140px]",
+      cell: (lead) => <span className="text-[12px] text-ink-muted">{sourceLabel(lead.source)}</span>,
+    },
+    {
+      id: "created",
+      header: t("list.columns.created"),
+      align: "right",
+      className: "w-[150px]",
+      sortField: "created",
+      defaultDirection: "desc",
+      cell: (lead) => <span className="text-[12px] text-ink-muted">{formatDateTime(lead.createdAt)}</span>,
+    },
+    {
+      id: "status",
+      header: t("list.columns.status"),
+      className: "w-[150px]",
+      // The status change stays a row control: a lead is triaged from the inbox, not from a page
+      // of its own, and on the board the same control is how a card moves column.
+      cell: (lead) => (
+        <select
+          value={lead.status}
+          disabled={updateStatus.isPending && updateStatus.variables?.id === lead.id}
+          onChange={(event) => void changeStatus(lead, event.target.value as SalesLeadStatus)}
+          aria-label={t("statusAria", { company: lead.company })}
+          className="h-8 rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
+        >
+          {SALES_LEAD_STATUSES.map((value) => (
+            <option key={value} value={value}>
+              {statusLabels[value]}
+            </option>
+          ))}
+        </select>
+      ),
+    },
+  ];
 
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Revenue"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Handshake size={14} weight="fill" />}
-        title="Sales leads"
-        description="Every contact-sales request on the platform, newest first."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -151,237 +326,155 @@ function SalesLeadsInbox() {
             disabled={leadsQuery.isFetching}
           >
             <ArrowsClockwise size={14} className={cn(leadsQuery.isFetching && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
-      <AdminFilterTabs
-        tabs={STATUS_TABS}
-        value={status}
-        onChange={(value) =>
-          updateParams({ status: value === "all" ? undefined : value, page: undefined })
-        }
-        label="Lead status"
-        trailing={
-          leadsQuery.isPending
-            ? "Loading…"
-            : `${numberFormatter.format(total)} lead${total === 1 ? "" : "s"}`
-        }
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("leadStatusAria")} />
+
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("searchPlaceholder")}
+        filters={filterFields}
+        count={leadsQuery.isPending ? null : total}
+        countLabel={t("leadCount", { count: total })}
+        isFetching={leadsQuery.isFetching && !leadsQuery.isPending}
+        display={{
+          board: true,
+          sortOptions: [
+            { field: "created", label: t("list.sortFields.created") },
+            { field: "company", label: t("list.sortFields.company") },
+          ],
+          groupOptions: [{ key: "status", label: t("list.columns.status") }],
+          columns: columns
+            .filter((column) => !column.primary)
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
       />
 
-      <form onSubmit={submitSearch} className="mt-4 flex max-w-md items-center gap-2">
-        <div className="relative flex-1">
-          <MagnifyingGlass
-            size={14}
-            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-subtle"
-          />
-          <Input
-            value={searchDraft}
-            onChange={(event) => setSearchDraft(event.target.value)}
-            placeholder="Search name, email or company"
-            aria-label="Search leads"
-            className="h-9 pl-8"
-          />
-        </div>
-        <Button type="submit" variant="outline" size="sm">
-          Search
-        </Button>
-      </form>
-
-      <AdminPanel className="mt-3">
-        {leadsQuery.isError ? (
-          <div className="flex items-start gap-3 px-4 py-10 text-sm">
-            <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
-            <div>
-              <p className="font-medium">Sales leads could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the billing service and that your session still holds the platform admin
-                role.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void leadsQuery.refetch()}
-              >
-                Try again
-              </Button>
-            </div>
-          </div>
-        ) : leadsQuery.isPending ? (
-          <ul>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <li
-                key={index}
-                className="flex items-center gap-4 border-b border-hairline/60 px-4 py-3 last:border-b-0"
-              >
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-52 animate-pulse rounded bg-surface-2" />
-                  <div className="h-2.5 w-32 animate-pulse rounded bg-surface-2" />
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : items.length === 0 ? (
-          <div className="grid place-items-center px-4 py-14 text-center">
-            <div>
-              <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-                <Handshake size={20} weight="duotone" />
-              </span>
-              <p className="mt-3 text-sm font-medium">No leads match this filter</p>
-              <p className="mt-1 text-xs text-ink-muted">
-                Pick a different status tab or clear the search.
-              </p>
-            </div>
-          </div>
-        ) : (
-          <ul>
-            {items.map((lead) => (
-              <li key={lead.id}>
-                <SalesLeadRow
-                  lead={lead}
-                  isSaving={updateStatus.isPending && updateStatus.variables?.id === lead.id}
-                  onStatusChange={(next) => void changeStatus(lead, next)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </AdminPanel>
-
-      {totalPages > 1 ? (
-        <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => updateParams({ page: String(page - 1) })}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => updateParams({ page: String(page + 1) })}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+      {isBoard && totalPages > 1 ? (
+        <p className="mb-2 text-[12px] text-ink-muted">{t("list.boardPageNote", { size: BOARD_PAGE_SIZE })}</p>
       ) : null}
+
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={items}
+          rowKey={(lead) => lead.id}
+          isPending={leadsQuery.isPending}
+          isError={leadsQuery.isError}
+          onRetry={() => void leadsQuery.refetch()}
+          empty={{
+            title: t("list.emptyTitle"),
+            description: t("list.emptyDescription"),
+            icon: <Handshake size={20} weight="duotone" />,
+          }}
+          groupings={{
+            status: {
+              keyOf: (lead) => lead.status,
+              label: (key) => statusLabels[key as SalesLeadStatus] ?? key,
+              order: SALES_LEAD_STATUSES,
+            },
+          }}
+          boardGrouping="status"
+          pagination={{ page: state.page, pageCount: totalPages, total, pageSize }}
+          caption={t("title")}
+          minWidth={860}
+        />
+      </AdminPanel>
     </AdminPage>
   );
 }
 
-function SalesLeadRow({
-  lead,
-  isSaving,
-  onStatusChange,
-}: {
-  lead: SalesLeadDto;
-  isSaving: boolean;
-  onStatusChange: (status: SalesLeadStatus) => void;
-}) {
+function LeadIdentity({ lead }: { lead: SalesLeadDto }) {
+  const t = useTranslations("adminMisc.salesLeads");
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-[13px] font-medium text-ink">{lead.company}</p>
+      <p className="truncate text-[12px] font-normal text-ink-muted">
+        {lead.firstName} {lead.lastName}
+      </p>
+      <a
+        href={`mailto:${lead.workEmail}`}
+        className="block truncate text-[12px] font-normal text-ink-subtle transition-colors hover:text-ink"
+      >
+        {lead.workEmail}
+      </a>
+      {lead.workspaceId ? (
+        <Link
+          href={`/admin/workspaces/${lead.workspaceId}`}
+          className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline"
+        >
+          {t("openWorkspace")}
+        </Link>
+      ) : (
+        <p className="mt-1 text-[11px] font-normal text-ink-subtle">{t("noWorkspaceYet")}</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * What the lead asked for. On the board only the headline fits a card; the list keeps the volumes,
+ * the tags and the use-case notes with their Show more / Show less expansion.
+ */
+function LeadRequest({ lead, compact }: { lead: SalesLeadDto; compact: boolean }) {
+  const t = useTranslations("adminMisc.salesLeads");
   const [expanded, setExpanded] = useState(false);
-  const figures = requestedFigures(lead);
+  const figures = requestedFigures(lead, t);
   const notes = lead.useCaseNotes?.trim() ?? "";
   const isLongNote = notes.length > 160;
 
+  if (compact) {
+    return (
+      <span className="text-[12px] text-ink">
+        {lead.requestType}
+        {figures.length > 0 ? <span className="text-ink-muted"> · {figures.join(" · ")}</span> : null}
+      </span>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-3 border-b border-hairline/60 px-4 py-3.5 last:border-b-0 md:flex-row md:gap-4">
-      <div className="min-w-0 md:w-[240px] md:shrink-0">
-        <p className="truncate text-[13px] font-medium text-ink">{lead.company}</p>
-        <p className="truncate text-[12px] text-ink-muted">
-          {lead.firstName} {lead.lastName}
-        </p>
-        <a
-          href={`mailto:${lead.workEmail}`}
-          className="block truncate text-[12px] text-ink-subtle transition-colors hover:text-ink"
-        >
-          {lead.workEmail}
-        </a>
-        {lead.workspaceId ? (
-          <Link
-            href={`/admin/workspaces/${lead.workspaceId}`}
-            className="mt-1 inline-block text-[11px] font-medium text-primary hover:underline"
-          >
-            Open workspace
-          </Link>
-        ) : (
-          <p className="mt-1 text-[11px] text-ink-subtle">No workspace yet</p>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1 text-[13px]">
-        <p className="text-ink">
-          <span className="font-medium">{lead.requestType}</span>
-          {figures.length > 0 ? (
-            <span className="text-ink-muted"> · {figures.join(" · ")}</span>
-          ) : null}
-        </p>
-        <p className="mt-0.5 text-[12px] text-ink-muted">
-          {lead.currentMonthlyMeetingVolume} meetings / month now
-          {lead.expectedMonthlyMeetingVolumeInSixMonths
-            ? ` · ${lead.expectedMonthlyMeetingVolumeInSixMonths} in six months`
-            : ""}
-        </p>
-        {lead.featureInterests.length > 0 || lead.targetLanguages.length > 0 ? (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {[...lead.featureInterests, ...lead.targetLanguages].map((tag, index) => (
-              <span
-                key={`${tag}-${index}`}
-                className="rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-muted"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
-        {notes ? (
-          <div className="mt-2">
-            <p
-              className={cn(
-                "whitespace-pre-line text-[12px] text-ink",
-                !expanded && "line-clamp-2",
-              )}
+    <div className="min-w-0 text-[13px]">
+      <p className="text-ink">
+        <span className="font-medium">{lead.requestType}</span>
+        {figures.length > 0 ? <span className="text-ink-muted"> · {figures.join(" · ")}</span> : null}
+      </p>
+      <p className="mt-0.5 text-[12px] text-ink-muted">
+        {t("meetingsPerMonthNow", { count: lead.currentMonthlyMeetingVolume })}
+        {lead.expectedMonthlyMeetingVolumeInSixMonths
+          ? ` · ${t("expectedInSixMonths", { count: lead.expectedMonthlyMeetingVolumeInSixMonths })}`
+          : ""}
+      </p>
+      {lead.featureInterests.length > 0 || lead.targetLanguages.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {[...lead.featureInterests, ...lead.targetLanguages].map((tag, index) => (
+            <span
+              key={`${tag}-${index}`}
+              className="rounded-full border border-hairline bg-surface-2 px-2 py-0.5 text-[11px] text-ink-muted"
             >
-              {notes}
-            </p>
-            {isLongNote ? (
-              <button
-                type="button"
-                onClick={() => setExpanded((value) => !value)}
-                className="mt-0.5 text-[11px] font-medium text-ink-subtle hover:text-ink"
-              >
-                {expanded ? "Show less" : "Show more"}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="flex shrink-0 items-start justify-between gap-3 md:w-[170px] md:flex-col md:items-end">
-        <p className="text-[12px] text-ink-muted md:text-right">{formatDateTime(lead.createdAt)}</p>
-        <select
-          value={lead.status}
-          disabled={isSaving}
-          onChange={(event) => onStatusChange(event.target.value as SalesLeadStatus)}
-          aria-label={`Status for ${lead.company}`}
-          className="h-8 rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
-        >
-          {SALES_LEAD_STATUSES.map((value) => (
-            <option key={value} value={value}>
-              {STATUS_LABELS[value]}
-            </option>
+              {tag}
+            </span>
           ))}
-        </select>
-      </div>
+        </div>
+      ) : null}
+      {notes ? (
+        <div className="mt-2">
+          <p className={cn("whitespace-pre-line text-[12px] text-ink", !expanded && "line-clamp-2")}>{notes}</p>
+          {isLongNote ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((value) => !value)}
+              aria-expanded={expanded}
+              className="mt-0.5 text-[11px] font-medium text-ink-subtle hover:text-ink"
+            >
+              {expanded ? t("showLess") : t("showMore")}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "re
 import gsap from "gsap";
 import { Flip } from "gsap/Flip";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import {
   CreditCard,
   FileText,
@@ -43,55 +44,69 @@ export function buildWorkspacePath(slug: string, segment: string) {
   return `/${slug}/${segment}`;
 }
 
-export function buildTabOptions(slug: string): TabOption[] {
+export type WorkspaceTabsT = ReturnType<typeof useTranslations>;
+
+const DEFAULT_TAB_COPY: Record<string, { title: string; description: string }> = {
+  home: { title: "Home", description: "Workspace start page" },
+  meetings: { title: "Meetings", description: "Live and scheduled rooms" },
+  voiceProfiles: { title: "Voice Profiles", description: "Voice and clone settings" },
+  members: { title: "Members", description: "People and roles" },
+  documents: { title: "Documents", description: "Knowledge and reference files" },
+  billing: { title: "Billing", description: "Plan and invoices" },
+  settings: { title: "Settings", description: "Workspace configuration" },
+};
+
+function tabCopy(t: WorkspaceTabsT | undefined, itemId: string) {
+  const fallback = DEFAULT_TAB_COPY[itemId];
+  if (!t) return fallback;
+  return {
+    title: t(`items.${itemId}.title`),
+    description: t(`items.${itemId}.description`),
+  };
+}
+
+export function buildTabOptions(slug: string, t?: WorkspaceTabsT): TabOption[] {
   return [
     {
       id: "home",
-      title: "Home",
+      ...tabCopy(t, "home"),
       href: buildWorkspacePath(slug, "home"),
-      description: "Workspace start page",
       icon: House,
     },
     {
       id: "meetings",
-      title: "Meetings",
+      ...tabCopy(t, "meetings"),
       href: buildWorkspacePath(slug, "rooms"),
-      description: "Live and scheduled rooms",
       icon: SquaresFour,
     },
     {
       id: "voice-profiles",
-      title: "Voice Profiles",
+      ...tabCopy(t, "voiceProfiles"),
       href: buildWorkspacePath(slug, "voice-profiles"),
-      description: "Voice and clone settings",
       icon: Waveform,
     },
     {
       id: "members",
-      title: "Members",
+      ...tabCopy(t, "members"),
       href: buildWorkspacePath(slug, "members"),
-      description: "People and roles",
       icon: Users,
     },
     {
       id: "documents",
-      title: "Documents",
+      ...tabCopy(t, "documents"),
       href: buildWorkspacePath(slug, "documents"),
-      description: "Knowledge and reference files",
       icon: FileText,
     },
     {
       id: "billing",
-      title: "Billing",
+      ...tabCopy(t, "billing"),
       href: buildWorkspacePath(slug, "billing"),
-      description: "Plan and invoices",
       icon: CreditCard,
     },
     {
       id: "settings",
-      title: "Settings",
+      ...tabCopy(t, "settings"),
       href: buildWorkspacePath(slug, "settings"),
-      description: "Workspace configuration",
       icon: GearSix,
     },
   ];
@@ -118,12 +133,13 @@ export function resolveCurrentTab(pathname: string, options: TabOption[]): Works
 }
 
 export function WorkspaceTabs() {
+  const t = useTranslations("common.workspaceTabs");
   const pathname = usePathname();
   const router = useRouter();
   const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const slug = activeWorkspaceSlug || "workspace";
   const scope = activeWorkspaceSlug || "global";
-  const options = useMemo(() => buildTabOptions(slug), [slug]);
+  const options = useMemo(() => buildTabOptions(slug, t), [slug, t]);
   const tabsByScope = useWorkspaceTabsStore((state) => state.tabsByScope);
   const addTab = useWorkspaceTabsStore((state) => state.addTab);
   const closeTab = useWorkspaceTabsStore((state) => state.closeTab);
@@ -339,7 +355,7 @@ export function WorkspaceTabs() {
                 {tab.closable !== false ? (
                   <button
                     type="button"
-                    aria-label={`Close ${tab.title}`}
+                    aria-label={t("actions.closeTab", { title: tab.title })}
                     onClick={(event) => handleClose(tab, event)}
                     draggable={false}
                     className="absolute right-1.5 grid size-3.5 place-items-center rounded-[5px] text-ink-subtle opacity-0 transition hover:bg-surface-3 hover:text-ink group-hover:opacity-100"
@@ -355,7 +371,7 @@ export function WorkspaceTabs() {
         <div ref={actionMenuRef} className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            aria-label={actionsOpen ? "Hide tab actions" : "Show tab actions"}
+            aria-label={actionsOpen ? t("actions.hideTabActions") : t("actions.showTabActions")}
             aria-expanded={actionsOpen}
             onClick={() => setActionsOpen((open) => !open)}
             className="grid size-7 place-items-center rounded-[8px] border border-border bg-surface-2/60 text-ink-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] outline-none transition hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40"
@@ -368,7 +384,7 @@ export function WorkspaceTabs() {
           <button
             type="button"
             data-tab-action
-            aria-label="Close active tab"
+            aria-label={t("actions.closeActiveTab")}
             onClick={handleCloseActiveTab}
             disabled={!activeTab || activeTab.closable === false}
             className="pointer-events-none grid size-7 place-items-center rounded-[8px] border border-border bg-surface-2/60 text-ink-muted opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)] outline-none transition hover:bg-surface-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-30"
@@ -385,7 +401,7 @@ export function WorkspaceTabs() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" sideOffset={8} className="w-64 rounded-[10px]">
               <DropdownMenuGroup>
-                <DropdownMenuLabel>Create new view</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("actions.createNewView")}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {options.map((option) => {
                   const Icon = option.icon;
@@ -404,7 +420,7 @@ export function WorkspaceTabs() {
                         <span className="block truncate text-[13px] font-medium text-ink">{option.title}</span>
                         <span className="block truncate text-[11px] text-ink-muted">{option.description}</span>
                       </span>
-                      {exists ? <span className="text-[11px] text-ink-subtle">Open</span> : null}
+                      {exists ? <span className="text-[11px] text-ink-subtle">{t("actions.open")}</span> : null}
                     </DropdownMenuItem>
                   );
                 })}

@@ -26,6 +26,14 @@ export interface VoiceProfileDto {
    * person's own voice came to be listed as their library pick. See profile-status.ts.
    */
   source?: string | null;
+  /**
+   * Why the clone failed, when `status` is "clone_failed" — a stable code, see
+   * lib/voice/clone-failure.ts. Null on a failed row means the reason was not recorded (it
+   * failed before AuthService stored reasons).
+   */
+  cloneErrorCode?: string | null;
+  /** The AI worker's one-line detail for `cloneErrorCode`, for the row's tooltip. */
+  cloneError?: string | null;
 }
 
 export interface CreateVoiceProfileRequest {

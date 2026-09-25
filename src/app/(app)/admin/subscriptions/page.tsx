@@ -2,28 +2,39 @@
 
 import { Suspense, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ArrowCounterClockwise,
   ArrowsClockwise,
+  ArrowsCounterClockwise,
   ArrowsLeftRight,
+  Buildings,
+  CalendarBlank,
   CreditCard,
+  Gauge,
   Prohibit,
+  Tag,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
+import { AdminPage, AdminPageHeader, AdminPanel } from "@/components/admin/admin-page-chrome";
 import {
-  AdminFilterTabs,
-  AdminPage,
-  AdminPageHeader,
-  AdminPanel,
-} from "@/components/admin/admin-page-chrome";
+  AdminDataTable,
+  AdminListToolbar,
+  AdminStatusTabs,
+  resolveAdminWorkspaces,
+  searchAdminWorkspaces,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+} from "@/components/admin/list";
 import {
   SubscriptionLifecycleDialog,
   type SubscriptionLifecycleAction,
 } from "@/components/admin/subscription-lifecycle-dialog";
 import { ChangePlanDialog } from "@/components/admin/change-plan-dialog";
+import { useAdminPlans } from "@/hooks/use-admin-pricing";
 import {
   useAdminSubscriptionDirectory,
   useAdminSubscriptionSummary,
@@ -32,15 +43,22 @@ import {
   useReactivateAdminSubscription,
 } from "@/hooks/use-admin-subscriptions";
 import {
-  formatMonthlyRecurring,
-  formatSubscriptionValue,
-} from "@/lib/billing/admin-money";
+  booleanValue,
+  dateRangeBounds,
+  dateRangeValue,
+  entityValues,
+  enumValue,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
+import { formatMonthlyRecurring, formatSubscriptionValue } from "@/lib/billing/admin-money";
 import {
   adminSubscriptionRowAction,
   isEndedSubscription,
 } from "@/lib/billing/admin-subscription-actions";
 import { cn } from "@/lib/utils";
 import type {
+  AdminSubscriptionDirectoryQuery,
+  AdminSubscriptionServiceState,
   AdminSubscriptionSort,
   AdminSubscriptionStatusFilter,
   AdminSubscriptionSummaryDto,
@@ -48,32 +66,44 @@ import type {
 
 const PAGE_SIZE = 20;
 
-const STATUS_TABS = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "pending", label: "Pending" },
-  { value: "suspended", label: "Suspended" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "expired", label: "Expired" },
-] as const;
+const STATUS_VALUES = ["all", "active", "pending", "suspended", "cancelled", "expired"] as const;
+const SERVICE_STATES: AdminSubscriptionServiceState[] = ["healthy", "low_balance", "in_overage", "suspended"];
 
-const SORT_OPTIONS = [
-  { value: "period_end_asc", label: "Renews soonest" },
-  { value: "period_end_desc", label: "Renews latest" },
-  { value: "credits_asc", label: "Fewest credits left" },
-  { value: "created_desc", label: "Newest" },
-  { value: "created_asc", label: "Oldest" },
-] as const;
+/**
+ * The directory's whole view in the URL. Every filter is server-side
+ * (SubscriptionRepository.ApplyAdminFilters in billing); the page holds one page of rows.
+ */
+const LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "status", kind: "enum", values: ["active", "pending", "suspended", "cancelled", "expired"] },
+    // Plan slugs are the catalogue's, loaded after mount — an open set.
+    { key: "plan", kind: "enum" },
+    { key: "service", kind: "enum", values: SERVICE_STATES },
+    { key: "cycle", kind: "enum", values: ["monthly", "yearly"] },
+    { key: "autoRenew", kind: "boolean" },
+    { key: "workspace", kind: "entity" },
+    { key: "renews", kind: "dateRange" },
+  ],
+  sortFields: ["periodEnd", "created", "credits"],
+  defaultSort: { field: "periodEnd", direction: "asc" },
+  columns: [
+    { id: "plan" },
+    { id: "status" },
+    { id: "value" },
+    { id: "credits" },
+    { id: "periodEnd" },
+    { id: "actions" },
+  ],
+  groupings: ["status", "plan", "service"],
+};
+
+function apiSort(field: string, direction: "asc" | "desc"): AdminSubscriptionSort {
+  if (field === "created") return direction === "asc" ? "created_asc" : "created_desc";
+  if (field === "credits") return direction === "asc" ? "credits_asc" : "credits_desc";
+  return direction === "asc" ? "period_end_asc" : "period_end_desc";
+}
 
 const numberFormatter = new Intl.NumberFormat("en-US");
-
-function isStatusFilter(value: string | null): value is AdminSubscriptionStatusFilter {
-  return STATUS_TABS.some((tab) => tab.value === value);
-}
-
-function isSort(value: string | null): value is AdminSubscriptionSort {
-  return SORT_OPTIONS.some((option) => option.value === value);
-}
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -96,9 +126,7 @@ function SummaryTile({
 }) {
   return (
     <div className="border-r border-border px-4 py-3.5 last:border-r-0">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">
-        {label}
-      </p>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">{label}</p>
       <p
         className={cn(
           "mt-2 text-[21px] font-semibold leading-none tracking-tight tabular-nums",
@@ -113,33 +141,51 @@ function SummaryTile({
 }
 
 function SubscriptionsDirectory() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const t = useTranslations("adminSubscriptions.page");
+  const list = useAdminListState(LIST_CONFIG);
+  const { state } = list;
 
-  const statusParam = searchParams.get("status");
-  const sortParam = searchParams.get("sort");
-  const status: AdminSubscriptionStatusFilter = isStatusFilter(statusParam) ? statusParam : "all";
-  const sort: AdminSubscriptionSort = isSort(sortParam) ? sortParam : "period_end_asc";
-  const parsedPage = Number.parseInt(searchParams.get("page") ?? "1", 10);
-  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const status = (enumValue(state.filters, "status") ?? "all") as AdminSubscriptionStatusFilter;
+  const planSlug = enumValue(state.filters, "plan");
+  const serviceState = enumValue(state.filters, "service") as AdminSubscriptionServiceState | undefined;
+  const billingCycle = enumValue(state.filters, "cycle") as "monthly" | "yearly" | undefined;
+  const autoRenew = booleanValue(state.filters, "autoRenew");
+  const workspaceId = entityValues(state.filters, "workspace")[0];
+  const renewsRange = dateRangeValue(state.filters, "renews");
+  const renews = dateRangeBounds(renewsRange ?? {});
 
-  const updateParams = (next: Record<string, string | undefined>) => {
-    const params = new URLSearchParams(searchParams.toString());
-    for (const [key, value] of Object.entries(next)) {
-      if (value === undefined || value === "") params.delete(key);
-      else params.set(key, value);
-    }
-    const queryString = params.toString();
-    router.replace(queryString ? `/admin/subscriptions?${queryString}` : "/admin/subscriptions");
-  };
-
-  const query = useMemo(
-    () => ({ page, pageSize: PAGE_SIZE, status, sort }),
-    [page, status, sort],
+  const query = useMemo<AdminSubscriptionDirectoryQuery>(
+    () => ({
+      page: state.page,
+      pageSize: PAGE_SIZE,
+      status,
+      sort: apiSort(state.sort.field, state.sort.direction),
+      planSlug,
+      serviceState,
+      billingCycle,
+      autoRenew,
+      workspaceId,
+      periodEndFrom: renews.from,
+      periodEndTo: renews.toExclusive,
+    }),
+    [
+      state.page,
+      status,
+      state.sort.field,
+      state.sort.direction,
+      planSlug,
+      serviceState,
+      billingCycle,
+      autoRenew,
+      workspaceId,
+      renews.from,
+      renews.toExclusive,
+    ],
   );
 
   const directoryQuery = useAdminSubscriptionDirectory(query);
   const summaryQuery = useAdminSubscriptionSummary();
+  const plansQuery = useAdminPlans();
   const cancelSubscription = useCancelAdminSubscription();
   const reactivateSubscription = useReactivateAdminSubscription();
   const changePlan = useChangeAdminSubscriptionPlan();
@@ -158,13 +204,145 @@ function SubscriptionsDirectory() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const summary = summaryQuery.data;
 
+  const statusTabs = useMemo(
+    () => STATUS_VALUES.map((value) => ({ value, label: t(`statusTabs.${value}`) })),
+    [t],
+  );
+
+  const planOptions = useMemo(() => {
+    const plans = plansQuery.data ?? [];
+    const options = plans.map((plan) => ({ value: plan.slug, label: plan.name, hint: `${plan.slug} · ${plan.billingCycle}` }));
+    if (planSlug && !options.some((option) => option.value === planSlug)) options.push({ value: planSlug, label: planSlug, hint: "" });
+    return options;
+  }, [plansQuery.data, planSlug]);
+
+  const filterFields = useMemo<AdminFilterField[]>(
+    () => [
+      { key: "plan", label: t("filters.plan"), icon: <Tag size={13} />, kind: "enum", options: planOptions },
+      {
+        key: "service",
+        label: t("filters.service"),
+        icon: <Gauge size={13} />,
+        kind: "enum",
+        options: SERVICE_STATES.map((value) => ({ value, label: t(`filters.serviceStates.${value}`) })),
+      },
+      {
+        key: "cycle",
+        label: t("filters.cycle"),
+        icon: <ArrowsCounterClockwise size={13} />,
+        kind: "enum",
+        options: [
+          { value: "monthly", label: t("filters.cycles.monthly") },
+          { value: "yearly", label: t("filters.cycles.yearly") },
+        ],
+      },
+      {
+        key: "autoRenew",
+        label: t("filters.autoRenew"),
+        icon: <ArrowsClockwise size={13} />,
+        kind: "boolean",
+        trueLabel: t("filters.renews"),
+        falseLabel: t("filters.doesNotRenew"),
+      },
+      {
+        key: "workspace",
+        label: t("filters.workspace"),
+        icon: <Buildings size={13} />,
+        kind: "entity",
+        placeholder: t("filters.workspacePlaceholder"),
+        search: searchAdminWorkspaces,
+        resolve: resolveAdminWorkspaces,
+      },
+      { key: "renews", label: t("filters.periodEnd"), icon: <CalendarBlank size={13} />, kind: "dateRange" },
+    ],
+    [planOptions, t],
+  );
+
+  const columns = useMemo<AdminColumn<AdminSubscriptionSummaryDto>[]>(
+    () => [
+      {
+        id: "plan",
+        header: t("columns.plan"),
+        primary: true,
+        cell: (subscription) => (
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-medium text-ink">
+              {subscription.planName}
+              <span className="ml-2 text-[11px] font-normal text-ink-subtle">{subscription.billingCycle}</span>
+            </p>
+            <Link
+              href={`/admin/workspaces/${subscription.workspaceId}`}
+              className="truncate font-mono text-[11px] text-ink-subtle transition-colors hover:text-ink"
+            >
+              {subscription.workspaceId.slice(0, 8)}…
+            </Link>
+          </div>
+        ),
+      },
+      {
+        id: "status",
+        header: t("columns.status"),
+        className: "w-[160px]",
+        cell: (subscription) => <StatusCell subscription={subscription} />,
+      },
+      {
+        id: "value",
+        header: t("columns.value"),
+        align: "right",
+        className: "w-[160px]",
+        cell: (subscription) => <ValueCell subscription={subscription} />,
+      },
+      {
+        id: "credits",
+        header: t("columns.credits"),
+        align: "right",
+        className: "w-[120px]",
+        sortField: "credits",
+        defaultDirection: "asc",
+        cell: (subscription) => (
+          <span className="text-ink-muted">{numberFormatter.format(subscription.creditsRemaining)}</span>
+        ),
+      },
+      {
+        id: "periodEnd",
+        header: t("columns.periodEnd"),
+        align: "right",
+        className: "w-[160px]",
+        sortField: "periodEnd",
+        defaultDirection: "asc",
+        cell: (subscription) => (
+          <span className="text-ink-muted">
+            {formatDate(subscription.currentPeriodEnd)}
+            {!subscription.autoRenew ? (
+              <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">{t("row.noRenew")}</span>
+            ) : null}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: t("columns.actions"),
+        align: "right",
+        className: "w-[240px]",
+        cell: (subscription) => (
+          <RowActions
+            subscription={subscription}
+            onAction={(target, action) => setPending({ subscription: target, action })}
+            onChangePlan={(target) => setChangingPlanFor(target)}
+          />
+        ),
+      },
+    ],
+    [t],
+  );
+
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Revenue"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<CreditCard size={14} weight="fill" />}
-        title="Subscriptions"
-        description="Every plan on the platform, what it is worth per month, and what runs out next."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -175,11 +353,8 @@ function SubscriptionsDirectory() {
             }}
             disabled={directoryQuery.isFetching}
           >
-            <ArrowsClockwise
-              size={14}
-              className={cn(directoryQuery.isFetching && "animate-spin")}
-            />
-            Refresh
+            <ArrowsClockwise size={14} className={cn(directoryQuery.isFetching && "animate-spin")} />
+            {t("refresh")}
           </Button>
         }
       />
@@ -187,7 +362,7 @@ function SubscriptionsDirectory() {
       {summaryQuery.isError ? (
         <div className="mt-5 flex items-center gap-3 rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           <WarningCircle size={18} weight="duotone" />
-          Revenue totals could not be loaded. The directory below is unaffected.
+          {t("summaryError")}
         </div>
       ) : (
         <div className="mt-5 grid grid-cols-2 overflow-hidden rounded-xl border border-border bg-surface-1 lg:grid-cols-4">
@@ -195,121 +370,94 @@ function SubscriptionsDirectory() {
               reports one amount per currency and refuses to add VND to USD. Rendering it as a
               single figure here would put back exactly the invention the API avoided. */}
           <SummaryTile
-            label="Monthly recurring"
+            label={t("summary.monthlyRecurring.label")}
             value={summary ? formatMonthlyRecurring(summary.monthlyRecurring) : "—"}
             helper={
               summary && summary.monthlyRecurring.length > 1
-                ? "Kept per currency — not converted"
-                : "Excludes trials and cancellations"
+                ? t("summary.monthlyRecurring.helperMultiCurrency")
+                : t("summary.monthlyRecurring.helperDefault")
             }
           />
           <SummaryTile
-            label="Active"
+            label={t("summary.active.label")}
             value={summary ? numberFormatter.format(summary.activeCount) : "—"}
-            helper={summary ? `${numberFormatter.format(summary.trialCount)} still in trial` : "—"}
+            helper={
+              summary
+                ? t("summary.active.helper", { count: numberFormatter.format(summary.trialCount) })
+                : "—"
+            }
           />
           <SummaryTile
-            label="Renewing in 14 days"
+            label={t("summary.endingWithin14Days.label")}
             value={summary ? numberFormatter.format(summary.endingWithin14Days) : "—"}
-            helper="Renewals and expiries alike"
+            helper={t("summary.endingWithin14Days.helper")}
           />
           <SummaryTile
-            label="Past due"
+            label={t("summary.pastDue.label")}
             value={summary ? numberFormatter.format(summary.pastDueCount) : "—"}
-            helper="Service suspended on an overdue invoice"
+            helper={t("summary.pastDue.helper")}
             tone={summary && summary.pastDueCount > 0 ? "warning" : "neutral"}
           />
         </div>
       )}
 
-      <AdminFilterTabs
-        tabs={STATUS_TABS}
-        value={status}
-        onChange={(value) =>
-          updateParams({ status: value === "all" ? undefined : value, page: undefined })
-        }
-        label="Subscription status"
-        trailing={
-          directoryQuery.isPending
-            ? "Loading…"
-            : `${numberFormatter.format(total)} subscription${total === 1 ? "" : "s"}`
-        }
+      <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("statusTabs.label")} />
+
+      <AdminListToolbar
+        list={list}
+        filters={filterFields}
+        count={directoryQuery.isPending ? null : total}
+        countLabel={t("subscriptionCount", { count: total })}
+        isFetching={directoryQuery.isFetching && !directoryQuery.isPending}
+        display={{
+          sortOptions: [
+            { field: "periodEnd", label: t("sortFields.periodEnd") },
+            { field: "created", label: t("sortFields.created") },
+            { field: "credits", label: t("sortFields.credits") },
+          ],
+          groupOptions: [
+            { key: "status", label: t("columns.status") },
+            { key: "plan", label: t("columns.plan") },
+            { key: "service", label: t("filters.service") },
+          ],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
       />
 
-      <div className="mt-4 flex justify-end">
-        <label className="flex items-center gap-2 text-[13px] text-ink-muted">
-          Sort
-          <select
-            value={sort}
-            onChange={(event) => updateParams({ sort: event.target.value, page: undefined })}
-            className="h-9 rounded-lg border border-border bg-surface-1 px-2 text-[13px] text-ink outline-none focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/20"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
-      <AdminPanel className="mt-3">
-        {directoryQuery.isError ? (
-          <div className="flex items-start gap-3 px-4 py-10 text-sm">
-            <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
-            <div>
-              <p className="font-medium">Subscriptions could not be loaded.</p>
-              <p className="mt-1 text-ink-muted">
-                Check the billing service and that your session still holds the platform admin
-                role.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-3"
-                onClick={() => void directoryQuery.refetch()}
-              >
-                Try again
-              </Button>
-            </div>
-          </div>
-        ) : directoryQuery.isPending ? (
-          <ul>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <li
-                key={index}
-                className="flex items-center gap-4 border-b border-hairline/60 px-4 py-3 last:border-b-0"
-              >
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-52 animate-pulse rounded bg-surface-2" />
-                  <div className="h-2.5 w-32 animate-pulse rounded bg-surface-2" />
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : items.length === 0 ? (
-          <div className="grid place-items-center px-4 py-14 text-center">
-            <div>
-              <span className="mx-auto grid size-10 place-items-center rounded-xl bg-surface-2 text-ink-subtle">
-                <CreditCard size={20} weight="duotone" />
-              </span>
-              <p className="mt-3 text-sm font-medium">No subscriptions match this filter</p>
-              <p className="mt-1 text-xs text-ink-muted">Pick a different status tab.</p>
-            </div>
-          </div>
-        ) : (
-          <ul>
-            {items.map((subscription) => (
-              <li key={subscription.id}>
-                <SubscriptionRow
-                  subscription={subscription}
-                  onAction={(target, action) => setPending({ subscription: target, action })}
-                  onChangePlan={(target) => setChangingPlanFor(target)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={items}
+          rowKey={(subscription) => subscription.id}
+          isPending={directoryQuery.isPending}
+          isError={directoryQuery.isError}
+          onRetry={() => void directoryQuery.refetch()}
+          empty={{
+            title: t("emptyState.title"),
+            description: t("emptyState.description"),
+            icon: <CreditCard size={20} weight="duotone" />,
+          }}
+          groupings={{
+            status: {
+              keyOf: (subscription) => subscription.status,
+              label: (key) => t(`statusTabs.${key}`),
+              order: ["active", "pending", "suspended", "cancelled", "expired"],
+            },
+            plan: { keyOf: (subscription) => subscription.planName, label: (key) => key },
+            service: {
+              keyOf: (subscription) => subscription.serviceState,
+              label: (key) =>
+                (SERVICE_STATES as string[]).includes(key) ? t(`filters.serviceStates.${key}`) : key,
+              order: SERVICE_STATES,
+            },
+          }}
+          pagination={{ page: state.page, pageCount: totalPages, total, pageSize: PAGE_SIZE }}
+          caption={t("title")}
+          minWidth={1000}
+        />
       </AdminPanel>
 
       <ChangePlanDialog
@@ -346,138 +494,100 @@ function SubscriptionsDirectory() {
         }}
         isSaving={cancelSubscription.isPending || reactivateSubscription.isPending}
       />
-
-      {totalPages > 1 ? (
-        <div className="mt-4 flex items-center justify-between text-[13px] text-ink-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => updateParams({ page: String(page - 1) })}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => updateParams({ page: String(page + 1) })}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      ) : null}
     </AdminPage>
   );
 }
 
-function SubscriptionRow({
+function StatusCell({ subscription }: { subscription: AdminSubscriptionSummaryDto }) {
+  const t = useTranslations("adminSubscriptions.page");
+  // Suspended service on a live subscription is the state the status column cannot show: the row
+  // still says "active", because it is.
+  const isPastDue =
+    subscription.serviceState === "suspended" && subscription.suspendedReason === "invoice_overdue";
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+          subscription.status === "active"
+            ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            : subscription.status === "cancelled" || subscription.status === "expired"
+              ? "border-border bg-surface-2 text-ink-muted"
+              : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+        )}
+      >
+        {t(`statusTabs.${subscription.status}`)}
+      </span>
+      {isPastDue ? (
+        <span className="inline-flex items-center rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+          {t("row.pastDue")}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * "In trial" and "Cancelled" rather than 0. A trial is worth its full price next week and a
+ * cancellation is worth nothing ever again — printing 0 for both merges two facts that read
+ * differently.
+ */
+function ValueCell({ subscription }: { subscription: AdminSubscriptionSummaryDto }) {
+  const t = useTranslations("adminSubscriptions.page");
+  const isTrial = subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > new Date();
+  // A paid cancellation leaves cancelledAt null (the row stays live until the period ends), so the
+  // status is what says "cancelled" for the value column; cancelledAt alone only marks ended rows.
+  const isCancelled = subscription.status === "cancelled" || subscription.cancelledAt != null;
+  return (
+    <span className="text-ink">
+      {subscription.monthlyValue
+        ? formatSubscriptionValue(subscription.monthlyValue, { isTrial, isCancelled })
+        : isTrial
+          ? t("row.value.trial")
+          : isCancelled
+            ? t("row.value.cancelled")
+            : formatSubscriptionValue(subscription.monthlyValue, { isTrial, isCancelled })}
+    </span>
+  );
+}
+
+/**
+ * One lifecycle action per row, chosen by what the endpoint would accept (see
+ * admin-subscription-actions.ts). A renewing row offers Cancel; a scheduled cancellation still
+ * inside its paid period offers Reactivate (`/reactivate`, never `/resume`, which lifts a service
+ * suspension); an ended row offers neither.
+ */
+function RowActions({
   subscription,
   onAction,
   onChangePlan,
 }: {
   subscription: AdminSubscriptionSummaryDto;
-  onAction: (
-    subscription: AdminSubscriptionSummaryDto,
-    action: SubscriptionLifecycleAction,
-  ) => void;
+  onAction: (subscription: AdminSubscriptionSummaryDto, action: SubscriptionLifecycleAction) => void;
   onChangePlan: (subscription: AdminSubscriptionSummaryDto) => void;
 }) {
-  const isTrial =
-    subscription.trialEndsAt != null && new Date(subscription.trialEndsAt) > new Date();
-  // A paid cancellation leaves cancelledAt null (the row stays live until the period ends), so the
-  // status is what says "cancelled" for the value column; cancelledAt alone only marks ended rows.
-  const isCancelled = subscription.status === "cancelled" || subscription.cancelledAt != null;
+  const t = useTranslations("adminSubscriptions.page");
   const lifecycleAction = adminSubscriptionRowAction(subscription);
-  // Suspended service on a live subscription is the state the status column cannot show: the row
-  // still says "active", because it is.
-  const isPastDue =
-    subscription.serviceState === "suspended" && subscription.suspendedReason === "invoice_overdue";
-
   return (
-    <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium text-ink">
-          {subscription.planName}
-          <span className="ml-2 text-[11px] font-normal text-ink-subtle">
-            {subscription.billingCycle}
-          </span>
-        </p>
-        <Link
-          href={`/admin/workspaces/${subscription.workspaceId}`}
-          className="truncate font-mono text-[11px] text-ink-subtle transition-colors hover:text-ink"
-        >
-          {subscription.workspaceId.slice(0, 8)}…
-        </Link>
-      </div>
-
-      <div className="flex w-[150px] shrink-0 flex-wrap items-center gap-1">
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            subscription.status === "active"
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : subscription.status === "cancelled" || subscription.status === "expired"
-                ? "border-border bg-surface-2 text-ink-muted"
-                : "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-          )}
-        >
-          {subscription.status}
-        </span>
-        {isPastDue ? (
-          <span className="inline-flex items-center rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
-            past due
-          </span>
-        ) : null}
-      </div>
-
-      {/* "In trial" and "Cancelled" rather than 0. A trial is worth its full price next week and a
-          cancellation is worth nothing ever again — printing 0 for both merges two facts that read
-          differently. */}
-      <div className="w-[150px] shrink-0 text-[13px] tabular-nums text-ink md:text-right">
-        {formatSubscriptionValue(subscription.monthlyValue, { isTrial, isCancelled })}
-      </div>
-
-      <div className="w-[110px] shrink-0 text-[13px] tabular-nums text-ink-muted md:text-right">
-        {numberFormatter.format(subscription.creditsRemaining)}
-      </div>
-
-      <div className="w-[150px] shrink-0 text-[13px] text-ink-muted md:text-right">
-        {formatDate(subscription.currentPeriodEnd)}
-        {!subscription.autoRenew ? (
-          <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">no renew</span>
-        ) : null}
-      </div>
-
-      {/* One lifecycle action per row, chosen by what the endpoint would accept (see
-          admin-subscription-actions.ts). A renewing row offers Cancel; a scheduled cancellation
-          still inside its paid period offers Reactivate (`/reactivate`, never `/resume`, which
-          lifts a service suspension); an ended row offers neither. */}
-      <div className="flex w-[220px] shrink-0 justify-end gap-1.5 md:ml-3">
-        {/* Change plan only where the endpoint would act: it looks for the ACTIVE subscription. */}
-        {!isEndedSubscription(subscription) ? (
-          <Button variant="outline" size="sm" onClick={() => onChangePlan(subscription)}>
-            <ArrowsLeftRight size={13} />
-            Change plan
-          </Button>
-        ) : null}
-        {lifecycleAction === "reactivate" ? (
-          <Button variant="outline" size="sm" onClick={() => onAction(subscription, "reactivate")}>
-            <ArrowCounterClockwise size={13} />
-            Reactivate
-          </Button>
-        ) : lifecycleAction === "cancel" ? (
-          <Button variant="outline" size="sm" onClick={() => onAction(subscription, "cancel")}>
-            <Prohibit size={13} />
-            Cancel
-          </Button>
-        ) : null}
-      </div>
+    <div className="flex justify-end gap-1.5">
+      {/* Change plan only where the endpoint would act: it looks for the ACTIVE subscription. */}
+      {!isEndedSubscription(subscription) ? (
+        <Button variant="outline" size="sm" onClick={() => onChangePlan(subscription)}>
+          <ArrowsLeftRight size={13} />
+          {t("row.changePlan")}
+        </Button>
+      ) : null}
+      {lifecycleAction === "reactivate" ? (
+        <Button variant="outline" size="sm" onClick={() => onAction(subscription, "reactivate")}>
+          <ArrowCounterClockwise size={13} />
+          {t("row.reactivate")}
+        </Button>
+      ) : lifecycleAction === "cancel" ? (
+        <Button variant="outline" size="sm" onClick={() => onAction(subscription, "cancel")}>
+          <Prohibit size={13} />
+          {t("row.cancel")}
+        </Button>
+      ) : null}
     </div>
   );
 }

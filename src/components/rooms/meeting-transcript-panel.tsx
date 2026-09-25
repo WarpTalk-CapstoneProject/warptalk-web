@@ -42,6 +42,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import {
   describeTranscriptAbsence,
   transcriptAbsenceMessage,
@@ -77,7 +78,8 @@ import {
 } from "@/lib/meeting/room-history-mapping";
 import { correctionAuthorName } from "@/lib/transcript/correction-history";
 import { useScrollToLatest } from "@/hooks/use-scroll-to-latest";
-import { useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import { useTranslationRoom, useTranslationRoomSessions } from "@/hooks/use-translationRooms";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 // WT-605. The pause-window read lives with the other transcript hooks, not with the room
 // ones — #410 wrote its own beside useTranslationRoomSessions before the merged version
 // existed, and two hooks of the same name over the same endpoint is how they drift.
@@ -88,7 +90,12 @@ import {
 } from "@/components/rooms/transcript-speaker-avatar";
 import { ScrollToLatestChip } from "@/components/ui/scroll-to-latest";
 import { useReadingSync } from "@/components/rooms/transcript-reading-sync";
-import { getLanguageCode, getLanguageName, languagesInScope } from "@/lib/language/languages";
+import {
+  getLanguageCode,
+  getLanguageName,
+  normalizeLanguageCode,
+} from "@/lib/language/languages";
+import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
@@ -203,6 +210,7 @@ function FollowPlaybackChip({
   visible: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   return (
     <div
       className={cn(
@@ -215,14 +223,14 @@ function FollowPlaybackChip({
         tabIndex={visible ? 0 : -1}
         aria-hidden={!visible}
         onClick={onClick}
-        title="Scroll with the recording again"
+        title={t("followPlayback.srTitle")}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-full bg-ink py-1.5 pl-2.5 pr-3.5 text-[12px] font-medium text-canvas shadow-[0_2px_10px_rgba(0,0,0,0.14)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1",
           visible ? "pointer-events-auto" : "pointer-events-none",
         )}
       >
         <Play className="size-3.5 fill-current" />
-        Follow playback
+        {t("followPlayback.label")}
       </button>
     </div>
   );
@@ -267,6 +275,7 @@ export function MeetingTranscriptArtifact({
   transcriptLoading,
   meetingStartedAt,
   meetingEndedAt,
+  saveTranscript,
 }: {
   segments: TranscriptSegmentDto[];
   /** Every current translation of this transcript, one row per (segment, language). */
@@ -317,7 +326,10 @@ export function MeetingTranscriptArtifact({
    */
   meetingStartedAt?: string | null;
   meetingEndedAt?: string | null;
+  /** WT-587/828: the room's `saveTranscript`, so an empty ephemeral meeting says so. */
+  saveTranscript?: boolean;
 }) {
+  const t = useTranslations("meetingTranscript");
   // Memoised on the fetched rows rather than recomputed per render: the language options and
   // the translation index are derived from these, and rebuilding them on every keystroke of a
   // correction would rebuild the whole transcript with them.
@@ -336,20 +348,59 @@ export function MeetingTranscriptArtifact({
     () => transcriptLanguageOptions(grouped, translationIndex),
     [grouped, translationIndex],
   );
-  /* Every language the product can translate into, not only the ones this meeting happened to
-     produce — see withOfferableLanguages. A meeting where translation was never started has no
-     entries of its own, and that is exactly the reader who needs the picker most. */
-  const offeredLanguages = useMemo(
+  /* WT-705: languages narrow workspace (L1) ⊇ meeting (L2) ⊇ artifact (L3). Everything the
+     transcript already holds stays readable (languageOptions is never filtered); the offers added
+     on top come from `artifactLanguageOptions`, the one helper that decides which languages a
+     finished meeting may be offered — never the product's whole catalogue read straight, which is
+     how a VI/EN/ES meeting used to be offered French. */
+  const { data: room } = useTranslationRoom(roomId);
+  const serverLanguages = room?.artifactLanguages?.generatable;
+  const offeredCodes = useMemo(
     () =>
-      withOfferableLanguages(
-        languageOptions,
-        languagesInScope("chatTarget").map((language) => language.code),
-        grouped.length,
-      ),
-    [languageOptions, grouped.length],
+      artifactLanguageOptions(
+        serverLanguages,
+        languageOptions.map((option) => option.code),
+      ).map((option) => option.code),
+    [serverLanguages, languageOptions],
   );
+  const offeredLanguages = useMemo(
+    () => withOfferableLanguages(languageOptions, offeredCodes, grouped.length),
+    [languageOptions, offeredCodes, grouped.length],
+  );
+  /*
+   * WHICH LANGUAGES THE TRANSLATE BUTTON MAY ACTUALLY START A RUN IN — narrower than the menu.
+   *
+   * `artifactLanguageOptions` fails OPEN on purpose: when the server sent no list, every product
+   * language is offered, because the server still enforces per request and an empty picker would
+   * hide allowed choices. For a summary that is a cheap refusal. Here it is not: a confirmed
+   * translation rewrites the whole meeting's transcript and spends workspace credits, so an
+   * unknown list must not become an invitation to translate a two-hour meeting into a language it
+   * never used. So: the server's list when there IS one, and otherwise only the languages the
+   * transcript already holds (where a run fills the lines that are missing from one it started).
+   */
+  const translatableCodes = useMemo(
+    () =>
+      new Set(
+        (serverLanguages
+          ? serverLanguages.map((code) => normalizeLanguageCode(code))
+          : languageOptions.map((option) => option.code)
+        ).filter(Boolean),
+      ),
+    [serverLanguages, languageOptions],
+  );
+  // Generating a translation spends workspace credits and changes what every reader of the record
+  // sees, so it is a host action on a finished meeting — the same authority the minutes panel
+  // uses: the host, or a workspace Owner/Admin (RoomHostAccess on the server).
+  const workspaceRole = useWorkspaceRole();
+  const hostAuthority =
+    Boolean(room?.isHost)
+    || (Boolean(currentUserId) && room?.hostId === currentUserId)
+    || workspaceRole === "owner"
+    || workspaceRole === "admin";
+  const canTranslate = Boolean(transcriptId) && isEnded && hostAuthority;
 
-  const sessionsQuery = useTranslationRoomSessions(roomId);
+  // WT-701: an ended meeting's sessions are final — fetch once, do not poll every 5s.
+  const sessionsQuery = useTranslationRoomSessions(roomId, { poll: !isEnded });
   const blocks = groupSegmentsByTranslationSession(grouped, sessionsQuery.data ?? [], baseTime);
   const showSessionLabels = blocks.length > 1;
   // WT-605. Independent of the translation-session grouping above — pausing the transcript and
@@ -389,6 +440,9 @@ export function MeetingTranscriptArtifact({
     isEnded,
     isLoading: transcriptLoading,
     errorCode: transcriptErrorCode,
+    // WT-828: why a finished meeting has nothing to show — kept no record, paused, or silence.
+    saveTranscript,
+    pausedAtSomePoint: (pauseWindowsQuery.data ?? []).length > 0,
   });
   const base = baseTime ? new Date(baseTime) : null;
 
@@ -418,7 +472,7 @@ export function MeetingTranscriptArtifact({
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
 
   const displayLanguage =
-    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage);
+    chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
 
   /* Filling in what the meeting never translated. Inert for as-spoken, and inert without a
      transcript id — the live tab has neither a saved transcript to work on nor an id to name it
@@ -429,15 +483,30 @@ export function MeetingTranscriptArtifact({
   );
 
   /**
-   * Picking a language is the request.
+   * Picking a language only READS the transcript in it. WT-705.
    *
-   * "Read it in English" and "translate the rest into English" are not two decisions a reader
-   * wants to make in sequence — the first one already means the second. The server does nothing
-   * when the language is already complete, so this is safe to fire on every pick.
+   * It used to be the request as well: choosing Spanish started translating 88 entries at once,
+   * for any viewer, with no confirmation. Generating a translation costs workspace credits and
+   * changes the record for everyone, so it is a separate, confirmed action (confirmTranslation)
+   * offered only to host authority and only in one of the room's generatable languages.
    */
   function chooseLanguage(code: string) {
     setChosenLanguage(code);
-    if (code !== AS_SPOKEN) backfill.request(code);
+  }
+
+  const [isTranslateDialogOpen, setIsTranslateDialogOpen] = useState(false);
+  // Narrower than the menu on purpose — see `translatableCodes`. As-spoken is not a language
+  // anything can be translated INTO, and normalising it would fold "as-spoken" to Assamese.
+  const canTranslateDisplayed =
+    canTranslate
+    && displayLanguage !== AS_SPOKEN
+    && translatableCodes.has(normalizeLanguageCode(displayLanguage));
+
+  /** The one place a reader's choice becomes a backfill — after they confirmed it. */
+  function confirmTranslation() {
+    setIsTranslateDialogOpen(false);
+    if (!canTranslateDisplayed || displayLanguage === AS_SPOKEN) return;
+    backfill.request(displayLanguage);
   }
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
   // with one part missing. Counted here and said out loud below, rather than left for the reader
@@ -960,7 +1029,7 @@ export function MeetingTranscriptArtifact({
     // changed nothing and count against the transcript's revision history.
     const plan = transcriptId && draftText.trim() ? planCorrectionFor(segment, draftText) : [];
     if (plan === null) {
-      toast.error("This edit removes too much of the line to save. Keep at least a word per sentence.");
+      toast.error(t("toasts.correctionTooShort"));
       return;
     }
     if (plan.length === 0) {
@@ -977,9 +1046,9 @@ export function MeetingTranscriptArtifact({
       // replaced, and nothing on the page ever resolves that.
       refreshTranslationsAfterCorrection();
       setEditingSegmentId(null);
-      toast.success("Correction saved. Its translations are being redone.");
+      toast.success(t("toasts.correctionSaved"));
     } catch {
-      toast.error("Could not save the transcript correction.");
+      toast.error(t("toasts.correctionSaveFailed"));
     } finally {
       setIsSavingCorrection(false);
     }
@@ -1072,25 +1141,19 @@ export function MeetingTranscriptArtifact({
 
     if (unsplittable > 0) {
       // Same reason as a failure to stay in batch mode: the typed text is the only copy.
-      toast.error(
-        `Saved ${saved}, but ${unsplittable} ${unsplittable === 1 ? "line removes" : "lines remove"} too much to save. Keep at least a word per sentence.`,
-      );
+      toast.error(t("toasts.batchUnsplittable", { saved, count: unsplittable }));
       return false;
     }
 
     if (failed.length === 0) {
-      toast.success(
-        `Saved ${saved} ${saved === 1 ? "correction" : "corrections"}. Their translations are being redone.`,
-      );
+      toast.success(t("toasts.batchSaved", { count: saved }));
       return true;
     }
 
     // Deliberately stays in batch mode with the failures still on screen. Dropping out would
     // discard the text the user typed for the lines that did NOT save, which is the only copy
     // of it anywhere.
-    toast.error(
-      `Saved ${saved}, but ${failed.length} could not be saved. Their edits are still here — try again.`,
-    );
+    toast.error(t("toasts.batchPartialFailure", { saved, failed: failed.length }));
     return false;
   }
 
@@ -1100,9 +1163,9 @@ export function MeetingTranscriptArtifact({
     try {
       await transcriptService.finalize(transcriptId);
       onSegmentsChanged?.();
-      toast.success("Transcript finalized and locked.");
+      toast.success(t("toasts.finalizeSuccess"));
     } catch {
-      toast.error("Could not finalize the transcript.");
+      toast.error(t("toasts.finalizeFailed"));
     } finally {
       setIsFinalizing(false);
     }
@@ -1139,17 +1202,16 @@ export function MeetingTranscriptArtifact({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 print:hidden">
         <div className="flex flex-wrap items-center gap-2">
           <TranscriptChip icon={<FileText className="size-3.5" />}>
-            {isEnded ? "Saved" : "Live"} · {totalCount}{" "}
-            {totalCount === 1 ? "entry" : "entries"}
+            {t("toolbar.entriesChip", { isEnded: isEnded ? "true" : "false", count: totalCount })}
           </TranscriptChip>
           {/* WT-311(c): from the room's own start and end. It used to come off the translation
               session, so a meeting whose host never pressed Start Translation read "0m". */}
           {meetingDuration ? (
             <TranscriptChip
               icon={<Clock className="size-3.5" />}
-              title="How long the meeting ran, from when it was started to when it was ended"
+              title={t("toolbar.durationTitle")}
             >
-              Duration {meetingDuration}
+              {t("toolbar.duration", { duration: meetingDuration })}
             </TranscriptChip>
           ) : null}
           {/* WT-311(d): translation is a thing the host switches on partway through, and when
@@ -1160,7 +1222,7 @@ export function MeetingTranscriptArtifact({
               icon={<Languages className="size-3.5" />}
               title={new Date(translationStartedAt).toLocaleString()}
             >
-              Translation started {clockTime(translationStartedAt)}
+              {t("toolbar.translationStarted", { time: clockTime(translationStartedAt) })}
             </TranscriptChip>
           ) : null}
           {/* Said out loud, because after finalizing the pencils simply stop appearing and
@@ -1168,18 +1230,17 @@ export function MeetingTranscriptArtifact({
           {isFinalized ? (
             <TranscriptChip
               icon={<Lock className="size-3.5" />}
-              title="The wording is approved and locked. No further edits are possible."
+              title={t("toolbar.finalizedTitle")}
             >
-              Finalized &amp; locked
+              {t("toolbar.finalized")}
             </TranscriptChip>
           ) : null}
         </div>
         {totalCount > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {/* Offered for any transcript with lines in it, including a meeting held entirely in
-                one language: that used to render the same transcript twice over and read as a
-                broken control, but a language with no coverage is now something the reader can
-                ask for rather than a dead entry. */}
+                one language: its generatable languages are listed as "Not translated yet", which
+                a host can then translate from the status line — choosing one only reads. */}
             <TranscriptLanguageMenu
               options={offeredLanguages}
               value={displayLanguage}
@@ -1193,8 +1254,8 @@ export function MeetingTranscriptArtifact({
             {isReading ? (
               <button
                 type="button"
-                title="Find in this transcript"
-                aria-label="Find in this transcript"
+                title={t("toolbar.findAria")}
+                aria-label={t("toolbar.findAria")}
                 aria-pressed={searchOpen}
                 onClick={() => {
                   // Closing clears the term: leaving a filter's marks behind a closed control is
@@ -1213,11 +1274,11 @@ export function MeetingTranscriptArtifact({
             <div className="mx-0.5 h-4 w-px bg-border" />
             <button
               type="button"
-              onClick={() => onCopy(transcriptAsText(), "Transcript")}
+              onClick={() => onCopy(transcriptAsText(), t("toolbar.copyLabel"))}
               className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <Copy className="size-3.5" />
-              Copy
+              {t("toolbar.copy")}
             </button>
             <button
               type="button"
@@ -1225,7 +1286,7 @@ export function MeetingTranscriptArtifact({
               className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
             >
               <Download className="size-3.5" />
-              Download
+              {t("toolbar.download")}
             </button>
             {/* WT-589. Two states, one button, and the second one is not a toggle — it commits.
                 "Edit all" reads as a mode; leaving it has to say what leaving does, or somebody
@@ -1239,7 +1300,7 @@ export function MeetingTranscriptArtifact({
                     disabled={isSavingBatch}
                     className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
                   >
-                    Discard
+                    {t("toolbar.discard")}
                   </button>
                   <button
                     type="button"
@@ -1252,7 +1313,7 @@ export function MeetingTranscriptArtifact({
                     className="flex items-center gap-1.5 rounded-md bg-ink px-2.5 py-1 text-[12px] font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-50"
                   >
                     <CheckCircle className="size-3.5" />
-                    {isSavingBatch ? "Saving…" : "Done & save all"}
+                    {isSavingBatch ? t("toolbar.saving") : t("toolbar.doneSaveAll")}
                   </button>
                 </>
               ) : (
@@ -1269,7 +1330,7 @@ export function MeetingTranscriptArtifact({
                   className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
                 >
                   <Pencil className="size-3.5" />
-                  Edit all
+                  {t("toolbar.editAll")}
                 </button>
               )
             ) : null}
@@ -1282,11 +1343,11 @@ export function MeetingTranscriptArtifact({
                 type="button"
                 onClick={() => setIsFinalizeDialogOpen(true)}
                 disabled={isFinalizing}
-                title="Approve the wording and lock it. No further edits are possible afterwards."
+                title={t("toolbar.finalizeButtonTitle")}
                 className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
               >
                 <Lock className="size-3.5" />
-                {isFinalizing ? "Finalizing…" : "Finalize & lock"}
+                {isFinalizing ? t("toolbar.finalizing") : t("toolbar.finalizeAndLock")}
               </button>
             ) : null}
           </div>
@@ -1296,10 +1357,9 @@ export function MeetingTranscriptArtifact({
       <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
         <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Finalize and lock this transcript?</DialogTitle>
+            <DialogTitle>{t("finalizeDialog.title")}</DialogTitle>
             <DialogDescription className="pt-2 text-ink-subtle">
-              Once finalized, the transcript is approved and locked. No further edits are
-              possible.
+              {t("finalizeDialog.description")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
@@ -1308,7 +1368,7 @@ export function MeetingTranscriptArtifact({
               onClick={() => setIsFinalizeDialogOpen(false)}
               className="border-border bg-surface-2 text-ink hover:bg-surface-3"
             >
-              Cancel
+              {t("finalizeDialog.cancel")}
             </Button>
             <Button
               disabled={isFinalizing}
@@ -1318,7 +1378,7 @@ export function MeetingTranscriptArtifact({
               }}
             >
               <Lock />
-              Confirm
+              {t("finalizeDialog.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1332,12 +1392,44 @@ export function MeetingTranscriptArtifact({
         incompleteCount={incompleteCount}
         totalCount={totalCount}
         coverage={backfill.coverage}
-        canBackfill={Boolean(transcriptId)}
+        canTranslate={canTranslateDisplayed}
         isStarting={backfill.isStarting}
         failedToStart={backfill.failedToStart}
         budgetExhausted={backfill.budgetExhausted}
-        onRetry={() => backfill.request(displayLanguage)}
+        onTranslate={() => setIsTranslateDialogOpen(true)}
+        onRetry={() => {
+          // A retry of a run the reader already confirmed; asking again would be noise.
+          if (canTranslateDisplayed) backfill.request(displayLanguage);
+        }}
       />
+
+      <Dialog open={isTranslateDialogOpen} onOpenChange={setIsTranslateDialogOpen}>
+        <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>
+              Translate {incompleteCount} {incompleteCount === 1 ? "entry" : "entries"} into{" "}
+              {displayLanguage === AS_SPOKEN ? "" : getLanguageName(displayLanguage)}?
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-ink-subtle">
+              This uses workspace translation credits, and everyone who can read this record will
+              see the translation.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsTranslateDialogOpen(false)}
+              className="border-border bg-surface-2 text-ink hover:bg-surface-3"
+            >
+              Cancel
+            </Button>
+            <Button disabled={backfill.isStarting} onClick={confirmTranslation}>
+              <Languages />
+              Translate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {absence ? (
         // WT-516: "No transcript was captured for this meeting" is a claim about the MEETING,
@@ -1345,7 +1437,15 @@ export function MeetingTranscriptArtifact({
         // refused read, which is how a member of the workspace was told a meeting was silent
         // while 82 saved lines sat behind an access check.
         <div className="rounded-md border border-dashed border-border bg-surface-1 px-3.5 py-3 text-[13px] text-muted-foreground">
-          {transcriptAbsenceMessage(absence)}
+          {transcriptAbsenceMessage(absence, (key) =>
+            t(
+              key === "not-yet"
+                ? "absence.notYet"
+                : key === "not-kept"
+                  ? "absence.notKept"
+                  : `absence.${key}`,
+            ),
+          )}
         </div>
       ) : (
         /* The transcript is the one thing on this page with no upper bound — an hour of
@@ -1491,7 +1591,9 @@ export function MeetingTranscriptArtifact({
                               key={segment.id}
                               {...row}
                               speakerName={
-                                row.isSelf ? "You" : segment.speakerName || "Unknown speaker"
+                                row.isSelf
+                                  ? t("speaker.you")
+                                  : segment.speakerName || t("speaker.unknownSpeaker")
                               }
                             />
                           );
@@ -1538,8 +1640,9 @@ function TranscriptSessionDivider({
   sessionNumber: number;
   session: TranslationRoomSessionDto | null;
 }) {
+  const t = useTranslations("meetingTranscript");
   const started = session?.startedAt ? clockTime(session.startedAt) : null;
-  const ended = session?.endedAt ? clockTime(session.endedAt) : "now";
+  const ended = session?.endedAt ? clockTime(session.endedAt) : t("sessionDivider.now");
 
   return (
     /* 11px, up from 10 (WT-311(d)): this divider is where a reader learns when translation
@@ -1547,7 +1650,7 @@ function TranscriptSessionDivider({
     <div className="flex items-center gap-2 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       <div className="h-px flex-1 bg-border" />
       <span>
-        Translation {sessionNumber}
+        {t("sessionDivider.label", { number: sessionNumber })}
         {started ? ` · ${started}–${ended}` : ""}
       </span>
       <div className="h-px flex-1 bg-border" />
@@ -1626,25 +1729,33 @@ function TranscriptLanguageStatus({
   incompleteCount,
   totalCount,
   coverage,
-  canBackfill,
+  canTranslate,
   isStarting,
   failedToStart,
   budgetExhausted,
+  onTranslate,
   onRetry,
 }: {
   language: string;
   incompleteCount: number;
   totalCount: number;
   coverage: TranscriptLanguageCoverage | null;
-  canBackfill: boolean;
+  /** WT-705: may this viewer generate this language here — host authority on a finished,
+   *  saved transcript, in one of the room's generatable languages. Without it the line only
+   *  reports the gap; reading what exists never depends on it. */
+  canTranslate: boolean;
   isStarting: boolean;
   /** The request to start one was refused or never arrived — a different failure from a run
    *  that started and then broke, and the reader can only act on it by asking again. */
   failedToStart: boolean;
   /** Refused for the day, not failed: asking again cannot help, so no button is offered. */
   budgetExhausted: boolean;
+  /** Opens the confirmation; never starts a translation by itself. */
+  onTranslate: () => void;
+  /** Restarts a run that was already confirmed, so it does not ask again. */
   onRetry: () => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   if (language === AS_SPOKEN) return null;
 
   const name = getLanguageName(language);
@@ -1659,9 +1770,7 @@ function TranscriptLanguageStatus({
       <div className="mb-2 space-y-1.5">
         <p className="flex items-center gap-2 text-[12px] leading-relaxed text-muted-foreground">
           <Loader2 className="size-3.5 shrink-0 animate-spin" />
-          <span>
-            Translating the rest of this meeting into {name} — {done} of {total} entries ready.
-          </span>
+          <span>{t("languageStatus.translating", { name, done, total })}</span>
         </p>
         {/* The bar and the sentence say the same thing on purpose: the number is what a reader
             checks, the bar is what tells them at a glance that it is still moving. */}
@@ -1671,7 +1780,7 @@ function TranscriptLanguageStatus({
           aria-valuemin={0}
           aria-valuemax={total}
           aria-valuenow={done}
-          aria-label={`Translating into ${name}`}
+          aria-label={t("languageStatus.translatingAria", { name })}
         >
           <div
             className="h-full rounded-full bg-ink/40 transition-[width] duration-500"
@@ -1685,9 +1794,7 @@ function TranscriptLanguageStatus({
   if (budgetExhausted && missing > 0) {
     return (
       <p className="mb-2 text-[12px] leading-relaxed text-muted-foreground">
-        This transcript has reached its translation limit for today. {missing}{" "}
-        {missing === 1 ? "entry stays" : "entries stay"} as spoken, with the original words one
-        click away.
+        {t("languageStatus.budgetExhausted", { count: missing })}
       </p>
     );
   }
@@ -1695,44 +1802,41 @@ function TranscriptLanguageStatus({
   if ((failed || failedToStart) && missing > 0) {
     return (
       <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-relaxed text-muted-foreground">
-        <span>
-          {missing} {missing === 1 ? "entry" : "entries"} could not be translated into {name}.
-        </span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
-        >
-          Try again
-        </button>
+        <span>{t("languageStatus.failed", { count: missing, name })}</span>
+        {canTranslate ? (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
+          >
+            {t("languageStatus.tryAgain")}
+          </button>
+        ) : null}
       </p>
     );
   }
 
   if (missing <= 0) return null;
 
-  if (!canBackfill) {
-    // The live tab: the transcript is still being written and there is no saved id to work on,
-    // so the honest footnote is all there is. It was the whole feature before backfill existed.
+  if (!canTranslate) {
+    // The live tab, a viewer without host authority, or a language the meeting cannot generate:
+    // the honest footnote is all there is. Reading what exists never waits on permission.
     return (
       <p className="mb-2 text-[12px] leading-relaxed text-muted-foreground">
-        {missing} of {total} entries {missing === 1 ? "is" : "are"} not fully in {name} — marked,
-        with the spoken words one click away.
+        {t("languageStatus.notFullyCovered", { missing, total, name })}
       </p>
     );
   }
 
   return (
     <p className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] leading-relaxed text-muted-foreground">
-      <span>
-        {missing} of {total} entries {missing === 1 ? "is" : "are"} not in {name} yet.
-      </span>
+      <span>{t("languageStatus.notYetTranslated", { missing, total, name })}</span>
       <button
         type="button"
-        onClick={onRetry}
+        onClick={onTranslate}
         className="rounded-md border border-border px-2 py-0.5 text-[12px] text-ink transition-colors hover:bg-surface-2"
       >
-        Translate {missing === 1 ? "it" : "them"}
+        {t("languageStatus.translateAction", { count: missing })}
       </button>
     </p>
   );
@@ -1744,8 +1848,11 @@ function TranscriptLanguageStatus({
  * Every entry says how much of the meeting is readable in it before the reader commits. A meeting
  * can be readable end-to-end in a language nobody spoke — that is what the dubbing produced —
  * partially readable in one where translation was only running for part of it, or not readable in
- * it at all. The last of those used to be left out of the list; it is offered now, because
- * choosing it translates the meeting into it rather than returning a page of untranslated lines.
+ * it at all.
+ *
+ * WT-705: two groups. "In this transcript" is everything with text in it, never filtered.
+ * "Not translated yet" is the room's generatable languages with nothing in them yet. Choosing
+ * any entry only reads; translating is a separate, confirmed action on the status line.
  */
 function TranscriptLanguageMenu({
   options,
@@ -1759,37 +1866,53 @@ function TranscriptLanguageMenu({
   /** The language a backfill is currently filling in, so its row can say so. */
   busyLanguage?: string | null;
 }) {
+  const t = useTranslations("meetingTranscript");
   const asSpoken = value === AS_SPOKEN;
+  const readable = options.filter((option) => option.readableCount > 0);
+  const notYet = options.filter((option) => option.readableCount <= 0);
+
+  const renderOption = (option: TranscriptLanguageOption) => (
+    <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
+      <TranscriptLanguageItem
+        label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
+        detail={languageDetail(t, option, busyLanguage === option.code)}
+        selected={!asSpoken && option.code === value}
+      />
+    </DropdownMenuItem>
+  );
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-ink">
         <Languages className="size-3.5" />
         <span className="max-w-[132px] truncate font-medium text-ink">
-          {asSpoken ? "As spoken" : getLanguageName(value)}
+          {asSpoken ? t("languageMenu.asSpoken") : getLanguageName(value)}
         </span>
         <ChevronDown className="size-3" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-[272px]">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Read this transcript in</DropdownMenuLabel>
+          <DropdownMenuLabel>{t("languageMenu.readIn")}</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onChange(AS_SPOKEN)}>
             <TranscriptLanguageItem
-              label="As spoken"
-              detail="Every line in its own language"
+              label={t("languageMenu.asSpoken")}
+              detail={t("languageMenu.asSpokenDetail")}
               selected={asSpoken}
             />
           </DropdownMenuItem>
-          {options.map((option) => (
-            <DropdownMenuItem key={option.code} onClick={() => onChange(option.code)}>
-              <TranscriptLanguageItem
-                label={`${getLanguageCode(option.code)} · ${getLanguageName(option.code)}`.trim()}
-                detail={languageDetail(option, busyLanguage === option.code)}
-                selected={!asSpoken && option.code === value}
-              />
-            </DropdownMenuItem>
-          ))}
         </DropdownMenuGroup>
+        {readable.length > 0 ? (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t("languageMenu.inThisTranscript")}</DropdownMenuLabel>
+            {readable.map(renderOption)}
+          </DropdownMenuGroup>
+        ) : null}
+        {notYet.length > 0 ? (
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>{t("languageMenu.notTranslatedYetGroup")}</DropdownMenuLabel>
+            {notYet.map(renderOption)}
+          </DropdownMenuGroup>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -1802,14 +1925,18 @@ function TranscriptLanguageMenu({
  * broken option rather than as an offer — and it is the wrong thing to show one that covers the
  * whole meeting, where the number is just noise beside the name.
  */
-function languageDetail(option: TranscriptLanguageOption, busy: boolean): string {
-  if (busy) return "Translating the rest now";
+function languageDetail(
+  t: ReturnType<typeof useTranslations>,
+  option: TranscriptLanguageOption,
+  busy: boolean,
+): string {
+  if (busy) return t("languageMenu.translatingNow");
   // completeCount, not readableCount: a merged utterance with half a translation is readable and
   // is still marked incomplete in the transcript below, and a row promising "the whole meeting"
   // over that contradicts the line it sits above.
-  if (option.totalCount > 0 && option.completeCount >= option.totalCount) return "The whole meeting";
-  if (option.completeCount === 0) return "Translate the meeting into this";
-  return `${option.completeCount} of ${option.totalCount} entries · translate the rest`;
+  if (option.totalCount > 0 && option.completeCount >= option.totalCount) return t("languageMenu.wholeMeeting");
+  if (option.readableCount <= 0) return t("languageMenu.notTranslatedYet");
+  return t("languageMenu.partialDetail", { done: option.completeCount, total: option.totalCount });
 }
 
 function TranscriptLanguageItem({
@@ -1851,10 +1978,11 @@ function TranscriptLayoutToggle({
   value: TranscriptLayout;
   onChange: (value: TranscriptLayout) => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   const options: { key: TranscriptLayout; label: string; icon: ReactNode }[] = [
-    { key: "chat", label: "Conversation view", icon: <MessageSquare className="size-3.5" /> },
-    { key: "document", label: "Document view", icon: <AlignLeft className="size-3.5" /> },
-    { key: "timeline", label: "Timeline view", icon: <GitCommitVertical className="size-3.5" /> },
+    { key: "chat", label: t("layoutToggle.conversation"), icon: <MessageSquare className="size-3.5" /> },
+    { key: "document", label: t("layoutToggle.document"), icon: <AlignLeft className="size-3.5" /> },
+    { key: "timeline", label: t("layoutToggle.timeline"), icon: <GitCommitVertical className="size-3.5" /> },
   ];
 
   return (
@@ -1945,6 +2073,7 @@ function TranscriptChatRow({
   onStartEdit,
   editor,
 }: TranscriptRowProps) {
+  const t = useTranslations("meetingTranscript");
   return (
     <div
       id={`transcript-segment-${segment.id}`}
@@ -2017,8 +2146,8 @@ function TranscriptChatRow({
               {canCorrect ? (
                 <button
                   type="button"
-                  aria-label="Edit transcript line"
-                  title="Edit this line"
+                  aria-label={t("line.editAria")}
+                  title={t("line.editTitle")}
                   onClick={onStartEdit}
                   className={cn(
                     "absolute right-1 top-1 grid size-7 place-items-center rounded-md opacity-60 transition-opacity group-hover/line:opacity-100 focus-visible:opacity-100",
@@ -2057,6 +2186,7 @@ function TranscriptFindBar({
   onChange: (value: string) => void;
   onClose: () => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   return (
     <div className="mb-2 flex items-center gap-2 rounded-lg border border-border bg-surface-1 px-2.5 py-1.5 print:hidden">
       <Search className="size-3.5 shrink-0 text-muted-foreground" />
@@ -2072,14 +2202,14 @@ function TranscriptFindBar({
         }}
         // Accent-insensitive on both sides, so "manh" finds "Mạnh" — said out loud because a
         // reader who types it unaccented and gets nothing concludes the word is not there.
-        placeholder="Find in this transcript — accents optional"
-        aria-label="Find in this transcript"
+        placeholder={t("findBar.placeholder")}
+        aria-label={t("toolbar.findAria")}
         className="min-w-0 flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-subtle"
       />
       <button
         type="button"
         onClick={onClose}
-        aria-label="Close find"
+        aria-label={t("findBar.closeAria")}
         className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <X className="size-3.5" />
@@ -2176,6 +2306,7 @@ function TranscriptDocumentTurn({
   query: string;
   rows: TranscriptRowBase[];
 }) {
+  const t = useTranslations("meetingTranscript");
   // A citation lands on a LINE; the block is what has to look selected, because the block is what
   // the reader sees as one thing here.
   const highlighted = rows.some((row) => row.highlighted);
@@ -2227,8 +2358,8 @@ function TranscriptDocumentTurn({
             onClick={onSeek}
             title={
               clock
-                ? `Play the recording from here — ${clock}`
-                : "Play the recording from here"
+                ? t("line.playFromHereAt", { time: clock })
+                : t("line.playFromHere")
             }
             className="group/seek -mx-1 -my-[6.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[6.75px] hover:text-ink"
           >
@@ -2281,6 +2412,7 @@ function TranscriptDocumentLine({
   query,
   playing,
 }: TranscriptRowBase & { query: string; playing: boolean }) {
+  const t = useTranslations("meetingTranscript");
   if (isEditing) {
     return <div id={`transcript-segment-${segment.id}`}>{editor}</div>;
   }
@@ -2327,8 +2459,8 @@ function TranscriptDocumentLine({
         {canCorrect ? (
           <button
             type="button"
-            aria-label="Edit transcript line"
-            title="Edit this line"
+            aria-label={t("line.editAria")}
+            title={t("line.editTitle")}
             onClick={onStartEdit}
             className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink focus-visible:opacity-100 group-hover/line:opacity-100"
           >
@@ -2439,6 +2571,7 @@ function TranscriptTimelineLine({
   onStartEdit,
   editor,
 }: TranscriptRowBase) {
+  const t = useTranslations("meetingTranscript");
   if (isEditing) {
     return <div id={`transcript-segment-${segment.id}`}>{editor}</div>;
   }
@@ -2466,8 +2599,8 @@ function TranscriptTimelineLine({
         {canCorrect ? (
           <button
             type="button"
-            aria-label="Edit transcript line"
-            title="Edit this line"
+            aria-label={t("line.editAria")}
+            title={t("line.editTitle")}
             onClick={onStartEdit}
             className="grid size-6 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 hover:text-ink focus-visible:opacity-100 group-hover/line:opacity-100"
           >
@@ -2501,6 +2634,7 @@ function TranscriptTimelineLine({
  * edge the eye runs down.
  */
 function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => void }) {
+  const t = useTranslations("meetingTranscript");
   // No recording, no target. A meeting whose record has no video is read as a document, and
   // nothing in a document may look clickable — so this stays a plain span with no hit area to
   // enlarge and no mark to reveal, exactly as it was.
@@ -2512,7 +2646,7 @@ function TranscriptLineTime({ time, onSeek }: { time: string; onSeek?: () => voi
     <button
       type="button"
       onClick={onSeek}
-      title="Play the recording from here"
+      title={t("line.playFromHere")}
       // 3.75px above and below an 11px/1.5 line box is 24px of height, and -my gives all of it
       // back. -mx does the same for the 4px of horizontal reach.
       className="group/seek -mx-1 -my-[3.75px] inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-[3.75px] font-mono text-[11px] text-muted-foreground hover:text-ink"
@@ -2544,6 +2678,7 @@ function TranscriptLineLanguage({
   revealed: boolean;
   onToggleReveal: () => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   const spoken = (resolved.spokenLanguage || "?").toUpperCase();
 
   if (resolved.isTranslated) {
@@ -2554,8 +2689,8 @@ function TranscriptLineLanguage({
         aria-expanded={revealed}
         title={
           resolved.isPartial
-            ? `Part of this line was never translated — show all of what was said, in ${getLanguageName(resolved.spokenLanguage)}`
-            : `Translated from ${getLanguageName(resolved.spokenLanguage)} — show what was said`
+            ? t("line.translatedPartialTitle", { language: getLanguageName(resolved.spokenLanguage) })
+            : t("line.translatedTitle", { language: getLanguageName(resolved.spokenLanguage) })
         }
         className={cn(
           "inline-flex h-5 shrink-0 items-center gap-1 rounded-full border px-1.5 text-[10px] font-medium transition-colors",
@@ -2576,7 +2711,7 @@ function TranscriptLineLanguage({
   if (resolved.isUntranslated) {
     return (
       <span
-        title={`This line was never translated — it is shown in ${getLanguageName(resolved.spokenLanguage)}, as spoken`}
+        title={t("line.untranslatedTitle", { language: getLanguageName(resolved.spokenLanguage) })}
         className="inline-flex h-5 shrink-0 items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
       >
         {spoken}
@@ -2625,15 +2760,16 @@ function TranscriptVersionHistory({
   currentUserId?: string;
   speakerDirectory?: Readonly<Record<string, { fullName?: string | null }>>;
 }) {
+  const t = useTranslations("meetingTranscript");
   return (
     <Popover>
       <PopoverTrigger
-        aria-label="Version history"
-        title="This line was corrected — show its version history"
+        aria-label={t("versionHistory.aria")}
+        title={t("versionHistory.triggerTitle")}
         className="inline-flex h-5 shrink-0 items-center gap-1 rounded-full border border-border bg-surface-1 px-1.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
       >
         <History className="size-3" />
-        Version history
+        {t("versionHistory.label")}
       </PopoverTrigger>
       {/* Portaled by the primitive, so the transcript's own scroll frame cannot clip it — the
           frame is overflow-y-auto, which the browser computes as clipping on both axes. */}
@@ -2661,30 +2797,29 @@ function TranscriptCorrectionList({
   currentUserId?: string;
   speakerDirectory?: Readonly<Record<string, { fullName?: string | null }>>;
 }) {
+  const t = useTranslations("meetingTranscript");
   const query = useSegmentCorrections(transcriptId, segmentIds);
 
   return (
     <div className="max-h-[320px] overflow-y-auto">
       <div className="border-b border-border px-3 py-2">
-        <p className="text-[12px] font-semibold text-ink">Version history</p>
-        <p className="text-[11px] text-muted-foreground">
-          Newest first. Each entry is one saved correction.
-        </p>
+        <p className="text-[12px] font-semibold text-ink">{t("versionHistory.heading")}</p>
+        <p className="text-[11px] text-muted-foreground">{t("versionHistory.subheading")}</p>
       </div>
       {query.isLoading ? (
         <p className="flex items-center gap-2 px-3 py-3 text-[12px] text-muted-foreground">
           <Loader2 className="size-3.5 shrink-0 animate-spin" />
-          Loading…
+          {t("versionHistory.loading")}
         </p>
       ) : query.isError ? (
         <p className="px-3 py-3 text-[12px] text-muted-foreground">
-          Could not load the version history. Close this and try again.
+          {t("versionHistory.loadError")}
         </p>
       ) : !query.data?.length ? (
         // The line is marked corrected and the server holds no rows for it. Say that rather than
         // nothing: an empty popover reads as a request that never returned.
         <p className="px-3 py-3 text-[12px] text-muted-foreground">
-          No corrections are recorded for this line.
+          {t("versionHistory.empty")}
         </p>
       ) : (
         <ol className="divide-y divide-border">
@@ -2735,6 +2870,7 @@ function TranscriptBatchLineEditor({
   onCommitAndMoveOn: () => void;
   onExit: () => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   return (
     <textarea
       data-batch-segment-id={segmentId}
@@ -2756,7 +2892,7 @@ function TranscriptBatchLineEditor({
           onCommitAndMoveOn();
         }
       }}
-      aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
+      aria-label={t("line.editByAria", { speaker: speakerName || t("speaker.unknownSpeakerLower") })}
       rows={Math.min(6, Math.max(1, Math.ceil(value.length / 80)))}
       className="w-full min-w-0 resize-y rounded-md border border-dashed border-primary/50 bg-surface-2 px-2.5 py-1.5 text-[13px] leading-6 text-ink outline-none focus:border-solid focus:border-primary disabled:opacity-60"
     />
@@ -2781,6 +2917,7 @@ function TranscriptLineEditor({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const t = useTranslations("meetingTranscript");
   return (
     <div className="w-full min-w-0 space-y-2 rounded-xl border border-primary/40 bg-surface-1 p-2.5">
       {/* A reader who unified the transcript is looking at a translation, and the pencil edits
@@ -2788,14 +2925,13 @@ function TranscriptLineEditor({
           wrong language — the re-translation then rewrites every language from it. */}
       {spokenLanguage ? (
         <p className="text-[11px] text-muted-foreground">
-          Editing what was said, in {getLanguageName(spokenLanguage)}. The translations are
-          rewritten from it.
+          {t("editor.editingTranslated", { language: getLanguageName(spokenLanguage) })}
         </p>
       ) : null}
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        aria-label={`Edit transcript line by ${speakerName || "unknown speaker"}`}
+        aria-label={t("line.editByAria", { speaker: speakerName || t("speaker.unknownSpeakerLower") })}
         className="min-h-24 w-full resize-y rounded-md border border-border bg-surface-2 px-2.5 py-2 text-[13px] leading-6 text-ink outline-none focus:border-primary"
       />
       <div className="flex justify-end gap-2">
@@ -2804,7 +2940,7 @@ function TranscriptLineEditor({
           onClick={onCancel}
           className="rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
         >
-          Cancel
+          {t("editor.cancel")}
         </button>
         <button
           type="button"
@@ -2812,7 +2948,7 @@ function TranscriptLineEditor({
           onClick={onSave}
           className="rounded-md bg-ink px-2.5 py-1 text-[12px] font-medium text-canvas transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          {isSaving ? "Saving…" : "Save correction"}
+          {isSaving ? t("editor.saving") : t("editor.save")}
         </button>
       </div>
     </div>

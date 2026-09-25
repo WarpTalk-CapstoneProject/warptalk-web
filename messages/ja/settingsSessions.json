@@ -1,0 +1,36 @@
+{
+  "subheading": "現在あなたのアカウントにサインインしているデバイスとブラウザです。",
+  "signOutAllOthers": "他のすべてのセッションをサインアウト",
+  "loadFailed": "セッションを読み込めませんでした。",
+  "retry": "再試行",
+  "noActiveSessions": "アクティブなセッションはありません。",
+  "couldNotMatchDevice": "このデバイスをセッションに一致させられませんでした。サインアウトして再度サインインすると、ここから他のセッションを管理できます。",
+  "signOut": "サインアウト",
+  "revoke": "取り消す",
+  "cancel": "キャンセル",
+  "deviceLabel": {
+    "unknownDevice": "不明なデバイス",
+    "browserOnSystem": "{system}の{browser}"
+  },
+  "dialog": {
+    "revokeTitle": "このセッションを取り消しますか?",
+    "revokeDescription": "{device}{ip}はサインアウトされ、再度サインインが必要になります。",
+    "signOutOthersTitle": "他のすべてのセッションをサインアウトしますか?",
+    "signOutOthersDescription": "他の{count}件のセッションがサインアウトされます。このデバイスはサインインしたままです。",
+    "signOutDeviceTitle": "このデバイスをサインアウトしますか?",
+    "signOutDeviceDescription": "ここでサインアウトされ、サインインページに戻ります。"
+  },
+  "toasts": {
+    "sessionSignedOut": "セッションをサインアウトしました。",
+    "othersSignedOut": "他のすべてのセッションをサインアウトしました。",
+    "signOutFailed": "そのセッションをサインアウトできませんでした。"
+  },
+  "row": {
+    "thisDevice": "このデバイス",
+    "unknownIp": "不明なIP",
+    "lastActive": "最終アクティブ {when}",
+    "signedIn": "サインイン {when}",
+    "expires": "有効期限 {when}",
+    "unknown": "不明"
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "workspaceFallback": "không gian làm việc này",
+  "header": {
+    "title": "Plugin của workspace",
+    "subtitle": "Các plugin trong kho mà thành viên của {workspaceName} có thể kết nối. Mỗi thành viên đăng nhập bằng tài khoản của riêng mình.",
+    "readOnly": "Bạn có thể xem danh sách này. Chỉ chủ sở hữu không gian làm việc mới có thể thay đổi."
+  },
+  "addMenu": {
+    "trigger": "Thêm plugin",
+    "fromMarketplace": "Từ kho plugin",
+    "withMcp": "Bằng MCP"
+  },
+  "states": {
+    "loading": "Đang tải plugin...",
+    "forbiddenTitle": "Chỉ chủ sở hữu và quản trị viên không gian làm việc mới xem được trang này",
+    "forbiddenBody": "Hãy yêu cầu plugin từ trang Kết nối của tôi.",
+    "loadError": "Không thể tải plugin của không gian làm việc này.",
+    "retry": "Thử lại"
+  },
+  "empty": {
+    "title": "Thêm một plugin vào không gian làm việc này",
+    "readOnly": "Chỉ chủ sở hữu không gian làm việc mới có thể thêm plugin."
+  },
+  "transition": {
+    "carriedOver": "{count, plural, other {Không gian làm việc này chưa chọn plugin nào, nên vẫn giữ # plugin mà thành viên đang dùng ở đây cho đến khi bạn thay đổi danh sách này.}}"
+  },
+  "requests": {
+    "title": "Yêu cầu",
+    "waiting": "{count} đang chờ",
+    "readOnly": "Chỉ chủ sở hữu không gian làm việc mới có thể thêm hoặc từ chối những yêu cầu này.",
+    "askedFor": "đã yêu cầu",
+    "decline": "Từ chối",
+    "approve": "Thêm",
+    "requesterFallback": "Một thành viên",
+    "requesterFallbackSentence": "Thành viên đó"
+  },
+  "inWorkspace": {
+    "title": "Trong không gian làm việc này",
+    "count": "{count} plugin",
+    "empty": "Chưa có plugin nào. Hãy thêm một plugin từ kho bên dưới.",
+    "manage": "Quản lý",
+    "view": "Xem"
+  },
+  "marketplace": {
+    "title": "Kho plugin",
+    "note": "Do WarpTalk phát hành",
+    "allAdded": "Mọi plugin trong kho đều đã có trong không gian làm việc này.",
+    "add": "Thêm"
+  },
+  "marketplaceDialog": {
+    "title": "Thêm từ kho plugin",
+    "subtitle": "Thành viên có thể kết nối bằng tài khoản của riêng họ ngay khi plugin được thêm."
+  },
+  "mcpDialog": {
+    "title": "Thêm máy chủ MCP của riêng bạn",
+    "subtitle": "Chỉ thành viên của {workspaceName} nhìn thấy nó.",
+    "submit": "Thêm plugin"
+  },
+  "form": {
+    "nameLabel": "Tên",
+    "namePlaceholder": "CRM nội bộ",
+    "urlLabel": "URL máy chủ MCP",
+    "urlPlaceholder": "https://mcp.example.com/mcp",
+    "descriptionLabel": "Mô tả",
+    "optional": "Không bắt buộc",
+    "descriptionPlaceholder": "WarpBot có thể làm gì với nó",
+    "cancel": "Hủy",
+    "errors": {
+      "labelRequired": "Hãy đặt tên cho plugin.",
+      "labelTooLong": "Hãy giữ tên dưới 150 ký tự.",
+      "urlRequired": "Hãy nhập URL máy chủ MCP.",
+      "urlNotHttps": "Hãy dùng URL https://.",
+      "descriptionTooLong": "Hãy giữ mô tả dưới 500 ký tự."
+    }
+  },
+  "authMode": {
+    "legend": "Cách thành viên kết nối",
+    "oauthTitle": "Đăng nhập bằng OAuth",
+    "oauthNote": "Mỗi thành viên đăng nhập trên trang riêng của máy chủ.",
+    "apiKeyTitle": "Mỗi thành viên dán một API key",
+    "apiKeyNote": "Dành cho máy chủ không có OAuth. Key được kiểm tra với máy chủ và lưu ở dạng mã hóa.",
+    "changeWarning": "Những thành viên đã kết nối có thể cần kết nối lại."
+  },
+  "manageDialog": {
+    "ariaLabel": "Quản lý {label}",
+    "save": "Lưu",
+    "removeFromWorkspace": "Xóa khỏi không gian làm việc",
+    "readOnly": "Chỉ chủ sở hữu không gian làm việc mới có thể thay đổi điều này.",
+    "close": "Đóng",
+    "cancel": "Hủy",
+    "remove": "Xóa",
+    "confirmPrivate": "Xóa {label}? Thành viên sẽ không còn thấy hay dùng được nó, dù ở {workspaceName} hay bất kỳ đâu.",
+    "confirmShared": "Xóa {label} khỏi {workspaceName}? WarpBot sẽ ngừng dùng nó ở đây. Thành viên vẫn giữ kết nối của riêng họ và có thể ngắt kết nối từ trang Kết nối của tôi."
+  },
+  "facts": {
+    "notUsedYet": "Chưa có thành viên nào dùng",
+    "usedBy": "{count} thành viên đã dùng",
+    "addedBy": "được {name} thêm",
+    "onlyThisWorkspace": "chỉ không gian làm việc này",
+    "apiKeyPerMember": "mỗi thành viên dán một API key",
+    "onlyThisWorkspaceAlone": "Chỉ không gian làm việc này"
+  },
+  "dialog": {
+    "close": "Đóng"
+  },
+  "toasts": {
+    "added": "Đã thêm {label} vào {workspaceName}",
+    "couldNotAdd": "Không thể thêm {label}.",
+    "removed": "Đã xóa khỏi {workspaceName}",
+    "couldNotRemove": "Không thể xóa {label}.",
+    "couldNotAddPlugin": "Không thể thêm plugin.",
+    "saved": "Đã lưu {label}",
+    "couldNotSave": "Không thể lưu {label}.",
+    "requestApproved": "Đã thêm {label} · {name} đã được thông báo",
+    "requestDeclined": "{name} đã được báo là plugin không được thêm",
+    "couldNotDecide": "Không thể cập nhật yêu cầu."
+  },
+  "members": {
+    "title": "Thành viên đã kết nối",
+    "count": "{count} thành viên",
+    "loading": "Đang tải thành viên…",
+    "loadError": "Không tải được danh sách thành viên đã kết nối plugin này.",
+    "retry": "Thử lại",
+    "empty": "Chưa có thành viên nào của không gian làm việc này kết nối plugin.",
+    "formerMember": "Thành viên cũ",
+    "connectedAgo": "Kết nối {when}",
+    "lastUsedAgo": "dùng lần cuối {when}",
+    "notUsedHereYet": "chưa dùng ở đây",
+    "status": {
+      "expired": "Đã hết hạn",
+      "revoked": "Đã ngắt kết nối"
+    }
+  },
+  "disabledByPlatform": {
+    "title": "WarpTalk đã tắt",
+    "note": "Hiện không dùng được trong workspace này",
+    "row": "WarpTalk đã tắt plugin này cho workspace này. Kết nối của thành viên được giữ, nhưng WarpBot sẽ không dùng ở đây."
+  }
+}

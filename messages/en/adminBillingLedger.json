@@ -1,0 +1,263 @@
+{
+  "header": {
+    "eyebrow": "Platform billing",
+    "title": "Billing",
+    "description": "System-wide credits, consumption, and active workspaces."
+  },
+  "actions": {
+    "exportReport": "Export Report",
+    "managePlans": "Manage Plans"
+  },
+  "adjustCredits": {
+    "trigger": "Adjust Credits",
+    "title": "Adjust Credits",
+    "description": "Manually add or remove credits. This action will be recorded in the audit trail.",
+    "descriptionWithTarget": "Manually add or remove credits for workspace {workspaceId}. This action will be recorded in the audit trail.",
+    "confirmHeading": "Confirm this credit adjustment",
+    "confirmWorkspace": "Workspace: {name}",
+    "confirmAmount": "{sign}{amount} credits",
+    "confirmReason": "Reason: {reason}",
+    "workspaceLabel": "Workspace",
+    "workspaceLoading": "Loading workspaces…",
+    "workspaceLoadError": "Workspaces could not be loaded",
+    "workspacePlaceholder": "Choose a workspace…",
+    "workspaceOption": "{name} ({slug})",
+    "workspaceOptionSuspended": "{name} ({slug}) — suspended",
+    "amountLabel": "Amount",
+    "amountPlaceholder": "e.g. 500 or -500",
+    "amountHint": "Use negative values to deduct credits.",
+    "reasonLabel": "Reason (Required)",
+    "reasonPlaceholder": "e.g. Compensation for downtime",
+    "cancel": "Cancel",
+    "back": "Back",
+    "reviewAdjustment": "Review Adjustment",
+    "confirmAdjustment": "Confirm Adjustment",
+    "processing": "Processing...",
+    "success": "Successfully adjusted {sign}{amount} credits.",
+    "errors": {
+      "chooseWorkspace": "Choose a workspace.",
+      "invalidAmount": "Please enter a valid whole-number amount (non-zero).",
+      "amountTooLarge": "A single adjustment cannot exceed {max} credits.",
+      "reasonRequired": "Reason is required for audit trail.",
+      "adjustFailed": "Failed to adjust credits. Please try again."
+    }
+  },
+  "metrics": {
+    "totalIssuedCredits": {
+      "label": "Total Issued Credits",
+      "detail": "Circulating across workspaces"
+    },
+    "activeWorkspaces": {
+      "label": "Active Workspaces",
+      "detail": "Workspaces using the platform"
+    },
+    "monthlyConsumption": {
+      "label": "Monthly Consumption",
+      "detail": "Total credits consumed this month"
+    },
+    "transactions30d": {
+      "label": "Transactions (30d)",
+      "detail": "Credit transactions in the last 30 days"
+    }
+  },
+  "tabs": {
+    "overview": "Economics & Analytics",
+    "ledger": "Global Transactions",
+    "invoices": "Invoices",
+    "subscriptions": "Subscriptions",
+    "alerts": "Fraud Alerts"
+  },
+  "ledger": {
+    "cardTitle": "Global Transactions",
+    "filters": {
+      "typeLabel": "Type",
+      "topUp": "Top Up",
+      "consumption": "Consumption",
+      "adjustment": "Adjustment"
+    },
+    "table": {
+      "timestamp": "Timestamp",
+      "workspace": "Workspace",
+      "type": "Type",
+      "reason": "Reason",
+      "amount": "Amount",
+      "balanceAfter": "Balance After",
+      "action": "Action"
+    },
+    "empty": "No transactions found",
+    "meetingSession": "Meeting Session",
+    "systemAutomatic": "System automatic",
+    "typeBadge": {
+      "topUp": "Top-Up",
+      "consume": "Consume",
+      "adjustment": "Adjustment"
+    },
+    "view": "View"
+  },
+  "export": {
+    "dialogTitle": "Export Billing Report",
+    "stats": {
+      "transactions": "Transactions",
+      "netTopUp": "Net Top-Up",
+      "totalConsumed": "Total Consumed",
+      "netAdjustments": "Net Adjustments"
+    },
+    "noteLabel": "Add a note (optional)",
+    "notePlaceholder": "e.g. Q2 2026 billing review for board meeting...",
+    "noteHelper": "This note will be printed at the top of the Summary sheet.",
+    "cancel": "Cancel",
+    "download": "Download Excel",
+    "generating": "Generating...",
+    "noDataAlert": "No data to export."
+  },
+  "transactionDetails": {
+    "title": "Transaction Details",
+    "subtitle": "Breakdown of variable AI service spend for this session",
+    "date": "Date",
+    "totalDeducted": "Total Deducted",
+    "serviceBreakdown": "Service Breakdown",
+    "callsSummary": "{count, plural, one {# call} other {# calls}} × {unitPrice} {suffix}",
+    "activityLogFeed": "Activity Log Feed",
+    "close": "Close"
+  },
+  "usageLabels": {
+    "translation": "Real-time Translation",
+    "summary": "AI meeting insights",
+    "chat": "AI workspace chat",
+    "other": "Other",
+    "aiUsage": "AI usage"
+  },
+  "idBadge": {
+    "copyTooltip": "Click to copy ID: {id}"
+  },
+  "growth": {
+    "usageHeading": "Credit usage",
+    "usageNote": "Consumption and top-ups — secondary to growth, and what the ledger below itemises.",
+    "vsPrevious": "{delta} vs previous 6 months",
+    "monthGrowth": "{percent} in {month}",
+    "tiles": {
+      "revenue": "Revenue · 6 months",
+      "sixMonths": "Paid payments, last 6 months",
+      "mrr": "MRR",
+      "activeSubscriptions": "{count} active subscriptions",
+      "activeWorkspaces": "Active workspaces · 6 months",
+      "activeWorkspacesDetail": "Used credits at least once",
+      "activeAccounts": "Active accounts · 6 months",
+      "activeAccountsDetail": "Signed in at least once",
+      "totalUsers": "Registered users",
+      "newUsers": "{count} new in 6 months"
+    },
+    "revenueTitle": "Revenue by month",
+    "revenueNote": "Paid payments in VND; a Stripe checkout and its first invoice count once. The latest month is month to date.",
+    "activeTitle": "Active accounts and workspaces",
+    "activeNote": "Per month: accounts that signed in, workspaces that used credits. The latest month is month to date.",
+    "usersTitle": "User and workspace growth",
+    "series": {
+      "activeAccounts": "Active accounts",
+      "activeWorkspaces": "Active workspaces",
+      "totalUsers": "Registered users",
+      "totalWorkspaces": "Workspaces",
+      "newUsers": "New users"
+    },
+    "loading": "Loading…",
+    "noData": "No paid payments in these months.",
+    "unavailable": "Not available from this backend yet."
+  },
+  "lists": {
+    "tabsLabel": "Billing sections",
+    "workspacePlaceholder": "Search workspaces…",
+    "creditsUnit": "credits",
+    "ledger": {
+      "searchPlaceholder": "Search descriptions, or paste a transaction id…",
+      "count": "{count, plural, one {# transaction} other {# transactions}}",
+      "filters": {
+        "date": "Date"
+      },
+      "amountPresets": {
+        "over1k": "1,000+ credits",
+        "over10k": "10,000+ credits",
+        "over100k": "100,000+ credits"
+      },
+      "emptyDescription": "Top-ups, consumption and adjustments appear here as they happen."
+    },
+    "export": {
+      "description": "Exports a 2-sheet Excel file: <strong>Summary</strong> (system metrics and totals) and <strong>Audit Trail</strong> — every transaction matching the ledger's current search and filters.",
+      "matching": "{count, plural, one {# transaction will be exported.} other {# transactions will be exported.}}",
+      "truncated": "Only the first {cap} are exported. Narrow the filters to export the rest.",
+      "loading": "Loading the matching transactions…",
+      "failed": "The transactions could not be loaded for export. Close this and try again."
+    },
+    "invoices": {
+      "caption": "Invoices",
+      "searchPlaceholder": "Search by invoice number, or paste an invoice id…",
+      "count": "{count, plural, one {# invoice} other {# invoices}}",
+      "filters": {
+        "status": "Status",
+        "workspace": "Workspace",
+        "currency": "Currency",
+        "issued": "Issued",
+        "total": "Total"
+      },
+      "statuses": {
+        "draft": "Draft",
+        "issued": "Issued",
+        "open": "Open",
+        "paid": "Paid",
+        "void": "Void",
+        "uncollectible": "Uncollectible"
+      },
+      "sort": {
+        "issued": "Issued date",
+        "total": "Total",
+        "due": "Due date"
+      },
+      "columns": {
+        "invoice": "Invoice",
+        "issued": "Issued",
+        "workspace": "Workspace",
+        "status": "Status",
+        "due": "Due",
+        "total": "Total",
+        "actions": "Actions"
+      },
+      "viewReceipt": "View receipt",
+      "stripeInvoice": "Stripe invoice",
+      "emptyTitle": "No invoices yet",
+      "emptyDescription": "Invoices appear here once a workspace pays for a plan or for credits."
+    },
+    "subscriptions": {
+      "title": "Subscriptions have their own page",
+      "description": "Search and filter every workspace subscription, see recurring revenue, and cancel or reactivate a subscription in the subscriptions directory.",
+      "open": "Open subscriptions"
+    },
+    "alerts": {
+      "title": "Fraud & usage alerts",
+      "description": "Workspaces with unusually high credit consumption (more than 50,000 credits in the last 24 hours).",
+      "searchPlaceholder": "Search workspaces by name or id…",
+      "count": "{count, plural, one {# alert} other {# alerts}}",
+      "filters": {
+        "consumption": "24h consumption"
+      },
+      "consumptionPresets": {
+        "over100k": "100,000+ credits",
+        "over500k": "500,000+ credits",
+        "over1m": "1,000,000+ credits"
+      },
+      "sort": {
+        "consumption": "24h consumption",
+        "workspace": "Workspace name"
+      },
+      "columns": {
+        "workspace": "Workspace",
+        "id": "Workspace ID",
+        "reason": "Reason",
+        "consumption": "24h consumption",
+        "actions": "Actions"
+      },
+      "reason": "Unusually high consumption: {credits} credits in 24h",
+      "investigate": "Investigate",
+      "emptyTitle": "No unusual usage",
+      "emptyDescription": "No workspace has consumed more than 50,000 credits in the last 24 hours."
+    }
+  }
+}

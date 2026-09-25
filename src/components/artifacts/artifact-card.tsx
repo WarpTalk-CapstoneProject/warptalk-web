@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import {
   FileText,
   LockSimple,
@@ -12,12 +13,12 @@ import {
 
 import { cn } from "@/lib/utils";
 import {
-  KIND_LABELS,
   describeAbsence,
-  entryExcerpt,
   preferredEntry,
   relativeTime,
 } from "@/lib/meeting/artifact-library";
+import { artifactPreviewMarkdown } from "@/lib/meeting/artifact-preview";
+import { PreviewMarkdown } from "@/components/markdown/document-markdown";
 import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
 import { UserChip } from "@/components/user/user-chip";
 import { recordDetailPath } from "@/lib/workspace/workspace-routes";
@@ -68,12 +69,17 @@ const KIND_ACCENTS: Record<ArtifactKind, string> = {
 export function ArtifactCard({
   group,
   workspaceSlug,
+  locale,
 }: {
   group: MeetingRecordGroup;
   workspaceSlug: string;
+  locale?: string;
 }) {
+  const t = useTranslations("artifacts");
   const lead = preferredEntry(group);
-  const excerpt = entryExcerpt(lead);
+  // Markdown, rendered: the stored transcript IS markdown, and printing it verbatim put a room
+  // UUID header and `**[Name (VI)]**:` markers at the top of every card. See artifact-preview.
+  const excerpt = artifactPreviewMarkdown(lead.body);
 
   return (
     /* A link, not a button. The records open at their own URL now, so this has to be the thing a
@@ -99,11 +105,15 @@ export function ArtifactCard({
         </p>
 
         {excerpt ? (
-          <p className="mt-2 whitespace-pre-wrap break-words text-[8.5px] leading-[1.5] text-ink-muted">
+          <PreviewMarkdown className="mt-2 text-[8.5px] leading-[1.5] text-ink-muted">
             {excerpt}
-          </p>
+          </PreviewMarkdown>
+        ) : lead.body ? (
+          // A body with nothing left once the header and the pipeline's markers are gone — a
+          // transcript nobody spoke in. Said, rather than left as an empty frame.
+          <AbsenceNote entry={{ ...lead, absence: "empty" }} t={t} />
         ) : (
-          <AbsenceNote entry={lead} />
+          <AbsenceNote entry={lead} t={t} />
         )}
 
         {/* The document continues past the card. A hard edge reads as a document that ends here;
@@ -112,7 +122,7 @@ export function ArtifactCard({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5 px-3.5 py-3">
-        <RecordMarks group={group} />
+        <RecordMarks group={group} t={t} />
         <span className="flex min-w-0 items-center gap-1.5 text-[10px] text-ink-subtle">
           {/* The card is a <Link>, so the chip renders a span and swallows its own click —
               opening the host's card must not also open the record. */}
@@ -128,7 +138,14 @@ export function ArtifactCard({
             <span className="truncate">—</span>
           )}
           <span className="text-ink-subtle/60">·</span>
-          <span className="shrink-0">{relativeTime(group.changedAt ?? group.meetingEndedAt)}</span>
+          <span className="shrink-0">
+            {relativeTime(
+              group.changedAt ?? group.meetingEndedAt,
+              undefined,
+              (key, values) => t(`relativeTime.${key}`, values),
+              locale,
+            )}
+          </span>
         </span>
       </div>
     </Link>
@@ -146,7 +163,14 @@ export function ArtifactCard({
  * the host's to share is a different fact from there being no transcript, and it is the fact that
  * tells the reader who to ask.
  */
-function RecordMarks({ group }: { group: MeetingRecordGroup }) {
+function RecordMarks({
+  group,
+  t,
+}: {
+  group: MeetingRecordGroup;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const describeAbsenceT = (key: string) => t(`absence.${key}`);
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
       {group.entries.map((entry) => {
@@ -155,7 +179,11 @@ function RecordMarks({ group }: { group: MeetingRecordGroup }) {
         return (
           <span
             key={entry.id}
-            title={readable ? KIND_LABELS[entry.kind] : describeAbsence(entry.absence ?? "unavailable", entry.kind)}
+            title={
+              readable
+                ? t(`kindLabels.${entry.kind}`)
+                : describeAbsence(entry.absence ?? "unavailable", entry.kind, describeAbsenceT)
+            }
             className={cn(
               "flex min-w-0 items-center gap-1 text-[10px] font-medium",
               readable ? "text-ink" : "text-ink-subtle/70",
@@ -191,7 +219,13 @@ function LockOrState({ entry }: { entry: LibraryEntry }) {
  * still has the shape of a card — a grid where the empty ones collapse to half height reads as a
  * rendering fault.
  */
-function AbsenceNote({ entry }: { entry: LibraryEntry }) {
+function AbsenceNote({
+  entry,
+  t,
+}: {
+  entry: LibraryEntry;
+  t: ReturnType<typeof useTranslations>;
+}) {
   if (!entry.absence) return null;
 
   return (
@@ -203,7 +237,7 @@ function AbsenceNote({ entry }: { entry: LibraryEntry }) {
       ) : (
         <WarningCircle size={10} className="mt-px shrink-0" />
       )}
-      <span>{describeAbsence(entry.absence, entry.kind)}</span>
+      <span>{describeAbsence(entry.absence, entry.kind, (key) => t(`absence.${key}`))}</span>
     </p>
   );
 }

@@ -59,6 +59,23 @@ export const MEETING_TYPES: MeetingType[] = [
 ];
 
 /**
+ * Maps each type's stored `value` to a message key under `rooms.create.templatePicker.types` /
+ * `rooms.meetingType.types` (English source in `messages/en/rooms.json`). Display surfaces read
+ * a type's name through this map rather than `.label` directly, so the same type reads in the
+ * viewer's locale wherever it is shown; `.label` itself stays fixed English — it is what
+ * `meetingTypeByLabel` matches against, not UI text.
+ */
+export const MEETING_TYPE_I18N_KEYS: Record<string, string> = {
+  EVENT: "event",
+  CHANNEL_MEETING: "channelMeeting",
+  WEBINAR: "webinar",
+  COMPANY_MEETING: "companyMeeting",
+  VIRTUAL_APPOINTMENT: "virtualAppointment",
+  LIVE_EVENT: "liveEvent",
+  EXTERNAL_BRIDGE: "externalMeeting",
+};
+
+/**
  * The only type whose meeting does not happen on WarpTalk. The call is on Google Meet, Zoom or
  * Teams, and WarpTalk sits beside it translating: the two seats are the user and one stand-in for
  * everyone on the far side.

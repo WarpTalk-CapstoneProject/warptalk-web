@@ -1,0 +1,135 @@
+{
+  "accessDenied": {
+    "title": "Admin access required",
+    "description": "The global glossary is a system-wide baseline applied to every workspace. Only platform administrators can view or edit it."
+  },
+  "header": {
+    "eyebrow": "Platform terminology",
+    "title": "Global Glossary",
+    "description": "System-wide terminology baseline applied to every workspace (unless it opts out). A workspace’s own glossary term always overrides a matching global term."
+  },
+  "actions": {
+    "bulkImportCsv": "Bulk import CSV",
+    "newTerm": "New term"
+  },
+  "filters": {
+    "statusLabel": "Term status",
+    "status": {
+      "all": "All",
+      "draft": "Draft",
+      "published": "Published",
+      "archived": "Archived"
+    },
+    "searchPlaceholder": "Search term or translation…"
+  },
+  "table": {
+    "term": "Term",
+    "translation": "Translation",
+    "domain": "Domain",
+    "priority": "Priority",
+    "status": "Status",
+    "actions": "Actions",
+    "noDomain": "—",
+    "emptyTitle": "No terms found"
+  },
+  "rowActions": {
+    "edit": "Edit",
+    "publish": "Publish",
+    "archive": "Archive",
+    "viewAuditHistory": "View audit history",
+    "delete": "Delete"
+  },
+  "fields": {
+    "term": "Term",
+    "termPlaceholder": "e.g. architect",
+    "preferredTranslation": "Preferred Translation",
+    "preferredTranslationPlaceholder": "e.g. architect (keep verbatim)",
+    "sourceLanguageOptional": "Source Lang (opt.)",
+    "targetLanguageOptional": "Target Lang (opt.)",
+    "sourceLanguage": "Source Lang",
+    "targetLanguage": "Target Lang",
+    "allLanguages": "All languages",
+    "businessDomainOptional": "Business Domain (opt.)",
+    "businessDomain": "Business Domain",
+    "businessDomainPlaceholder": "e.g. IT, Finance",
+    "definition": "Definition",
+    "definitionPlaceholder": "required before publishing",
+    "usageNoteOptional": "Usage Note (opt.)",
+    "usageNote": "Usage Note",
+    "priority": "Priority (0-10)"
+  },
+  "createDialog": {
+    "title": "New Global Glossary Term",
+    "description": "Created as a draft — publish explicitly to make it live for every workspace.",
+    "cancel": "Cancel",
+    "submit": "Create Draft"
+  },
+  "editDialog": {
+    "title": "Edit Global Glossary Term",
+    "description": "Updates are audited and apply immediately when the term is published.",
+    "cancel": "Cancel",
+    "submit": "Save Changes"
+  },
+  "bulkImportDialog": {
+    "title": "Bulk Import (CSV)",
+    "description": "Headers: Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority (only Term and Translation are required). Imported rows land as drafts.",
+    "cancel": "Cancel",
+    "submit": "Import"
+  },
+  "auditDialog": {
+    "title": "Audit History",
+    "description": "Who changed this term, and when.",
+    "noEntries": "No audit entries yet.",
+    "actor": "Actor: {actorId}"
+  },
+  "deleteDialog": {
+    "title": "Delete Term?",
+    "description": "This removes <term></term> from the global glossary for every workspace. This cannot be undone from the UI.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "validation": {
+    "invalidLanguage": "Choose a language the system supports, or leave it as All languages.",
+    "termMin": "Term must be at least 3 characters — short/common words risk hijacking every meeting's STT.",
+    "translationRequired": "Preferred translation cannot be empty"
+  },
+  "toasts": {
+    "createdDraft": "Term \"{term}\" created as draft.",
+    "createFailed": "Failed to create term.",
+    "updated": "Term \"{term}\" updated.",
+    "updateFailed": "Failed to update term.",
+    "published": "\"{term}\" published — now live for every opted-in workspace.",
+    "publishFailedDefault": "Failed to publish term (a definition is required).",
+    "archived": "\"{term}\" archived.",
+    "archiveFailed": "Failed to archive term.",
+    "deleted": "\"{term}\" deleted.",
+    "deleteFailed": "Failed to delete term.",
+    "csvMissingColumns": "CSV must include at least Term and Translation columns.",
+    "csvNoValidRows": "No valid rows found.",
+    "csvUnknownLanguages": "Unknown language code(s): {codes}. Use {allowed}, or leave the column blank for all languages.",
+    "bulkImported": "Imported {imported}, skipped {skipped}.",
+    "bulkImportIssues": "{count, plural, one {# row} other {# rows}} had issues — check console.",
+    "bulkImportFailed": "Bulk import failed."
+  },
+  "list": {
+    "termCount": "{count, plural, one {# term} other {# terms}}",
+    "emptyDescription": "Add a term or import a CSV to set the platform-wide baseline.",
+    "anyLanguage": "Any language",
+    "noDomainGroup": "No domain",
+    "filters": {
+      "domain": "Domain",
+      "language": "Language"
+    },
+    "sortFields": {
+      "priority": "Priority (highest first)",
+      "updated": "Recently updated",
+      "created": "Recently created",
+      "term": "Term"
+    },
+    "columns": {
+      "languages": "Languages",
+      "updated": "Updated",
+      "created": "Created"
+    }
+  }
+}

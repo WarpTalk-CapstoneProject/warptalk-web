@@ -1,0 +1,131 @@
+{
+  "translation": {
+    "start": "翻訳を開始",
+    "stop": "翻訳を停止"
+  },
+  "hostControls": {
+    "label": "ホスト操作",
+    "menuAriaLabel": "ホスト操作",
+    "lockRoom": {
+      "lockedLabel": "ルームはロック中",
+      "unlockedLabel": "ルームをロック",
+      "description": "有効な間は新規参加をブロックします。"
+    },
+    "muteOnEntry": {
+      "label": "参加時にミュート",
+      "description": "新しく参加した人はマイクがミュートされた状態で始まります。"
+    },
+    "muteAll": {
+      "label": "全員をミュート",
+      "description": "あなた以外の全員をミュートします — 各自でミュート解除できます。"
+    }
+  },
+  "recording": {
+    "pending": "録画リクエストを処理中",
+    "stop": "録画を停止",
+    "start": "録画を開始"
+  },
+  "captions": {
+    "hide": "字幕を非表示にする（文字起こしは継続中）",
+    "show": "字幕を表示"
+  },
+  "screenShare": {
+    "stop": "画面共有を停止",
+    "start": "画面を共有"
+  },
+  "raiseHand": {
+    "lower": "挙手を下げる",
+    "raise": "挙手する"
+  },
+  "reactions": {
+    "send": "リアクションを送る"
+  },
+  "cloneCapture": {
+    "dismissAriaLabel": "音声キャプチャの状態を閉じる"
+  },
+  "trackControls": {
+    "muteMicrophone": "マイクをミュート",
+    "unmuteMicrophone": "マイクのミュートを解除",
+    "turnCameraOff": "カメラをオフにする",
+    "turnCameraOn": "カメラをオンにする",
+    "chooseMicrophoneAndSpeaker": "マイクとスピーカーを選択",
+    "chooseCamera": "カメラを選択"
+  },
+  "settingsButton": "設定",
+  "settingsMenu": {
+    "noiseSuppression": {
+      "label": "ノイズ抑制",
+      "on": "オン",
+      "off": "オフ"
+    },
+    "micNoiseFilter": {
+      "row": "マイクのノイズフィルター",
+      "submenuHeader": "マイクのノイズフィルター",
+      "description": "文字起こしされる前にマイク音声をフィルタリングします。音声認識の精度に影響するもので、他の人に聞こえる音は変わりません。"
+    },
+    "backgroundBlur": {
+      "label": "背景ぼかし",
+      "on": "オン",
+      "off": "オフ"
+    },
+    "layout": {
+      "label": "レイアウト",
+      "submenuHeader": "レイアウト",
+      "auto": "自動",
+      "grid": "グリッド",
+      "spotlight": "スポットライト",
+      "sidebar": "サイドバー"
+    },
+    "voice": {
+      "label": "音声",
+      "submenuHeader": "音声"
+    },
+    "transcript": {
+      "resume": "文字起こしを再開",
+      "pause": "文字起こしを一時停止",
+      "paused": "一時停止中",
+      "recording": "記録中"
+    },
+    "copyJoinLink": "参加リンクをコピー",
+    "copyRoomCode": "ルームコードをコピー",
+    "joinLinkToastLabel": "参加リンク",
+    "roomCodeToastLabel": "ルームコード"
+  },
+  "roomSpeed": {
+    "heading": "ルームの速度",
+    "flashMode": {
+      "label": "高速モード",
+      "editable": "相手がまだ話している間から翻訳を開始します。より速くなりますが、まだ実験的な機能です。",
+      "room": "ホストが設定しています。相手がまだ話している間から翻訳が始まります。",
+      "deployment": "プラットフォームの既定値に従っています。相手がまだ話している間から翻訳が始まります。",
+      "unknown": "現在の設定は不明です — このルームはプラットフォームの既定値を使用しています。"
+    }
+  },
+  "languagePicker": {
+    "triggerTitle": "使用する言語を選択",
+    "setLanguage": "言語を設定",
+    "myLanguage": {
+      "title": "自分の言語",
+      "hint": "あなたが話す言語であり、他の全員があなた向けに翻訳される言語でもあります。"
+    },
+    "otherLanguages": {
+      "title": "その他の言語",
+      "hint": "このルームでは提供されていませんが、翻訳自体は利用できます。",
+      "disclosure": "他の言語"
+    }
+  },
+  "micCheck": {
+    "title": "マイクチェック",
+    "providerKrisp": "Krisp",
+    "providerBrowser": "ブラウザ",
+    "liveLevelAriaLabel": "マイクのリアルタイム音量（相手に聞こえる音）",
+    "prompt": "何か話してみてください — このバーが相手に聞こえる音です。",
+    "off": "マイクがオフです — ミュートを解除して確認してください。",
+    "background": {
+      "silent": "背景ノイズ：静か — ノイズ抑制が効いています。",
+      "low": "背景ノイズ：小さめです。",
+      "noticeable": "背景ノイズ：目立ちます — 周囲の音が相手に聞こえています。",
+      "loud": "背景ノイズ：大きいです — マイクの近くに何があるか確認してください。"
+    }
+  }
+}

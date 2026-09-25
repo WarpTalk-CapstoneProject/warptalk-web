@@ -19,6 +19,8 @@ const PLUGINS_QUERY_ROOT = ["assistant", "plugins"] as const;
 
 export const ASSISTANT_KEYS = {
   conversations: (workspaceId: string) => ["assistant", "conversations", workspaceId] as const,
+  /** Its own key root, so a platform list can never be served from a workspace list's cache. */
+  platformConversations: ["assistant", "platform", "conversations"] as const,
   conversation: (id: string) => ["assistant", "conversation", id] as const,
   skills: ["assistant", "skills"] as const,
   pluginsRoot: PLUGINS_QUERY_ROOT,
@@ -38,6 +40,18 @@ export function useAssistantConversations(workspaceId: string | null) {
       return data;
     },
     enabled: !!workspaceId,
+  });
+}
+
+/** A system admin's platform-scope conversations. Pass `enabled: false` outside platform mode. */
+export function usePlatformAssistantConversations(enabled: boolean) {
+  return useQuery({
+    queryKey: ASSISTANT_KEYS.platformConversations,
+    queryFn: async () => {
+      const { data } = await assistantService.platform.listConversations();
+      return data;
+    },
+    enabled,
   });
 }
 
@@ -62,6 +76,38 @@ export function useLoadAssistantConversation() {
     mutationFn: async (conversationId: string) => {
       const { data } = await assistantService.getConversation(conversationId);
       return data;
+    },
+  });
+}
+
+/** Imperative load of one platform-scope conversation — see useLoadAssistantConversation. */
+export function useLoadPlatformAssistantConversation() {
+  return useMutation({
+    mutationFn: async (conversationId: string) => {
+      const { data } = await assistantService.platform.getConversation(conversationId);
+      return data;
+    },
+  });
+}
+
+export function useCreatePlatformAssistantConversation() {
+  return useMutation({
+    mutationFn: async () => {
+      const { data } = await assistantService.platform.createConversation();
+      return data;
+    },
+  });
+}
+
+export function useSendPlatformAssistantMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ conversationId, content }: { conversationId: string; content: string }) => {
+      const { data } = await assistantService.platform.sendMessage(conversationId, content);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.platformConversations });
     },
   });
 }
@@ -160,6 +206,27 @@ export function usePluginConnectUrl() {
     // let a user finish consent, come back inside the minute, and be served the pre-consent answer
     // from cache. Marking it stale here is what lets the global `refetchOnWindowFocus` do its job
     // on every plugin surface, not just the one that started the flow.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
+    },
+  });
+}
+
+export function useConnectPluginWithApiKey() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      pluginKey,
+      apiKey,
+      workspaceId,
+    }: {
+      pluginKey: string;
+      apiKey: string;
+      workspaceId?: string | null;
+    }) => {
+      const { data } = await assistantService.connectPluginWithApiKey(pluginKey, apiKey, workspaceId);
+      return data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ASSISTANT_KEYS.pluginsRoot });
     },

@@ -1,0 +1,102 @@
+{
+  "searchPlaceholder": "用語を検索",
+  "newGlossary": "新しい用語集",
+  "import": "インポート",
+  "addTerm": "用語を追加",
+  "jumpToLetter": "文字にジャンプ",
+  "removeTermTitle": "用語を削除",
+  "deleteThisGlossary": "この用語集を削除",
+  "emptyState": {
+    "title": "まだ用語集がありません",
+    "description": "用語集は、ミーティング中に用語がどう聞き取られ翻訳されるかを固定します — 製品名、略語、分野によって意味が変わる言葉など。ここでの用語はプラットフォーム全体の用語集より優先されます。すでにリストをお持ちですか?入力する代わりにCSVや表計算ファイルをインポートできます。",
+    "importTerms": "用語をインポート"
+  },
+  "emptyTerms": {
+    "titleSearch": "その検索に一致する用語はありません",
+    "titleEmpty": "この用語集にはまだ用語がありません",
+    "description": "このワークスペースで特定の聞き取り方・訳し方をしたい単語を追加するか、すでにあるCSVや表計算ファイルをインポートしてください。"
+  },
+  "dialogs": {
+    "newGlossary": {
+      "title": "新しい用語集",
+      "description": "1つの用語集は1方向の翻訳を対象とします。もう1つの言語ペアには別の用語集を追加してください。",
+      "namePlaceholder": "名前",
+      "descriptionPlaceholder": "説明(任意)",
+      "spokenLanguagePlaceholder": "話す言語",
+      "translatedIntoPlaceholder": "翻訳先の言語",
+      "chooseBothLanguages": "両方の言語を選択してください。",
+      "creating": "作成中…",
+      "create": "用語集を作成"
+    },
+    "addTerm": {
+      "title": "用語を追加",
+      "description": "このワークスペースのすべてのミーティングで、音声認識と翻訳の両方にリアルタイムで適用されます。",
+      "termAsSpokenPlaceholder": "話される用語",
+      "translateAsPlaceholder": "訳語",
+      "domainPlaceholder": "分野(任意)",
+      "partOfSpeechPlaceholder": "品詞(任意)",
+      "definitionPlaceholder": "定義(任意)",
+      "contextPlaceholder": "文脈 — この訳が適用される場面(任意)",
+      "adding": "追加中…",
+      "addTerm": "用語を追加"
+    },
+    "import": {
+      "title": "用語をインポート",
+      "description": "<glossaryName></glossaryName>へインポートします。先頭付近の行で列名を指定してください。<term>Term</term>列と<translation>Translation</translation>列は必須です。Field、Definition、Note、Part of speech、Priorityは存在する場合に使用されます。",
+      "expectedPairSame": "この用語集は{source} → {target}なので、2列目は翻訳ではなく各用語の意味です。",
+      "expectedPairDifferent": "この用語集は{source} → {target}です。2列目は{target}にしてください。",
+      "downloadSample": "サンプルファイルをダウンロード",
+      "chooseFile": ".xlsxまたは.csvファイルを選択",
+      "chooseDifferentFile": "別のファイルを選択",
+      "excelOrCsv": "Excelまたはカンマ区切り",
+      "readingFile": "ファイルを読み込み中…",
+      "noRows": "このファイルには行がありません。",
+      "columnsFoundButEmpty": "列は見つかりましたが、その下の行はすべて空でした。",
+      "missingColumns": "先頭の行で列名を指定する必要があり、Term列とTranslation列が必須です。",
+      "fileCouldNotBeRead": "このファイルを読み込めませんでした({detail})。.xlsxまたは.csvとして保存して再試行するか、以下のサンプルから始めてください。",
+      "rowsReady": "{count}行の準備ができました。この用語集に既にある用語はスキップされ、件数はインポート後に報告されます。",
+      "showingFirst": "{count}件中、最初の50件を表示しています。全{count}件がインポートされます。",
+      "term": "Term",
+      "translation": "Translation",
+      "field": "Field",
+      "cancel": "キャンセル",
+      "importing": "インポート中…",
+      "importCount": "{count}件の用語をインポート"
+    }
+  },
+  "toasts": {
+    "imported": "{count}件の用語をインポートしました。",
+    "importedSkipped": "{count}件の用語をインポートしました。{skipped}件はこの用語集に既にあるためスキップしました。",
+    "moreErrors": "…他{count}件。",
+    "importFailed": "ファイルをインポートできませんでした。",
+    "glossaryCreatedWithTerms": "{count}件の用語とともに用語集を作成しました。",
+    "glossaryCreated": "用語集を作成しました。",
+    "glossaryTermsFailed": "用語集は作成されましたが、用語を追加できませんでした。",
+    "glossaryCreateFailed": "用語集を作成できませんでした。",
+    "termAdded": "用語を追加しました。",
+    "termAddFailed": "用語を追加できませんでした。",
+    "glossaryDeleted": "用語集を削除しました。",
+    "glossaryDeleteFailed": "用語集を削除できませんでした。",
+    "termRemoved": "用語を削除しました。",
+    "termRemoveFailed": "用語を削除できませんでした。"
+  },
+  "validation": {
+    "nameMin": "名前は2文字以上で入力してください",
+    "sourceLanguageRequired": "話される言語を選択してください",
+    "targetLanguageRequired": "翻訳先の言語を選択してください",
+    "sourceTermRequired": "用語を入力してください",
+    "targetTermRequired": "使用する訳語を入力してください"
+  },
+  "initialTerms": {
+    "addTranslationOrClear": "訳語を入力するか、用語を消してください。",
+    "addTermOrClear": "用語を入力するか、訳語を消してください。"
+  },
+  "initialTermsField": {
+    "title": "最初の用語",
+    "optionalHint": "任意 — 後から追加できます",
+    "termInLanguage": "{language}での用語",
+    "useThisInLanguage": "{language}でこれを使う",
+    "removeTerm": "用語{index}を削除",
+    "addTerm": "用語を追加"
+  }
+}

@@ -1,0 +1,138 @@
+{
+  "page": {
+    "eyebrow": "Revenue",
+    "title": "Subscriptions",
+    "description": "Every plan on the platform, what it is worth per month, and what runs out next.",
+    "refresh": "Refresh",
+    "summaryError": "Revenue totals could not be loaded. The directory below is unaffected.",
+    "summary": {
+      "monthlyRecurring": {
+        "label": "Monthly recurring",
+        "helperMultiCurrency": "Kept per currency — not converted",
+        "helperDefault": "Excludes trials and cancellations"
+      },
+      "active": {
+        "label": "Active",
+        "helper": "{count} still in trial"
+      },
+      "endingWithin14Days": {
+        "label": "Renewing in 14 days",
+        "helper": "Renewals and expiries alike"
+      },
+      "pastDue": {
+        "label": "Past due",
+        "helper": "Service suspended on an overdue invoice"
+      }
+    },
+    "statusTabs": {
+      "label": "Subscription status",
+      "all": "All",
+      "active": "Active",
+      "pending": "Pending",
+      "suspended": "Suspended",
+      "cancelled": "Cancelled",
+      "expired": "Expired"
+    },
+    "loading": "Loading…",
+    "subscriptionCount": "{count, plural, =1 {# subscription} other {# subscriptions}}",
+    "sort": {
+      "label": "Sort",
+      "periodEndAsc": "Renews soonest",
+      "periodEndDesc": "Renews latest",
+      "creditsAsc": "Fewest credits left",
+      "createdDesc": "Newest",
+      "createdAsc": "Oldest"
+    },
+    "errorState": {
+      "title": "Subscriptions could not be loaded.",
+      "description": "Check the billing service and that your session still holds the platform admin role.",
+      "retry": "Try again"
+    },
+    "emptyState": {
+      "title": "No subscriptions match this filter",
+      "description": "Pick a different status tab."
+    },
+    "row": {
+      "noRenew": "no renew",
+      "pastDue": "past due",
+      "changePlan": "Change plan",
+      "reactivate": "Reactivate",
+      "cancel": "Cancel",
+      "value": {
+        "trial": "In trial",
+        "cancelled": "Cancelled"
+      }
+    },
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "columns": {
+      "plan": "Plan",
+      "status": "Status",
+      "value": "Monthly value",
+      "credits": "Credits left",
+      "periodEnd": "Period ends",
+      "actions": "Actions"
+    },
+    "filters": {
+      "plan": "Plan",
+      "service": "Service state",
+      "serviceStates": {
+        "healthy": "Healthy",
+        "low_balance": "Low balance",
+        "in_overage": "In overage",
+        "suspended": "Service suspended"
+      },
+      "cycle": "Billing cycle",
+      "cycles": {
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      },
+      "autoRenew": "Auto-renew",
+      "renews": "Renews",
+      "doesNotRenew": "Does not renew",
+      "workspace": "Workspace",
+      "workspacePlaceholder": "Search workspaces by name or slug…",
+      "periodEnd": "Period ends"
+    },
+    "sortFields": {
+      "periodEnd": "Period end",
+      "created": "Created",
+      "credits": "Credits left"
+    }
+  },
+  "lifecycleDialog": {
+    "cancel": {
+      "title": "Cancel this subscription?",
+      "description": "The Stripe subscription is cancelled, entitlements are republished and the workspace owner is notified. A trial ends immediately; a paid subscription runs to the end of its period.",
+      "confirm": "Cancel subscription",
+      "pending": "Cancelling…"
+    },
+    "reactivate": {
+      "title": "Reactivate this subscription?",
+      "description": "Undoes a cancellation that has not taken effect yet: renewal is switched back on for the period already paid for. Nothing is charged now. It does not lift a service suspension.",
+      "confirm": "Reactivate subscription",
+      "pending": "Reactivating…"
+    },
+    "workspacePrefix": "workspace",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "Recorded on the subscription.",
+    "reasonTooShort": "Give a reason of at least ten characters. It is the only record of why.",
+    "genericError": "The subscription could not be updated.",
+    "back": "Back"
+  },
+  "changePlanDialog": {
+    "title": "Change plan",
+    "description": "Moves this workspace's subscription from <strong>{planName}</strong> onto the plan you choose. The credit balance does not move with it — compensate separately with a credit adjustment if the change warrants one.",
+    "newPlanLabel": "New plan",
+    "loadingPlans": "Loading plans…",
+    "choosePlan": "Choose a plan…",
+    "currentSuffix": " (current)",
+    "genericError": "The plan could not be changed.",
+    "cancel": "Cancel",
+    "confirm": "Change plan",
+    "pending": "Changing…"
+  }
+}

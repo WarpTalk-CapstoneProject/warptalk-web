@@ -14,18 +14,21 @@
  * the thing they wanted lived under. The boundary is now a band divider inside one page: knobs
  * first, reference data second, with the reason it is read-only stated where it applies.
  *
- * What is read-only here is read-only for a reason that has not changed: neither service behind
- * the catalog or the consent ledger can record WHO threw a switch, so those move by migration,
- * where the change is reviewed and has an author.
+ * The language catalog became editable with WT-691: translation-room now records every catalog
+ * change in the platform audit log over gRPC before saving it (and refuses the change when it
+ * cannot), which was the one reason it was read-only. The consent ledger is still read-only —
+ * its service cannot record who threw a switch.
  */
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   ArrowsClockwise,
   GearSix,
   Globe,
   Microphone,
   PencilSimple,
+  Plus,
   Warning,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
@@ -49,12 +52,23 @@ import {
   useAdminLanguageCatalog,
   useAdminVoiceConsentSummary,
 } from "@/hooks/use-admin-configuration";
+import {
+  LanguageFormDialog,
+  LanguageToggleDialog,
+} from "@/components/admin/language-catalog-editor";
 import { compareLanguageCatalog } from "@/lib/language/catalog-drift";
+import { fxLineView } from "@/lib/admin/insights-pnl";
+import { useAdminFxActions, useAdminFxRate } from "@/hooks/use-admin-insights";
 import { getErrorMessage } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
-import type { AdminVoiceConsentSummaryDto } from "@/types/admin-configuration";
+import type {
+  AdminSupportedLanguageDto,
+  AdminVoiceConsentSummaryDto,
+} from "@/types/admin-configuration";
 
 const numberFormatter = new Intl.NumberFormat("en-US");
+// USD per Cartesia credit is ~0.00004: the default six-digit cut would show 0.000039.
+const usdPerCreditFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 10 });
 
 /**
  * The divider that replaced the route split: what you can change, then what you can only read.
@@ -91,16 +105,15 @@ function SettingRow({
 }
 
 function PanelError({ what, onRetry }: { what: string; onRetry: () => void }) {
+  const t = useTranslations("adminPlansSettings.settings.panelError");
   return (
     <div className="flex items-start gap-3 px-4 py-8 text-sm">
       <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
       <div>
-        <p className="font-medium">{what} could not be loaded.</p>
-        <p className="mt-1 text-ink-muted">
-          Check the service and that your session still holds the platform admin role.
-        </p>
+        <p className="font-medium">{t("message", { what })}</p>
+        <p className="mt-1 text-ink-muted">{t("hint")}</p>
         <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
-          Try again
+          {t("tryAgain")}
         </Button>
       </div>
     </div>
@@ -108,6 +121,7 @@ function PanelError({ what, onRetry }: { what: string; onRetry: () => void }) {
 }
 
 function BillingPolicyPanel() {
+  const t = useTranslations("adminPlansSettings.settings.billingPolicy");
   const policyQuery = useAdminBillingPolicy();
   const updatePolicy = useUpdateAdminBillingPolicy();
 
@@ -122,28 +136,25 @@ function BillingPolicyPanel() {
     try {
       await updatePolicy.mutateAsync({ vatRate: parsed });
       setDraft(null);
-      toast.success("Billing policy saved.");
+      toast.success(t("saveSuccessToast"));
     } catch (error) {
-      toast.error(getErrorMessage(error, "The billing policy could not be saved."));
+      toast.error(getErrorMessage(error, t("saveErrorToast")));
     }
   };
 
   return (
     <AdminPanel className="mt-3">
       {policyQuery.isError ? (
-        <PanelError what="The billing policy" onRetry={() => void policyQuery.refetch()} />
+        <PanelError what={t("errorWhat")} onRetry={() => void policyQuery.refetch()} />
       ) : (
-        <SettingRow
-          label="VAT rate"
-          hint="Applied to every invoice the platform raises. A fraction: 0.1 is 10%."
-        >
+        <SettingRow label={t("vatLabel")} hint={t("vatHint")}>
           <div className="flex items-center gap-2">
             <Input
               value={value}
               onChange={(event) => setDraft(event.target.value)}
               inputMode="decimal"
               disabled={policyQuery.isPending || updatePolicy.isPending}
-              aria-label="VAT rate"
+              aria-label={t("vatAriaLabel")}
               className="h-9 w-28 text-right tabular-nums"
             />
             <Button
@@ -151,7 +162,7 @@ function BillingPolicyPanel() {
               disabled={!isDirty || !isValid || updatePolicy.isPending}
               onClick={() => void save()}
             >
-              {updatePolicy.isPending ? "Saving…" : "Save"}
+              {updatePolicy.isPending ? t("saving") : t("save")}
             </Button>
           </div>
         </SettingRow>
@@ -160,7 +171,92 @@ function BillingPolicyPanel() {
   );
 }
 
+
+const fxInstant = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+/**
+ * The USD→VND rate: Stripe's by default (recorded daily by billing), with its source and as-of time,
+ * an amber warning whenever Stripe has not answered for a day (the reports then run on the last known
+ * rate), and an explicit, reversible override. Replaces the hand-typed 26,300.
+ */
+function FxRateRow({ fallbackRate }: { fallbackRate: number }) {
+  const t = useTranslations("adminPlansSettings.settings.pricingEconomics");
+  const fxQuery = useAdminFxRate();
+  const actions = useAdminFxActions();
+  const fx = fxQuery.data ?? null;
+  const view = fxLineView(fx, fxInstant);
+  const busy = actions.refresh.isPending || actions.clearOverride.isPending;
+
+  const refresh = async () => {
+    try {
+      const result = await actions.refresh.mutateAsync();
+      if (result.error) toast.warning(t("fxRefreshPartial", { error: result.error }));
+      else toast.success(t("fxRefreshed"));
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("fxRefreshError")));
+    }
+  };
+
+  const backToStripe = async () => {
+    try {
+      await actions.clearOverride.mutateAsync();
+    } catch (error) {
+      toast.error(getErrorMessage(error, t("fxOverrideError")));
+    }
+  };
+
+  return (
+    <div className="border-b border-hairline/60 px-4 py-3.5">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-[13px] font-medium text-ink">{t("fxRateLabel")}</p>
+          <p className="mt-0.5 text-xs text-ink-muted">{t("fxRateHint")}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <span className={cn("text-[13px] font-medium tabular-nums", view?.tone === "warning" ? "text-warning" : "text-ink")}>
+            {view ? view.rate : `${numberFormatter.format(fallbackRate)} VND/USD`}
+          </span>
+          {view ? (
+            <p className="mt-0.5 text-[11px] text-ink-muted">
+              {view.asOf ? t("fxSourceAsOf", { source: view.source, asOf: view.asOf }) : view.source}
+            </p>
+          ) : fxQuery.isError ? (
+            <p className="mt-0.5 text-[11px] text-warning">{t("fxStatusUnavailable")}</p>
+          ) : null}
+        </div>
+      </div>
+
+      {view?.warning ? (
+        <p role="status" className="mt-2 flex items-start gap-1.5 rounded-md bg-warning/10 px-2.5 py-1.5 text-[12px] text-warning">
+          <Warning size={14} className="mt-0.5 shrink-0" />
+          {view.warning}
+        </p>
+      ) : null}
+
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <Button variant="outline" size="sm" disabled={busy || !fx} onClick={() => void refresh()}>
+          <ArrowsClockwise size={14} />
+          {actions.refresh.isPending ? t("fxRefreshing") : t("fxRefresh")}
+        </Button>
+        {/* The rate is Stripe's. A manual rate set before that rule can still be cleared here. */}
+        {fx?.mode === "manual" ? (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => void backToStripe()}>
+            {t("fxUseStripe")}
+          </Button>
+        ) : null}
+        {fx?.mode === "manual" && fx.latestStripe ? (
+          <span className="text-[11px] text-ink-muted">
+            {t("fxStripeWouldBe", { rate: numberFormatter.format(fx.latestStripe.rate), date: fx.latestStripe.rateDate })}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function PricingEconomicsPanel() {
+  const t = useTranslations("adminPlansSettings.settings.pricingEconomics");
   const configQuery = useAdminPricingConfig();
   const updateConfig = useUpdateAdminPricingConfig();
   const [isEditing, setIsEditing] = useState(false);
@@ -170,10 +266,7 @@ function PricingEconomicsPanel() {
     <>
       <AdminPanel className="mt-3">
         {configQuery.isError ? (
-          <PanelError
-            what="The pricing configuration"
-            onRetry={() => void configQuery.refetch()}
-          />
+          <PanelError what={t("errorWhat")} onRetry={() => void configQuery.refetch()} />
         ) : configQuery.isPending || !config ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 4 }).map((_, index) => (
@@ -182,36 +275,38 @@ function PricingEconomicsPanel() {
           </div>
         ) : (
           <>
-            <SettingRow label="FX rate (USD → VND)" hint="Reads a USD provider cost in VND terms.">
+            <FxRateRow fallbackRate={config.fxRateUsdVnd} />
+            {/* Framed like the FX rate beside it: a conversion Insights applies to a measured
+                quantity, not a price anyone is charged. */}
+            <SettingRow label={t("cartesiaUsdPerCreditLabel")} hint={t("cartesiaUsdPerCreditHint")}>
               <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.fxRateUsdVnd)}
+                {config.cartesiaUsdPerCredit == null
+                  ? "—"
+                  : t("cartesiaUsdPerCreditValue", {
+                      price: usdPerCreditFormatter.format(config.cartesiaUsdPerCredit),
+                    })}
               </span>
             </SettingRow>
-            <SettingRow label="Credit value" hint="What one credit costs a customer, in VND.">
+            {/* WT-690: no credit value or per-credit price floor here. Stripe owns customer
+                prices; both values are still read by billing (top-up pricing, plan/contract floor),
+                so they stay stored and change by migration, not from this page. */}
+            <SettingRow label={t("minimumContractPriceLabel")} hint={t("minimumContractPriceHint")}>
               <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.creditValueVnd)} ₫
+                {t("minimumContractPriceValue", {
+                  vnd: numberFormatter.format(config.minimumContractPriceVnd),
+                  usd: numberFormatter.format(config.minimumContractPriceUsd),
+                })}
               </span>
             </SettingRow>
             <SettingRow
-              label="Minimum price per credit"
-              hint="The plan validator's price floor — a VND plan cannot sell credits below this."
+              label={t("defaultInvoiceTermsLabel")}
+              hint={t("defaultInvoiceTermsHint")}
             >
               <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.minimumPricePerCreditVnd)} ₫
-              </span>
-            </SettingRow>
-            <SettingRow label="Minimum contract price" hint="Per cycle, before a plan is valid.">
-              <span className="text-[13px] tabular-nums text-ink">
-                {numberFormatter.format(config.minimumContractPriceVnd)} ₫ ·{" "}
-                {numberFormatter.format(config.minimumContractPriceUsd)} $
-              </span>
-            </SettingRow>
-            <SettingRow
-              label="Default invoice terms"
-              hint="Days to pay, and the grace window after that, for plans that do not override them."
-            >
-              <span className="text-[13px] tabular-nums text-ink">
-                {config.defaultInvoiceTermsDays} days · {config.defaultInvoiceGraceHours} h grace
+                {t("defaultInvoiceTermsValue", {
+                  days: config.defaultInvoiceTermsDays,
+                  hours: config.defaultInvoiceGraceHours,
+                })}
               </span>
             </SettingRow>
           </>
@@ -230,7 +325,7 @@ function PricingEconomicsPanel() {
         <div className="mt-3">
           <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
             <PencilSimple size={14} />
-            Edit pricing economics
+            {t("editButton")}
           </Button>
         </div>
       ) : null}
@@ -238,15 +333,44 @@ function PricingEconomicsPanel() {
   );
 }
 
+function usageText(
+  row: AdminSupportedLanguageDto,
+  t: ReturnType<typeof useTranslations>,
+): { text: string; live: boolean } {
+  const live = row.liveMeetings ?? 0;
+  const upcoming = row.upcomingMeetings ?? 0;
+  if (live > 0) return { text: t("manage.usageLive", { count: live }), live: true };
+  if (upcoming > 0) return { text: t("manage.usageUpcoming", { count: upcoming }), live: false };
+  return { text: t("manage.usageNone"), live: false };
+}
+
 function LanguageCatalogPanel() {
+  const t = useTranslations("adminPlansSettings.settings.languageCatalog");
   const languagesQuery = useAdminLanguageCatalog();
   const comparison = useMemo(
     () => (languagesQuery.data ? compareLanguageCatalog(languagesQuery.data) : null),
     [languagesQuery.data],
   );
+  // WT-691: add / edit / enable / disable. `formLanguage` undefined = closed, null = add.
+  const [formLanguage, setFormLanguage] = useState<AdminSupportedLanguageDto | null | undefined>(undefined);
+  const [toggleLanguage, setToggleLanguage] = useState<AdminSupportedLanguageDto | null>(null);
+  const catalog = languagesQuery.data ?? [];
+  const activeCount = catalog.filter((language) => language.isActive).length;
 
   return (
     <>
+      <div className="mt-2 flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setFormLanguage(null)}
+          disabled={!languagesQuery.data}
+        >
+          <Plus size={14} />
+          {t("manage.add")}
+        </Button>
+      </div>
+
       {/* The drift banner. languages.ts has warned in a comment since it was written that its
           rows and the server catalog can diverge; nothing has ever checked. This is that check,
           run against live data. */}
@@ -256,14 +380,12 @@ function LanguageCatalogPanel() {
             <Warning size={16} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
             <div>
               <p className="font-medium">
-                The meeting picker offers {comparison.offeredButNotSupported.length} language
-                {comparison.offeredButNotSupported.length === 1 ? "" : "s"} this catalog will
-                reject.
+                {t("driftTitle", { count: comparison.offeredButNotSupported.length })}
               </p>
               <p className="mt-1 text-ink-muted">
-                {comparison.offeredButNotSupported.map((entry) => entry.name).join(", ")} — anyone
-                choosing one gets &ldquo;Source language is not supported.&rdquo; Either seed the
-                row or drop it from the picker.
+                {t("driftBody", {
+                  names: comparison.offeredButNotSupported.map((entry) => entry.name).join(", "),
+                })}
               </p>
             </div>
           </div>
@@ -272,7 +394,7 @@ function LanguageCatalogPanel() {
 
       <AdminPanel className={comparison && comparison.offeredButNotSupported.length > 0 ? "" : "mt-3"}>
         {languagesQuery.isError ? (
-          <PanelError what="The language catalog" onRetry={() => void languagesQuery.refetch()} />
+          <PanelError what={t("errorWhat")} onRetry={() => void languagesQuery.refetch()} />
         ) : languagesQuery.isPending ? (
           <ul>
             {Array.from({ length: 6 }).map((_, index) => (
@@ -282,17 +404,17 @@ function LanguageCatalogPanel() {
             ))}
           </ul>
         ) : !comparison || comparison.rows.length === 0 ? (
-          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">
-            The catalog is empty — no room in any language can be created.
-          </p>
+          <p className="px-4 py-10 text-center text-[12px] text-ink-muted">{t("empty")}</p>
         ) : (
           <>
             <div className="hidden border-b border-hairline/60 px-4 py-2 text-[11px] font-medium text-ink-muted md:flex">
-              <span className="w-[70px]">Code</span>
-              <span className="flex-1">Name</span>
-              <span className="w-[150px]">Native</span>
-              <span className="w-[90px]">Rooms</span>
-              <span className="w-[130px]">In this app</span>
+              <span className="w-[70px]">{t("columns.code")}</span>
+              <span className="flex-1">{t("columns.name")}</span>
+              <span className="w-[150px]">{t("columns.native")}</span>
+              <span className="w-[90px]">{t("columns.rooms")}</span>
+              <span className="w-[110px]">{t("manage.columns.usage")}</span>
+              <span className="w-[130px]">{t("columns.inThisApp")}</span>
+              <span className="w-[150px]" aria-hidden />
             </div>
             <ul>
               {comparison.rows.map((row) => (
@@ -314,9 +436,22 @@ function LanguageCatalogPanel() {
                           : "border-border bg-surface-2 text-ink-muted",
                       )}
                     >
-                      {row.isActive ? "allowed" : "off"}
+                      {row.isActive ? t("badgeAllowed") : t("badgeOff")}
                     </span>
                   </span>
+                  {(() => {
+                    const usage = usageText(row, t);
+                    return (
+                      <span
+                        className={cn(
+                          "w-[110px] shrink-0 text-[12px] tabular-nums",
+                          usage.live ? "font-medium text-emerald-600 dark:text-emerald-400" : "text-ink-muted",
+                        )}
+                      >
+                        {usage.text}
+                      </span>
+                    );
+                  })()}
                   {/* Not shipped means every name this app renders for that language falls back
                       to the raw code — the user sees "de", not "German". */}
                   <span
@@ -327,10 +462,18 @@ function LanguageCatalogPanel() {
                   >
                     {row.shippedInApp
                       ? row.offeredForMeetings
-                        ? "offered"
-                        : "known"
-                      : "renders as a code"}
+                        ? t("shippedOffered")
+                        : t("shippedKnown")
+                      : t("shippedAsCode")}
                   </span>
+                  <div className="flex w-[150px] shrink-0 items-center gap-1.5 md:justify-end">
+                    <Button variant="ghost" size="sm" onClick={() => setFormLanguage(row)}>
+                      {t("manage.edit")}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setToggleLanguage(row)}>
+                      {row.isActive ? t("manage.disable") : t("manage.enable")}
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -338,16 +481,34 @@ function LanguageCatalogPanel() {
         )}
       </AdminPanel>
 
+      <LanguageFormDialog
+        open={formLanguage !== undefined}
+        language={formLanguage ?? null}
+        catalog={catalog}
+        onOpenChange={(open) => {
+          if (!open) setFormLanguage(undefined);
+        }}
+      />
+      <LanguageToggleDialog
+        language={toggleLanguage}
+        activeCount={activeCount}
+        onOpenChange={(open) => {
+          if (!open) setToggleLanguage(null);
+        }}
+      />
+
       <p className="mt-2 text-[12px] text-ink-muted">
-        This is <span className="font-mono">translation_room.supported_languages</span>, the table
-        room validation queries — not <span className="font-mono">platform.supported_languages</span>,
-        which the seed script still writes and nothing validates against since migration 036.
+        {t.rich("footnote", {
+          code1: (chunks) => <span className="font-mono">{chunks}</span>,
+          code2: (chunks) => <span className="font-mono">{chunks}</span>,
+        })}
       </p>
     </>
   );
 }
 
 function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }) {
+  const t = useTranslations("adminPlansSettings.settings.voiceConsent");
   const granted = summary.byStatus
     .filter((row) => row.status === "GRANTED")
     .reduce((total, row) => total + row.people, 0);
@@ -359,9 +520,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
     <div className="px-4 py-4">
       <div className="grid gap-3 sm:grid-cols-3">
         {summary.byStatus.length === 0 ? (
-          <p className="text-[12px] text-ink-muted sm:col-span-3">
-            Nobody has been asked for voice consent yet.
-          </p>
+          <p className="text-[12px] text-ink-muted sm:col-span-3">{t("nobodyAsked")}</p>
         ) : (
           summary.byStatus.map((row) => (
             <div key={`${row.consentType}-${row.status}`}>
@@ -372,7 +531,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
               <p className="mt-0.5 text-[11px] text-ink-subtle">
                 {/* People, not rows. The table is append-only, so counting rows would count
                     everyone who has ever agreed — including those who withdrew. */}
-                people, current decision
+                {t("peopleCurrentDecision")}
               </p>
             </div>
           ))
@@ -381,9 +540,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
 
       {granted > 0 ? (
         <div className="mt-5 border-t border-hairline/60 pt-4">
-          <p className="text-[11px] font-medium text-ink-muted">
-            Live grants by the wording agreed to
-          </p>
+          <p className="text-[11px] font-medium text-ink-muted">{t("liveGrantsHeading")}</p>
           <ul className="mt-2 space-y-1.5">
             {summary.currentGrantsByTextVersion.map((row) => {
               const current = row.textVersion === summary.currentTextVersion;
@@ -396,11 +553,11 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
                     <span className="truncate font-mono text-[12px]">{row.textVersion}</span>
                     {current ? (
                       <span className="shrink-0 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                        current
+                        {t("current")}
                       </span>
                     ) : (
                       <span className="shrink-0 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-                        superseded
+                        {t("superseded")}
                       </span>
                     )}
                   </span>
@@ -414,11 +571,9 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
           {outdated.length > 0 ? (
             <p className="mt-3 text-[12px] text-ink-muted">
               {/* The question the version column was added to answer. */}
-              {numberFormatter.format(outdated.reduce((total, row) => total + row.people, 0))} live
-              grant
-              {outdated.reduce((total, row) => total + row.people, 0) === 1 ? " was" : "s were"}{" "}
-              given under wording that has since been replaced. Consent stays valid for what it
-              said at the time — this is the count to re-ask if the change was material.
+              {t("outdatedNotice", {
+                count: outdated.reduce((total, row) => total + row.people, 0),
+              })}
             </p>
           ) : null}
         </div>
@@ -428,6 +583,7 @@ function VoiceConsentPanel({ summary }: { summary: AdminVoiceConsentSummaryDto }
 }
 
 export default function AdminSettingsPage() {
+  const t = useTranslations("adminPlansSettings.settings");
   const languagesQuery = useAdminLanguageCatalog();
   const consentQuery = useAdminVoiceConsentSummary();
 
@@ -436,10 +592,10 @@ export default function AdminSettingsPage() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Configuration"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<GearSix size={14} weight="fill" />}
-        title="Platform settings"
-        description="Everything the platform runs on, in the order you can act on it: the knobs you can turn, then the reference data you can only read."
+        title={t("title")}
+        description={t("description")}
         actions={
           <Button
             variant="outline"
@@ -451,56 +607,47 @@ export default function AdminSettingsPage() {
             disabled={isRefreshing}
           >
             <ArrowsClockwise size={14} className={cn(isRefreshing && "animate-spin")} />
-            Refresh
+            {t("refresh")}
           </Button>
         }
       />
 
-      <Band
-        title="Knobs you can turn"
-        note="Saved from this page, applied platform-wide, recorded against your account."
-      />
+      <Band title={t("bandKnobs.title")} note={t("bandKnobs.note")} />
 
-      <h3 className="mt-4 text-sm font-semibold text-ink">Billing policy</h3>
+      <h3 className="mt-4 text-sm font-semibold text-ink">{t("billingPolicyHeading")}</h3>
       <BillingPolicyPanel />
 
-      <h3 className="mt-6 text-sm font-semibold text-ink">Pricing economics</h3>
-      <p className="mt-1 text-xs text-ink-muted">
-        The same configuration the plan validator and the rate-card margin reader consult — also
-        reachable from Plans &amp; pricing.
-      </p>
+      <h3 className="mt-6 text-sm font-semibold text-ink">{t("pricingEconomicsHeading")}</h3>
+      <p className="mt-1 text-xs text-ink-muted">{t("pricingEconomicsSubnote")}</p>
       <PricingEconomicsPanel />
 
-      <Band title="Reference data" note="Read-only here — these change by migration." />
+      <Band title={t("bandReference.title")} note={t("bandReference.note")} />
 
       <AdminPanel className="mt-3 border-border bg-surface-2/40">
         <p className="px-4 py-3 text-[12.5px] leading-relaxed text-ink-muted">
-          <span className="font-medium text-ink">Why there is nothing to click below.</span>{" "}
-          Neither service behind this data can record who changed it. A switch here would let
-          someone alter what every meeting validates against with no name against the change, so
-          these move by migration, where the change is reviewed and has an author.
+          {t.rich("explainer", { strong: (chunks) => <span className="font-medium text-ink">{chunks}</span> })}
         </p>
       </AdminPanel>
 
       <h3 className="mt-6 flex items-center gap-2 text-sm font-semibold text-ink">
         <Globe size={14} weight="duotone" />
-        Language catalog
+        {t("languageCatalogHeading")}
       </h3>
       <LanguageCatalogPanel />
 
       <h3 className="mt-6 flex items-center gap-2 text-sm font-semibold text-ink">
         <Microphone size={14} weight="duotone" />
-        Voice clone consent
+        {t("voiceConsentHeading")}
         {consentQuery.data ? (
           <span className="ml-1 text-[11px] font-normal text-ink-muted">
-            {numberFormatter.format(consentQuery.data.totalDecisions)} decisions recorded
+            {t("voiceConsentCount", { count: consentQuery.data.totalDecisions })}
           </span>
         ) : null}
       </h3>
 
       <AdminPanel className="mt-3">
         {consentQuery.isError ? (
-          <PanelError what="Voice consent" onRetry={() => void consentQuery.refetch()} />
+          <PanelError what={t("voiceConsent.errorWhat")} onRetry={() => void consentQuery.refetch()} />
         ) : consentQuery.isPending ? (
           <div className="px-4 py-6">
             <div className="h-16 animate-pulse rounded bg-surface-2" />
@@ -510,11 +657,7 @@ export default function AdminSettingsPage() {
         )}
       </AdminPanel>
 
-      <p className="mt-4 text-[12px] text-ink-muted">
-        Counts only, and that is a boundary rather than a shortcut. A cloned voice is biometric
-        data; a list of who agreed to it would be a register of biometric permissions, and nothing
-        on this screen acts on a person.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
     </AdminPage>
   );
 }

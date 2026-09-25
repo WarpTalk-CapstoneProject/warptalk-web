@@ -100,6 +100,7 @@ import type {
 import { useWorkspaceSettings } from "@/hooks/use-workspace";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useRegisterAssistantContext } from "@/hooks/use-assistant-page-context";
+import { continueMeetingChatInWidget } from "@/lib/assistant/continue-in-widget";
 
 // Import Refactored Components
 import {
@@ -197,6 +198,10 @@ import { meetingService } from "@/services/meeting.service";
 import { translationRoomService } from "@/services/translation-room.service";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
+import {
+  TRANSLATION_RESTORED_NOTICE,
+  translationSuspendedNotice,
+} from "@/lib/billing/translation-credits-notice";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
 import { buildCatchUpTranscript } from "@/lib/transcript/transcript-catch-up";
 import { useTranscriptByRoom, useTranscriptSegments } from "@/hooks/use-transcripts";
@@ -723,7 +728,14 @@ export function PersistentMeetingSession({
   );
 
   const room = roomQuery.data;
-  // The room is OPEN — somebody took the meeting live.
+  // Somebody took the meeting live — there is a room with people in it.
+  //
+  // NOT the `open` status, despite the wording this comment used to carry ("the room is OPEN").
+  // `open` (WT-612 / WT-621) is the clock unlocking the door at `scheduledAt`, with nobody inside
+  // and no TranslationRoomSession behind it, and the only thing this flag gates is the poll for
+  // that session. Polling a room that cannot have one yet would cost a request every few seconds
+  // to be told what its status already says. Entering the room is what takes it to IN_PROGRESS,
+  // so by the time a session can exist this is true.
   const meetingLive = room?.status === "in_progress";
   // Whether a transcript broadcast arriving right now still has somewhere to land.
   //
@@ -781,12 +793,17 @@ export function PersistentMeetingSession({
   // WT-428: read inside the hub's ParticipantWaiting callback, which is registered once and
   // would otherwise close over the first render's value — where isHost is still false because
   // the room query has not resolved. Same reasoning as currentUserIdRef.
-  // Placed here, below `isHost` and `translationStarted`, because it reads both. The state it
+  // WT-828: the far side of a bridged call is heard for as long as the meeting is open — the same
+  // rule the caption lane and the transcript follow (TRANSCRIPT_CLOSED_STATUSES above). It used to
+  // wait for Start Translation, which kept every word the far side said before Start out of the
+  // meeting's record. `room` first, so no server render (which has no room) can ever read as open.
+  const bridgeListening = Boolean(room) && transcriptOpen;
+  // Placed here, below `isHost` and `bridgeListening`, because it reads both. The state it
   // depends on is declared with the other bridge state far above; only the derivation has to wait.
   const consentState = browserCaptureConsentState({
     isBridgeRoom,
     isHost,
-    translationStarted,
+    meetingOpen: bridgeListening,
     hasInboundDevice: Boolean(bridgeInboundDeviceId),
     loopbackAvailable: bridgeInboundLoopback,
     answer: browserCaptureAnswer?.roomId === roomId ? browserCaptureAnswer.granted : null,
@@ -794,7 +811,7 @@ export function PersistentMeetingSession({
   const selectedLoopbackSourceId =
     loopbackSourceSelection?.roomId === roomId ? loopbackSourceSelection.sourceId : null;
   // Where the host is actually asked. Reading the desktop bridge during render is safe here only
-  // because consent is never "required" during SSR — it needs translationStarted, which no server
+  // because consent is never "required" during SSR — it needs a loaded room, which no server
   // render has — so this is "none" on the server either way and cannot mismatch on hydration.
   const consentSurface = bridgeConsentSurface({
     consent: consentState,
@@ -851,10 +868,12 @@ export function PersistentMeetingSession({
   // speaker Meet plays into, and published on a SECOND LiveKit connection under the stand-in
   // identity, so the pipeline attributes their speech to them rather than to the host.
   //
-  // Gated on `translationStarted`, not merely on being in the room. Before Start Translation
-  // there is no STT/MT/TTS pipeline to consume the track, so connecting early would publish into
-  // a room nothing is listening to and burn LiveKit connection minutes — the quota this project
-  // has already exhausted once (WT-269).
+  // Gated on the meeting being open (`bridgeListening`), NOT on Start Translation. WT-828: this
+  // used to wait for Start, on the theory that before it there was no pipeline to consume the
+  // track. There is — the transcript is saved whenever people speak, and Start Translation only
+  // controls translation and dubbing — so waiting left the far side's first minutes out of the
+  // record. The LiveKit minutes this costs (WT-269) are bounded by the idle reap below, which is
+  // what actually stops a forgotten bridge; a translation that was never started never did.
   //
   // Host-only because the token is host-only: a participant calling this would take a 403 on
   // every render, and a 403 here is a settled answer rather than a transient one.
@@ -880,7 +899,7 @@ export function PersistentMeetingSession({
     // does not reach, so a reap used to drop the host's side of the bridge and leave the stand-in
     // publishing the far side — and billing — into a room nobody was in any more.
     const wanted =
-      isBridgeRoom && isHost && translationStarted && hasInboundSource && !meetingIsIdleReaped;
+      isBridgeRoom && isHost && bridgeListening && hasInboundSource && !meetingIsIdleReaped;
     if (!wanted) {
       // Covers Stop Translation, an idle reap and leaving the room. Not awaited: teardown is
       // fire-and-forget by nature and an effect cleanup cannot await anyway.
@@ -995,7 +1014,7 @@ export function PersistentMeetingSession({
   }, [
     isBridgeRoom,
     isHost,
-    translationStarted,
+    bridgeListening,
     bridgeInboundDeviceId,
     bridgeInboundLoopback,
     consentState,
@@ -2334,6 +2353,17 @@ export function PersistentMeetingSession({
     connection.on("TranslationStopped", () => {
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
+    // WT-699 / TC3705: the workspace could not pay for the last translated sentence, and
+    // translation_worker has stopped translating this room. Said to everyone — every listener
+    // loses their dub, not just the host — and in words that name the actual reason.
+    connection.on("TranslationCreditsExhausted", (_roomId: string, reason?: string) => {
+      toast.error(translationSuspendedNotice(reason), { duration: 15000 });
+      void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
+    connection.on("TranslationCreditsRestored", () => {
+      toast.success(TRANSLATION_RESTORED_NOTICE);
+      void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
+    });
     // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
     // after JoinTranslationRoom — every other participant event describes a CHANGE, so without a
     // starting point the live roster of a late joiner began empty and no later event could fill
@@ -2443,8 +2473,13 @@ export function PersistentMeetingSession({
     // channel RoomEnded/RoomStarted use, and the Gateway relays it to the room group. Every
     // waiting client is already in that group (JoinTranslationRoom runs regardless of waiting
     // state), so the admitted one re-runs its join here without touching anything.
+    //
+    // WT-699 / TC1806: while knocking, this connection sat in the room's LOBBY group, which carries
+    // nothing said inside the meeting. Joining the hub again once admitted is what moves it into
+    // the room group — without it the guest would see the meeting and receive none of its events.
     connection.on("ParticipantAdmitted", (admittedUserId: string) => {
       if (!user?.id || admittedUserId !== user.id) return;
+      void joinCurrentRoom();
       void refetchRoom().then(() => {
         retryMeetingConnectionRef.current();
       });
@@ -2602,8 +2637,20 @@ export function PersistentMeetingSession({
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
 
-    connection.on("ParticipantKicked", () => {
+    // The relay broadcasts this to the whole room with the KICKED user's id. It used to ignore
+    // that argument, so one kick closed the meeting for everybody in it. WT-699.
+    connection.on("ParticipantKicked", (kickedUserId?: string) => {
+      if (kickedUserId && kickedUserId !== currentUserIdRef.current) return;
       toast.error("You have been permanently removed from this room.");
+      onMeetingClosed();
+      router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
+    });
+
+    // WT-699 / TC2402: the lobby's "no". Sent to the room's lobby group — where a knocking client
+    // now sits (TC1806) — with the declined user's id; every other knock ignores it.
+    connection.on("ParticipantRejected", (rejectedUserId: string) => {
+      if (!rejectedUserId || rejectedUserId !== currentUserIdRef.current) return;
+      toast.error("The host declined your request to join this meeting.");
       onMeetingClosed();
       router.replace(`/${activeWorkspaceSlug || "workspace"}/rooms`);
     });
@@ -2613,7 +2660,24 @@ export function PersistentMeetingSession({
 
     const wait = (ms: number) =>
       new Promise((resolve) => window.setTimeout(resolve, ms));
-    const joinCurrentRoom = () =>
+    // WT-699 / TC1806: the hub now refuses a join from anybody the room has not admitted, and
+    // answers a knock with the lobby group only. A refusal can be a race rather than a verdict —
+    // the REST join that writes the roster row can land a moment after the socket opens — so the
+    // join is retried a few times before it is given up on, instead of being swallowed once.
+    const joinRetryDelaysMs = [0, 1000, 2500, 5000];
+    const joinCurrentRoom = async () => {
+      for (const delay of joinRetryDelaysMs) {
+        if (cancelled) return;
+        if (delay) await wait(delay);
+        try {
+          await invokeJoinTranslationRoom();
+          return;
+        } catch {
+          // Refused or transport hiccup; the next attempt decides.
+        }
+      }
+    };
+    const invokeJoinTranslationRoom = () =>
       // targetLanguageRef.current (not the closed-over targetLanguage) so a language
       // picked via the dropdown before a reconnect (e.g. after a network drop) is what
       // gets rejoined with, and so this effect's dependency array below doesn't need
@@ -2638,8 +2702,7 @@ export function PersistentMeetingSession({
             ? sourceLanguageRef.current
             : "",
           targetLanguageRef.current,
-        )
-        .catch(() => undefined);
+        );
     const startAndJoin = async () => {
       for (const delay of retryDelays) {
         if (cancelled) return;
@@ -2775,6 +2838,13 @@ export function PersistentMeetingSession({
   // handleStartWarptalk below. Either way a person decides, and the room leaves "Waiting"
   // because someone started it.
 
+  // Read by the WarpBot handoff below at the moment it fires. The chat hub effect is registered
+  // once per room, so a title it closed over would be the title as it was when the room opened.
+  const roomTitleRef = useRef<string | null>(null);
+  useEffect(() => {
+    roomTitleRef.current = room?.title ?? null;
+  }, [room?.title]);
+
   useEffect(() => {
     if (!roomId) return;
     const chatConnection = createHubConnection("/api/v1/meetings/chat-hub");
@@ -2862,6 +2932,20 @@ export function PersistentMeetingSession({
           store.setAssistantPluginConnectionJson(json);
           store.setAssistantPluginSetupJson(null);
         }
+      },
+    );
+
+    // "Chuyển qua widget để bàn tiếp" — WarpBot's continue_in_widget tool. The room group is
+    // shared, so every screen in the meeting receives this; only the person who ASKED acts on it,
+    // and the meeting service names them from its own request row. Their widget opens on a new
+    // conversation seeded with this thread — the same path as the "Continue in widget" button.
+    chatConnection.on(
+      "ChatAssistantHandoff",
+      (payload: { requestedByUserId?: string }) => {
+        const me = useAuthStore.getState().user?.id;
+        const asker = payload?.requestedByUserId;
+        if (!me || !asker || asker.toLowerCase() !== me.toLowerCase()) return;
+        void continueMeetingChatInWidget({ roomId, roomTitle: roomTitleRef.current });
       },
     );
 
@@ -3048,6 +3132,11 @@ export function PersistentMeetingSession({
   // A room that is not open yet is still opened first. That is normally the lobby's job
   // (WT-232), but this button is reachable without going through it, and failing with "invalid
   // state" would be a worse answer than doing the obvious thing.
+  //
+  // An `open` room (WT-612 / WT-621) goes down that same path and must: the clock unlocked the
+  // door, nothing has taken the room to IN_PROGRESS, and the Start endpoint accepts OPEN for
+  // exactly this. Adding it to the skip list below would send /resume at a room with no session
+  // to resume.
   async function handleStartWarptalk() {
     if (!room?.id) return;
     try {
@@ -3059,9 +3148,10 @@ export function PersistentMeetingSession({
       setRightSidebarOpen(true);
       toast.success("WarpTalk realtime translation started.");
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to start translation.",
-      );
+      // WT-699 / TC3705: the server's own sentence. `error.message` on an HTTP failure is
+      // "Request failed with status code 403" — the refusal for a workspace out of credits (or
+      // with an overdue invoice) says which, and that is what the host needs to read.
+      toast.error(getErrorMessage(error, "Failed to start translation."));
     }
   }
 
@@ -3670,7 +3760,11 @@ export function PersistentMeetingSession({
             {subtitlesEnabled ? (
               <div
                 data-meeting-subtitle-lane
-                className="relative flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center overflow-hidden"
+                // Not `overflow-hidden`, and z-30: scrolling up in the lane opens its caption
+                // history as a panel that grows UPWARD over the bottom of the camera view (so the
+                // video never reflows). Clipping here would cut that panel off at the lane's own
+                // height; z-30 puts it above the stage's badges and below the control dock (z-40).
+                className="relative z-30 flex h-[clamp(96px,15vh,148px)] shrink-0 items-stretch justify-center"
               >
                 <LiveSubtitleOverlay
                   // Captions are the TRANSCRIPT in the caption lane (carrying the translation
@@ -3688,6 +3782,12 @@ export function PersistentMeetingSession({
                   // ...but only once there IS another language. Before Start Translation the
                   // captions are the transcript and nothing else.
                   translationActive={translationStarted}
+                  // The lane's history is the recent past; the panel is the record. Both calls,
+                  // in this order — the panel only renders while the sidebar is open.
+                  onOpenTranscript={() => {
+                    setSidePanelMode("transcript");
+                    setRightSidebarOpen(true);
+                  }}
                 />
               </div>
             ) : null}

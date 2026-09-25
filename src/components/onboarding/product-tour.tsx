@@ -34,6 +34,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useTranslations } from "next-intl";
 import { ArrowLeft, ArrowRight, X } from "@phosphor-icons/react/dist/ssr";
 
 import {
@@ -119,6 +120,7 @@ function useTargetRect(target: string | null): Rect | null {
 }
 
 function TourRunner() {
+  const t = useTranslations("common.productTour");
   const closeTour = useOnboardingStore((state) => state.closeTour);
   const userId = useAuthStore((state) => state.user?.id);
 
@@ -173,7 +175,7 @@ function TourRunner() {
       className="fixed inset-0 z-[100]"
       role="dialog"
       aria-modal="true"
-      aria-label="Product tour"
+      aria-label={t("ariaLabel")}
     >
       {rect ? (
         <>
@@ -191,7 +193,7 @@ function TourRunner() {
           />
           <button
             type="button"
-            aria-label="Close the tour"
+            aria-label={t("closeTour")}
             onClick={finish}
             className="absolute inset-0 cursor-default"
             tabIndex={-1}
@@ -200,7 +202,7 @@ function TourRunner() {
       ) : (
         <button
           type="button"
-          aria-label="Close the tour"
+          aria-label={t("closeTour")}
           onClick={finish}
           className="absolute inset-0 cursor-default bg-black/55"
           tabIndex={-1}
@@ -215,11 +217,11 @@ function TourRunner() {
         style={rect ? cardPosition : undefined}
       >
         <div className="flex items-start justify-between gap-3">
-          <p className="text-[14px] font-semibold text-ink">{step.title}</p>
+          <p className="text-[14px] font-semibold text-ink">{t(`steps.${step.id}.title`)}</p>
           <button
             type="button"
             onClick={finish}
-            aria-label="Skip the tour"
+            aria-label={t("skipTour")}
             className="-mr-1 -mt-1 grid size-6 shrink-0 place-items-center rounded-md text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink"
           >
             <X size={12} weight="bold" />
@@ -227,7 +229,7 @@ function TourRunner() {
         </div>
 
         <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
-          {step.body}
+          {t(`steps.${step.id}.body`)}
         </p>
 
         <div className="mt-4 flex items-center justify-between gap-3">
@@ -254,7 +256,7 @@ function TourRunner() {
                 type="button"
                 onClick={back}
                 className="grid size-7 place-items-center rounded-lg border border-border/60 text-ink-muted transition-colors hover:bg-surface-2 hover:text-ink"
-                aria-label="Previous step"
+                aria-label={t("previousStep")}
               >
                 <ArrowLeft size={12} weight="bold" />
               </button>
@@ -264,7 +266,7 @@ function TourRunner() {
               onClick={next}
               className="inline-flex h-7 items-center gap-1.5 rounded-lg bg-foreground px-2.5 text-[12px] font-medium text-background transition hover:opacity-90"
             >
-              {isLast ? "Done" : "Next"}
+              {isLast ? t("done") : t("next")}
               {isLast ? null : <ArrowRight size={12} weight="bold" />}
             </button>
           </div>

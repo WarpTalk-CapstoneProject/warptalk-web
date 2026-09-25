@@ -8,13 +8,13 @@
  * the request returns the delivery events are already on the stream. A single Send button beside a
  * form is the shape this deliberately is not.
  *
- * The audience is always a named list. `CreateAdminNotificationValidator` refuses BROADCAST and
- * SEGMENT — "Only SPECIFIC_USERS is supported until a production user/segment resolver is
- * configured" — so there is no "everyone" control to hunt for, and the composer says why rather
- * than leaving the reader to conclude one is missing.
+ * The audience is a named list, one workspace's members, or everyone (WT-699 / TC4104). The last
+ * two are resolved to people by the notification service when the announcement is created, so the
+ * confirmation names the audience rather than a head count it cannot know in advance.
  */
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { MagnifyingGlass, PaperPlaneTilt, WarningCircle, X } from "@phosphor-icons/react/dist/ssr";
 
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAdminUserDirectory } from "@/hooks/use-admin-users";
 import { getErrorMessage } from "@/lib/api/errors";
 import {
+  ANNOUNCEMENT_AUDIENCES,
   ANNOUNCEMENT_TYPES,
   buildCreateRequest,
   emptyAnnouncementDraft,
@@ -39,18 +40,12 @@ import {
   typeRequiresDowntime,
   validateAnnouncementDraft,
   type AnnouncementDraft,
-  type AnnouncementType,
   type CreateAdminAnnouncementRequest,
 } from "@/lib/notifications/announcement-draft";
 import { cn } from "@/lib/utils";
 import type { AdminUserSummaryDto } from "@/types/admin-user";
-
-const TYPE_LABELS: Record<AnnouncementType, { label: string; hint: string }> = {
-  ANNOUNCEMENT: { label: "Announcement", hint: "General news from the platform." },
-  PROMOTION: { label: "Promotion", hint: "Carries an offer, a link and a discount code." },
-  MAINTENANCE: { label: "Maintenance", hint: "States a downtime window. Both ends required." },
-  SYSTEM: { label: "System", hint: "The platform speaking about itself. No links, no offers." },
-};
+import type { AdminWorkspaceSummaryDto } from "@/types/admin-workspace";
+import { useAdminWorkspaceDirectory } from "@/hooks/use-admin-workspaces";
 
 export function AnnouncementComposer({
   open,
@@ -92,8 +87,10 @@ function ComposerForm({
   onSent: () => void;
   isSending: boolean;
 }) {
+  const t = useTranslations("adminAnnouncements.composer");
   const [draft, setDraft] = useState<AnnouncementDraft>(() => emptyAnnouncementDraft());
   const [recipients, setRecipients] = useState<AdminUserSummaryDto[]>([]);
+  const [segment, setSegment] = useState<AdminWorkspaceSummaryDto | null>(null);
   const [isConfirming, setIsConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,8 +100,12 @@ function ComposerForm({
   // The picker holds the whole user so the confirmation can name people rather than ids; the
   // request only ever carries the ids.
   const withRecipients = useMemo(
-    () => ({ ...draft, recipientIds: recipients.map((user) => user.id) }),
-    [draft, recipients],
+    () => ({
+      ...draft,
+      recipientIds: recipients.map((user) => user.id),
+      segmentId: segment?.id ?? "",
+    }),
+    [draft, recipients, segment],
   );
 
   const handleReview = () => {
@@ -132,7 +133,7 @@ function ComposerForm({
       await onSend(buildCreateRequest(withRecipients));
       onSent();
     } catch (err) {
-      setError(getErrorMessage(err, "The announcement could not be sent."));
+      setError(getErrorMessage(err, t("sendFailed")));
       setIsConfirming(false);
     }
   };
@@ -142,6 +143,7 @@ function ComposerForm({
       <ConfirmStep
         draft={withRecipients}
         recipients={recipients}
+        segment={segment}
         error={error}
         isSending={isSending}
         onBack={() => setIsConfirming(false)}
@@ -153,15 +155,13 @@ function ComposerForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Compose an announcement</DialogTitle>
-        <DialogDescription>
-          Delivered to the people you name, once. There is no draft, no schedule and no recall.
-        </DialogDescription>
+        <DialogTitle>{t("title")}</DialogTitle>
+        <DialogDescription>{t("description")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-5">
         <div>
-          <Label className="text-[12px] text-ink-muted">Type</Label>
+          <Label className="text-[12px] text-ink-muted">{t("typeLabel")}</Label>
           <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
             {ANNOUNCEMENT_TYPES.map((type) => (
               <button
@@ -175,14 +175,14 @@ function ComposerForm({
                     : "border-hairline/60 hover:bg-surface-2",
                 )}
               >
-                <span className="block text-[13px] font-medium">{TYPE_LABELS[type].label}</span>
+                <span className="block text-[13px] font-medium">{t(`types.${type}.label`)}</span>
                 <span
                   className={cn(
                     "mt-0.5 block text-[11px]",
                     draft.type === type ? "text-surface-1/70" : "text-ink-subtle",
                   )}
                 >
-                  {TYPE_LABELS[type].hint}
+                  {t(`types.${type}.hint`)}
                 </span>
               </button>
             ))}
@@ -191,7 +191,7 @@ function ComposerForm({
 
         <div>
           <Label htmlFor="announcement-title" className="text-[12px] text-ink-muted">
-            Title
+            {t("titleLabel")}
           </Label>
           <Input
             id="announcement-title"
@@ -204,7 +204,7 @@ function ComposerForm({
 
         <div>
           <Label htmlFor="announcement-content" className="text-[12px] text-ink-muted">
-            Message
+            {t("messageLabel")}
           </Label>
           <Textarea
             id="announcement-content"
@@ -213,16 +213,14 @@ function ComposerForm({
             value={draft.content}
             onChange={(event) => set("content", event.target.value)}
           />
-          <p className="mt-1 text-[11px] text-ink-subtle">
-            Plain text. The notification service refuses anything that looks like an HTML tag.
-          </p>
+          <p className="mt-1 text-[11px] text-ink-subtle">{t("messageHint")}</p>
         </div>
 
         {typeAllowsPayloadFields(draft.type) ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <Label htmlFor="announcement-cta" className="text-[12px] text-ink-muted">
-                Call-to-action link <span className="text-ink-subtle">(optional)</span>
+                {t("ctaLabel")} <span className="text-ink-subtle">{t("optional")}</span>
               </Label>
               <Input
                 id="announcement-cta"
@@ -234,7 +232,7 @@ function ComposerForm({
             </div>
             <div>
               <Label htmlFor="announcement-image" className="text-[12px] text-ink-muted">
-                Image URL <span className="text-ink-subtle">(optional)</span>
+                {t("imageLabel")} <span className="text-ink-subtle">{t("optional")}</span>
               </Label>
               <Input
                 id="announcement-image"
@@ -246,7 +244,7 @@ function ComposerForm({
             </div>
             <div>
               <Label htmlFor="announcement-discount" className="text-[12px] text-ink-muted">
-                Discount code <span className="text-ink-subtle">(optional)</span>
+                {t("discountLabel")} <span className="text-ink-subtle">{t("optional")}</span>
               </Label>
               <Input
                 id="announcement-discount"
@@ -260,8 +258,7 @@ function ComposerForm({
           // Said, not merely hidden. A reader who used these on the last notice needs to know they
           // are gone on purpose rather than wonder where the fields went.
           <p className="rounded-lg border border-hairline/60 bg-surface-2 px-3 py-2 text-[12px] text-ink-muted">
-            A system notice carries no link, image or discount code. The service refuses them on
-            this type.
+            {t("noPayloadFields")}
           </p>
         )}
 
@@ -269,7 +266,7 @@ function ComposerForm({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="announcement-downtime-start" className="text-[12px] text-ink-muted">
-                Downtime starts
+                {t("downtimeStartLabel")}
               </Label>
               <Input
                 id="announcement-downtime-start"
@@ -281,7 +278,7 @@ function ComposerForm({
             </div>
             <div>
               <Label htmlFor="announcement-downtime-end" className="text-[12px] text-ink-muted">
-                Downtime ends
+                {t("downtimeEndLabel")}
               </Label>
               <Input
                 id="announcement-downtime-end"
@@ -291,12 +288,45 @@ function ComposerForm({
                 onChange={(event) => set("downtimeEnd", event.target.value)}
               />
             </div>
-            <p className="text-[11px] text-ink-subtle sm:col-span-2">
-              Entered in your own time zone and sent as an absolute instant.
-            </p>
+            <p className="text-[11px] text-ink-subtle sm:col-span-2">{t("downtimeHint")}</p>
           </div>
         ) : null}
 
+        <div>
+          <Label className="text-[12px] text-ink-muted">{t("audience.label")}</Label>
+          <div className="mt-1.5 grid gap-2 sm:grid-cols-3">
+            {ANNOUNCEMENT_AUDIENCES.map((audience) => (
+              <button
+                key={audience}
+                type="button"
+                aria-pressed={draft.audience === audience}
+                onClick={() => set("audience", audience)}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-left transition-colors",
+                  draft.audience === audience
+                    ? "border-ink bg-ink text-surface-1"
+                    : "border-hairline/60 hover:bg-surface-2",
+                )}
+              >
+                <span className="block text-[13px] font-medium">{t(`audience.${audience}.label`)}</span>
+                <span
+                  className={cn(
+                    "mt-0.5 block text-[11px]",
+                    draft.audience === audience ? "text-surface-1/70" : "text-ink-subtle",
+                  )}
+                >
+                  {t(`audience.${audience}.hint`)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {draft.audience === "SEGMENT" ? (
+          <WorkspacePicker selected={segment} onSelect={setSegment} />
+        ) : null}
+
+        {draft.audience === "SPECIFIC_USERS" ? (
         <RecipientPicker
           selected={recipients}
           onToggle={(user) =>
@@ -308,6 +338,7 @@ function ComposerForm({
           }
           onClear={() => setRecipients([])}
         />
+        ) : null}
 
         {error ? (
           <p
@@ -321,13 +352,93 @@ function ComposerForm({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onCancel} disabled={isSending}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button onClick={handleReview} disabled={isSending}>
-          Review before sending
+          {t("review")}
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+/** WT-699 / TC4104: SEGMENT is one workspace; its active members receive the announcement. */
+function WorkspacePicker({
+  selected,
+  onSelect,
+}: {
+  selected: AdminWorkspaceSummaryDto | null;
+  onSelect: (workspace: AdminWorkspaceSummaryDto | null) => void;
+}) {
+  const t = useTranslations("adminAnnouncements.composer.segment");
+  const [search, setSearch] = useState("");
+  const query = useMemo(() => ({ page: 1, pageSize: 10, search: search.trim() }), [search]);
+  const directory = useAdminWorkspaceDirectory(query, { enabled: Boolean(search.trim()) });
+  const results = search.trim() ? (directory.data?.items ?? []) : [];
+
+  return (
+    <div>
+      <Label htmlFor="announcement-segment" className="text-[12px] text-ink-muted">
+        {t("label")}
+      </Label>
+      {selected ? (
+        <div className="mt-1.5 flex items-center justify-between gap-3 rounded-lg border border-hairline/60 px-3 py-2">
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] text-ink">{selected.name}</span>
+            <span className="block text-[11px] text-ink-subtle">
+              {t("memberCount", { count: selected.memberCount })}
+            </span>
+          </span>
+          <Button variant="outline" size="sm" onClick={() => onSelect(null)}>
+            {t("change")}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="relative mt-1.5">
+            <MagnifyingGlass
+              size={14}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-subtle"
+            />
+            <Input
+              id="announcement-segment"
+              className="pl-8"
+              placeholder={t("searchPlaceholder")}
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          {search.trim() ? (
+            <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-hairline/60">
+              {directory.isPending ? (
+                <p className="px-3 py-3 text-[12px] text-ink-muted">{t("searching")}</p>
+              ) : directory.isError ? (
+                <p className="px-3 py-3 text-[12px] text-destructive">{t("directoryError")}</p>
+              ) : results.length === 0 ? (
+                <p className="px-3 py-3 text-[12px] text-ink-muted">{t("noMatch")}</p>
+              ) : (
+                <ul>
+                  {results.map((workspace) => (
+                    <li key={workspace.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(workspace)}
+                        className="flex w-full items-center justify-between gap-3 border-b border-hairline/60 px-3 py-2 text-left last:border-b-0 hover:bg-surface-2"
+                      >
+                        <span className="truncate text-[13px] text-ink">{workspace.name}</span>
+                        <span className="shrink-0 text-[11px] text-ink-subtle">
+                          {t("memberCount", { count: workspace.memberCount })}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -340,6 +451,7 @@ function RecipientPicker({
   onToggle: (user: AdminUserSummaryDto) => void;
   onClear: () => void;
 }) {
+  const t = useTranslations("adminAnnouncements.composer.recipients");
   const [search, setSearch] = useState("");
 
   /**
@@ -361,12 +473,12 @@ function RecipientPicker({
     <div>
       <div className="flex items-baseline justify-between gap-3">
         <Label htmlFor="announcement-recipients" className="text-[12px] text-ink-muted">
-          Recipients
+          {t("label")}
         </Label>
         <span className="text-[11px] text-ink-subtle">
           {selected.length === 0
-            ? "Nobody selected"
-            : `${selected.length} selected`}
+            ? t("nobodySelected")
+            : t("selectedCount", { count: selected.length })}
         </span>
       </div>
 
@@ -378,7 +490,7 @@ function RecipientPicker({
         <Input
           id="announcement-recipients"
           className="pl-8"
-          placeholder="Search the platform directory by name or email"
+          placeholder={t("searchPlaceholder")}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
@@ -387,13 +499,11 @@ function RecipientPicker({
       {search.trim() ? (
         <div className="mt-2 max-h-52 overflow-y-auto rounded-lg border border-hairline/60">
           {directory.isPending ? (
-            <p className="px-3 py-3 text-[12px] text-ink-muted">Searching…</p>
+            <p className="px-3 py-3 text-[12px] text-ink-muted">{t("searching")}</p>
           ) : directory.isError ? (
-            <p className="px-3 py-3 text-[12px] text-destructive">
-              The user directory could not be read.
-            </p>
+            <p className="px-3 py-3 text-[12px] text-destructive">{t("directoryError")}</p>
           ) : results.length === 0 ? (
-            <p className="px-3 py-3 text-[12px] text-ink-muted">No account matches that.</p>
+            <p className="px-3 py-3 text-[12px] text-ink-muted">{t("noMatch")}</p>
           ) : (
             <ul>
               {results.map((user) => {
@@ -417,7 +527,7 @@ function RecipientPicker({
                           isSelected ? "text-ink" : "text-ink-subtle",
                         )}
                       >
-                        {isSelected ? "Selected" : "Add"}
+                        {isSelected ? t("selected") : t("add")}
                       </span>
                     </button>
                   </li>
@@ -438,7 +548,7 @@ function RecipientPicker({
               {user.email}
               <button
                 type="button"
-                aria-label={`Remove ${user.email}`}
+                aria-label={t("remove", { email: user.email })}
                 onClick={() => onToggle(user)}
                 className="grid size-4 place-items-center rounded-full text-ink-subtle hover:bg-surface-1 hover:text-ink"
               >
@@ -447,15 +557,12 @@ function RecipientPicker({
             </span>
           ))}
           <Button variant="ghost" size="sm" onClick={onClear} className="h-6 px-2 text-[11px]">
-            Clear
+            {t("clear")}
           </Button>
         </div>
       ) : null}
 
-      <p className="mt-1.5 text-[11px] text-ink-subtle">
-        A named list only. The service accepts no &ldquo;everyone&rdquo; audience until a segment
-        resolver exists.
-      </p>
+      <p className="mt-1.5 text-[11px] text-ink-subtle">{t("footerNote")}</p>
     </div>
   );
 }
@@ -463,6 +570,7 @@ function RecipientPicker({
 function ConfirmStep({
   draft,
   recipients,
+  segment,
   error,
   isSending,
   onBack,
@@ -470,11 +578,13 @@ function ConfirmStep({
 }: {
   draft: AnnouncementDraft;
   recipients: AdminUserSummaryDto[];
+  segment: AdminWorkspaceSummaryDto | null;
   error: string | null;
   isSending: boolean;
   onBack: () => void;
   onSend: () => void;
 }) {
+  const t = useTranslations("adminAnnouncements.composer");
   // Named in full up to a point, then counted. Ten addresses can be read; two hundred cannot, and
   // a wall of them would be scrolled past rather than checked.
   const NAMED = 10;
@@ -484,30 +594,37 @@ function ConfirmStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Send this announcement?</DialogTitle>
-        <DialogDescription>
-          It reaches everyone below as soon as you confirm. It cannot be edited, recalled or
-          deleted afterwards.
-        </DialogDescription>
+        <DialogTitle>{t("confirm.title")}</DialogTitle>
+        <DialogDescription>{t("confirm.description")}</DialogDescription>
       </DialogHeader>
 
       <div className="mt-4 grid gap-4">
         <div className="rounded-lg border border-hairline/60 p-3">
           <p className="text-[11px] uppercase tracking-wide text-ink-subtle">
-            {TYPE_LABELS[draft.type].label}
+            {t(`types.${draft.type}.label`)}
           </p>
           <p className="mt-1 text-[14px] font-medium text-ink">{draft.title}</p>
           <p className="mt-1 whitespace-pre-wrap text-[13px] text-ink-muted">{draft.content}</p>
         </div>
 
         <div className="rounded-lg border border-hairline/60 p-3">
-          <p className="text-[12px] font-medium text-ink">
-            {recipients.length} {recipients.length === 1 ? "recipient" : "recipients"}
-          </p>
-          <p className="mt-1.5 text-[12px] leading-5 text-ink-muted">
-            {named.map((user) => user.email).join(", ")}
-            {remaining > 0 ? ` and ${remaining} more` : ""}
-          </p>
+          {draft.audience === "BROADCAST" ? (
+            <p className="text-[12px] font-medium text-ink">{t("confirm.everyone")}</p>
+          ) : draft.audience === "SEGMENT" ? (
+            <p className="text-[12px] font-medium text-ink">
+              {t("confirm.segment", { name: segment?.name ?? "", count: segment?.memberCount ?? 0 })}
+            </p>
+          ) : (
+            <>
+              <p className="text-[12px] font-medium text-ink">
+                {t("confirm.recipientCount", { count: recipients.length })}
+              </p>
+              <p className="mt-1.5 text-[12px] leading-5 text-ink-muted">
+                {named.map((user) => user.email).join(", ")}
+                {remaining > 0 ? ` ${t("confirm.andMore", { count: remaining })}` : ""}
+              </p>
+            </>
+          )}
         </div>
 
         {error ? (
@@ -523,11 +640,15 @@ function ConfirmStep({
 
       <DialogFooter className="mt-5">
         <Button variant="outline" onClick={onBack} disabled={isSending}>
-          Back
+          {t("confirm.back")}
         </Button>
         <Button onClick={onSend} disabled={isSending}>
           <PaperPlaneTilt size={14} weight="fill" />
-          {isSending ? "Sending…" : `Send to ${recipients.length}`}
+          {isSending
+            ? t("confirm.sending")
+            : draft.audience === "SPECIFIC_USERS"
+              ? t("confirm.send", { count: recipients.length })
+              : t("confirm.sendAudience")}
         </Button>
       </DialogFooter>
     </>

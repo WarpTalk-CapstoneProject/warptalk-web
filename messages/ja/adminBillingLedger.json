@@ -1,0 +1,263 @@
+{
+  "header": {
+    "eyebrow": "プラットフォーム請求",
+    "title": "請求",
+    "description": "全システムのクレジット、消費量、稼働中のワークスペース。"
+  },
+  "actions": {
+    "exportReport": "レポートを書き出す",
+    "managePlans": "プランを管理"
+  },
+  "adjustCredits": {
+    "trigger": "クレジットを調整",
+    "title": "クレジットを調整",
+    "description": "クレジットを手動で追加または減算します。この操作は監査ログに記録されます。",
+    "descriptionWithTarget": "ワークスペース {workspaceId} のクレジットを手動で追加または減算します。この操作は監査ログに記録されます。",
+    "confirmHeading": "このクレジット調整を確認してください",
+    "confirmWorkspace": "ワークスペース: {name}",
+    "confirmAmount": "{sign}{amount} クレジット",
+    "confirmReason": "理由: {reason}",
+    "workspaceLabel": "ワークスペース",
+    "workspaceLoading": "ワークスペースを読み込み中…",
+    "workspaceLoadError": "ワークスペースを読み込めませんでした",
+    "workspacePlaceholder": "ワークスペースを選択…",
+    "workspaceOption": "{name}（{slug}）",
+    "workspaceOptionSuspended": "{name}（{slug}）— 停止中",
+    "amountLabel": "数量",
+    "amountPlaceholder": "例: 500 または -500",
+    "amountHint": "マイナス値を入力するとクレジットが減算されます。",
+    "reasonLabel": "理由（必須）",
+    "reasonPlaceholder": "例: サービス停止に対する補填",
+    "cancel": "キャンセル",
+    "back": "戻る",
+    "reviewAdjustment": "調整内容を確認",
+    "confirmAdjustment": "調整を確定",
+    "processing": "処理中...",
+    "success": "{sign}{amount} クレジットの調整が完了しました。",
+    "errors": {
+      "chooseWorkspace": "ワークスペースを選択してください。",
+      "invalidAmount": "0以外の有効な整数を入力してください。",
+      "amountTooLarge": "一度の調整で {max} クレジットを超えることはできません。",
+      "reasonRequired": "監査ログのため理由の入力が必要です。",
+      "adjustFailed": "クレジットの調整に失敗しました。もう一度お試しください。"
+    }
+  },
+  "metrics": {
+    "totalIssuedCredits": {
+      "label": "発行済みクレジット合計",
+      "detail": "全ワークスペースで流通中"
+    },
+    "activeWorkspaces": {
+      "label": "稼働中のワークスペース",
+      "detail": "プラットフォームを利用中のワークスペース"
+    },
+    "monthlyConsumption": {
+      "label": "月間消費量",
+      "detail": "今月消費されたクレジットの合計"
+    },
+    "transactions30d": {
+      "label": "取引数（30日間）",
+      "detail": "過去30日間のクレジット取引"
+    }
+  },
+  "tabs": {
+    "overview": "経済状況・分析",
+    "ledger": "全システム取引",
+    "invoices": "請求書",
+    "subscriptions": "サブスクリプション",
+    "alerts": "不正利用アラート"
+  },
+  "ledger": {
+    "cardTitle": "全システム取引",
+    "filters": {
+      "typeLabel": "種類",
+      "topUp": "チャージ",
+      "consumption": "消費",
+      "adjustment": "調整"
+    },
+    "table": {
+      "timestamp": "日時",
+      "workspace": "ワークスペース",
+      "type": "種類",
+      "reason": "理由",
+      "amount": "金額",
+      "balanceAfter": "取引後残高",
+      "action": "操作"
+    },
+    "empty": "取引が見つかりません",
+    "meetingSession": "会議セッション",
+    "systemAutomatic": "システム自動処理",
+    "typeBadge": {
+      "topUp": "チャージ",
+      "consume": "消費",
+      "adjustment": "調整"
+    },
+    "view": "表示"
+  },
+  "export": {
+    "dialogTitle": "請求レポートを書き出す",
+    "stats": {
+      "transactions": "取引数",
+      "netTopUp": "チャージ純額",
+      "totalConsumed": "消費合計",
+      "netAdjustments": "調整純額"
+    },
+    "noteLabel": "メモを追加（任意）",
+    "notePlaceholder": "例: 取締役会向け2026年第2四半期請求レビュー...",
+    "noteHelper": "このメモはSummaryシートの先頭に印刷されます。",
+    "cancel": "キャンセル",
+    "download": "Excelをダウンロード",
+    "generating": "生成中...",
+    "noDataAlert": "書き出すデータがありません。"
+  },
+  "transactionDetails": {
+    "title": "取引の詳細",
+    "subtitle": "このセッションにおける変動AIサービス費用の内訳",
+    "date": "日付",
+    "totalDeducted": "控除合計",
+    "serviceBreakdown": "サービス別内訳",
+    "callsSummary": "{count}回 × {unitPrice} {suffix}",
+    "activityLogFeed": "アクティビティログ",
+    "close": "閉じる"
+  },
+  "usageLabels": {
+    "translation": "リアルタイム翻訳",
+    "summary": "AI会議要約",
+    "chat": "AIワークスペースチャット",
+    "other": "その他",
+    "aiUsage": "AI利用"
+  },
+  "idBadge": {
+    "copyTooltip": "クリックしてIDをコピー: {id}"
+  },
+  "growth": {
+    "usageHeading": "クレジット使用量",
+    "usageNote": "消費とチャージ — 成長指標の次に見るもので、下の台帳が明細です。",
+    "vsPrevious": "前6か月比 {delta}",
+    "monthGrowth": "{month}: {percent}",
+    "tiles": {
+      "revenue": "売上 · 6か月",
+      "sixMonths": "支払い済み、直近6か月",
+      "mrr": "MRR",
+      "activeSubscriptions": "有効なサブスクリプション {count} 件",
+      "activeWorkspaces": "アクティブなワークスペース · 6か月",
+      "activeWorkspacesDetail": "クレジットを1回以上使用",
+      "activeAccounts": "アクティブなアカウント · 6か月",
+      "activeAccountsDetail": "1回以上サインイン",
+      "totalUsers": "登録ユーザー",
+      "newUsers": "6か月で新規 {count}"
+    },
+    "revenueTitle": "月別売上",
+    "revenueNote": "VND建ての支払い済み金額。Stripe のチェックアウトとその初回請求書は1回として数えます。最新月は月初来です。",
+    "activeTitle": "アクティブなアカウントとワークスペース",
+    "activeNote": "月ごと: サインインしたアカウント、クレジットを使用したワークスペース。最新月は月初来です。",
+    "usersTitle": "ユーザーとワークスペースの成長",
+    "series": {
+      "activeAccounts": "アクティブなアカウント",
+      "activeWorkspaces": "アクティブなワークスペース",
+      "totalUsers": "登録ユーザー",
+      "totalWorkspaces": "ワークスペース",
+      "newUsers": "新規ユーザー"
+    },
+    "loading": "読み込み中…",
+    "noData": "この期間に支払い済みの売上はありません。",
+    "unavailable": "このバックエンドではまだ利用できません。"
+  },
+  "lists": {
+    "tabsLabel": "請求セクション",
+    "workspacePlaceholder": "ワークスペースを検索…",
+    "creditsUnit": "クレジット",
+    "ledger": {
+      "searchPlaceholder": "説明で検索、または取引 ID を貼り付け…",
+      "count": "{count, plural, other {# 件の取引}}",
+      "filters": {
+        "date": "日付"
+      },
+      "amountPresets": {
+        "over1k": "1,000 クレジット以上",
+        "over10k": "10,000 クレジット以上",
+        "over100k": "100,000 クレジット以上"
+      },
+      "emptyDescription": "チャージ、消費、調整は発生するとここに表示されます。"
+    },
+    "export": {
+      "description": "2 シートの Excel ファイルを書き出します: <strong>Summary</strong>(システム指標と合計)と <strong>Audit Trail</strong>(台帳の現在の検索とフィルターに一致するすべての取引)。",
+      "matching": "{count, plural, other {# 件の取引を書き出します。}}",
+      "truncated": "書き出されるのは最初の {cap} 件のみです。残りを書き出すにはフィルターを絞り込んでください。",
+      "loading": "一致する取引を読み込んでいます…",
+      "failed": "書き出す取引を読み込めませんでした。このダイアログを閉じて、もう一度お試しください。"
+    },
+    "invoices": {
+      "caption": "請求書",
+      "searchPlaceholder": "請求書番号で検索、または請求書 ID を貼り付け…",
+      "count": "{count, plural, other {# 件の請求書}}",
+      "filters": {
+        "status": "ステータス",
+        "workspace": "ワークスペース",
+        "currency": "通貨",
+        "issued": "発行日",
+        "total": "合計"
+      },
+      "statuses": {
+        "draft": "下書き",
+        "issued": "発行済み",
+        "open": "未払い",
+        "paid": "支払い済み",
+        "void": "無効",
+        "uncollectible": "回収不能"
+      },
+      "sort": {
+        "issued": "発行日",
+        "total": "合計",
+        "due": "支払期限"
+      },
+      "columns": {
+        "invoice": "請求書",
+        "issued": "発行日",
+        "workspace": "ワークスペース",
+        "status": "ステータス",
+        "due": "期限",
+        "total": "合計",
+        "actions": "操作"
+      },
+      "viewReceipt": "領収書を表示",
+      "stripeInvoice": "Stripe 請求書",
+      "emptyTitle": "請求書はまだありません",
+      "emptyDescription": "ワークスペースがプランまたはクレジットを購入すると、請求書がここに表示されます。"
+    },
+    "subscriptions": {
+      "title": "サブスクリプションには専用ページがあります",
+      "description": "すべてのワークスペースのサブスクリプションの検索・絞り込み、定期収益の確認、サブスクリプションの解約と再開は、サブスクリプション一覧で行えます。",
+      "open": "サブスクリプションを開く"
+    },
+    "alerts": {
+      "title": "不正利用・使用量アラート",
+      "description": "クレジット消費が異常に多いワークスペース(過去 24 時間で 50,000 クレジット超)。",
+      "searchPlaceholder": "名前または ID でワークスペースを検索…",
+      "count": "{count, plural, other {# 件のアラート}}",
+      "filters": {
+        "consumption": "24 時間の消費量"
+      },
+      "consumptionPresets": {
+        "over100k": "100,000 クレジット以上",
+        "over500k": "500,000 クレジット以上",
+        "over1m": "1,000,000 クレジット以上"
+      },
+      "sort": {
+        "consumption": "24 時間の消費量",
+        "workspace": "ワークスペース名"
+      },
+      "columns": {
+        "workspace": "ワークスペース",
+        "id": "ワークスペース ID",
+        "reason": "理由",
+        "consumption": "24 時間の消費量",
+        "actions": "操作"
+      },
+      "reason": "異常に多い消費: 24 時間で {credits} クレジット",
+      "investigate": "調査する",
+      "emptyTitle": "異常な使用はありません",
+      "emptyDescription": "過去 24 時間で 50,000 クレジットを超えて消費したワークスペースはありません。"
+    }
+  }
+}

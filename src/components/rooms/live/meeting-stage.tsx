@@ -20,6 +20,7 @@ import {
   type Participant,
 } from "livekit-client";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 import {
   INITIAL_STICKY_SPEAKER,
@@ -111,6 +112,7 @@ export function LiveKitMeetingStage({
   bottomInset?: number;
   onRetry: () => void;
 }) {
+  const t = useTranslations("meetingCallChrome.stage");
   const connectionState = useConnectionState();
   const room = useMaybeRoomContext();
   // Read once for the whole stage. `renderTile` is a nested function, so it cannot call the hook
@@ -191,9 +193,23 @@ export function LiveKitMeetingStage({
   // The LAYOUT does not: the large tile used to swap on every "mm", then swap back, so a
   // two-person conversation flickered between two faces for its whole duration. Focus is
   // sticky, and only moves once someone else has held the floor for SPEAKER_HOLD_MS.
-  const speakingNow = visibleTracks
-    .filter((trackRef) => activeSpeakerIdentities.has(trackRef.participant.identity))
-    .map((trackRef) => trackRef.participant.identity);
+  //
+  // WT-825: the viewer's OWN voice never moves the layout. Google Meet never hands you the large
+  // tile on your own screen — you know what you look like, and the point of the stage is the
+  // people you are talking to. Counting the local participant here made every sentence the viewer
+  // spoke swap their own face onto the stage, which is the "inverted" layout in the report.
+  const localIdentity = room?.localParticipant.identity ?? null;
+  const speakingNow = [
+    ...new Set(
+      visibleTracks
+        .filter(
+          (trackRef) =>
+            activeSpeakerIdentities.has(trackRef.participant.identity) &&
+            trackRef.participant.identity !== localIdentity,
+        )
+        .map((trackRef) => trackRef.participant.identity),
+    ),
+  ];
 
   const [stickySpeaker, setStickySpeaker] = useState(INITIAL_STICKY_SPEAKER);
   const speakingKey = speakingNow.join("|");
@@ -216,19 +232,34 @@ export function LiveKitMeetingStage({
     visibleTracks.some((trackRef) => trackRef.participant.identity === stickySpeaker.focused)
       ? stickySpeaker.focused
       : undefined;
-  const localIdentity = room?.localParticipant.identity ?? null;
   const firstVisibleIdentity = visibleTracks[0]?.participant.identity;
   const firstRemoteIdentity = visibleTracks.find(
     (trackRef) => trackRef.participant.identity !== localIdentity,
   )?.participant.identity;
+  // People, not tracks: a participant sharing their screen is in visibleTracks twice.
+  const remoteIdentities = [
+    ...new Set(
+      visibleTracks
+        .map((trackRef) => trackRef.participant.identity)
+        .filter((identity) => identity !== localIdentity),
+    ),
+  ];
+  const localIsVisible =
+    localIdentity !== null &&
+    visibleTracks.some((trackRef) => trackRef.participant.identity === localIdentity);
+  // WT-825: a one-to-one call is the other person, large, with yourself in the corner — the
+  // Google Meet layout. It used to fall through to an even two-up grid (or, in Spotlight and
+  // Sidebar, to the first track LiveKit lists, which is the LOCAL one), so the viewer's own face
+  // took as much of the stage as the person they were talking to, or more.
+  const isOneToOne = localIsVisible && remoteIdentities.length === 1;
   const featuredIdentity =
     spotlightedUserId ||
     (layoutMode === "grid"
       ? null
       : layoutMode === "spotlight"
-        ? pinnedUserId || activeSpeakerIdentity || firstVisibleIdentity
+        ? pinnedUserId || activeSpeakerIdentity || firstRemoteIdentity || firstVisibleIdentity
         : layoutMode === "sidebar"
-          ? pinnedUserId || firstVisibleIdentity
+          ? pinnedUserId || firstRemoteIdentity || firstVisibleIdentity
           // Five is where an even grid stops being readable. Below it, everyone gets the
           // same tile — a two- or three-person call has no "main" person, and picking one
           // shrinks the others for nothing. At six and above the grid tiles get too small
@@ -238,8 +269,14 @@ export function LiveKitMeetingStage({
               activeSpeakerIdentity ||
               firstRemoteIdentity ||
               firstVisibleIdentity
-            : pinnedUserId) ||
+            : layoutMode === "auto" && isOneToOne
+              ? pinnedUserId || firstRemoteIdentity
+              : pinnedUserId) ||
     null;
+  // WT-825: in Auto's even grid the viewer is not one of the tiles either. The others share the
+  // grid; the viewer is the small self-view docked in the corner, as in the featured layout.
+  const selfViewDocked =
+    layoutMode === "auto" && !spotlightedUserId && localIsVisible && remoteIdentities.length >= 2;
   const isSpotlight = Boolean(spotlightedUserId);
 
   // WT-245: a camera-off participant's TrackReference is not stable — LiveKit swaps between a
@@ -317,7 +354,7 @@ export function LiveKitMeetingStage({
             />
             {isThumbnail ? null : (
               <div className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[12px] font-medium text-ink-muted">
-                Camera is off
+                {t("cameraOff")}
               </div>
             )}
           </div>
@@ -331,7 +368,7 @@ export function LiveKitMeetingStage({
           {isFeatured ? (
             <span
               className="grid h-6 w-6 place-items-center rounded-md bg-surface-1/90 text-primary shadow-sm backdrop-blur"
-              title={isSpotlight ? "Spotlighted by host" : "Pinned"}
+              title={isSpotlight ? t("spotlightedByHost") : t("pinned")}
             >
               {isSpotlight ? (
                 <Star className="h-3.5 w-3.5" weight="fill" />
@@ -400,7 +437,7 @@ export function LiveKitMeetingStage({
             playsInline
           />
           <div className="absolute left-4 top-4 rounded-md bg-surface-1/90 px-2 py-1 text-[11px] font-semibold text-ink shadow-sm backdrop-blur">
-            You are presenting
+            {t("presenting")}
           </div>
         </div>
 
@@ -494,6 +531,31 @@ export function LiveKitMeetingStage({
       );
     }
 
+    if (selfViewDocked) {
+      const remoteTracks = visibleTracks.filter(
+        (trackRef) => trackRef.participant.identity !== localIdentity,
+      );
+      const selfTracks = visibleTracks.filter(
+        (trackRef) => trackRef.participant.identity === localIdentity,
+      );
+      return (
+        <div className={`${STAGE_CLASSNAME} relative`}>
+          <div
+            className={`grid h-full min-h-0 gap-3 ${
+              remoteTracks.length === 2
+                ? "grid-cols-1 lg:grid-cols-2"
+                : gridClassName(remoteTracks.length)
+            }`}
+          >
+            {remoteTracks.map((trackRef) => renderTile(trackRef))}
+          </div>
+          <div className="absolute bottom-3 right-3 z-20 flex items-end justify-end gap-2">
+            {selfTracks.map((trackRef) => renderThumbnail(trackRef))}
+          </div>
+        </div>
+      );
+    }
+
     if (visibleTracks.length === 2) {
       return (
         <div className={`${STAGE_CLASSNAME} grid grid-cols-1 gap-3 lg:grid-cols-2`}>
@@ -523,7 +585,7 @@ export function LiveKitMeetingStage({
       </p>
       <p className="mt-1 flex items-center gap-2 text-[13px] text-ink-subtle">
         {isJoining && <SpinnerGap className="h-3.5 w-3.5 animate-spin" />}
-        {error || liveKitStateLabel(connectionState)}
+        {error || liveKitStateLabel(connectionState, t)}
       </p>
       {error && (
         <button
@@ -531,18 +593,21 @@ export function LiveKitMeetingStage({
           onClick={onRetry}
           className="mt-4 rounded-md border border-border bg-surface-1 px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-surface-2 shadow-sm"
         >
-          Retry connection
+          {t("retryConnection")}
         </button>
       )}
     </div>
   );
 }
 
-function liveKitStateLabel(state: ConnectionState) {
-  if (state === ConnectionState.Connected) return "Connected";
-  if (state === ConnectionState.Connecting) return "Connecting";
-  if (state === ConnectionState.Reconnecting) return "Reconnecting";
-  return "Waiting for LiveKit";
+function liveKitStateLabel(
+  state: ConnectionState,
+  t: ReturnType<typeof useTranslations>,
+) {
+  if (state === ConnectionState.Connected) return t("connectionState.connected");
+  if (state === ConnectionState.Connecting) return t("connectionState.connecting");
+  if (state === ConnectionState.Reconnecting) return t("connectionState.reconnecting");
+  return t("connectionState.waiting");
 }
 
 function gridClassName(count: number) {

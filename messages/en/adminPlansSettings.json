@@ -1,0 +1,418 @@
+{
+  "plans": {
+    "list": {
+      "visibleOfTotal": "{visible} of {total}",
+      "cycles": {
+        "monthly": "Monthly",
+        "yearly": "Yearly"
+      },
+      "plans": {
+        "searchPlaceholder": "Search plans by name or slug",
+        "filters": {
+          "tier": "Tier",
+          "cycle": "Billing cycle",
+          "currency": "Currency",
+          "active": "Active"
+        },
+        "sortFields": {
+          "order": "Display order",
+          "name": "Name",
+          "price": "Price",
+          "credits": "Credits per cycle"
+        },
+        "columns": {
+          "plan": "Plan",
+          "tier": "Tier",
+          "cycle": "Billing cycle",
+          "price": "Price",
+          "credits": "Credits / cycle",
+          "status": "Status",
+          "order": "Order"
+        }
+      },
+      "rateCards": {
+        "searchPlaceholder": "Search charge type, provider or model",
+        "filters": {
+          "chargeType": "Charge type",
+          "provider": "Provider",
+          "unit": "Unit",
+          "currency": "Currency",
+          "margin": "Margin",
+          "active": "In force"
+        },
+        "marginBands": {
+          "loss": "Loss (below 1×)",
+          "thin": "Thin (1× to 1.5×)",
+          "healthy": "Healthy (1.5× and up)",
+          "unknown": "Not known"
+        },
+        "inForce": "In force",
+        "deactivated": "Deactivated",
+        "sortFields": {
+          "chargeType": "Charge type",
+          "provider": "Provider",
+          "price": "Unit price",
+          "margin": "Margin",
+          "effective": "Effective from"
+        },
+        "columns": {
+          "rateCard": "Rate card",
+          "unit": "Unit",
+          "price": "Unit price",
+          "providerCost": "Provider cost",
+          "margin": "Margin",
+          "effective": "Effective"
+        }
+      }
+    },
+    "eyebrow": "Revenue",
+    "title": "Plans & pricing",
+    "description": "What the platform sells, and what each unit of it costs to serve.",
+    "newPlan": "New plan",
+    "editConfiguration": "Edit configuration",
+    "refresh": "Refresh",
+    "filterLabel": "Pricing view",
+    "tabs": {
+      "plans": "Plans",
+      "rateCards": "Rate cards",
+      "configuration": "Configuration"
+    },
+    "loading": "Loading…",
+    "planCount": "{count, plural, one {# plan} other {# plans}}",
+    "rateCardCount": "{count, plural, one {# rate card} other {# rate cards}}",
+    "platformWide": "Platform-wide",
+    "rateCardsNote": "Margins are read from the rate card's recorded multiplier. Where a price is in one currency and the provider cost in another, no margin is shown — dividing them would produce a number off by the exchange rate.",
+    "errorHint": "Check the billing service and that your session still holds the platform admin role.",
+    "tryAgain": "Try again",
+    "plansError": "Plans could not be loaded.",
+    "plansEmpty": "No plans in the catalogue.",
+    "rateCardsError": "Rate cards could not be loaded.",
+    "rateCardsEmpty": "No rate cards configured.",
+    "configError": "Pricing configuration could not be loaded.",
+    "configEmpty": "No pricing configuration is stored.",
+    "footerNote": "Editable, within what the API allows. Nothing here is deleted: a plan is named on every invoice ever raised against it, so it is retired with its Active switch, and a rate card is retired with Deactivate because settled charges point at it. A new rate-card identity still arrives with the migration that registers it.",
+    "deactivateToast": "{chargeType} rate card deactivated.",
+    "planRow": {
+      "active": "Active",
+      "hidden": "Hidden",
+      "edit": "Edit"
+    },
+    "rateCardRow": {
+      "edit": "Edit",
+      "deactivate": "Deactivate",
+      "from": "from {date}",
+      "marginDerivedTooltip": "Computed from price and cost — both in USD",
+      "marginRecordedTooltip": "As recorded on the rate card"
+    },
+    "configRows": {
+      "fxRate": "FX rate USD→VND",
+      "minimumContractPrice": "Minimum contract price",
+      "salesWeightUsage": "Sales weight · usage",
+      "salesWeightMembers": "Sales weight · members",
+      "salesWeightLanguages": "Sales weight · languages",
+      "salesWeightAiServices": "Sales weight · AI services",
+      "defaultOverageCapRatio": "Default overage cap ratio",
+      "defaultInvoiceTerms": "Default invoice terms",
+      "defaultInvoiceTermsValue": "{days} days",
+      "defaultInvoiceGrace": "Default invoice grace",
+      "defaultInvoiceGraceValue": "{hours} hours",
+      "formula": "Formula (derived)",
+      "resolverKey": "Resolver key (derived)"
+    }
+  },
+  "settings": {
+    "eyebrow": "Configuration",
+    "title": "Platform settings",
+    "description": "Everything the platform runs on, in the order you can act on it: the knobs you can turn, then the reference data you can only read.",
+    "refresh": "Refresh",
+    "bandKnobs": {
+      "title": "Knobs you can turn",
+      "note": "Saved from this page, applied platform-wide, recorded against your account."
+    },
+    "bandReference": {
+      "title": "Reference data",
+      "note": "The language catalog is audited; voice consent is read-only."
+    },
+    "billingPolicyHeading": "Billing policy",
+    "pricingEconomicsHeading": "Pricing economics",
+    "pricingEconomicsSubnote": "The same configuration the plan validator and the rate-card margin reader consult — also reachable from Plans & pricing. Customer prices live in Stripe, so the credit value and the per-credit price floor are no longer edited here; they change by migration.",
+    "languageCatalogHeading": "Language catalog",
+    "voiceConsentHeading": "Voice clone consent",
+    "voiceConsentCount": "{count, plural, one {# decision recorded} other {# decisions recorded}}",
+    "explainer": "<strong>What you can change here, and what you cannot.</strong> The language catalog is editable: every add, rename or switch is written to the platform audit log first, and refused if it cannot be recorded, so each change has a name against it. The voice-consent ledger stays read-only — its service cannot record who changed it.",
+    "footerNote": "Counts only, and that is a boundary rather than a shortcut. A cloned voice is biometric data; a list of who agreed to it would be a register of biometric permissions, and nothing on this screen acts on a person.",
+    "panelError": {
+      "message": "{what} could not be loaded.",
+      "hint": "Check the service and that your session still holds the platform admin role.",
+      "tryAgain": "Try again"
+    },
+    "billingPolicy": {
+      "vatLabel": "VAT rate",
+      "vatHint": "Applied to every invoice the platform raises. A fraction: 0.1 is 10%.",
+      "vatAriaLabel": "VAT rate",
+      "save": "Save",
+      "saving": "Saving…",
+      "saveSuccessToast": "Billing policy saved.",
+      "saveErrorToast": "The billing policy could not be saved.",
+      "errorWhat": "The billing policy"
+    },
+    "pricingEconomics": {
+      "errorWhat": "The pricing configuration",
+      "fxRateLabel": "FX rate (USD → VND)",
+      "fxRateHint": "Stripe's USD→VND rate, recorded once a day; every report converts each day at that day's rate.",
+      "fxSourceAsOf": "{source} · as of {asOf}",
+      "fxStatusUnavailable": "Rate source not available yet",
+      "fxRefresh": "Refresh from Stripe",
+      "fxRefreshing": "Refreshing…",
+      "fxRefreshed": "USD→VND rate refreshed from Stripe",
+      "fxRefreshPartial": "Stripe did not return everything: {error}",
+      "fxRefreshError": "Could not refresh the rate from Stripe",
+      "fxOverride": "Override",
+      "fxOverrideAriaLabel": "Override rate, VND per US dollar",
+      "fxApplyOverride": "Use this rate",
+      "fxCancel": "Cancel",
+      "fxUseStripe": "Use Stripe's rate again",
+      "fxOverrideError": "Could not change the rate",
+      "fxStripeWouldBe": "Stripe's rate: {rate} ({date})",
+      "cartesiaUsdPerCreditLabel": "Cartesia USD per credit",
+      "cartesiaUsdPerCreditHint": "What one Cartesia credit costs WarpTalk. Insights price dubbing as measured Cartesia credits × this × the FX rate. The account spends credits bought earlier, so enter what they cost, not the Free plan's marginal 0. Default: Startup plan, $49 / 1,250,000.",
+      "cartesiaUsdPerCreditValue": "${price} per credit",
+      "minimumContractPriceLabel": "Minimum contract price",
+      "minimumContractPriceHint": "Per cycle, before a plan is valid.",
+      "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
+      "defaultInvoiceTermsLabel": "Default invoice terms",
+      "defaultInvoiceTermsHint": "Days to pay, and the grace window after that, for plans that do not override them.",
+      "defaultInvoiceTermsValue": "{days} days · {hours} h grace",
+      "editButton": "Edit pricing economics"
+    },
+    "languageCatalog": {
+      "manage": {
+        "add": "Add language",
+        "edit": "Edit",
+        "disable": "Disable",
+        "enable": "Enable",
+        "columns": {
+          "usage": "In use",
+          "actions": ""
+        },
+        "usageNone": "—",
+        "usageLive": "{count} live",
+        "usageUpcoming": "{count} scheduled",
+        "form": {
+          "addTitle": "Add a language",
+          "editTitle": "Edit {code}",
+          "description": "Room validation accepts it as soon as it is enabled. The meeting pickers in this app only offer languages the app ships; a new one shows as “renders as a code” until it does.",
+          "codeLabel": "Code",
+          "codeHint": "ISO 639 language, optional region — e.g. de or de-DE.",
+          "nameLabel": "Name",
+          "nativeNameLabel": "Native name",
+          "enabledLabel": "Enable for new rooms now",
+          "cancel": "Cancel",
+          "save": "Save",
+          "create": "Add language",
+          "saving": "Saving…",
+          "createdToast": "{code} added to the catalog.",
+          "savedToast": "{code} updated.",
+          "genericError": "Nothing was changed. The catalog was not updated, or the change could not be recorded in the audit log.",
+          "errors": {
+            "codeInvalid": "Use a language code like de or de-DE.",
+            "codeTaken": "That language is already in the catalog.",
+            "codeCovered": "Already covered by {code} — rooms match on the language, not the region.",
+            "nameRequired": "Name is required.",
+            "nameTooLong": "Name must be at most 100 characters.",
+            "nativeNameTooLong": "Native name must be at most 100 characters."
+          }
+        },
+        "toggle": {
+          "disableTitle": "Disable {name}?",
+          "enableTitle": "Enable {name}?",
+          "disableDescription": "Soft switch: the row stays, and past meetings keep naming it. New rooms in {code} are refused until it is enabled again.",
+          "enableDescription": "New rooms in {code} will be accepted again.",
+          "blocked": "{count, plural, one {# live meeting uses this language.} other {# live meetings use this language.}} It can be disabled once they end.",
+          "last": "This is the only enabled language. Disabling it would stop every room from being created.",
+          "confirmUpcoming": "{count, plural, one {# scheduled meeting uses this language} other {# scheduled meetings use this language}}. Anyone editing or joining it in {code} will be refused.",
+          "confirmCheckbox": "I understand — disable it anyway",
+          "cancel": "Cancel",
+          "confirmDisable": "Disable",
+          "confirmEnable": "Enable",
+          "pending": "Working…",
+          "disabledToast": "{code} disabled for new rooms.",
+          "enabledToast": "{code} enabled.",
+          "genericError": "Nothing was changed."
+        }
+      },
+      "errorWhat": "The language catalog",
+      "empty": "The catalog is empty — no room in any language can be created.",
+      "driftTitle": "{count, plural, one {The meeting picker offers # language this catalog will reject.} other {The meeting picker offers # languages this catalog will reject.}}",
+      "driftBody": "{names} — anyone choosing one gets “Source language is not supported.” Either seed the row or drop it from the picker.",
+      "columns": {
+        "code": "Code",
+        "name": "Name",
+        "native": "Native",
+        "rooms": "Rooms",
+        "inThisApp": "In this app"
+      },
+      "badgeAllowed": "allowed",
+      "badgeOff": "off",
+      "shippedOffered": "offered",
+      "shippedKnown": "known",
+      "shippedAsCode": "renders as a code",
+      "footnote": "This is <code1>translation_room.supported_languages</code1>, the table room validation queries — not <code2>platform.supported_languages</code2>, which the seed script still writes and nothing validates against since migration 036."
+    },
+    "voiceConsent": {
+      "errorWhat": "Voice consent",
+      "nobodyAsked": "Nobody has been asked for voice consent yet.",
+      "peopleCurrentDecision": "people, current decision",
+      "liveGrantsHeading": "Live grants by the wording agreed to",
+      "current": "current",
+      "superseded": "superseded",
+      "outdatedNotice": "{count, plural, one {# live grant was} other {# live grants were}} given under wording that has since been replaced. Consent stays valid for what it said at the time — this is the count to re-ask if the change was material."
+    }
+  },
+  "pricingEditors": {
+    "planForm": {
+      "sections": {
+        "identity": "Identity",
+        "price": "Price",
+        "creditsOverage": "Credits and overage",
+        "invoicing": "Invoicing",
+        "limits": "Limits",
+        "entitlements": "Entitlements"
+      },
+      "fields": {
+        "name": "Name",
+        "slug": "Slug",
+        "slugHint": "Lowercase, digits and hyphens.",
+        "tier": "Tier",
+        "sortOrder": "Sort order",
+        "sortOrderHint": "Where it sits on the pricing page.",
+        "active": "Active",
+        "activeHint": "Hidden plans stay on old invoices. This is how a plan is retired — there is no delete.",
+        "price": "Price",
+        "currency": "Currency",
+        "billingCycle": "Billing cycle",
+        "billingCycleHint": "Monthly only — the update endpoint accepts no other value.",
+        "creditsPerCycle": "Credits per cycle",
+        "overageCap": "Overage cap (credits)",
+        "overageCapHint": "Zero means the plan allows no overage.",
+        "overagePrice": "Overage price per credit",
+        "lowBalance": "Low-balance threshold",
+        "lowBalanceHint": "Must sit above the overage cap, or the warning lands after billing starts.",
+        "rolloverCap": "Rollover cap (credits)",
+        "invoiceTerms": "Terms (days)",
+        "invoiceGrace": "Grace (hours)",
+        "maxParticipants": "Max participants",
+        "maxLanguages": "Max languages",
+        "maxLanguagesHint": "Between 1 and 3.",
+        "voiceCloning": "Voice cloning",
+        "aiAssistant": "AI assistant",
+        "glossary": "Glossary",
+        "dedicatedGpu": "Dedicated GPU",
+        "features": "Features",
+        "featuresHint": "The JSON blob the pricing page reads. An array or an object."
+      },
+      "editDialog": {
+        "title": "Edit plan",
+        "description": "Saving replaces the whole plan. Members on it keep their subscription; the new terms apply from their next cycle."
+      },
+      "createDialog": {
+        "title": "New plan",
+        "description": "Creates a catalogue entry. Nobody is subscribed to it until a subscription is moved onto it or a checkout sells it; leave it hidden to stage it."
+      },
+      "cancel": "Cancel",
+      "save": "Save plan",
+      "saving": "Saving…",
+      "saveError": "The plan could not be saved."
+    },
+    "rateCard": {
+      "editDialog": {
+        "title": "Edit rate card",
+        "description": "What this unit sells for and what it costs to serve. The charge type, provider and model identify the card and cannot be retyped here — a new billing identity arrives with the migration that registers it."
+      },
+      "perUnit": "per {unit}",
+      "fields": {
+        "unitPrice": "Unit price",
+        "currency": "Currency",
+        "providerCost": "Provider cost (USD)",
+        "providerCostHint": "Blank means no cost is recorded. Not the same as zero.",
+        "markup": "Markup multiplier",
+        "markupHint": "What the margin column reports. Blank leaves it to be derived, or left unknown.",
+        "active": "Active",
+        "activeHint": "An inactive card stops being charged against; the row stays for the invoices that used it."
+      },
+      "preview": {
+        "heading": "Pricing preview",
+        "hintReady": "Prices one unit at this cost and markup against the stored FX rate and credit value. Publishes nothing.",
+        "hintNotReady": "Enter both a provider cost and a markup to preview.",
+        "button": "Preview",
+        "pricing": "Pricing…",
+        "creditsPerUnit": "Credits per unit",
+        "customerPrice": "Customer price",
+        "providerCost": "Provider cost",
+        "margin": "Margin",
+        "formulaLine": "{formula} · FX {fx} · credit {credit} VND",
+        "vndSuffix": "(VND)"
+      },
+      "errors": {
+        "previewStale": "Cost or markup changed since the preview. Preview again before saving.",
+        "previewRequired": "Preview the new pricing before saving a change to cost or markup.",
+        "unitPriceInvalid": "Unit price must be a positive amount.",
+        "providerCostInvalid": "Provider cost must be a positive amount in USD, or left blank.",
+        "markupInvalid": "Markup multiplier must be above zero, or left blank.",
+        "saveFailed": "The rate card could not be saved.",
+        "previewFailed": "The pricing preview could not be calculated."
+      },
+      "cancel": "Cancel",
+      "save": "Save rate card",
+      "saving": "Saving…",
+      "creditCost": {
+        "title": "Provider cost",
+        "description": "What the provider charges WarpTalk per unit on a credit-unit (CRD) card — the card usage is actually settled on. Its credit price is set separately and does not change here. Admin Insights reads this cost to compute AI provider cost.",
+        "field": "Provider cost (USD per {unit})",
+        "hint": "In USD for one {unit} of usage, as the provider bills it. Must be above zero.",
+        "noUnit": "unit",
+        "effectBackfill": "This card has no provider cost yet. The value will also apply to the usage already settled on it, so past periods in Insights gain a cost.",
+        "effectSupersede": "This card already has a cost. A new version of the card takes effect now; usage already settled keeps the cost that applied to it.",
+        "save": "Save provider cost",
+        "errors": {
+          "invalid": "Enter a positive amount in USD, for example 0.00049.",
+          "noUnit": "This card has no unit, so a per-unit cost cannot be applied to it."
+        }
+      }
+    },
+    "deactivate": {
+      "title": "Deactivate this rate card?",
+      "description": "It stops pricing new usage now and leaves this list — it cannot be reactivated from this screen. Usage that resolves to it is not charged until a new rate is published for the identity. The row itself stays, because settled charges point at it.",
+      "confirmLabel": "Type {chargeType} to confirm",
+      "back": "Back",
+      "confirm": "Deactivate",
+      "deactivating": "Deactivating…",
+      "error": "The rate card could not be deactivated."
+    },
+    "config": {
+      "dialog": {
+        "title": "Edit pricing configuration",
+        "description": "Platform-wide. These are the floors and rates every plan is validated against and every quote is built from, so a change here can make an existing plan invalid on its next edit."
+      },
+      "fields": {
+        "fxRateUsdVnd": { "label": "FX rate USD→VND", "hint": "How a USD provider cost is read in VND." },
+        "minimumContractPriceVnd": { "label": "Minimum contract price (VND)" },
+        "minimumContractPriceUsd": { "label": "Minimum contract price (USD)" },
+        "salesUsageWeight": { "label": "Sales weight · usage" },
+        "salesMembersWeight": { "label": "Sales weight · members" },
+        "salesLanguagesWeight": { "label": "Sales weight · languages" },
+        "salesAiServicesWeight": { "label": "Sales weight · AI services" },
+        "defaultOverageCapRatio": { "label": "Default overage cap ratio" },
+        "defaultInvoiceTermsDays": { "label": "Default invoice terms (days)" },
+        "defaultInvoiceGraceHours": { "label": "Default invoice grace (hours)" },
+        "cartesiaUsdPerCredit": { "label": "Cartesia USD per credit", "hint": "Measured Cartesia credits × this × FX is the dubbing cost in Insights. Leave blank to keep the stored value." }
+      },
+      "cancel": "Cancel",
+      "save": "Save configuration",
+      "saving": "Saving…",
+      "numberError": "{label} must be a number.",
+      "negativeError": "{label} cannot be negative.",
+      "saveError": "The pricing configuration could not be saved."
+    }
+  }
+}

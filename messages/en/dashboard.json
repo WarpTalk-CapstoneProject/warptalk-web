@@ -1,0 +1,95 @@
+{
+  "billing": "Billing",
+  "restricted": {
+    "title": "Only an Owner or Admin can see this dashboard",
+    "description": "It reports workspace-wide spend and resources, so it is limited to the people who manage them."
+  },
+  "loading": "Loading…",
+  "hero": {
+    "noPlanTitle": "Start translating in this workspace",
+    "noPlanDescription": "Meetings translate against a credit balance. Choose a plan to give this workspace one, and every meeting in it gets live translation, transcripts and AI summaries.",
+    "hasPlanTitle": "Your workspace at a glance",
+    "hasPlanDescription": "Credits, burn rate and what is coming up — everything that decides whether this workspace keeps translating, on one page.",
+    "choosePlan": "Choose a plan",
+    "openBilling": "Open billing",
+    "dismiss": "Dismiss"
+  },
+  "creditsError": {
+    "title": "Could not read this workspace's credits",
+    "detail": "Billing did not answer. The rest of the page is unaffected."
+  },
+  "retry": "Retry",
+  "noPlan": {
+    "title": "No plan on this workspace",
+    "description": "Meetings translate against a credit balance, and this workspace has none to draw from.",
+    "choosePlan": "Choose a plan",
+    "usageChartedOncePlan": "Usage is charted once this workspace has a plan.",
+    "reasonNoDates": "This cycle has no dates on it.",
+    "reasonTooEarly": "Too early in the cycle to project a rate.",
+    "reasonNothingUsed": "Nothing used yet this cycle."
+  },
+  "cells": {
+    "creditsLeft": "Credits left",
+    "creditsLeftDetail": "{percent}% of {available} available",
+    "usedThisCycle": "Used this cycle",
+    "usedThisCycleDetail": "{percent}% of this cycle's credits",
+    "burnRate": "Burn rate",
+    "perDay": "{value}/day",
+    "burnRateDetailAverage": "Average since the cycle began",
+    "runsOut": "Runs out",
+    "renews": "Renews",
+    "runsOutDetail": "{count, plural, one {In # day} other {In # days}} — before the cycle ends",
+    "lastsDetail": "{count} left at this rate",
+    "renewsDetail": "{count, plural, one {In # day} other {In # days}}",
+    "cyclePerUnit": "cycle"
+  },
+  "usedPercentOfCredits": "of credits used",
+  "elapsedPercentOfCycle": "of the cycle elapsed",
+  "cancelsAtPeriodEnd": "cancels at period end",
+  "cancelWarning": "Translation stops for everyone in this workspace on {date}.",
+  "usageCouldNotLoad": "Usage could not be loaded.",
+  "sections": {
+    "creditUsage": "Credit usage",
+    "creditUsageDescription": "Consumed against topped up, month by month in {year}.",
+    "whereCreditsGo": "Where credits go",
+    "whoIsSpending": "Who is spending it",
+    "needsDecision": "Needs a decision",
+    "comingUp": "Coming up"
+  },
+  "usageEmptyForYear": "No credits used or added in {year}.",
+  "memberUsageError": "Member usage could not be loaded.",
+  "nothingWaiting": "Nothing is waiting on you.",
+  "documentsWaitingApproval": "{count, plural, one {# document waiting for approval} other {# documents waiting for approval}}",
+  "creditsAtPercent": "Credits are at {percent}%",
+  "creditsAtPercentDetail": "{count} left — meetings stop translating when this runs out.",
+  "planCancelling": "The plan is set to cancel",
+  "planEndsOn": "{planName} ends on {date}.",
+  "noMeetingsScheduled": "No meetings scheduled.",
+  "runningNow": "Running now",
+  "openNow": "Open now",
+  "noTimeSet": "No time set",
+  "counts": { "members": "members", "documents": "documents", "meetings": "meetings" },
+  "usageTrend": {
+    "consumed": "Consumed",
+    "toppedUp": "Topped up",
+    "tooltipConsumed": "consumed",
+    "tooltipToppedUp": "topped up"
+  },
+  "memberUsage": {
+    "empty": "No member has used credits in this window.",
+    "formerMember": "· no longer a member",
+    "charges": "{count, plural, one {# charge} other {# charges}}"
+  },
+  "usageBreakdown": { "empty": "Nothing has been used in this window." },
+  "usageLabels": {
+    "translation": "Live translation",
+    "dubbing": "Voice dubbing",
+    "cloneDubbing": "Cloned-voice dubbing",
+    "transcription": "Transcription",
+    "assistant": "AI assistant",
+    "summary": "Meeting summary",
+    "voiceCloning": "Voice cloning",
+    "documentTranslation": "Document translation",
+    "otherUsage": "Other usage"
+  }
+}

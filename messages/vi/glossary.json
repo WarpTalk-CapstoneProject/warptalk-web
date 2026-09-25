@@ -1,0 +1,102 @@
+{
+  "searchPlaceholder": "Tìm thuật ngữ",
+  "newGlossary": "Thuật ngữ mới",
+  "import": "Nhập",
+  "addTerm": "Thêm thuật ngữ",
+  "jumpToLetter": "Nhảy đến chữ cái",
+  "removeTermTitle": "Xóa thuật ngữ",
+  "deleteThisGlossary": "Xóa bộ thuật ngữ này",
+  "emptyState": {
+    "title": "Chưa có bộ thuật ngữ nào",
+    "description": "Một bộ thuật ngữ quy định cách các từ của bạn được nghe và dịch trong cuộc họp — tên sản phẩm, từ viết tắt, và những từ có nghĩa tùy thuộc vào lĩnh vực. Thuật ngữ ở đây sẽ ghi đè lên bộ thuật ngữ chung của nền tảng. Đã có sẵn danh sách? Nhập từ CSV hoặc bảng tính thay vì gõ tay.",
+    "importTerms": "Nhập thuật ngữ"
+  },
+  "emptyTerms": {
+    "titleSearch": "Không có thuật ngữ nào khớp tìm kiếm",
+    "titleEmpty": "Bộ thuật ngữ này chưa có mục nào",
+    "description": "Thêm những từ mà không gian làm việc muốn được nghe và dịch theo cách riêng, hoặc nhập từ CSV hoặc bảng tính đã có sẵn."
+  },
+  "dialogs": {
+    "newGlossary": {
+      "title": "Thuật ngữ mới",
+      "description": "Một bộ thuật ngữ chỉ áp dụng cho một chiều dịch. Thêm bộ khác cho một cặp ngôn ngữ khác.",
+      "namePlaceholder": "Tên",
+      "descriptionPlaceholder": "Mô tả (không bắt buộc)",
+      "spokenLanguagePlaceholder": "Ngôn ngữ nói",
+      "translatedIntoPlaceholder": "Dịch sang",
+      "chooseBothLanguages": "Hãy chọn cả hai ngôn ngữ.",
+      "creating": "Đang tạo…",
+      "create": "Tạo bộ thuật ngữ"
+    },
+    "addTerm": {
+      "title": "Thêm thuật ngữ",
+      "description": "Áp dụng trực tiếp cho cả nhận diện giọng nói và dịch thuật, trong mọi cuộc họp của không gian làm việc này.",
+      "termAsSpokenPlaceholder": "Thuật ngữ khi nói",
+      "translateAsPlaceholder": "Dịch thành",
+      "domainPlaceholder": "Lĩnh vực (không bắt buộc)",
+      "partOfSpeechPlaceholder": "Từ loại (không bắt buộc)",
+      "definitionPlaceholder": "Định nghĩa (không bắt buộc)",
+      "contextPlaceholder": "Ngữ cảnh — khi nào áp dụng cách đọc này (không bắt buộc)",
+      "adding": "Đang thêm…",
+      "addTerm": "Thêm thuật ngữ"
+    },
+    "import": {
+      "title": "Nhập thuật ngữ",
+      "description": "Vào <glossaryName></glossaryName>. Một hàng gần đầu file phải đặt tên cột; cần có cột <term>Term</term> và <translation>Translation</translation>. Field, Definition, Note, Part of speech và Priority sẽ được dùng nếu có.",
+      "expectedPairSame": "Bộ thuật ngữ này là {source} → {target}, nên cột thứ hai là ý nghĩa của mỗi từ chứ không phải bản dịch.",
+      "expectedPairDifferent": "Bộ thuật ngữ này là {source} → {target}. Cột thứ hai nên là {target}.",
+      "downloadSample": "Tải file mẫu",
+      "chooseFile": "Chọn file .xlsx hoặc .csv",
+      "chooseDifferentFile": "Chọn file khác",
+      "excelOrCsv": "Excel hoặc phân tách bằng dấu phẩy",
+      "readingFile": "Đang đọc file…",
+      "noRows": "File này không có dòng nào.",
+      "columnsFoundButEmpty": "Đã tìm thấy cột, nhưng mọi dòng bên dưới đều trống.",
+      "missingColumns": "Hàng đầu tiên phải đặt tên các cột, và phải có cột Term và cột Translation.",
+      "fileCouldNotBeRead": "Không thể đọc file này ({detail}). Hãy lưu lại dưới dạng .xlsx hoặc .csv và thử lại, hoặc bắt đầu từ file mẫu bên dưới.",
+      "rowsReady": "{count, plural, other {# dòng}} đã sẵn sàng. Các thuật ngữ đã có trong bộ này sẽ bị bỏ qua, và số lượng sẽ được báo sau khi nhập.",
+      "showingFirst": "Đang hiển thị 50 dòng đầu trong {count}. Toàn bộ {count} sẽ được nhập.",
+      "term": "Term",
+      "translation": "Translation",
+      "field": "Field",
+      "cancel": "Hủy",
+      "importing": "Đang nhập…",
+      "importCount": "{count, plural, other {Nhập # thuật ngữ}}"
+    }
+  },
+  "toasts": {
+    "imported": "Đã nhập {count, plural, other {# thuật ngữ}}.",
+    "importedSkipped": "Đã nhập {count, plural, other {# thuật ngữ}}, bỏ qua {skipped} thuật ngữ đã có trong bộ này.",
+    "moreErrors": "…và {count} lỗi khác.",
+    "importFailed": "Không thể nhập file.",
+    "glossaryCreatedWithTerms": "Đã tạo bộ thuật ngữ với {count, plural, other {# thuật ngữ}}.",
+    "glossaryCreated": "Đã tạo bộ thuật ngữ.",
+    "glossaryTermsFailed": "Đã tạo bộ thuật ngữ, nhưng không thể thêm các thuật ngữ.",
+    "glossaryCreateFailed": "Không thể tạo bộ thuật ngữ.",
+    "termAdded": "Đã thêm thuật ngữ.",
+    "termAddFailed": "Không thể thêm thuật ngữ.",
+    "glossaryDeleted": "Đã xóa bộ thuật ngữ.",
+    "glossaryDeleteFailed": "Không thể xóa bộ thuật ngữ.",
+    "termRemoved": "Đã xóa thuật ngữ.",
+    "termRemoveFailed": "Không thể xóa thuật ngữ."
+  },
+  "validation": {
+    "nameMin": "Tên phải có ít nhất 2 ký tự",
+    "sourceLanguageRequired": "Chọn ngôn ngữ mọi người nói",
+    "targetLanguageRequired": "Chọn ngôn ngữ được dịch sang",
+    "sourceTermRequired": "Cần nhập thuật ngữ",
+    "targetTermRequired": "Cần nhập bản dịch sẽ dùng"
+  },
+  "initialTerms": {
+    "addTranslationOrClear": "Thêm bản dịch, hoặc xóa thuật ngữ.",
+    "addTermOrClear": "Thêm thuật ngữ, hoặc xóa bản dịch."
+  },
+  "initialTermsField": {
+    "title": "Thuật ngữ đầu tiên",
+    "optionalHint": "Không bắt buộc — bạn có thể thêm sau",
+    "termInLanguage": "Thuật ngữ bằng {language}",
+    "useThisInLanguage": "Dùng từ này trong {language}",
+    "removeTerm": "Xóa thuật ngữ {index}",
+    "addTerm": "Thêm thuật ngữ"
+  }
+}

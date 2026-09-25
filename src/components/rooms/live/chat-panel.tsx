@@ -45,9 +45,12 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
 import { stripMeetingMarkers } from "@/lib/assistant/meeting-links";
+import { continueMeetingChatInWidget } from "@/lib/assistant/continue-in-widget";
+import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
+import { useTranslationRoom } from "@/hooks/use-translationRooms";
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { parseAnswerSources } from "@/lib/assistant/answer-sources";
-import { openProviderConsent } from "@/lib/assistant/open-provider-consent";
+import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { setMentionMenusVisible, suggestion } from "./mentions";
 import { SuggestionPluginKey } from "@tiptap/suggestion";
 import { mentionMatches, mentionMenuHandlesKey } from "@/lib/meeting/mention-menu";
@@ -64,12 +67,14 @@ import {
   FileImage,
   FileArchive,
   Download,
+  ArrowUpRight,
 } from "lucide-react";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
 import { usePluginConnectUrl } from "@/hooks/use-assistant";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 
 interface MessageTranslationState {
   text?: string;
@@ -149,7 +154,13 @@ export function ChatPanel({
    */
   active?: boolean;
 }) {
+  const t = useTranslations("meetingChat");
   const messages = useTranslationRoomStore((state) => state.chatMessages);
+  // "Continue in widget" hangs off WarpBot's LATEST answer only: one door, where the thread ends,
+  // rather than a button under every reply offering to move the same conversation.
+  const latestAssistantMessageId = [...messages].reverse().find(isAssistantMessage)?.id ?? null;
+  const handoffInFlight = useAssistantWidgetStore((state) => state.handoffInFlight);
+  const { data: roomForHandoff } = useTranslationRoom(roomId);
   // Only so a document chip under a WarpBot answer can link to that document; a room whose
   // workspace is not in the store simply renders the chip as a label.
   const activeWorkspaceSlug = useWorkspaceStore(
@@ -264,7 +275,7 @@ export function ChatPanel({
             [messageId]: {
               loading: false,
               visible: true,
-              error: "Could not translate message.",
+              error: t("errors.translateFailed"),
             },
           }));
         },
@@ -373,7 +384,7 @@ export function ChatPanel({
           // participant — and retrying refuses it again, forever. The backend now sends its
           // reason with the 403 (see MeetingChatController.ForbiddenWithReason), so say that;
           // the generic line stays for the faults where trying again genuinely is the answer.
-          setSendError(getErrorMessage(error, "Message could not be sent. Try again."));
+          setSendError(getErrorMessage(error, t("errors.sendFailed")));
           // Nothing was asked, so nothing is pending. Leaving this would spin for ninety
           // seconds and then blame WarpBot for a message that never reached it.
           if (asksTheAgent) {
@@ -504,7 +515,7 @@ export function ChatPanel({
         // Short on purpose. This panel is a narrow column, and "Type a message or @agent for
         // AI help..." wrapped onto a second line inside a one-line box. The @ hint does not
         // need to live here: typing "@" opens the agent menu, which names WarpBot itself.
-        placeholder: "Type a message…",
+        placeholder: t("composer.placeholder"),
       }),
       // Stops the typing at the cap rather than letting the message be composed and then
       // rejected by the API (WT-237).
@@ -602,7 +613,10 @@ export function ChatPanel({
     // the text actually sent can be longer than what was typed.
     if (trimmedText.length > MAX_CHAT_MESSAGE_LENGTH) {
       setSendError(
-        `Message is too long (${trimmedText.length}/${MAX_CHAT_MESSAGE_LENGTH} characters).`,
+        t("composer.messageTooLong", {
+          current: trimmedText.length,
+          max: MAX_CHAT_MESSAGE_LENGTH,
+        }),
       );
       return;
     }
@@ -624,7 +638,7 @@ export function ChatPanel({
 
     if (decision === "refuse") {
       setSendError(
-        `WarpBot already has ${MAX_QUEUED_AGENT_ASKS} questions waiting. Let it catch up before asking another.`,
+        t("queue.full", { max: MAX_QUEUED_AGENT_ASKS }),
       );
       return;
     }
@@ -662,7 +676,9 @@ export function ChatPanel({
     if (!file) return;
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
-      setFileError("File exceeds the 25 MB limit.");
+      setFileError(
+        t("errors.fileTooLarge", { maxMb: MAX_FILE_SIZE_BYTES / (1024 * 1024) }),
+      );
       return;
     }
 
@@ -676,7 +692,7 @@ export function ChatPanel({
           setUploadProgress(null);
         },
         onError: () => {
-          setFileError("File could not be uploaded. Try again.");
+          setFileError(t("errors.fileUploadFailed"));
           setUploadProgress(null);
         },
       },
@@ -691,7 +707,7 @@ export function ChatPanel({
         file.fileName || file.originalText || "download",
       );
     } catch {
-      setFileError("File could not be downloaded. Try again.");
+      setFileError(t("errors.fileDownloadFailed"));
     }
   }
 
@@ -715,20 +731,24 @@ export function ChatPanel({
         client: isDesktopApp() ? "desktop" : "web",
         workspaceId: activeWorkspaceId ?? undefined,
       });
+      if (result.apiKeyRequired) {
+        window.location.assign(pluginApiKeyPageHref(pluginKey));
+        return;
+      }
       // Connected on the server already: the provider's grant covered it, nothing to open. Said
       // out loud, because this is the common case for a second Google plugin — and returning
       // silently left the button flipping back to "Connect", which reads as a click that failed.
       if (result.connected || !result.url) {
-        toast.success("Plugin connected.");
+        toast.success(t("plugin.connected"));
         return;
       }
       if (!openProviderConsent(result.url)) {
         // Blocked popup, most likely: the user gesture is gone by the time the mutation
         // resolves. Saying nothing leaves them waiting on a window that never opened.
-        setSendError("Your browser blocked the consent window. Allow pop-ups and try again.");
+        setSendError(t("errors.popupBlocked"));
       }
     } catch {
-      setSendError("Could not open the plugin connection flow. Try again.");
+      setSendError(t("errors.pluginFlowFailed"));
     }
   }
 
@@ -743,20 +763,20 @@ export function ChatPanel({
         {historyQuery.isLoading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
             <LumidotSpinner />
-            <span className="ml-2">Loading messages</span>
+            <span className="ml-2">{t("history.loading")}</span>
           </div>
         ) : null}
         {historyQuery.isError && messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <p className="text-[13px] font-medium text-ink">
-              Could not load chat history
+              {t("history.loadError")}
             </p>
             <button
               type="button"
               onClick={() => void historyQuery.refetch()}
               className="text-[12px] font-medium text-primary hover:underline"
             >
-              Retry
+              {t("history.retry")}
             </button>
           </div>
         ) : null}
@@ -764,7 +784,7 @@ export function ChatPanel({
         !historyQuery.isError &&
         messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-ink-subtle">
-            No messages yet
+            {t("history.empty")}
           </div>
         ) : null}
         <AnimatePresence initial={false}>
@@ -813,8 +833,12 @@ export function ChatPanel({
                       <button
                         type="button"
                         onClick={() => toggleTranslation(message.id)}
-                        aria-label={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
-                        title={`Translate into ${getLanguageName(suggestedTargetLanguage)}`}
+                        aria-label={t("message.translateInto", {
+                          language: getLanguageName(suggestedTargetLanguage),
+                        })}
+                        title={t("message.translateInto", {
+                          language: getLanguageName(suggestedTargetLanguage),
+                        })}
                         aria-pressed={Boolean(translations[message.id]?.visible)}
                         // Always visible, not revealed on hover. The header dropdown is gone,
                         // so this is now the only way to translate anything — and a control
@@ -901,6 +925,31 @@ export function ChatPanel({
                           durationMs={assistantTrails[message.id].durationMs}
                         />
                       ) : null}
+                      {/* The explicit door to the same handover WarpBot's continue_in_widget tool
+                          performs: the thread moves to THIS viewer's private widget and the call
+                          carries on beside it. Visible to everyone — each person continues in
+                          their own widget; nothing is moved for anyone else. */}
+                      {message.id === latestAssistantMessageId ? (
+                        <button
+                          type="button"
+                          data-testid="continue-in-widget"
+                          disabled={handoffInFlight}
+                          onClick={() =>
+                            void continueMeetingChatInWidget({
+                              roomId,
+                              roomTitle: roomForHandoff?.title ?? null,
+                            })
+                          }
+                          className="mt-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-50"
+                        >
+                          {handoffInFlight ? (
+                            <LoaderCircle className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <ArrowUpRight className="h-3 w-3" />
+                          )}
+                          {t("message.continueInWidget")}
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     <p
@@ -948,15 +997,13 @@ export function ChatPanel({
             <LumidotSpinner />
             <span>
               {assistantState === "slow"
-                ? "WarpBot is still working — this one is taking a while."
-                : "WarpBot is thinking…"}
+                ? t("assistant.stillWorking")
+                : t("assistant.thinking")}
               {/* WT-580 — say that the next question was kept, not lost. Without this the
                   composer clears and nothing happens for several seconds, which is
                   indistinguishable from the message having failed to send. */}
               {queuedAsks.length > 0
-                ? queuedAsks.length === 1
-                  ? " Your next question is queued."
-                  : ` ${queuedAsks.length} more questions are queued.`
+                ? ` ${t("assistant.queued", { count: queuedAsks.length })}`
                 : null}
             </span>
           </div>
@@ -1044,7 +1091,7 @@ export function ChatPanel({
         ) : null}
         {uploadProgress != null ? (
           <p className="mb-2 text-[12px] text-ink-subtle">
-            Uploading file… {uploadProgress}%
+            {t("composer.uploadingFile", { progress: uploadProgress })}
           </p>
         ) : null}
         <input
@@ -1062,8 +1109,8 @@ export function ChatPanel({
             type="button"
             onClick={handleFileButtonClick}
             disabled={isUploadingFile}
-            aria-label="Attach file"
-            title="Attach file"
+            aria-label={t("composer.attachFile")}
+            title={t("composer.attachFile")}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isUploadingFile ? (
@@ -1077,8 +1124,8 @@ export function ChatPanel({
             type="button"
             onClick={() => sendMessage()}
             disabled={isPending}
-            aria-label="Send message"
-            title="Send message"
+            aria-label={t("composer.sendMessage")}
+            title={t("composer.sendMessage")}
             className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-ink-subtle transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isPending ? (

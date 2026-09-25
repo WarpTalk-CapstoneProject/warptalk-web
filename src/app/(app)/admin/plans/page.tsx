@@ -1,23 +1,43 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   ArrowsClockwise,
+  CalendarBlank,
+  Coins,
+  Cpu,
+  CurrencyCircleDollar,
+  Gauge,
   PencilSimple,
   Plus,
   Prohibit,
+  Ruler,
+  Stack,
   Tag,
+  ToggleRight,
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   AdminFilterTabs,
   AdminPage,
   AdminPageHeader,
   AdminPanel,
 } from "@/components/admin/admin-page-chrome";
+import {
+  AdminDataTable,
+  AdminListToolbar,
+  useAdminActionIntent,
+  useAdminListState,
+  type AdminColumn,
+  type AdminFilterField,
+  type AdminFilterOption,
+} from "@/components/admin/list";
 import {
   PlanCreateDialog,
   PlanEditDialog,
@@ -31,10 +51,17 @@ import {
   useAdminRateCards,
   useCreateAdminPlan,
   useDeactivateAdminRateCard,
+  useSetAdminRateCardProviderCost,
   useUpdateAdminPlan,
   useUpdateAdminPricingConfig,
   useUpsertAdminRateCard,
 } from "@/hooks/use-admin-pricing";
+import {
+  applyClientListState,
+  type ClientListAccessors,
+  type ListStateConfig,
+} from "@/lib/admin/list-state";
+import { matchesSearch } from "@/lib/admin/search-text";
 import { formatAdminMoney } from "@/lib/billing/admin-money";
 import {
   marginLabel,
@@ -45,13 +72,13 @@ import { cn } from "@/lib/utils";
 import type { UsageRateCardDto } from "@/types/admin-pricing";
 import type { PlanDto } from "@/types/billing";
 
-const TABS = [
-  { value: "plans", label: "Plans" },
-  { value: "rate-cards", label: "Rate cards" },
-  { value: "configuration", label: "Configuration" },
-] as const;
+const TAB_VALUES = ["plans", "rate-cards", "configuration"] as const;
 
-type Tab = (typeof TABS)[number]["value"];
+type Tab = (typeof TAB_VALUES)[number];
+
+function isTab(value: string | null): value is Tab {
+  return (TAB_VALUES as readonly string[]).includes(value ?? "");
+}
 
 const numberFormatter = new Intl.NumberFormat("en-US");
 
@@ -59,6 +86,571 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" })
     .format(new Date(value));
 }
+
+/** Distinct values of one property across a whole catalogue, as filter options. */
+function distinctOptions<T>(
+  rows: readonly T[],
+  valueOf: (row: T) => string | null | undefined,
+  labelOf: (value: string) => string = (value) => value,
+): AdminFilterOption[] {
+  const values = Array.from(new Set(rows.map(valueOf).filter((value): value is string => Boolean(value))));
+  return values
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => {
+      const label = labelOf(value);
+      return { value, label, hint: label === value ? undefined : value };
+    });
+}
+
+// ── Plans ────────────────────────────────────────────────────────────────────
+
+/**
+ * The plan catalogue is small and fetched whole, so its view is filtered here, in the browser,
+ * with `applyClientListState`. Tier, cycle and currency are open sets (whatever the catalogue
+ * holds), so their options come from the rows and their defs carry no `values`.
+ */
+const PLAN_LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "tier", kind: "enum", multiple: true },
+    { key: "cycle", kind: "enum", multiple: true },
+    { key: "currency", kind: "enum", multiple: true },
+    { key: "active", kind: "boolean" },
+  ],
+  sortFields: ["order", "name", "price", "credits"],
+  defaultSort: { field: "order", direction: "asc" },
+  columns: [
+    { id: "plan" },
+    { id: "tier" },
+    { id: "cycle" },
+    { id: "price" },
+    { id: "credits" },
+    { id: "status" },
+    { id: "order", defaultHidden: true },
+  ],
+  groupings: ["tier", "cycle", "currency"],
+};
+
+const PLAN_ACCESSORS: ClientListAccessors<PlanDto> = {
+  search: (plan) => [plan.name, plan.slug, plan.tier],
+  filters: {
+    tier: (plan) => plan.tier,
+    cycle: (plan) => plan.billingCycle,
+    currency: (plan) => plan.currency,
+    active: (plan) => plan.isActive,
+  },
+  sort: {
+    order: (plan) => plan.sortOrder,
+    name: (plan) => plan.name,
+    // Amounts, not a converted value: plans in different currencies do not order against each
+    // other meaningfully, which is why Currency is offered as a filter and a grouping beside it.
+    price: (plan) => plan.price,
+    credits: (plan) => plan.creditsPerCycle,
+  },
+};
+
+function PlansList({
+  plans,
+  isPending,
+  isError,
+  isFetching,
+  onRetry,
+  onEdit,
+}: {
+  plans: readonly PlanDto[];
+  isPending: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  onRetry: () => void;
+  onEdit: (plan: PlanDto) => void;
+}) {
+  const t = useTranslations("adminPlansSettings.plans");
+  const list = useAdminListState(PLAN_LIST_CONFIG);
+  const { state } = list;
+
+  const rows = useMemo(
+    () => applyClientListState(plans, state, PLAN_ACCESSORS, matchesSearch),
+    [plans, state],
+  );
+
+  const cycleLabel = (value: string) =>
+    value === "monthly" ? t("list.cycles.monthly") : value === "yearly" || value === "year" ? t("list.cycles.yearly") : value;
+
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "tier",
+      label: t("list.plans.filters.tier"),
+      icon: <Stack size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(plans, (plan) => plan.tier),
+    },
+    {
+      key: "cycle",
+      label: t("list.plans.filters.cycle"),
+      icon: <CalendarBlank size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(plans, (plan) => plan.billingCycle, cycleLabel),
+    },
+    {
+      key: "currency",
+      label: t("list.plans.filters.currency"),
+      icon: <CurrencyCircleDollar size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(plans, (plan) => plan.currency),
+    },
+    {
+      key: "active",
+      label: t("list.plans.filters.active"),
+      icon: <ToggleRight size={13} />,
+      kind: "boolean",
+      trueLabel: t("planRow.active"),
+      falseLabel: t("planRow.hidden"),
+    },
+  ];
+
+  const columns: AdminColumn<PlanDto>[] = [
+    {
+      id: "plan",
+      header: t("list.plans.columns.plan"),
+      primary: true,
+      sortField: "name",
+      cell: (plan) => (
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium text-ink">{plan.name}</p>
+          <p className="truncate font-mono text-[11px] font-normal text-ink-subtle">{plan.slug}</p>
+        </div>
+      ),
+    },
+    {
+      id: "tier",
+      header: t("list.plans.columns.tier"),
+      className: "w-[110px]",
+      cell: (plan) => <span className="text-[12px] text-ink-muted">{plan.tier}</span>,
+    },
+    {
+      id: "cycle",
+      header: t("list.plans.columns.cycle"),
+      className: "w-[110px]",
+      cell: (plan) => <span className="text-[12px] text-ink-muted">{cycleLabel(plan.billingCycle)}</span>,
+    },
+    {
+      id: "price",
+      header: t("list.plans.columns.price"),
+      align: "right",
+      className: "w-[140px]",
+      sortField: "price",
+      defaultDirection: "desc",
+      cell: (plan) => formatAdminMoney({ amount: plan.price, currency: plan.currency }),
+    },
+    {
+      id: "credits",
+      header: t("list.plans.columns.credits"),
+      align: "right",
+      className: "w-[130px]",
+      sortField: "credits",
+      defaultDirection: "desc",
+      cell: (plan) => <span className="text-ink-muted">{numberFormatter.format(plan.creditsPerCycle)}</span>,
+    },
+    {
+      id: "status",
+      header: t("list.plans.columns.status"),
+      className: "w-[100px]",
+      // Hidden, not deleted. A deactivated plan still appears on old invoices, so removing it would
+      // break history — which is why the API has no delete and this has no button. The Active
+      // switch inside the editor is how a plan is retired.
+      cell: (plan) => (
+        <span
+          className={cn(
+            "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+            plan.isActive
+              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-border bg-surface-2 text-ink-muted",
+          )}
+        >
+          {plan.isActive ? t("planRow.active") : t("planRow.hidden")}
+        </span>
+      ),
+    },
+    {
+      id: "order",
+      header: t("list.plans.columns.order"),
+      align: "right",
+      className: "w-[80px]",
+      sortField: "order",
+      cell: (plan) => <span className="text-ink-muted">{plan.sortOrder}</span>,
+    },
+    {
+      id: "actions",
+      header: "",
+      align: "right",
+      className: "w-[90px]",
+      cell: (plan) => (
+        <Button variant="outline" size="sm" onClick={() => onEdit(plan)}>
+          <PencilSimple size={13} />
+          {t("planRow.edit")}
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("list.plans.searchPlaceholder")}
+        filters={filterFields}
+        count={isPending ? null : rows.length}
+        countLabel={
+          list.narrowed
+            ? t("list.visibleOfTotal", { visible: rows.length, total: plans.length })
+            : t("planCount", { count: plans.length })
+        }
+        isFetching={isFetching && !isPending}
+        display={{
+          sortOptions: [
+            { field: "order", label: t("list.plans.sortFields.order") },
+            { field: "name", label: t("list.plans.sortFields.name") },
+            { field: "price", label: t("list.plans.sortFields.price") },
+            { field: "credits", label: t("list.plans.sortFields.credits") },
+          ],
+          groupOptions: [
+            { key: "tier", label: t("list.plans.filters.tier") },
+            { key: "cycle", label: t("list.plans.filters.cycle") },
+            { key: "currency", label: t("list.plans.filters.currency") },
+          ],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
+      />
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={rows}
+          rowKey={(plan) => plan.id}
+          isPending={isPending}
+          isError={isError}
+          onRetry={onRetry}
+          empty={{ title: t("plansEmpty"), icon: <Tag size={20} weight="duotone" /> }}
+          groupings={{
+            tier: { keyOf: (plan) => plan.tier, label: (key) => key },
+            cycle: { keyOf: (plan) => plan.billingCycle, label: cycleLabel },
+            currency: { keyOf: (plan) => plan.currency, label: (key) => key },
+          }}
+          caption={t("tabs.plans")}
+          minWidth={820}
+        />
+      </AdminPanel>
+    </>
+  );
+}
+
+// ── Rate cards ───────────────────────────────────────────────────────────────
+
+const MARGIN_BANDS = ["loss", "thin", "healthy", "unknown"] as const;
+
+const RATE_CARD_LIST_CONFIG: ListStateConfig = {
+  filters: [
+    { key: "chargeType", kind: "enum", multiple: true },
+    { key: "provider", kind: "enum", multiple: true },
+    { key: "unit", kind: "enum", multiple: true },
+    { key: "currency", kind: "enum", multiple: true },
+    { key: "margin", kind: "enum", multiple: true, values: MARGIN_BANDS },
+    { key: "active", kind: "boolean" },
+  ],
+  sortFields: ["chargeType", "provider", "price", "margin", "effective"],
+  defaultSort: { field: "chargeType", direction: "asc" },
+  columns: [
+    { id: "rateCard" },
+    { id: "unit" },
+    { id: "price" },
+    { id: "providerCost" },
+    { id: "margin" },
+    { id: "effective" },
+  ],
+  groupings: ["chargeType", "provider", "unit"],
+};
+
+const RATE_CARD_ACCESSORS: ClientListAccessors<UsageRateCardDto> = {
+  search: (card) => [
+    card.chargeType,
+    card.provider,
+    card.model,
+    card.unit,
+    card.sourceLanguageCode,
+    card.targetLanguageCode,
+  ],
+  filters: {
+    chargeType: (card) => card.chargeType,
+    provider: (card) => card.provider,
+    unit: (card) => card.unit,
+    currency: (card) => card.currency,
+    margin: (card) => marginTone(resolveRateCardMargin(card)),
+    active: (card) => card.isActive,
+  },
+  sort: {
+    chargeType: (card) => card.chargeType,
+    provider: (card) => card.provider,
+    price: (card) => card.unitPrice,
+    // The same number the Margin column shows; a card with no sound margin sorts last either way.
+    margin: (card) => resolveRateCardMargin(card).value,
+    effective: (card) => new Date(card.effectiveFrom),
+  },
+};
+
+function RateCardMargin({ card }: { card: UsageRateCardDto }) {
+  const t = useTranslations("adminPlansSettings.plans.rateCardRow");
+  const margin = resolveRateCardMargin(card);
+  const tone = marginTone(margin);
+  // The column this page exists for. It is the STORED multiplier where there is one, and a named
+  // refusal where price and cost are in different currencies — never price ÷ cost across VND and
+  // USD, which produces a plausible number that is off by the exchange rate.
+  return (
+    <Tooltip
+      content={
+        margin.source === "derived"
+          ? t("marginDerivedTooltip")
+          : margin.source === "recorded"
+            ? t("marginRecordedTooltip")
+            : null
+      }
+    >
+      <span
+        className={cn(
+          "tabular-nums",
+          tone === "loss" && "font-semibold text-destructive",
+          tone === "thin" && "font-semibold text-amber-600 dark:text-amber-400",
+          tone === "healthy" && "font-semibold text-emerald-600 dark:text-emerald-400",
+          tone === "unknown" && "text-[11px] italic text-ink-subtle",
+        )}
+      >
+        {marginLabel(margin)}
+      </span>
+    </Tooltip>
+  );
+}
+
+function RateCardsList({
+  cards,
+  isPending,
+  isError,
+  isFetching,
+  onRetry,
+  onEdit,
+  onDeactivate,
+}: {
+  cards: readonly UsageRateCardDto[];
+  isPending: boolean;
+  isError: boolean;
+  isFetching: boolean;
+  onRetry: () => void;
+  onEdit: (card: UsageRateCardDto) => void;
+  onDeactivate: (card: UsageRateCardDto) => void;
+}) {
+  const t = useTranslations("adminPlansSettings.plans");
+  const list = useAdminListState(RATE_CARD_LIST_CONFIG);
+  const { state } = list;
+
+  const rows = useMemo(
+    () => applyClientListState(cards, state, RATE_CARD_ACCESSORS, matchesSearch),
+    [cards, state],
+  );
+
+  const filterFields: AdminFilterField[] = [
+    {
+      key: "chargeType",
+      label: t("list.rateCards.filters.chargeType"),
+      icon: <Gauge size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(cards, (card) => card.chargeType),
+    },
+    {
+      key: "provider",
+      label: t("list.rateCards.filters.provider"),
+      icon: <Cpu size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(cards, (card) => card.provider),
+    },
+    {
+      key: "unit",
+      label: t("list.rateCards.filters.unit"),
+      icon: <Ruler size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(cards, (card) => card.unit),
+    },
+    {
+      key: "currency",
+      label: t("list.rateCards.filters.currency"),
+      icon: <CurrencyCircleDollar size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: distinctOptions(cards, (card) => card.currency),
+    },
+    {
+      key: "margin",
+      label: t("list.rateCards.filters.margin"),
+      icon: <Coins size={13} />,
+      kind: "enum",
+      multiple: true,
+      options: MARGIN_BANDS.map((band) => ({ value: band, label: t(`list.rateCards.marginBands.${band}`) })),
+    },
+    {
+      key: "active",
+      label: t("list.rateCards.filters.active"),
+      icon: <ToggleRight size={13} />,
+      kind: "boolean",
+      trueLabel: t("list.rateCards.inForce"),
+      falseLabel: t("list.rateCards.deactivated"),
+    },
+  ];
+
+  const columns: AdminColumn<UsageRateCardDto>[] = [
+    {
+      id: "rateCard",
+      header: t("list.rateCards.columns.rateCard"),
+      primary: true,
+      sortField: "chargeType",
+      cell: (card) => (
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium text-ink">{card.chargeType}</p>
+          <p className="truncate text-[11px] font-normal text-ink-subtle">
+            {card.provider}
+            {card.model ? ` · ${card.model}` : ""}
+            {card.sourceLanguageCode || card.targetLanguageCode
+              ? ` · ${card.sourceLanguageCode ?? "*"}→${card.targetLanguageCode ?? "*"}`
+              : ""}
+          </p>
+        </div>
+      ),
+    },
+    {
+      id: "unit",
+      header: t("list.rateCards.columns.unit"),
+      className: "w-[90px]",
+      cell: (card) => <span className="text-[12px] text-ink-muted">{card.unit}</span>,
+    },
+    {
+      id: "price",
+      header: t("list.rateCards.columns.price"),
+      align: "right",
+      className: "w-[130px]",
+      sortField: "price",
+      defaultDirection: "desc",
+      cell: (card) => formatAdminMoney({ amount: card.unitPrice, currency: card.currency }),
+    },
+    {
+      id: "providerCost",
+      header: t("list.rateCards.columns.providerCost"),
+      align: "right",
+      className: "w-[130px]",
+      cell: (card) => (
+        <span className="text-ink-muted">
+          {card.providerUnitCostUsd == null
+            ? "—"
+            : formatAdminMoney({ amount: card.providerUnitCostUsd, currency: "USD" })}
+        </span>
+      ),
+    },
+    {
+      id: "margin",
+      header: t("list.rateCards.columns.margin"),
+      align: "right",
+      className: "w-[130px]",
+      sortField: "margin",
+      cell: (card) => <RateCardMargin card={card} />,
+    },
+    {
+      id: "effective",
+      header: t("list.rateCards.columns.effective"),
+      align: "right",
+      className: "w-[140px]",
+      sortField: "effective",
+      defaultDirection: "desc",
+      cell: (card) => (
+        <span className="text-[12px] text-ink-muted">{t("rateCardRow.from", { date: formatDate(card.effectiveFrom) })}</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "",
+      align: "right",
+      className: "w-[200px]",
+      cell: (card) => (
+        <div className="flex justify-end gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => onEdit(card)}>
+            <PencilSimple size={13} />
+            {t("rateCardRow.edit")}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onDeactivate(card)}>
+            <Prohibit size={13} />
+            {t("rateCardRow.deactivate")}
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <>
+      <AdminListToolbar
+        list={list}
+        searchPlaceholder={t("list.rateCards.searchPlaceholder")}
+        filters={filterFields}
+        count={isPending ? null : rows.length}
+        countLabel={
+          list.narrowed
+            ? t("list.visibleOfTotal", { visible: rows.length, total: cards.length })
+            : t("rateCardCount", { count: cards.length })
+        }
+        isFetching={isFetching && !isPending}
+        display={{
+          sortOptions: [
+            { field: "chargeType", label: t("list.rateCards.sortFields.chargeType") },
+            { field: "provider", label: t("list.rateCards.sortFields.provider") },
+            { field: "price", label: t("list.rateCards.sortFields.price") },
+            { field: "margin", label: t("list.rateCards.sortFields.margin") },
+            { field: "effective", label: t("list.rateCards.sortFields.effective") },
+          ],
+          groupOptions: [
+            { key: "chargeType", label: t("list.rateCards.filters.chargeType") },
+            { key: "provider", label: t("list.rateCards.filters.provider") },
+            { key: "unit", label: t("list.rateCards.filters.unit") },
+          ],
+          columns: columns
+            .filter((column) => !column.primary && column.id !== "actions")
+            .map((column) => ({ id: column.id, label: column.header })),
+        }}
+      />
+      <AdminPanel>
+        <AdminDataTable
+          list={list}
+          columns={columns}
+          rows={rows}
+          rowKey={(card) => card.id}
+          isPending={isPending}
+          isError={isError}
+          onRetry={onRetry}
+          empty={{ title: t("rateCardsEmpty"), icon: <Tag size={20} weight="duotone" /> }}
+          groupings={{
+            chargeType: { keyOf: (card) => card.chargeType, label: (key) => key },
+            provider: { keyOf: (card) => card.provider, label: (key) => key },
+            unit: { keyOf: (card) => card.unit, label: (key) => key },
+          }}
+          caption={t("tabs.rateCards")}
+          minWidth={980}
+        />
+      </AdminPanel>
+    </>
+  );
+}
+
+// ── Configuration ────────────────────────────────────────────────────────────
 
 function PanelState({
   isError,
@@ -77,17 +669,16 @@ function PanelState({
   onRetry: () => void;
   children: React.ReactNode;
 }) {
+  const t = useTranslations("adminPlansSettings.plans");
   if (isError) {
     return (
       <div className="flex items-start gap-3 px-4 py-10 text-sm">
         <WarningCircle size={18} weight="duotone" className="mt-0.5 shrink-0 text-destructive" />
         <div>
           <p className="font-medium">{errorText}</p>
-          <p className="mt-1 text-ink-muted">
-            Check the billing service and that your session still holds the platform admin role.
-          </p>
+          <p className="mt-1 text-ink-muted">{t("errorHint")}</p>
           <Button variant="outline" size="sm" className="mt-3" onClick={onRetry}>
-            Try again
+            {t("tryAgain")}
           </Button>
         </div>
       </div>
@@ -117,124 +708,6 @@ function PanelState({
   return <>{children}</>;
 }
 
-function PlanRow({ plan, onEdit }: { plan: PlanDto; onEdit: (plan: PlanDto) => void }) {
-  return (
-    <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium text-ink">{plan.name}</p>
-        <p className="truncate font-mono text-[11px] text-ink-subtle">{plan.slug}</p>
-      </div>
-      <div className="w-[110px] shrink-0 text-[12px] text-ink-muted">{plan.tier}</div>
-      <div className="w-[100px] shrink-0 text-[12px] text-ink-muted">{plan.billingCycle}</div>
-      <div className="w-[140px] shrink-0 text-[13px] tabular-nums text-ink md:text-right">
-        {formatAdminMoney({ amount: plan.price, currency: plan.currency })}
-      </div>
-      <div className="w-[130px] shrink-0 text-[13px] tabular-nums text-ink-muted md:text-right">
-        {numberFormatter.format(plan.creditsPerCycle)}
-      </div>
-      <div className="w-[90px] shrink-0 md:text-right">
-        {/* Hidden, not deleted. A deactivated plan still appears on old invoices, so removing it
-            would break history — which is why the API has no delete and this has no button. The
-            Active switch inside the editor is how a plan is retired. */}
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-            plan.isActive
-              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-              : "border-border bg-surface-2 text-ink-muted",
-          )}
-        >
-          {plan.isActive ? "Active" : "Hidden"}
-        </span>
-      </div>
-
-      <div className="shrink-0 md:ml-3">
-        <Button variant="outline" size="sm" onClick={() => onEdit(plan)}>
-          <PencilSimple size={13} />
-          Edit
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function RateCardRow({
-  card,
-  onEdit,
-  onDeactivate,
-}: {
-  card: UsageRateCardDto;
-  onEdit: (card: UsageRateCardDto) => void;
-  onDeactivate: (card: UsageRateCardDto) => void;
-}) {
-  const margin = resolveRateCardMargin(card);
-  const tone = marginTone(margin);
-
-  return (
-    <div className="flex flex-col gap-2 border-b border-hairline/60 px-4 py-3 last:border-b-0 md:flex-row md:items-center md:gap-0">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium text-ink">{card.chargeType}</p>
-        <p className="truncate text-[11px] text-ink-subtle">
-          {card.provider}
-          {card.model ? ` · ${card.model}` : ""}
-          {card.sourceLanguageCode || card.targetLanguageCode
-            ? ` · ${card.sourceLanguageCode ?? "*"}→${card.targetLanguageCode ?? "*"}`
-            : ""}
-        </p>
-      </div>
-
-      <div className="w-[80px] shrink-0 text-[12px] text-ink-muted">{card.unit}</div>
-
-      <div className="w-[130px] shrink-0 text-[13px] tabular-nums text-ink md:text-right">
-        {formatAdminMoney({ amount: card.unitPrice, currency: card.currency })}
-      </div>
-
-      <div className="w-[130px] shrink-0 text-[13px] tabular-nums text-ink-muted md:text-right">
-        {card.providerUnitCostUsd == null
-          ? "—"
-          : formatAdminMoney({ amount: card.providerUnitCostUsd, currency: "USD" })}
-      </div>
-
-      {/* The column this page exists for. It is the STORED multiplier where there is one, and a
-          named refusal where price and cost are in different currencies — never price ÷ cost
-          across VND and USD, which produces a plausible number that is off by the exchange rate. */}
-      <div
-        className={cn(
-          "w-[140px] shrink-0 text-[13px] tabular-nums md:text-right",
-          tone === "loss" && "font-semibold text-destructive",
-          tone === "thin" && "font-semibold text-amber-600 dark:text-amber-400",
-          tone === "healthy" && "font-semibold text-emerald-600 dark:text-emerald-400",
-          tone === "unknown" && "text-[11px] italic text-ink-subtle",
-        )}
-        title={
-          margin.source === "derived"
-            ? "Computed from price and cost — both in USD"
-            : margin.source === "recorded"
-              ? "As recorded on the rate card"
-              : undefined
-        }
-      >
-        {marginLabel(margin)}
-      </div>
-
-      <div className="w-[150px] shrink-0 text-[12px] text-ink-muted md:text-right">
-        from {formatDate(card.effectiveFrom)}
-      </div>
-
-      <div className="flex shrink-0 gap-1.5 md:ml-3">
-        <Button variant="outline" size="sm" onClick={() => onEdit(card)}>
-          <PencilSimple size={13} />
-          Edit
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => onDeactivate(card)}>
-          <Prohibit size={13} />
-          Deactivate
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 /**
  * The platform-wide knobs, read straight down the page rather than into a table.
  *
@@ -252,8 +725,28 @@ function ConfigRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-export default function AdminPlansPage() {
-  const [tab, setTab] = useState<Tab>("plans");
+
+function PlansAndPricing() {
+  const t = useTranslations("adminPlansSettings.plans");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const TAB_LABEL_KEYS: Record<Tab, string> = {
+    plans: "tabs.plans",
+    "rate-cards": "tabs.rateCards",
+    configuration: "tabs.configuration",
+  };
+  const TABS = TAB_VALUES.map((value) => ({ value, label: t(TAB_LABEL_KEYS[value]) }));
+
+  // The tab is in the URL (`?tab=rate-cards`), so a link lands on it. Plans is the default and is
+  // never written, which keeps the palette's `/admin/plans?q=<slug>` on the Plans tab.
+  const tabParam = searchParams.get("tab");
+  const tab: Tab = isTab(tabParam) ? tabParam : "plans";
+  /** A new tab starts clean: the other tab's search, filters and order mean nothing here. */
+  const setTab = (next: Tab) => {
+    router.replace(next === "plans" ? pathname : `${pathname}?tab=${next}`, { scroll: false });
+  };
+
   const plansQuery = useAdminPlans();
   const rateCardsQuery = useAdminRateCards();
   const configQuery = useAdminPricingConfig();
@@ -262,6 +755,7 @@ export default function AdminPlansPage() {
   const createPlan = useCreateAdminPlan();
   const upsertRateCard = useUpsertAdminRateCard();
   const deactivateRateCard = useDeactivateAdminRateCard();
+  const setRateCardProviderCost = useSetAdminRateCardProviderCost();
   const updateConfig = useUpdateAdminPricingConfig();
 
   /**
@@ -277,8 +771,11 @@ export default function AdminPlansPage() {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isCreatingPlan, setIsCreatingPlan] = useState(false);
 
-  const plans = plansQuery.data ?? [];
-  const rateCards = rateCardsQuery.data ?? [];
+  // The palette's "Create plan" action.
+  useAdminActionIntent({ "create-plan": () => setIsCreatingPlan(true) });
+
+  const plans = useMemo(() => plansQuery.data ?? [], [plansQuery.data]);
+  const rateCards = useMemo(() => rateCardsQuery.data ?? [], [rateCardsQuery.data]);
   const config = configQuery.data ?? null;
 
   const active =
@@ -287,22 +784,22 @@ export default function AdminPlansPage() {
   return (
     <AdminPage>
       <AdminPageHeader
-        eyebrow="Revenue"
+        eyebrow={t("eyebrow")}
         eyebrowIcon={<Tag size={14} weight="fill" />}
-        title="Plans & pricing"
-        description="What the platform sells, and what each unit of it costs to serve."
+        title={t("title")}
+        description={t("description")}
         actions={
           <>
             {tab === "plans" ? (
               <Button size="sm" onClick={() => setIsCreatingPlan(true)}>
                 <Plus size={14} />
-                New plan
+                {t("newPlan")}
               </Button>
             ) : null}
             {tab === "configuration" ? (
               <Button size="sm" onClick={() => setIsConfigOpen(true)} disabled={config === null}>
                 <PencilSimple size={14} />
-                Edit configuration
+                {t("editConfiguration")}
               </Button>
             ) : null}
             <Button
@@ -312,7 +809,7 @@ export default function AdminPlansPage() {
               disabled={active.isFetching}
             >
               <ArrowsClockwise size={14} className={cn(active.isFetching && "animate-spin")} />
-              Refresh
+              {t("refresh")}
             </Button>
           </>
         }
@@ -322,133 +819,101 @@ export default function AdminPlansPage() {
         tabs={TABS}
         value={tab}
         onChange={setTab}
-        label="Pricing view"
+        label={t("filterLabel")}
         trailing={
-          tab === "plans"
-            ? plansQuery.isPending
-              ? "Loading…"
-              : `${plans.length} plan${plans.length === 1 ? "" : "s"}`
-            : tab === "rate-cards"
-              ? rateCardsQuery.isPending
-                ? "Loading…"
-                : `${rateCards.length} rate card${rateCards.length === 1 ? "" : "s"}`
-              : configQuery.isPending
-                ? "Loading…"
-                : "Platform-wide"
+          tab === "configuration"
+            ? configQuery.isPending
+              ? t("loading")
+              : t("platformWide")
+            : undefined
         }
       />
 
       {tab === "rate-cards" ? (
-        <p className="mt-4 text-[12px] text-ink-muted">
-          Margins are read from the rate card&rsquo;s recorded multiplier. Where a price is in one
-          currency and the provider cost in another, no margin is shown — dividing them would
-          produce a number off by the exchange rate.
-        </p>
+        <p className="mt-4 text-[12px] text-ink-muted">{t("rateCardsNote")}</p>
       ) : null}
 
-      <AdminPanel className="mt-3">
-        {tab === "plans" ? (
-          <PanelState
-            isError={plansQuery.isError}
-            isPending={plansQuery.isPending}
-            isEmpty={plans.length === 0}
-            errorText="Plans could not be loaded."
-            emptyText="No plans in the catalogue."
-            onRetry={() => void plansQuery.refetch()}
-          >
-            <ul>
-              {plans.map((plan) => (
-                <li key={plan.id}>
-                  <PlanRow plan={plan} onEdit={setEditingPlan} />
-                </li>
-              ))}
-            </ul>
-          </PanelState>
-        ) : tab === "rate-cards" ? (
-          <PanelState
-            isError={rateCardsQuery.isError}
-            isPending={rateCardsQuery.isPending}
-            isEmpty={rateCards.length === 0}
-            errorText="Rate cards could not be loaded."
-            emptyText="No rate cards configured."
-            onRetry={() => void rateCardsQuery.refetch()}
-          >
-            <ul>
-              {rateCards.map((card) => (
-                <li key={card.id}>
-                  <RateCardRow card={card} onEdit={setEditingCard} onDeactivate={setRetiringCard} />
-                </li>
-              ))}
-            </ul>
-          </PanelState>
-        ) : (
+      {tab === "plans" ? (
+        <PlansList
+          plans={plans}
+          isPending={plansQuery.isPending}
+          isError={plansQuery.isError}
+          isFetching={plansQuery.isFetching}
+          onRetry={() => void plansQuery.refetch()}
+          onEdit={setEditingPlan}
+        />
+      ) : tab === "rate-cards" ? (
+        <RateCardsList
+          cards={rateCards}
+          isPending={rateCardsQuery.isPending}
+          isError={rateCardsQuery.isError}
+          isFetching={rateCardsQuery.isFetching}
+          onRetry={() => void rateCardsQuery.refetch()}
+          onEdit={setEditingCard}
+          onDeactivate={setRetiringCard}
+        />
+      ) : (
+        <AdminPanel className="mt-3">
           <PanelState
             isError={configQuery.isError}
             isPending={configQuery.isPending}
             isEmpty={config === null}
-            errorText="Pricing configuration could not be loaded."
-            emptyText="No pricing configuration is stored."
+            errorText={t("configError")}
+            emptyText={t("configEmpty")}
             onRetry={() => void configQuery.refetch()}
           >
             {config ? (
               <div>
                 <ConfigRow
-                  label="FX rate USD→VND"
+                  label={t("configRows.fxRate")}
                   value={numberFormatter.format(config.fxRateUsdVnd)}
                 />
                 <ConfigRow
-                  label="Credit value (VND)"
-                  value={numberFormatter.format(config.creditValueVnd)}
-                />
-                <ConfigRow
-                  label="Minimum price per credit (VND)"
-                  value={numberFormatter.format(config.minimumPricePerCreditVnd)}
-                />
-                <ConfigRow
-                  label="Minimum contract price"
+                  label={t("configRows.minimumContractPrice")}
                   value={`${formatAdminMoney({ amount: config.minimumContractPriceVnd, currency: "VND" })} · ${formatAdminMoney({ amount: config.minimumContractPriceUsd, currency: "USD" })}`}
                 />
-                <ConfigRow label="Sales weight · usage" value={config.salesUsageWeight} />
-                <ConfigRow label="Sales weight · members" value={config.salesMembersWeight} />
-                <ConfigRow label="Sales weight · languages" value={config.salesLanguagesWeight} />
+                <ConfigRow label={t("configRows.salesWeightUsage")} value={config.salesUsageWeight} />
                 <ConfigRow
-                  label="Sales weight · AI services"
+                  label={t("configRows.salesWeightMembers")}
+                  value={config.salesMembersWeight}
+                />
+                <ConfigRow
+                  label={t("configRows.salesWeightLanguages")}
+                  value={config.salesLanguagesWeight}
+                />
+                <ConfigRow
+                  label={t("configRows.salesWeightAiServices")}
                   value={config.salesAiServicesWeight}
                 />
                 <ConfigRow
-                  label="Default overage cap ratio"
+                  label={t("configRows.defaultOverageCapRatio")}
                   value={config.defaultOverageCapRatio}
                 />
                 <ConfigRow
-                  label="Default invoice terms"
-                  value={`${config.defaultInvoiceTermsDays} days`}
+                  label={t("configRows.defaultInvoiceTerms")}
+                  value={t("configRows.defaultInvoiceTermsValue", { days: config.defaultInvoiceTermsDays })}
                 />
                 <ConfigRow
-                  label="Default invoice grace"
-                  value={`${config.defaultInvoiceGraceHours} hours`}
+                  label={t("configRows.defaultInvoiceGrace")}
+                  value={t("configRows.defaultInvoiceGraceValue", { hours: config.defaultInvoiceGraceHours })}
                 />
                 {/* The two the write endpoint does not take. Shown so their absence from the
                     editor reads as a property of the field, not as a gap in the form. */}
                 <ConfigRow
-                  label="Formula (derived)"
+                  label={t("configRows.formula")}
                   value={<span className="font-mono text-[11px]">{config.formula}</span>}
                 />
                 <ConfigRow
-                  label="Resolver key (derived)"
+                  label={t("configRows.resolverKey")}
                   value={<span className="font-mono text-[11px]">{config.resolverKey}</span>}
                 />
               </div>
             ) : null}
           </PanelState>
-        )}
-      </AdminPanel>
+        </AdminPanel>
+      )}
 
-      <p className="mt-4 text-[12px] text-ink-muted">
-        Editable, within what the API allows. Nothing here is deleted: a plan is named on every
-        invoice ever raised against it, so it is retired with its Active switch, and a rate card is
-        retired with Deactivate because settled charges point at it. A new rate-card identity still
-        arrives with the migration that registers it.
-      </p>
+      <p className="mt-4 text-[12px] text-ink-muted">{t("footerNote")}</p>
 
       <PlanCreateDialog
         open={isCreatingPlan}
@@ -479,7 +944,10 @@ export default function AdminPlansPage() {
           if (!open) setEditingCard(null);
         }}
         onSubmit={(request) => upsertRateCard.mutateAsync(request)}
-        isSaving={upsertRateCard.isPending}
+        onSetProviderCost={(id, providerUnitCostUsd) =>
+          setRateCardProviderCost.mutateAsync({ id, request: { providerUnitCostUsd } })
+        }
+        isSaving={upsertRateCard.isPending || setRateCardProviderCost.isPending}
       />
 
       <RateCardDeactivateDialog
@@ -489,7 +957,7 @@ export default function AdminPlansPage() {
         }}
         onConfirm={async (card) => {
           await deactivateRateCard.mutateAsync(card.id);
-          toast.success(`${card.chargeType} rate card deactivated.`);
+          toast.success(t("deactivateToast", { chargeType: card.chargeType }));
         }}
         isSaving={deactivateRateCard.isPending}
       />
@@ -502,5 +970,13 @@ export default function AdminPlansPage() {
         isSaving={updateConfig.isPending}
       />
     </AdminPage>
+  );
+}
+
+export default function AdminPlansPage() {
+  return (
+    <Suspense fallback={<div className="min-h-full bg-panel" />}>
+      <PlansAndPricing />
+    </Suspense>
   );
 }

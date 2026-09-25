@@ -1,0 +1,122 @@
+{
+  "filters": {
+    "ariaLabel": "カテゴリでドキュメントを絞り込む",
+    "all": "すべて",
+    "published": "公開済み",
+    "pendingApproval": "承認待ち",
+    "rejected": "却下",
+    "private": "非公開",
+    "aiContext": "AIコンテキスト",
+    "administrative": "管理用",
+    "restricted": "制限あり",
+    "archived": "アーカイブ済み"
+  },
+  "searchPlaceholder": "ドキュメントを検索...",
+  "searchAriaLabel": "ドキュメントを検索",
+  "filterOptions": "フィルターオプション",
+  "displayOptions": "表示オプション",
+  "new": "新規",
+  "gridView": "グリッド表示",
+  "listView": "リスト表示",
+  "empty": {
+    "title": "ドキュメントが見つかりません",
+    "descriptionCanUpload": "上の「新規」から参照ドキュメントをアップロードしてください。",
+    "descriptionCannotUpload": "このワークスペースにはまだ参照ドキュメントがアップロードされていません。"
+  },
+  "table": {
+    "name": "名前",
+    "uploadedBy": "アップロード者",
+    "approvedBy": "承認者",
+    "status": "状態",
+    "modified": "更新日時",
+    "size": "サイズ",
+    "actions": "操作"
+  },
+  "status": {
+    "rejected": "却下",
+    "private": "非公開",
+    "pendingApproval": "承認待ち",
+    "administrative": "管理用",
+    "aiReady": "AI利用可能",
+    "aiFailed": "AI失敗",
+    "aiIngestionFailed": "AI取り込み失敗",
+    "processingAi": "AI処理中...",
+    "aiContext": "AIコンテキスト"
+  },
+  "actions": {
+    "viewDetails": "詳細を見る",
+    "restoreDocument": "ドキュメントを復元",
+    "archiveDocument": "ドキュメントをアーカイブ",
+    "deletePermanently": "完全に削除"
+  },
+  "grid": {
+    "uploader": "アップロード者",
+    "approver": "承認者",
+    "unavailable": "{label}なし"
+  },
+  "pagination": {
+    "previous": "前へ",
+    "next": "次へ",
+    "page": "ページ {page}"
+  },
+  "uploadDialog": {
+    "title": "新しいドキュメントをアップロード",
+    "description": "ワークスペースのライブラリに参照ドキュメントを追加します。AI検索コンテキストとメンバーのアクセス権限を設定してください。",
+    "step1Label": "1. 参照ファイルを選択",
+    "supportedFormats": "対応形式: PDF, DOCX, XLSX, MD, PNG, JPG, JPEG, WEBP, BMP, GIF(最大10MB)",
+    "dropzoneTitle": "クリックまたはドラッグしてパソコンからファイルをアップロード",
+    "dropzoneHint": "最大ファイルサイズ: 10MB",
+    "imageAdminNotice": "画像ファイルは管理用添付ファイルとして保存されます",
+    "changeFile": "ファイルを変更",
+    "nameLabel": "ドキュメントの表示名",
+    "namePlaceholder": "例: 法務用語集 2026",
+    "aiAllowLabelApprover": "AIアシスタントのインデックス作成を許可",
+    "aiAllowLabelMember": "AIアシスタントのインデックス作成をリクエスト",
+    "aiAllowDescApprover": "セキュリティ処理後にRAGコンテキスト検索を有効にします。",
+    "aiAllowDescMember": "ワークスペースのオーナーまたは管理者がこのドキュメントを承認した後にのみAI処理が開始されます。",
+    "imageSkipNotice": "画像ファイルは管理用添付ファイルとして保存されます。AIの取り込みは自動的にスキップされます。",
+    "policyApprover": "ワークスペースのオーナー/管理者として、アップロードは自動的に公開されます。",
+    "policyMember": "アップロードは承認待ちになります。セキュリティとAI処理は、ワークスペースのオーナーまたは管理者が承認した後にのみ開始されます。",
+    "cancel": "キャンセル",
+    "upload": "ドキュメントをアップロード"
+  },
+  "toasts": {
+    "fileTooLarge": "ファイルサイズが10MBの上限を超えています。",
+    "imageIndexingDisabled": "画像ファイルが選択されました: AIインデックス作成は無効です。",
+    "selectFile": "アップロードするファイルを選択してください。",
+    "uploadedPending": "ドキュメントをアップロードしました!承認のために送信されました。",
+    "uploadedPublished": "ドキュメントのアップロードと公開に成功しました!",
+    "uploadedSuccess": "ドキュメントのアップロードに成功しました。",
+    "sessionExpired": "セッションの有効期限が切れました。再度サインインしてください。",
+    "noPermission": "このワークスペースにドキュメントをアップロードする権限がありません。",
+    "uploadFailed": "ドキュメントのアップロードに失敗しました。",
+    "archived": "ドキュメントをアーカイブしました。",
+    "archiveFailed": "ドキュメントのアーカイブに失敗しました。",
+    "restored": "ドキュメントを復元しました。",
+    "restoreFailed": "ドキュメントの復元に失敗しました。",
+    "deleted": "ドキュメントを削除しました。",
+    "deleteFailed": "ドキュメントの削除に失敗しました。"
+  },
+  "validation": {
+    "nameMin": "ドキュメント名は2文字以上で入力してください",
+    "nameMax": "ドキュメント名は{max}文字以内にしてください"
+  },
+  "deleteDialog": {
+    "title": "ドキュメントを削除しますか?",
+    "description": "<name></name>を削除してもよろしいですか?この操作により、ファイルの内容、AIコンテキスト、アクセスポリシーがワークスペースから削除されます。",
+    "cancel": "キャンセル",
+    "delete": "削除"
+  },
+  "duplicateDialog": {
+    "title": "このファイルは既に存在します",
+    "descriptionKnown": "同じファイルが<name></name>として{date}にアップロードされています。まだ何も保存されていません。",
+    "descriptionUnknown": "同一のファイルが既にこのワークスペースにありますが、アクセス権のないドキュメントです。まだ何も保存されていません。",
+    "keepExisting": "既存のドキュメントを保持",
+    "keepExistingDetail": "このアップロードをキャンセルして{name}を開きます。",
+    "replace": "このファイルで置き換える",
+    "replaceDetail": "{name}とその履歴を保持し、承認のために再送します。",
+    "uploadAnyway": "そのままアップロード",
+    "uploadAnywayDetail": "同じ内容の2つ目の別ドキュメントを作成します。",
+    "cancel": "キャンセル"
+  }
+}

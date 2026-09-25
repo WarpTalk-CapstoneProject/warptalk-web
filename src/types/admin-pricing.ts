@@ -1,3 +1,5 @@
+import type { FxRateStatusDto } from "@/types/admin-insights";
+
 /**
  * Contracts for the system-admin pricing screens.
  *
@@ -91,15 +93,36 @@ export interface UpsertUsageRateCardRequest {
 }
 
 /**
+ * The body `PUT /usages/rate-card/{id}/provider-cost` takes — USD per the card's own `unit`.
+ *
+ * Only for the internal credit-unit (CRD) cards usage is actually settled on. Their credit price
+ * is not derived from a provider cost, so the full editor (which reprices from cost × markup) is
+ * the wrong tool for them; this changes nothing but the cost. See lib/billing/rate-card-margin.ts
+ * `providerCostEffect` for what the server does with it.
+ */
+export interface SetRateCardProviderCostRequest {
+  providerUnitCostUsd: number;
+}
+
+/**
  * The body `PUT /usages/pricing-config` takes.
  *
  * `PricingConfigDto` minus `formula` and `resolverKey` — those two describe how the config is
  * resolved rather than what it holds, and the endpoint does not accept them.
  */
 export interface UpdatePricingConfigRequest {
-  fxRateUsdVnd: number;
-  creditValueVnd: number;
-  minimumPricePerCreditVnd: number;
+  /**
+   * Never sent by the admin UI any more: the rate is Stripe's, and an override goes through
+   * PUT /admin/billing/fx/override. Omitted keeps the rate; the same value as stored is no override.
+   */
+  fxRateUsdVnd?: number;
+  /**
+   * Never sent by the admin UI (WT-690): Stripe owns pricing, and omitted means the backend keeps
+   * the stored value, which billing still reads to price top-ups.
+   */
+  creditValueVnd?: number;
+  /** Never sent by the admin UI (WT-690); omitted keeps the stored plan/contract price floor. */
+  minimumPricePerCreditVnd?: number;
   minimumContractPriceVnd: number;
   minimumContractPriceUsd: number;
   salesUsageWeight: number;
@@ -109,6 +132,11 @@ export interface UpdatePricingConfigRequest {
   defaultOverageCapRatio: number;
   defaultInvoiceTermsDays: number;
   defaultInvoiceGraceHours: number;
+  /**
+   * USD per Cartesia credit. Omitted leaves the stored value alone (the backend reads null as
+   * "unchanged"), so a blank field cannot reset it.
+   */
+  cartesiaUsdPerCredit?: number;
 }
 
 /** Platform-wide pricing knobs. Editable through `PUT /usages/pricing-config`. */
@@ -127,6 +155,14 @@ export interface PricingConfigDto {
   defaultInvoiceGraceHours: number;
   formula: string;
   resolverKey: string;
+  /**
+   * USD per Cartesia credit (`cartesia_usd_per_credit`). Insights price dubbing as measured Cartesia
+   * credits × this × `fxRateUsdVnd`. Default 0.0000392, the Startup plan's $49 / 1,250,000 credits.
+   * Absent from a backend that predates the Cartesia usage sync.
+   */
+  cartesiaUsdPerCredit?: number;
+  /** Where `fxRateUsdVnd` comes from (Stripe by default), as of when, and whether it is stale. */
+  fxRate?: FxRateStatusDto | null;
 }
 
 /** Platform billing policy. One knob today; the endpoint replaces the whole record. */

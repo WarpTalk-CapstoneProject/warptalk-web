@@ -1,0 +1,418 @@
+{
+  "plans": {
+    "list": {
+      "visibleOfTotal": "{visible} / {total}",
+      "cycles": {
+        "monthly": "Hằng tháng",
+        "yearly": "Hằng năm"
+      },
+      "plans": {
+        "searchPlaceholder": "Tìm gói theo tên hoặc slug",
+        "filters": {
+          "tier": "Hạng",
+          "cycle": "Chu kỳ thanh toán",
+          "currency": "Tiền tệ",
+          "active": "Đang hoạt động"
+        },
+        "sortFields": {
+          "order": "Thứ tự hiển thị",
+          "name": "Tên",
+          "price": "Giá",
+          "credits": "Tín dụng mỗi chu kỳ"
+        },
+        "columns": {
+          "plan": "Gói",
+          "tier": "Hạng",
+          "cycle": "Chu kỳ thanh toán",
+          "price": "Giá",
+          "credits": "Tín dụng / chu kỳ",
+          "status": "Trạng thái",
+          "order": "Thứ tự"
+        }
+      },
+      "rateCards": {
+        "searchPlaceholder": "Tìm loại phí, nhà cung cấp hoặc mô hình",
+        "filters": {
+          "chargeType": "Loại phí",
+          "provider": "Nhà cung cấp",
+          "unit": "Đơn vị",
+          "currency": "Tiền tệ",
+          "margin": "Biên lợi nhuận",
+          "active": "Đang áp dụng"
+        },
+        "marginBands": {
+          "loss": "Lỗ (dưới 1×)",
+          "thin": "Mỏng (1× đến 1,5×)",
+          "healthy": "Tốt (từ 1,5× trở lên)",
+          "unknown": "Chưa xác định"
+        },
+        "inForce": "Đang áp dụng",
+        "deactivated": "Đã ngừng",
+        "sortFields": {
+          "chargeType": "Loại phí",
+          "provider": "Nhà cung cấp",
+          "price": "Đơn giá",
+          "margin": "Biên lợi nhuận",
+          "effective": "Hiệu lực từ"
+        },
+        "columns": {
+          "rateCard": "Bảng giá",
+          "unit": "Đơn vị",
+          "price": "Đơn giá",
+          "providerCost": "Chi phí nhà cung cấp",
+          "margin": "Biên lợi nhuận",
+          "effective": "Hiệu lực"
+        }
+      }
+    },
+    "eyebrow": "Doanh thu",
+    "title": "Gói & bảng giá",
+    "description": "Những gì nền tảng bán, và chi phí phục vụ từng đơn vị.",
+    "newPlan": "Tạo gói mới",
+    "editConfiguration": "Chỉnh sửa cấu hình",
+    "refresh": "Làm mới",
+    "filterLabel": "Chế độ xem giá",
+    "tabs": {
+      "plans": "Gói",
+      "rateCards": "Bảng giá đơn vị",
+      "configuration": "Cấu hình"
+    },
+    "loading": "Đang tải…",
+    "planCount": "{count, plural, other {# gói}}",
+    "rateCardCount": "{count, plural, other {# bảng giá}}",
+    "platformWide": "Toàn nền tảng",
+    "rateCardsNote": "Biên lợi nhuận được đọc từ hệ số nhân đã lưu trên bảng giá. Khi giá bán và chi phí nhà cung cấp ở hai loại tiền tệ khác nhau, biên lợi nhuận sẽ không hiển thị — chia trực tiếp hai giá trị này sẽ cho ra một con số sai lệch theo tỷ giá.",
+    "errorHint": "Kiểm tra dịch vụ thanh toán và đảm bảo phiên đăng nhập của bạn vẫn còn quyền quản trị nền tảng.",
+    "tryAgain": "Thử lại",
+    "plansError": "Không thể tải danh sách gói.",
+    "plansEmpty": "Chưa có gói nào trong danh mục.",
+    "rateCardsError": "Không thể tải bảng giá.",
+    "rateCardsEmpty": "Chưa cấu hình bảng giá nào.",
+    "configError": "Không thể tải cấu hình giá.",
+    "configEmpty": "Chưa có cấu hình giá nào được lưu.",
+    "footerNote": "Có thể chỉnh sửa, trong phạm vi API cho phép. Không có gì ở đây bị xóa: một gói được ghi tên trên mọi hóa đơn từng phát hành theo gói đó, nên nó được ngừng dùng bằng công tắc Hoạt động; một bảng giá được ngừng dùng bằng nút Vô hiệu hóa vì các khoản phí đã chốt vẫn tham chiếu đến nó. Một bảng giá mới vẫn phải đến qua migration đăng ký nó.",
+    "deactivateToast": "Đã vô hiệu hóa bảng giá {chargeType}.",
+    "planRow": {
+      "active": "Đang hoạt động",
+      "hidden": "Đã ẩn",
+      "edit": "Sửa"
+    },
+    "rateCardRow": {
+      "edit": "Sửa",
+      "deactivate": "Vô hiệu hóa",
+      "from": "từ {date}",
+      "marginDerivedTooltip": "Tính từ giá bán và chi phí — cả hai đều theo USD",
+      "marginRecordedTooltip": "Theo giá trị đã ghi trên bảng giá"
+    },
+    "configRows": {
+      "fxRate": "Tỷ giá USD→VND",
+      "minimumContractPrice": "Giá hợp đồng tối thiểu",
+      "salesWeightUsage": "Trọng số bán hàng · mức sử dụng",
+      "salesWeightMembers": "Trọng số bán hàng · thành viên",
+      "salesWeightLanguages": "Trọng số bán hàng · ngôn ngữ",
+      "salesWeightAiServices": "Trọng số bán hàng · dịch vụ AI",
+      "defaultOverageCapRatio": "Tỷ lệ trần vượt mức mặc định",
+      "defaultInvoiceTerms": "Thời hạn thanh toán mặc định",
+      "defaultInvoiceTermsValue": "{days} ngày",
+      "defaultInvoiceGrace": "Thời gian gia hạn hóa đơn mặc định",
+      "defaultInvoiceGraceValue": "{hours} giờ",
+      "formula": "Công thức (được suy ra)",
+      "resolverKey": "Khóa resolver (được suy ra)"
+    }
+  },
+  "settings": {
+    "eyebrow": "Cấu hình",
+    "title": "Cài đặt nền tảng",
+    "description": "Mọi thứ nền tảng đang vận hành, theo đúng thứ tự bạn có thể tác động: những công tắc bạn có thể điều chỉnh trước, rồi đến dữ liệu tham chiếu bạn chỉ có thể xem.",
+    "refresh": "Làm mới",
+    "bandKnobs": {
+      "title": "Công tắc bạn có thể điều chỉnh",
+      "note": "Lưu từ trang này, áp dụng toàn nền tảng, được ghi nhận theo tài khoản của bạn."
+    },
+    "bandReference": {
+      "title": "Dữ liệu tham chiếu",
+      "note": "Danh mục ngôn ngữ được ghi nhật ký kiểm tra; đồng ý giọng nói chỉ đọc."
+    },
+    "billingPolicyHeading": "Chính sách thanh toán",
+    "pricingEconomicsHeading": "Cấu trúc giá",
+    "pricingEconomicsSubnote": "Cùng một cấu hình mà bộ kiểm tra gói và bộ đọc biên lợi nhuận bảng giá tham chiếu — cũng có thể truy cập từ Gói & bảng giá. Giá bán cho khách hàng do Stripe quản lý, nên giá trị 1 credit và giá sàn mỗi credit không còn được chỉnh ở đây; chúng chỉ thay đổi qua migration.",
+    "languageCatalogHeading": "Danh mục ngôn ngữ",
+    "voiceConsentHeading": "Đồng ý nhân bản giọng nói",
+    "voiceConsentCount": "{count, plural, other {# quyết định đã ghi nhận}}",
+    "explainer": "<strong>Những gì bạn có thể và không thể thay đổi ở đây.</strong> Danh mục ngôn ngữ có thể chỉnh sửa: mọi thao tác thêm, đổi tên hay bật/tắt đều được ghi vào nhật ký kiểm tra của nền tảng trước, và bị từ chối nếu không ghi được, nên mỗi thay đổi đều có tên người thực hiện. Sổ đồng ý nhân bản giọng nói vẫn chỉ đọc — dịch vụ của nó không ghi nhận được ai đã thay đổi.",
+    "footerNote": "Chỉ có số liệu, và đó là một ranh giới chứ không phải một sự rút gọn. Giọng nói được nhân bản là dữ liệu sinh trắc học; một danh sách ai đã đồng ý sẽ trở thành một sổ đăng ký quyền sinh trắc học, và không có gì trên màn hình này tác động đến một cá nhân cụ thể.",
+    "panelError": {
+      "message": "Không thể tải {what}.",
+      "hint": "Kiểm tra dịch vụ và đảm bảo phiên đăng nhập của bạn vẫn còn quyền quản trị nền tảng.",
+      "tryAgain": "Thử lại"
+    },
+    "billingPolicy": {
+      "vatLabel": "Thuế suất VAT",
+      "vatHint": "Áp dụng cho mọi hóa đơn nền tảng phát hành. Một phân số: 0.1 nghĩa là 10%.",
+      "vatAriaLabel": "Thuế suất VAT",
+      "save": "Lưu",
+      "saving": "Đang lưu…",
+      "saveSuccessToast": "Đã lưu chính sách thanh toán.",
+      "saveErrorToast": "Không thể lưu chính sách thanh toán.",
+      "errorWhat": "chính sách thanh toán"
+    },
+    "pricingEconomics": {
+      "errorWhat": "cấu hình giá",
+      "fxRateLabel": "Tỷ giá (USD → VND)",
+      "fxRateHint": "Tỷ giá USD→VND của Stripe, ghi nhận mỗi ngày; mọi báo cáo quy đổi từng ngày theo tỷ giá của chính ngày đó.",
+      "fxSourceAsOf": "{source} · cập nhật {asOf}",
+      "fxStatusUnavailable": "Chưa có nguồn tỷ giá",
+      "fxRefresh": "Làm mới từ Stripe",
+      "fxRefreshing": "Đang làm mới…",
+      "fxRefreshed": "Đã cập nhật tỷ giá USD→VND từ Stripe",
+      "fxRefreshPartial": "Stripe chưa trả đủ dữ liệu: {error}",
+      "fxRefreshError": "Không thể làm mới tỷ giá từ Stripe",
+      "fxOverride": "Ghi đè",
+      "fxOverrideAriaLabel": "Tỷ giá ghi đè, VND cho mỗi đô la Mỹ",
+      "fxApplyOverride": "Dùng tỷ giá này",
+      "fxCancel": "Hủy",
+      "fxUseStripe": "Dùng lại tỷ giá Stripe",
+      "fxOverrideError": "Không thể đổi tỷ giá",
+      "fxStripeWouldBe": "Tỷ giá Stripe: {rate} ({date})",
+      "cartesiaUsdPerCreditLabel": "Giá USD mỗi credit Cartesia",
+      "cartesiaUsdPerCreditHint": "Chi phí WarpTalk trả cho một credit Cartesia. Insights tính chi phí lồng tiếng bằng số credit Cartesia đo được × giá này × tỷ giá. Tài khoản đang dùng credit đã mua từ trước, nên hãy nhập giá đã trả cho chúng, không phải mức biên 0 của gói Free. Mặc định: gói Startup, $49 / 1.250.000.",
+      "cartesiaUsdPerCreditValue": "${price} mỗi credit",
+      "minimumContractPriceLabel": "Giá hợp đồng tối thiểu",
+      "minimumContractPriceHint": "Theo mỗi chu kỳ, trước khi một gói được coi là hợp lệ.",
+      "minimumContractPriceValue": "{vnd} ₫ · {usd} $",
+      "defaultInvoiceTermsLabel": "Thời hạn thanh toán hóa đơn mặc định",
+      "defaultInvoiceTermsHint": "Số ngày để thanh toán, và khoảng thời gian gia hạn sau đó, cho các gói không đặt riêng giá trị này.",
+      "defaultInvoiceTermsValue": "{days} ngày · gia hạn {hours} giờ",
+      "editButton": "Chỉnh sửa cấu trúc giá"
+    },
+    "languageCatalog": {
+      "manage": {
+        "add": "Thêm ngôn ngữ",
+        "edit": "Sửa",
+        "disable": "Tắt",
+        "enable": "Bật",
+        "columns": {
+          "usage": "Đang dùng",
+          "actions": ""
+        },
+        "usageNone": "—",
+        "usageLive": "{count} đang diễn ra",
+        "usageUpcoming": "{count} đã lên lịch",
+        "form": {
+          "addTitle": "Thêm ngôn ngữ",
+          "editTitle": "Sửa {code}",
+          "description": "Kiểm tra phòng chấp nhận ngôn ngữ ngay khi được bật. Bộ chọn ngôn ngữ cuộc họp trong ứng dụng chỉ hiển thị các ngôn ngữ ứng dụng hỗ trợ; ngôn ngữ mới sẽ hiện là “hiển thị dạng mã” cho đến khi được hỗ trợ.",
+          "codeLabel": "Mã",
+          "codeHint": "Mã ngôn ngữ ISO 639, vùng tùy chọn — ví dụ de hoặc de-DE.",
+          "nameLabel": "Tên",
+          "nativeNameLabel": "Tên bản địa",
+          "enabledLabel": "Bật cho phòng mới ngay",
+          "cancel": "Hủy",
+          "save": "Lưu",
+          "create": "Thêm ngôn ngữ",
+          "saving": "Đang lưu…",
+          "createdToast": "Đã thêm {code} vào danh mục.",
+          "savedToast": "Đã cập nhật {code}.",
+          "genericError": "Không có gì thay đổi. Danh mục chưa được cập nhật, hoặc thay đổi không ghi được vào nhật ký kiểm tra.",
+          "errors": {
+            "codeInvalid": "Dùng mã ngôn ngữ như de hoặc de-DE.",
+            "codeTaken": "Ngôn ngữ này đã có trong danh mục.",
+            "codeCovered": "Đã được bao gồm bởi {code} — phòng so khớp theo ngôn ngữ, không theo vùng.",
+            "nameRequired": "Bắt buộc nhập tên.",
+            "nameTooLong": "Tên tối đa 100 ký tự.",
+            "nativeNameTooLong": "Tên bản địa tối đa 100 ký tự."
+          }
+        },
+        "toggle": {
+          "disableTitle": "Tắt {name}?",
+          "enableTitle": "Bật {name}?",
+          "disableDescription": "Tắt mềm: dòng dữ liệu vẫn còn, các cuộc họp cũ vẫn giữ ngôn ngữ này. Phòng mới bằng {code} sẽ bị từ chối cho đến khi bật lại.",
+          "enableDescription": "Phòng mới bằng {code} sẽ được chấp nhận trở lại.",
+          "blocked": "{count, plural, other {# cuộc họp đang diễn ra dùng ngôn ngữ này.}} Có thể tắt sau khi chúng kết thúc.",
+          "last": "Đây là ngôn ngữ duy nhất đang bật. Tắt nó sẽ khiến không phòng nào tạo được.",
+          "confirmUpcoming": "{count, plural, other {# cuộc họp đã lên lịch dùng ngôn ngữ này}}. Ai sửa hoặc tham gia bằng {code} sẽ bị từ chối.",
+          "confirmCheckbox": "Tôi hiểu — vẫn tắt",
+          "cancel": "Hủy",
+          "confirmDisable": "Tắt",
+          "confirmEnable": "Bật",
+          "pending": "Đang xử lý…",
+          "disabledToast": "Đã tắt {code} cho phòng mới.",
+          "enabledToast": "Đã bật {code}.",
+          "genericError": "Không có gì thay đổi."
+        }
+      },
+      "errorWhat": "danh mục ngôn ngữ",
+      "empty": "Danh mục đang trống — không thể tạo phòng ở bất kỳ ngôn ngữ nào.",
+      "driftTitle": "{count, plural, other {Bộ chọn cuộc họp đang hiển thị # ngôn ngữ mà danh mục này sẽ từ chối.}}",
+      "driftBody": "{names} — bất kỳ ai chọn một trong số này sẽ nhận thông báo “Source language is not supported.” Hãy thêm dòng dữ liệu tương ứng hoặc gỡ nó khỏi bộ chọn.",
+      "columns": {
+        "code": "Mã",
+        "name": "Tên",
+        "native": "Tên bản ngữ",
+        "rooms": "Phòng",
+        "inThisApp": "Trong ứng dụng này"
+      },
+      "badgeAllowed": "được phép",
+      "badgeOff": "tắt",
+      "shippedOffered": "đang cung cấp",
+      "shippedKnown": "đã biết",
+      "shippedAsCode": "hiển thị dưới dạng mã",
+      "footnote": "Đây là <code1>translation_room.supported_languages</code1>, bảng mà việc kiểm tra phòng tham chiếu đến — không phải <code2>platform.supported_languages</code2>, bảng mà script khởi tạo dữ liệu vẫn ghi vào nhưng không còn được kiểm tra kể từ migration 036."
+    },
+    "voiceConsent": {
+      "errorWhat": "dữ liệu đồng ý giọng nói",
+      "nobodyAsked": "Chưa có ai được yêu cầu đồng ý nhân bản giọng nói.",
+      "peopleCurrentDecision": "người, theo quyết định hiện tại",
+      "liveGrantsHeading": "Lượt đồng ý còn hiệu lực theo nội dung đã thống nhất",
+      "current": "hiện hành",
+      "superseded": "đã thay thế",
+      "outdatedNotice": "{count, plural, other {# lượt đồng ý còn hiệu lực}} được đưa ra theo nội dung đã được thay thế sau đó. Sự đồng ý vẫn có giá trị với nội dung tại thời điểm đó — đây là con số cần hỏi lại nếu thay đổi là đáng kể."
+    }
+  },
+  "pricingEditors": {
+    "planForm": {
+      "sections": {
+        "identity": "Định danh",
+        "price": "Giá",
+        "creditsOverage": "Credit và vượt mức",
+        "invoicing": "Hóa đơn",
+        "limits": "Giới hạn",
+        "entitlements": "Quyền lợi"
+      },
+      "fields": {
+        "name": "Tên",
+        "slug": "Slug",
+        "slugHint": "Chữ thường, chữ số và dấu gạch ngang.",
+        "tier": "Hạng",
+        "sortOrder": "Thứ tự sắp xếp",
+        "sortOrderHint": "Vị trí hiển thị trên trang bảng giá.",
+        "active": "Đang hoạt động",
+        "activeHint": "Gói bị ẩn vẫn còn trên các hóa đơn cũ. Đây là cách ngừng dùng một gói — không có chức năng xóa.",
+        "price": "Giá",
+        "currency": "Loại tiền",
+        "billingCycle": "Chu kỳ thanh toán",
+        "billingCycleHint": "Chỉ theo tháng — endpoint cập nhật không chấp nhận giá trị nào khác.",
+        "creditsPerCycle": "Credit mỗi chu kỳ",
+        "overageCap": "Trần vượt mức (credit)",
+        "overageCapHint": "Bằng 0 nghĩa là gói không cho phép vượt mức.",
+        "overagePrice": "Giá mỗi credit vượt mức",
+        "lowBalance": "Ngưỡng số dư thấp",
+        "lowBalanceHint": "Phải cao hơn trần vượt mức, nếu không cảnh báo sẽ đến sau khi đã bắt đầu tính phí.",
+        "rolloverCap": "Trần chuyển tiếp (credit)",
+        "invoiceTerms": "Thời hạn (ngày)",
+        "invoiceGrace": "Gia hạn (giờ)",
+        "maxParticipants": "Số người tham gia tối đa",
+        "maxLanguages": "Số ngôn ngữ tối đa",
+        "maxLanguagesHint": "Từ 1 đến 3.",
+        "voiceCloning": "Nhân bản giọng nói",
+        "aiAssistant": "Trợ lý AI",
+        "glossary": "Bảng thuật ngữ",
+        "dedicatedGpu": "GPU riêng",
+        "features": "Tính năng",
+        "featuresHint": "Khối JSON mà trang bảng giá đọc. Có thể là mảng hoặc object."
+      },
+      "editDialog": {
+        "title": "Chỉnh sửa gói",
+        "description": "Lưu sẽ thay thế toàn bộ gói. Thành viên đang dùng gói này vẫn giữ nguyên đăng ký; điều khoản mới áp dụng từ chu kỳ tiếp theo của họ."
+      },
+      "createDialog": {
+        "title": "Gói mới",
+        "description": "Tạo một mục mới trong danh mục. Không ai được đăng ký gói này cho đến khi một đăng ký được chuyển sang hoặc một lượt checkout mua nó; để ở trạng thái ẩn nếu muốn chuẩn bị trước."
+      },
+      "cancel": "Hủy",
+      "save": "Lưu gói",
+      "saving": "Đang lưu…",
+      "saveError": "Không thể lưu gói."
+    },
+    "rateCard": {
+      "editDialog": {
+        "title": "Chỉnh sửa bảng giá",
+        "description": "Đơn vị này được bán với giá bao nhiêu và tốn bao nhiêu chi phí để phục vụ. Loại phí, nhà cung cấp và model xác định bảng giá này và không thể chỉnh sửa tại đây — một định danh bảng giá mới chỉ đến qua migration đăng ký nó."
+      },
+      "perUnit": "mỗi {unit}",
+      "fields": {
+        "unitPrice": "Giá mỗi đơn vị",
+        "currency": "Loại tiền",
+        "providerCost": "Chi phí nhà cung cấp (USD)",
+        "providerCostHint": "Để trống nghĩa là chưa ghi nhận chi phí. Không giống với giá trị 0.",
+        "markup": "Hệ số markup",
+        "markupHint": "Giá trị mà cột biên lợi nhuận hiển thị. Để trống sẽ được suy ra tự động, hoặc coi là chưa xác định.",
+        "active": "Đang hoạt động",
+        "activeHint": "Bảng giá không hoạt động sẽ ngừng được dùng để tính phí; dòng dữ liệu vẫn giữ lại cho các hóa đơn đã dùng nó."
+      },
+      "preview": {
+        "heading": "Xem trước giá",
+        "hintReady": "Tính giá một đơn vị theo chi phí và markup này, dựa trên tỷ giá và giá trị credit đã lưu. Không công bố gì cả.",
+        "hintNotReady": "Nhập cả chi phí nhà cung cấp và hệ số markup để xem trước.",
+        "button": "Xem trước",
+        "pricing": "Đang tính giá…",
+        "creditsPerUnit": "Credit mỗi đơn vị",
+        "customerPrice": "Giá bán cho khách",
+        "providerCost": "Chi phí nhà cung cấp",
+        "margin": "Biên lợi nhuận",
+        "formulaLine": "{formula} · Tỷ giá {fx} · credit {credit} VND",
+        "vndSuffix": "(VND)"
+      },
+      "errors": {
+        "previewStale": "Chi phí hoặc markup đã thay đổi kể từ lần xem trước. Hãy xem trước lại trước khi lưu.",
+        "previewRequired": "Hãy xem trước giá mới trước khi lưu thay đổi về chi phí hoặc markup.",
+        "unitPriceInvalid": "Giá mỗi đơn vị phải là một số dương.",
+        "providerCostInvalid": "Chi phí nhà cung cấp phải là một số dương tính bằng USD, hoặc để trống.",
+        "markupInvalid": "Hệ số markup phải lớn hơn 0, hoặc để trống.",
+        "saveFailed": "Không thể lưu bảng giá.",
+        "previewFailed": "Không thể tính giá xem trước."
+      },
+      "cancel": "Hủy",
+      "save": "Lưu bảng giá",
+      "saving": "Đang lưu…",
+      "creditCost": {
+        "title": "Chi phí nhà cung cấp",
+        "description": "Số tiền nhà cung cấp tính cho WarpTalk trên mỗi đơn vị của thẻ đơn vị tín dụng (CRD) — thẻ mà mức sử dụng thực sự được quyết toán. Giá tín dụng của thẻ được đặt riêng và không thay đổi ở đây. Trang Insights dùng chi phí này để tính chi phí nhà cung cấp AI.",
+        "field": "Chi phí nhà cung cấp (USD mỗi {unit})",
+        "hint": "Tính bằng USD cho một {unit} sử dụng, đúng như nhà cung cấp tính phí. Phải lớn hơn 0.",
+        "noUnit": "đơn vị",
+        "effectBackfill": "Thẻ này chưa có chi phí nhà cung cấp. Giá trị cũng sẽ áp dụng cho mức sử dụng đã quyết toán trên thẻ, nên các kỳ trước trong Insights sẽ có chi phí.",
+        "effectSupersede": "Thẻ này đã có chi phí. Một phiên bản mới của thẻ có hiệu lực từ bây giờ; mức sử dụng đã quyết toán giữ nguyên chi phí đã áp dụng.",
+        "save": "Lưu chi phí nhà cung cấp",
+        "errors": {
+          "invalid": "Nhập một số tiền dương bằng USD, ví dụ 0.00049.",
+          "noUnit": "Thẻ này không có đơn vị, nên không thể áp dụng chi phí theo đơn vị."
+        }
+      }
+    },
+    "deactivate": {
+      "title": "Vô hiệu hóa bảng giá này?",
+      "description": "Bảng giá sẽ ngừng dùng để tính phí sử dụng mới và rời khỏi danh sách này ngay lập tức — không thể kích hoạt lại từ màn hình này. Mức sử dụng tương ứng với bảng giá này sẽ không bị tính phí cho đến khi một mức giá mới được công bố cho định danh đó. Dòng dữ liệu vẫn được giữ lại vì các khoản phí đã chốt vẫn tham chiếu đến nó.",
+      "confirmLabel": "Nhập {chargeType} để xác nhận",
+      "back": "Quay lại",
+      "confirm": "Vô hiệu hóa",
+      "deactivating": "Đang vô hiệu hóa…",
+      "error": "Không thể vô hiệu hóa bảng giá."
+    },
+    "config": {
+      "dialog": {
+        "title": "Chỉnh sửa cấu hình giá",
+        "description": "Áp dụng toàn nền tảng. Đây là các mức sàn và tỷ lệ mà mọi gói được kiểm tra dựa vào và mọi báo giá được xây dựng từ đó, nên một thay đổi ở đây có thể khiến một gói hiện có trở nên không hợp lệ ở lần chỉnh sửa tiếp theo."
+      },
+      "fields": {
+        "fxRateUsdVnd": { "label": "Tỷ giá USD→VND", "hint": "Cách một chi phí nhà cung cấp tính bằng USD được đọc theo VND." },
+        "minimumContractPriceVnd": { "label": "Giá hợp đồng tối thiểu (VND)" },
+        "minimumContractPriceUsd": { "label": "Giá hợp đồng tối thiểu (USD)" },
+        "salesUsageWeight": { "label": "Trọng số bán hàng · mức sử dụng" },
+        "salesMembersWeight": { "label": "Trọng số bán hàng · thành viên" },
+        "salesLanguagesWeight": { "label": "Trọng số bán hàng · ngôn ngữ" },
+        "salesAiServicesWeight": { "label": "Trọng số bán hàng · dịch vụ AI" },
+        "defaultOverageCapRatio": { "label": "Tỷ lệ trần vượt mức mặc định" },
+        "defaultInvoiceTermsDays": { "label": "Thời hạn thanh toán hóa đơn mặc định (ngày)" },
+        "defaultInvoiceGraceHours": { "label": "Thời gian gia hạn hóa đơn mặc định (giờ)" },
+        "cartesiaUsdPerCredit": { "label": "Giá USD mỗi credit Cartesia", "hint": "Số credit Cartesia đo được × giá này × tỷ giá là chi phí lồng tiếng trong Insights. Để trống để giữ giá trị hiện tại." }
+      },
+      "cancel": "Hủy",
+      "save": "Lưu cấu hình",
+      "saving": "Đang lưu…",
+      "numberError": "{label} phải là một số.",
+      "negativeError": "{label} không được âm.",
+      "saveError": "Không thể lưu cấu hình giá."
+    }
+  }
+}

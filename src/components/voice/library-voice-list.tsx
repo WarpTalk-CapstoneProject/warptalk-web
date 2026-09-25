@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -102,6 +103,7 @@ export function LibraryVoiceList({
   onLanguageChange: (language: string) => void;
   search: string;
 }) {
+  const t = useTranslations("voiceProfiles.library");
   const catalogQuery = useVoiceCatalog(language, policyReady);
   const current = languages.find((item) => item.code === language);
   const setPreferred = useSetPreferredVoice();
@@ -121,24 +123,24 @@ export function LibraryVoiceList({
         onSuccess: () =>
           toast.success(
             voiceId
-              ? "Saved — used for speakers in this language who have no voice of their own."
-              : "Cleared — back to the automatic voice.",
+              ? t("toasts.setAsHeard")
+              : t("toasts.clearedAutomatic"),
           ),
         onError: (error) =>
-          toast.error(getErrorMessage(error, "Could not save the stand-in voice.")),
+          toast.error(getErrorMessage(error, t("toasts.saveFailed"))),
       },
     );
   }
 
   return (
     <WorkspaceListModule
-      title="Library voices"
+      title={t("title")}
       count={catalogQuery.isLoading ? undefined : voices.length}
       actions={
         <Select value={language} onValueChange={(value) => onLanguageChange(value ?? language)}>
           <SelectTrigger
             className="h-[30px] w-[168px] rounded-full text-[12.5px]"
-            aria-label="Language for the voice library"
+            aria-label={t("languageAriaLabel")}
           >
             {/* A bare <SelectValue /> renders the raw VALUE, so the closed control read "en" while
                 the open list said "English". Rendered explicitly so the two always agree. */}
@@ -165,7 +167,7 @@ export function LibraryVoiceList({
       }
     >
       {!policyReady || catalogQuery.isLoading ? (
-        <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">Loading voices…</p>
+        <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">{t("loading")}</p>
       ) : voices.length === 0 ? (
         // A cold catalog is the normal state before the AI worker's first synthesis for this
         // language — say so plainly instead of showing it as a failure.
@@ -173,17 +175,17 @@ export function LibraryVoiceList({
           <PagePlaceholder
             kind="voice-profiles"
             className="min-h-[240px]"
-            title={`No library voices for ${getLanguageName(language)}`}
+            title={t("noVoicesTitle", { language: getLanguageName(language) })}
             // The old sentence — "they appear after the first translation into this language in a
             // meeting" — described the lazy cache the catalogue used to be. It is warmed for every
             // language now, so empty means Cartesia publishes none here, or the worker has only
             // just restarted and has not walked the library yet.
-            description="Cartesia publishes no voices in this language, or the library is still loading after a restart."
+            description={t("noVoicesDescription")}
           />
         </div>
       ) : filtered.length === 0 ? (
         <p className="px-1.5 py-4 text-[12.5px] text-ink-subtle">
-          No library voice matches that search.
+          {t("noMatch")}
         </p>
       ) : (
         // BOUNDED, WITH THE SCROLLBAR HIDDEN — and a fade, because hiding the bar removes the only
@@ -209,9 +211,9 @@ export function LibraryVoiceList({
               avatar={<VoiceOrb voiceId={voice.id} />}
               tone="library"
               name={voice.name}
-              badge={active ? <VoiceChip tone="active">Stand-in</VoiceChip> : undefined}
+              badge={active ? <VoiceChip tone="active">{t("youHearThis")}</VoiceChip> : undefined}
               secondary={voice.gender ? capitalise(voice.gender) : "—"}
-              statusText={active ? "Your stand-in" : undefined}
+              statusText={active ? t("yourDefault") : undefined}
               actions={
                 <>
                   <VoicePreviewButton voiceId={voice.id} language={language} label={voice.name} />
@@ -222,7 +224,7 @@ export function LibraryVoiceList({
                     disabled={setPreferred.isPending}
                     onClick={() => choose(active ? null : voice.id)}
                   >
-                    {active ? "Clear" : "Use"}
+                    {active ? t("clear") : t("use")}
                   </Button>
                 </>
               }
@@ -258,6 +260,7 @@ export function ListeningVoiceSummary({
   profiles: VoiceProfileDto[];
   language: string;
 }) {
+  const t = useTranslations("voiceProfiles.listeningSummary");
   const current = usePreferredVoice(profiles, language);
   const currentVoiceId = current?.providerVoiceId ?? null;
   const catalogQuery = useVoiceCatalog(language);
@@ -280,15 +283,15 @@ export function ListeningVoiceSummary({
     label.state === "named"
       ? label.name
       : label.state === "loading"
-        ? "Loading…"
+        ? t("loading")
         : label.state === "unavailable"
-          ? (label.name ?? "Saved voice")
-          : "Automatic";
+          ? (label.name ?? t("savedVoice"))
+          : t("automatic");
 
   return (
     <WorkspaceRailModule
-      title="Stand-in voice"
-      description={`Used for a speaker in ${getLanguageName(language)} who has not picked a voice of their own. Anyone who has, you hear as themselves.`}
+      title={t("title")}
+      description={t("description", { language: getLanguageName(language) })}
     >
       <p className="text-[13px] font-medium text-ink">{headline}</p>
       {label.state === "unavailable" ? (
@@ -298,8 +301,7 @@ export function ListeningVoiceSummary({
         // silently fall back. The id itself is not shown: a UUID is not an answer to "which
         // voice is this".
         <p className="text-[11.5px] leading-snug text-ink-subtle">
-          Not offered for {getLanguageName(language)} right now, so the automatic voice is used
-          until it is. The catalogue fills after the first translation into this language.
+          {t("unavailable", { language: getLanguageName(language) })}
         </p>
       ) : null}
       {currentVoiceId ? (
@@ -310,7 +312,7 @@ export function ListeningVoiceSummary({
             <VoicePreviewButton
               voiceId={currentVoiceId}
               language={language}
-              label="the stand-in voice"
+              label={t("previewLabel")}
               variant="inline"
             />
           ) : (
@@ -325,19 +327,19 @@ export function ListeningVoiceSummary({
               setPreferred.mutate(
                 { language, voiceId: null },
                 {
-                  onSuccess: () => toast.success("Cleared — back to the automatic voice."),
+                  onSuccess: () => toast.success(t("toasts.cleared")),
                   onError: (error) =>
-                    toast.error(getErrorMessage(error, "Could not clear the stand-in voice.")),
+                    toast.error(getErrorMessage(error, t("toasts.clearFailed"))),
                 },
               )
             }
           >
-            Clear
+            {t("clear")}
           </Button>
         </div>
       ) : (
         <p className="text-[11.5px] text-ink-subtle">
-          Press Use on a library voice to pick one for this language.
+          {t("hint")}
         </p>
       )}
     </WorkspaceRailModule>

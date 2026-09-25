@@ -1,0 +1,22 @@
+{
+  "conversations": "AI conversations",
+  "new": "New",
+  "loadingConversations": "Loading conversations…",
+  "loadConversationsFailed": "Could not load conversations.",
+  "emptyConversations": "Create a conversation to ask WarpTalk AI about this workspace.",
+  "defaultTitle": "WarpTalk AI",
+  "loadingMessages": "Loading messages…",
+  "loadMessagesFailed": "Could not load this conversation.",
+  "emptyMessages": "Ask a question about your meetings, transcripts, or workspace documents.",
+  "messageFailed": "Message processing failed.",
+  "inputPlaceholder": "Ask WarpTalk AI about this workspace…",
+  "sending": "Sending…",
+  "send": "Send",
+  "toasts": {
+    "pluginConnected": "Plugin connected.",
+    "pluginConnectOpenBrowser": "Finish connecting this plugin in your browser.",
+    "pluginConnectBlocked": "Your browser blocked the consent window.",
+    "pluginConnectBlockedAction": "Open it",
+    "pluginConnectFailed": "Could not open the plugin connection flow."
+  }
+}

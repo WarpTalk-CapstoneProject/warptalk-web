@@ -42,9 +42,26 @@ export interface SalesLeadPage {
   totalPages: number;
 }
 
+/** Orders billing's sales-lead listing accepts. `created_desc` is its default. */
+export type SalesLeadSort = "created_desc" | "created_asc" | "company_asc" | "company_desc";
+
+/** `source` when the form did not send one — billing's `SalesInquiryConstants.Sources.LandingPricing`. */
+export const SALES_LEAD_DEFAULT_SOURCE = "landing_pricing";
+
 export interface SalesLeadQuery {
   page: number;
   pageSize: number;
   status?: SalesLeadStatus;
+  /** Email, company, first or last name. */
   search?: string;
+  workspaceId?: string;
+  /** Exact match, case-insensitive. The set is open: whatever the contact form of the day sent. */
+  requestType?: string;
+  /** Exact match, case-insensitive. */
+  source?: string;
+  /** Inclusive lower bound on `createdAt`, ISO 8601. */
+  createdFrom?: string;
+  /** Exclusive upper bound on `createdAt`, ISO 8601. */
+  createdTo?: string;
+  sort?: SalesLeadSort;
 }

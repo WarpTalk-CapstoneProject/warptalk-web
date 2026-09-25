@@ -1,0 +1,167 @@
+{
+  "statusBadge": {
+    "active": "Active",
+    "locked": "Locked",
+    "deactivated": "Deactivated",
+    "unverified": "Unverified",
+    "deleted": "Deleted"
+  },
+  "list": {
+    "eyebrow": "Platform directory",
+    "title": "Accounts",
+    "description": "Every account on the platform, independent of workspace membership.",
+    "refresh": "Refresh",
+    "statusTabsLabel": "Account status",
+    "statusTabs": {
+      "all": "All",
+      "active": "Active",
+      "locked": "Locked",
+      "unverified": "Unverified",
+      "deactivated": "Deactivated",
+      "deleted": "Deleted"
+    },
+    "loading": "Loading…",
+    "accountCount": "{count, plural, one {# account} other {# accounts}}",
+    "searchPlaceholder": "Search name or email…",
+    "searchAriaLabel": "Search users",
+    "sortLabel": "Sort",
+    "sortOptions": {
+      "createdDesc": "Newest",
+      "createdAsc": "Oldest",
+      "lastLoginDesc": "Recently active",
+      "lastLoginAsc": "Least recently active",
+      "nameAsc": "Name A–Z",
+      "nameDesc": "Name Z–A"
+    },
+    "loadErrorTitle": "The user directory could not be loaded.",
+    "loadErrorDescription": "Check the auth service and that your session still holds the platform admin role.",
+    "tryAgain": "Try again",
+    "emptyTitle": "No accounts match these filters",
+    "emptyDescription": "Clear the search or pick a different status tab.",
+    "columns": {
+      "user": "User",
+      "status": "Status",
+      "roles": "Roles",
+      "sessions": "Sessions",
+      "lastLogin": "Last Login",
+      "actions": "Actions",
+      "created": "Joined"
+    },
+    "noRoles": "—",
+    "neverSignedIn": "Never signed in",
+    "sessionCount": "{count, plural, one {# session} other {# sessions}}",
+    "noActionsAvailable": "—",
+    "unlock": "Unlock",
+    "signOut": "Sign out",
+    "reactivate": "Reactivate",
+    "deactivate": "Deactivate",
+    "pagination": {
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "filters": {
+      "role": "Platform role",
+      "platformAdmin": "Platform admin",
+      "signedIn": "Signed in",
+      "neverSignedIn": "Never",
+      "hasSignedIn": "At least once",
+      "lastLogin": "Last login",
+      "created": "Joined"
+    },
+    "sortFields": {
+      "created": "Joined",
+      "name": "Name",
+      "lastLogin": "Last login"
+    }
+  },
+  "detail": {
+    "eyebrow": "Platform account",
+    "backToDirectory": "Accounts",
+    "refresh": "Refresh",
+    "unlock": "Unlock",
+    "endSessions": "End sessions",
+    "deactivate": "Deactivate",
+    "reactivate": "Reactivate",
+    "notFoundTitle": "Account not found",
+    "notFoundDescription": "No account carries this id. It may have been permanently removed, or the link is wrong.",
+    "loadErrorTitle": "This account could not be loaded",
+    "loadErrorDescription": "Check the auth service, and that your session still holds the platform admin role.",
+    "backToDirectoryButton": "Back to directory",
+    "tryAgain": "Try again",
+    "identityHeading": "Identity",
+    "facts": {
+      "status": "Status",
+      "platformRoles": "Platform roles",
+      "lastSignedIn": "Last signed in",
+      "accountCreated": "Account created"
+    },
+    "noRoles": "—",
+    "neverSignedIn": "Never signed in",
+    "accessHeading": "Access",
+    "emailConfirmed": {
+      "label": "Email confirmed",
+      "hint": "Whether the person has ever completed the verification link.",
+      "confirmed": "Confirmed",
+      "notConfirmed": "Not confirmed"
+    },
+    "signInAllowed": {
+      "label": "Sign-in allowed",
+      "hint": "Deactivating also ends every session already open.",
+      "allowed": "Allowed",
+      "deactivated": "Deactivated"
+    },
+    "lockout": {
+      "label": "Failed-login lockout",
+      "hintLocked": "Clears itself at {time}. Unlock does not wait for it.",
+      "hintClear": "A lockout is temporary and clears itself once the window passes.",
+      "locked": "Locked",
+      "none": "None"
+    },
+    "sessionsHeading": "Sessions",
+    "sessionsOpenCount": "{count, plural, =0 {none open} other {# open right now}}",
+    "sessionColumns": {
+      "device": "Device",
+      "ipAddress": "IP address",
+      "signedIn": "Signed in",
+      "expires": "Expires"
+    },
+    "unknownDevice": "Unknown device",
+    "noIpAddress": "—",
+    "noSessionsOpen": "No sessions are open. The account is not signed in anywhere.",
+    "footerNote": "A session row never carries the token or its hash — an administrator needs to know a session exists, not to be able to use it. Ending sessions does not lock the account or change the password: the person can sign in again immediately."
+  },
+  "actionDialog": {
+    "revokeSessions": {
+      "title": "End every session?",
+      "description": "Signs the account out everywhere. It is not locked and the password is unchanged — the person can sign in again immediately.",
+      "confirm": "End sessions",
+      "pending": "Ending…"
+    },
+    "deactivate": {
+      "title": "Deactivate this account?",
+      "description": "The person cannot sign in, and the sessions already open are ended. Nothing is deleted and this can be undone.",
+      "confirm": "Deactivate",
+      "pending": "Deactivating…"
+    },
+    "reactivate": {
+      "title": "Reactivate this account?",
+      "description": "Sign-in is allowed again. Sessions ended earlier stay ended — the person signs in fresh.",
+      "confirm": "Reactivate",
+      "pending": "Reactivating…"
+    },
+    "unlock": {
+      "title": "Clear the lockout?",
+      "description": "Removes a failed-login lockout and resets the attempt counter, so the person can try again now instead of waiting out the window.",
+      "confirm": "Unlock",
+      "pending": "Unlocking…"
+    },
+    "noSessionsOpen": "No sessions are open right now.",
+    "sessionsWillEnd": "{count, plural, one {# session will end.} other {# sessions will end.}}",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "Recorded in the platform audit log against your account.",
+    "reasonTooShort": "Give a reason of at least ten characters. It goes into the platform audit log.",
+    "genericError": "Nothing was changed — the action could not be completed.",
+    "back": "Back"
+  }
+}

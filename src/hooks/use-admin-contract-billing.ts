@@ -64,6 +64,9 @@ function useInvalidateContractBilling() {
       queryClient.invalidateQueries({ queryKey: ["admin-contract-billing"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-workspaces", "analytics"] }),
       queryClient.invalidateQueries({ queryKey: ["admin-subscriptions"] }),
+      // The admin workspace page's money overview and its timeline, which records every write.
+      queryClient.invalidateQueries({ queryKey: ["admin-workspaces", "billing-overview"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-workspaces", "timeline"] }),
     ]);
 }
 
@@ -93,10 +96,11 @@ export function useResumeAdminWorkspaceService(workspaceId: string) {
   });
 }
 
-export function useMarkAdminInvoicePaid() {
+export function useMarkAdminInvoicePaid(workspaceId: string) {
   const invalidate = useInvalidateContractBilling();
   return useMutation({
-    mutationFn: (invoiceId: string) => adminContractBillingService.markInvoicePaid(invoiceId),
+    mutationFn: ({ invoiceId, reason }: { invoiceId: string; reason: string }) =>
+      adminContractBillingService.markInvoicePaid(workspaceId, invoiceId, reason),
     onSuccess: invalidate,
   });
 }

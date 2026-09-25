@@ -24,12 +24,32 @@ export interface AssistantMessageDto {
   mentionsJson?: string | null;
 }
 
+/**
+ * One turn a new conversation starts with — how a meeting's WarpBot thread continues in the
+ * widget (see lib/assistant/meeting-handoff.ts). The service accepts "user" and "assistant" only.
+ */
+export interface AssistantSeedMessageDto {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface CreateAssistantConversationOptions {
+  /** Named after where it came from, so history does not list it as one more "New chat". */
+  title?: string;
+  seedMessages?: AssistantSeedMessageDto[];
+}
+
 export interface AssistantConversationDto {
   id: string;
   title: string;
   createdAt: string;
   lastMessageAt?: string | null;
   isArchived: boolean;
+  /**
+   * Which store the conversation lives in: "workspace", or "platform" for a system admin's
+   * WarpBot in the admin portal. Absent from an older backend, which only had workspace ones.
+   */
+  scope?: "workspace" | "platform";
 }
 
 export interface AssistantConversationDetailDto extends AssistantConversationDto {
@@ -157,14 +177,33 @@ export interface AssistantPluginCatalogItemDto {
    * Whether the workspace the catalog was listed for has this plugin (plugin marketplace,
    * 2026-09-17). `added`: a marketplace plugin the workspace has. `private`: an MCP plugin the
    * workspace's Owner created, visible only there. `not_added`: a member may ask the Owner for it.
+   * `platform_disabled`: WarpTalk turned it off for this workspace — listed only for a member who
+   * already installed it, whose connection is kept but unused.
    * Absent when the catalog was listed without a workspace, or by a server older than the marketplace.
    */
   workspaceAvailability?: WorkspacePluginAvailability | null;
   /** `pending` when the caller has already asked this workspace's Owner for the plugin. */
   requestStatus?: PluginRequestStatus | null;
+  /**
+   * How a user connects. `oauth`: the provider's own sign-in page. `api_key`: each user pastes a
+   * key of their own, which the server checks against the MCP server before saving. Absent from a
+   * server older than API-key auth, which only knows OAuth.
+   */
+  authMode?: PluginAuthMode;
+  /**
+   * True when the caller may add this plugin to the workspace the catalog was listed for — the
+   * workspace Owner. Their row then offers Add instead of Request: an Owner asking themselves only
+   * leaves a request nobody is notified about.
+   *
+   * Optional, and absent reads as "not the Owner": a server older than the flag gets the member's
+   * Request, which it already accepts. Only meaningful on a `not_added` row.
+   */
+  canAdd?: boolean;
 }
 
-export type WorkspacePluginAvailability = "added" | "private" | "not_added";
+export type PluginAuthMode = "oauth" | "api_key";
+
+export type WorkspacePluginAvailability = "added" | "private" | "not_added" | "platform_disabled";
 
 export type PluginRequestStatus = "pending" | "approved" | "declined";
 
@@ -181,7 +220,17 @@ export interface WorkspacePluginItemDto {
   mcpServerUrl?: string | null;
   /** Null for a row seeded by the transition, and for every marketplace candidate. */
   addedBy?: string | null;
+  /**
+   * Who `addedBy` is, when the server resolved it. Optional: without it the page looks the id up
+   * among the workspace's members, and says nothing when neither knows.
+   */
+  addedByName?: string | null;
   addedAt?: string | null;
+  /**
+   * How members connect it. Absent from a server older than API-key auth, which only knows OAuth;
+   * the page then says nothing about it rather than guessing.
+   */
+  authMode?: PluginAuthMode | null;
   /**
    * Distinct members who have run one of its tools in this workspace. Connections are personal, so
    * "members connected" is not something the server can count per workspace; this is.
@@ -203,32 +252,61 @@ export interface WorkspacePluginRequestDto {
   decidedAt?: string | null;
 }
 
+/**
+ * GET /assistant/workspaces/{id}/plugins/{key}/members — Owner or Admin. One member who has the
+ * plugin connected. Connection metadata only: no token, no provider account. Name and avatar come
+ * from the workspace's member list (`useWorkspaceMemberProfiles`).
+ */
+export interface WorkspacePluginMemberDto {
+  userId: string;
+  /** `connected`, `expired` or `revoked`. */
+  connectionStatus: "connected" | "expired" | "revoked" | string;
+  connectedAt: string;
+  /** Their last successful tool call through it in this workspace; null when they never made one here. */
+  lastUsedAt?: string | null;
+  toolCallCount: number;
+}
+
 /** GET /assistant/workspaces/{id}/plugins — Owner or Admin. */
 export interface WorkspacePluginsOverviewDto {
   workspaceId: string;
   /**
-   * False while the workspace is still on the pre-marketplace "Allow personal plugins" default:
-   * every marketplace plugin then reads as added (or none does, if the switch was off), and the
-   * Owner's first change turns that into an explicit list.
+   * False while the Owner has never edited the list. Such a workspace has the marketplace plugins
+   * its members already use there (while the old "Allow personal plugins" switch is on) and no
+   * others; the Owner's first change turns that into an explicit list.
    */
   isCurated: boolean;
-  /** Only the Owner changes the list; an Admin reads it. */
-  canManage: boolean;
+  /**
+   * Only the Owner changes the list; an Admin reads it. Optional on the type so a response without
+   * it falls back to the caller's workspace role (see `canManageWorkspacePlugins`) instead of
+   * reading as a yes.
+   */
+  canManage?: boolean;
   inWorkspace: WorkspacePluginItemDto[];
   marketplace: WorkspacePluginItemDto[];
   pendingRequests: WorkspacePluginRequestDto[];
+  /**
+   * Plugins this workspace had (on its list, or used by members) that the platform admin has since
+   * turned off here. Not addable; members' connections are kept but unused. Optional for an older
+   * server.
+   */
+  disabledByPlatform?: WorkspacePluginItemDto[];
 }
 
 export interface CreatePrivatePluginRequest {
   label: string;
   mcpServerUrl: string;
   description?: string;
+  /** How members connect. Omitted means OAuth, which is all a server older than API-key auth knows. */
+  authMode?: PluginAuthMode;
 }
 
 export interface UpdatePrivatePluginRequest {
   label?: string;
   description?: string;
   mcpServerUrl?: string;
+  /** Sent only when the Owner changes it, so an unchanged form never rewrites how members connect. */
+  authMode?: PluginAuthMode;
 }
 
 /**
@@ -241,6 +319,8 @@ export interface UpdatePrivatePluginRequest {
 export interface PluginConnectResultDto {
   connected: boolean;
   url: string | null;
+  /** An `api_key` plugin: no consent page exists, the user pastes a key on the plugins page. */
+  apiKeyRequired?: boolean;
 }
 
 /**

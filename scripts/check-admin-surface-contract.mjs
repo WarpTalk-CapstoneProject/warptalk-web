@@ -38,6 +38,10 @@ const ADMIN_ROOT = "src/app/(app)/admin";
 
 const sidebar = await read("src/components/layout/linear-sidebar.tsx");
 const chrome = await read("src/components/admin/admin-page-chrome.tsx");
+// i18n: the Insights label and "Back to app" now render through t("adminNav.items.insights") /
+// t("adminNav.backToApp") rather than as literal source text — see common.json for the English
+// wording the checks below still pin.
+const commonEn = JSON.parse(await read("messages/en/common.json"));
 
 const checks = [];
 
@@ -62,13 +66,18 @@ checks.push([
 ]);
 checks.push([
   // NavLink treats a non-exact item as active for anything beneath its href, and every admin
-  // page is beneath /admin — so Overview would stay lit on every other admin screen.
-  "the Overview row matches /admin exactly",
-  /label: "Overview", href: "\/admin", exact: true/.test(sidebar),
+  // page is beneath /admin — so Insights would stay lit on every other admin screen. The row was
+  // "Overview" until the landing page became Insights (2026-09-17); the route never moved.
+  "the Insights row matches /admin exactly",
+  /label: t\("adminNav\.items\.insights"\), href: "\/admin", exact: true/.test(sidebar) &&
+    commonEn.sidebar?.adminNav?.items?.insights === "Insights",
 ]);
 checks.push([
   "the admin sidebar offers a way back to the app",
-  /isAdminPage && isSystemAdmin[\s\S]{0,4000}?Back to app/.test(sidebar),
+  // The window spans the whole admin nav block, so it grows with each row added (9000 since
+  // /admin/packages, G11); what it pins is that the link lives in that block, not its offset.
+  /isAdminPage && isSystemAdmin[\s\S]{0,9000}?t\("adminNav\.backToApp"\)/.test(sidebar) &&
+    commonEn.sidebar?.adminNav?.backToApp === "Back to app",
 ]);
 
 // ── 2 · The ground is the page ground, not the chrome ground ─────────────────
@@ -183,6 +192,21 @@ const NAV_EXEMPT = new Set([
   // Reached from /admin/announcements by clicking a row. One notice's full record, not a
   // destination of its own.
   `${ADMIN_ROOT}/announcements/[id]/page.tsx`,
+  // Reached from /admin/billing's "Manage Plans" button / a ledger row's workspace link, not
+  // from the nav. Both re-export the same component the legacy /billing/plans and
+  // /billing/workspace/[id] routes render, kept under /admin so that navigating from
+  // /admin/billing stays inside the system-admin portal's own sidebar instead of dropping into
+  // the older (internal) layout's — see the basePath note in src/app/(internal)/billing/page.tsx.
+  `${ADMIN_ROOT}/billing/plans/page.tsx`,
+  `${ADMIN_ROOT}/billing/workspace/[id]/page.tsx`,
+  // The announcements CMS editor (`new` or an id), reached from a card or "New announcement" on
+  // /admin/announcements.
+  `${ADMIN_ROOT}/announcements/posts/[postId]/page.tsx`,
+  // One email layout or block, reached from the Layouts / Blocks sections of
+  // /admin/email-templates. Same reasoning as the posts editor above.
+  `${ADMIN_ROOT}/email-templates/blocks/[blockId]/page.tsx`,
+  // One email's editor, reached from its card on /admin/email-templates.
+  `${ADMIN_ROOT}/email-templates/[templateKey]/page.tsx`,
 ]);
 for (const rel of adminPages) {
   if (NAV_EXEMPT.has(rel)) continue;
