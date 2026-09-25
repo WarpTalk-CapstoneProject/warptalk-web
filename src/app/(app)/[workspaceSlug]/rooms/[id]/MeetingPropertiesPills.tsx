@@ -18,6 +18,7 @@ function hostIdentity(
   room: TranslationRoomDto,
   apiParticipants: TranslationRoomParticipantDto[],
   user: { id: string; fullName?: string } | null,
+  hostLabel: string,
 ): UserChipIdentity {
   const fromRoster = apiParticipants.find(
     (participant) => participant.userId === room.hostId,
@@ -27,8 +28,8 @@ function hostIdentity(
     name:
       (room.hostId === user?.id ? user?.fullName : fromRoster?.displayName) ||
       fromRoster?.displayName ||
-      "Host",
-    role: "Host",
+      hostLabel,
+    role: hostLabel,
   };
 }
 
@@ -56,6 +57,7 @@ export function MeetingPropertiesPills({
   onCopy: (text: string, label: string) => void;
 }) {
   const t = useTranslations("rooms.create.templatePicker");
+  const tRoom = useTranslations("meetingRoomPage");
 
   // The day this meeting runs: its scheduled time when it has one, otherwise the day it was
   // created — which for an ad-hoc room is the same thing.
@@ -108,7 +110,7 @@ export function MeetingPropertiesPills({
           every meeting was a letter — and when neither the viewer nor the participant list could
           name them it printed the raw host UUID into the pill. The shared chip carries the face,
           the presence dot and the card; an unresolvable host now reads as "Host". */}
-      <UserChip user={hostIdentity(room, apiParticipants, user)} size="md" className="border-border/60" />
+      <UserChip user={hostIdentity(room, apiParticipants, user, tRoom("hostLabel"))} size="md" className="border-border/60" />
 
       <LanguageSelector
         languages={room.targetLanguages?.length ? room.targetLanguages : [room.sourceLanguage].filter(Boolean) as string[]}
@@ -121,8 +123,8 @@ export function MeetingPropertiesPills({
           Both older copies stay — the button and the "Meeting access" line are still correct. */}
       <button
         type="button"
-        onClick={() => onCopy(room.translationRoomCode, "Room code")}
-        title="Copy room code"
+        onClick={() => onCopy(room.translationRoomCode, tRoom("roomCodeLabel"))}
+        title={tRoom("copyRoomCode")}
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)] hover:bg-surface-2 transition-colors cursor-pointer"
       >
         <Copy size={12} weight="bold" className="text-ink-muted" />
@@ -148,8 +150,8 @@ export function MeetingPropertiesPills({
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-1 border border-border/60 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
         title={
           occupancyNoun === "attended"
-            ? "People who joined this meeting"
-            : "Participants in the room, out of the meeting type's seat capacity"
+            ? tRoom("occupancyTooltip.attended")
+            : tRoom("occupancyTooltip.inRoom")
         }
       >
         <Users size={12} weight="regular" className="text-ink-muted" aria-hidden />
