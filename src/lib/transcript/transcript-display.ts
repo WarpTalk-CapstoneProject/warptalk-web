@@ -136,8 +136,14 @@ export function captionTextForReader(
   return translationActive ? null : segment.originalText?.trim() || null;
 }
 
-/** Union of two bubbles' per-language translations, appending where both hold the same language. */
-function mergeTranslations(
+/**
+ * Union of two bubbles' per-language translations, appending where both hold the same language.
+ *
+ * Exported for the Clean view (WT-716), which folds a segment a merged sentence swallowed into
+ * the line that replaces it and must not lose that segment's translations on the way — the same
+ * question the grouping below answers, so it is the same answer.
+ */
+export function mergeTranslations(
   previous: Record<string, string> | undefined,
   next: Record<string, string> | undefined,
 ): Record<string, string> | undefined {

@@ -40,9 +40,18 @@ check(
   "the viewer feed records impressions, dismissals and clicks",
   /HttpPost\("\{id:guid\}\/events"\)/.test(read(`${api}/AnnouncementsController.cs`)),
 );
-for (const controller of ["AdminEmailTemplatesController", "AdminEmailBlocksController", "AdminAnnouncementsController"]) {
+for (const controller of ["AdminEmailTemplatesController", "AdminEmailBlocksController", "AdminAnnouncementsController", "AdminEmailSendsController"]) {
   check(`${controller} writes are audited`, /\[AdminAudited\(/.test(read(`${api}/${controller}.cs`)));
 }
+
+// Email CMS v3.
+const templatesController = read(`${api}/AdminEmailTemplatesController.cs`);
+check("stored emails render for thumbnails and the as-received preview", /HttpGet\("\{key\}\/render"\)/.test(templatesController) && /HttpGet\("\{id:guid\}\/render"\)/.test(read(`${api}/AdminEmailBlocksController.cs`)));
+check("custom templates are created, deleted with a reason and restored", /\[HttpPost\]\s*public Task<IActionResult> Create/.test(templatesController) && /HttpPost\("\{key\}\/delete"\)/.test(templatesController) && /HttpPost\("\{key\}\/restore"\)/.test(templatesController));
+const sendsController = read(`${api}/AdminEmailSendsController.cs`);
+check("audience sends are served at api/v1/admin/notifications/email-sends", sendsController.includes('[Route("api/v1/admin/notifications/email-sends")]'));
+check("audience sends need content.email_send", /RequirePermission\(AdminPermissions\.ContentEmailSend\)/.test(sendsController));
+check("the permission is in the backend catalog", read("shared/WarpTalk.Shared/Authorization/AdminPermissions.cs").includes('ContentEmailSend = "content.email_send"'));
 
 const senders = {
   "auth (Resend)": ["auth/src/WarpTalk.AuthService.Infrastructure/Services/ResendAuthEmailSender.cs", ["AuthVerifyEmail", "AuthPasswordReset"]],

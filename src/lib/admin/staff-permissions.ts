@@ -67,6 +67,7 @@ export const ADMIN_PERMISSIONS = {
   pluginsManage: "plugins.manage",
   contentAnnouncements: "content.announcements",
   contentEmailTemplates: "content.email_templates",
+  contentEmailSend: "content.email_send",
   glossaryRead: "glossary.read",
   glossaryManage: "glossary.manage",
   settingsRead: "settings.read",

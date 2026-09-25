@@ -6,6 +6,9 @@ import { CMS_AUDIT_KEYS } from "@/hooks/use-cms-audit";
 
 import { adminEmailTemplateService } from "@/services/admin-email-template.service";
 import type {
+  CreateCustomEmailTemplateRequest,
+  EmailRenderQuery,
+  UpdateCustomEmailTemplateRequest,
   EmailBulkRequest,
   EmailPreviewRequest,
   EmailTestSendRequest,
@@ -80,6 +83,7 @@ function useEmailMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>)
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ADMIN_EMAIL_TEMPLATE_KEYS.all }),
+        queryClient.invalidateQueries({ queryKey: ["email-render"] }),
         queryClient.invalidateQueries({ queryKey: CMS_AUDIT_KEYS.all }),
       ]),
   });
@@ -148,4 +152,72 @@ export function useSendTestEmail() {
     mutationFn: ({ key, request }: { key: string; request: EmailTestSendRequest }) =>
       adminEmailTemplateService.sendTest(key, request),
   });
+}
+
+// ── v3 ────────────────────────────────────────────────────────────────────────────────────────
+
+export const EMAIL_RENDER_KEYS = {
+  all: ["email-render"] as const,
+  template: (key: string, query: EmailRenderQuery) => ["email-render", "template", key, query] as const,
+  block: (id: string, query: object) => ["email-render", "block", id, query] as const,
+};
+
+/**
+ * A stored email rendered as received. Cached for five minutes and shared by every thumbnail and
+ * preview of the same email; `enabled` lets a thumbnail wait until it scrolls into view.
+ */
+export function useRenderedEmail(key: string | undefined, query: EmailRenderQuery, enabled = true) {
+  return useQuery({
+    queryKey: EMAIL_RENDER_KEYS.template(key ?? "", query),
+    queryFn: () => adminEmailTemplateService.render(key!, query),
+    enabled: Boolean(key) && enabled,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
+}
+
+/** Writes that change what renders also drop the cached renders. */
+function useTemplateWrite<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ADMIN_EMAIL_TEMPLATE_KEYS.all }),
+        queryClient.invalidateQueries({ queryKey: EMAIL_RENDER_KEYS.all }),
+        queryClient.invalidateQueries({ queryKey: CMS_AUDIT_KEYS.all }),
+      ]),
+  });
+}
+
+export function useCreateCustomEmail() {
+  return useTemplateWrite((request: CreateCustomEmailTemplateRequest) => adminEmailTemplateService.createCustom(request));
+}
+
+export function useUpdateCustomEmailDetails() {
+  return useTemplateWrite(({ key, request }: { key: string; request: UpdateCustomEmailTemplateRequest }) =>
+    adminEmailTemplateService.updateDetails(key, request),
+  );
+}
+
+export function useCustomEmailDeletionCheck(key: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["admin-email-templates", "deletion", key ?? ""],
+    queryFn: () => adminEmailTemplateService.deletionCheck(key!),
+    enabled: Boolean(key) && enabled,
+    staleTime: 0,
+    retry: false,
+  });
+}
+
+export function useDeleteCustomEmail() {
+  return useTemplateWrite(({ key, reason, permanent }: { key: string; reason: string; permanent: boolean }) =>
+    adminEmailTemplateService.deleteCustom(key, reason, permanent),
+  );
+}
+
+export function useRestoreCustomEmail() {
+  return useTemplateWrite((key: string) => adminEmailTemplateService.restoreCustom(key));
 }

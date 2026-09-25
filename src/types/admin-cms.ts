@@ -36,7 +36,21 @@ export interface EmailTemplateVariableDto {
   /** The template must reference it; publishing is refused without it. */
   required: boolean;
   multiline: boolean;
+  /** TEXT, URL, DATE, NUMBER or MULTILINE — how a send asks for a value. */
+  type?: EmailVariableType | string;
+  /** A custom variable's label; null for built-ins (the description says it). */
+  label?: string | null;
+  /** Filled in by the sender (recipient name, announcement title): never asked for. */
+  implicit?: boolean;
 }
+
+export const EMAIL_VARIABLE_TYPES = ["TEXT", "URL", "DATE", "NUMBER", "MULTILINE"] as const;
+export type EmailVariableType = (typeof EMAIL_VARIABLE_TYPES)[number];
+
+/** BUILT_IN for the emails services send from code; the rest are admin-created. */
+export const EMAIL_CATEGORIES = ["BUILT_IN", "TRANSACTIONAL_CUSTOM", "MARKETING", "ANNOUNCEMENT"] as const;
+export type EmailCategory = (typeof EMAIL_CATEGORIES)[number];
+export const CUSTOM_EMAIL_CATEGORIES = ["TRANSACTIONAL_CUSTOM", "MARKETING", "ANNOUNCEMENT"] as const;
 
 export interface EmailContentFieldsDto {
   subject: string;
@@ -87,6 +101,18 @@ export interface EmailTemplateListItemDto {
   updatedAt: string | null;
   updatedBy: string | null;
   last30Days: EmailDeliveryTotalsDto;
+  /** Created by an admin, not defined in code. Absent on servers before v3. */
+  isCustom?: boolean;
+  category?: EmailCategory | string;
+  /** ACTIVE, or DELETED for a soft-deleted custom template (the Archived filter). */
+  status?: "ACTIVE" | "DELETED" | string;
+  deletedAt?: string | null;
+  deleteReason?: string | null;
+  /** The English subject with sample values filled in — what an admin reads on a card. */
+  renderedSubject?: string;
+  renderedPreheader?: string;
+  createdAt?: string | null;
+  createdBy?: string | null;
 }
 
 export interface EmailVariantDto {
@@ -351,6 +377,9 @@ export interface AdminAnnouncementCmsDto {
   updatedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  /** The custom email template sent to the same audience when it goes live. */
+  emailTemplateKey?: string | null;
+  emailCampaignId?: string | null;
 }
 
 export interface AdminAnnouncementCmsPageDto {
@@ -400,6 +429,7 @@ export interface UpsertAnnouncementRequest {
   newUsersWithinDays: number | null;
   secondaryCtaLabel: string | null;
   secondaryCtaUrl: string | null;
+  emailTemplateKey: string | null;
 }
 
 /** No startsAt publishes now; a future one schedules. */
@@ -477,4 +507,141 @@ export interface CmsAuditEntryDto {
   errorMessage: string | null;
   beforeSummary: Record<string, string | null> | null;
   afterSummary: Record<string, string | null> | null;
+}
+
+// ── Email CMS v3: rendered emails, custom templates, audience sends ─────────────────────────
+
+/** A stored email rendered as a recipient gets it, with the inbox envelope. */
+export interface EmailRenderedDto {
+  subject: string;
+  preheader: string;
+  html: string;
+  text: string;
+  layoutName: string;
+  localeUsed: string;
+  /** PUBLISHED, DRAFT or BUILT_IN. */
+  sourceUsed: "PUBLISHED" | "DRAFT" | "BUILT_IN" | string;
+  version: number;
+  fromName: string;
+  fromAddress: string;
+  toName: string;
+  toAddress: string;
+}
+
+export interface EmailRenderQuery {
+  locale?: string;
+  dark?: boolean;
+  sampleSetId?: string | null;
+  /** "sent" (default): what goes out now. "draft": the locale's draft. */
+  source?: "sent" | "draft";
+}
+
+export interface CustomEmailVariableRequest {
+  name: string;
+  label: string | null;
+  type: EmailVariableType;
+  sample: string;
+  required: boolean;
+}
+
+export interface CustomEmailLocaleContent {
+  locale: string;
+  subject: string;
+  preheader: string | null;
+  heading: string | null;
+  bodyHtml: string;
+  textBody: string | null;
+}
+
+export interface CreateCustomEmailTemplateRequest {
+  key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  variables: CustomEmailVariableRequest[];
+  layoutId: string | null;
+  content: CustomEmailLocaleContent[];
+}
+
+export interface UpdateCustomEmailTemplateRequest {
+  name: string;
+  description: string | null;
+  category: string;
+  variables: CustomEmailVariableRequest[];
+}
+
+export interface CustomEmailDeletionCheckDto {
+  canDeletePermanently: boolean;
+  reason: string | null;
+  campaignCount: number;
+  sentCount: number;
+}
+
+export interface EmailAudienceDto {
+  mode: AnnouncementAudienceMode | string;
+  planSlugs: string[] | null;
+  workspaceIds: string[] | null;
+  roles: string[] | null;
+  locales: string[] | null;
+  newUsersWithinDays: number | null;
+}
+
+export interface EmailSendEstimateDto {
+  recipients: number;
+  skippedOptedOut: number;
+  byLocale: { locale: string; count: number }[];
+  /** Languages some recipients use that have nothing published: they get English. */
+  fallbackLocales: string[];
+  maxRecipients: number;
+  sendsPerMinute: number;
+}
+
+export interface CreateEmailSendRequest {
+  audience: EmailAudienceDto;
+  values: Record<string, string> | null;
+  expectedRecipients: number;
+  scheduledAt: string | null;
+}
+
+export type EmailCampaignStatus = "QUEUED" | "SENDING" | "COMPLETED" | "CANCELLED" | "FAILED";
+export type EmailRecipientStatus = "PENDING" | "SENT" | "FAILED" | "SKIPPED";
+
+export interface EmailCampaignDto {
+  id: string;
+  templateKey: string;
+  templateName: string;
+  source: "MANUAL" | "ANNOUNCEMENT" | string;
+  announcementId: string | null;
+  audience: EmailAudienceDto;
+  values: Record<string, string>;
+  status: EmailCampaignStatus | string;
+  scheduledAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  error: string | null;
+  createdBy: string;
+  createdAt: string;
+  cancelledBy: string | null;
+  cancelledAt: string | null;
+}
+
+export interface EmailCampaignRecipientDto {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  locale: string;
+  status: EmailRecipientStatus | string;
+  error: string | null;
+  sentAt: string | null;
+}
+
+export interface EmailCampaignRecipientPageDto {
+  items: EmailCampaignRecipientDto[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

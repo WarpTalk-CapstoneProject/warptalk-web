@@ -2,12 +2,14 @@ import { create } from "zustand";
 // Relative, with the extension: session-scoped-state.test.ts imports this store under the plain
 // node test runner, which does not resolve the "@/" alias for a real (non-type) import.
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
+import { upsertCleanSentence } from "../lib/transcript/clean-transcript.ts";
 import type {
   AiSuggestionDto,
   ChatMentionDto,
   ChatMessageDto,
   TranslationRoomStateDto,
   ParticipantInfoDto,
+  TranscriptCleanSentenceEventDto,
   TranscriptSegmentDto,
   TranslationTextDto,
 } from "@/types/realtime";
@@ -48,6 +50,17 @@ interface TranslationRoomStoreState {
   transcriptPaused: boolean;
   /** Segments kept out of the transcript lane since the current pause began. 0 while running. */
   withheldWhilePaused: number;
+  /**
+   * WT-716 tier 2: merged clean sentences received live (TranscriptCleanSentenceReceived), highest
+   * revision per id. Kept as sentences, not folded into the segments: a sentence REPLACES the
+   * segments it covers only at render, and only in the Clean view, so the segment lanes above stay
+   * the raw record the caption lane, corrections and Verbatim all read.
+   *
+   * Not split into caption/transcript lanes like the segments: a sentence covering a segment the
+   * pause kept out of the transcript lane simply finds that segment missing there, and the Clean
+   * view falls back for it (isCleanSentenceStale), so a pause cannot leak through a sentence.
+   */
+  cleanSentences: TranscriptCleanSentenceEventDto[];
   // AI suggestions keyed by the segment id they were anchored to. A record rather than a
   // list because at most one suggestion exists per segment and dismissing must be O(1);
   // note the key is a BACKEND segment id, which may have been merged into a bubble with a
@@ -161,6 +174,7 @@ interface TranslationRoomStoreState {
   updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
+  upsertCleanSentence: (sentence: TranscriptCleanSentenceEventDto) => void;
   setTranscriptPaused: (paused: boolean) => void;
   addSuggestion: (suggestion: AiSuggestionDto, preferredLanguage?: string) => void;
   dismissSuggestion: (segmentId: string) => void;
@@ -243,6 +257,7 @@ const initialState = {
   transcriptSegments: [],
   transcriptPaused: false,
   withheldWhilePaused: 0,
+  cleanSentences: [] as TranscriptCleanSentenceEventDto[],
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
@@ -369,6 +384,13 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
         // creating one would put paused speech in the panel through the back door.
         transcriptSegments: mergeTranslationText(s.transcriptSegments, translation, !s.transcriptPaused),
       };
+    }),
+
+  // Same array back when the revision is not newer, so a redelivered event re-renders nothing.
+  upsertCleanSentence: (sentence) =>
+    set((s) => {
+      const cleanSentences = upsertCleanSentence(s.cleanSentences, sentence);
+      return cleanSentences === s.cleanSentences ? {} : { cleanSentences };
     }),
 
   setTranscriptPaused: (paused) =>
