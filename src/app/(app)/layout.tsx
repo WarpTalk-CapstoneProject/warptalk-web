@@ -26,6 +26,7 @@ import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import { HeaderSearch } from "@/components/layout/header-search";
 import { MiniMeetingDock } from "@/components/rooms/live/mini-meeting-dock";
 import { AnnouncementHost } from "@/components/announcements/announcement-host";
+import { PlatformStatusBanner } from "@/components/platform/platform-status-banner";
 import { MeetingInviteBanner } from "@/components/rooms/meeting-invite-banner";
 import { MeetingStartedBanner } from "@/components/rooms/meeting-started-banner";
 import { WorkspaceTabs, buildTabOptions, resolveCurrentTab } from "@/components/layout/workspace-tabs";
@@ -498,6 +499,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (!isAdminRoute && workspacesFailed) {
     return (
       <div className="flex h-dvh w-screen items-center justify-center bg-canvas p-6">
+        {/* Maintenance mode answers this very request with 503: say so, not only "could not load". */}
+        <PlatformStatusBanner variant="public" />
         <div className="max-w-sm space-y-4 text-center">
           <h1 className="text-base font-semibold text-ink">Could not load your workspaces</h1>
           <p className="text-sm leading-relaxed text-ink-muted">
@@ -792,6 +795,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               Not on the admin console, where the CMS previews them, and not inside a live
               meeting, where nothing should compete. The bell panel and the workspace home render
               the other two placements. */}
+          {/* Maintenance mode (platform setting general.maintenance.enabled): on every route,
+              admin included — staff are the ones who need to remember to turn it off. */}
+          <PlatformStatusBanner />
           <AnnouncementHost enabled={!isAdminRoute && !isLiveMeetingRoute && !isOnboardingRoute} />
           <main className="relative min-h-0 flex-1 overflow-y-auto">
             {children}

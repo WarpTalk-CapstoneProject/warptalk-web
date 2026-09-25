@@ -1,0 +1,379 @@
+{
+  "eyebrow": "プラットフォーム",
+  "title": "プラットフォーム設定",
+  "description": "プラットフォームが実行時に読み込むすべての設定と、誰がいつ、なぜ変更したか。シークレットはデプロイ構成に残り、この画面では設定済みかどうかだけを表示します。",
+  "refresh": "更新",
+  "categories": {
+    "general": {
+      "label": "一般",
+      "description": "メンテナンスモード、サポート窓口、新しいワークスペースの初期値。"
+    },
+    "security": {
+      "label": "セキュリティと認証",
+      "description": "セッションの有効期間、パスワードポリシー、アカウントロック、サインインのレート制限、Google サインイン。変更には settings.security 権限が必要です。"
+    },
+    "meetings": {
+      "label": "会議と AI パイプライン",
+      "description": "文字起こし、AI 提案、音声クローン、録画。下に参考として言語カタログと同意台帳を表示します。"
+    },
+    "billing": {
+      "label": "請求",
+      "description": "トライアル、請求ポリシー（VAT）、価格の経済指標。"
+    },
+    "notifications": {
+      "label": "通知とメール",
+      "description": "トランザクションメールの送信者と返信先。"
+    },
+    "limits": {
+      "label": "制限とクォータ",
+      "description": "アップロードサイズとレート制限。一部はオーバーライドでプランやワークスペースごとに引き上げられます。"
+    },
+    "retention": {
+      "label": "データと保持",
+      "description": "プラットフォームが保持するデータと、現在それを削除する仕組み。"
+    },
+    "integrations": {
+      "label": "連携",
+      "description": "外部サービスの設定状況、接続テスト、デプロイ時の構成。シークレットは表示されません。"
+    },
+    "feature_flags": {
+      "label": "機能フラグ",
+      "description": "キルスイッチと段階的なロールアウト。オフのフラグは、許可リストの内容にかかわらず全員に対してオフです。"
+    }
+  },
+  "nav": {
+    "aria": "設定カテゴリ",
+    "changedCount": "{count, plural, other {# 件がデフォルトから変更済み}}"
+  },
+  "search": {
+    "placeholder": "名前、キー、説明、サービスで設定を検索",
+    "changedOnly": "デフォルトから変更",
+    "results": "すべてのカテゴリで「{query}」に一致する設定: {count, plural, other {# 件}}",
+    "noResults": "「{query}」に一致する設定はありません。",
+    "changedOnlyEmpty": "このカテゴリにデフォルトから変更された設定はありません。"
+  },
+  "empty": {
+    "category": "このカテゴリにはまだ設定がありません。"
+  },
+  "loadError": {
+    "title": "プラットフォーム設定を読み込めませんでした",
+    "hint": "ワークスペースサービスが応答しませんでした。しばらくしてからもう一度お試しください。",
+    "retry": "再試行"
+  },
+  "publish": {
+    "healthy": "公開済み · v{version}",
+    "healthyTitle": "最終公開 {when}。各サービスは数秒以内に変更を反映します。",
+    "never": "まだ公開されていません。各サービスはデプロイ時の値で動作しています。",
+    "unhealthy": "サービスは以前の値を使用中",
+    "unhealthyDetail": "直近の公開がサービスに届きませんでした: {error}。保存した内容は安全に保存されていますが、公開が成功するまで各サービスは最後に受け取った値で動作し続けます。",
+    "unknownError": "詳細は報告されていません"
+  },
+  "toolbar": {
+    "export": "JSON をエクスポート",
+    "exporting": "エクスポート中…",
+    "import": "JSON をインポート",
+    "readOnly": "閲覧のみ: あなたのロールはプラットフォーム設定を表示できますが、変更はできません。"
+  },
+  "export": {
+    "done": "{count, plural, other {# 件の値}}を {file} にエクスポートしました。",
+    "excluded": "機密設定 {count, plural, other {# 件}}を除外しました: {keys}。",
+    "failed": "エクスポートに失敗しました。"
+  },
+  "values": {
+    "on": "オン",
+    "off": "オフ",
+    "empty": "（空）",
+    "none": "なし",
+    "rollout": "{percent}%",
+    "plans": "{count, plural, other {# プラン}}",
+    "workspaces": "{count, plural, other {# ワークスペース}}",
+    "denied": "{count} 件拒否"
+  },
+  "scopes": {
+    "platform": "プラットフォーム",
+    "plan": "プラン",
+    "workspace": "ワークスペース"
+  },
+  "badges": {
+    "changed": "変更済み",
+    "risky": "高リスク",
+    "riskyHint": "ユーザーのロックアウト、会議の停止、顧客の支払額の変更につながる可能性があります。変更には理由の記入と差分の確認が必要です。",
+    "security": "セキュリティ",
+    "securityHint": "セキュリティと認証の設定です。変更には settings.manage に加えて settings.security 権限が必要です。",
+    "restart": "再起動が必要",
+    "restartHint": "起動時に一度だけ読み込まれます。変更は所有サービスの次回ロールアウト後に反映されます。",
+    "sensitive": "機密",
+    "sensitiveHint": "個人を特定できる値です。エクスポートから除外され、履歴では非表示になります。"
+  },
+  "row": {
+    "copyKey": "キー {key} をコピー",
+    "copied": "キーをコピーしました。",
+    "owner": "{service} が読み込み",
+    "default": "デフォルト {value}",
+    "scopes": "スコープ: {scopes}",
+    "lastChanged": "{when} に {who} が変更",
+    "someone": "誰か",
+    "neverChanged": "ここでは未変更",
+    "notSet": "未設定",
+    "notSetExplain": "{service} はデプロイ時の値を使用します（コードのデフォルト: {value}）。",
+    "edit": "編集",
+    "reset": "デフォルトに戻す",
+    "history": "履歴",
+    "cancel": "キャンセル",
+    "review": "変更を確認",
+    "readOnly": "閲覧のみ",
+    "refusal": {
+      "manage": "プラットフォーム設定の変更には settings.manage 権限が必要です。",
+      "security": "セキュリティと認証の設定には settings.security 権限も必要です。",
+      "server": "サーバーがこの設定の変更を許可していません。"
+    },
+    "overrides": "{count, plural, =0 {オーバーライド} other {オーバーライド # 件}}",
+    "noOverrides": "オーバーライドはありません。すべてのプランとワークスペースがプラットフォームの値を使用します。",
+    "addOverride": "オーバーライドを追加",
+    "editOverride": "編集",
+    "removeOverride": "削除"
+  },
+  "editor": {
+    "on": "オン",
+    "off": "オフ",
+    "itemPlaceholder": "項目を入力して Enter（リストの貼り付けも可）",
+    "removeItem": "{item} を削除",
+    "length": "{count}/{max}",
+    "entries": "{count}/{max} 件",
+    "range": "{min} – {max}",
+    "min": "{min} 以上",
+    "max": "{max} 以下",
+    "flag": {
+      "enabled": "有効",
+      "disabled": "全員に対して無効",
+      "killSwitchHint": "キルスイッチです。オフにすると、下のリストにかかわらずすべての場所で機能が無効になります。",
+      "rollout": "ロールアウト",
+      "rolloutPercent": "ロールアウト率",
+      "rolloutHint": "有効にするワークスペースの割合。ワークスペース ID の固定ハッシュで選ばれます。プラットフォーム全体の判断には 100% が必要です。",
+      "allowPlans": "常に有効にするプラン",
+      "allowWorkspaces": "常に有効にするワークスペース",
+      "denyWorkspaces": "常に無効にするワークスペース",
+      "planPlaceholder": "プランのスラッグ（例: pro）",
+      "workspacePlaceholder": "ワークスペース ID"
+    }
+  },
+  "validation": {
+    "expectedBoolean": "オンまたはオフを指定してください。",
+    "expectedInteger": "整数を入力してください。",
+    "expectedNumber": "数値を入力してください。",
+    "min": "{min}{unit} 以上にしてください。",
+    "max": "{max}{unit} 以下にしてください。",
+    "expectedText": "テキストを入力してください。",
+    "tooLong": "{max} 文字以内にしてください。",
+    "controlCharacters": "制御文字が含まれています。",
+    "pattern": "形式が正しくありません。",
+    "notAllowed": "「{value}」は次のいずれでもありません: {allowed}。",
+    "expectedList": "リストを指定してください。",
+    "tooManyEntries": "最大 {max} 件までです。",
+    "entryNotText": "テキストではありません。",
+    "entryEmpty": "空です。",
+    "duplicate": "「{value}」が重複しています。",
+    "expectedFlag": "機能フラグを指定してください。",
+    "flagUnknownField": "フラグに不明なフィールド「{field}」があります。",
+    "flagEnabled": "フラグはオンかオフのどちらかにしてください。",
+    "flagRollout": "ロールアウトは 0〜100 の整数のパーセントで指定してください。",
+    "flagList": "{field} にはテキストのみ指定できます。",
+    "flagListTooLong": "{field} が {max} 件を超えています。",
+    "flagWorkspaceIds": "{field} にはワークスペース ID を指定してください。",
+    "flagPlanSlugs": "プランはスラッグ（小文字、数字、- と _）で指定してください。",
+    "entry": "{index} 件目: {message}",
+    "planSlug": "プランのスラッグを入力してください（小文字、数字、- と _）。",
+    "workspaceId": "ワークスペース ID（GUID）を入力してください。",
+    "scopeNotAllowed": "この設定はそのスコープではオーバーライドできません。"
+  },
+  "confirm": {
+    "title": "変更を確認",
+    "resetTitle": "デフォルトに戻す",
+    "removeOverrideTitle": "オーバーライドを削除",
+    "scope": "スコープ",
+    "before": "変更前",
+    "after": "変更後",
+    "notSet": "未設定",
+    "added": "追加",
+    "removed": "削除",
+    "flagFields": {
+      "enabled": "有効",
+      "rolloutPercent": "ロールアウト",
+      "allowPlans": "常に有効にするプラン",
+      "allowWorkspaces": "常に有効にするワークスペース",
+      "denyWorkspaces": "常に無効にするワークスペース"
+    },
+    "resetExplain": "保存された値を削除します。{service} はデプロイ時の値、次にコードのデフォルト（{value}）を使用します。",
+    "riskyNotice": "この設定は高リスクです。ユーザーのロックアウト、会議の停止、顧客の支払額の変更につながる可能性があります。保存する前に新しい値を確認してください。",
+    "securityNotice": "セキュリティと認証の設定です。変更はあなたの名前と理由とともに記録されます。",
+    "restartNotice": "{service} は起動時にこの値を読み込みます。新しい値は次回のロールアウト後に反映されます。",
+    "unchanged": "保存する内容はありません。新しい値は保存済みの値と同じです。",
+    "reason": "理由",
+    "reasonPlaceholder": "変更の理由は？",
+    "reasonRequired": "必須、{min} 文字以上。設定の履歴と監査ログに記録されます。",
+    "reasonOptional": "任意。設定の履歴と監査ログに記録されます。",
+    "cancel": "キャンセル",
+    "confirm": "変更を保存",
+    "confirmReset": "リセット",
+    "saving": "保存中…",
+    "saved": "{label} を保存しました。",
+    "resetDone": "{label} をリセットしました。",
+    "failed": "変更は保存されませんでした。",
+    "forbidden": "この設定を変更する権限がありません。",
+    "conflict": "開いた後に別のユーザーがこの設定を変更しました。再読み込みして相手の値を確認してから、もう一度変更してください。",
+    "reload": "再読み込み"
+  },
+  "override": {
+    "addTitle": "オーバーライドを追加",
+    "editTitle": "オーバーライドを編集",
+    "description": "オーバーライドは 1 つのプランまたはワークスペースに対してプラットフォームの値より優先されます（ワークスペースのオーバーライドがプランより優先）。",
+    "scopeType": "適用先",
+    "planSlug": "プランのスラッグ",
+    "workspaceId": "ワークスペース ID",
+    "planPlaceholder": "pro",
+    "workspacePlaceholder": "00000000-0000-0000-0000-000000000000",
+    "workspaceHint": "ID はワークスペースの管理ページに表示されています。",
+    "value": "値",
+    "cancel": "キャンセル",
+    "review": "変更を確認"
+  },
+  "history": {
+    "title": "履歴",
+    "error": "この設定の履歴を読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "この設定の変更はまだ記録されていません。",
+    "actions": {
+      "set": "変更",
+      "reset": "リセット",
+      "revert": "取り消し",
+      "import": "インポート"
+    },
+    "by": "{who} による",
+    "revertOf": "以前の変更の取り消し",
+    "noReason": "理由の記載なし",
+    "hidden": "非表示",
+    "notSet": "未設定",
+    "revert": "元に戻す",
+    "revertTitle": "この変更を元に戻す",
+    "revertDescription": "この変更で置き換えられた値を復元します。取り消しはあなたの理由とともに新しい変更として記録されます。",
+    "revertConfirm": "元に戻す",
+    "reverting": "元に戻しています…",
+    "reverted": "{label} を元に戻しました。"
+  },
+  "import": {
+    "title": "プラットフォーム設定をインポート",
+    "description": "この画面からエクスポートしたファイルをアップロードします。適用するまで何も変更されず、インポートはすべて成功するかまったく適用されないかのどちらかです。",
+    "choose": "JSON ファイルを選択",
+    "chooseAnother": "別のファイルを選択",
+    "checking": "サーバーで確認中…",
+    "excluded": "ファイルでは機密設定 {count, plural, other {# 件}}（{keys}）が除外されています。これらは変更されません。",
+    "summary": "変更 {changed} 件 · 変更なし {unchanged} 件 · 拒否 {rejected} 件",
+    "preview": "インポートのプレビュー",
+    "columns": {
+      "setting": "設定",
+      "scope": "スコープ",
+      "outcome": "結果",
+      "change": "変更内容"
+    },
+    "outcomes": {
+      "create": "新規",
+      "update": "更新",
+      "unchanged": "変更なし",
+      "rejected": "拒否"
+    },
+    "rejectedNoReason": "サーバーに拒否されました。",
+    "hasRejected": "適用する前に拒否された行を修正または削除してください。インポートは全件一括のため、このままでは何も変更されません。",
+    "nothingToApply": "ファイル内のすべての値がすでに一致しています。適用するものはありません。",
+    "reason": "理由",
+    "reasonPlaceholder": "これらの設定をインポートする理由は？",
+    "reasonHint": "必須、{min} 文字以上。すべての変更に記録されます。",
+    "cancel": "キャンセル",
+    "apply": "{count, plural, =0 {適用} other {# 件の変更を適用}}",
+    "applying": "適用中…",
+    "applied": "{count, plural, other {# 件の設定}}を変更しました。",
+    "notApplied": "サーバーはインポートを適用しませんでした。下の行を確認してください。",
+    "failed": "インポートは適用されませんでした。",
+    "previewFailed": "サーバーがこのファイルを確認できませんでした。",
+    "notSet": "未設定",
+    "errors": {
+      "fileTooLarge": "ファイルが 2 MB を超えています。設定のエクスポートファイルではありません。",
+      "invalidJson": "ファイルが有効な JSON ではありません。",
+      "notAnObject": "設定のエクスポートファイルではありません（JSON オブジェクトが必要です）。",
+      "wrongFormat": "ファイルの形式は「{format}」で、WarpTalk のプラットフォーム設定エクスポートではありません。",
+      "noSettings": "ファイルに設定が含まれていません。",
+      "tooManyEntries": "ファイルの項目が {max} 件を超えています。",
+      "badEntry": "{index} 件目: {reason}",
+      "entryReasons": {
+        "notAnObject": "オブジェクトではありません。",
+        "key": "有効なキーがありません。",
+        "scopeType": "スコープが不明です。",
+        "scopeId": "スコープ ID がスコープに合っていません。",
+        "value": "値がありません。"
+      }
+    }
+  },
+  "integrations": {
+    "title": "連携",
+    "columns": {
+      "name": "連携",
+      "configured": "設定状況",
+      "services": "報告元",
+      "lastCheck": "最終チェック",
+      "actions": "操作"
+    },
+    "configured": "設定済み",
+    "notConfigured": "未設定",
+    "unknown": "不明",
+    "unknownHint": "この連携についてはまだどのサービスも報告していません。",
+    "noReports": "報告なし",
+    "never": "未チェック",
+    "checkOk": "OK · {latency} ms",
+    "checkFailed": "失敗",
+    "test": "接続テスト",
+    "testing": "テスト中…",
+    "testOk": "{name}: 接続 OK（{latency} ms）。",
+    "testFailed": "{name}: {detail}",
+    "testError": "{name} をテストできませんでした。",
+    "noDetail": "詳細なしでチェックに失敗しました。",
+    "open": "開く",
+    "empty": "報告されている連携はありません。",
+    "error": "連携の状態を読み込めませんでした。",
+    "unavailable": "このサーバーはまだ連携の状態を報告していません。",
+    "retry": "再試行",
+    "secretsNote": "キー、トークン、エンドポイントはここに表示も保存もされません。これらはデプロイ構成に残り、設定済みかどうかだけが報告されます。",
+    "deployConfig": {
+      "title": "デプロイ構成",
+      "description": "各サービスのデプロイ構成から読み込みます。変更するにはこの画面ではなくデプロイが必要です。",
+      "empty": "報告されているデプロイ時の値はありません。",
+      "notSet": "未設定"
+    }
+  },
+  "retention": {
+    "intro": "ここにある項目はまだ設定ではありません。保持期間の設定は、それを実行するジョブと一緒にレジストリへ追加されます。それまでは、ここに入力した値は効いているように見えて実際には無視されてしまいます。",
+    "notEnforcedHeading": "現在は適用されていないもの",
+    "enforcedHeading": "現在適用されているもの",
+    "items": {
+      "transcripts": {
+        "title": "文字起こし、要約、会議の成果物",
+        "body": "誰かが削除するまで保持されます。期間で削除するジョブはありません。"
+      },
+      "recordings": {
+        "title": "会議の録画",
+        "body": "削除されるまでオブジェクトストレージに保持されます。期限切れにするライフサイクルルールやジョブはありません。"
+      },
+      "auditLog": {
+        "title": "監査ログと設定の履歴",
+        "body": "追記のみです。どちらも削除されることはありません。"
+      },
+      "workspaceRetention": {
+        "title": "ワークスペースごとの成果物の保持期間",
+        "body": "ワークスペースの成果物保持日数は保存され設定画面に表示されますが、読み込むジョブがないため適用されていません。"
+      },
+      "streamTtl": {
+        "title": "ライブ会議パイプラインのストリーム",
+        "body": "Redis ストリームは、各サービスのデプロイ時に指定された TTL で期限切れになります。これはデプロイ構成であり、ここでの設定ではありません。"
+      }
+    },
+    "footnote": "現在、データの削除は手動の操作です。ワークスペースのオーナーが会議やドキュメントを削除するか、依頼に応じてスタッフが対応します。"
+  }
+}

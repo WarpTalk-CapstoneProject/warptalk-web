@@ -19,7 +19,15 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (rel) => readFile(path.join(root, rel), "utf8");
 
 const editors = await read("src/components/admin/pricing-editors.tsx");
-const settings = await read("src/app/(app)/admin/settings/page.tsx");
+// /admin/settings became the platform settings console: the billing knobs moved, unchanged, into
+// the console's Billing category (src/components/admin/settings/billing-panels.tsx). What the page
+// shows is the console plus those panels, so that is what these checks read.
+const settingsConsole = await read("src/components/admin/settings/platform-settings-console.tsx");
+const settings = [
+  await read("src/app/(app)/admin/settings/page.tsx"),
+  settingsConsole,
+  await read("src/components/admin/settings/billing-panels.tsx"),
+].join("\n");
 const plans = await read("src/app/(app)/admin/plans/page.tsx");
 const types = await read("src/types/admin-pricing.ts");
 
@@ -53,6 +61,8 @@ for (const [name, source] of [
 // …and the rate, its source, as-of time and stale warning live on /admin/settings, with an explicit
 // override and a way back to Stripe.
 check("/admin/settings shows the Stripe FX rate row", /<FxRateRow\b/.test(settings));
+check("the settings console renders the pricing economics panel", /<PricingEconomicsPanel\b/.test(settingsConsole));
+check("the settings page renders the settings console", /<PlatformSettingsConsole\b/.test(settings));
 check("the FX row shows the server's stale warning", /view\?\.warning/.test(settings));
 check("the FX row offers going back to Stripe", /clearOverride/.test(settings));
 

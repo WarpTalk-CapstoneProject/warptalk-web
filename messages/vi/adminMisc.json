@@ -355,7 +355,12 @@
       "coupon_duplicated": "Đã nhân bản mã giảm giá",
       "coupon_archived": "Đã lưu trữ mã giảm giá",
       "coupon_unarchived": "Đã khôi phục mã giảm giá",
-      "coupon_stripe_synced": "Đã đồng bộ mã giảm giá lên Stripe"
+      "coupon_stripe_synced": "Đã đồng bộ mã giảm giá lên Stripe",
+      "setting_changed": "Đã đổi cài đặt nền tảng",
+      "setting_reset": "Đã đặt lại cài đặt nền tảng",
+      "setting_reverted": "Đã hoàn tác cài đặt nền tảng",
+      "setting_imported": "Đã nhập cài đặt nền tảng",
+      "settings_exported": "Đã xuất cài đặt nền tảng"
     },
     "entities": {
       "workspace": "Workspace",
@@ -387,7 +392,8 @@
       "inbox_item": "Mục hộp việc",
       "credit_pack": "Gói credit",
       "addon": "Tiện ích bổ sung",
-      "coupon": "Mã giảm giá"
+      "coupon": "Mã giảm giá",
+      "platform_setting": "Cài đặt nền tảng"
     },
     "sources": {
       "workspace_service": "Workspace",

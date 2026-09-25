@@ -96,7 +96,8 @@
       "salesLeads": "Khách hàng tiềm năng",
       "feedback": "Phản hồi",
       "glossary": "Thuật ngữ",
-      "searchIn": "Tìm trong danh sách"
+      "searchIn": "Tìm trong danh sách",
+      "settings": "Cài đặt nền tảng"
     },
     "searchIn": "Tìm “{query}” trong {page}",
     "searching": "Đang tìm…",
@@ -119,7 +120,8 @@
       "ledger": "Bút toán",
       "salesLead": "Khách hàng tiềm năng",
       "feedback": "Phản hồi",
-      "glossaryTerm": "Thuật ngữ"
+      "glossaryTerm": "Thuật ngữ",
+      "setting": "Cài đặt"
     },
     "actions": {
       "adjustCredit": "Điều chỉnh tín dụng…",
@@ -138,7 +140,10 @@
       "recordExpense": "Ghi một khoản chi",
       "importExpenses": "Nhập chi phí từ CSV",
       "createCreditPack": "Tạo gói credit",
-      "createCoupon": "Tạo mã giảm giá"
+      "createCoupon": "Tạo mã giảm giá",
+      "changedPlatformSettings": "Xem các cài đặt nền tảng đã thay đổi",
+      "exportPlatformSettings": "Xuất cài đặt nền tảng (JSON)",
+      "importPlatformSettings": "Nhập cài đặt nền tảng (JSON)"
     }
   }
 }

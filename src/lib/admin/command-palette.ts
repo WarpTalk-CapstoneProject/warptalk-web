@@ -235,8 +235,10 @@ export const ADMIN_PALETTE_PAGES: readonly AdminPaletteEntry[] = [
     // i18n-allow: search synonyms, matched in every language whatever the UI locale.
     keywords: [
       "platform settings", "settings", "config", "configuration", "fx", "exchange rate", "currency", "languages", "stripe",
-      "cài đặt", "cấu hình", "tỷ giá", "tiền tệ", "ngôn ngữ",
-      "設定", "構成", "為替",
+      "maintenance", "feature flags", "flags", "kill switch", "security", "session", "password policy", "rate limit",
+      "integrations", "retention", "vat",
+      "cài đặt", "cấu hình", "tỷ giá", "tiền tệ", "ngôn ngữ", "bảo trì", "cờ tính năng", "bảo mật", "tích hợp", "lưu trữ dữ liệu",
+      "設定", "構成", "為替", "メンテナンス", "機能フラグ", "セキュリティ", "連携",
     ],
   },
   {
@@ -439,6 +441,30 @@ export const ADMIN_PALETTE_ACTIONS: readonly AdminPaletteEntry[] = [
     // i18n-allow: search synonyms, matched in every language whatever the UI locale.
     keywords: ["create role", "new role", "custom role", "tạo vai trò", "vai trò mới", "ロール作成"],
   },
+  {
+    id: "changedPlatformSettings",
+    kind: "action",
+    href: "/admin/settings?changed=1",
+    labelKey: "changedPlatformSettings",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["changed settings", "overridden settings", "non-default", "cài đặt đã đổi", "khác mặc định", "変更された設定"],
+  },
+  {
+    id: "exportPlatformSettings",
+    kind: "action",
+    href: "/admin/settings?action=export",
+    labelKey: "exportPlatformSettings",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["export settings", "backup settings", "settings json", "xuất cài đặt", "sao lưu cấu hình", "設定エクスポート"],
+  },
+  {
+    id: "importPlatformSettings",
+    kind: "action",
+    href: "/admin/settings?action=import",
+    labelKey: "importPlatformSettings",
+    // i18n-allow: search synonyms, matched in every language whatever the UI locale.
+    keywords: ["import settings", "restore settings", "settings json", "nhập cài đặt", "khôi phục cấu hình", "設定インポート"],
+  },
 ];
 
 export interface RankedEntry {
@@ -481,7 +507,8 @@ export type AdminRecentKind =
   | "ledger"
   | "salesLead"
   | "feedback"
-  | "glossaryTerm";
+  | "glossaryTerm"
+  | "setting";
 
 export interface AdminRecentItem {
   kind: AdminRecentKind;

@@ -128,6 +128,12 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "inbox.done": "Inbox item closed",
   "inbox.reopened": "Inbox item reopened",
   "inbox.note_added": "Inbox note added",
+  // Platform settings console (workspace service, AdminAuditPlatformSettingActions)
+  "setting.changed": "Platform setting changed",
+  "setting.reset": "Platform setting reset",
+  "setting.reverted": "Platform setting reverted",
+  "setting.imported": "Platform settings imported",
+  "settings.exported": "Platform settings exported",
 };
 
 /** Mirrors AdminAuditEntityTypes on the backend. */
@@ -162,6 +168,7 @@ export const AUDIT_ENTITY_LABELS: Readonly<Record<string, string>> = {
   credit_pack: "Credit pack",
   addon: "Add-on",
   coupon: "Coupon",
+  platform_setting: "Platform setting",
 };
 
 export const AUDIT_SOURCE_LABELS: Readonly<Record<string, string>> = {
@@ -283,6 +290,12 @@ export function auditEntityHref(entity: AuditSubjectRef, before?: Summary, after
       return "/admin/packages?tab=addons";
     case "coupon":
       return "/admin/packages?tab=coupons";
+    case "platform_setting": {
+      // The subject key is the setting key, with "@scope:id" for an override; an import or export
+      // names no single setting and opens the console.
+      const key = entity.key?.split("@")[0] ?? "";
+      return /^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(key) ? `/admin/settings?key=${encodeURIComponent(key)}` : "/admin/settings";
+    }
     default:
       return null;
   }
