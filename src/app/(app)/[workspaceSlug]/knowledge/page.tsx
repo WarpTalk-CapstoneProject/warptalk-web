@@ -40,6 +40,7 @@ import {
 } from "@/components/workspace/page-chrome";
 import { useKnowledgeFilters } from "@/hooks/use-knowledge-filters";
 import { useWorkspaceKnowledge } from "@/hooks/use-workspace";
+import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { WorkspaceKnowledgeChunkDto } from "@/types/workspace-knowledge";
 
@@ -48,10 +49,12 @@ export default function WorkspaceKnowledgePage() {
   const params = useParams();
   const workspaceSlug = String(params?.workspaceSlug ?? "");
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
-  const role = useWorkspaceStore((state) => state.role);
-  const normalizedRole = role?.toLowerCase();
-  const isOwner = normalizedRole === "owner";
-  const isOwnerOrAdmin = isOwner || normalizedRole === "admin";
+  // Was a bare `role?.toLowerCase()` comparison against the store's raw value — the exact
+  // class of bug useWorkspaceRole exists to rule out at compile time (see its doc comment):
+  // it silently reads as "not owner/admin" whenever the store hasn't populated role yet.
+  const role = useWorkspaceRole();
+  const isOwner = role === "owner";
+  const isOwnerOrAdmin = isOwner || role === "admin";
 
   const filters = useKnowledgeFilters();
   const { data, isLoading, isError, refetch, isFetching } = useWorkspaceKnowledge(

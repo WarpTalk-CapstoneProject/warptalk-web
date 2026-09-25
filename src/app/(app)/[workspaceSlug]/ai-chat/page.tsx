@@ -181,9 +181,17 @@ export default function AiChatPage() {
     setDraft("");
     setPendingQuestions(null);
     clearPluginCards();
-    await sendMessage.mutateAsync({ conversationId, content });
-    await conversationQuery.refetch();
-    await conversationsQuery.refetch();
+    try {
+      await sendMessage.mutateAsync({ conversationId, content });
+      await conversationQuery.refetch();
+      await conversationsQuery.refetch();
+    } catch {
+      // The message never reached the server — give the draft back instead of losing what was
+      // typed, and say so instead of leaving the chat looking silently frozen. The sidebar
+      // widget (global-chatbot.tsx) already does this; this full page did not.
+      setDraft(content);
+      toast.error(t("toasts.messageSendFailed"));
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

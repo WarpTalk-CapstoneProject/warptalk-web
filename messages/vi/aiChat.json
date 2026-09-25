@@ -13,6 +13,7 @@
   "sending": "Đang gửi…",
   "send": "Gửi",
   "toasts": {
+    "messageSendFailed": "Không thể gửi tin nhắn. Vui lòng thử lại.",
     "pluginConnected": "Đã kết nối plugin.",
     "pluginConnectOpenBrowser": "Hoàn tất kết nối plugin này trong trình duyệt của bạn.",
     "pluginConnectBlocked": "Trình duyệt của bạn đã chặn cửa sổ xác nhận.",

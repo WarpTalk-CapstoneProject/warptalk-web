@@ -118,5 +118,33 @@
     "uploadAnyway": "Upload it anyway",
     "uploadAnywayDetail": "Creates a second, separate document with the same contents.",
     "cancel": "Cancel"
+  },
+  "detail": {
+    "notFoundError": "Document no longer exists or has been hidden.",
+    "notFound": {
+      "title": "Document Not Found",
+      "description": "The requested document does not exist or has been deleted from this workspace.",
+      "backToDocuments": "Back to Documents"
+    },
+    "backToLibrary": "Back to Library",
+    "approve": "Approve",
+    "approveTitle": "Approve document",
+    "reject": "Reject",
+    "rejectTitle": "Reject document",
+    "download": "Download",
+    "toasts": {
+      "downloadSaved": "File saved successfully!",
+      "downloadStarted": "Downloading file...",
+      "downloadFailed": "Failed to download document.",
+      "approved": "Document approved for ingestion.",
+      "rejected": "Document rejected. The uploader can see your reason.",
+      "approveActionFailed": "Action failed.",
+      "revisionSubmitted": "Corrected version submitted for approval.",
+      "revisionFailed": "Failed to upload the corrected version.",
+      "visibilityChangeFailed": "Failed to change who can see this document.",
+      "aiIndexingEnabled": "AI indexing enabled. The document will be re-indexed.",
+      "aiIndexingDisabled": "AI indexing disabled. Existing AI copies of this document are being deleted.",
+      "aiIndexingFailed": "Failed to change AI indexing."
+    }
   }
 }

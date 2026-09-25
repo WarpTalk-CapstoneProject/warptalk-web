@@ -118,5 +118,33 @@
     "uploadAnyway": "Vẫn tải lên",
     "uploadAnywayDetail": "Tạo một tài liệu thứ hai, riêng biệt với cùng nội dung.",
     "cancel": "Hủy"
+  },
+  "detail": {
+    "notFoundError": "Tài liệu không còn tồn tại hoặc đã bị ẩn.",
+    "notFound": {
+      "title": "Không tìm thấy tài liệu",
+      "description": "Tài liệu được yêu cầu không tồn tại hoặc đã bị xóa khỏi không gian làm việc này.",
+      "backToDocuments": "Về trang Tài liệu"
+    },
+    "backToLibrary": "Về Thư viện",
+    "approve": "Duyệt",
+    "approveTitle": "Duyệt tài liệu",
+    "reject": "Từ chối",
+    "rejectTitle": "Từ chối tài liệu",
+    "download": "Tải xuống",
+    "toasts": {
+      "downloadSaved": "Đã lưu file thành công!",
+      "downloadStarted": "Đang tải file xuống...",
+      "downloadFailed": "Không thể tải tài liệu xuống.",
+      "approved": "Đã duyệt tài liệu để đưa vào AI.",
+      "rejected": "Đã từ chối tài liệu. Người tải lên có thể thấy lý do của bạn.",
+      "approveActionFailed": "Thao tác thất bại.",
+      "revisionSubmitted": "Đã gửi phiên bản đã sửa để chờ duyệt.",
+      "revisionFailed": "Không thể tải lên phiên bản đã sửa.",
+      "visibilityChangeFailed": "Không thể thay đổi quyền xem tài liệu này.",
+      "aiIndexingEnabled": "Đã bật lập chỉ mục AI. Tài liệu sẽ được lập chỉ mục lại.",
+      "aiIndexingDisabled": "Đã tắt lập chỉ mục AI. Các bản sao AI hiện có của tài liệu này đang được xóa.",
+      "aiIndexingFailed": "Không thể thay đổi cài đặt lập chỉ mục AI."
+    }
   }
 }

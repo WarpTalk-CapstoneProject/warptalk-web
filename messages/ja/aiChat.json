@@ -13,6 +13,7 @@
   "sending": "送信中…",
   "send": "送信",
   "toasts": {
+    "messageSendFailed": "メッセージを送信できませんでした。もう一度お試しください。",
     "pluginConnected": "プラグインを接続しました。",
     "pluginConnectOpenBrowser": "ブラウザでこのプラグインの接続を完了してください。",
     "pluginConnectBlocked": "ブラウザが同意ウィンドウをブロックしました。",
