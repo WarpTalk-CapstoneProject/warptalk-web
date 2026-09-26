@@ -15,6 +15,13 @@
 // different conversation begins, and are NOT cleared where a turn completes or fails. Each check
 // reads the one handler or function it is about, not the whole file, so a clear that moves from
 // the right place to the wrong one cannot keep the count and pass.
+//
+// THE ONE SEND THAT MUST NOT CLEAR, added with the permission form's states: the answer to the
+// form itself. "The next turn ends the previous turn's cards" was implemented as "any send ends
+// them", and an answer IS a send — so the form vanished on the press, leaving nothing on screen
+// for the seconds a write takes. The last section below checks that half on all three surfaces:
+// the answer keeps the prompt, the turn's end is reported to it rather than used to clear it, and
+// the form is the thing that eventually takes itself away.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -187,6 +194,95 @@ assertIncludes(
   slice(read(sessionFile), sessionFile, '"ChatAssistantResponsePending"', "\n    });"),
   "clearAssistantCards()",
   "The meeting session must clear the previous turn's cards on ChatAssistantResponsePending. Only the asker's panel runs beginAssistantTurn; this is the once-per-turn signal every other participant receives, and it always arrives before that turn's own card.",
+);
+
+// --- The answer is the one send that keeps the prompt ---------------------------------------------
+// Everything above is about a card nobody has pressed yet. These are about the moment after the
+// press, which used to be the end of the form: it now stays, says the write is running, and leaves
+// on its own once the turn is over.
+
+const promptFile = "src/components/assistant/permission-prompt.tsx";
+const promptSource = read(promptFile);
+
+for (const [what, token] of [
+  ["the three states it draws", 'const phase: "asking" | "running" | "done"'],
+  [
+    "a receipt that takes itself off the screen",
+    "setTimeout(() => dismissRef.current(), RECEIPT_VISIBLE_MS)",
+  ],
+]) {
+  assertIncludes(
+    promptSource,
+    token,
+    `The permission form must keep ${what}. Without it the press is the end of the form again, and a write that takes seconds happens behind an empty composer.`,
+  );
+}
+// The message is the worker's, not the button's: the short label is a display choice and the model
+// parses what is sent.
+assertIncludes(
+  promptSource,
+  "handlers.onAnswer(option.value!)",
+  "An answer must send the worker's own option value. Sending the button's label instead would hand the model a word it does not parse.",
+);
+
+const widgetPrompt = slice(widget, widgetFile, "<AssistantPermissionPrompt", "/>");
+const aiChatPrompt = slice(aiChat, aiChatFile, "<AssistantPermissionPrompt", "/>");
+const roomChatFile = "src/components/rooms/live/chat-panel.tsx";
+const roomChat = read(roomChatFile);
+const roomChatPrompt = slice(roomChat, roomChatFile, "<AssistantPermissionPrompt", "/>");
+
+for (const [surface, element, cleared] of [
+  ["global-chatbot", widgetPrompt, "setPendingPermission(null)"],
+  ["/ai-chat", aiChatPrompt, "setPendingPermission(null)"],
+  ["the meeting chat panel", roomChatPrompt, "setAssistantPermissionJson(null)"],
+]) {
+  assertIncludes(
+    element,
+    "turnEndedAt=",
+    `${surface} must tell the permission form when the turn ended, or its answer spins forever: the form cannot see the hub.`,
+  );
+  const onAnswer = slice(element, surface, "onAnswer=", "onConnect=");
+  assertNotIncludes(
+    onAnswer,
+    cleared,
+    `${surface} must not clear the permission slot when the answer is sent. The form is the only thing on screen saying the write is running — clearing it here is the empty composer the states were added to fix.`,
+  );
+}
+
+// The widget and /ai-chat funnel every send through one function, which is where the clear lives;
+// it has to skip the answer's own send and nothing else.
+for (const [surface, source, file, start] of [
+  ["global-chatbot", widget, widgetFile, "const sendMessage = async ("],
+  ["/ai-chat", aiChat, aiChatFile, "async function sendContent("],
+]) {
+  assertIncludes(
+    slice(source, file, start, "\n  }"),
+    "if (!options?.keepPermissionPrompt) clearPluginCards();",
+    `${surface} must skip the card clear for the permission form's own answer, and only for that: every other send is a new turn, which is what ends a card nobody pressed.`,
+  );
+}
+
+// Reported, not acted on: a handler that clears here is the WT-688 bug, and one that says nothing
+// leaves the form spinning under a finished answer.
+for (const event of ["AssistantMessageCompleted", "AssistantMessageFailed"]) {
+  assertIncludes(
+    slice(widget, widgetFile, `"${event}",`, "connection.on("),
+    "setTurnEndedAt(Date.now())",
+    `global-chatbot's ${event} handler must report the turn's end to the permission form. It is the only signal that an allowed write is over.`,
+  );
+}
+assertIncludes(
+  slice(aiChat, aiChatFile, "const refetchBoth = (", "\n    };"),
+  "setTurnEndedAt(Date.now())",
+  "/ai-chat must report the turn's end to the permission form from the handler both the completed and the failed event share.",
+);
+
+// The meeting's answer goes out through beginAssistantTurn, which ends the previous turn's cards —
+// including, unless it is put back, the prompt the answer belongs to.
+assertIncludes(
+  slice(roomChat, roomChatFile, "function dispatchMessage(", "sendMessageAPI("),
+  "setAssistantPermissionJson(answeredPermission)",
+  "The meeting chat panel must put the answered prompt back after beginAssistantTurn, which clears the card slots wholesale. Without it the form disappears on the press in a meeting only.",
 );
 
 console.log("Plugin card lifecycle contract passed.");
