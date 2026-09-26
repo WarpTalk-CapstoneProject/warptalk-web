@@ -1,6 +1,7 @@
 import type { ChatMessageDto } from "@/types/realtime";
 import type { AssistantSeedMessageDto } from "@/types/assistant";
 import { isAssistantMessage } from "../meeting/chat-sender.ts";
+import { stripMeetingMarkers } from "./meeting-links.ts";
 
 /**
  * "Chuyển qua widget để bàn tiếp" — the in-meeting WarpBot thread, as the opening turns of a
@@ -82,7 +83,10 @@ export function buildMeetingHandoffSeed(input: MeetingHandoffInput): MeetingHand
 
   const turns: AssistantSeedMessageDto[] = [];
   for (const message of thread) {
-    const text = clip(message.originalText ?? "");
+    // Markers first, then the clip. A handed-over turn is a quote of what was said, not a
+    // meeting being created again — and clipping mid-marker would leave half an HTML comment,
+    // which nothing downstream recognises as one and every reader sees as characters.
+    const text = clip(stripMeetingMarkers(message.originalText ?? ""));
     if (!text) continue;
 
     if (isAssistantMessage(message)) {
