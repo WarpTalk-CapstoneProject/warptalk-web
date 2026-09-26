@@ -537,6 +537,14 @@ export function GlobalChatbot() {
   // provider only an operator can register. One at a time, and it lives above the composer rather
   // than in the thread — see AssistantPermissionPrompt.
   const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
+  // That prompt has been answered. Two readers: Enter, which must not send the same answer twice
+  // while the first is still running, and the form itself, which cannot see an answer the composer
+  // sent on the user's behalf.
+  const [permissionAnswered, setPermissionAnswered] = useState(false);
+  // When the last turn ended, and null while one is open — which is how the permission form knows
+  // whether the write it just allowed is still running. A stamp rather than a clear of the slot:
+  // the form is what says the write is over, and it takes itself off the screen.
+  const [turnEndedAt, setTurnEndedAt] = useState<number | null>(null);
   // Both plugin cards last until the NEXT turn starts. Nothing but a click used to clear them, so
   // a Connect card survived New chat - where pressing Connect opened an OAuth flow the current
   // turn never asked for - and two of them could stack up, one per error code. So they clear when
@@ -548,6 +556,7 @@ export function GlobalChatbot() {
   // erased the card moments after it appeared, before anyone could press it (WT-688).
   const clearPluginCards = useCallback(() => {
     setPendingPermission(null);
+    setPermissionAnswered(false);
   }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
@@ -1122,7 +1131,12 @@ export function GlobalChatbot() {
         // the user's own message box still works, which is the fallback that matters.
         const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        if (permission) setPendingPermission(permission);
+        // A new ask replaces whatever the slot held, answered or not: the previous one's receipt is
+        // not worth a question going unseen behind it.
+        if (permission) {
+          setPendingPermission(permission);
+          setPermissionAnswered(false);
+        }
         armResponseTimeout();
       },
     );
@@ -1156,6 +1170,9 @@ export function GlobalChatbot() {
         setIsSlow(false);
         clearResponseTimeout();
         // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
+        // The permission form is told the turn is over so it can stop saying "Running…" — a stamp,
+        // not a clear, because the form owns how long its receipt lives.
+        setTurnEndedAt(Date.now());
 
         // Folded onto the answer, not deleted.
         //
@@ -1197,6 +1214,9 @@ export function GlobalChatbot() {
         setIsSlow(false);
         clearResponseTimeout();
         // The plugin cards stay: a turn that failed after raising one still needs it pressed.
+        // A turn that died still ended, so the permission form stops waiting on it rather than
+        // spinning until the next question; what went wrong is in the failed reply below it.
+        setTurnEndedAt(Date.now());
         // A failure is the case the trail matters MOST: how far it got is the only clue to why.
         // From the ref, for the same reason as the completed handler.
         const failedSteps = stepsRef.current.map((step) => ({ ...step, done: true }));
@@ -1311,6 +1331,15 @@ export function GlobalChatbot() {
     } else {
       setSlashMenuOpen(false);
     }
+  };
+
+  /**
+   * One way out of the permission form, whether the answer was pressed or taken by Enter on an
+   * empty composer: the slot keeps the prompt, because the form is now the only thing on screen
+   * saying the write is running, and the stamp is what stops Enter answering it twice.
+   */
+  const answerPermissionPrompt = (message: string) => {
+    void sendMessage(message, { keepPermissionPrompt: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1450,9 +1479,15 @@ export function GlobalChatbot() {
       // question is a better answer than a button press the user did not mean, so anything in the
       // box wins — and this is a write, which should never be approved by a stray keystroke.
       const firstAnswer = pendingPermission?.options?.find((option) => option.value)?.value;
-      if (!inputValue.trim() && pendingPermission?.kind === "tool" && firstAnswer) {
-        setPendingPermission(null);
-        void sendMessage(firstAnswer);
+      if (
+        !inputValue.trim() &&
+        pendingPermission?.kind === "tool" &&
+        // Not one already answered: the form is still there, showing the write running, and Enter
+        // on an empty box would confirm the same write twice.
+        !permissionAnswered &&
+        firstAnswer
+      ) {
+        answerPermissionPrompt(firstAnswer);
         return;
       }
       void sendMessage();
@@ -1630,7 +1665,14 @@ export function GlobalChatbot() {
     void addFiles(files);
   };
 
-  const sendMessage = async (overrideContent?: string) => {
+  const sendMessage = async (
+    overrideContent?: string,
+    // Set only by the permission form's own answer. Every other send starts a turn that has
+    // nothing to do with the prompt on screen, and a prompt outliving the turn it belongs to is
+    // how a Connect button came to offer an OAuth flow nobody had asked for (WT-688). An answer is
+    // the one send that must NOT end it: the form is what says the write is running.
+    options?: { keepPermissionPrompt?: boolean },
+  ) => {
     const content = (overrideContent ?? inputValue).trim();
     // WT-541: the same rule the send button is disabled by. It used to be spelled out here and
     // only half-spelled on the button, so a turn with no workspace was swallowed by a control
@@ -1642,6 +1684,11 @@ export function GlobalChatbot() {
       scope: assistantScope,
     });
     if (!readiness.canSend) return;
+    // A turn is opening, so the last one's end is no longer the state of anything. Before the
+    // awaits below, and in that order, because these two are what the permission form reads to
+    // tell an allowed write that is still running from one that is over.
+    setTurnEndedAt(null);
+    if (options?.keepPermissionPrompt) setPermissionAnswered(true);
     // The id travels with the yes, so this handler cannot disagree with the check above about
     // which workspace the turn belongs to — and a platform yes carries no workspace at all.
     const platformTurn = readiness.scope === "platform";
@@ -1725,7 +1772,7 @@ export function GlobalChatbot() {
       },
     ]);
     setIsAiTyping(true);
-    clearPluginCards();
+    if (!options?.keepPermissionPrompt) clearPluginCards();
     shouldAutoScrollRef.current = true;
     armResponseTimeout();
 
@@ -2086,12 +2133,16 @@ export function GlobalChatbot() {
                       prompt={pendingPermission}
                       plugins={catalogPlugins}
                       busy={connectPlugin.isPending}
-                      onAnswer={(answer) => {
-                        setPendingPermission(null);
-                        void sendMessage(answer);
-                      }}
+                      answered={permissionAnswered}
+                      turnEndedAt={turnEndedAt}
+                      // The slot is NOT cleared on an answer. Creating a meeting takes seconds, and
+                      // a form that vanishes on the press leaves nothing on screen saying the write
+                      // is running — see AssistantPermissionPrompt.
+                      onAnswer={answerPermissionPrompt}
                       onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
-                      onDismiss={() => setPendingPermission(null)}
+                      // Declined, or the receipt's four seconds are up. One path out, so a
+                      // dismissal cannot leave the answered stamp behind for the next prompt.
+                      onDismiss={clearPluginCards}
                     />
                   ) : null}
                   {/* Slash Command Dropdown */}

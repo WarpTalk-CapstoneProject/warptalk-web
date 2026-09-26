@@ -66,7 +66,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
-import { usePluginConnectUrl } from "@/hooks/use-assistant";
+import { useAssistantPlugins, usePluginConnectUrl } from "@/hooks/use-assistant";
 
 import { motion, AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -93,6 +93,17 @@ const STICK_TO_BOTTOM_PX = 80;
  * Same treatment TranscriptPanel already got for the same report — see the note there.
  */
 const chatScrollOffsets = new Map<string, { offset: number; atBottom: boolean }>();
+
+/**
+ * The permission prompt this room last answered, kept outside the component for the same reason
+ * the scroll offsets are: MeetingSidePanel unmounts ChatPanel on a tab switch, and a remount in the
+ * seconds a write takes would otherwise draw the question again, with its buttons, over a write
+ * already running — one Transcript round trip away from confirming it twice.
+ *
+ * Matched by payload, so a genuinely new ask (its confirmation token differs) is not mistaken for
+ * this one. Never cleared: an entry no live payload matches has no effect.
+ */
+const answeredPermissions = new Map<string, string>();
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -197,6 +208,16 @@ export function ChatPanel({
   const setAssistantState = useTranslationRoomStore((state) => state.setAssistantState);
   const beginAssistantTurn = useTranslationRoomStore((state) => state.beginAssistantTurn);
   const answersWhenAskedRef = useRef(0);
+  /**
+   * The permission prompt an answer on its way out belongs to, held across the turn it opens.
+   *
+   * beginAssistantTurn ends the PREVIOUS turn's cards, which is right for a question nobody
+   * pressed — but the prompt this answer came from is no longer waiting to be pressed, it is the
+   * only thing on screen saying the write is running, and creating a meeting takes seconds. So it
+   * is put straight back. A ref rather than an argument because the answer may be held behind the
+   * turn WarpBot is still finishing (WT-580) and dispatched later, from the queue.
+   */
+  const answeredPermissionRef = useRef<string | null>(null);
   const setChatMessages = useTranslationRoomStore(
     (state) => state.setChatMessages,
   );
@@ -207,6 +228,10 @@ export function ChatPanel({
   const historyQuery = useMeetingChat(roomId);
   const { mutate: sendMessageAPI, isPending } = useSendMeetingChat();
   const connectPlugin = usePluginConnectUrl();
+  // The catalog the permission form draws a plugin's logo from, scoped to the workspace exactly as
+  // the widget reads it. This panel passed an empty list, so the same form carried the logo in the
+  // widget and nothing here.
+  const { data: assistantPlugins = [] } = useAssistantPlugins(activeWorkspaceId ?? undefined);
   const { mutate: sendFileAPI, isPending: isUploadingFile } =
     useSendMeetingChatFile();
   const { mutate: translateMessageAPI } = useTranslateMeetingChat(roomId);
@@ -352,7 +377,12 @@ export function ChatPanel({
       // setAssistantState("thinking"), which moved the state without starting a trail — and
       // because every later signal then saw a non-idle state, nothing ever seeded one. The
       // whole stretch before the first tool call showed a bare spinner instead of a step.
+      const answeredPermission = answeredPermissionRef.current;
+      answeredPermissionRef.current = null;
       beginAssistantTurn();
+      // See answeredPermissionRef: the form this answer came from outlives the turn it opens,
+      // because it is what says the write is running. It takes itself off the screen.
+      if (answeredPermission) setAssistantPermissionJson(answeredPermission);
     }
 
     sendMessageAPI(
@@ -709,6 +739,10 @@ export function ChatPanel({
   const pendingPermission = assistantPermissionJson
     ? parsePermissionPrompt(assistantPermissionJson)
     : null;
+  // See answeredPermissions: survives the tab switch that unmounts this panel.
+  const permissionAnswered =
+    assistantPermissionJson !== null &&
+    answeredPermissions.get(roomId) === assistantPermissionJson;
 
   async function handlePluginConnectionAction(pluginKey: string) {
     try {
@@ -1057,10 +1091,20 @@ export function ChatPanel({
         {pendingPermission ? (
           <AssistantPermissionPrompt
             prompt={pendingPermission}
-            plugins={[]}
+            plugins={assistantPlugins}
             busy={connectPlugin.isPending}
+            // Stamped when the turn goes idle — the answer landing, or the send failing — and
+            // nulled by beginAssistantTurn while one is open. An answer still waiting behind
+            // WarpBot's current turn (WT-580) has not run yet, whatever the last turn did.
+            turnEndedAt={queuedAsks.length > 0 ? null : assistantFinishedAt}
+            answered={permissionAnswered}
             onAnswer={(answer) => {
-              setAssistantPermissionJson(null);
+              // Handed to the dispatch rather than cleared: the form stays, showing the write
+              // running. See answeredPermissionRef and answeredPermissions.
+              answeredPermissionRef.current = assistantPermissionJson;
+              if (assistantPermissionJson) {
+                answeredPermissions.set(roomId, assistantPermissionJson);
+              }
               sendMessage(answer);
             }}
             onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}

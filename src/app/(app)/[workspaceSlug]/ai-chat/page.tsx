@@ -7,6 +7,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
   useAssistantConversations,
+  useAssistantPlugins,
   useCreateAssistantConversation,
   usePluginConnectUrl,
   useSendAssistantMessage,
@@ -45,7 +46,16 @@ export default function AiChatPage() {
   // composer. This page used to keep only the questions, so a Connect prompt arrived and vanished
   // without trace (WT-688).
   const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
+  // That prompt has been answered, and the last turn's end — null while a turn is open. The form
+  // draws the running write from the pair; it used to disappear on the press, which said nothing
+  // about a write that takes seconds.
+  const [permissionAnswered, setPermissionAnswered] = useState(false);
+  const [turnEndedAt, setTurnEndedAt] = useState<number | null>(null);
   const connectPlugin = usePluginConnectUrl();
+  // The same catalog the widget reads, scoped to the workspace so its plugin policy applies. This
+  // page passed an empty list, so one form carried the plugin's logo in the widget and a bare line
+  // of mono here.
+  const { data: assistantPlugins = [] } = useAssistantPlugins(workspaceId ?? undefined);
 
   // The same rule the widget and the meeting panel follow: a card lasts until the NEXT turn starts.
   // Cleared on send and on changing conversation, because a Connect card left over from an earlier
@@ -54,6 +64,7 @@ export default function AiChatPage() {
   // so clearing there erases it before anyone can press it.
   const clearPluginCards = useCallback(() => {
     setPendingPermission(null);
+    setPermissionAnswered(false);
   }, []);
 
   const conversations = conversationsQuery.data ?? [];
@@ -84,12 +95,19 @@ export default function AiChatPage() {
         const questions = parseAssistantQuestions(payload.questionsJson);
         const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        if (permission) setPendingPermission(permission);
+        // A new ask replaces whatever the slot held, answered or not.
+        if (permission) {
+          setPendingPermission(permission);
+          setPermissionAnswered(false);
+        }
       },
     );
     const refetchBoth = (payload?: { conversationId?: string }) => {
       if (payload?.conversationId && payload.conversationId !== selectedId) return;
       // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
+      // The permission form is told the turn is over — a stamp, not a clear, because the form
+      // owns how long its receipt lives.
+      setTurnEndedAt(Date.now());
       void refetchConversationRef.current();
       void refetchConversationsRef.current();
     };
@@ -152,9 +170,18 @@ export default function AiChatPage() {
     }
   }
 
-  async function sendContent(content: string) {
+  // `keepPermissionPrompt` is set only by the permission form's own answer: every other send
+  // starts a turn the prompt on screen has nothing to do with, and that is what ends it. An answer
+  // is the one send that must not, because the form is what says the write is running.
+  async function sendContent(content: string, options?: { keepPermissionPrompt?: boolean }) {
     content = content.trim();
     if (!content || !workspaceId || sendMessage.isPending) return;
+
+    // A turn is opening, so the last one's end is no longer the state of anything. Before the
+    // awaits below: these two are what the permission form reads to tell an allowed write that is
+    // still running from one that is over.
+    setTurnEndedAt(null);
+    if (options?.keepPermissionPrompt) setPermissionAnswered(true);
 
     let conversationId = selectedId;
     if (!conversationId) {
@@ -165,7 +192,7 @@ export default function AiChatPage() {
 
     setDraft("");
     setPendingQuestions(null);
-    clearPluginCards();
+    if (!options?.keepPermissionPrompt) clearPluginCards();
     await sendMessage.mutateAsync({ conversationId, content });
     await conversationQuery.refetch();
     await conversationsQuery.refetch();
@@ -273,14 +300,14 @@ export default function AiChatPage() {
           {pendingPermission ? (
             <AssistantPermissionPrompt
               prompt={pendingPermission}
-              plugins={[]}
+              plugins={assistantPlugins}
               busy={connectPlugin.isPending}
-              onAnswer={(answer) => {
-                setPendingPermission(null);
-                void sendContent(answer);
-              }}
+              answered={permissionAnswered}
+              turnEndedAt={turnEndedAt}
+              // The slot is NOT cleared on an answer: the form stays, showing the write running.
+              onAnswer={(answer) => void sendContent(answer, { keepPermissionPrompt: true })}
               onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
-              onDismiss={() => setPendingPermission(null)}
+              onDismiss={clearPluginCards}
               className="rounded-lg border border-border"
             />
           ) : null}
