@@ -272,5 +272,13 @@
     "failed": "Không đổi được ngôn ngữ của phía bên kia",
     "sameLanguage": "Bạn và phía bên kia đều đang để {language}, nên sẽ không có gì được dịch. Hãy chọn ngôn ngữ họ nói.",
     "singleLanguageWorkspace": "Không gian làm việc này chỉ cho phép {language}, nên không có ngôn ngữ nào để dịch sang. Hãy nhờ quản trị viên cho phép thêm một ngôn ngữ thứ hai."
+  },
+  "translationCredits": {
+    "outOfCredits": "Đã dừng dịch: workspace này đã hết credit. Hãy nhờ chủ workspace nạp thêm credit hoặc nâng cấp gói.",
+    "invoiceOverdue": "Đã dừng dịch: workspace này có hóa đơn quá hạn. Hãy nhờ chủ workspace thanh toán.",
+    "trialEnded": "Đã dừng dịch: thời gian dùng thử của workspace đã kết thúc. Hãy nhờ chủ workspace chọn gói.",
+    "subscriptionExpired": "Gói đăng ký của workspace đã hết hạn — đã tạm dừng dịch. Hãy nhờ chủ workspace gia hạn.",
+    "suspended": "Đã dừng dịch: dịch vụ AI của workspace đang bị tạm ngưng. Hãy nhờ chủ workspace kiểm tra thanh toán.",
+    "restored": "Đã có thể dịch trở lại — thanh toán của workspace đã được khôi phục."
   }
 }

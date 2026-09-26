@@ -1,6 +1,11 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type {
+  CreateCustomEmailTemplateRequest,
+  CustomEmailDeletionCheckDto,
+  EmailRenderedDto,
+  EmailRenderQuery,
+  UpdateCustomEmailTemplateRequest,
   BulkResultDto,
   EmailBulkRequest,
   EmailCmsVersionDto,
@@ -76,4 +81,35 @@ export const adminEmailTemplateService = {
 
   bulk: async (request: EmailBulkRequest): Promise<BulkResultDto> =>
     (await apiClient.post<BulkResultDto>(API.adminEmailTemplates.bulk, request)).data,
+
+  // ── v3 ──
+
+  /** A stored email rendered as a recipient gets it. Reads only. */
+  render: async (key: string, query: EmailRenderQuery): Promise<EmailRenderedDto> =>
+    (
+      await apiClient.get<EmailRenderedDto>(API.adminEmailTemplates.render(key), {
+        params: {
+          locale: query.locale ?? "en",
+          dark: query.dark ?? false,
+          sampleSetId: query.sampleSetId || undefined,
+          source: query.source ?? undefined,
+        },
+      })
+    ).data,
+
+  createCustom: async (request: CreateCustomEmailTemplateRequest): Promise<EmailTemplateDetailDto> =>
+    (await apiClient.post<EmailTemplateDetailDto>(API.adminEmailTemplates.base, request)).data,
+
+  updateDetails: async (key: string, request: UpdateCustomEmailTemplateRequest): Promise<EmailTemplateDetailDto> =>
+    (await apiClient.put<EmailTemplateDetailDto>(API.adminEmailTemplates.details(key), request)).data,
+
+  deletionCheck: async (key: string): Promise<CustomEmailDeletionCheckDto> =>
+    (await apiClient.get<CustomEmailDeletionCheckDto>(API.adminEmailTemplates.deletion(key))).data,
+
+  deleteCustom: async (key: string, reason: string, permanent: boolean): Promise<void> => {
+    await apiClient.post(API.adminEmailTemplates.remove(key), { reason, permanent });
+  },
+
+  restoreCustom: async (key: string): Promise<EmailTemplateDetailDto> =>
+    (await apiClient.post<EmailTemplateDetailDto>(API.adminEmailTemplates.restoreTemplate(key))).data,
 };

@@ -96,7 +96,8 @@
       "salesLeads": "Sales leads",
       "feedback": "Feedback",
       "glossary": "Glossary terms",
-      "searchIn": "Search a list"
+      "searchIn": "Search a list",
+      "settings": "Platform settings"
     },
     "searchIn": "Search {page} for “{query}”",
     "searching": "Searching…",
@@ -119,7 +120,8 @@
       "ledger": "Ledger entry",
       "salesLead": "Sales lead",
       "feedback": "Feedback",
-      "glossaryTerm": "Glossary term"
+      "glossaryTerm": "Glossary term",
+      "setting": "Setting"
     },
     "actions": {
       "adjustCredit": "Adjust credit…",
@@ -138,7 +140,10 @@
       "recordExpense": "Record an expense",
       "importExpenses": "Import expenses from CSV",
       "createCreditPack": "Create credit pack",
-      "createCoupon": "Create coupon"
+      "createCoupon": "Create coupon",
+      "changedPlatformSettings": "Show changed platform settings",
+      "exportPlatformSettings": "Export platform settings (JSON)",
+      "importPlatformSettings": "Import platform settings (JSON)"
     }
   }
 }

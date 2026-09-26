@@ -150,7 +150,10 @@
       "overridden": "ghi đè theo hợp đồng",
       "burnHeading": "Mức tiêu hao credit — 30 ngày qua",
       "burnSubtitle": "Tiêu thụ hằng ngày và số dư cuối ngày theo sổ cái",
-      "adjustCredits": "Điều chỉnh credit"
+      "adjustCredits": "Điều chỉnh credit",
+      "frozenCredits": "Credit bị đóng băng",
+      "frozenCreditsValue": "{credits} (giữ từ {date}, trả lại khi gia hạn)",
+      "frozenCreditsDormant": "{credits} (tạm ngưng từ {date}, vẫn được giữ)"
     },
     "audit": {
       "emptyTitle": "Chưa có hành động quản trị nào",

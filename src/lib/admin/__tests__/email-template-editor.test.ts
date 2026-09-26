@@ -122,3 +122,14 @@ test("a locale without published content falls back to English, then to the buil
   assert.equal(sentVersionFor("en", [en]), "en");
   assert.equal(sentVersionFor("vi", [{ ...viDraft, publishedVersion: 1 }]), "vi");
 });
+
+test("custom, built-in and archived filters; a deleted template shows only under Archived", async () => {
+  const { matchesFilter } = await import("../email-template-editor.ts");
+  const builtIn = { isLive: true, isCustomized: false, hasDraftChanges: false, isCustom: false };
+  const custom = { isLive: true, isCustomized: true, hasDraftChanges: false, isCustom: true };
+  const deleted = { ...custom, isDeleted: true };
+  assert.deepEqual([builtIn, custom, deleted].filter((t) => matchesFilter(t, "all")), [builtIn, custom]);
+  assert.deepEqual([builtIn, custom, deleted].filter((t) => matchesFilter(t, "custom")), [custom]);
+  assert.deepEqual([builtIn, custom, deleted].filter((t) => matchesFilter(t, "builtIn")), [builtIn]);
+  assert.deepEqual([builtIn, custom, deleted].filter((t) => matchesFilter(t, "archived")), [deleted]);
+});

@@ -372,13 +372,13 @@ test("finishing re-arms the deadline", () => {
   assert.ok(store().assistantActivityAt >= before!);
 });
 
-// ── cards live until the NEXT turn starts, not until their own answer (WT-688) ──
+// ── a prompt lives until the NEXT turn starts, not until its own answer (WT-688) ──
 
-const CONNECT_CARD = JSON.stringify({
-  pluginConnection: {
-    type: "plugin_connection_required",
+const CONNECT_PROMPT = JSON.stringify({
+  permission: {
+    kind: "connect",
+    action: "Google Calendar",
     pluginKey: "google_calendar",
-    pluginLabel: "Google Calendar",
     connectionStatus: "not_connected",
   },
 });
@@ -389,40 +389,36 @@ test("a card survives the answer of the turn that raised it", () => {
   // appeared — and in a meeting, a plugin write's Confirm card with it.
   store().beginAssistantTurn();
   store().noteAssistantActivity("google_calendar_create_event", null);
-  store().setAssistantPluginConnectionJson(CONNECT_CARD);
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
   store().setAssistantQuestionsJson('{"questions":[]}');
 
   store().sealAssistantTrail("answer-1");
 
-  assert.equal(store().assistantPluginConnectionJson, CONNECT_CARD);
+  assert.equal(store().assistantPermissionJson, CONNECT_PROMPT);
   assert.equal(store().assistantQuestionsJson, '{"questions":[]}');
 });
 
 test("the asker's next turn ends the previous turn's cards", () => {
   store().beginAssistantTurn();
-  store().setAssistantPluginConnectionJson(CONNECT_CARD);
-  store().setAssistantPluginSetupJson('{"pluginOperatorSetup":{}}');
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
   store().setAssistantQuestionsJson('{"questions":[]}');
   store().sealAssistantTrail("answer-1");
 
   store().beginAssistantTurn();
 
-  assert.equal(store().assistantPluginConnectionJson, null);
-  assert.equal(store().assistantPluginSetupJson, null);
+  assert.equal(store().assistantPermissionJson, null);
   assert.equal(store().assistantQuestionsJson, null);
 });
 
 test("a turn another participant opens ends the previous turn's cards too", () => {
   // Only the asker's panel calls beginAssistantTurn; everyone else learns of a new turn from
   // ChatAssistantResponsePending, which the session turns into clearAssistantCards.
-  store().setAssistantPluginConnectionJson(CONNECT_CARD);
-  store().setAssistantPluginSetupJson('{"pluginOperatorSetup":{}}');
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
   store().setAssistantQuestionsJson('{"questions":[]}');
 
   store().clearAssistantCards();
 
-  assert.equal(store().assistantPluginConnectionJson, null);
-  assert.equal(store().assistantPluginSetupJson, null);
+  assert.equal(store().assistantPermissionJson, null);
   assert.equal(store().assistantQuestionsJson, null);
 });
 
@@ -431,10 +427,10 @@ test("idle -> thinking in the middle of a turn does not erase its card", () => {
   // to idle mid-turn. The next tool call of the SAME turn then re-enters the "starting" branch —
   // which must not be mistaken for a new turn.
   store().noteAssistantActivity("google_calendar_list_events", null);
-  store().setAssistantPluginConnectionJson(CONNECT_CARD);
+  store().setAssistantPermissionJson(CONNECT_PROMPT);
   store().setAssistantState("idle");
 
   store().noteAssistantActivity("google_calendar_create_event", null);
 
-  assert.equal(store().assistantPluginConnectionJson, CONNECT_CARD);
+  assert.equal(store().assistantPermissionJson, CONNECT_PROMPT);
 });

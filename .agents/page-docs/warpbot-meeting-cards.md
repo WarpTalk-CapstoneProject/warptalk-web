@@ -19,10 +19,11 @@ Now:
   meeting code with a Copy button, the time, and (for Google Meet) "Open in Calendar".
 - The two kinds are labelled: **Google Meet** with Google's mark, **WarpTalk room** with WarpTalk's,
   and **WarpTalk translation** for the `EXTERNAL_BRIDGE` room that translates a Google Meet call.
-- The **confirmation card** for a Google Meet write says what it will create — Title, When
-  (GMT+7), Calendar — instead of "Confirm this action".
-- A user's answer to a confirmation card shows as **"Create"** / "Always allow" / "Cancel"; the
-  confirmation token it carries for the model is hidden from the bubble.
+- Everything WarpBot has to **ask** before it may act — a write to confirm, a plugin to connect, a
+  provider only an administrator can register — is **one form above the composer**, not three cards
+  in the thread. See `permission-prompt.md`.
+- A user's answer to that form shows as **"Yes"** / "Always allow" / "Cancel"; the confirmation
+  token it carries for the model is hidden from the bubble.
 - `@mentions` stay **inside the sentence** in the composer and in the sent bubble.
 
 ## How it works

@@ -272,5 +272,13 @@
     "failed": "Could not change what the other side speaks",
     "sameLanguage": "You and the other side are both set to {language}, so nothing will be translated. Choose what they speak.",
     "singleLanguageWorkspace": "This workspace only allows {language}, so there is nothing to translate into. Ask a workspace admin to allow a second language."
+  },
+  "translationCredits": {
+    "outOfCredits": "Translation stopped: this workspace has run out of credits. Ask a workspace owner to add credits or upgrade the plan.",
+    "invoiceOverdue": "Translation stopped: this workspace has an overdue invoice. Ask a workspace owner to settle it.",
+    "trialEnded": "Translation stopped: this workspace's trial has ended. Ask a workspace owner to choose a plan.",
+    "subscriptionExpired": "Workspace subscription expired — translation paused. Ask the workspace owner to renew.",
+    "suspended": "Translation stopped: this workspace's AI service is suspended. Ask a workspace owner to check billing.",
+    "restored": "Translation is available again — the workspace's billing was restored."
   }
 }

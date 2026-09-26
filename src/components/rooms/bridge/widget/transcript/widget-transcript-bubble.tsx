@@ -28,32 +28,32 @@ import { ParticipantAvatar } from "@/components/rooms/live/participant-avatar";
 import { getLanguageName } from "@/lib/language/languages";
 import { splitIntoSentences } from "@/lib/transcript/sentence-flow";
 import {
+  transcriptBubbleLines,
+  type CleanTranscriptView,
+} from "@/lib/transcript/clean-transcript";
+import { SelfRepairMarker } from "@/components/rooms/transcript-clean-controls";
+import {
   confidencePercent,
   formatTranscriptClockTime,
   formatTranscriptTimestamp,
   resolveSegmentTranslation,
   type GroupedTranscriptSegment,
 } from "@/lib/transcript/transcript-display";
+import type { TranscriptSegmentDto } from "@/types/realtime";
 
-/**
- * The lines one bubble renders, in the order the speaker produced them: split first where the
- * speaker stopped (`paragraphs`, measured by VAD), then on the punctuation the recogniser produced.
- *
- * This is `transcriptLines` from live/side-panel/transcript-panel.tsx, which is not exported and
- * which this task may not edit. It is kept to the one expression so there is nothing in it to
- * drift: the decisions live in `splitIntoSentences` and in groupTranscriptSegments' paragraphs,
- * both imported. TODO(WT-525): export one `transcriptLines` from lib/transcript/sentence-flow and
- * have both bubbles call it.
+/*
+ * The lines one bubble renders now come from `transcriptBubbleLines` in
+ * lib/transcript/clean-transcript — the TODO(WT-525) that stood here, closed by WT-716. Both this
+ * bubble and the in-meeting one call it, so the two can no longer drift about where a line ends:
+ * Verbatim splits where the speaker stopped (`paragraphs`, measured by VAD) and then on the
+ * recogniser's punctuation, and Clean puts each merged sentence on a line of its own.
  */
-function bubbleLines(segment: GroupedTranscriptSegment): string[] {
-  const paragraphs = segment.paragraphs?.length ? segment.paragraphs : [segment.originalText];
-  return paragraphs.flatMap((paragraph) => splitIntoSentences(paragraph));
-}
 
 export function WidgetTranscriptBubble({
   segment,
   isSelf,
   readerLanguage,
+  cleanView,
 }: {
   // The GROUPED segment, as in the meeting: `paragraphs` is where the speaker stopped, and a raw
   // segment would lay a turn out one recogniser chunk — one breath — per bubble.
@@ -66,6 +66,8 @@ export function WidgetTranscriptBubble({
    * direction a line claimed depended on arrival order rather than on who was reading.
    */
   readerLanguage: string | null;
+  /** WT-716: the Clean view these bubbles were grouped from, or null in Verbatim. */
+  cleanView: CleanTranscriptView<TranscriptSegmentDto> | null;
 }) {
   // The far side's name is the segment's: in a bridge room it is the stand-in participant, which
   // has no account, no roster row in this window and no face — only the name the server saved.
@@ -80,6 +82,8 @@ export function WidgetTranscriptBubble({
       initial={{ opacity: 0, y: 8, scale: 0.99 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      // Every stored id this bubble stands for, a merged sentence's swallowed ones included.
+      data-segment-ids={segment.mergedSegmentIds.join(" ")}
       className={`flex gap-2 ${isSelf ? "flex-row-reverse" : "flex-row"}`}
     >
       <ParticipantAvatar identity={person} size="sm" className="mt-4" />
@@ -117,12 +121,16 @@ export function WidgetTranscriptBubble({
         >
           {/* One line per sentence, original muted and translation in medium weight, so the
               reader's own language is the line the eye lands on. */}
-          {bubbleLines(segment).map((line, at) => (
+          {transcriptBubbleLines(segment, cleanView, segment.segmentId).map((line, at) => (
             <p
-              key={`${segment.segmentId}-o-${at}`}
+              key={`${segment.segmentId}-o-${line.key}`}
+              data-clean-sentence-id={line.sentence?.sentenceId}
               className={`text-[13px] leading-relaxed ${at > 0 ? "mt-1" : ""} ${isSelf ? "text-white" : "text-ink-muted"}`}
             >
-              <AnimatedWords text={line} />
+              <AnimatedWords text={line.text} />
+              {line.sentence?.selfRepair ? (
+                <SelfRepairMarker rawText={line.sentence.rawText} inverted={isSelf} />
+              ) : null}
             </p>
           ))}
           {translation

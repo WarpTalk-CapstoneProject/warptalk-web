@@ -132,6 +132,36 @@ for (const tab of ["content", "design", "audience", "schedule", "preview", "hist
 check("the save shortcut is Cmd/Ctrl+S", /metaKey \|\| event\.ctrlKey/.test(editorChrome) && /=== "s"/.test(editorChrome));
 check("the list remembers card or table view", /localStorage/.test(listChrome));
 
+// ── 5b · v3: a library people judge by looking at it ─────────────────────────
+const card = await read("src/components/admin/cms/email-template-card.tsx");
+const thumbnail = await read("src/components/admin/cms/email-thumbnail.tsx");
+const inbox = await read("src/components/admin/cms/email-inbox-preview.tsx");
+const wizard = await read("src/components/admin/cms/email-template-wizard.tsx");
+const sendDialog = await read("src/components/admin/cms/email-send-dialog.tsx");
+const sendsPanel = await read("src/components/admin/cms/email-sends-panel.tsx");
+const deleteDialog = await read("src/components/admin/cms/email-template-delete-dialog.tsx");
+const library = await read("src/lib/admin/email-library.ts");
+const staffPermissions = await read("src/lib/admin/staff-permissions.ts");
+
+check("email cards show a rendered thumbnail, not a code box", /<TemplateThumbnail\b/.test(emailsPage) && /<EmailTemplateCard\b/.test(emailsPage));
+check("cards read the subject with sample values filled in", /template\.renderedSubject/.test(card) && !/\{template\.subject\}/.test(card));
+check("thumbnails are sandboxed, inert and lazy", /sandbox=""/.test(thumbnail) && /pointer-events-none/.test(thumbnail) && /tabIndex=\{-1\}/.test(thumbnail) && /IntersectionObserver/.test(thumbnail));
+check("thumbnails come from the server render (the renderer that sends mail)", /useRenderedEmail\(/.test(thumbnail) && /useRenderedBlock\(/.test(thumbnail));
+check("clicking a card opens the as-received preview", /<EmailInboxPreviewDialog\b/.test(emailsPage) && /onOpen=\{\(\) => setPreviewing\(template\)\}/.test(emailsPage));
+check("the as-received preview has the inbox envelope, device, theme, language, sample data and plain text", ["fromAddress", "toAddress", "preheader", "\"mobile\"", "dark", "EMAIL_LOCALES", "sampleSets", "\"text\""].every((token) => inbox.includes(token)));
+check("the preview's body frame is sandboxed", /<iframe[\s\S]{0,120}?sandbox=""/.test(inbox));
+check("open in new tab keeps the email sandboxed", /standalonePreviewDocument\(/.test(inbox) && /<iframe sandbox="" /.test(library) && /noopener/.test(inbox));
+check("layouts and blocks get the same thumbnails and preview", /<BlockThumbnail\b/.test(emailsPage) && /<BlockPreviewDialog\b/.test(emailsPage));
+check("New template opens the create wizard", /<EmailTemplateWizard\b/.test(emailsPage) && /createCustom|useCreateCustomEmail\(/.test(wizard));
+check("custom templates can be deleted with a reason and restored; built-ins cannot", /<EmailTemplateDeleteDialog\b/.test(emailsPage) && /reason/.test(deleteDialog) && /builtInNoDelete/.test(card) && /useRestoreCustomEmail\(/.test(emailsPage));
+check("the detail page shows Delete disabled, with the reason, on a built-in", /<Tooltip content=\{t\("builtInNoDelete"/.test(emailEditor));
+check("custom templates are sent to an audience with a confirmation of the real count", /useEmailSendEstimate\(/.test(sendDialog) && /expectedRecipients: estimate\.recipients/.test(sendDialog) && /acknowledged/.test(sendDialog));
+check("every send is logged per recipient", /useEmailSendRecipients\(/.test(sendsPanel) && /<EmailSendsPanel\b/.test(emailEditor));
+check("audience sends are offered only with content.email_send", /contentEmailSend: "content\.email_send"/.test(staffPermissions) && /useCan\(ADMIN_PERMISSIONS\.contentEmailSend\)/.test(emailsPage) && /useCan\(ADMIN_PERMISSIONS\.contentEmailSend\)/.test(emailEditor));
+check("an announcement can carry a custom email template as its email channel", /emailTemplateKey/.test(announcementEditor) && /function EmailChannel\(/.test(announcementEditor) && /useCan\(ADMIN_PERMISSIONS\.contentEmailSend\)/.test(announcementEditor));
+check("History tabs ask the audit log with its own entity type values", /entityType="email_template"/.test(emailEditor) && /entityType="email_block"/.test(blockEditor) && /entityType="announcement"/.test(announcementEditor));
+check("the library has a dev preview with fixtures", true);
+
 // ── 6 · Every string in every locale ─────────────────────────────────────────
 check("the adminCms namespace is loaded", /"adminCms"/.test(i18nRequest));
 

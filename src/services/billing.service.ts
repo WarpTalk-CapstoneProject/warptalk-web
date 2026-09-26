@@ -6,6 +6,7 @@ import type {
   CreditHistoryFilters,
   CreditHistoryQueryParams,
   CreditTransactionDto,
+  FrozenCreditsDto,
   GlobalInvoiceFilters,
   PagedResult,
   SubscriptionDto,
@@ -29,6 +30,17 @@ export const billingService = {
   ): Promise<CreditBalanceDto> => {
     const { data } = await apiClient.get<CreditBalanceDto>(
       `/credits/workspace/${workspaceId}`,
+    );
+    return data;
+  },
+
+  /**
+   * Credits the workspace kept from a subscription that ended ("X credits kept — renew to use
+   * them"). 200 with zero when nothing is frozen, including for a workspace with no plan at all.
+   */
+  getFrozenCredits: async (workspaceId: string): Promise<FrozenCreditsDto> => {
+    const { data } = await apiClient.get<FrozenCreditsDto>(
+      `/credits/workspace/${workspaceId}/frozen`,
     );
     return data;
   },

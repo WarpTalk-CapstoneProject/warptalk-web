@@ -91,6 +91,8 @@ export interface AnnouncementDraft {
   secondaryCtaUrl: string;
   startsAt: string;
   endsAt: string;
+  /** "" sends no email; otherwise a custom email template sent to the same audience. */
+  emailTemplateKey: string;
 }
 
 /** The server's shape, exactly — the notification service rejects unknown fields. */
@@ -118,6 +120,7 @@ export interface AnnouncementRequest {
   newUsersWithinDays: number | null;
   secondaryCtaLabel: string | null;
   secondaryCtaUrl: string | null;
+  emailTemplateKey: string | null;
 }
 
 export interface AnnouncementLike {
@@ -144,6 +147,7 @@ export interface AnnouncementLike {
   secondaryCtaUrl?: string | null;
   startsAt: string | null;
   endsAt: string | null;
+  emailTemplateKey?: string | null;
 }
 
 export function emptyDraft(): AnnouncementDraft {
@@ -171,6 +175,7 @@ export function emptyDraft(): AnnouncementDraft {
     secondaryCtaUrl: "",
     startsAt: "",
     endsAt: "",
+    emailTemplateKey: "",
   };
 }
 
@@ -203,6 +208,7 @@ export function draftFrom(announcement: AnnouncementLike): AnnouncementDraft {
     secondaryCtaUrl: announcement.secondaryCtaUrl ?? "",
     startsAt: toLocalInput(announcement.startsAt),
     endsAt: toLocalInput(announcement.endsAt),
+    emailTemplateKey: announcement.emailTemplateKey ?? "",
   };
 }
 
@@ -256,6 +262,7 @@ export function toRequest(draft: AnnouncementDraft): AnnouncementRequest {
     newUsersWithinDays: draft.newUsersWithinDays.trim() && Number.isFinite(days) ? days : null,
     secondaryCtaLabel: optional(draft.secondaryCtaLabel),
     secondaryCtaUrl: optional(draft.secondaryCtaUrl),
+    emailTemplateKey: optional(draft.emailTemplateKey),
   };
 }
 

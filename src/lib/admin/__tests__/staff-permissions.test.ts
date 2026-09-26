@@ -36,9 +36,9 @@ const SUPER: StaffAccessSnapshot = {
 };
 
 describe("staff permissions (G10)", () => {
-  it("has 34 unique codes (G10 29, G11 packages 1, G12 finance and inbox 4), each in exactly one area group", () => {
-    assert.equal(ALL_ADMIN_PERMISSIONS.length, 34);
-    assert.equal(new Set(ALL_ADMIN_PERMISSIONS).size, 34);
+  it("has 36 unique codes (G10 29, G11 packages 1, G12 finance and inbox 4, email CMS v3 sends 1, settings.security 1), each in exactly one area group", () => {
+    assert.equal(ALL_ADMIN_PERMISSIONS.length, 36);
+    assert.equal(new Set(ALL_ADMIN_PERMISSIONS).size, 36);
     const grouped = permissionsByArea().flatMap((group) => group.permissions);
     assert.deepEqual([...grouped].sort(), [...ALL_ADMIN_PERMISSIONS].sort());
   });

@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -80,8 +81,7 @@ import {
 } from "@/lib/meeting/participant-identity";
 import { MeetingIdentityProvider } from "@/components/rooms/live/meeting-identity-context";
 import { parseAssistantQuestions } from "@/components/layout/assistant-question-card";
-import { parsePluginConnectionAction } from "@/components/layout/plugin-connection-action-card";
-import { parsePluginOperatorSetupAction } from "@/components/layout/plugin-operator-setup-card";
+import { parsePermissionPrompt } from "@/components/assistant/permission-prompt";
 import { hasDubAudience } from "@/lib/meeting/dub-audience";
 import { applyLiveHostRole } from "@/lib/meeting/host-role-override";
 import { roomOccupancy } from "@/lib/meeting/room-occupancy";
@@ -91,6 +91,7 @@ import type { JoinMeetingResponseDto } from "@/types/meeting";
 import type {
   AiSuggestionDto,
   ParticipantInfoDto,
+  TranscriptCleanSentenceEventDto,
   TranscriptSegmentDto,
   TranslationRoomStateDto,
   TranslationTextDto,
@@ -199,7 +200,8 @@ import { translationRoomService } from "@/services/translation-room.service";
 import { getErrorMessage } from "@/lib/api/errors";
 import { getErrorStatus } from "@/lib/api/retry-policy";
 import {
-  TRANSLATION_RESTORED_NOTICE,
+  type TranslationCreditsTranslator,
+  translationRestoredNotice,
   translationSuspendedNotice,
 } from "@/lib/billing/translation-credits-notice";
 import { describeNoiseSuppressionFailure } from "@/lib/meeting/noise-suppression-failure";
@@ -280,6 +282,15 @@ export function PersistentMeetingSession({
     (state) => state.activeWorkspaceId,
   );
   const user = useAuthStore((state) => state.user);
+  // The hub's billing notices speak the viewer's language. Read through a ref so the hub effect
+  // below never reconnects just because the translator changed identity with the locale.
+  const translateCreditsNotice = useTranslations("rooms.translationCredits");
+  const translateCreditsNoticeRef = useRef<TranslationCreditsTranslator>((key) =>
+    translateCreditsNotice(key),
+  );
+  useEffect(() => {
+    translateCreditsNoticeRef.current = (key) => translateCreditsNotice(key);
+  }, [translateCreditsNotice]);
   const [meetingSession, setMeetingSession] =
     useState<JoinMeetingResponseDto | null>(null);
   // Declared up here only because the participants poll below has to see it. The reaper that
@@ -2357,11 +2368,13 @@ export function PersistentMeetingSession({
     // translation_worker has stopped translating this room. Said to everyone — every listener
     // loses their dub, not just the host — and in words that name the actual reason.
     connection.on("TranslationCreditsExhausted", (_roomId: string, reason?: string) => {
-      toast.error(translationSuspendedNotice(reason), { duration: 15000 });
+      toast.error(translationSuspendedNotice(reason, translateCreditsNoticeRef.current), {
+        duration: 15000,
+      });
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
     connection.on("TranslationCreditsRestored", () => {
-      toast.success(TRANSLATION_RESTORED_NOTICE);
+      toast.success(translationRestoredNotice(translateCreditsNoticeRef.current));
       void queryClient.invalidateQueries({ queryKey: sessionsKey(roomId) });
     });
     // WT-354: who was already here. The hub sends this to the caller alone, once, immediately
@@ -2405,6 +2418,17 @@ export function PersistentMeetingSession({
             participantsRef.current,
           ),
         });
+      },
+    );
+    // WT-716 tier 2. `cleanText`/`cleanFlags` on TranscriptSegmentReceived above need no handling
+    // of their own — the segment is stored whole — but the merged sentences are a separate event.
+    // Same gate as the segments: a sentence is part of the transcript, and with the transcript
+    // closed there is nothing for it to replace. Revisions are resolved by the store (highest wins).
+    connection.on(
+      "TranscriptCleanSentenceReceived",
+      (sentence: TranscriptCleanSentenceEventDto) => {
+        if (!transcriptOpenRef.current) return;
+        useTranslationRoomStore.getState().upsertCleanSentence(sentence);
       },
     );
     connection.on(
@@ -2922,16 +2946,7 @@ export function PersistentMeetingSession({
         if (!json) return;
         const store = useTranslationRoomStore.getState();
         if (parseAssistantQuestions(json).length) store.setAssistantQuestionsJson(json);
-        // Enforced here rather than assumed of the worker, exactly as the WarpBot widget does it.
-        // "Press Connect" and "no button will help" cannot both be true of one failure, so setup
-        // wins: it is the one saying the registration ladder is already exhausted.
-        if (parsePluginOperatorSetupAction(json)) {
-          store.setAssistantPluginSetupJson(json);
-          store.setAssistantPluginConnectionJson(null);
-        } else if (parsePluginConnectionAction(json)) {
-          store.setAssistantPluginConnectionJson(json);
-          store.setAssistantPluginSetupJson(null);
-        }
+        if (parsePermissionPrompt(json)) store.setAssistantPermissionJson(json);
       },
     );
 

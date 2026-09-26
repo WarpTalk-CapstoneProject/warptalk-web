@@ -16,13 +16,9 @@ import {
   parseAssistantQuestions,
 } from "@/components/layout/assistant-question-card";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
-import {
-  PluginOperatorSetupCard,
-  parsePluginOperatorSetupAction,
-} from "@/components/layout/plugin-operator-setup-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+} from "@/components/assistant/permission-prompt";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { toast } from "sonner";
 import { WarpBotAvatar } from "@/components/assistant/warpbot-avatar";
@@ -187,16 +183,12 @@ export function ChatPanel({
   const assistantDraft = useTranslationRoomStore((state) => state.assistantDraft);
   const assistantQuestionsJson = useTranslationRoomStore((state) => state.assistantQuestionsJson);
   const setAssistantQuestionsJson = useTranslationRoomStore((state) => state.setAssistantQuestionsJson);
-  // One slot per card, so dismissing one never takes another with it (WT-688).
-  const assistantPluginConnectionJson = useTranslationRoomStore(
-    (state) => state.assistantPluginConnectionJson,
+  // What WarpBot is waiting on before it may act — one slot, one form above the composer.
+  const assistantPermissionJson = useTranslationRoomStore(
+    (state) => state.assistantPermissionJson,
   );
-  const setAssistantPluginConnectionJson = useTranslationRoomStore(
-    (state) => state.setAssistantPluginConnectionJson,
-  );
-  const assistantPluginSetupJson = useTranslationRoomStore((state) => state.assistantPluginSetupJson);
-  const setAssistantPluginSetupJson = useTranslationRoomStore(
-    (state) => state.setAssistantPluginSetupJson,
+  const setAssistantPermissionJson = useTranslationRoomStore(
+    (state) => state.setAssistantPermissionJson,
   );
   const sealAssistantTrail = useTranslationRoomStore((state) => state.sealAssistantTrail);
   const assistantStartedAt = useTranslationRoomStore((state) => state.assistantStartedAt);
@@ -714,11 +706,8 @@ export function ChatPanel({
   const pendingAssistantQuestions = assistantQuestionsJson
     ? parseAssistantQuestions(assistantQuestionsJson)
     : [];
-  const pendingPluginConnection = assistantPluginConnectionJson
-    ? parsePluginConnectionAction(assistantPluginConnectionJson)
-    : null;
-  const pendingPluginSetup = assistantPluginSetupJson
-    ? parsePluginOperatorSetupAction(assistantPluginSetupJson)
+  const pendingPermission = assistantPermissionJson
+    ? parsePermissionPrompt(assistantPermissionJson)
     : null;
 
   async function handlePluginConnectionAction(pluginKey: string) {
@@ -1057,32 +1046,28 @@ export function ChatPanel({
             />
           </div>
         ) : null}
-        {pendingPluginConnection ? (
-          <div className="pl-10">
-            <PluginConnectionActionCard
-              action={pendingPluginConnection}
-              disabled={connectPlugin.isPending}
-              onDismiss={() => setAssistantPluginConnectionJson(null)}
-              onConnect={handlePluginConnectionAction}
-            />
-          </div>
-        ) : null}
-        {/* No button, because none would help: the provider has no registration WarpTalk can use
-            until an administrator sets one up. Without this card a meeting was told nothing. */}
-        {pendingPluginSetup ? (
-          <div className="pl-10">
-            <PluginOperatorSetupCard
-              action={pendingPluginSetup}
-              onDismiss={() => setAssistantPluginSetupJson(null)}
-            />
-          </div>
-        ) : null}
       </div>
       {/* Reading back through a meeting's chat stops the panel following, which is right — and
           left the newest message somewhere below with nothing on screen saying so. */}
       <ScrollToLatestChip visible={isAway} onClick={scrollToLatest} />
       </div>
       <div className="p-3 bg-transparent">
+        {/* Above the composer, where the meeting's hands are. In the thread it scrolled away
+            behind whatever was said next, and a live meeting scrolls fast. */}
+        {pendingPermission ? (
+          <AssistantPermissionPrompt
+            prompt={pendingPermission}
+            plugins={[]}
+            busy={connectPlugin.isPending}
+            onAnswer={(answer) => {
+              setAssistantPermissionJson(null);
+              sendMessage(answer);
+            }}
+            onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+            onDismiss={() => setAssistantPermissionJson(null)}
+            className="mb-2 rounded-lg border border-border"
+          />
+        ) : null}
         {sendError ? (
           <p className="mb-2 text-[12px] text-red-600">{sendError}</p>
         ) : null}

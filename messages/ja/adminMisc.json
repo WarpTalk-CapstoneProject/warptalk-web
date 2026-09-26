@@ -355,7 +355,12 @@
       "coupon_duplicated": "クーポンを複製",
       "coupon_archived": "クーポンをアーカイブ",
       "coupon_unarchived": "クーポンを復元",
-      "coupon_stripe_synced": "クーポンを Stripe に同期"
+      "coupon_stripe_synced": "クーポンを Stripe に同期",
+      "setting_changed": "プラットフォーム設定を変更",
+      "setting_reset": "プラットフォーム設定をリセット",
+      "setting_reverted": "プラットフォーム設定を元に戻す",
+      "setting_imported": "プラットフォーム設定をインポート",
+      "settings_exported": "プラットフォーム設定をエクスポート"
     },
     "entities": {
       "workspace": "ワークスペース",
@@ -387,7 +392,8 @@
       "inbox_item": "受信トレイ項目",
       "credit_pack": "クレジットパック",
       "addon": "アドオン",
-      "coupon": "クーポン"
+      "coupon": "クーポン",
+      "platform_setting": "プラットフォーム設定"
     },
     "sources": {
       "workspace_service": "ワークスペース",

@@ -355,7 +355,12 @@
       "coupon_duplicated": "Coupon duplicated",
       "coupon_archived": "Coupon archived",
       "coupon_unarchived": "Coupon restored",
-      "coupon_stripe_synced": "Coupon synced to Stripe"
+      "coupon_stripe_synced": "Coupon synced to Stripe",
+      "setting_changed": "Platform setting changed",
+      "setting_reset": "Platform setting reset",
+      "setting_reverted": "Platform setting reverted",
+      "setting_imported": "Platform settings imported",
+      "settings_exported": "Platform settings exported"
     },
     "entities": {
       "workspace": "Workspace",
@@ -387,7 +392,8 @@
       "inbox_item": "Inbox item",
       "credit_pack": "Credit pack",
       "addon": "Add-on",
-      "coupon": "Coupon"
+      "coupon": "Coupon",
+      "platform_setting": "Platform setting"
     },
     "sources": {
       "workspace_service": "Workspace",

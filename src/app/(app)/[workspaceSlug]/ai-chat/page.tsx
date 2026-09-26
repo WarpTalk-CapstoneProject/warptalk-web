@@ -22,15 +22,10 @@ import {
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-  type PluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
-import {
-  PluginOperatorSetupCard,
-  parsePluginOperatorSetupAction,
-  type PluginOperatorSetupAction,
-} from "@/components/layout/plugin-operator-setup-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+  type PermissionPrompt,
+} from "@/components/assistant/permission-prompt";
 import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -46,12 +41,10 @@ export default function AiChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
-  // One slot per card, as in the WarpBot widget (WT-688). This page used to keep only the
-  // questions, so a Connect prompt or an operator-setup notice arrived and vanished without trace.
-  const [pendingPluginConnection, setPendingPluginConnection] =
-    useState<PluginConnectionAction | null>(null);
-  const [pendingPluginSetup, setPendingPluginSetup] =
-    useState<PluginOperatorSetupAction | null>(null);
+  // What WarpBot is waiting on before it may act, as in the widget: one slot, one form, above the
+  // composer. This page used to keep only the questions, so a Connect prompt arrived and vanished
+  // without trace (WT-688).
+  const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
   const connectPlugin = usePluginConnectUrl();
 
   // The same rule the widget and the meeting panel follow: a card lasts until the NEXT turn starts.
@@ -60,8 +53,7 @@ export default function AiChatPage() {
   // turn completes or fails: the card is raised mid-turn and that answer is the one explaining it,
   // so clearing there erases it before anyone can press it.
   const clearPluginCards = useCallback(() => {
-    setPendingPluginConnection(null);
-    setPendingPluginSetup(null);
+    setPendingPermission(null);
   }, []);
 
   const conversations = conversationsQuery.data ?? [];
@@ -90,18 +82,9 @@ export default function AiChatPage() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== selectedId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
-        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
-        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
+        const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        // Setup wins, exactly as in the widget: "press Connect" and "no button will help" cannot
-        // both be true of one failure, and setup is the one saying the ladder is exhausted.
-        if (pluginSetup) {
-          setPendingPluginSetup(pluginSetup);
-          setPendingPluginConnection(null);
-        } else if (pluginConnection) {
-          setPendingPluginConnection(pluginConnection);
-          setPendingPluginSetup(null);
-        }
+        if (permission) setPendingPermission(permission);
       },
     );
     const refetchBoth = (payload?: { conversationId?: string }) => {
@@ -283,25 +266,24 @@ export default function AiChatPage() {
                 />
               </div>
             ) : null}
-            {pendingPluginConnection ? (
-              <div className="max-w-[85%]">
-                <PluginConnectionActionCard
-                  action={pendingPluginConnection}
-                  disabled={connectPlugin.isPending}
-                  onDismiss={() => setPendingPluginConnection(null)}
-                  onConnect={handlePluginConnectionAction}
-                />
-              </div>
-            ) : null}
-            {pendingPluginSetup ? (
-              <div className="max-w-[85%]">
-                <PluginOperatorSetupCard
-                  action={pendingPluginSetup}
-                  onDismiss={() => setPendingPluginSetup(null)}
-                />
-              </div>
-            ) : null}
           </div>
+
+          {/* Above the composer, not in the thread: it is a thing to act on, and in the thread it
+              scrolled away behind the answer that followed it. */}
+          {pendingPermission ? (
+            <AssistantPermissionPrompt
+              prompt={pendingPermission}
+              plugins={[]}
+              busy={connectPlugin.isPending}
+              onAnswer={(answer) => {
+                setPendingPermission(null);
+                void sendContent(answer);
+              }}
+              onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+              onDismiss={() => setPendingPermission(null)}
+              className="rounded-lg border border-border"
+            />
+          ) : null}
 
           <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>
             <Input

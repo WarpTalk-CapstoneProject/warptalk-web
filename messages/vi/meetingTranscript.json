@@ -110,5 +110,13 @@
     "cancel": "Hủy",
     "saving": "Đang lưu…",
     "save": "Lưu chỉnh sửa"
+  },
+  "cleanView": {
+    "groupLabel": "Cách hiển thị lời thoại",
+    "clean": "Bản gọn",
+    "cleanTitle": "Đã bỏ từ đệm và từ lặp, mỗi dòng là một câu. Chỉ thay đổi cách bạn xem.",
+    "verbatim": "Nguyên văn",
+    "verbatimTitle": "Đúng những gì hệ thống nhận dạng giọng nói đã ghi lại. Chỉ thay đổi cách bạn xem.",
+    "selfRepair": "Người nói đã tự sửa lời. Nguyên văn: \"{rawText}\""
   }
 }

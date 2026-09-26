@@ -78,11 +78,7 @@ for (const [name, start] of [
 
 for (const event of ["AssistantMessageCompleted", "AssistantMessageFailed"]) {
   const handler = slice(widget, widgetFile, `"${event}",`, "connection.on(");
-  for (const clear of [
-    "clearPluginCards()",
-    "setPendingPluginConnection(null)",
-    "setPendingPluginSetup(null)",
-  ]) {
+  for (const clear of ["clearPluginCards()", "setPendingPermission(null)"]) {
     assertNotIncludes(
       handler,
       clear,
@@ -91,17 +87,13 @@ for (const event of ["AssistantMessageCompleted", "AssistantMessageFailed"]) {
   }
 }
 
-// Exclusivity is enforced, not assumed of the worker: one payload carrying both keys must not
-// render both cards, and the operator-setup card is the one that wins.
+// One prompt at a time, by construction: a write to confirm, a plugin to connect and a provider
+// needing an operator are one question asked in one form, so there is one slot to overwrite rather
+// than three that can contradict each other on screen.
 assertIncludes(
   widget,
-  "if (pluginSetup) {",
-  "The operator-setup card must be chosen explicitly, not set unconditionally.",
-);
-assertIncludes(
-  widget,
-  "} else if (pluginConnection) {",
-  "The connect card must be the else branch of the operator-setup card, so the two cannot both render.",
+  "setPendingPermission(permission)",
+  "global-chatbot must put the permission prompt in its own slot, so an answer it is waiting on cannot be erased by an unrelated event.",
 );
 
 // --- /ai-chat ---------------------------------------------------------------------------------------
@@ -152,11 +144,7 @@ for (const clear of [
 
 const storeFile = "src/stores/translationRoom-store.ts";
 const store = read(storeFile);
-const CARD_SLOTS = [
-  "assistantQuestionsJson: null",
-  "assistantPluginConnectionJson: null",
-  "assistantPluginSetupJson: null",
-];
+const CARD_SLOTS = ["assistantQuestionsJson: null", "assistantPermissionJson: null"];
 
 const seal = slice(store, storeFile, "sealAssistantTrail: (messageId) =>", "\n    }),");
 for (const slot of CARD_SLOTS) {

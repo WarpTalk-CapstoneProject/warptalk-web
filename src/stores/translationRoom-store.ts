@@ -2,12 +2,14 @@ import { create } from "zustand";
 // Relative, with the extension: session-scoped-state.test.ts imports this store under the plain
 // node test runner, which does not resolve the "@/" alias for a real (non-type) import.
 import { normalizeLanguageCode } from "../lib/language/languages.ts";
+import { upsertCleanSentence } from "../lib/transcript/clean-transcript.ts";
 import type {
   AiSuggestionDto,
   ChatMentionDto,
   ChatMessageDto,
   TranslationRoomStateDto,
   ParticipantInfoDto,
+  TranscriptCleanSentenceEventDto,
   TranscriptSegmentDto,
   TranslationTextDto,
 } from "@/types/realtime";
@@ -48,6 +50,17 @@ interface TranslationRoomStoreState {
   transcriptPaused: boolean;
   /** Segments kept out of the transcript lane since the current pause began. 0 while running. */
   withheldWhilePaused: number;
+  /**
+   * WT-716 tier 2: merged clean sentences received live (TranscriptCleanSentenceReceived), highest
+   * revision per id. Kept as sentences, not folded into the segments: a sentence REPLACES the
+   * segments it covers only at render, and only in the Clean view, so the segment lanes above stay
+   * the raw record the caption lane, corrections and Verbatim all read.
+   *
+   * Not split into caption/transcript lanes like the segments: a sentence covering a segment the
+   * pause kept out of the transcript lane simply finds that segment missing there, and the Clean
+   * view falls back for it (isCleanSentenceStale), so a pause cannot leak through a sentence.
+   */
+  cleanSentences: TranscriptCleanSentenceEventDto[];
   // AI suggestions keyed by the segment id they were anchored to. A record rather than a
   // list because at most one suggestion exists per segment and dismissing must be O(1);
   // note the key is a BACKEND segment id, which may have been merged into a bubble with a
@@ -133,8 +146,12 @@ interface TranslationRoomStoreState {
    * card means. The session routes each payload; the panel parses what it renders.
    */
   assistantQuestionsJson: string | null;
-  assistantPluginConnectionJson: string | null;
-  assistantPluginSetupJson: string | null;
+  /**
+   * What WarpBot is waiting on before it may act: a write to confirm, a plugin to connect, or a
+   * provider only an operator can register. One slot, because it is one question, and the panel
+   * draws one form for all three above its composer (AssistantPermissionPrompt).
+   */
+  assistantPermissionJson: string | null;
   /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
@@ -161,6 +178,7 @@ interface TranslationRoomStoreState {
   updateParticipantListenLanguage: (userId: string, listenLanguage: string) => void;
   addTranscriptSegment: (segment: TranscriptSegmentDto) => void;
   addOrMergeTranslationText: (translation: TranslationTextDto) => void;
+  upsertCleanSentence: (sentence: TranscriptCleanSentenceEventDto) => void;
   setTranscriptPaused: (paused: boolean) => void;
   addSuggestion: (suggestion: AiSuggestionDto, preferredLanguage?: string) => void;
   dismissSuggestion: (segmentId: string) => void;
@@ -227,8 +245,7 @@ interface TranslationRoomStoreState {
    */
   appendAssistantDraft: (delta?: string | null) => void;
   setAssistantQuestionsJson: (questionsJson: string | null) => void;
-  setAssistantPluginConnectionJson: (pluginConnectionJson: string | null) => void;
-  setAssistantPluginSetupJson: (pluginSetupJson: string | null) => void;
+  setAssistantPermissionJson: (permissionJson: string | null) => void;
   sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
@@ -243,6 +260,7 @@ const initialState = {
   transcriptSegments: [],
   transcriptPaused: false,
   withheldWhilePaused: 0,
+  cleanSentences: [] as TranscriptCleanSentenceEventDto[],
   suggestions: {},
   chatMessages: [],
   assistantState: "idle" as const,
@@ -253,8 +271,7 @@ const initialState = {
   assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
   assistantDraft: "",
   assistantQuestionsJson: null as string | null,
-  assistantPluginConnectionJson: null as string | null,
-  assistantPluginSetupJson: null as string | null,
+  assistantPermissionJson: null as string | null,
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -371,6 +388,13 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       };
     }),
 
+  // Same array back when the revision is not newer, so a redelivered event re-renders nothing.
+  upsertCleanSentence: (sentence) =>
+    set((s) => {
+      const cleanSentences = upsertCleanSentence(s.cleanSentences, sentence);
+      return cleanSentences === s.cleanSentences ? {} : { cleanSentences };
+    }),
+
   setTranscriptPaused: (paused) =>
     set((s) =>
       s.transcriptPaused === paused
@@ -460,8 +484,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       // here. A Connect card left over from the last question would open an OAuth flow this one
       // never asked for.
       assistantQuestionsJson: null,
-      assistantPluginConnectionJson: null,
-      assistantPluginSetupJson: null,
+      assistantPermissionJson: null,
       assistantActivityAt: Date.now(),
     })),
 
@@ -512,8 +535,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
   clearAssistantCards: () =>
     set({
       assistantQuestionsJson: null,
-      assistantPluginConnectionJson: null,
-      assistantPluginSetupJson: null,
+      assistantPermissionJson: null,
     }),
 
   noteAssistantToolFinished: (toolName = null, toolDetail = null) =>
@@ -623,17 +645,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       assistantActivityAt: Date.now(),
     }),
 
-  // Both stamp activity like the questions setter: a card arriving is the worker showing a sign of
-  // life mid-turn, and a connect-only event must not leave the slow-turn deadline running.
-  setAssistantPluginConnectionJson: (assistantPluginConnectionJson) =>
+  // Stamps activity like the questions setter: a prompt arriving is the worker showing a sign of
+  // life mid-turn, and a permission-only event must not leave the slow-turn deadline running.
+  setAssistantPermissionJson: (assistantPermissionJson) =>
     set({
-      assistantPluginConnectionJson,
-      assistantActivityAt: Date.now(),
-    }),
-
-  setAssistantPluginSetupJson: (assistantPluginSetupJson) =>
-    set({
-      assistantPluginSetupJson,
+      assistantPermissionJson,
       assistantActivityAt: Date.now(),
     }),
 

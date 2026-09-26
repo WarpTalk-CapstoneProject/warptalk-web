@@ -69,6 +69,7 @@ function useBlockMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<TResult>)
       Promise.all([
         queryClient.invalidateQueries({ queryKey: ADMIN_EMAIL_BLOCK_KEYS.all }),
         queryClient.invalidateQueries({ queryKey: ADMIN_EMAIL_TEMPLATE_KEYS.all }),
+        queryClient.invalidateQueries({ queryKey: ["email-render"] }),
         queryClient.invalidateQueries({ queryKey: CMS_AUDIT_KEYS.all }),
       ]),
   });
@@ -124,4 +125,21 @@ export function useEmailBlockBulk() {
   return useBlockMutation(({ action, ids }: { action: EmailBlockBulkAction; ids: string[] }) =>
     adminEmailBlockService.bulk(action, ids),
   );
+}
+
+/** A stored block rendered inside an email: its thumbnail and preview. */
+export function useRenderedBlock(
+  id: string | undefined,
+  query: { dark?: boolean; templateKey?: string | null; locale?: string; draft?: boolean },
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ["email-render", "block", id ?? "", query] as const,
+    queryFn: () => adminEmailBlockService.render(id!, query),
+    enabled: Boolean(id) && enabled,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    placeholderData: keepPreviousData,
+    retry: false,
+  });
 }

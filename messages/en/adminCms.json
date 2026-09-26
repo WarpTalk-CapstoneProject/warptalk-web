@@ -127,7 +127,10 @@
       "live": "Live",
       "dormant": "Dormant",
       "customized": "Customized",
-      "draft": "Unpublished changes"
+      "draft": "Unpublished changes",
+      "custom": "Created here",
+      "builtIn": "Built-in",
+      "archived": "Archived"
     },
     "searchPlaceholder": "Search emails",
     "sort": {
@@ -154,7 +157,8 @@
       "live": "Live",
       "dormant": "Dormant",
       "customized": "Customized",
-      "draft": "Unpublished changes"
+      "draft": "Unpublished changes",
+      "archived": "Archived"
     },
     "localeStates": {
       "PUBLISHED": "Published",
@@ -212,7 +216,15 @@
       "discarded": "Drafts discarded.",
       "archived": "Archived.",
       "duplicated": "Copied into the other locale's draft.",
-      "reset": "The English draft is back to the built-in wording. Publish it to send it."
+      "reset": "The English draft is back to the built-in wording. Publish it to send it.",
+      "archivedAll": "Archived. The sender now uses the built-in wording.",
+      "restored": "Restored. It is back in the list."
+    },
+    "newTemplate": "New template",
+    "archiveAllDialog": {
+      "title": "Archive every language of “{name}”?",
+      "description": "The {service} service keeps sending this email — with the built-in wording instead of your edits, in every language, until you unarchive it.",
+      "confirm": "Archive and use built-in wording"
     }
   },
   "blocks": {
@@ -312,6 +324,10 @@
     "actions": {
       "edit": "Edit",
       "preview": "Preview"
+    },
+    "kinds": {
+      "LAYOUT": "Layout",
+      "PARTIAL": "Reusable block"
     }
   },
   "emailEditor": {
@@ -344,7 +360,9 @@
       "variables": "Variables",
       "preview": "Preview",
       "history": "History",
-      "analytics": "Analytics"
+      "analytics": "Analytics",
+      "details": "Details",
+      "sends": "Sends"
     },
     "fields": {
       "subject": "Subject",
@@ -446,7 +464,11 @@
       "discard": "Discard changes",
       "deleteDraft": "Delete draft",
       "publish": "Publish",
-      "saveAndPublish": "Save & publish"
+      "saveAndPublish": "Save & publish",
+      "restoreTemplate": "Restore template",
+      "asReceived": "Preview as received",
+      "sendEmail": "Send email…",
+      "deleteTemplate": "Delete template"
     },
     "publishBlocked": "Fix the issues on the Content tab first.",
     "publishDialog": {
@@ -497,8 +519,12 @@
       "archived": "Archived. It is no longer sent.",
       "unarchived": "Unarchived.",
       "reset": "Draft reset to the built-in wording.",
-      "restored": "v{version} restored into the draft."
-    }
+      "restored": "v{version} restored into the draft.",
+      "restoredTemplate": "Template restored."
+    },
+    "deletedNotice": "This template is deleted and read-only (reason: {reason}). Restore it to edit or send it.",
+    "sendNeedsPublish": "Publish the English version first.",
+    "builtInNoDelete": "Sent by the {service} service, so it cannot be deleted. Reset it to the built-in wording, or archive a language to fall back to it."
   },
   "blockEditor": {
     "back": "Email templates",
@@ -1014,7 +1040,282 @@
         "noMatch": "No workspace matches.",
         "added": "Added",
         "memberCount": "{count, plural, one {# member} other {# members}}"
+      },
+      "email": {
+        "title": "Also send by email",
+        "description": "Email the same audience when this announcement goes live, using one of your email templates.",
+        "noPermission": "Sending email to an audience needs the “Send email to an audience” permission.",
+        "loadError": "Your email templates could not be loaded.",
+        "none": "No email",
+        "preview": "Preview email",
+        "manage": "Manage email templates",
+        "noneEligible": "No template can be used yet: create one under Email templates and publish its English version.",
+        "unavailable": "The chosen template is deleted or no longer published; choose another or no email.",
+        "when": "It is sent at the start time to everyone in the audience who has not turned off announcement email. Unpublishing before then cancels it.",
+        "alsoSends": "It also emails the audience now.",
+        "alsoSendsAtStart": "Its email goes out at the same time."
       }
+    }
+  },
+  "library": {
+    "categories": {
+      "BUILT_IN": "Built-in",
+      "TRANSACTIONAL_CUSTOM": "Transactional",
+      "MARKETING": "Marketing",
+      "ANNOUNCEMENT": "Announcement email"
+    },
+    "thumbnail": {
+      "error": "Preview unavailable",
+      "open": "Preview “{name}” as received",
+      "preview": "Preview"
+    },
+    "card": {
+      "sentByYou": "Sent by you to an audience",
+      "deletedBecause": "Deleted: {reason}",
+      "restore": "Restore",
+      "more": "More actions",
+      "sendEmail": "Send email…",
+      "publishFirst": "Publish the English version first",
+      "archiveAll": "Archive (use built-in wording)",
+      "archiveAllHint": "The sender falls back to the built-in text",
+      "delete": "Delete",
+      "builtInNoDelete": "Used by the {service} service — reset or archive it instead"
+    },
+    "inbox": {
+      "dialogTitle": "“{name}” as received",
+      "frameTitle": "Body of “{name}”",
+      "language": "Language",
+      "sampleData": "Sample data",
+      "defaultSample": "Default sample",
+      "to": "to",
+      "preheader": "Preview line",
+      "formatHtml": "Email",
+      "formatText": "Plain text",
+      "error": "This email could not be rendered.",
+      "openInNewTab": "Open in new tab",
+      "sendTest": "Send test",
+      "edit": "Edit",
+      "previewWith": "Inside",
+      "sampleContent": "Sample content",
+      "source": {
+        "published": "Sent version v{version}",
+        "fallback": "{locale} not written — {used} is sent",
+        "draft": "Draft — not sent yet",
+        "builtIn": "Built-in wording"
+      }
+    },
+    "send": {
+      "title": "Send “{name}”",
+      "description": "Only the published version goes out: each person gets their language, or English.",
+      "steps": "Steps",
+      "stepNames": {
+        "audience": "Who",
+        "values": "Details",
+        "confirm": "Confirm"
+      },
+      "who": "Who gets it",
+      "when": "Send at (optional)",
+      "whenHint": "Empty sends now. Times are in your time zone.",
+      "errors": {
+        "plans": "Choose at least one plan.",
+        "workspaces": "Choose at least one workspace.",
+        "past": "Choose a time in the future.",
+        "required": "Required.",
+        "notALink": "Enter a full link (https://…).",
+        "notANumber": "Enter a number.",
+        "notADate": "Enter a date.",
+        "tooLong": "Too long."
+      },
+      "noValues": "This template needs nothing else: it fills in each person's name and address itself.",
+      "automatic": "The recipient's name and address are filled in for each person.",
+      "reaches": "{count, plural, one {# person} other {# people}}",
+      "optedOut": "{count, plural, one {# person turned this email off and is skipped.} other {# people turned this email off and are skipped.}}",
+      "fallback": "{locales}: nothing published in that language, so they get English.",
+      "startsAt": "Starts {date}.",
+      "duration": "Takes about {minutes, plural, one {# minute} other {# minutes}} at {rate} emails a minute.",
+      "nobody": "Nobody in this audience can be emailed.",
+      "acknowledge": "I understand this emails {count, plural, one {# person} other {# people}}.",
+      "recount": "The server counts again when you send; if the number moved by more than {tolerance}, you confirm the new one.",
+      "back": "Back",
+      "cancel": "Cancel",
+      "next": "Next",
+      "counting": "Counting…",
+      "review": "Review",
+      "send": "Send to {count, plural, one {# person} other {# people}}",
+      "schedule": "Schedule for {count, plural, one {# person} other {# people}}",
+      "started": "Sending to {count, plural, one {# person} other {# people}}. Follow it on the Sends tab.",
+      "scheduled": "Scheduled. Follow it on the Sends tab.",
+      "startFailed": "The send could not be started.",
+      "estimateFailed": "The audience could not be counted."
+    },
+    "sends": {
+      "noPermission": "You cannot send email to an audience",
+      "noPermissionHint": "It needs the “Send email to an audience” permission.",
+      "loadError": "The sends could not be loaded.",
+      "empty": "Not sent yet",
+      "emptyHint": "Every send — by you, or with an announcement — is listed here with each recipient's outcome.",
+      "newSend": "Send email…",
+      "statuses": {
+        "QUEUED": "Queued",
+        "SENDING": "Sending",
+        "COMPLETED": "Completed",
+        "CANCELLED": "Cancelled",
+        "FAILED": "Failed"
+      },
+      "fromAnnouncement": "With an announcement",
+      "scheduledFor": "Scheduled for {date}",
+      "startedAt": "Started {date}",
+      "counts": "{sent} sent · {failed} failed · {skipped} skipped of {total}",
+      "back": "All sends",
+      "cancelTitle": "Cancel this send?",
+      "cancelDescription": "The {pending, plural, one {# email} other {# emails}} not sent yet are skipped. Emails already sent cannot be recalled.",
+      "cancel": "Cancel send",
+      "cancelled": "Send cancelled.",
+      "audience": "Audience",
+      "created": "Created",
+      "values": "Values",
+      "recipientFilter": "Filter recipients",
+      "allRecipients": "All",
+      "recipientStatuses": {
+        "SENT": "Sent",
+        "FAILED": "Failed",
+        "SKIPPED": "Skipped",
+        "PENDING": "Waiting"
+      },
+      "resolving": "Working out who is in the audience…",
+      "noRecipients": "No recipients match.",
+      "recipient": "Recipient",
+      "language": "Language",
+      "status": "Status",
+      "when": "Sent",
+      "pageOf": "Page {page} of {totalPages}",
+      "previous": "Previous",
+      "next": "Next",
+      "audiencePlans": "Plans: {plans}",
+      "audienceWorkspaces": "{count, plural, one {# workspace} other {# workspaces}}",
+      "audienceAll": "Everyone",
+      "audienceNew": "Joined in the last {days} days"
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "Built-in emails cannot be deleted; this one was created here.",
+      "how": "How to delete",
+      "archive": "Move to Archived",
+      "archiveHint": "It stops being offered and can be restored from the Archived filter. Its send log is kept.",
+      "purge": "Delete for good",
+      "purgeHint": "It never sent an email, so it can be removed with its drafts, versions and samples.",
+      "purgeUnavailable": "Only a template that never sent anything can be deleted for good.",
+      "checking": "Checking whether it ever sent anything…",
+      "reason": "Reason (kept in the audit log)",
+      "reasonPlaceholder": "Campaign ended, replaced by…",
+      "archived": "Moved to Archived.",
+      "purged": "Deleted for good.",
+      "confirmArchive": "Move to Archived",
+      "confirmPurge": "Delete for good"
+    },
+    "details": {
+      "variablesHint": "What a send asks for, beyond what is filled in automatically. Required ones must be given a value when sending.",
+      "save": "Save details",
+      "saved": "Details saved.",
+      "saveFailed": "The details could not be saved."
+    },
+    "wizard": {
+      "title": "New email template",
+      "description": "It is saved as a draft. Nothing is sent until you publish it and send it to an audience or with an announcement.",
+      "stepsLabel": "Steps",
+      "steps": {
+        "basics": "Basics",
+        "layout": "Layout",
+        "variables": "Variables",
+        "content": "Content",
+        "review": "Review"
+      },
+      "cancel": "Cancel",
+      "back": "Back",
+      "next": "Next",
+      "saving": "Saving…",
+      "saveDraft": "Save draft",
+      "created": "Template created as a draft.",
+      "createFailed": "The template could not be created.",
+      "name": "Name",
+      "namePlaceholder": "Autumn product update",
+      "key": "Key",
+      "keyHint": "Suggested from the name. Lower-case letters, digits, dots, dashes; it cannot change later.",
+      "category": "Kind of email",
+      "categories": {
+        "TRANSACTIONAL_CUSTOM": {
+          "label": "Transactional",
+          "hint": "An operational message, e.g. a policy change. Sent to everyone chosen."
+        },
+        "MARKETING": {
+          "label": "Marketing",
+          "hint": "Offers and news. People who turned off promotional email are skipped."
+        },
+        "ANNOUNCEMENT": {
+          "label": "Announcement email",
+          "hint": "Sent with an announcement; can use its title, text and link."
+        }
+      },
+      "descriptionLabel": "Description (optional)",
+      "howItSends": "A template created here has no automatic sender: it goes out when you send it to an audience, or as an announcement's email.",
+      "defaultLayout": "Default layout",
+      "defaultLayoutHint": "Follows whichever layout is the default.",
+      "builtInLayout": "WarpTalk layout",
+      "automaticVariables": "Filled in automatically",
+      "implicit": {
+        "RecipientName": "Recipient name",
+        "RecipientEmail": "Recipient email",
+        "AnnouncementTitle": "Announcement title",
+        "AnnouncementText": "Announcement text",
+        "AnnouncementLink": "Announcement link"
+      },
+      "variableName": "Name (in the template)",
+      "variableLabel": "Label (in the send form)",
+      "variableType": "Type",
+      "variableSample": "Sample value",
+      "variableRequired": "Required",
+      "removeVariable": "Remove variable",
+      "addVariable": "Add variable",
+      "types": {
+        "TEXT": "Text",
+        "URL": "Link",
+        "DATE": "Date",
+        "NUMBER": "Number",
+        "MULTILINE": "Paragraph"
+      },
+      "language": "Language",
+      "languages": {
+        "en": "English",
+        "vi": "Tiếng Việt",
+        "ja": "日本語"
+      },
+      "optional": "optional",
+      "fallbackHint": "Optional: people using this language get English until it is written and published.",
+      "subject": "Subject",
+      "preheader": "Preview line",
+      "heading": "Heading",
+      "body": "Body (HTML)",
+      "bodyHint": "Click a variable to insert it at the cursor. You can refine everything, and preview it as received, after saving.",
+      "languagesWritten": "Languages written",
+      "noVariables": "None",
+      "reviewHint": "Saving creates drafts only. Next: publish the English version, then use Send email or pick it as an announcement's email.",
+      "errors": {
+        "nameRequired": "Name the template.",
+        "keyInvalid": "The key must be 3–60 lower-case letters, digits, dots or dashes.",
+        "keyTaken": "Another template already uses this key.",
+        "variableNameInvalid": "Variable names are letters, digits and _, starting with a letter.",
+        "variableImplicit": "That variable is filled in automatically; choose another name.",
+        "variableDuplicate": "Two variables have the same name.",
+        "variableSampleInvalid": "A sample value does not match its type.",
+        "tooManyVariables": "Declare 20 variables at most.",
+        "englishRequired": "Write the English version: every language falls back to it.",
+        "subjectRequired": "A written language needs a subject.",
+        "bodyRequired": "A written language needs a body.",
+        "unknownVariable": "The content uses a variable that is not declared."
+      },
+      "bodyView": "Body view",
+      "quickLook": "Quick look",
+      "write": "Write"
     }
   }
 }

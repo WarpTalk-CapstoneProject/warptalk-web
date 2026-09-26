@@ -86,15 +86,10 @@ import {
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-  type PluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
-import {
-  PluginOperatorSetupCard,
-  parsePluginOperatorSetupAction,
-  type PluginOperatorSetupAction,
-} from "@/components/layout/plugin-operator-setup-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+  type PermissionPrompt,
+} from "@/components/assistant/permission-prompt";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
@@ -538,10 +533,10 @@ export function GlobalChatbot() {
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
-  const [pendingPluginConnection, setPendingPluginConnection] =
-    useState<PluginConnectionAction | null>(null);
-  const [pendingPluginSetup, setPendingPluginSetup] =
-    useState<PluginOperatorSetupAction | null>(null);
+  // What WarpBot is waiting on before it may act: a write to confirm, a plugin to connect, or a
+  // provider only an operator can register. One at a time, and it lives above the composer rather
+  // than in the thread — see AssistantPermissionPrompt.
+  const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
   // Both plugin cards last until the NEXT turn starts. Nothing but a click used to clear them, so
   // a Connect card survived New chat - where pressing Connect opened an OAuth flow the current
   // turn never asked for - and two of them could stack up, one per error code. So they clear when
@@ -552,8 +547,7 @@ export function GlobalChatbot() {
   // plugin tool returns, and the answer that lands next is the one explaining it; clearing there
   // erased the card moments after it appeared, before anyone could press it (WT-688).
   const clearPluginCards = useCallback(() => {
-    setPendingPluginConnection(null);
-    setPendingPluginSetup(null);
+    setPendingPermission(null);
   }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
@@ -1124,22 +1118,11 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== conversationId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
-        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
-        // A malformed payload leaves the card absent rather than rendering an empty shell —
+        // A malformed payload leaves the prompt absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
-        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
+        const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        // Enforced here rather than assumed of the worker. "Press Connect" and "no button
-        // will help" cannot both be true, but they are two independent keys on one payload,
-        // and two unconditional setters rendered both cards the moment anything emitted both.
-        // Setup wins: it is the one saying the registration ladder is already exhausted.
-        if (pluginSetup) {
-          setPendingPluginSetup(pluginSetup);
-          setPendingPluginConnection(null);
-        } else if (pluginConnection) {
-          setPendingPluginConnection(pluginConnection);
-          setPendingPluginSetup(null);
-        }
+        if (permission) setPendingPermission(permission);
         armResponseTimeout();
       },
     );
@@ -1463,6 +1446,15 @@ export function GlobalChatbot() {
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      // Enter answers the permission prompt only while there is nothing written. A half-typed
+      // question is a better answer than a button press the user did not mean, so anything in the
+      // box wins — and this is a write, which should never be approved by a stray keystroke.
+      const firstAnswer = pendingPermission?.options?.find((option) => option.value)?.value;
+      if (!inputValue.trim() && pendingPermission?.kind === "tool" && firstAnswer) {
+        setPendingPermission(null);
+        void sendMessage(firstAnswer);
+        return;
+      }
       void sendMessage();
     }
   };
@@ -2011,24 +2003,7 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
-                {pendingPluginConnection ? (
-                  <div className="pl-4">
-                    <PluginConnectionActionCard
-                      action={pendingPluginConnection}
-                      disabled={connectPlugin.isPending}
-                      onDismiss={() => setPendingPluginConnection(null)}
-                      onConnect={handlePluginConnectionAction}
-                    />
-                  </div>
-                ) : null}
-                {pendingPluginSetup ? (
-                  <div className="pl-4">
-                    <PluginOperatorSetupCard
-                      action={pendingPluginSetup}
-                      onDismiss={() => setPendingPluginSetup(null)}
-                    />
-                  </div>
-                ) : null}
+
               </div>
               {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
                   the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
@@ -2101,7 +2076,24 @@ export function GlobalChatbot() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className={`${contextInputShellClassName} relative z-10`}>
+                <div className={`${contextInputShellClassName} relative z-10 overflow-hidden`}>
+                  {/* What WarpBot is waiting on, where the user's hands already are. In the thread
+                      it scrolled away behind the answer that followed it and was gone when the
+                      conversation was reopened, leaving WarpBot talking about a card nobody could
+                      see. See AssistantPermissionPrompt. */}
+                  {pendingPermission ? (
+                    <AssistantPermissionPrompt
+                      prompt={pendingPermission}
+                      plugins={catalogPlugins}
+                      busy={connectPlugin.isPending}
+                      onAnswer={(answer) => {
+                        setPendingPermission(null);
+                        void sendMessage(answer);
+                      }}
+                      onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+                      onDismiss={() => setPendingPermission(null)}
+                    />
+                  ) : null}
                   {/* Slash Command Dropdown */}
                   <AnimatePresence>
                     {slashMenuOpen && (

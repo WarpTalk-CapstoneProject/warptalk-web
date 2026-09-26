@@ -67,6 +67,8 @@ const NAMESPACES = [
   "adminProviders",
   "adminFinance",
   "adminInbox",
+  "adminPlatformSettings",
+  "platformStatus",
   "download",
   "meetingControlBar",
   "meetingCallChrome",

@@ -54,6 +54,7 @@ test("a minimal draft is valid and becomes exactly the server's request shape", 
     "type",
     "variant",
     "accentColor",
+    "emailTemplateKey",
   ].sort());
 });
 
