@@ -28,6 +28,9 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   `{Meeting title} - Transcript[ (LANG)] - yyyy-MM-dd.docx|.txt`. The title is `room.title`; the date
   is the **meeting's** own start (WT-311(c)), the same source the duration chip counts from. The
   language is included only when the reader chose a translation — never for "as spoken".
+  A title over 80 characters is cut at a word and marked with an ellipsis, character for character
+  the server's `DocumentFileName.Truncate`: a transcript and a minutes document of the same meeting
+  have to be filed under the same spelling of its name.
   A **recording's** name is the server's, set by `Content-Disposition` on the presigned link, so the
   client sets none.
 

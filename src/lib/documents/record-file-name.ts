@@ -46,10 +46,19 @@ function clean(value: string | null | undefined): string {
   return out.replace(/[ .]+$/, "");
 }
 
+/** The server's DocumentFileName.Truncate, spelled the same way: a title cut here and a title cut
+ *  by the minutes writer have to produce the same name, or a folder ends up holding two spellings
+ *  of one meeting. Cut at a word where there is one, and say with an ellipsis that something was
+ *  left out. */
 function truncate(value: string, max: number): string {
   const characters = Array.from(value);
   if (characters.length <= max) return value;
-  return characters.slice(0, max).join("").replace(/[ .]+$/, "");
+
+  let cut = characters.slice(0, max).join("");
+  const lastSpace = cut.lastIndexOf(" ");
+  if (lastSpace > max / 2) cut = cut.slice(0, lastSpace);
+
+  return `${cut.replace(/[ .]+$/, "")}…`;
 }
 
 /** yyyy-MM-dd in the reader's own zone — the day they would say the meeting was on. */

@@ -28,7 +28,17 @@ test("an untitled meeting still gets a name", () => {
   assert.equal(recordFileName({ meetingTitle: "  ", kind: "Transcript", extension: "txt" }), "Meeting - Transcript.txt");
 });
 
-test("long titles stop at 80 characters", () => {
+test("long titles stop at 80 characters, marked with an ellipsis", () => {
   const name = recordFileName({ meetingTitle: "a".repeat(200), kind: "Transcript", extension: "docx" });
-  assert.equal(name, `${"a".repeat(80)} - Transcript.docx`);
+  assert.equal(name, `${"a".repeat(80)}… - Transcript.docx`);
+});
+
+// The same rule the server's DocumentFileName.Truncate follows, so a transcript and a minutes
+// document of the same meeting are filed under the same spelling of its name.
+test("a long title is cut at a word, not mid-syllable", () => {
+  const title = `${"Họp rà soát ngân sách quý bốn ".repeat(3)}và kế hoạch năm sau cho toàn bộ khối vận hành`;
+  const name = recordFileName({ meetingTitle: title, kind: "Summary", extension: "docx" });
+  assert.match(name, /^Họp rà soát ngân sách quý bốn .*[^ ]… - Summary\.docx$/);
+  assert.ok(!name.includes("  "));
+  assert.ok(Array.from(name.split(" - Summary")[0]).length <= 81);
 });
