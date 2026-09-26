@@ -13,6 +13,7 @@ import {
   Lightning,
   Megaphone,
   Receipt,
+  Snowflake,
   Tray,
   UserPlus,
   Warning,
@@ -51,6 +52,7 @@ const TYPE_ICONS: Record<string, typeof Tray> = {
   announcement_draft: Megaphone,
   broadcast_failed: EnvelopeSimple,
   dead_letter: Bell,
+  paid_credits_frozen: Snowflake,
 };
 
 export function InboxTypeIcon({ type, className }: { type: string; className?: string }) {

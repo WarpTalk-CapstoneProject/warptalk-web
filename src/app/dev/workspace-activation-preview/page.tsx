@@ -93,6 +93,22 @@ const CASES: Case[] = [
     },
   },
   {
+    label: "Owner, plan expired with credits kept — renew brings them back (backend#467)",
+    props: {
+      canBuy: true,
+      lapsed: { planName: "Enterprise", endedOn: new Date("2026-09-23T00:00:00Z") },
+      keptCredits: 699_983,
+    },
+  },
+  {
+    label: "Member, plan expired — kept outside, told to ask the owner to renew",
+    props: {
+      canBuy: false,
+      lapsed: { planName: "Enterprise", endedOn: new Date("2026-09-23T00:00:00Z") },
+      keptCredits: 100_000,
+    },
+  },
+  {
     label: "Plans still loading",
     props: { canBuy: true, plans: [], plansLoading: true },
   },

@@ -20,6 +20,13 @@ export interface FrozenCreditsDto {
   dormantSince: string | null;
   graceEndsAt: string | null;
   hasActiveSubscription: boolean;
+  /**
+   * backend#467: the plan of the workspace's most recent subscription when it has no live one,
+   * and when that plan ended — set even when nothing was left to freeze, so the renew screen can
+   * name what ended. Null when a subscription is live, or there never was one (never paid).
+   */
+  lastPlanName?: string | null;
+  lastEndedAt?: string | null;
 }
 
 export interface SubscriptionDto {

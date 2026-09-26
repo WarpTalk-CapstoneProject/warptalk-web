@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
+import { isPurchaseRequiresSubscription } from "@/lib/billing/extra-credits";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { cn } from "@/lib/utils";
@@ -54,6 +55,7 @@ export function TopUpModal({
   workspaceId: string;
 }) {
   const t = useTranslations("settingsBillingUsage");
+  const tBilling = useTranslations("settingsBilling");
   const user = useAuthStore((state) => state.user);
   const [credits, setCredits] = useState<number>(TOP_UP_PACKAGES[0]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -83,8 +85,14 @@ export function TopUpModal({
         credits,
       });
       if (url) window.location.assign(url);
-    } catch {
-      toast.error(t("topUpModal.checkoutFailed"));
+    } catch (error) {
+      // backend#467: refused before Stripe because the workspace has no live plan — say which
+      // step comes first rather than "checkout failed".
+      toast.error(
+        isPurchaseRequiresSubscription(error)
+          ? tBilling("purchaseGate.refused")
+          : t("topUpModal.checkoutFailed"),
+      );
     } finally {
       setIsProcessing(false);
     }

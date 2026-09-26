@@ -128,5 +128,20 @@
     "dormant": "Số credit này đã chờ từ {date}; chúng vẫn thuộc về bạn và vẫn được trả lại khi bạn gia hạn.",
     "pendingTitle": "Credit từ gói trước",
     "pendingDescription": "{credits} credit được giữ lại từ gói đăng ký trước đang được cộng vào gói này."
+  },
+  "purchaseGate": {
+    "title": "Đăng ký một gói để mua thêm credit",
+    "description": "Nạp thêm và gói credit được cộng vào một gói đăng ký. Hãy chọn gói trước, rồi quay lại để thêm credit.",
+    "cta": "Xem các gói",
+    "refused": "Đăng ký một gói để mua thêm credit."
+  },
+  "renew": {
+    "title": "Gói của {workspaceName} đã hết hạn",
+    "ownerDescription": "Gói {planName} đã hết hạn vào {date}. Mọi thứ trong workspace vẫn được giữ nguyên — gia hạn để mở lại cho cả nhóm.",
+    "memberDescription": "Gói {planName} đã hết hạn vào {date}. Mọi thứ trong workspace vẫn được giữ lại. Hãy nhờ chủ sở hữu workspace gia hạn — workspace sẽ mở lại cho mọi người ngay khi họ gia hạn.",
+    "memberNotice": "Chỉ chủ sở hữu hoặc quản trị viên của {workspaceName} mới có thể gia hạn. Đây là chi phí — hãy gửi cho họ.",
+    "kept": "Đã giữ lại {credits} credit — gia hạn để dùng tiếp",
+    "keptMember": "{credits} credit được giữ lại cho workspace này và sẽ được trả lại khi gói được gia hạn.",
+    "renewWith": "Gia hạn với gói {planName}"
   }
 }

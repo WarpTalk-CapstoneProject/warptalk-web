@@ -13,7 +13,8 @@
  * It takes no queries, no stores and no router. Everything it needs is passed in.
  */
 
-import { ArrowSquareOut, Check, SignOut, Storefront } from "@phosphor-icons/react";
+import { ArrowSquareOut, Check, SignOut, Snowflake, Storefront } from "@phosphor-icons/react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -22,12 +23,8 @@ import {
   monthlyDisplayPrice,
 } from "@/lib/billing/plan-pricing";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
-import { formatMoney } from "@/lib/format/currency";
+import { formatAmount, formatMoney } from "@/lib/format/currency";
 import type { PlanDto } from "@/types/billing";
-
-/** One date format for the page, matching the plans screen. */
-const formatDate = (date: Date) =>
-  date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
 export type ActivationLandingProps = {
   /** The workspace's own name. The old screen never said which workspace it was talking about. */
@@ -54,6 +51,12 @@ export type ActivationLandingProps = {
    * never had one. Absent for a workspace that has never been paid for.
    */
   lapsed?: { planName: string; endedOn: Date } | null;
+  /**
+   * Credits kept FROZEN from the plan that ended (and any paid purchase booked frozen after it).
+   * They come back on renewal, so the renew screen says how many — "renew to use them" is the
+   * strongest reason on the page to renew rather than start over.
+   */
+  keptCredits?: number;
   onSwitchWorkspace: () => void;
   onSignOut: () => void;
 };
@@ -68,10 +71,18 @@ export function WorkspaceActivationLanding({
   pendingPlanSlug,
   preselectedPlanSlug,
   lapsed,
+  keptCredits = 0,
   onChoosePlan,
   onSwitchWorkspace,
   onSignOut,
 }: ActivationLandingProps) {
+  // The renew screen (an EXPIRED workspace) is localized; the first-activation copy predates the
+  // catalog and stays as it is.
+  const tRenew = useTranslations("settingsBilling.renew");
+  const locale = useLocale();
+  const endedOn = lapsed
+    ? lapsed.endedOn.toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" })
+    : "";
   return (
     <main className="min-h-dvh bg-canvas text-ink">
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-5 py-5">
@@ -107,21 +118,37 @@ export function WorkspaceActivationLanding({
 
           {/* The workspace's own name, at the size of a title. */}
           <h1 className="mt-5 text-balance text-[28px] font-semibold leading-tight tracking-tight text-ink">
-            {workspaceName} is ready — it just needs a plan
+            {lapsed ? tRenew("title", { workspaceName }) : <>{workspaceName} is ready — it just needs a plan</>}
           </h1>
 
           <p className="mx-auto mt-3 max-w-xl text-pretty text-[14px] leading-6 text-ink-muted">
             {lapsed
-              ? `The ${lapsed.planName} plan ended on ${formatDate(lapsed.endedOn)}. Everything in this workspace is exactly where you left it, and opens again the moment a plan is active.`
+              ? tRenew(canBuy ? "ownerDescription" : "memberDescription", {
+                  planName: lapsed.planName,
+                  date: endedOn,
+                })
               : canBuy
                 ? "Your workspace, its members and its settings are all saved. Choose a plan to open it — meetings, live translation and everything else start working straight away."
                 : "This workspace has not been activated yet. Nothing has been lost — it opens for everyone as soon as its owner picks a plan."}
           </p>
 
+          {keptCredits > 0 && (
+            <p className="mx-auto mt-4 inline-flex max-w-md items-center gap-2 rounded-full border border-border bg-surface-1 px-3.5 py-1.5 text-[13px] font-medium text-ink">
+              <Snowflake size={14} className="shrink-0 text-ink-muted" />
+              {tRenew(canBuy ? "kept" : "keptMember", { credits: formatAmount(keptCredits) })}
+            </p>
+          )}
+
           {!canBuy && (
             <p className="mx-auto mt-4 max-w-md rounded-lg border border-border bg-surface-1 px-4 py-3 text-[13px] leading-6 text-ink-muted">
-              Only an owner or admin of {workspaceName} can activate a plan. Here is what it would
-              cost — send it to them, and the workspace opens for the whole team at once.
+              {lapsed ? (
+                tRenew("memberNotice", { workspaceName })
+              ) : (
+                <>
+                  Only an owner or admin of {workspaceName} can activate a plan. Here is what it would
+                  cost — send it to them, and the workspace opens for the whole team at once.
+                </>
+              )}
             </p>
           )}
         </section>
@@ -215,7 +242,11 @@ export function WorkspaceActivationLanding({
                           : "bg-foreground text-background hover:opacity-90"
                       }`}
                     >
-                      {isPending ? "Opening checkout…" : `Activate with ${plan.name}`}
+                      {isPending
+                        ? "Opening checkout…"
+                        : lapsed
+                          ? tRenew("renewWith", { planName: plan.name })
+                          : `Activate with ${plan.name}`}
                     </button>
                   )}
 
