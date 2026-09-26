@@ -23,6 +23,7 @@ import {
   Copy,
   Download,
   FileText,
+  FileType,
   GitCommitVertical,
   History,
   Languages,
@@ -151,6 +152,8 @@ import {
   speakerColorVar,
   type TranscriptSpeaker,
 } from "@/lib/transcript/speaker-color";
+import { recordFileName } from "@/lib/documents/record-file-name";
+import { buildTranscriptDocumentModel } from "@/lib/documents/transcript-document-model";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { transcriptService } from "@/services/transcript.service";
@@ -280,6 +283,7 @@ export function MeetingTranscriptArtifact({
   currentUserId,
   isEnded,
   onCopy,
+  meetingTitle,
   transcriptId,
   transcriptStatus,
   highlightedSegmentIds,
@@ -305,6 +309,8 @@ export function MeetingTranscriptArtifact({
   currentUserId?: string;
   isEnded: boolean;
   onCopy: (text: string, label: string) => void;
+  /** The meeting's own name — what a downloaded transcript is called. See recordFileName. */
+  meetingTitle?: string | null;
   /** Needed to correct or finalize; omit and the section stays read-only. */
   transcriptId?: string;
   transcriptStatus?: string;
@@ -533,6 +539,8 @@ export function MeetingTranscriptArtifact({
     revision: `${blocks.length}:${layout}`,
   });
   const [revealedOriginals, setRevealedOriginals] = useState<Record<string, boolean>>({});
+  /** Which download is being built, so the button can say so and refuse a second click. */
+  const [buildingDocument, setBuildingDocument] = useState<"docx" | "txt" | null>(null);
 
   const displayLanguage =
     chosenLanguage ?? defaultTranscriptLanguage(languageOptions, preferredLanguage, offeredCodes);
@@ -1260,18 +1268,98 @@ export function MeetingTranscriptArtifact({
     return assembleTranscriptText(blocks, translationIndex, displayLanguage);
   }
 
-  function downloadTranscript() {
-    saveBlobDownload(
-      new Blob([transcriptAsText()], { type: "text/plain;charset=utf-8" }),
-      `transcript-${roomId}-${displayLanguage}.txt`,
-    );
-  }
-
   function segmentTime(startMs: number) {
     if (!base) return "";
     const stamp = new Date(base);
     stamp.setMilliseconds(stamp.getMilliseconds() + startMs);
     return stamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  /**
+   * The transcript as a document, in the shape the Reading layout draws — WHATEVER LAYOUT IS ON
+   * SCREEN.
+   *
+   * Chat and Timeline are postures for watching a meeting go by: one row per finalized STT chunk,
+   * or a rail of dots. Neither is a document, and a file that reproduced them would be a file
+   * nobody reads. So the download is always the reading shape, built by one pure module from the
+   * very inputs this panel renders from — see transcript-document-model.ts for why a second copy
+   * of these rules in a document builder would drift.
+   */
+  function transcriptDocumentModel() {
+    return buildTranscriptDocumentModel({
+      meta: {
+        meetingTitle: meetingTitle ?? "",
+        // WT-311(c): the MEETING's start, the same one the duration chip counts from — not the
+        // transcript's `baseTime`, which is whenever the first line happened to be written.
+        startedAt: meetingStartedAt ?? null,
+        durationLabel: meetingDuration,
+        languageLabel:
+          displayLanguage === AS_SPOKEN
+            ? t("languageMenu.asSpoken")
+            : getLanguageName(displayLanguage),
+      },
+      blocks,
+      gapsPerBlock,
+      translationIndex,
+      displayLanguage,
+      meetingEnded: isEnded,
+      formatClock: (startTimeMs) => (base ? segmentTime(startTimeMs) : null),
+      // The divider's own words, clock range included — the same sentence the reader saw. It is
+      // passed in rather than built in the model because it is translated, and a catalog lookup
+      // is a hook away.
+      sessionDividerLabel: (block) => sessionDividerLabel(block.sessionNumber),
+    });
+  }
+
+  /** What TranscriptSessionDivider prints, as a string — the same label, the same clock range. */
+  function sessionDividerLabel(sessionNumber: number) {
+    const session = blocks.find((block) => block.sessionNumber === sessionNumber)?.session;
+    const started = session?.startedAt ? clockTime(session.startedAt) : null;
+    const ended = session?.endedAt ? clockTime(session.endedAt) : t("sessionDivider.now");
+    const label = t("sessionDivider.label", { number: sessionNumber });
+    return started ? `${label} · ${started}–${ended}` : label;
+  }
+
+  /**
+   * Hand over what is on screen, as a file.
+   *
+   * The builders are imported at the CLICK, not at the top: the .docx writer pulls in a document
+   * library that every reader of every meeting would otherwise download in order to look at a
+   * transcript, and most of them never press this.
+   *
+   * The language goes in the file name only when the reader CHOSE one. "As spoken" is the
+   * transcript's own languages, and "(AS-SPOKEN)" in a file name would read as a language code.
+   */
+  async function downloadTranscriptDocument(format: "docx" | "txt") {
+    setBuildingDocument(format);
+    try {
+      const model = transcriptDocumentModel();
+      const fileName = recordFileName({
+        meetingTitle,
+        kind: "Transcript",
+        startedAt: meetingStartedAt,
+        language: displayLanguage === AS_SPOKEN ? undefined : displayLanguage,
+        extension: format,
+      });
+
+      if (format === "txt") {
+        // From record-document-layout, which pulls in no docx writer — the plain text option must
+        // not cost the reader the library it does not use.
+        const { transcriptPlainText } = await import("@/lib/documents/record-document-layout");
+        saveBlobDownload(
+          new Blob([transcriptPlainText(model)], { type: "text/plain;charset=utf-8" }),
+          fileName,
+        );
+        return;
+      }
+
+      const { buildTranscriptDocx } = await import("@/lib/documents/transcript-docx");
+      saveBlobDownload(await buildTranscriptDocx(model), fileName);
+    } catch {
+      toast.error(t("toasts.downloadFailed"));
+    } finally {
+      setBuildingDocument(null);
+    }
   }
 
   return (
@@ -1366,14 +1454,37 @@ export function MeetingTranscriptArtifact({
               <Copy className="size-3.5" />
               {t("toolbar.copy")}
             </button>
-            <button
-              type="button"
-              onClick={downloadTranscript}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-surface-2 hover:text-ink"
-            >
-              <Download className="size-3.5" />
-              {t("toolbar.download")}
-            </button>
+            {/* Two formats, one control. A bare Download button had to pick one — it wrote .txt,
+                which is the right answer for grepping a transcript and the wrong one for sending it
+                to anybody, and a reader who wanted the other had no way to say so. The menu is the
+                shadcn DropdownMenu the language picker beside it already uses, so Escape closes it,
+                a click outside closes it, and the trigger carries aria-haspopup without this file
+                spelling any of that out. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                disabled={buildingDocument !== null}
+                title={t("toolbar.downloadTitle")}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[12px] text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-ink disabled:opacity-60"
+              >
+                {buildingDocument ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5" />
+                )}
+                {t("toolbar.download")}
+                <ChevronDown className="size-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[212px]">
+                <DropdownMenuItem onClick={() => void downloadTranscriptDocument("docx")}>
+                  <FileText className="size-3.5" />
+                  {t("toolbar.downloadWord")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void downloadTranscriptDocument("txt")}>
+                  <FileType className="size-3.5" />
+                  {t("toolbar.downloadText")}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* WT-589. Two states, one button, and the second one is not a toggle — it commits.
                 "Edit all" reads as a mode; leaving it has to say what leaving does, or somebody
                 clicks the same button again expecting it to close and loses their typing. */}

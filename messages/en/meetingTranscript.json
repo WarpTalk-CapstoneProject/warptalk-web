@@ -22,6 +22,9 @@
     "copy": "Copy",
     "copyLabel": "Transcript",
     "download": "Download",
+    "downloadTitle": "Download this transcript as it is on screen",
+    "downloadWord": "Word document (.docx)",
+    "downloadText": "Plain text (.txt)",
     "discard": "Discard",
     "saving": "Saving…",
     "doneSaveAll": "Done & save all",
@@ -44,7 +47,8 @@
     "batchSaved": "Saved {count, plural, one {# correction} other {# corrections}}. Their translations are being redone.",
     "batchPartialFailure": "Saved {saved}, but {failed} could not be saved. Their edits are still here — try again.",
     "finalizeSuccess": "Transcript finalized and locked.",
-    "finalizeFailed": "Could not finalize the transcript."
+    "finalizeFailed": "Could not finalize the transcript.",
+    "downloadFailed": "Could not build this download."
   },
   "sessionDivider": {
     "label": "Translation {number}",

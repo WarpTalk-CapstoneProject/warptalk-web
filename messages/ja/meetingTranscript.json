@@ -22,6 +22,9 @@
     "copy": "コピー",
     "copyLabel": "文字起こし",
     "download": "ダウンロード",
+    "downloadTitle": "画面に表示されているとおりに文字起こしをダウンロード",
+    "downloadWord": "Word 文書 (.docx)",
+    "downloadText": "テキスト (.txt)",
     "discard": "破棄",
     "saving": "保存中…",
     "doneSaveAll": "完了してすべて保存",
@@ -44,7 +47,8 @@
     "batchSaved": "{count, plural, other {#件の修正}}を保存しました。翻訳は再作成されています。",
     "batchPartialFailure": "{saved}件を保存しましたが、{failed}件は保存できませんでした。入力内容はそのまま残っています — もう一度お試しください。",
     "finalizeSuccess": "文字起こしを確定してロックしました。",
-    "finalizeFailed": "文字起こしを確定できませんでした。"
+    "finalizeFailed": "文字起こしを確定できませんでした。",
+    "downloadFailed": "ダウンロードを作成できませんでした。"
   },
   "sessionDivider": {
     "label": "翻訳セッション {number}",
