@@ -146,8 +146,12 @@ interface TranslationRoomStoreState {
    * card means. The session routes each payload; the panel parses what it renders.
    */
   assistantQuestionsJson: string | null;
-  assistantPluginConnectionJson: string | null;
-  assistantPluginSetupJson: string | null;
+  /**
+   * What WarpBot is waiting on before it may act: a write to confirm, a plugin to connect, or a
+   * provider only an operator can register. One slot, because it is one question, and the panel
+   * draws one form for all three above its composer (AssistantPermissionPrompt).
+   */
+  assistantPermissionJson: string | null;
   /**
    * When WarpBot last showed a sign of life — a pending signal, a tool call, an answer.
    *
@@ -241,8 +245,7 @@ interface TranslationRoomStoreState {
    */
   appendAssistantDraft: (delta?: string | null) => void;
   setAssistantQuestionsJson: (questionsJson: string | null) => void;
-  setAssistantPluginConnectionJson: (pluginConnectionJson: string | null) => void;
-  setAssistantPluginSetupJson: (pluginSetupJson: string | null) => void;
+  setAssistantPermissionJson: (permissionJson: string | null) => void;
   sealAssistantTrail: (messageId: string) => void;
   hideChatMessage: (messageId: string) => void;
   setMuted: (muted: boolean) => void;
@@ -268,8 +271,7 @@ const initialState = {
   assistantTrails: {} as Record<string, { steps: AssistantStep[]; durationMs: number | null }>,
   assistantDraft: "",
   assistantQuestionsJson: null as string | null,
-  assistantPluginConnectionJson: null as string | null,
-  assistantPluginSetupJson: null as string | null,
+  assistantPermissionJson: null as string | null,
   assistantActivityAt: 0,
   isMuted: false,
   raisedHands: [],
@@ -482,8 +484,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       // here. A Connect card left over from the last question would open an OAuth flow this one
       // never asked for.
       assistantQuestionsJson: null,
-      assistantPluginConnectionJson: null,
-      assistantPluginSetupJson: null,
+      assistantPermissionJson: null,
       assistantActivityAt: Date.now(),
     })),
 
@@ -534,8 +535,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
   clearAssistantCards: () =>
     set({
       assistantQuestionsJson: null,
-      assistantPluginConnectionJson: null,
-      assistantPluginSetupJson: null,
+      assistantPermissionJson: null,
     }),
 
   noteAssistantToolFinished: (toolName = null, toolDetail = null) =>
@@ -645,17 +645,11 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
       assistantActivityAt: Date.now(),
     }),
 
-  // Both stamp activity like the questions setter: a card arriving is the worker showing a sign of
-  // life mid-turn, and a connect-only event must not leave the slow-turn deadline running.
-  setAssistantPluginConnectionJson: (assistantPluginConnectionJson) =>
+  // Stamps activity like the questions setter: a prompt arriving is the worker showing a sign of
+  // life mid-turn, and a permission-only event must not leave the slow-turn deadline running.
+  setAssistantPermissionJson: (assistantPermissionJson) =>
     set({
-      assistantPluginConnectionJson,
-      assistantActivityAt: Date.now(),
-    }),
-
-  setAssistantPluginSetupJson: (assistantPluginSetupJson) =>
-    set({
-      assistantPluginSetupJson,
+      assistantPermissionJson,
       assistantActivityAt: Date.now(),
     }),
 

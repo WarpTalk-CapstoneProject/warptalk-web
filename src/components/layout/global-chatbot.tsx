@@ -86,15 +86,10 @@ import {
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-  type PluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
-import {
-  PluginOperatorSetupCard,
-  parsePluginOperatorSetupAction,
-  type PluginOperatorSetupAction,
-} from "@/components/layout/plugin-operator-setup-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+  type PermissionPrompt,
+} from "@/components/assistant/permission-prompt";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
 import { PluginGlyph } from "@/components/assistant/plugin-glyph";
 import { AnswerSources } from "@/components/assistant/answer-sources";
@@ -113,9 +108,15 @@ import { toast } from "sonner";
 import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 
 import { ChatAttachmentStrip } from "@/components/layout/chat-attachment-strip";
-import { MessageMentionChips } from "@/components/assistant/message-mention-chips";
+import { UserMessageBody } from "@/components/assistant/message-mention-chips";
 import { mentionCompletion } from "@/lib/assistant/mention-completion";
-import { parseMessageMentions } from "@/lib/assistant/message-mentions";
+import {
+  hasMentionToken,
+  mentionToken,
+  mentionTokenEndingAt,
+  parseMessageMentions,
+  splitMentionTokens,
+} from "@/lib/assistant/message-mentions";
 import { withEffectiveConnectionStatus } from "@/lib/assistant/plugin-connection";
 import { isOfferedInWorkspaceChat } from "@/lib/assistant/plugin-availability";
 import {
@@ -532,10 +533,10 @@ export function GlobalChatbot() {
   // The card WarpBot last put up, or null. One at a time: a second question set replaces the
   // first, because answering a stale card would send answers the assistant has moved past.
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
-  const [pendingPluginConnection, setPendingPluginConnection] =
-    useState<PluginConnectionAction | null>(null);
-  const [pendingPluginSetup, setPendingPluginSetup] =
-    useState<PluginOperatorSetupAction | null>(null);
+  // What WarpBot is waiting on before it may act: a write to confirm, a plugin to connect, or a
+  // provider only an operator can register. One at a time, and it lives above the composer rather
+  // than in the thread — see AssistantPermissionPrompt.
+  const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
   // Both plugin cards last until the NEXT turn starts. Nothing but a click used to clear them, so
   // a Connect card survived New chat - where pressing Connect opened an OAuth flow the current
   // turn never asked for - and two of them could stack up, one per error code. So they clear when
@@ -546,8 +547,7 @@ export function GlobalChatbot() {
   // plugin tool returns, and the answer that lands next is the one explaining it; clearing there
   // erased the card moments after it appeared, before anyone could press it (WT-688).
   const clearPluginCards = useCallback(() => {
-    setPendingPluginConnection(null);
-    setPendingPluginSetup(null);
+    setPendingPermission(null);
   }, []);
   const [isMinimized, setIsMinimized] = useState(false);
   /**
@@ -1118,22 +1118,11 @@ export function GlobalChatbot() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== conversationId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
-        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
-        // A malformed payload leaves the card absent rather than rendering an empty shell —
+        // A malformed payload leaves the prompt absent rather than rendering an empty shell —
         // the user's own message box still works, which is the fallback that matters.
-        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
+        const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        // Enforced here rather than assumed of the worker. "Press Connect" and "no button
-        // will help" cannot both be true, but they are two independent keys on one payload,
-        // and two unconditional setters rendered both cards the moment anything emitted both.
-        // Setup wins: it is the one saying the registration ladder is already exhausted.
-        if (pluginSetup) {
-          setPendingPluginSetup(pluginSetup);
-          setPendingPluginConnection(null);
-        } else if (pluginConnection) {
-          setPendingPluginConnection(pluginConnection);
-          setPendingPluginSetup(null);
-        }
+        if (permission) setPendingPermission(permission);
         armResponseTimeout();
       },
     );
@@ -1287,6 +1276,12 @@ export function GlobalChatbot() {
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setInputValue(val);
+    // Deleting "@Google Meet" from the text is how a mention is removed now that it lives in the
+    // sentence, so a context whose token is gone goes with it.
+    setSelectedContexts((prev) => {
+      const kept = prev.filter((ctx) => hasMentionToken(val, ctx.title));
+      return kept.length === prev.length ? prev : kept;
+    });
 
     const cursorPosition = e.target.selectionStart;
     const textBeforeCursor = val.slice(0, cursorPosition);
@@ -1411,7 +1406,35 @@ export function GlobalChatbot() {
       return;
     }
 
-    // Handle backspace when input is empty to delete the last context
+    // A mention lives in the text as "@Google Meet", so Backspace at its end removes the whole
+    // token. One character off it used to leave "@Google Mee" behind as ordinary words, with the
+    // structured mention silently dropped — the message then looked like it named a plugin it no
+    // longer named.
+    if (e.key === "Backspace" && !e.altKey && !e.metaKey && !e.ctrlKey) {
+      const input = inputRef.current;
+      const caret = input?.selectionStart ?? 0;
+      if (input && caret === input.selectionEnd) {
+        const token = mentionTokenEndingAt(
+          inputValue,
+          caret,
+          selectedContexts.map((ctx) => ({ label: ctx.title })),
+        );
+        if (token) {
+          e.preventDefault();
+          const next = inputValue.slice(0, token.start) + inputValue.slice(token.end);
+          setInputValue(next);
+          setSelectedContexts((prev) => prev.filter((ctx) => hasMentionToken(next, ctx.title)));
+          setTimeout(() => {
+            input.focus();
+            input.setSelectionRange(token.start, token.start);
+          }, 0);
+          return;
+        }
+      }
+    }
+
+    // Handle backspace when input is empty to delete the last context. Only mentions that never
+    // made it into the text can be left by now (see the sent bubble's `unplaced`).
     if (
       e.key === "Backspace" &&
       inputValue === "" &&
@@ -1423,6 +1446,15 @@ export function GlobalChatbot() {
 
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      // Enter answers the permission prompt only while there is nothing written. A half-typed
+      // question is a better answer than a button press the user did not mean, so anything in the
+      // box wins — and this is a write, which should never be approved by a stray keystroke.
+      const firstAnswer = pendingPermission?.options?.find((option) => option.value)?.value;
+      if (!inputValue.trim() && pendingPermission?.kind === "tool" && firstAnswer) {
+        setPendingPermission(null);
+        void sendMessage(firstAnswer);
+        return;
+      }
       void sendMessage();
     }
   };
@@ -1430,6 +1462,16 @@ export function GlobalChatbot() {
   const filteredOptions = CONTEXT_OPTIONS.filter((opt) =>
     opt.title.toLowerCase().includes(mentionQuery.toLowerCase()),
   );
+
+  // The composer's text split around the mentions written into it, for the mirror's highlight.
+  const composerMentionSegments = splitMentionTokens(
+    inputValue,
+    selectedContexts.map((ctx) => ({
+      entityType: ctx.entityType,
+      entityId: ctx.entityId,
+      label: ctx.title,
+    })),
+  ).segments;
 
   // What Tab would finish the typed name with — see mention-completion.ts for when it is empty.
   const mentionGhost = mentionMenuOpen
@@ -1450,17 +1492,26 @@ export function GlobalChatbot() {
     const textBeforeCursor = inputValue.slice(0, cursorPosition);
     const textAfterCursor = inputValue.slice(cursorPosition);
 
+    // The mention stays in the sentence as "@Google Meet", where it was typed. It used to be cut
+    // out and kept only as a chip, so "tạo 1 cuộc họp bằng @Google Meet" was sent - and shown
+    // back in the bubble - as "tạo 1 cuộc họp bằng", with the chip stranded above it (17 Sep).
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
-    if (mentionMatch) {
-      const newTextBefore = textBeforeCursor.slice(0, mentionMatch.index);
-      setInputValue(newTextBefore + textAfterCursor);
-    }
+    const newTextBefore = mentionMatch
+      ? textBeforeCursor.slice(0, mentionMatch.index)
+      : textBeforeCursor;
+    const token = `${mentionToken(opt.title)} `;
+    const needsSpaceBefore = newTextBefore.length > 0 && !/\s$/.test(newTextBefore);
+    const nextBefore = `${newTextBefore}${needsSpaceBefore ? " " : ""}${token}`;
+    setInputValue(nextBefore + textAfterCursor.replace(/^ /, ""));
 
     setMentionMenuOpen(false);
 
-    // Focus back
+    // Focus back, with the caret after the token rather than at the end of the box.
     setTimeout(() => {
-      inputRef.current?.focus();
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextBefore.length, nextBefore.length);
     }, 0);
   };
 
@@ -1595,10 +1646,16 @@ export function GlobalChatbot() {
     // which workspace the turn belongs to — and a platform yes carries no workspace at all.
     const platformTurn = readiness.scope === "platform";
 
+    // A message this component composed rather than the user typing it — a question card's
+    // answer, a slash command — carries neither the draft's @mentions nor its attachments, and
+    // leaves the draft alone. Sending "Create" used to clear whatever the user had half-written
+    // and attach its chips to the answer.
+    const fromComposer = overrideContent === undefined;
+
     // Explicit @mentions are per-message: build the list from whatever's attached right
     // now, then clear the chips so they don't silently ride along with the *next*
     // unrelated message too.
-    const mentions: AssistantMentionDto[] = platformTurn ? [] : selectedContexts
+    const mentions: AssistantMentionDto[] = (platformTurn || !fromComposer ? [] : selectedContexts)
       .filter(
         (
           ctx,
@@ -1615,12 +1672,14 @@ export function GlobalChatbot() {
 
     // Captured before the state is cleared, for the same reason mentions are: this handler runs
     // against pre-update state and the request is built further down.
-    const sentAttachments = platformTurn ? [] : attachments;
+    const sentAttachments = platformTurn || !fromComposer ? [] : attachments;
 
-    setInputValue("");
+    if (fromComposer) {
+      setInputValue("");
+      setSelectedContexts([]);
+      setAttachments([]);
+    }
     setMentionMenuOpen(false);
-    setSelectedContexts([]);
-    setAttachments([]);
 
     let convId = conversationId;
     if (!convId) {
@@ -1863,7 +1922,7 @@ export function GlobalChatbot() {
                       >
                         {msg.role === "assistant" && !msg.failed ? (
                           <>
-                            <AssistantMarkdown>{msg.content}</AssistantMarkdown>
+                            <AssistantMarkdown withMeetingCards>{msg.content}</AssistantMarkdown>
                             <AnswerSources
                               sources={msg.sources ?? []}
                               workspaceSlug={activeWorkspaceSlug}
@@ -1878,17 +1937,18 @@ export function GlobalChatbot() {
                           </>
                         ) : (
                           <>
-                            <MessageMentionChips
+                            <UserMessageBody
+                              content={msg.content}
                               mentions={msg.mentions ?? []}
                               plugins={catalogPlugins}
-                            />
-                            {msg.attachments && msg.attachments.length > 0 ? (
-                              <ChatAttachmentStrip
-                                attachments={msg.attachments}
-                                className="mb-1 flex justify-end px-0 pb-0"
-                              />
-                            ) : null}
-                            {msg.content}
+                            >
+                              {msg.attachments && msg.attachments.length > 0 ? (
+                                <ChatAttachmentStrip
+                                  attachments={msg.attachments}
+                                  className="mb-1 flex justify-end px-0 pb-0"
+                                />
+                              ) : null}
+                            </UserMessageBody>
                           </>
                         )}
                       </div>
@@ -1943,24 +2003,7 @@ export function GlobalChatbot() {
                     />
                   </div>
                 ) : null}
-                {pendingPluginConnection ? (
-                  <div className="pl-4">
-                    <PluginConnectionActionCard
-                      action={pendingPluginConnection}
-                      disabled={connectPlugin.isPending}
-                      onDismiss={() => setPendingPluginConnection(null)}
-                      onConnect={handlePluginConnectionAction}
-                    />
-                  </div>
-                ) : null}
-                {pendingPluginSetup ? (
-                  <div className="pl-4">
-                    <PluginOperatorSetupCard
-                      action={pendingPluginSetup}
-                      onDismiss={() => setPendingPluginSetup(null)}
-                    />
-                  </div>
-                ) : null}
+
               </div>
               {/* Only the widget gets the fade. It is a small panel with a hard bottom edge against
                   the composer, so an answer ends mid-sentence at a cut line; the taller in-meeting
@@ -2033,7 +2076,24 @@ export function GlobalChatbot() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                <div className={`${contextInputShellClassName} relative z-10`}>
+                <div className={`${contextInputShellClassName} relative z-10 overflow-hidden`}>
+                  {/* What WarpBot is waiting on, where the user's hands already are. In the thread
+                      it scrolled away behind the answer that followed it and was gone when the
+                      conversation was reopened, leaving WarpBot talking about a card nobody could
+                      see. See AssistantPermissionPrompt. */}
+                  {pendingPermission ? (
+                    <AssistantPermissionPrompt
+                      prompt={pendingPermission}
+                      plugins={catalogPlugins}
+                      busy={connectPlugin.isPending}
+                      onAnswer={(answer) => {
+                        setPendingPermission(null);
+                        void sendMessage(answer);
+                      }}
+                      onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+                      onDismiss={() => setPendingPermission(null)}
+                    />
+                  ) : null}
                   {/* Slash Command Dropdown */}
                   <AnimatePresence>
                     {slashMenuOpen && (
@@ -2172,7 +2232,12 @@ export function GlobalChatbot() {
                       dragDepth > 0 && "bg-primary/5 outline-dashed outline-1 outline-primary/40",
                     )}
                   >
-                    {selectedContexts.map((ctx) => (
+                    {/* Only contexts that are not already written into the sentence. A mention picked
+                        from the @ menu lives in the text as "@Google Meet" and is highlighted there
+                        by the mirror below; drawing it here too would show it twice. */}
+                    {selectedContexts
+                      .filter((ctx) => !hasMentionToken(inputValue, ctx.title))
+                      .map((ctx) => (
                       <span
                         key={ctx.id}
                         className="flex items-center gap-1 bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-md text-[12px] font-medium"
@@ -2219,12 +2284,27 @@ export function GlobalChatbot() {
                         aria-hidden: the open menu already announces the option, and hearing the
                         sentence read back a second time is worse than not hearing the hint. */}
                     <div className="relative flex-1 min-w-[120px]">
-                      {mentionGhost && !composerOverflowing ? (
+                      {(mentionGhost || composerMentionSegments.some((part) => part.kind === "mention"))
+                      && !composerOverflowing ? (
                         <div
                           aria-hidden
                           className="pointer-events-none absolute inset-0 overflow-hidden text-[13px] whitespace-pre-wrap break-words"
                         >
-                          <span className="invisible">{inputValue}</span>
+                          {/* Same string, same glyphs: a mention token gets a tint BEHIND the
+                              textarea's own text (text-transparent keeps its background, where
+                              invisible would hide it), everything else stays invisible. No
+                              padding on the tint - padding would move every glyph after it. */}
+                          {composerMentionSegments.map((part, index) =>
+                            part.kind === "mention" ? (
+                              <span key={index} className="rounded-[3px] bg-primary/15 text-transparent">
+                                {mentionToken(part.mention.label ?? "")}
+                              </span>
+                            ) : (
+                              <span key={index} className="invisible">
+                                {part.text}
+                              </span>
+                            ),
+                          )}
                           <span className="text-ink-subtle">{mentionGhost}</span>
                         </div>
                       ) : null}

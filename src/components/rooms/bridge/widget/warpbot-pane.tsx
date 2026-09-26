@@ -37,6 +37,7 @@ import { ArrowUp, LockSimple, NotePencil } from "@phosphor-icons/react/dist/ssr"
 
 import { AnswerSources } from "@/components/assistant/answer-sources";
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
 import { AssistantWorkTrail } from "@/components/assistant/assistant-work-trail";
 import { AssistantQuestionCard } from "@/components/layout/assistant-question-card";
 import { LumidotSpinner } from "@/components/ui/lumidot-spinner";
@@ -209,7 +210,9 @@ export function WarpBotPane() {
                 {message.role === "assistant" && !message.failed ? (
                   <>
                     {/* Streams: chunks append to `content`, so this re-renders as it is written. */}
-                    <AssistantMarkdown>{message.content}</AssistantMarkdown>
+                    <AssistantMarkdown withMeetingCards meetingCardsOpenRoomsOutside>
+                      {message.content}
+                    </AssistantMarkdown>
                     {/* No workspace slug on purpose. With one, a document chip is a Next link, and
                         in this window that navigates the floating popup itself to a full document
                         page, with no way back to the widget. Without it the chip is a label; web
@@ -224,7 +227,7 @@ export function WarpBotPane() {
                   </>
                 ) : (
                   <>
-                    {message.content}
+                    {message.role === "user" ? userMessageDisplayText(message.content) : message.content}
                     {message.failed && message.steps?.length ? (
                       <AssistantWorkTrail
                         steps={message.steps}

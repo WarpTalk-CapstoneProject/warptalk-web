@@ -3,6 +3,9 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { MeetingLinkCards } from "@/components/assistant/meeting-link-card";
+import { stripMeetingMarkers } from "@/lib/assistant/meeting-links";
+
 /**
  * What WarpBot's answers are rendered with, everywhere it speaks.
  *
@@ -23,8 +26,27 @@ import remarkGfm from "remark-gfm";
  *     Default browser margins for h1-h3/ul/p are sized for documents. In a 13px chat column
  *     they blow the rhythm apart. Every element that can appear is given spacing that reads
  *     as chat rather than as an article.
+ *
+ * MEETING CARDS
+ *     `withMeetingCards` draws a card under the answer for every meeting WarpBot created this
+ *     turn, read from the markers the worker appended (see MeetingLinkCards). Opt-in, because
+ *     this also renders documents, where nothing of the sort belongs.
+ *
+ *     The markers themselves are taken out of the text FIRST, always. react-markdown has no raw
+ *     HTML plugin here, and instead of dropping an HTML comment it prints it: the reader saw
+ *     `<!-- warpbot:meeting {"kind":"google_meet",…} -->` under the answer, in full.
  */
-export function AssistantMarkdown({ children }: { children: string }) {
+export function AssistantMarkdown({
+  children,
+  withMeetingCards = false,
+  meetingCardsOpenRoomsOutside = false,
+}: {
+  children: string;
+  withMeetingCards?: boolean;
+  meetingCardsOpenRoomsOutside?: boolean;
+}) {
+  const prose = stripMeetingMarkers(children);
+
   return (
     <div className="space-y-2 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
       <ReactMarkdown
@@ -100,8 +122,11 @@ export function AssistantMarkdown({ children }: { children: string }) {
           hr: () => <hr className="border-border" />,
         }}
       >
-        {children}
+        {prose}
       </ReactMarkdown>
+      {withMeetingCards ? (
+        <MeetingLinkCards markdown={children} openRoomsOutside={meetingCardsOpenRoomsOutside} />
+      ) : null}
     </div>
   );
 }

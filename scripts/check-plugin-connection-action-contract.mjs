@@ -1,9 +1,10 @@
-// WarpBot raises three kinds of card mid-turn, all on the same AssistantQuestion event: a question
-// (including the write confirmation), a Connect prompt, and an operator-setup notice. The worker
-// sends one card per event, under a different JSON key each. A surface that renders question cards
-// but not the other two does not fail loudly — the payload parses to nothing and the user is simply
-// told nothing about the plugin they need to connect. That is how /ai-chat and the meeting panel
-// came to drop these cards (WT-688), so this script checks every surface, not just the widget.
+// Everything WarpBot has to ask before it may act — a write to confirm, a plugin to connect, a
+// provider only an operator can register — arrives on the AssistantQuestion event under one
+// `permission` key and is drawn by one form above the composer. A surface that renders question
+// cards but not that form does not fail loudly: the payload parses to nothing and the user is
+// simply told nothing about the plugin they need to connect. That is how /ai-chat and the meeting
+// panel came to drop the old cards (WT-688), so this script checks every surface, not just the
+// widget.
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
@@ -25,42 +26,32 @@ function assertNotIncludes(source, token, message) {
   }
 }
 
-// --- The parsers read the keys the worker actually sends ----------------------------------------
-// ai_assistant_worker/mcp_tools.py publishes {"pluginConnection": {...}} and
-// {"pluginOperatorSetup": {...}}. A parser reading any other key returns null for every real event.
+// --- The parser reads the key the worker actually sends -----------------------------------------
+// ai_assistant_worker/mcp_tools.py publishes {"permission": {...}} for all three kinds. A parser
+// reading any other key returns null for every real event.
 
-const actionCard = read("src/components/layout/plugin-connection-action-card.tsx");
+const prompt = read("src/components/assistant/permission-prompt.tsx");
 assertIncludes(
-  actionCard,
-  "parsePluginConnectionAction",
-  "Plugin connection action card module must export a parser for AssistantQuestion payloads.",
+  prompt,
+  "{ permission?: unknown }",
+  "The permission prompt parser must read the permission key, which is the key the AI worker publishes every ask under; reading any other key silently drops all of them.",
+);
+for (const kind of ['kind !== "tool"', 'kind !== "connect"', 'kind !== "blocked"']) {
+  assertIncludes(
+    prompt,
+    kind,
+    `The permission prompt must know the ${kind.split('"')[1]} kind, or that ask renders nothing.`,
+  );
+}
+assertIncludes(
+  prompt,
+  "onConnect(prompt.pluginKey)",
+  "The permission prompt's Connect answer must pass the backend plugin key to the connect flow.",
 );
 assertIncludes(
-  actionCard,
-  "{ pluginConnection?: unknown }",
-  "The Connect card parser must read the pluginConnection key, which is the key the AI worker publishes the prompt under; reading any other key silently drops every real Connect prompt.",
-);
-assertIncludes(
-  actionCard,
-  'type: "plugin_connection_required"',
-  "Plugin connection action card must use the plugin_connection_required action type.",
-);
-assertIncludes(
-  actionCard,
-  "onConnect(action.pluginKey)",
-  "Plugin connection action card primary action must pass the backend plugin key to the connect flow.",
-);
-assertIncludes(
-  actionCard,
-  "Not now",
-  "Plugin connection action card must offer a local dismissal action.",
-);
-
-const setupCard = read("src/components/layout/plugin-operator-setup-card.tsx");
-assertIncludes(
-  setupCard,
-  "{ pluginOperatorSetup?: unknown }",
-  "The operator-setup card parser must read the pluginOperatorSetup key, which is the key the AI worker publishes the notice under; reading any other key means a plugin that needs an administrator is never explained.",
+  prompt,
+  '"Not now"',
+  "The permission prompt must offer a local dismissal for a plugin the user does not want to connect now.",
 );
 
 // --- Every surface that renders question cards renders the plugin cards too ---------------------
@@ -121,13 +112,8 @@ for (const surface of CHAT_SURFACES) {
 
   assertIncludes(
     source,
-    "<PluginConnectionActionCard",
-    `${surface} renders WarpBot's question cards but not the Connect card, so a plugin tool that needs connecting tells the user nothing on this surface.`,
-  );
-  assertIncludes(
-    source,
-    "<PluginOperatorSetupCard",
-    `${surface} renders WarpBot's question cards but not the operator-setup card, so a plugin that needs an administrator to register an OAuth app tells the user nothing on this surface.`,
+    "<AssistantPermissionPrompt",
+    `${surface} renders WarpBot's question cards but not the permission prompt, so a write awaiting confirmation, or a plugin that needs connecting, tells the user nothing on this surface.`,
   );
   assertIncludes(
     source,
@@ -160,9 +146,10 @@ for (const surface of CHAT_SURFACES) {
   }
 }
 
-// --- Setup beats Connect, wherever the choice is made -------------------------------------------
-// "Press Connect" and "no button will help" cannot both be true of one failure. Each surface makes
-// the choice explicitly instead of trusting the worker never to send both.
+// --- One prompt, one slot ------------------------------------------------------------------------
+// "Press Connect" and "no button will help" cannot both be true of one failure. They used to be two
+// keys on one payload and two setters, so a surface could render both; now the worker sends one
+// kind and each surface keeps one slot.
 
 const globalWidget = read("src/components/layout/global-chatbot.tsx");
 const aiChat = read("src/app/(app)/[workspaceSlug]/ai-chat/page.tsx");
@@ -172,13 +159,13 @@ for (const [surface, source] of [
 ]) {
   assertIncludes(
     source,
-    "if (pluginSetup) {",
-    `${surface} must choose the operator-setup card explicitly, so a payload carrying both keys cannot show a Connect button for a plugin no button can connect.`,
+    "setPendingPermission(permission)",
+    `${surface} must store the permission prompt it was sent, in its own slot.`,
   );
-  assertIncludes(
+  assertNotIncludes(
     source,
-    "} else if (pluginConnection) {",
-    `${surface} must make the Connect card the else branch of the operator-setup card, so the two cannot both render.`,
+    "setPendingPluginSetup",
+    `${surface} still keeps a second slot for an operator-setup card. There is one prompt now; two slots is how they contradicted each other on screen.`,
   );
 }
 
@@ -195,25 +182,20 @@ assertNotIncludes(
 );
 assertIncludes(
   roomHub,
-  "if (parsePluginOperatorSetupAction(json)) {",
-  "The meeting session must route operator-setup payloads into their own slot, chosen ahead of the Connect card.",
+  "store.setAssistantPermissionJson(json)",
+  "The meeting session must route a permission payload into its own slot, so it cannot overwrite a question the user is still answering.",
 );
 assertIncludes(
   roomHub,
-  "} else if (parsePluginConnectionAction(json)) {",
-  "The meeting session must route Connect payloads into their own slot, as the else branch of the operator-setup card so the two cannot both render.",
+  "parsePermissionPrompt(json)",
+  "The meeting session must recognise a permission payload before storing it; storing whatever arrives would put a question in the permission slot and vice versa.",
 );
 
 const roomChat = read("src/components/rooms/live/chat-panel.tsx");
 assertIncludes(
   roomChat,
-  "onDismiss={() => setAssistantPluginConnectionJson(null)}",
-  "Dismissing the Connect card in the meeting panel must clear only the Connect card, not a question card shown beside it.",
-);
-assertIncludes(
-  roomChat,
-  "onDismiss={() => setAssistantPluginSetupJson(null)}",
-  "Dismissing the operator-setup card in the meeting panel must clear only the setup card, not a question card shown beside it.",
+  "onDismiss={() => setAssistantPermissionJson(null)}",
+  "Dismissing the permission prompt in the meeting panel must clear only that prompt, not a question card shown beside it.",
 );
 
 console.log("Plugin connection action contract passed.");
