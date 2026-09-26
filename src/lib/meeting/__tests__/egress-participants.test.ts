@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isRecordableParticipant } from "../egress-participants.ts";
+import { isRecordableParticipant, resolveEgressDisplayName } from "../egress-participants.ts";
 
 test("a person is recorded", () => {
   assert.equal(isRecordableParticipant("019ff9e1-e3e2-7024-99b7-6e37c6a18392"), true);
@@ -44,4 +44,23 @@ test("an absent identity is not a person to record", () => {
   assert.equal(isRecordableParticipant(null), false);
   assert.equal(isRecordableParticipant(undefined), false);
   assert.equal(isRecordableParticipant(""), false);
+});
+
+test("resolveEgressDisplayName prints the LiveKit name when there is one", () => {
+  assert.equal(resolveEgressDisplayName("Thanh Ha", "019ff9e1-e3e2-7024"), "Thanh Ha");
+});
+
+test("resolveEgressDisplayName falls back to identity when the name is blank", () => {
+  // Mirrors the fallback meeting-stage.tsx already uses for the live UI:
+  // `trackRef.participant.name || identity || fallbackName`.
+  assert.equal(resolveEgressDisplayName("", "019ff9e1-e3e2-7024"), "019ff9e1-e3e2-7024");
+  assert.equal(resolveEgressDisplayName("   ", "019ff9e1-e3e2-7024"), "019ff9e1-e3e2-7024");
+  assert.equal(resolveEgressDisplayName(null, "019ff9e1-e3e2-7024"), "019ff9e1-e3e2-7024");
+  assert.equal(resolveEgressDisplayName(undefined, "019ff9e1-e3e2-7024"), "019ff9e1-e3e2-7024");
+});
+
+test("resolveEgressDisplayName never returns an empty label", () => {
+  assert.equal(resolveEgressDisplayName(null, null), "Participant");
+  assert.equal(resolveEgressDisplayName("", ""), "Participant");
+  assert.equal(resolveEgressDisplayName(undefined, undefined), "Participant");
 });
