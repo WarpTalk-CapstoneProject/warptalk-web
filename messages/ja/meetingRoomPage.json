@@ -21,6 +21,13 @@
   },
   "loading": "ルームを読み込み中…",
   "copiedSuffix": "{label}をコピーしました",
+  "hostLabel": "ホスト",
+  "roomCodeLabel": "ルームコード",
+  "copyRoomCode": "ルームコードをコピー",
+  "occupancyTooltip": {
+    "attended": "このミーティングに参加した人",
+    "inRoom": "ルーム内の参加者数(ミーティング種別の定員に対する人数)"
+  },
   "editRoom": "ルームを編集",
   "startingLabel": "開始しています...",
   "startError": "ミーティングを開始できませんでした。",

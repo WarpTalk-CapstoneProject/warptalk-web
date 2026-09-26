@@ -21,6 +21,13 @@
   },
   "loading": "Loading room…",
   "copiedSuffix": "{label} copied",
+  "hostLabel": "Host",
+  "roomCodeLabel": "Room code",
+  "copyRoomCode": "Copy room code",
+  "occupancyTooltip": {
+    "attended": "People who joined this meeting",
+    "inRoom": "Participants in the room, out of the meeting type's seat capacity"
+  },
   "editRoom": "Edit room",
   "startingLabel": "Starting...",
   "startError": "Could not start the meeting.",

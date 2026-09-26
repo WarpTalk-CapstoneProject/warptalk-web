@@ -199,9 +199,12 @@ export default function WorkspaceAdminDashboardPage() {
     })
     .slice(0, UPCOMING_LIMIT);
 
+  // Capped at 100 to match the account-menu credits bar — currentCredits can exceed
+  // totalCredits (e.g. a mid-cycle top-up), and an uncapped value here showed >100% while the
+  // account menu, reading the same balance, capped at 100%.
   const remainingPercent =
     credits && credits.totalCredits > 0
-      ? Math.round((Math.max(0, credits.currentCredits) / credits.totalCredits) * 100)
+      ? Math.min(100, Math.round((Math.max(0, credits.currentCredits) / credits.totalCredits) * 100))
       : null;
   const creditIsLow = remainingPercent !== null && remainingPercent <= LOW_CREDIT_PERCENT;
 
