@@ -56,8 +56,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { ExtraCreditsNeedPlan } from "@/components/billing/extra-credits-need-plan";
 import { PagePlaceholder } from "@/components/workspace/page-placeholder";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
+import { canBuyExtraCredits } from "@/lib/billing/extra-credits";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { billingService } from "@/services/billing.service";
@@ -75,6 +77,7 @@ import {
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
+import { AutoRenewRow, PaymentFailedBanner } from "./components/auto-renew-section";
 import { CatalogSection } from "./components/catalog-section";
 
 /**
@@ -227,6 +230,10 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   const activePlan = activePlans.find((plan) => plan.id === subscription?.planId) ?? null;
 
+  // backend#467: the server refuses a top-up or pack without a live plan (409), so every way to
+  // buy one is hidden in exactly that case. The same rule as the server's, not hasPaidEntitlement.
+  const canBuyCredits = canBuyExtraCredits(subscription);
+
   const currentCredits = balance?.currentCredits ?? 0;
   const totalCredits = balance?.totalCredits ?? 0;
   // The server's own number, not `total - current`. They agree today, but only one of them stays
@@ -310,6 +317,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   return (
     <div className="flex min-w-0 flex-col text-ink">
+      {/* backend#466: a renewal charge failed — the plan runs until the grace ends. */}
+      <PaymentFailedBanner workspaceId={workspaceId} />
       {frozenCredits > 0 ? (
         // Renewed, and the previous subscription's kept credits are on their way into this one
         // (the payment moves them; the hourly billing sweep catches any it did not).
@@ -392,14 +401,17 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
               ? t("currentPlanRow.endsOn", { date: renewsDate })
               : t("currentPlanRow.renewsOn", { date: renewsDate })}
           </span>
-          <BillingButton
-            tone="outline"
-            className="w-auto px-3"
-            onClick={() => setIsTopUpOpen(true)}
-          >
-            <Wallet className="h-3.5 w-3.5" />
-            {t("buyCredits")}
-          </BillingButton>
+          {/* backend#467: extra credits are sold only on top of a live plan. */}
+          {canBuyCredits ? (
+            <BillingButton
+              tone="outline"
+              className="w-auto px-3"
+              onClick={() => setIsTopUpOpen(true)}
+            >
+              <Wallet className="h-3.5 w-3.5" />
+              {t("buyCredits")}
+            </BillingButton>
+          ) : null}
           <BillingButton
             tone="outline"
             className="w-auto px-3"
@@ -409,6 +421,15 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           </BillingButton>
         </div>
       </GridRow>
+
+      {/* backend#466: auto-renew = the saved card is charged each cycle (Stripe). */}
+      <AutoRenewRow workspaceId={workspaceId} plansHref={`/${workspaceSlug}/payment/plans`} />
+
+      {canBuyCredits ? null : (
+        <div className="border-b border-border px-4 py-3">
+          <ExtraCreditsNeedPlan plansHref={`/${workspaceSlug}/payment/plans`} />
+        </div>
+      )}
 
       {/* G11: the credit packs and add-ons this workspace may buy, priced by the server. */}
       <CatalogSection workspaceId={workspaceId} />
@@ -429,7 +450,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
         subscription={subscription ?? null}
         plan={activePlan}
       />
-      <TopUpModal open={isTopUpOpen} onOpenChange={setIsTopUpOpen} workspaceId={workspaceId} />
+      {canBuyCredits ? (
+        <TopUpModal open={isTopUpOpen} onOpenChange={setIsTopUpOpen} workspaceId={workspaceId} />
+      ) : null}
     </div>
   );
 }

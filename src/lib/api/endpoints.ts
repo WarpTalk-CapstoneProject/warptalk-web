@@ -814,6 +814,12 @@ export const API = {
      */
     reactivate: (workspaceId: string) =>
       `/subscriptions/workspace/${workspaceId}/reactivate`,
+    /** backend#466: switch automatic renewal off / on (Stripe cancel_at_period_end for a card plan). */
+    autoRenew: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/auto-renew`,
+    /** backend#466: next charge, card on file (brand + last4), and any failed renewal charge. */
+    recurring: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/recurring`,
+    /** backend#466: a Stripe billing-portal link to update the card. */
+    billingPortal: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/billing-portal`,
     /** Lift an AI-service suspension (overage cap, overdue invoice). Unrelated to cancellation. */
     resume: (workspaceId: string) => `/subscriptions/workspace/${workspaceId}/resume`,
     /**

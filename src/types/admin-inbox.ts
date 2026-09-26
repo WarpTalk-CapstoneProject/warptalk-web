@@ -23,6 +23,7 @@ export const INBOX_TYPES = [
   "announcement_draft",
   "broadcast_failed",
   "dead_letter",
+  "paid_credits_frozen",
 ] as const;
 export type InboxItemType = (typeof INBOX_TYPES)[number];
 

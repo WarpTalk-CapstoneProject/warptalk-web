@@ -28,7 +28,14 @@ import { Spinner } from "@phosphor-icons/react";
 import axios from "axios";
 
 import { billingService } from "@/services/billing.service";
-import { decidePaywall, paywallRedirectPath } from "@/lib/billing/workspace-paywall";
+import {
+  NO_SUBSCRIPTION_CODE,
+  type EntitlementStanding,
+  decidePaywall,
+  paywallRedirectPath,
+} from "@/lib/billing/workspace-paywall";
+import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
+import { WorkspaceService } from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import type { SubscriptionDto } from "@/types/billing";
 
@@ -65,6 +72,30 @@ export function WorkspacePaywall({
     staleTime: 60_000,
   });
 
+  // A member cannot read the subscription (owner/admin only), so its answer for them is always
+  // "unknown". The entitlement snapshot — what the server's own gate reads, readable by every
+  // member — answers instead, and is asked only when the subscription did not (decidePaywall).
+  const subscriptionCode = subscriptionQuery.error ? errorCode(subscriptionQuery.error) : null;
+  const needsStanding =
+    Boolean(workspaceId) && subscriptionQuery.isError && subscriptionCode !== NO_SUBSCRIPTION_CODE;
+  const standingQuery = useQuery({
+    queryKey: WORKSPACE_KEYS.entitlements(workspaceId ?? ""),
+    queryFn: () => WorkspaceService.getEntitlements(workspaceId!),
+    enabled: needsStanding,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const standingData = standingQuery.data;
+  const standing: EntitlementStanding | null | undefined = useMemo(
+    () =>
+      standingData
+        ? { isKnown: standingData.isKnown, hasActiveSubscription: standingData.hasActiveSubscription }
+        : standingQuery.isError
+          ? null
+          : undefined,
+    [standingData, standingQuery.isError],
+  );
+
   const decision = useMemo(
     () =>
       decidePaywall({
@@ -75,9 +106,10 @@ export function WorkspacePaywall({
         // like a definitive "no subscription" and would paywall every workspace for a frame.
         isLoading: !workspaceId || subscriptionQuery.isPending,
         subscription: subscriptionQuery.data,
-        error: subscriptionQuery.error ? { code: errorCode(subscriptionQuery.error) } : null,
+        error: subscriptionQuery.error ? { code: subscriptionCode } : null,
+        standing,
       }),
-    [pathname, workspaceSlug, workspaceId, subscriptionQuery.isPending, subscriptionQuery.data, subscriptionQuery.error],
+    [pathname, workspaceSlug, workspaceId, subscriptionQuery.isPending, subscriptionQuery.data, subscriptionQuery.error, subscriptionCode, standing],
   );
 
   // Everybody goes to the same place, whatever their role.

@@ -94,7 +94,8 @@
     "announcement_scheduled": "確認が必要なお知らせ",
     "announcement_draft": "放置された下書き",
     "broadcast_failed": "配信失敗",
-    "dead_letter": "デッドレターのイベント"
+    "dead_letter": "デッドレターのイベント",
+    "paid_credits_frozen": "支払い済みクレジットを保留中"
   },
   "priorities": {
     "urgent": "緊急",

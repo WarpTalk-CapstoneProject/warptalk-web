@@ -25,7 +25,11 @@ export function UsageWarningCard({
   warning: UsageWarning;
   /** Members cannot buy or upgrade; offering them buttons that 403 is worse than saying so. */
   canBuy: boolean;
-  onAddCredits: () => void;
+  /**
+   * Null when the workspace has no live plan: extra credits are sold only on top of one
+   * (backend#467), so "Add credits" is left out and "Upgrade" — which leads to the plans — stays.
+   */
+  onAddCredits: (() => void) | null;
   onUpgrade: () => void;
   onDismiss: () => void;
 }) {
@@ -86,9 +90,11 @@ export function UsageWarningCard({
 
           {canBuy ? (
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Button size="sm" onClick={onAddCredits}>
-                Add credits
-              </Button>
+              {onAddCredits ? (
+                <Button size="sm" onClick={onAddCredits}>
+                  Add credits
+                </Button>
+              ) : null}
               <Button size="sm" variant="outline" onClick={onUpgrade}>
                 Upgrade
               </Button>
