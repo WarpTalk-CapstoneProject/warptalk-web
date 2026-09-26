@@ -143,5 +143,29 @@
     "kept": "{credits} credits kept — renew to use them",
     "keptMember": "{credits} credits are kept for this workspace and come back when the plan is renewed.",
     "renewWith": "Renew with {planName}"
+  },
+  "autoRenew": {
+    "title": "Auto-renew",
+    "on": "On",
+    "off": "Off",
+    "nextCharge": "Your card will be charged {amount} on {date}.",
+    "renewsOn": "Renews automatically on {date}.",
+    "invoiceNext": "An invoice for the next period is issued on {date}.",
+    "endsOn": "Your plan stays active until {date} and will not renew.",
+    "card": "{brand} ending in {last4}",
+    "cardGeneric": "Card",
+    "cardExpires": "expires {month}/{year}",
+    "cardUnavailable": "Card details are unavailable right now.",
+    "manageCard": "Manage card",
+    "oneOffHint": "This plan was paid once, so there is no card on file to renew it with.",
+    "choosePlan": "Choose a plan with auto-renew",
+    "turnedOn": "Auto-renew is on. Your card will be charged at the end of each period.",
+    "turnedOff": "Auto-renew is off. Your plan stays active until {date}.",
+    "requiresCheckout": "Turning auto-renew on needs a card on file. Choose your plan again with auto-renew on.",
+    "toggleFailed": "We could not change auto-renew. Please try again.",
+    "portalFailed": "We could not open the card settings. Please try again.",
+    "failedTitle": "Payment failed — update your card",
+    "failedBadge": "Payment failed",
+    "failedDescription": "We could not charge your card for this plan's renewal. Your plan stays active until {date} while we retry. Update your card to keep it."
   }
 }

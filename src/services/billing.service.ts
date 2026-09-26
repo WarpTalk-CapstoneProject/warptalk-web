@@ -1,6 +1,7 @@
 import apiClient from "@/lib/api/client";
 import { API } from "@/lib/api/endpoints";
 import type {
+  RecurringBillingStatusDto,
   CreditBalanceDto,
   BillingReportDto,
   CreditHistoryFilters,
@@ -407,6 +408,39 @@ export const billingService = {
       `/subscriptions/workspace/${workspaceId}/reactivate`,
     );
     return data;
+  },
+
+  /**
+   * backend#466 — renewal as the billing page shows it: who renews, the next charge date and
+   * amount, the card on file (brand + last four only) and any failed renewal charge.
+   */
+  getRecurringBilling: async (workspaceId: string): Promise<RecurringBillingStatusDto> => {
+    const { data } = await apiClient.get<RecurringBillingStatusDto>(
+      API.adminSubscriptions.recurring(workspaceId),
+    );
+    return data;
+  },
+
+  /**
+   * backend#466 — switch automatic renewal off or back on. For a card plan the server moves Stripe's
+   * cancel_at_period_end first; the paid period always runs to its end. A plan that was paid once
+   * answers 409 BILLING_AUTO_RENEW_REQUIRES_CHECKOUT when switched on.
+   */
+  setAutoRenew: async (workspaceId: string, autoRenew: boolean): Promise<SubscriptionDto> => {
+    const { data } = await apiClient.put<SubscriptionDto>(
+      API.adminSubscriptions.autoRenew(workspaceId),
+      { autoRenew },
+    );
+    return data;
+  },
+
+  /** backend#466 — a Stripe billing-portal URL to update the card. `returnPath` is a path on this site. */
+  createBillingPortal: async (workspaceId: string, returnPath: string): Promise<string> => {
+    const { data } = await apiClient.post<{ url: string }>(
+      API.adminSubscriptions.billingPortal(workspaceId),
+      { returnPath },
+    );
+    return data.url;
   },
 
   cancelSubscription: async (
