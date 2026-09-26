@@ -94,7 +94,8 @@
     "announcement_scheduled": "Announcement to review",
     "announcement_draft": "Stale draft",
     "broadcast_failed": "Broadcast failed",
-    "dead_letter": "Dead-lettered event"
+    "dead_letter": "Dead-lettered event",
+    "paid_credits_frozen": "Paid credits kept frozen"
   },
   "priorities": {
     "urgent": "Urgent",

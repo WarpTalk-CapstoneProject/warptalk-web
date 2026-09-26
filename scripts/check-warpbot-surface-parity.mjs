@@ -37,8 +37,15 @@ for (const [surface, source] of [
 ]) {
   assert.match(
     source,
-    /<AssistantMarkdown>/,
+    /<AssistantMarkdown\b/,
     `${surface} must render WarpBot's markdown, not the source of it.`,
+  );
+  // A meeting WarpBot created is a card with its link and code on every surface, labelled as a
+  // Google Meet meeting or a WarpTalk room - not a bare link on one and a card on another.
+  assert.match(
+    source,
+    /<AssistantMarkdown[^>]*\bwithMeetingCards\b/,
+    `${surface} must draw meeting cards under an answer that created a meeting.`,
   );
   assert.match(
     source,
@@ -51,6 +58,15 @@ for (const [surface, source] of [
     `${surface} must show the work trail.`,
   );
 }
+
+// The marker a card is built from is machinery, and react-markdown PRINTS an HTML comment rather
+// than dropping it — the JSON showed up under the answer in full. It comes out of the prose in
+// one place, so every surface is covered at once.
+assert.match(
+  read("src/components/assistant/assistant-markdown.tsx"),
+  /stripMeetingMarkers\(children\)/,
+  "AssistantMarkdown must strip meeting markers before rendering the answer.",
+);
 
 // ── the same colour ──────────────────────────────────────────────────────────
 
@@ -225,7 +241,7 @@ assert.match(
 // Streams: the answer is rendered from the message the chunks append to, not only once persisted.
 assert.match(
   popupPaneCode,
-  /<AssistantMarkdown>\{message\.content\}<\/AssistantMarkdown>/,
+  /<AssistantMarkdown\b[^>]*>\s*\{message\.content\}\s*<\/AssistantMarkdown>/,
   "The popup must render the answer as it is written.",
 );
 assert.match(
@@ -409,6 +425,96 @@ assert.ok(
   "The isComposing guard must come before every Enter branch in handleKeyDown, the menu ones included.",
 );
 
+// ── one permission form, the same on all three surfaces ─────────────────────
+//
+// The form above the composer is shared code, so it cannot drift in its own right — but what each
+// surface HANDS it can, and did: the widget passed the plugin catalog and the other two passed
+// `plugins={[]}`, so the same ask carried Google Meet's mark in one place and a bare line of mono
+// in the other two. A screenshot of any one of them looks correct.
+//
+// The Meet popup is deliberately not here: it carves itself out of the Connect flow altogether
+// (see check-plugin-connection-action-contract.mjs).
+
+const aiChat = read("src/app/(app)/[workspaceSlug]/ai-chat/page.tsx");
+
+for (const [surface, source] of [
+  ["the widget", widget],
+  ["/ai-chat", aiChat],
+  ["the in-meeting chat", chatPanel],
+]) {
+  assert.match(
+    source,
+    /<AssistantPermissionPrompt\b/,
+    `${surface} must draw WarpBot's permission form.`,
+  );
+  const element = source.match(/<AssistantPermissionPrompt[\s\S]*?\/>/)?.[0] ?? "";
+  assert.doesNotMatch(
+    element,
+    /plugins=\{\[\]\}/,
+    `${surface} must hand the permission form the real plugin catalog, not an empty list: the form draws the plugin's own mark from it, and an empty list is the same ask looking like a different product.`,
+  );
+  assert.match(
+    element,
+    /plugins=\{\w+\}/,
+    `${surface} must pass a plugin catalog to the permission form.`,
+  );
+  assert.match(
+    source,
+    /useAssistantPlugins\(/,
+    `${surface} must read the plugin catalog through useAssistantPlugins, scoped to the workspace, rather than assembling one of its own.`,
+  );
+  assert.match(
+    element,
+    /turnEndedAt=/,
+    `${surface} must tell the permission form when the turn ended — the form's "Running…" has no other way to end.`,
+  );
+}
+
+// The buttons say the short word; the sentence is the accessible name, not only a tooltip. Both are
+// in the shared component, and both have been "simplified" away before: the labels were the
+// worker's full sentences, which wrapped and pushed the keyboard hint off the row.
+const promptForm = read("src/components/assistant/permission-prompt.tsx");
+for (const [role, label, meaning] of [
+  ["allow-once", "Yes", "Run this action once"],
+  ["always-allow", "Always allow", "Run it now and stop asking for this tool"],
+  ["decline", "No", "Don't run it — tell WarpBot what to do instead"],
+]) {
+  assert.ok(
+    promptForm.includes(`label: "${label}"`),
+    `The permission form must offer the short label "${label}" for the ${role} answer.`,
+  );
+  assert.ok(
+    promptForm.includes(meaning),
+    `The permission form must keep the full meaning of the ${role} answer ("${meaning}") for the tooltip and the accessible name.`,
+  );
+}
+for (const attribute of [/title=\{answer\.meaning\}/, /aria-label=\{answer\.meaning\}/]) {
+  assert.match(
+    promptForm,
+    attribute,
+    "A button reading 'No' beside a write must carry the long form in both title and aria-label: the tooltip is for the mouse, the accessible name for everyone else.",
+  );
+}
+// Keyboard-reachable, at the app's own ring. The form gates a write; it cannot be a control only a
+// mouse can find.
+assert.match(
+  promptForm,
+  /focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/,
+  "The permission form's answers must show the app's focus ring.",
+);
+// Narrow composer: the hint hides rather than shoving the answers onto a second row. A container
+// query, because the widget is 460px wide on a 4K screen and the meeting panel is narrower still.
+assert.match(
+  promptForm,
+  /@container/,
+  "The permission form must measure its own composer, not the window: a viewport breakpoint says nothing about a 460px widget.",
+);
+assert.match(
+  promptForm,
+  /@max-\[360px\]:hidden/,
+  "In a narrow composer the keyboard hint must hide instead of pushing the answers around.",
+);
+
 console.log(
-  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, trail read from a ref, IME Enter; Meet popup: private, two tabs, composer, queue)",
+  "WarpBot surface parity OK (markdown, chips, trail, colour, lifecycle steps, turn opening, streaming, trail read from a ref, IME Enter; permission form: catalog, turn end, short labels, focus ring, narrow composer; Meet popup: private, two tabs, composer, queue)",
 );

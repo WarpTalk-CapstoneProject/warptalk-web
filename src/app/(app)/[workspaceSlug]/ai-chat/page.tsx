@@ -7,6 +7,7 @@ import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
   useAssistantConversation,
   useAssistantConversations,
+  useAssistantPlugins,
   useCreateAssistantConversation,
   usePluginConnectUrl,
   useSendAssistantMessage,
@@ -19,16 +20,13 @@ import {
   parseAssistantQuestions,
   type AssistantQuestion,
 } from "@/components/layout/assistant-question-card";
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown";
+import { userMessageDisplayText } from "@/lib/assistant/confirmation-answer";
 import {
-  PluginConnectionActionCard,
-  parsePluginConnectionAction,
-  type PluginConnectionAction,
-} from "@/components/layout/plugin-connection-action-card";
-import {
-  PluginOperatorSetupCard,
-  parsePluginOperatorSetupAction,
-  type PluginOperatorSetupAction,
-} from "@/components/layout/plugin-operator-setup-card";
+  AssistantPermissionPrompt,
+  parsePermissionPrompt,
+  type PermissionPrompt,
+} from "@/components/assistant/permission-prompt";
 import { openProviderConsent, pluginApiKeyPageHref } from "@/lib/assistant/open-provider-consent";
 import { isDesktopApp } from "@/lib/desktop/bridge";
 import { createHubConnection } from "@/lib/realtime/signalr";
@@ -44,13 +42,20 @@ export default function AiChatPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [pendingQuestions, setPendingQuestions] = useState<AssistantQuestion[] | null>(null);
-  // One slot per card, as in the WarpBot widget (WT-688). This page used to keep only the
-  // questions, so a Connect prompt or an operator-setup notice arrived and vanished without trace.
-  const [pendingPluginConnection, setPendingPluginConnection] =
-    useState<PluginConnectionAction | null>(null);
-  const [pendingPluginSetup, setPendingPluginSetup] =
-    useState<PluginOperatorSetupAction | null>(null);
+  // What WarpBot is waiting on before it may act, as in the widget: one slot, one form, above the
+  // composer. This page used to keep only the questions, so a Connect prompt arrived and vanished
+  // without trace (WT-688).
+  const [pendingPermission, setPendingPermission] = useState<PermissionPrompt | null>(null);
+  // That prompt has been answered, and the last turn's end — null while a turn is open. The form
+  // draws the running write from the pair; it used to disappear on the press, which said nothing
+  // about a write that takes seconds.
+  const [permissionAnswered, setPermissionAnswered] = useState(false);
+  const [turnEndedAt, setTurnEndedAt] = useState<number | null>(null);
   const connectPlugin = usePluginConnectUrl();
+  // The same catalog the widget reads, scoped to the workspace so its plugin policy applies. This
+  // page passed an empty list, so one form carried the plugin's logo in the widget and a bare line
+  // of mono here.
+  const { data: assistantPlugins = [] } = useAssistantPlugins(workspaceId ?? undefined);
 
   // The same rule the widget and the meeting panel follow: a card lasts until the NEXT turn starts.
   // Cleared on send and on changing conversation, because a Connect card left over from an earlier
@@ -58,8 +63,8 @@ export default function AiChatPage() {
   // turn completes or fails: the card is raised mid-turn and that answer is the one explaining it,
   // so clearing there erases it before anyone can press it.
   const clearPluginCards = useCallback(() => {
-    setPendingPluginConnection(null);
-    setPendingPluginSetup(null);
+    setPendingPermission(null);
+    setPermissionAnswered(false);
   }, []);
 
   const conversations = conversationsQuery.data ?? [];
@@ -88,23 +93,21 @@ export default function AiChatPage() {
       (payload: { conversationId: string; questionsJson: string }) => {
         if (payload.conversationId !== selectedId) return;
         const questions = parseAssistantQuestions(payload.questionsJson);
-        const pluginConnection = parsePluginConnectionAction(payload.questionsJson);
-        const pluginSetup = parsePluginOperatorSetupAction(payload.questionsJson);
+        const permission = parsePermissionPrompt(payload.questionsJson);
         if (questions.length) setPendingQuestions(questions);
-        // Setup wins, exactly as in the widget: "press Connect" and "no button will help" cannot
-        // both be true of one failure, and setup is the one saying the ladder is exhausted.
-        if (pluginSetup) {
-          setPendingPluginSetup(pluginSetup);
-          setPendingPluginConnection(null);
-        } else if (pluginConnection) {
-          setPendingPluginConnection(pluginConnection);
-          setPendingPluginSetup(null);
+        // A new ask replaces whatever the slot held, answered or not.
+        if (permission) {
+          setPendingPermission(permission);
+          setPermissionAnswered(false);
         }
       },
     );
     const refetchBoth = (payload?: { conversationId?: string }) => {
       if (payload?.conversationId && payload.conversationId !== selectedId) return;
       // The plugin cards stay: this answer is the one explaining them. See clearPluginCards.
+      // The permission form is told the turn is over — a stamp, not a clear, because the form
+      // owns how long its receipt lives.
+      setTurnEndedAt(Date.now());
       void refetchConversationRef.current();
       void refetchConversationsRef.current();
     };
@@ -167,9 +170,18 @@ export default function AiChatPage() {
     }
   }
 
-  async function sendContent(content: string) {
+  // `keepPermissionPrompt` is set only by the permission form's own answer: every other send
+  // starts a turn the prompt on screen has nothing to do with, and that is what ends it. An answer
+  // is the one send that must not, because the form is what says the write is running.
+  async function sendContent(content: string, options?: { keepPermissionPrompt?: boolean }) {
     content = content.trim();
     if (!content || !workspaceId || sendMessage.isPending) return;
+
+    // A turn is opening, so the last one's end is no longer the state of anything. Before the
+    // awaits below: these two are what the permission form reads to tell an allowed write that is
+    // still running from one that is over.
+    setTurnEndedAt(null);
+    if (options?.keepPermissionPrompt) setPermissionAnswered(true);
 
     let conversationId = selectedId;
     if (!conversationId) {
@@ -180,7 +192,7 @@ export default function AiChatPage() {
 
     setDraft("");
     setPendingQuestions(null);
-    clearPluginCards();
+    if (!options?.keepPermissionPrompt) clearPluginCards();
     try {
       await sendMessage.mutateAsync({ conversationId, content });
       await conversationQuery.refetch();
@@ -265,7 +277,15 @@ export default function AiChatPage() {
                       : "bg-muted text-foreground",
                   )}
                 >
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  {message.role === "assistant" ? (
+                    // Markdown, like every other WarpBot surface: this printed the source of the
+                    // answer, so "**bold**" and a meeting marker reached the reader as characters.
+                    <AssistantMarkdown withMeetingCards>{message.content}</AssistantMarkdown>
+                  ) : (
+                    <p className="whitespace-pre-wrap">
+                      {userMessageDisplayText(message.content)}
+                    </p>
+                  )}
                   {message.status === "failed" ? (
                     <p className="mt-1 text-xs text-destructive">{t("messageFailed")}</p>
                   ) : null}
@@ -281,25 +301,24 @@ export default function AiChatPage() {
                 />
               </div>
             ) : null}
-            {pendingPluginConnection ? (
-              <div className="max-w-[85%]">
-                <PluginConnectionActionCard
-                  action={pendingPluginConnection}
-                  disabled={connectPlugin.isPending}
-                  onDismiss={() => setPendingPluginConnection(null)}
-                  onConnect={handlePluginConnectionAction}
-                />
-              </div>
-            ) : null}
-            {pendingPluginSetup ? (
-              <div className="max-w-[85%]">
-                <PluginOperatorSetupCard
-                  action={pendingPluginSetup}
-                  onDismiss={() => setPendingPluginSetup(null)}
-                />
-              </div>
-            ) : null}
           </div>
+
+          {/* Above the composer, not in the thread: it is a thing to act on, and in the thread it
+              scrolled away behind the answer that followed it. */}
+          {pendingPermission ? (
+            <AssistantPermissionPrompt
+              prompt={pendingPermission}
+              plugins={assistantPlugins}
+              busy={connectPlugin.isPending}
+              answered={permissionAnswered}
+              turnEndedAt={turnEndedAt}
+              // The slot is NOT cleared on an answer: the form stays, showing the write running.
+              onAnswer={(answer) => void sendContent(answer, { keepPermissionPrompt: true })}
+              onConnect={(pluginKey) => void handlePluginConnectionAction(pluginKey)}
+              onDismiss={clearPluginCards}
+              className="rounded-lg border border-border"
+            />
+          ) : null}
 
           <form className="flex gap-2 border-t pt-4" onSubmit={handleSubmit}>
             <Input
