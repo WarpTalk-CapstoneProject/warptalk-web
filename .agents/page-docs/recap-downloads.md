@@ -72,6 +72,16 @@ How a reader takes a copy of a meeting away, on `/{workspaceSlug}/rooms/{id}`.
   on the workspace's Artifacts library page.
 - A meeting with several recordings still cannot be seeked into — that needs each file's duration,
   which the backend does not store yet (WT-655).
+- **WT-683's "owed outputs" placeholder rows are gone with the tab, deliberately.** `pendingOutputs`
+  and `artifactDownloadFormat` were deleted rather than moved: the first said which outputs an ended
+  meeting is still owed ("Processing" inside the 15-minute window, "Not produced" after it), the
+  second said which format a row's click would hand over. Each output now answers for itself where
+  the reader already is — "Still writing this up" above Recap, the summary rail's generating state,
+  the player's "Recording is being processed" — so nothing was lost by removing them. They did not
+  move to the workspace Artifacts library either: that page lists what WarpTalk *wrote*, as cards a
+  person reads, searches and cites, and a card for a document that does not exist (one per meeting
+  that never produced a summary, for the life of the workspace) is not a document. If a surface ever
+  needs the rule again, it is in this file's history and in WT-683.
 
 ## Testing Checklist
 

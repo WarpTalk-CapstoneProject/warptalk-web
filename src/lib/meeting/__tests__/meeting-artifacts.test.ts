@@ -2,15 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  artifactDownloadFormat,
   artifactLabel,
   artifactStatusLabel,
   canDownloadArtifact,
   countPlayableRecordings,
   findPlayableRecording,
   unplayableRecordingState,
-  ARTIFACT_OUTPUT_WINDOW_MS,
-  pendingOutputs,
   recordingFailureText,
 } from "../meeting-artifacts.ts";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
@@ -30,41 +27,6 @@ const artifact = (
     backendSource: "translation_room_summaries",
     ...over,
   }) as RoomHistoryArtifact;
-
-const ENDED = "2026-09-11T14:30:00Z";
-const endedMs = Date.parse(ENDED);
-
-test("WT-683: straight after the meeting ends, both outputs read as processing, not as nothing", () => {
-  assert.deepEqual(pendingOutputs([], ENDED, endedMs + 20_000), [
-    { type: "transcript_export", state: "processing" },
-    { type: "summary_export", state: "processing" },
-  ]);
-});
-
-test("WT-683: an output that has arrived gets its own row and is not listed as pending", () => {
-  const transcript = artifact({ id: "t", type: "transcript_export" });
-  assert.deepEqual(pendingOutputs([transcript], ENDED, endedMs + 60_000), [
-    { type: "summary_export", state: "processing" },
-  ]);
-  assert.deepEqual(
-    pendingOutputs([transcript, artifact({ id: "s" })], ENDED, endedMs + 60_000),
-    [],
-  );
-});
-
-test("WT-683: past the polling window a missing output is not produced, not still processing", () => {
-  assert.deepEqual(pendingOutputs([], ENDED, endedMs + ARTIFACT_OUTPUT_WINDOW_MS + 1), [
-    { type: "transcript_export", state: "not_produced" },
-    { type: "summary_export", state: "not_produced" },
-  ]);
-});
-
-test("WT-683: without an end time nothing is promised", () => {
-  assert.deepEqual(
-    pendingOutputs([], null).map((output) => output.state),
-    ["not_produced", "not_produced"],
-  );
-});
 
 test("every artifact type has a human label", () => {
   assert.equal(artifactLabel("summary_export"), "AI summary");
@@ -147,26 +109,6 @@ test("only a ready artifact is downloadable", () => {
   }
 });
 
-// The row used to print `artifact.format`, which is the STORED format: MARKDOWN for the
-// transcript, JSON for the summary. Both are correct for the code that reads them and both were
-// wrong on screen, because the server serves those two as plain text — so a row labelled JSON
-// handed over a .txt when clicked. This is the only thing that decides what the row claims.
-test("the two text exports are reported as TXT, whatever they are stored as", () => {
-  assert.equal(
-    artifactDownloadFormat(artifact({ type: "summary_export", format: "JSON" })),
-    "TXT",
-  );
-  assert.equal(
-    artifactDownloadFormat(artifact({ type: "transcript_export", format: "MARKDOWN" })),
-    "TXT",
-  );
-});
-
-test("anything that is a real file keeps its own format", () => {
-  // A recording is not rendered to text on the way out — it is the file it says it is.
-  assert.equal(artifactDownloadFormat(artifact({ type: "recording", format: "MP4" })), "MP4");
-  assert.equal(artifactDownloadFormat(artifact({ type: "recording", format: undefined })), "—");
-});
 
 // WT-492 — the recording was reachable only as a file to download, so watching the meeting back
 // meant saving a video and leaving the page with the transcript on it. The artifact row was never
