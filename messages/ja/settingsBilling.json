@@ -143,5 +143,29 @@
     "kept": "{credits} クレジットを保持中 — 更新すると使えます",
     "keptMember": "このワークスペースには {credits} クレジットが保持されており、プランが更新されると戻ります。",
     "renewWith": "{planName} で更新"
+  },
+  "autoRenew": {
+    "title": "自動更新",
+    "on": "オン",
+    "off": "オフ",
+    "nextCharge": "{date}にカードへ{amount}が請求されます。",
+    "renewsOn": "{date}に自動更新されます。",
+    "invoiceNext": "次の期間の請求書は{date}に発行されます。",
+    "endsOn": "プランは{date}まで有効で、更新されません。",
+    "card": "{brand}(末尾 {last4})",
+    "cardGeneric": "カード",
+    "cardExpires": "有効期限 {month}/{year}",
+    "cardUnavailable": "現在カード情報を表示できません。",
+    "manageCard": "カードを管理",
+    "oneOffHint": "このプランは一回払いのため、更新に使う登録済みカードがありません。",
+    "choosePlan": "自動更新ありでプランを選択",
+    "turnedOn": "自動更新をオンにしました。各期間の終わりにカードへ請求されます。",
+    "turnedOff": "自動更新をオフにしました。プランは{date}まで有効です。",
+    "requiresCheckout": "自動更新をオンにするには登録済みのカードが必要です。自動更新をオンにしてプランを選び直してください。",
+    "toggleFailed": "自動更新を変更できませんでした。もう一度お試しください。",
+    "portalFailed": "カード設定を開けませんでした。もう一度お試しください。",
+    "failedTitle": "支払いに失敗しました — カードを更新してください",
+    "failedBadge": "支払い失敗",
+    "failedDescription": "プラン更新のためのカード請求ができませんでした。再試行の間、プランは{date}まで有効です。プランを維持するにはカードを更新してください。"
   }
 }

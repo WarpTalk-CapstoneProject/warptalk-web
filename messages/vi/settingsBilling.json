@@ -143,5 +143,29 @@
     "kept": "Đã giữ lại {credits} credit — gia hạn để dùng tiếp",
     "keptMember": "{credits} credit được giữ lại cho workspace này và sẽ được trả lại khi gói được gia hạn.",
     "renewWith": "Gia hạn với gói {planName}"
+  },
+  "autoRenew": {
+    "title": "Tự động gia hạn",
+    "on": "Bật",
+    "off": "Tắt",
+    "nextCharge": "Thẻ của bạn sẽ được trừ {amount} vào ngày {date}.",
+    "renewsOn": "Tự động gia hạn vào ngày {date}.",
+    "invoiceNext": "Hóa đơn cho kỳ tiếp theo sẽ được phát hành vào ngày {date}.",
+    "endsOn": "Gói của bạn vẫn hoạt động đến ngày {date} và sẽ không gia hạn.",
+    "card": "{brand} kết thúc bằng {last4}",
+    "cardGeneric": "Thẻ",
+    "cardExpires": "hết hạn {month}/{year}",
+    "cardUnavailable": "Hiện chưa thể hiển thị thông tin thẻ.",
+    "manageCard": "Quản lý thẻ",
+    "oneOffHint": "Gói này được thanh toán một lần nên chưa có thẻ nào được lưu để gia hạn.",
+    "choosePlan": "Chọn gói có tự động gia hạn",
+    "turnedOn": "Đã bật tự động gia hạn. Thẻ của bạn sẽ được trừ tiền vào cuối mỗi kỳ.",
+    "turnedOff": "Đã tắt tự động gia hạn. Gói của bạn vẫn hoạt động đến ngày {date}.",
+    "requiresCheckout": "Cần có thẻ đã lưu để bật tự động gia hạn. Hãy chọn lại gói với tự động gia hạn được bật.",
+    "toggleFailed": "Không thể thay đổi tự động gia hạn. Vui lòng thử lại.",
+    "portalFailed": "Không thể mở trang cài đặt thẻ. Vui lòng thử lại.",
+    "failedTitle": "Thanh toán thất bại — hãy cập nhật thẻ",
+    "failedBadge": "Thanh toán thất bại",
+    "failedDescription": "Chúng tôi không thể trừ tiền thẻ của bạn để gia hạn gói. Gói của bạn vẫn hoạt động đến ngày {date} trong khi chúng tôi thử lại. Hãy cập nhật thẻ để giữ gói."
   }
 }

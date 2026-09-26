@@ -67,6 +67,11 @@ export interface CreateCheckoutSessionRequest {
    * session so the completion handler grants exactly what was paid for.
    */
   credits?: number;
+  /**
+   * backend#466, plan checkouts: renew automatically. On (the server's default) sells a Stripe
+   * Subscription — the saved card is charged every cycle. Off sells one period, paid once.
+   */
+  autoRenew?: boolean;
   /** G11, paymentType CreditPack / AddOn: the catalog item. Its price is the catalog's. */
   packageId?: string;
   /** G11, add-ons: units bought. */
@@ -369,4 +374,38 @@ export interface WorkspaceUsageByMemberDto {
   to: string | null;
   totalCreditsConsumed: number;
   members: MemberCreditUsageDto[];
+}
+
+/** backend#466: the card on file — brand and last four digits only. */
+export interface CardOnFileDto {
+  brand: string | null;
+  last4: string;
+  expMonth: number | null;
+  expYear: number | null;
+}
+
+/**
+ * backend#466: renewal as the billing page shows it. `renewalMode` says who renews the plan:
+ * `stripe` (the saved card is charged), `invoice` (an invoice is issued), `none` (nothing — turning
+ * auto-renew on needs a new checkout, `autoRenewRequiresCheckout`).
+ */
+export interface RecurringBillingStatusDto {
+  workspaceId: string;
+  subscriptionId: string;
+  renewalMode: "stripe" | "invoice" | "none" | string;
+  autoRenew: boolean;
+  canToggleAutoRenew: boolean;
+  autoRenewRequiresCheckout: boolean;
+  currentPeriodEnd: string;
+  nextChargeAt: string | null;
+  nextChargeAmount: number | null;
+  nextChargeCurrency: string | null;
+  card: CardOnFileDto | null;
+  canManagePaymentMethod: boolean;
+  paymentFailed: boolean;
+  paymentFailedAt: string | null;
+  paymentGraceEndsAt: string | null;
+  paymentFailureReason: string | null;
+  stripeStatus: string | null;
+  stripeUnavailable: boolean;
 }

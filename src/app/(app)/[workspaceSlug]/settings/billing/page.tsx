@@ -77,6 +77,7 @@ import {
 import { ManageSubscriptionModal } from "./components/manage-subscription-modal";
 import { PlanGrid } from "./components/plan-grid";
 import { TopUpModal } from "./components/top-up-modal";
+import { AutoRenewRow, PaymentFailedBanner } from "./components/auto-renew-section";
 import { CatalogSection } from "./components/catalog-section";
 
 /**
@@ -316,6 +317,8 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
 
   return (
     <div className="flex min-w-0 flex-col text-ink">
+      {/* backend#466: a renewal charge failed — the plan runs until the grace ends. */}
+      <PaymentFailedBanner workspaceId={workspaceId} />
       {frozenCredits > 0 ? (
         // Renewed, and the previous subscription's kept credits are on their way into this one
         // (the payment moves them; the hourly billing sweep catches any it did not).
@@ -418,6 +421,9 @@ function WorkspaceBillingContent({ slug }: { slug: string }) {
           </BillingButton>
         </div>
       </GridRow>
+
+      {/* backend#466: auto-renew = the saved card is charged each cycle (Stripe). */}
+      <AutoRenewRow workspaceId={workspaceId} plansHref={`/${workspaceSlug}/payment/plans`} />
 
       {canBuyCredits ? null : (
         <div className="border-b border-border px-4 py-3">
