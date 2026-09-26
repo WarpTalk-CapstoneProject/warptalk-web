@@ -73,10 +73,23 @@ export function canDownloadArtifact(artifact: RoomHistoryArtifact): boolean {
 export function findPlayableRecording(
   artifacts: RoomHistoryArtifact[] | undefined | null,
 ): RoomHistoryArtifact | null {
-  return (
-    artifacts?.find(
-      (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
-    ) ?? null
+  return playableRecordings(artifacts)[0] ?? null;
+}
+
+/**
+ * Every recording of this meeting that has a file behind it, in the order the record lists them.
+ *
+ * One answer, three callers: the player picks the first, the seek guard counts them, and the
+ * "more than one recording" notice offers all of them for download — which is the only route to
+ * those files now that the Artifacts tab is gone. Three copies of "a recording that can be
+ * fetched" is three places for the definition to drift, and a drift here reads as a recording
+ * that exists in one part of the page and not in another.
+ */
+export function playableRecordings(
+  artifacts: RoomHistoryArtifact[] | undefined | null,
+): RoomHistoryArtifact[] {
+  return (artifacts ?? []).filter(
+    (artifact) => artifact.type === "recording" && canDownloadArtifact(artifact),
   );
 }
 
@@ -122,10 +135,7 @@ function isRecording(artifact: RoomHistoryArtifact): boolean {
 export function countPlayableRecordings(
   artifacts: RoomHistoryArtifact[] | undefined | null,
 ): number {
-  return (
-    artifacts?.filter((artifact) => isRecording(artifact) && canDownloadArtifact(artifact))
-      .length ?? 0
-  );
+  return playableRecordings(artifacts).length;
 }
 
 export type UnplayableRecordingState = "processing" | "failed";
@@ -160,7 +170,8 @@ const FAILED_RECORDING_STATUSES: ReadonlySet<RoomHistoryArtifact["status"]> = ne
  *   resolves itself. `expired` and `deleted` are NOT failures — retention ran out, or someone
  *   removed the file on purpose; the recording worked. Calling them failed would send a host
  *   looking for a fault that is really the policy working, so they return null here and the
- *   Artifacts tab's own status label is where they are named.
+ *   workspace's Artifacts library, which lists every retained file with its status, is where they
+ *   are named.
  *
  * Processing outranks failed: with a restart in the meeting, one run can have failed while the
  * next is still being written, and "wait a minute" is the answer that is about to change.
@@ -192,6 +203,12 @@ export type PendingOutput = {
 
 /**
  * WT-683 — the outputs every ended meeting is owed that have no row yet.
+ *
+ * NOTHING RENDERS THIS AS OF 2026-09-18, and that is not a regression: the tab it was written for is
+ * gone, and each of the three outputs now says its own state where the reader is already looking —
+ * "Still writing this up" above the Recap tab, the summary rail's generating state, the player's
+ * "Recording is being processed". The rule below is the one place that knows WHICH outputs a meeting
+ * is owed, so it stays for the surface that next needs to list them.
  *
  * The finalizer writes the transcript and the AI summary a minute or so after the meeting ends, and
  * until then the Artifacts tab read "(0) · Nothing has been generated or retained for this meeting

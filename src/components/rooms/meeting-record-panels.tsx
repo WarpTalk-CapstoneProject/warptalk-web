@@ -3,9 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Archive,
   ArrowsClockwise,
-  CheckCircle,
   DownloadSimple,
   Play,
   SpinnerGap,
@@ -20,25 +18,25 @@ import {
 } from "@/lib/meeting/artifact-denial";
 import { releaseArtifactIfPermitted } from "@/lib/meeting/artifact-consent";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
-import {
-  artifactDownloadFormat,
-  artifactLabel,
-  artifactStatusLabel,
-  recordingFailureText,
-  canDownloadArtifact,
-  pendingOutputs,
-} from "@/lib/meeting/meeting-artifacts";
+import { canDownloadArtifact } from "@/lib/meeting/meeting-artifacts";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
 
 /**
- * The AI summary and the retained files for one meeting.
+ * The recording of one meeting, and the download flow behind every file on its record.
  *
  * These used to live on a separate Transcripts page, one level removed from the meeting they
  * describe: to read what a meeting decided you left the meeting's own page, found it again in
  * a workspace-wide queue, and picked a tab. A meeting's transcript, its summary and its files
- * are three views of one thing, so they now sit together on that meeting's page and this
- * component is what moved.
+ * are views of one thing, so they now sit together on that meeting's page.
+ *
+ * THE LIST OF RETAINED FILES IS NOT HERE ANY MORE
+ *   `ArtifactsPanel` drew every artifact of a meeting as a row with a download arrow, on a tab of
+ *   its own. It was a THIRD place to reach things the Recap tab already shows — the recording is a
+ *   player, the transcript and the summary are documents you are reading — and reaching them by
+ *   name from a list of file types is the long way round from every one of them. Each download now
+ *   sits on the thing it is a copy of, and the workspace's Artifacts library keeps the rows for the
+ *   files that are nobody's reading surface (debug logs, audio samples).
  */
 
 /** A tab in the meeting record. Shared so the three tabs cannot drift apart visually. */
@@ -97,10 +95,14 @@ export function useArtifactDownload(onConsentGranted?: () => void) {
       const released = artifact.consentRequired
         ? await releaseArtifactIfPermitted(artifact.id)
         : false;
+      // `attachment`, which is what makes the presigned link save the file under the name the
+      // server gives it rather than opening it in place. The player's own fetch deliberately does
+      // NOT ask for this — see artifactDownload.
       const { data } = await translationRoomService.artifactDownload(
         artifact.id,
+        "attachment",
       );
-      openArtifactDownload(data);
+      openArtifactDownload(data, { asAttachment: true });
       if (released) onConsentGranted?.();
     } catch (error) {
       // A host-only artifact is withheld, not broken — the same distinction the history preview
@@ -199,6 +201,9 @@ export function MeetingRecordingPlayer({
   onPlayingChange,
   onDurationSeconds,
   unavailableReason,
+  recordings,
+  onDownloadRecording,
+  busyArtifactId,
   variant = "section",
 }: {
   artifact: RoomHistoryArtifact | null;
@@ -272,6 +277,18 @@ export function MeetingRecordingPlayer({
    * notice, nothing to dismiss.
    */
   unavailableReason?: "processing" | "multiple" | null;
+  /**
+   * Every recording of this meeting that HAS a file, for the `multiple` case — where no single
+   * frame can honestly claim to be the recording, and the only honest offer is all of them.
+   *
+   * It used to say "Download them from the Artifacts tab", which was a signpost to a tab that no
+   * longer exists. A list of two buttons is shorter than the sentence pointing at it was.
+   */
+  recordings?: readonly RoomHistoryArtifact[];
+  /** The download flow, consent stop included — `useArtifactDownload().downloadArtifact`. */
+  onDownloadRecording?: (artifact: RoomHistoryArtifact) => void;
+  /** Which download is in flight, from the same hook. */
+  busyArtifactId?: string | null;
   /**
    * `pip` is the rail's corner of Option C: the recording stops being a column of its own and
    * becomes a 16:9 frame the width of the rail. Below 1280px even that is too much horizontal
@@ -510,9 +527,32 @@ export function MeetingRecordingPlayer({
               </p>
               <p className="text-[12px] leading-5 text-ink-muted">
                 This meeting has more than one recording, and this page cannot yet
-                tell which one a given moment belongs to. Download them from the
-                Artifacts tab to watch.
+                tell which one a given moment belongs to.
               </p>
+              {/* The files themselves, since the page cannot pick between them. Numbered in the
+                  order they were recorded, which is the order the list arrives in — a stop and a
+                  restart make "Recording 1" and "Recording 2", and nothing else here can name
+                  them. The file NAME comes from the server, so nothing is set on the anchor. */}
+              {recordings?.length && onDownloadRecording ? (
+                <div className="flex flex-wrap items-center justify-center gap-1.5">
+                  {recordings.map((recording, index) => (
+                    <button
+                      key={recording.id}
+                      type="button"
+                      onClick={() => onDownloadRecording(recording)}
+                      disabled={busyArtifactId === recording.id}
+                      className="flex items-center gap-1.5 rounded-full border border-border bg-surface-1 px-3 py-1.5 text-[12px] font-medium text-ink transition-colors hover:bg-surface-2 disabled:opacity-60"
+                    >
+                      {busyArtifactId === recording.id ? (
+                        <SpinnerGap size={13} className="animate-spin" />
+                      ) : (
+                        <DownloadSimple size={13} />
+                      )}
+                      Recording {index + 1}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </>
           )}
         </div>
@@ -562,7 +602,7 @@ export function MeetingRecordingPlayer({
               </p>
               <p className="text-[12px] leading-5 text-ink-muted">
                 The file was reached but the browser could not play it. Downloading
-                it from the Artifacts tab may still work.
+                it may still work.
               </p>
             </>
           )}
@@ -783,125 +823,14 @@ export function SummaryStalenessNotice({
  * checkable at all.
  */
 
-export function ArtifactsPanel({
-  artifacts,
-  endedAt,
-  busyArtifactId,
-  onDownload,
-}: {
-  artifacts: RoomHistoryArtifact[];
-  /** When the meeting ended — what decides whether a missing output is still on its way. WT-683. */
-  endedAt?: string | null;
-  busyArtifactId: string | null;
-  onDownload: (artifact: RoomHistoryArtifact) => void;
-}) {
-  // The page refetches every few seconds while anything here is pending (shouldPollRoomHistory),
-  // and every refetch re-renders this, so "processing" turns into a real row or into "not
-  // produced" without a clock of its own.
-  const pending = pendingOutputs(artifacts, endedAt);
-  const stillProcessing =
-    pending.some((output) => output.state === "processing") ||
-    artifacts.some((artifact) => artifact.status === "processing");
-
-  if (!artifacts.length && !stillProcessing) {
-    return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center border border-border bg-surface-2 p-8 text-center">
-        <Archive size={28} className="text-ink-muted" />
-        <h3 className="mt-4 text-[15px] font-semibold">No retained artifacts</h3>
-        <p className="mt-2 max-w-[360px] text-[11px] leading-5 text-ink-muted">
-          Nothing has been generated or retained for this meeting yet.
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-[320px] border border-border bg-surface-2">
-      <div className="flex h-10 items-center justify-between border-b border-border px-4">
-        <span className="text-[10px] font-medium text-ink-subtle">
-          RETAINED ARTIFACTS
-        </span>
-        <span className="text-[10px] text-ink-subtle">{artifacts.length}</span>
-      </div>
-      <div className="divide-y divide-border">
-        {artifacts.map((artifact) => (
-          <button
-            key={artifact.id}
-            type="button"
-            disabled={busyArtifactId === artifact.id}
-            onClick={() => onDownload(artifact)}
-            className="group flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2/55 disabled:opacity-50"
-          >
-            <span className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-surface-1">
-              <ArtifactIcon artifact={artifact} />
-            </span>
-            <span className="min-w-0 flex-1">
-              {/* "Transcript", not "transcript export (TXT)". The server's title is generated
-                  from the type and repeats on the second line what the first line already
-                  said — and it is lowercase, because it is derived from an enum name. */}
-              <span className="block truncate text-[12px] font-medium text-ink">
-                {artifactLabel(artifact.type)}
-              </span>
-              <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {artifactDownloadFormat(artifact)} · {artifactStatusLabel(artifact)}
-              </span>
-              {/* WT-824: a failed recording says why, not only that it failed. */}
-              {recordingFailureText(artifact) ? (
-                <span className="mt-0.5 block text-[10px] leading-snug text-ink-muted">
-                  {recordingFailureText(artifact)}
-                </span>
-              ) : null}
-            </span>
-            {busyArtifactId === artifact.id ? (
-              <SpinnerGap size={14} className="animate-spin text-ink-muted" />
-            ) : (
-              <DownloadSimple
-                size={14}
-                className="text-ink-subtle transition-colors group-hover:text-ink"
-              />
-            )}
-          </button>
-        ))}
-        {pending.map((output) => (
-          <div
-            key={output.type}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left"
-            aria-live="polite"
-          >
-            <span className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-surface-1">
-              {output.state === "processing" ? (
-                <SpinnerGap size={14} className="animate-spin text-ink-muted" />
-              ) : (
-                <WarningCircle size={14} className="text-ink-muted" />
-              )}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[12px] font-medium text-ink">
-                {artifactLabel(output.type)}
-              </span>
-              <span className="mt-0.5 block text-[10px] text-ink-subtle">
-                {output.state === "processing"
-                  ? "Processing · usually ready within a minute of the meeting ending"
-                  : "Not produced for this meeting"}
-              </span>
-            </span>
-          </div>
-        ))}
-      </div>
-      {stillProcessing ? (
-        <p className="border-t border-border px-4 py-3 text-[11px] leading-5 text-ink-muted">
-          This page updates on its own. If the meeting was recorded, the recording appears here
-          once it has finished uploading, which can take a few minutes longer.
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function ArtifactIcon({ artifact }: { artifact: RoomHistoryArtifact }) {
-  if (artifact.status === "processing")
-    return <SpinnerGap size={14} className="animate-spin text-ink-muted" />;
-  if (["failed", "missing", "expired"].includes(artifact.status))
-    return <WarningCircle size={14} className="text-ink-muted" />;
-  return <CheckCircle size={14} className="text-primary" />;
-}
+/**
+ * `ArtifactsPanel` is gone too, and with it the record's third tab.
+ *
+ * It listed every artifact of a meeting as a row with a download arrow. Two of those rows — the
+ * recording and the summary — were copies of things the Recap tab renders in full, reached by
+ * their file type instead of from the thing itself, and the transcript export was a copy of a
+ * column the reader was already looking at. Each download now lives on the surface that shows
+ * what it is a copy of: the recording's player, the summary's control row, the transcript's
+ * toolbar. What is left — debug logs, audio samples — is nobody's reading surface and belongs in
+ * the workspace's Artifacts library, which lists them for the whole workspace and always did.
+ */

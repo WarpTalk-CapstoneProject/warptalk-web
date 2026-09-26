@@ -69,9 +69,12 @@ import {
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
 import { InlineMarkdown, SummaryMarkdown } from "@/components/markdown/document-markdown";
 import { useSummaryRenderings } from "@/hooks/use-summary-renderings";
+import { buildSummaryDocumentModel } from "@/lib/documents/summary-document-model";
+import { recordFileName } from "@/lib/documents/record-file-name";
 import { useTranslationRoom } from "@/hooks/use-translationRooms";
-import { normalizeLanguageCode } from "@/lib/language/languages";
+import { getLanguageName, normalizeLanguageCode } from "@/lib/language/languages";
 import { artifactLanguageOptions } from "@/lib/meeting/artifact-language-options";
+import { playableRecordings } from "@/lib/meeting/meeting-artifacts";
 import {
   DEFAULT_SUMMARY_TEMPLATE,
   SUMMARY_TEMPLATES,
@@ -91,6 +94,7 @@ import {
 } from "@/lib/transcript/document-reading";
 import { resolveTranscriptSpeaker, speakerColorVar } from "@/lib/transcript/speaker-color";
 import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
+import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { SeekSources } from "@/lib/meeting/recording-seek";
@@ -157,6 +161,8 @@ type RailTab = "summary" | "talk";
 export function TranscriptReadingLayout({
   transcript,
   record,
+  meetingTitle,
+  meetingStartedAt,
   segments,
   hasTranscript,
   recording,
@@ -187,6 +193,14 @@ export function TranscriptReadingLayout({
    * who wanted both had to keep swapping. So the rail takes the record and renders all of it.
    */
   record: EndedRoomHistoryItem | null;
+  /**
+   * The meeting's own name and start, for the files this rail hands over.
+   *
+   * From the room rather than from `record`: the title is the one the host typed and the start is
+   * the MEETING's (WT-311(c)), which is the same source the transcript's duration chip counts from.
+   */
+  meetingTitle?: string | null;
+  meetingStartedAt?: string | null;
   /** The persisted transcript, for the talk-time tab. Control markers are dropped here, not by
    *  the caller — see the note on `shares`. */
   segments: readonly TranscriptSegmentDto[];
@@ -265,6 +279,8 @@ export function TranscriptReadingLayout({
         <div className="order-2 min-w-0 lg:order-none">{transcript}</div>
         <ReadingRail
           record={record}
+          meetingTitle={meetingTitle}
+          meetingStartedAt={meetingStartedAt}
           segments={segments}
           hasTranscript={hasTranscript}
           recording={recording}
@@ -291,6 +307,8 @@ export function TranscriptReadingLayout({
 
 function ReadingRail({
   record,
+  meetingTitle,
+  meetingStartedAt,
   segments,
   hasTranscript,
   recording,
@@ -311,6 +329,8 @@ function ReadingRail({
   speakerDirectory,
 }: {
   record: EndedRoomHistoryItem | null;
+  meetingTitle?: string | null;
+  meetingStartedAt?: string | null;
   segments: readonly TranscriptSegmentDto[];
   hasTranscript?: boolean;
   recording: RoomHistoryArtifact | null;
@@ -341,6 +361,13 @@ function ReadingRail({
   const t = useTranslations("meetingSummary");
   const sync = useReadingSync();
   const [tab, setTab] = useState<RailTab>("summary");
+  /**
+   * Every recording with a file behind it — which is `recording` and nothing else on an ordinary
+   * meeting, and the list the "more than one recording" notice offers when somebody stopped and
+   * started again. Derived from the record rather than passed in, so it cannot disagree with the
+   * one the page picked `recording` out of.
+   */
+  const recordings = useMemo(() => playableRecordings(record?.artifacts), [record?.artifacts]);
   /**
    * WHAT IS ON SCREEN, which is not always what the host published.
    *
@@ -470,32 +497,67 @@ function ReadingRail({
     <aside className="order-1 flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-surface-2 lg:order-none print:hidden">
       {/* WT-655: a recording that is still being processed has no playable artifact, so `recording`
           is null and this whole block used to vanish — indistinguishable from a meeting nobody
-          recorded, for the reader most likely to be waiting on it. `"multiple"` deliberately does
-          NOT open this block: the transcript tab already carries a line explaining that case, and
-          saying it twice on one screen reads as two different problems. */}
-      {recording || recordingUnavailableReason === "processing" ? (
+          recorded, for the reader most likely to be waiting on it.
+
+          `"multiple"` used to be kept out on the grounds that the transcript tab already carries a
+          line explaining that case. It is in now, because the block carries something that line
+          cannot: the FILES. With the Artifacts tab gone this is the only place a meeting with two
+          recordings can be watched at all, and the reason it has no player is not the same
+          sentence as the offer of the two videos. */}
+      {recording
+      || recordingUnavailableReason === "processing"
+      || (recordingUnavailableReason === "multiple" && recordings.length > 0) ? (
         <div className="border-b border-border p-2.5">
           <div className="mb-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-ink-subtle">
               <VideoCamera size={12} />
               {t("recording.label")}
             </span>
-            <button
-              type="button"
-              onClick={onTogglePip}
-              aria-expanded={pipOpen}
-              title={pipOpen ? t("recording.hideTitle") : t("recording.showTitle")}
-              className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
-            >
-              {pipOpen ? t("recording.hide") : t("recording.show")}
-              {pipOpen ? <CaretUp size={10} /> : <CaretDown size={10} />}
-            </button>
+            <span className="flex items-center gap-0.5">
+              {/* The video's own download, beside the video. It used to be a row on the Artifacts
+                  tab — "the recording" named as a file type, two clicks from the frame showing it.
+                  The consent stop comes with the flow (useArtifactDownload), and the file NAME comes
+                  from the server, so nothing here names it. Offered only for the single-recording
+                  case: with several, no one of them is "the recording", and the player's own notice
+                  offers them all. */}
+              {recording && onDownload ? (
+                <button
+                  type="button"
+                  onClick={() => onDownload(recording)}
+                  disabled={busyArtifactId === recording.id}
+                  title={t("recording.downloadTitle")}
+                  aria-label={t("recording.downloadAriaLabel")}
+                  className="flex size-6 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink disabled:opacity-60"
+                >
+                  {busyArtifactId === recording.id ? (
+                    <SpinnerGap size={13} className="animate-spin" />
+                  ) : (
+                    <DownloadSimple size={13} />
+                  )}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={onTogglePip}
+                aria-expanded={pipOpen}
+                title={pipOpen ? t("recording.hideTitle") : t("recording.showTitle")}
+                className="flex items-center gap-1 rounded px-1 py-0.5 text-[11px] text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink"
+              >
+                {pipOpen ? t("recording.hide") : t("recording.show")}
+                {pipOpen ? <CaretUp size={10} /> : <CaretDown size={10} />}
+              </button>
+            </span>
           </div>
           {pipOpen ? (
             <MeetingRecordingPlayer
               variant="pip"
               artifact={recording}
               unavailableReason={recordingUnavailableReason}
+              /* The files themselves, for the case where the page cannot say which one a moment
+                 belongs to. Same download flow as the single-recording button above. */
+              recordings={recordings}
+              onDownloadRecording={onDownload}
+              busyArtifactId={busyArtifactId}
               seek={seek}
               playbackRequest={sync?.playbackRequest ?? null}
               /* WT-655 — the wire the transcript follows the recording along. Handed the context's
@@ -541,15 +603,15 @@ function ReadingRail({
         {tab === "summary" ? (
           <RailSummary
             record={record}
+            meetingTitle={meetingTitle}
+            meetingStartedAt={meetingStartedAt}
             segments={segments}
             hasTranscript={hasTranscript}
-            busyArtifactId={busyArtifactId}
             claims={claims}
             litKeys={litKeys}
             uncitedCount={uncitedCount}
             onMark={markClaim}
             onJumpToMoment={onJumpToMoment}
-            onDownload={onDownload}
             onRewrite={onRewrite}
             rewriteFailure={rewriteFailure}
             shownSummary={shownSummary}
@@ -609,15 +671,15 @@ function RailTabButton({
  */
 function RailSummary({
   record,
+  meetingTitle,
+  meetingStartedAt,
   segments,
   hasTranscript,
-  busyArtifactId,
   claims,
   litKeys,
   uncitedCount,
   onMark,
   onJumpToMoment,
-  onDownload,
   onRewrite,
   rewriteFailure,
   shownSummary,
@@ -626,9 +688,11 @@ function RailSummary({
   generatableLanguages,
 }: {
   record: EndedRoomHistoryItem | null;
+  /** What a downloaded copy of this summary is called, and the date in its name. */
+  meetingTitle?: string | null;
+  meetingStartedAt?: string | null;
   segments: readonly StalenessSegment[];
   hasTranscript?: boolean;
-  busyArtifactId: string | null;
   claims: readonly RailClaim[];
   /** The claims covering the block being read right now. */
   litKeys: readonly string[];
@@ -636,7 +700,6 @@ function RailSummary({
   /** Mark the blocks a claim rests on, or clear with a null. See markClaim. */
   onMark: (atMs: number | null, alsoAtMs?: readonly number[]) => void;
   onJumpToMoment: (atMs: number, alsoAtMs?: readonly number[]) => void;
-  onDownload?: (artifact: RoomHistoryArtifact) => void;
   onRewrite?: (templateKey: string, language?: string) => Promise<void>;
   /** WT-669 — why the last rewrite did not happen. A new token means a new answer, even when
    *  the reason is word-for-word the one before it. */
@@ -652,9 +715,10 @@ function RailSummary({
   // unless a rendering is ready. Passed in rather than re-derived so the panel and the claims
   // beside it can never disagree about which summary is on screen.
   const summary = shownSummary;
+  // Still read, and only for what it says ABOUT the summary: whether one was written at all, what
+  // state it is in, and when (staleness). Its bytes are no longer fetched — the document handed over
+  // is built from what is on screen.
   const artifact = record?.artifacts.find((item) => item.type === "summary_export");
-  const ready = artifact?.status === "ready";
-  const downloading = busyArtifactId !== null && busyArtifactId === artifact?.id;
   // `sections` counts as content in its own right. A traceable summary can put every word it has
   // into `narrative` and leave the flat overview string empty, and judging emptiness on the three
   // pre-template fields alone would answer "No summary yet" over a summary that is right there.
@@ -715,6 +779,8 @@ function RailSummary({
    * duplicate.
    */
   const [regenerating, setRegenerating] = useState(false);
+  /** Whether the Word file is being written, so the button can say so and refuse a second click. */
+  const [buildingDocument, setBuildingDocument] = useState(false);
 
   /**
    * Waiting for a rendering, which is no longer the same event as rewriting the meeting.
@@ -826,6 +892,56 @@ function RailSummary({
     // Reading, not rewriting: nobody else's summary changes. The deadline and the polling live
     // with the caller, which is the only place that knows whether a refetch is still in flight.
     onSelectRendering?.(template, language);
+  }
+
+  /**
+   * THE SUMMARY AS SHOWN, AS A WORD FILE.
+   *
+   * This button used to download the server's `summary_export` artifact, and that was the wrong
+   * document whenever the reader had changed anything: pick Japanese, or the Standup shape, and the
+   * file that arrived was still the host's published English General summary. The rail is looking
+   * at ONE rendering of the summary; the file has to be that rendering, built from the same
+   * `shownSummary` the sections beside this were drawn from.
+   *
+   * The builder is imported at the click — every reader of every meeting would otherwise download a
+   * document library to read a summary they never save.
+   */
+  async function downloadSummaryDocument() {
+    setBuildingDocument(true);
+    try {
+      const model = buildSummaryDocumentModel({
+        meta: {
+          meetingTitle: meetingTitle ?? record?.title ?? "",
+          startedAt: meetingStartedAt ?? null,
+          languageLabel: currentLanguage ? getLanguageName(currentLanguage) : t("asSpoken"),
+        },
+        summary,
+        templateLabel:
+          SUMMARY_TEMPLATES.find((template) => template.key === currentTemplate)?.label ?? null,
+        // A rendering reads identically to the published summary, so the document says which one it
+        // is — otherwise a reader's private translation gets forwarded as the record of the meeting.
+        isPersonalRendering: Boolean(rendering && !rendering.isCanonical),
+        insufficientDataMessage: summaryAbsenceMessage(absence, t),
+      });
+      const { buildSummaryDocx } = await import("@/lib/documents/summary-docx");
+      saveBlobDownload(
+        await buildSummaryDocx(model),
+        recordFileName({
+          meetingTitle: meetingTitle ?? record?.title,
+          kind: "Summary",
+          startedAt: meetingStartedAt,
+          // Named for its language only when this is NOT the published summary. The host's own
+          // summary is "the summary"; a rendering is one of several, and the language is what tells
+          // two downloads in the same folder apart.
+          language: rendering && !rendering.isCanonical ? rendering.language || undefined : undefined,
+          extension: "docx",
+        }),
+      );
+    } catch {
+      toast.error(t("toasts.downloadError"));
+    } finally {
+      setBuildingDocument(false);
+    }
   }
 
   async function copyAsText() {
@@ -958,17 +1074,21 @@ function RailSummary({
           <Copy size={13} />
         </button>
         {/* WT-369: offered only when there is a summary to download. The artifact ROW existing is
-            not the summary existing — the finalizer writes one even when the AI produced nothing. */}
-        {artifact && summaryState === "ready" && onDownload ? (
+            not the summary existing — the finalizer writes one even when the AI produced nothing,
+            which is why the test is `summaryState`, not the row.
+
+            What it hands over is the summary ON SCREEN, written here in the browser — see
+            downloadSummaryDocument for why fetching the server's artifact was the wrong document. */}
+        {summaryState === "ready" ? (
           <button
             type="button"
-            onClick={() => onDownload(artifact)}
-            disabled={!ready || downloading}
+            onClick={() => void downloadSummaryDocument()}
+            disabled={buildingDocument || isRendering}
             title={t("controls.downloadTitle")}
             aria-label={t("controls.downloadAriaLabel")}
             className="flex size-6 shrink-0 items-center justify-center rounded text-ink-muted transition-colors hover:bg-surface-1 hover:text-ink disabled:opacity-60"
           >
-            {downloading ? (
+            {buildingDocument ? (
               <SpinnerGap size={13} className="animate-spin" />
             ) : (
               <DownloadSimple size={13} />

@@ -22,6 +22,9 @@
     "copy": "Sao chép",
     "copyLabel": "Bản ghi",
     "download": "Tải xuống",
+    "downloadTitle": "Tải bản ghi này đúng như đang hiển thị",
+    "downloadWord": "Tài liệu Word (.docx)",
+    "downloadText": "Văn bản thuần (.txt)",
     "discard": "Hủy bỏ",
     "saving": "Đang lưu…",
     "doneSaveAll": "Xong & lưu tất cả",
@@ -44,7 +47,8 @@
     "batchSaved": "Đã lưu {count, plural, other {# chỉnh sửa}}. Các bản dịch đang được thực hiện lại.",
     "batchPartialFailure": "Đã lưu {saved} dòng, nhưng {failed} dòng không thể lưu. Nội dung bạn đã sửa vẫn còn ở đây — hãy thử lại.",
     "finalizeSuccess": "Đã hoàn tất và khóa bản ghi.",
-    "finalizeFailed": "Không thể hoàn tất bản ghi."
+    "finalizeFailed": "Không thể hoàn tất bản ghi.",
+    "downloadFailed": "Không tạo được tệp tải về."
   },
   "sessionDivider": {
     "label": "Lượt dịch {number}",
