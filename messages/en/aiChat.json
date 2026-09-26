@@ -13,6 +13,7 @@
   "sending": "Sending…",
   "send": "Send",
   "toasts": {
+    "messageSendFailed": "Couldn't send your message. Please try again.",
     "pluginConnected": "Plugin connected.",
     "pluginConnectOpenBrowser": "Finish connecting this plugin in your browser.",
     "pluginConnectBlocked": "Your browser blocked the consent window.",
