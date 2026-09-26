@@ -128,5 +128,20 @@
     "dormant": "They have been waiting since {date}; they are still yours and still come back when you renew.",
     "pendingTitle": "Credits from your previous plan",
     "pendingDescription": "{credits} credits kept from your previous subscription are being added to this plan."
+  },
+  "purchaseGate": {
+    "title": "Subscribe to a plan to buy extra credits",
+    "description": "Top-ups and credit packs are added on top of a plan. Choose a plan first, then come back to add credits.",
+    "cta": "See plans",
+    "refused": "Subscribe to a plan to buy extra credits."
+  },
+  "renew": {
+    "title": "{workspaceName}'s plan has ended",
+    "ownerDescription": "The {planName} plan ended on {date}. Everything in this workspace is exactly where you left it — renew to open it again for the whole team.",
+    "memberDescription": "The {planName} plan ended on {date}. Everything in this workspace is kept. Ask the workspace owner to renew — it opens for everyone as soon as they do.",
+    "memberNotice": "Only an owner or admin of {workspaceName} can renew. Here is what it costs — send it to them.",
+    "kept": "{credits} credits kept — renew to use them",
+    "keptMember": "{credits} credits are kept for this workspace and come back when the plan is renewed.",
+    "renewWith": "Renew with {planName}"
   }
 }

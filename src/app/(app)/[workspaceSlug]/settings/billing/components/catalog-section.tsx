@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useBillingCatalog, useCancelWorkspaceAddon, useCouponPreview } from "@/hooks/use-billing-catalog";
 import { getErrorMessage } from "@/lib/api/errors";
+import { isPurchaseRequiresSubscription } from "@/lib/billing/extra-credits";
 import { displayCurrency, isNumericEntitlement, priceFor } from "@/lib/billing/package-request";
 import { formatAmount, formatMoney } from "@/lib/format/currency";
 import { cn } from "@/lib/utils";
@@ -66,8 +67,11 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
   const [cancelling, setCancelling] = useState<WorkspaceAddonDto | null>(null);
 
   const catalog = catalogQuery.data;
+  // backend#467: a credit pack is sold only on top of a live plan — the server's hasActivePlan,
+  // the same liveness its checkout refuses on (409). The billing page says why, once, above.
+  const packs = catalog?.hasActivePlan ? catalog.creditPacks : [];
   // Nothing to sell and nothing owned: the section would only be an empty heading.
-  if (!catalog || (catalog.creditPacks.length === 0 && catalog.addons.length === 0 && catalog.activeAddons.length === 0)) {
+  if (!catalog || (packs.length === 0 && catalog.addons.length === 0 && catalog.activeAddons.length === 0)) {
     return null;
   }
 
@@ -75,11 +79,11 @@ export function CatalogSection({ workspaceId }: { workspaceId: string }) {
 
   return (
     <>
-      {catalog.creditPacks.length > 0 ? (
+      {packs.length > 0 ? (
         <div className="border-b border-border px-4 py-4">
           <Heading title={t("packs.title")} description={t("packs.description")} />
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {catalog.creditPacks.map((pack) => {
+            {packs.map((pack) => {
               const currency = displayCurrency(pack.prices, workspaceCurrency);
               const price = currency ? priceFor(pack.prices, currency) : null;
               return (
@@ -292,6 +296,7 @@ function PurchaseForm({
   cycle: "monthly" | "yearly";
 }) {
   const t = useTranslations("settingsBillingCatalog.purchase");
+  const tBilling = useTranslations("settingsBilling");
   const user = useAuthStore((state) => state.user);
   const previewCoupon = useCouponPreview(workspaceId);
   const isPack = purchase.kind === "pack";
@@ -348,7 +353,12 @@ function PurchaseForm({
       });
       if (url) window.location.assign(url);
     } catch (error) {
-      toast.error(getErrorMessage(error, t("checkoutFailed")));
+      // backend#467: the plan lapsed between the page loading and the click.
+      toast.error(
+        isPurchaseRequiresSubscription(error)
+          ? tBilling("purchaseGate.refused")
+          : getErrorMessage(error, t("checkoutFailed")),
+      );
     } finally {
       setIsProcessing(false);
     }

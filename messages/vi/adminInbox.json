@@ -94,7 +94,8 @@
     "announcement_scheduled": "Thông báo cần duyệt",
     "announcement_draft": "Bản nháp bị bỏ quên",
     "broadcast_failed": "Gửi thông báo thất bại",
-    "dead_letter": "Sự kiện bị dead-letter"
+    "dead_letter": "Sự kiện bị dead-letter",
+    "paid_credits_frozen": "Credit đã trả đang bị giữ lại"
   },
   "priorities": {
     "urgent": "Khẩn cấp",

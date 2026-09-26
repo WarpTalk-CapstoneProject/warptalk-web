@@ -52,7 +52,11 @@ import {
   checkoutTotal,
   selectablePlans,
 } from "@/lib/billing/plan-pricing";
+import { apiErrorCode } from "@/lib/api/errors";
 import { readCheckoutIntent } from "@/lib/billing/checkout-intent";
+import { NO_SUBSCRIPTION_CODE } from "@/lib/billing/workspace-paywall";
+import { WORKSPACE_KEYS } from "@/hooks/use-workspace";
+import { WorkspaceService } from "@/services/workspace.service";
 import { normalizeWorkspaceSlug } from "@/lib/workspace/workspace-slug";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -108,7 +112,49 @@ export default function WorkspaceActivationPage() {
   // would let it change under a reader mid-session.
   const [clock] = useState(() => Date.now());
   const subscriptionState = describeSubscription(subscriptionQuery.data ?? null, clock);
-  const isPaid = hasPaidEntitlement(subscriptionState);
+
+  /**
+   * The EXPIRED case, which the subscription answer cannot describe: the endpoint serves only the
+   * active row, so an expired workspace reads exactly like one that never paid. Billing's frozen-
+   * credits read (open to every member) names the plan that ended, when, and what it kept — the
+   * difference between "it just needs a plan" and "your plan ended; renew to get it back".
+   */
+  const frozenQuery = useQuery({
+    queryKey: ["billing", "frozen", workspaceId],
+    queryFn: () => billingService.getFrozenCredits(workspaceId!),
+    enabled: Boolean(workspaceId),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const frozen = frozenQuery.data;
+
+  /**
+   * A member cannot read the subscription, so "already paid" needs the source the paywall itself
+   * uses for them — the entitlement snapshot. Not the frozen read's own flag: the two disagree on
+   * an inconsistent row (status cancelled, still active), and a page that sends somebody home
+   * while the gate sends them back is a redirect loop.
+   */
+  const subscriptionUnanswered =
+    subscriptionQuery.isError && apiErrorCode(subscriptionQuery.error) !== NO_SUBSCRIPTION_CODE;
+  const standingQuery = useQuery({
+    queryKey: WORKSPACE_KEYS.entitlements(workspaceId ?? ""),
+    queryFn: () => WorkspaceService.getEntitlements(workspaceId!),
+    enabled: Boolean(workspaceId) && subscriptionUnanswered,
+    retry: false,
+    staleTime: 60_000,
+  });
+  const snapshotSaysPaid =
+    subscriptionUnanswered &&
+    standingQuery.data?.isKnown === true &&
+    standingQuery.data.hasActiveSubscription;
+  const isPaid = hasPaidEntitlement(subscriptionState) || snapshotSaysPaid;
+
+  const lapsed =
+    subscriptionState.kind === "lapsed"
+      ? { planName: subscriptionState.planName, endedOn: subscriptionState.endedOn }
+      : frozen?.lastPlanName && frozen.lastEndedAt
+        ? { planName: frozen.lastPlanName, endedOn: new Date(frozen.lastEndedAt) }
+        : null;
 
   /**
    * Somebody who already has a plan does not belong on the activation screen.
@@ -170,11 +216,8 @@ export default function WorkspaceActivationPage() {
       pendingPlanSlug={pendingPlanSlug}
       preselectedPlanSlug={preselectedPlanSlug}
       onChoosePlan={(plan) => void choosePlan(plan)}
-      lapsed={
-        subscriptionState.kind === "lapsed"
-          ? { planName: subscriptionState.planName, endedOn: subscriptionState.endedOn }
-          : null
-      }
+      lapsed={lapsed}
+      keptCredits={frozen?.frozenCredits ?? 0}
       onSwitchWorkspace={() => router.push("/workspace")}
       onSignOut={() => {
         logout();
