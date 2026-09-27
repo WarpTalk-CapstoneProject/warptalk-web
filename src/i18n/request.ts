@@ -76,6 +76,7 @@ const NAMESPACES = [
   "meetingRoomPage",
   "meetingTranscript",
   "meetingSummary",
+  "minutes",
 ] as const;
 
 async function loadMessages(locale: string): Promise<Messages> {
