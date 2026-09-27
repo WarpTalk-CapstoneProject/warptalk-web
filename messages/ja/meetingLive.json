@@ -1,0 +1,56 @@
+{
+  "exitControl": {
+    "leaveAria": "会議から退出",
+    "leaveMenu": "会議から退出",
+    "endForAllMenu": "全員に対して終了",
+    "leaveDialogTitle": "会議から退出",
+    "leaveDialogDescription": "本当に会議から退出しますか？",
+    "leaveDialogHostNote": "あなたはアクティブなホストです。全員に対して終了しない限り、ホストなしで会議が続きます。",
+    "endDialogTitle": "全員に対して終了",
+    "endDialogDescription": "全員の会議を終了し、参加者を退出させ、成果物と請求を確定します。この操作は元に戻せません。",
+    "cancel": "キャンセル",
+    "leaveRoom": "退出する",
+    "endForEveryone": "全員に対して終了",
+    "failedToEnd": "会議を終了できませんでした",
+    "notRecording": "記録していません",
+    "notRecordingTitle": "字幕と翻訳は通常通り動作します。この会議の内容は保存されないため、文字起こし・要約・議事録は残りません。"
+  },
+  "inviteDialog": {
+    "title": "この会議に招待",
+    "description": "メールとアプリ内通知で、この部屋への直接リンクが届きます。",
+    "placeholder": "name@company.com, another@company.com",
+    "copyLink": "または参加リンクをコピー",
+    "cancel": "キャンセル",
+    "invite": "招待",
+    "inviteCount": "{count}人を招待",
+    "sending": "送信中…",
+    "sendFailed": "招待を送信できませんでした。"
+  },
+  "transcriptPause": {
+    "title": "文字起こしを一時停止しますか？",
+    "description": "今後は文字起こしに書き込まれず保存もされません — 翻訳、吹き替え、声のクローンは動作し続けます。",
+    "cancel": "キャンセル",
+    "confirm": "一時停止する"
+  },
+  "sidePanel": {
+    "transcript": "文字起こし",
+    "chat": "チャット",
+    "people": "参加者",
+    "transcriptPaused": "文字起こしを一時停止中"
+  },
+  "transcriptPanel": {
+    "empty": "WarpTalkを開始すると、ここにライブ翻訳が表示されます。"
+  },
+  "controlBar": {
+    "voiceOffHint": "オフ — 翻訳を聞く代わりに読みます。",
+    "voiceOnHint": "あなたの言語で翻訳を聞きます。",
+    "roomSpeedFast": "高速ルーム",
+    "roomSpeedFastHint": "話している最中から翻訳します。より速いですが、まだ実験的です。",
+    "micNoiseOff": "オフ",
+    "micNoiseOffHint": "追加のフィルタなし。口元に近いヘッドセットに最適です。",
+    "micNoiseClose": "近接マイク",
+    "micNoiseCloseHint": "ヘッドセット、または顔に当てた電話。",
+    "micNoiseRoom": "ルームマイク",
+    "micNoiseRoomHint": "ノートPCや離れた場所のマイク。後ろに下がると文字起こしが悪くなる場合に使ってください。"
+  }
+}

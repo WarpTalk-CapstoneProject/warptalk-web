@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { EyeSlash, SignOut } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
@@ -46,6 +47,7 @@ export function MeetingStageTimer({
  * it is a fact about the meeting you are currently in.
  */
 export function MeetingEphemeralBadge({ saveTranscript }: { saveTranscript?: boolean }) {
+  const t = useTranslations("meetingLive");
   // `undefined` is a server that did not say, or a room predating the setting — both of which
   // keep their transcript. Only an explicit false is an ephemeral room.
   if (saveTranscript !== false) return null;
@@ -53,11 +55,11 @@ export function MeetingEphemeralBadge({ saveTranscript }: { saveTranscript?: boo
   return (
     <div
       data-meeting-ephemeral-badge
-      title="Subtitles and translation work normally. Nothing from this meeting is saved, so there will be no transcript, summary or minutes afterwards."
+      title={t("exitControl.notRecordingTitle")}
       className="absolute left-4 top-14 z-30 flex items-center gap-1.5 rounded-full border border-border/70 bg-surface-1/90 px-2.5 py-1 text-[12px] font-medium text-ink-subtle shadow-sm backdrop-blur"
     >
       <EyeSlash weight="duotone" size={14} className="shrink-0" />
-      Not being recorded
+      {t("exitControl.notRecording")}
     </div>
   );
 }
@@ -77,6 +79,7 @@ export function MeetingExitControl({
   isHost: boolean;
   onExit: (action: "leave" | "end") => void;
 }) {
+  const t = useTranslations("meetingLive");
   const endForAll = useEndMeetingForAll(room.id);
   const [showLeaveDialog, setShowLeaveDialog] = useState(false);
   const [showEndDialog, setShowEndDialog] = useState(false);
@@ -85,7 +88,7 @@ export function MeetingExitControl({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          aria-label="Leave meeting"
+          aria-label={t("exitControl.leaveAria")}
           className="grid h-11 w-11 place-items-center rounded-full border border-border/50 bg-surface-1/80 text-destructive shadow-sm outline-none backdrop-blur-xl transition-colors hover:bg-destructive/10 focus-visible:ring-2 focus-visible:ring-ring/40"
         >
           <SignOut className="h-[18px] w-[18px]" weight="bold" />
@@ -100,14 +103,14 @@ export function MeetingExitControl({
             onClick={() => setShowLeaveDialog(true)}
             className="cursor-pointer hover:bg-surface-2"
           >
-            Leave Meeting
+            {t("exitControl.leaveMenu")}
           </DropdownMenuItem>
           {isHost ? (
             <DropdownMenuItem
               onClick={() => setShowEndDialog(true)}
               className="cursor-pointer text-destructive focus:bg-destructive/10 focus:text-destructive"
             >
-              End Meeting for All
+              {t("exitControl.endForAllMenu")}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -116,11 +119,11 @@ export function MeetingExitControl({
       <Dialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
         <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Leave Meeting</DialogTitle>
+            <DialogTitle>{t("exitControl.leaveDialogTitle")}</DialogTitle>
             <DialogDescription className="pt-2 text-ink-subtle">
-              Are you sure you want to leave the meeting?
+              {t("exitControl.leaveDialogDescription")}
               {isHost
-                ? " You are the active host. The meeting will continue without an active host unless you end it for everyone."
+                ? " " + t("exitControl.leaveDialogHostNote")
                 : ""}
             </DialogDescription>
           </DialogHeader>
@@ -142,11 +145,9 @@ export function MeetingExitControl({
       <Dialog open={showEndDialog} onOpenChange={setShowEndDialog}>
         <DialogContent className="rounded-xl border-border bg-surface-1 text-ink sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>End Meeting for All</DialogTitle>
+            <DialogTitle>{t("exitControl.endDialogTitle")}</DialogTitle>
             <DialogDescription className="pt-2 text-ink-subtle">
-              This will end the meeting for everyone, kick all participants out,
-              and finalize the artifacts and billing. This action cannot be
-              undone.
+              {t("exitControl.endDialogDescription")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="mt-4">
@@ -164,7 +165,7 @@ export function MeetingExitControl({
                   await endForAll.mutateAsync();
                   onExit("end");
                 } catch (error: unknown) {
-                  toast.error(getErrorMessage(error, "Failed to end meeting"));
+                  toast.error(getErrorMessage(error, t("exitControl.failedToEnd")));
                 }
               }}
             >

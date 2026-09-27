@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
+import { useTranslations } from "next-intl";
 import { PauseCircle } from "@phosphor-icons/react/dist/ssr";
 
 import { ChatPanel } from "@/components/rooms/live/chat-panel";
@@ -86,6 +87,7 @@ export function MeetingSidePanel({
   /** Host-only: toggles spotlight for this participant. Omit to hide the control. */
   onToggleSpotlight?: (userId: string) => void;
 }) {
+  const t = useTranslations("meetingLive");
   // The panel used to be `flex w-[340px] shrink-0 flex-col overflow-hidden xl:flex hidden` —
   // with no tailwind.config and no --breakpoint-* override in globals.css, Tailwind v4's default
   // xl is 1280px, so Transcript/Chat/People were display:none on anything narrower. A 1280x720
@@ -221,24 +223,24 @@ export function MeetingSidePanel({
         <div className="flex items-center gap-3 px-3 pt-3 pb-2 shrink-0 border-b border-border overflow-x-auto">
           <TabButton
             active={mode === "transcript"}
-            label="Transcript"
+            label={t("sidePanel.transcript")}
             // WT-605. The control below only exists while this tab is open, so somebody sitting
             // in Chat or People would have no way of knowing the record had stopped. The dot is
             // for THEM: it is on the tab, not on the control, it is shown to every participant
             // rather than only to the host, and it survives the panel being on another tab.
             marked={Boolean(transcriptPause?.paused)}
-            markLabel="Transcript paused"
+            markLabel={t("sidePanel.transcriptPaused")}
             onClick={() => selectMode("transcript")}
           />
           <TabButton
             active={mode === "chat"}
-            label="Chat"
+            label={t("sidePanel.chat")}
             badge={unreadChatCount || undefined}
             onClick={() => selectMode("chat")}
           />
           <TabButton
             active={mode === "participants"}
-            label="People"
+            label={t("sidePanel.people")}
             badge={activeCount}
             onClick={() => selectMode("participants")}
           />
@@ -390,8 +392,9 @@ function TranscriptPauseControl({
   pending: boolean;
   onClick: () => void;
 }) {
+  const t = useTranslations("meetingLive");
   const label = pending
-    ? "Transcript request in progress"
+    ? t("sidePanel.transcriptPaused")
     : paused
       ? "Resume transcript"
       : "Pause transcript";
