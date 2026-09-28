@@ -141,7 +141,7 @@ import {
   useTranslationRoomParticipants,
   useUpdateTranslationRoomSettings,
 } from "@/hooks/use-translationRooms";
-import { useWorkspaceMembers, useWorkspaces } from "@/hooks/use-workspace";
+import { useWorkspaceMembers, useWorkspaces, useWorkspaceSettings } from "@/hooks/use-workspace";
 import { apiErrorCode, getErrorMessage } from "@/lib/api/errors";
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import {
@@ -357,6 +357,7 @@ export default function RoomInformationPage() {
   // workspace, and sharing the workspace history query — the only endpoint carrying them.
   const endedRecordQuery = useEndedRoomRecord(validWorkspaceId ?? null, roomId);
   const { data: members } = useWorkspaceMembers(validWorkspaceId || "");
+  const { data: workspaceSettings } = useWorkspaceSettings(validWorkspaceId || "");
   const membersArray = members?.items ?? [];
 
   /**
@@ -1063,6 +1064,8 @@ export default function RoomInformationPage() {
                     }
                     user={user}
                     onCopy={handleCopy}
+                    canEdit={canEditRoom}
+                    allowedTargetLanguages={workspaceSettings?.allowedTargetLanguages}
                   />
                 </div>
                 <div className="flex w-full max-w-[280px] shrink-0 flex-col items-end gap-2">

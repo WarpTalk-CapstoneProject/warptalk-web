@@ -553,16 +553,20 @@ export function MeetingTranscriptArtifact({
     displayLanguage === AS_SPOKEN ? undefined : displayLanguage,
   );
 
+  // Tracks languages for which backfill has been requested to prevent duplicate requests
+  const autoRequestedLanguages = useRef<Set<string>>(new Set());
+
   /**
-   * Picking a language only READS the transcript in it. WT-705.
-   *
-   * It used to be the request as well: choosing Spanish started translating 88 entries at once,
-   * for any viewer, with no confirmation. Generating a translation costs workspace credits and
-   * changes the record for everyone, so it is a separate, confirmed action (confirmTranslation)
-   * offered only to host authority and only in one of the room's generatable languages.
+   * Picking a language reads the transcript in it and automatically triggers backfill
+   * for any missing entries when the user has translation authority.
    */
   function chooseLanguage(code: string) {
     setChosenLanguage(code);
+    const normalized = normalizeLanguageCode(code);
+    if (code !== AS_SPOKEN && canTranslate && translatableCodes.has(normalized)) {
+      autoRequestedLanguages.current.add(normalized);
+      backfill.request(code);
+    }
   }
 
   const [isTranslateDialogOpen, setIsTranslateDialogOpen] = useState(false);
@@ -577,6 +581,7 @@ export function MeetingTranscriptArtifact({
   function confirmTranslation() {
     setIsTranslateDialogOpen(false);
     if (!canTranslateDisplayed || displayLanguage === AS_SPOKEN) return;
+    autoRequestedLanguages.current.add(normalizeLanguageCode(displayLanguage));
     backfill.request(displayLanguage);
   }
   // Lines the chosen language does not fully cover — never translated, or a merged utterance
@@ -594,6 +599,33 @@ export function MeetingTranscriptArtifact({
       return resolved.isUntranslated || resolved.isPartial ? count + 1 : count;
     }, 0);
   }, [grouped, translationIndex, displayLanguage]);
+
+  // Auto-backfill: when the transcript is displayed in a language that has missing entries,
+  // automatically trigger backfill to fill in the missing translations instead of leaving them as spoken.
+  useEffect(() => {
+    if (!canTranslateDisplayed || displayLanguage === AS_SPOKEN) return;
+    const normalized = normalizeLanguageCode(displayLanguage);
+    if (
+      incompleteCount > 0
+      && !autoRequestedLanguages.current.has(normalized)
+      && !backfill.isStarting
+      && backfill.coverage?.status !== "running"
+      && !backfill.failedToStart
+      && !backfill.budgetExhausted
+    ) {
+      autoRequestedLanguages.current.add(normalized);
+      backfill.request(displayLanguage);
+    }
+  }, [
+    canTranslateDisplayed,
+    displayLanguage,
+    incompleteCount,
+    backfill.isStarting,
+    backfill.coverage?.status,
+    backfill.failedToStart,
+    backfill.budgetExhausted,
+    backfill,
+  ]);
 
   function toggleOriginal(segmentId: string) {
     setRevealedOriginals((current) => ({ ...current, [segmentId]: !current[segmentId] }));
@@ -1593,7 +1625,14 @@ export function MeetingTranscriptArtifact({
         isStarting={backfill.isStarting}
         failedToStart={backfill.failedToStart}
         budgetExhausted={backfill.budgetExhausted}
-        onTranslate={() => setIsTranslateDialogOpen(true)}
+        onTranslate={() => {
+          if (canTranslateDisplayed) {
+            autoRequestedLanguages.current.add(normalizeLanguageCode(displayLanguage));
+            backfill.request(displayLanguage);
+          } else {
+            setIsTranslateDialogOpen(true);
+          }
+        }}
         onRetry={() => {
           // A retry of a run the reader already confirmed; asking again would be noise.
           if (canTranslateDisplayed) backfill.request(displayLanguage);
