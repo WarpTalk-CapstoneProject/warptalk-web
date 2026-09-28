@@ -58,6 +58,7 @@ import {
 import EgressHelper from "@livekit/egress-sdk";
 
 import { isRecordableParticipant, resolveEgressDisplayName } from "@/lib/meeting/egress-participants";
+import { getInitials } from "@/lib/meeting/participant-identity";
 
 interface Tile {
   identity: string;
@@ -196,10 +197,12 @@ export default function EgressCompositePage() {
     };
   }, []);
 
-  const videoTiles = useMemo(
-    () => tiles.filter((tile) => tile.kind === Track.Kind.Video),
-    [tiles],
-  );
+  const participantIdentities = useMemo(() => {
+    const set = new Set<string>();
+    Object.keys(overlays).forEach((id) => set.add(id));
+    tiles.forEach((t) => set.add(t.identity));
+    return Array.from(set);
+  }, [overlays, tiles]);
 
   return (
     <main
@@ -210,9 +213,8 @@ export default function EgressCompositePage() {
         margin: 0,
         background: "#000",
         display: "grid",
-        // A square-ish grid that grows with the room. No animation anywhere: a transition here is
-        // burned into every frame of the file.
-        gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(Math.sqrt(videoTiles.length || 1)))}, 1fr)`,
+        // A square-ish grid that grows with the room participants (including camera-off participants).
+        gridTemplateColumns: `repeat(${Math.max(1, Math.ceil(Math.sqrt(participantIdentities.length || 1)))}, 1fr)`,
         gap: "8px",
         padding: "8px",
         boxSizing: "border-box",
@@ -221,49 +223,88 @@ export default function EgressCompositePage() {
       {error ? (
         <p style={{ color: "#fff", fontFamily: "sans-serif", padding: "2rem" }}>{error}</p>
       ) : null}
-      {tiles.map((tile, index) => (
-        <MediaTile
-          key={`${tile.identity}-${index}`}
-          tile={tile}
-          overlay={tile.kind === Track.Kind.Video ? overlays[tile.identity] : undefined}
-        />
-      ))}
+      {participantIdentities.map((identity) => {
+        const overlay = overlays[identity] || {
+          name: resolveEgressDisplayName(undefined, identity),
+          micMuted: false,
+          camMuted: true,
+        };
+        const videoTile = tiles.find((t) => t.identity === identity && t.kind === Track.Kind.Video);
+        const audioTile = tiles.find((t) => t.identity === identity && t.kind === Track.Kind.Audio);
+
+        return (
+          <ParticipantGridCell
+            key={identity}
+            identity={identity}
+            overlay={overlay}
+            videoTile={videoTile}
+            audioTile={audioTile}
+          />
+        );
+      })}
     </main>
   );
 }
 
+const AVATAR_BG_COLORS = [
+  "#6a1b38", // dark pink/red (matches real meeting UI)
+  "#451a11", // dark brown (matches real meeting UI)
+  "#1e293b", // dark navy
+  "#2c3b28", // dark olive
+  "#3b1d50", // dark purple
+  "#1a3636", // dark teal
+];
+
+function getParticipantBgColor(identity: string): string {
+  let hash = 0;
+  for (let i = 0; i < identity.length; i++) {
+    hash = identity.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_BG_COLORS[Math.abs(hash) % AVATAR_BG_COLORS.length]!;
+}
+
 /**
- * One attached media element, parked in the DOM.
+ * One participant cell in the recording grid.
  *
- * Audio elements are mounted too, and hidden rather than skipped: an audio track that is attached
- * but not in the document is not guaranteed to play, and this page exists to capture audio.
- *
- * A video tile gets a rounded, dark panel instead of a raw black square, with the participant's
- * name pinned to the bottom-left and a mute badge in the top-right when the LiveKit room reports
- * their mic or camera as off — the same two facts MicStatusIcon and the camera-off placeholder
- * already draw on in the live meeting UI, just laid out for a fixed recording frame instead of an
- * interactive one.
+ * Renders live video if published and unmuted, or a styled camera-off tile matching the real meeting UI
+ * with a participant-specific background tone, avatar circle, name badge, and mute indicators.
+ * Always mounts the audio element in the DOM so Chrome captures audio for all recordable participants.
  */
-function MediaTile({ tile, overlay }: { tile: Tile; overlay?: ParticipantOverlay }) {
-  const holderRef = useRef<HTMLDivElement | null>(null);
+function ParticipantGridCell({
+  identity,
+  overlay,
+  videoTile,
+  audioTile,
+}: {
+  identity: string;
+  overlay: ParticipantOverlay;
+  videoTile?: Tile;
+  audioTile?: Tile;
+}) {
+  const videoHolderRef = useRef<HTMLDivElement | null>(null);
+  const audioHolderRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const holder = holderRef.current;
-    if (!holder) return;
-    holder.appendChild(tile.element);
+    const holder = videoHolderRef.current;
+    if (!holder || !videoTile) return;
+    holder.appendChild(videoTile.element);
     return () => {
-      if (tile.element.parentElement === holder) holder.removeChild(tile.element);
+      if (videoTile.element.parentElement === holder) holder.removeChild(videoTile.element);
     };
-  }, [tile.element]);
+  }, [videoTile]);
 
-  if (tile.kind === Track.Kind.Audio) {
-    return (
-      <div
-        ref={holderRef}
-        style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
-      />
-    );
-  }
+  useEffect(() => {
+    const holder = audioHolderRef.current;
+    if (!holder || !audioTile) return;
+    holder.appendChild(audioTile.element);
+    return () => {
+      if (audioTile.element.parentElement === holder) holder.removeChild(audioTile.element);
+    };
+  }, [audioTile]);
+
+  const initials = getInitials(overlay.name);
+  const hasVideo = Boolean(videoTile && !overlay.camMuted);
+  const tileBgColor = hasVideo ? "#1c1c1e" : getParticipantBgColor(identity);
 
   return (
     <div
@@ -271,41 +312,85 @@ function MediaTile({ tile, overlay }: { tile: Tile; overlay?: ParticipantOverlay
         position: "relative",
         width: "100%",
         height: "100%",
-        background: "#1c1c1e",
+        background: tileBgColor,
         borderRadius: "14px",
         overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       }}
     >
-      <div ref={holderRef} style={{ width: "100%", height: "100%" }} />
-      {overlay ? (
-        <>
+      {/* Hidden audio element container so audio plays for headless Chrome recorder */}
+      <div
+        ref={audioHolderRef}
+        style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}
+      />
+
+      {hasVideo ? (
+        <div ref={videoHolderRef} style={{ width: "100%", height: "100%" }} />
+      ) : (
+        /* Camera-Off Placeholder Tile matching real meeting UI */
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+          }}
+        >
           <div
             style={{
-              position: "absolute",
-              left: "12px",
-              bottom: "12px",
-              maxWidth: "calc(100% - 24px)",
-              padding: "5px 12px",
-              borderRadius: "999px",
-              background: "rgba(17,17,20,0.72)",
-              color: "#fff",
-              fontFamily: "sans-serif",
-              fontSize: "14px",
+              width: "96px",
+              height: "96px",
+              borderRadius: "50%",
+              background: "rgba(255, 255, 255, 0.18)",
+              backdropFilter: "blur(4px)",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "36px",
               fontWeight: 600,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              fontFamily: "sans-serif",
+              userSelect: "none",
+              border: "2px solid rgba(255, 255, 255, 0.25)",
+              boxShadow: "0 8px 16px rgba(0,0,0,0.25)",
             }}
           >
-            {overlay.name}
+            {initials}
           </div>
-          {overlay.micMuted || overlay.camMuted ? (
-            <div style={{ position: "absolute", right: "10px", top: "10px", display: "flex", gap: "6px" }}>
-              {overlay.micMuted ? <MuteBadge label="Microphone muted" icon="mic" /> : null}
-              {overlay.camMuted ? <MuteBadge label="Camera off" icon="camera" /> : null}
-            </div>
-          ) : null}
-        </>
+        </div>
+      )}
+
+      {/* Name Overlay (Bottom-left) */}
+      <div
+        style={{
+          position: "absolute",
+          left: "12px",
+          bottom: "12px",
+          maxWidth: "calc(100% - 24px)",
+          padding: "5px 12px",
+          borderRadius: "999px",
+          background: "rgba(17,17,20,0.72)",
+          color: "#fff",
+          fontFamily: "sans-serif",
+          fontSize: "14px",
+          fontWeight: 600,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {overlay.name}
+      </div>
+
+      {/* Mute Badges (Top-right) */}
+      {overlay.micMuted || overlay.camMuted ? (
+        <div style={{ position: "absolute", right: "10px", top: "10px", display: "flex", gap: "6px" }}>
+          {overlay.micMuted ? <MuteBadge label="Microphone muted" icon="mic" /> : null}
+          {overlay.camMuted ? <MuteBadge label="Camera off" icon="camera" /> : null}
+        </div>
       ) : null}
     </div>
   );
@@ -345,3 +430,4 @@ function MuteBadge({ label, icon }: { label: string; icon: "mic" | "camera" }) {
     </div>
   );
 }
+
