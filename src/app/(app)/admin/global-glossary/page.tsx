@@ -55,7 +55,8 @@ import {
   useUpdateGlobalGlossaryTerm,
 } from "@/hooks/use-global-glossary";
 import { useIsSystemAdmin } from "@/hooks/use-is-system-admin";
-import { enumValue, type ListStateConfig } from "@/lib/admin/list-state";
+import { enumValue, singleEnumFilter, type ListStateConfig } from "@/lib/admin/list-state";
+import { cn } from "@/lib/utils";
 import { languagesInScope } from "@/lib/language/languages";
 import type {
   GlobalGlossaryTermDto,
@@ -651,12 +652,12 @@ function GlobalGlossaryAdmin() {
             <span className="text-[10px] text-ink-subtle">({totalCount})</span>
           </button>
           {domains.map((d) => {
-            const active = state.filters.domain === d;
+            const active = enumValue(state.filters, "domain") === d;
             return (
               <button
                 key={d}
                 type="button"
-                onClick={() => list.setFilter("domain", d)}
+                onClick={() => list.setFilter("domain", singleEnumFilter(d))}
                 className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
                   active
                     ? "border-border bg-surface-3 font-semibold text-ink"
