@@ -97,6 +97,7 @@ import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-displa
 import { saveBlobDownload } from "@/lib/ui/download-artifact";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import type { RecordingMark } from "@/lib/meeting/recording-marks";
 import type { SeekSources } from "@/lib/meeting/recording-seek";
 import type { EndedRoomHistoryItem, RoomHistoryArtifact } from "@/types/roomHistory";
 import type { TranscriptSegmentDto } from "@/types/transcript";
@@ -180,6 +181,8 @@ export function TranscriptReadingLayout({
   onSelectRendering,
   generatableLanguages,
   speakerDirectory,
+  marks,
+  onMarkClick,
 }: {
   /** Built by the room page — see the note in transcript-reading-sync.tsx on why it arrives whole. */
   transcript: React.ReactNode;
@@ -250,6 +253,8 @@ export function TranscriptReadingLayout({
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
+  marks?: readonly RecordingMark[];
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   /** Whether the recording is shown as a picture or folded away to its transport bar. */
   const [pipOpen, setPipOpen] = useState(true);
@@ -299,6 +304,8 @@ export function TranscriptReadingLayout({
           onSelectRendering={onSelectRendering}
           generatableLanguages={generatableLanguages}
           speakerDirectory={speakerDirectory}
+          marks={marks}
+          onMarkClick={onMarkClick}
         />
       </div>
     </ReadingSyncProvider>
@@ -327,6 +334,8 @@ function ReadingRail({
   onSelectRendering,
   generatableLanguages,
   speakerDirectory,
+  marks,
+  onMarkClick,
 }: {
   record: EndedRoomHistoryItem | null;
   meetingTitle?: string | null;
@@ -357,6 +366,8 @@ function ReadingRail({
   speakerDirectory?: Readonly<
     Record<string, { fullName?: string | null; avatarUrl?: string | null }>
   >;
+  marks?: readonly RecordingMark[];
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   const t = useTranslations("meetingSummary");
   const sync = useReadingSync();
@@ -571,6 +582,8 @@ function ReadingRail({
                  every render of the rail and disarm the past-the-end refusal. */
               onDurationSeconds={onDurationSeconds}
               onConsentGranted={onConsentGranted}
+              marks={marks}
+              onMarkClick={onMarkClick}
             />
           ) : null}
         </div>

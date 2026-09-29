@@ -21,6 +21,7 @@ import { openArtifactDownload } from "@/lib/ui/download-artifact";
 import { canDownloadArtifact } from "@/lib/meeting/meeting-artifacts";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { RoomHistoryArtifact } from "@/types/roomHistory";
+import type { RecordingMark } from "@/lib/meeting/recording-marks";
 
 /**
  * The recording of one meeting, and the download flow behind every file on its record.
@@ -205,6 +206,8 @@ export function MeetingRecordingPlayer({
   onDownloadRecording,
   busyArtifactId,
   variant = "section",
+  marks,
+  onMarkClick,
 }: {
   artifact: RoomHistoryArtifact | null;
   onConsentGranted?: () => void;
@@ -296,6 +299,10 @@ export function MeetingRecordingPlayer({
    * of its own transport controls — a player bar, which is all the spec asks for in that band.
    */
   variant?: "section" | "pip";
+  /** Turn marks on the video file-second axis. */
+  marks?: readonly RecordingMark[];
+  /** When a mark is clicked on the scrubber, notify the caller to jump transcript. */
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   // The URL is stored WITH the artifact it belongs to, rather than being cleared by an effect when
   // that artifact changes. A stale link then simply stops matching and is ignored — no effect can
@@ -325,6 +332,7 @@ export function MeetingRecordingPlayer({
    */
   const reloadedAfterFailureRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   // Held so a seek that arrives before the file is loaded is honoured once it is, rather than
   // dropped — the first click on a transcript line is exactly that case, since the player waits
   // for a press before fetching anything.
@@ -402,6 +410,7 @@ export function MeetingRecordingPlayer({
     reloadedAfterFailureRef.current = true;
     setFailure(null);
     setLoaded(null);
+    setVideoDuration(null);
     void loadRecording();
   }, [loadRecording]);
 
@@ -440,6 +449,7 @@ export function MeetingRecordingPlayer({
   const hasPlayhead = Boolean(sourceUrl) && !playbackFailure;
   useEffect(() => {
     if (hasPlayhead) return;
+    setVideoDuration(null);
     onPlaybackSeconds?.(null);
     onPlayingChange?.(false);
     // The duration goes with the element. A number left standing after the <video> was replaced by
@@ -474,9 +484,23 @@ export function MeetingRecordingPlayer({
       const seconds = video.duration;
       // `> 0` as well as finite: a zero-length duration is the element saying it has nothing, and a
       // zero would make the guard refuse every moment in the meeting.
-      onDurationSeconds?.(Number.isFinite(seconds) && seconds > 0 ? seconds : null);
+      const valid = Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+      setVideoDuration(valid);
+      onDurationSeconds?.(valid);
     },
     [onDurationSeconds],
+  );
+
+  const handleMarkClick = useCallback(
+    (mark: RecordingMark) => {
+      const video = videoRef.current;
+      if (video) {
+        video.currentTime = mark.seconds;
+        void video.play().catch(() => {});
+      }
+      onMarkClick?.(mark);
+    },
+    [onMarkClick],
   );
 
   const isPip = variant === "pip";
@@ -608,93 +632,119 @@ export function MeetingRecordingPlayer({
           )}
         </div>
       ) : sourceUrl ? (
-        // controls, and nothing else: autoplay on a page someone opened to read a transcript is
-        // a room full of unexpected sound.
-        <video
-          ref={videoRef}
-          src={sourceUrl}
-          controls
-          preload="metadata"
-          className={frameClass}
-          onLoadedMetadata={(event) => {
-            // Metadata arrived, so this link opens: whatever the previous one's failure was, it is
-            // settled and spent. Without this reset the very first expiry would mark the player
-            // for the rest of its life, and the NEXT genuine expiry — an hour of reading later —
-            // would be reported as an unplayable file with no reload offered.
-            reloadedAfterFailureRef.current = false;
-            publishDuration(event.currentTarget);
-            const queued = pendingSeekRef.current;
-            if (!queued) return;
-            pendingSeekRef.current = null;
-            /**
-             * WT-655 — the queued seek is the one the caller's guard could not see.
-             *
-             * A click that lands before the file has been fetched is held in `pendingSeekRef` and
-             * applied here. At the instant it was made the page had no duration to check it
-             * against — the player only fetches on demand, so nothing had loaded — which means the
-             * past-the-end refusal upstream cannot have run for exactly the first click of every
-             * visit. This is that refusal, made at the only moment the number exists: right now,
-             * on the element.
-             *
-             * FILE AXIS AGAINST FILE AXIS, AND NOTHING ELSE. `queued.seconds` is already an offset
-             * into this file, computed by recording-seek.ts; `duration` is this file's length. No
-             * meeting clock appears in this component and none may — see the header of
-             * recording-seek.ts for what a second subtraction of the two origins costs.
-             *
-             * Dropped rather than clamped, because the browser's own clamp is the bug: it parks the
-             * playhead on the last frame, which is a still picture of the meeting ending and looks
-             * exactly like a seek that worked.
-             */
-            const duration = event.currentTarget.duration;
-            if (Number.isFinite(duration) && duration > 0 && queued.seconds > duration) {
-              toast.info("This recording stopped before that moment.");
-              return;
-            }
-            event.currentTarget.currentTime = queued.seconds;
-            void event.currentTarget.play().catch(() => {});
-          }}
-          /* A duration is revised, not announced once: a fragmented MP4 reports `Infinity` until
-             enough of it has been read to know better, and a caller that only ever heard
-             `loadedmetadata` would keep an unknown length forever on exactly the containers the
-             egress pipeline produces. */
-          onDurationChange={(event) => publishDuration(event.currentTarget)}
-          /* WT-655 — the playhead, for the transcript to follow.
-             `timeupdate` fires roughly four times a second while playing, and the provider throttles
-             to about that rate whatever this browser's rate turns out to be. The `paused` guard is
-             the "nothing runs while paused" rule at its source: the event also fires for a SEEK made
-             while paused, and honouring that would drag a reader who paused deliberately and
-             scrolled away back to the playhead they had just left. */
-          onTimeUpdate={(event) => {
-            if (event.currentTarget.paused) return;
-            onPlaybackSeconds?.(event.currentTarget.currentTime);
-          }}
-          onPlay={() => onPlayingChange?.(true)}
-          onPause={() => onPlayingChange?.(false)}
-          // Ended is not paused as far as the element's own events go, and a recording that ran to
-          // the end must stop being "playing" or the follow pill would hang around over a finished
-          // video offering to chase a playhead that has stopped.
-          onEnded={() => onPlayingChange?.(false)}
-          /* WT-655: without this the frame just went black. The surrounding code only ever
-             reported a missing `url` FIELD, which says nothing about whether that url opens —
-             and a fifteen-minute presigned link on a page people keep open will routinely stop
-             opening. Every failure to play was therefore silent, which is why the whole seek
-             feature looked broken rather than merely stale. */
-          onError={(event) => {
-            const classified = classifyPlaybackFailure(event.currentTarget.error);
-            // Aborted playback is us, not a failure — nothing happened worth saying.
-            if (!classified) return;
-            // A second failure on a link fetched to replace a failed one settles it: the file is
-            // the problem, not the link's age.
-            const kind =
-              classified === "expired" && reloadedAfterFailureRef.current ? "broken" : classified;
-            setFailure({ url: sourceUrl, kind });
-            // The frame says both cases, so only the genuine fault also toasts: below 1280px the
-            // pip is a strip in the corner of the rail, and a broken FILE is worth knowing about
-            // even if the reader never looks up at it. An expired link is ordinary and stays
-            // where the reload button is.
-            if (kind === "broken") toast.error("Could not play this recording.");
-          }}
-        />
+        <div className="flex flex-col bg-black">
+          {/* controls, and nothing else: autoplay on a page someone opened to read a transcript is
+              a room full of unexpected sound. */}
+          <video
+            ref={videoRef}
+            src={sourceUrl}
+            controls
+            preload="metadata"
+            className={frameClass}
+            onLoadedMetadata={(event) => {
+              // Metadata arrived, so this link opens: whatever the previous one's failure was, it is
+              // settled and spent. Without this reset the very first expiry would mark the player
+              // for the rest of its life, and the NEXT genuine expiry — an hour of reading later —
+              // would be reported as an unplayable file with no reload offered.
+              reloadedAfterFailureRef.current = false;
+              publishDuration(event.currentTarget);
+              const queued = pendingSeekRef.current;
+              if (!queued) return;
+              pendingSeekRef.current = null;
+              /**
+               * WT-655 — the queued seek is the one the caller's guard could not see.
+               *
+               * A click that lands before the file has been fetched is held in `pendingSeekRef` and
+               * applied here. At the instant it was made the page had no duration to check it
+               * against — the player only fetches on demand, so nothing had loaded — which means the
+               * past-the-end refusal upstream cannot have run for exactly the first click of every
+               * visit. This is that refusal, made at the only moment the number exists: right now,
+               * on the element.
+               *
+               * FILE AXIS AGAINST FILE AXIS, AND NOTHING ELSE. `queued.seconds` is already an offset
+               * into this file, computed by recording-seek.ts; `duration` is this file's length. No
+               * meeting clock appears in this component and none may — see the header of
+               * recording-seek.ts for what a second subtraction of the two origins costs.
+               *
+               * Dropped rather than clamped, because the browser's own clamp is the bug: it parks the
+               * playhead on the last frame, which is a still picture of the meeting ending and looks
+               * exactly like a seek that worked.
+               */
+              const duration = event.currentTarget.duration;
+              if (Number.isFinite(duration) && duration > 0 && queued.seconds > duration) {
+                toast.info("This recording stopped before that moment.");
+                return;
+              }
+              event.currentTarget.currentTime = queued.seconds;
+              void event.currentTarget.play().catch(() => {});
+            }}
+            /* A duration is revised, not announced once: a fragmented MP4 reports `Infinity` until
+               enough of it has been read to know better, and a caller that only ever heard
+               `loadedmetadata` would keep an unknown length forever on exactly the containers the
+               egress pipeline produces. */
+            onDurationChange={(event) => publishDuration(event.currentTarget)}
+            /* WT-655 — the playhead, for the transcript to follow.
+               `timeupdate` fires roughly four times a second while playing, and the provider throttles
+               to about that rate whatever this browser's rate turns out to be. The `paused` guard is
+               the "nothing runs while paused" rule at its source: the event also fires for a SEEK made
+               while paused, and honouring that would drag a reader who paused deliberately and
+               scrolled away back to the playhead they had just left. */
+            onTimeUpdate={(event) => {
+              if (event.currentTarget.paused) return;
+              onPlaybackSeconds?.(event.currentTarget.currentTime);
+            }}
+            onPlay={() => onPlayingChange?.(true)}
+            onPause={() => onPlayingChange?.(false)}
+            // Ended is not paused as far as the element's own events go, and a recording that ran to
+            // the end must stop being "playing" or the follow pill would hang around over a finished
+            // video offering to chase a playhead that has stopped.
+            onEnded={() => onPlayingChange?.(false)}
+            /* WT-655: without this the frame just went black. The surrounding code only ever
+               reported a missing `url` FIELD, which says nothing about whether that url opens —
+               and a fifteen-minute presigned link on a page people keep open will routinely stop
+               opening. Every failure to play was therefore silent, which is why the whole seek
+               feature looked broken rather than merely stale. */
+            onError={(event) => {
+              const classified = classifyPlaybackFailure(event.currentTarget.error);
+              // Aborted playback is us, not a failure — nothing happened worth saying.
+              if (!classified) return;
+              // A second failure on a link fetched to replace a failed one settles it: the file is
+              // the problem, not the link's age.
+              const kind =
+                classified === "expired" && reloadedAfterFailureRef.current ? "broken" : classified;
+              setFailure({ url: sourceUrl, kind });
+              // The frame says both cases, so only the genuine fault also toasts: below 1280px the
+              // pip is a strip in the corner of the rail, and a broken FILE is worth knowing about
+              // even if the reader never looks up at it. An expired link is ordinary and stays
+              // where the reload button is.
+              if (kind === "broken") toast.error("Could not play this recording.");
+            }}
+          />
+          {marks && marks.length > 0 && videoDuration && videoDuration > 0 ? (
+            <div
+              className="relative flex h-2.5 w-full items-center border-t border-border/30 bg-surface-2/40 px-2 py-0.5 select-none"
+              title="Recording marks (turn starts)"
+              aria-label="Recording marks"
+            >
+              <div className="relative h-1.5 w-full">
+                {marks.map((mark, idx) => {
+                  const percent = Math.min(100, Math.max(0, (mark.seconds / videoDuration) * 100));
+                  return (
+                    <button
+                      key={`${mark.atMs}-${idx}`}
+                      type="button"
+                      onClick={() => handleMarkClick(mark)}
+                      style={{ left: `${percent}%` }}
+                      className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 size-2 rounded-full bg-ink/40 transition-all hover:scale-125 hover:bg-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                      title={`Jump to turn at ${Math.round(mark.seconds)}s`}
+                      aria-label={`Jump to turn at ${Math.round(mark.seconds)} seconds`}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div className={noticeFrameClass}>
           <button
