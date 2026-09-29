@@ -35,6 +35,7 @@ import { getLanguageName } from "../language/languages.ts";
 export const SAMPLE_TEMPLATE_HEADER = [
   "Term",
   "Translation",
+  "Context",
   "Field",
   "Definition",
   "Note",
@@ -45,6 +46,7 @@ export const SAMPLE_TEMPLATE_HEADER = [
 type SampleRow = {
   term: string;
   translation: string;
+  context?: string;
   field: string;
   definition: string;
   note: string;
@@ -63,6 +65,7 @@ const GENUINE_SAMPLES: Record<string, SampleRow[]> = {
     {
       term: "offside",
       translation: "việt vị",
+      context: "Tình huống cầu thủ tấn công đứng dưới hậu vệ đối phương khi nhận bóng",
       field: "Football",
       definition: "Attacker ahead of the last defender",
       note: "Common in match commentary",
@@ -71,6 +74,7 @@ const GENUINE_SAMPLES: Record<string, SampleRow[]> = {
     {
       term: "headshot",
       translation: "bắn trúng đầu",
+      context: "Trong game bắn súng góc nhìn thứ nhất (FPS)",
       field: "Gaming",
       definition: "A shot that hits the head",
       note: "",
@@ -82,6 +86,7 @@ const GENUINE_SAMPLES: Record<string, SampleRow[]> = {
     {
       term: "việt vị",
       translation: "offside",
+      context: "Tình huống cầu thủ nhận bóng khi đứng dưới hàng phòng ngự đối phương",
       field: "Football",
       definition: "Cầu thủ tấn công đứng trên hậu vệ cuối cùng",
       note: "Hay gặp khi bình luận trận đấu",
@@ -93,6 +98,7 @@ const GENUINE_SAMPLES: Record<string, SampleRow[]> = {
     {
       term: "offside",
       translation: "an attacker positioned ahead of the last defender",
+      context: "Called when the ball is played forward to them",
       field: "Football",
       definition: "Called when the ball is played forward to them",
       note: "Same-language glossary: describe the term rather than translate it",
@@ -101,6 +107,7 @@ const GENUINE_SAMPLES: Record<string, SampleRow[]> = {
     {
       term: "assist",
       translation: "the pass that directly sets up a goal",
+      context: "In soccer or basketball when a player passes to a teammate who scores",
       field: "Football",
       definition: "Credited to the passer, not the scorer",
       note: "",
@@ -126,6 +133,7 @@ function placeholderSamples(
       translation: sameLanguage
         ? `<what this term means, in ${targetName}>`
         : `<translation in ${targetName}>`,
+      context: "optional: sentence or scenario showing how this term is used",
       field: "optional",
       definition: "optional",
       note: sameLanguage
@@ -154,6 +162,7 @@ export function buildSampleTemplateRows(
     ...samples.map((row, index) => [
       row.term,
       row.translation,
+      row.context ?? "",
       row.field,
       row.definition,
       row.note,

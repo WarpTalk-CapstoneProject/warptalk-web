@@ -78,8 +78,35 @@
     "glossaryDeleted": "Glossary deleted.",
     "glossaryDeleteFailed": "Could not delete the glossary.",
     "termRemoved": "Term removed.",
-    "termRemoveFailed": "Could not remove the term."
+    "termRemoveFailed": "Could not remove the term.",
+    "customizingTerm": "Pre-filled term '{term}' into Custom Glossary form.",
+    "createGlossaryFirstForCustom": "Create a glossary pair first to customize this term."
   },
+  "tabs": {
+    "custom": "Custom Glossary",
+    "global": "Global Glossary"
+  },
+  "grouping": {
+    "label": "Group by",
+    "byDomain": "Domain",
+    "alphabetical": "A-Z"
+  },
+  "domains": {
+    "all": "All domains"
+  },
+  "globalView": {
+    "bannerTitle": "Platform Terminology",
+    "bannerNotice": "Published terms are applied by default across meetings. Custom workspace terms take precedence on conflict. Workspace custom glossaries are strictly private and never exposed to platform admins.",
+    "searchPlaceholder": "Search by term, translation, domain, context...",
+    "emptyTitle": "No global terms found",
+    "emptyDescription": "Try searching with a different keyword or domain filter.",
+    "customizeAction": "Customize",
+    "loadError": "Could not load global glossary terms."
+  },
+  "termsCount": "terms",
+  "priorityLabel": "Priority",
+  "contextLabel": "Context",
+  "multiDomainNotice": "Also defined in",
   "validation": {
     "nameMin": "Name must be at least 2 characters",
     "sourceLanguageRequired": "Select the language people speak",
