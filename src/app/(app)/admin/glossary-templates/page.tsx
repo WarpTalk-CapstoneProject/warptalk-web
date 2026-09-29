@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
 import {
   Books,
   Plus,
@@ -9,8 +8,6 @@ import {
   FileCsv,
   Eye,
   PencilSimple,
-  Archive,
-  Trash,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
@@ -35,7 +32,6 @@ import { Button } from "@/components/ui/button";
 import {
   BUILT_IN_GLOSSARY_TEMPLATES,
   type GlossaryTemplateDefinition,
-  type GlossaryTemplateCategory,
   generateTemplateCsv,
   generateTemplateXlsx,
 } from "@/lib/glossary/glossary-templates-catalog";
@@ -49,6 +45,17 @@ import { GlossaryTemplateWizard } from "@/components/admin/cms/glossary-template
 
 type StatusTab = "all" | "published" | "draft" | "archived";
 type SortOption = "name" | "terms" | "updated";
+
+function createTemplateCopy(template: GlossaryTemplateDefinition): GlossaryTemplateDefinition {
+  const stamp = Date.now().toString(36);
+  return {
+    ...template,
+    key: `${template.key}-copy-${stamp}`,
+    name: `${template.name} (Copy)`,
+    status: "draft",
+    updatedAt: new Date().toISOString(),
+  };
+}
 
 export default function GlossaryTemplatesAdminPage() {
   const [templates, setTemplates] = useState<GlossaryTemplateDefinition[]>(BUILT_IN_GLOSSARY_TEMPLATES);
@@ -115,13 +122,7 @@ export default function GlossaryTemplatesAdminPage() {
   };
 
   const handleDuplicate = (template: GlossaryTemplateDefinition) => {
-    const copy: GlossaryTemplateDefinition = {
-      ...template,
-      key: `${template.key}-copy-${Date.now().toString(36)}`,
-      name: `${template.name} (Copy)`,
-      status: "draft",
-      updatedAt: new Date().toISOString(),
-    };
+    const copy = createTemplateCopy(template);
     setTemplates((prev) => [copy, ...prev]);
     toast.success(`Đã nhân bản "${template.name}"`);
   };

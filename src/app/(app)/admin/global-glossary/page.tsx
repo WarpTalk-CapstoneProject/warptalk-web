@@ -479,7 +479,7 @@ function GlobalGlossaryAdmin() {
           ) : null}
           {term.usageNote ? (
             <span className="block text-[10px] italic text-ink-subtle leading-tight mt-0.5 line-clamp-1">
-              "{term.usageNote}"
+              &ldquo;{term.usageNote}&rdquo;
             </span>
           ) : null}
         </div>

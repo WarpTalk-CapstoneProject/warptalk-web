@@ -675,7 +675,7 @@ export default function WorkspaceGlossaryPage() {
                                   <span className="font-medium not-italic text-ink-muted">
                                     {t("contextLabel")}:{" "}
                                   </span>
-                                  "{term.context}"
+                                  &ldquo;{term.context}&rdquo;
                                 </p>
                               )}
                               {otherDomains && otherDomains.length > 0 && (
@@ -775,7 +775,7 @@ export default function WorkspaceGlossaryPage() {
                                   <span className="font-medium not-italic text-ink-muted">
                                     {t("contextLabel")}:{" "}
                                   </span>
-                                  "{term.context}"
+                                  &ldquo;{term.context}&rdquo;
                                 </p>
                               )}
                             </div>

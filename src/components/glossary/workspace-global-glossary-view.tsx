@@ -285,7 +285,7 @@ export function WorkspaceGlobalGlossaryView({
                             <span className="font-medium text-ink-muted">
                               {t("contextLabel")}:
                             </span>
-                            <span className="italic">"{term.usageNote}"</span>
+                            <span className="italic">&ldquo;{term.usageNote}&rdquo;</span>
                           </div>
                         )}
 
@@ -364,7 +364,7 @@ export function WorkspaceGlobalGlossaryView({
                         )}
                         {term.usageNote && (
                           <p className="text-[11px] italic text-ink-subtle">
-                            "{term.usageNote}"
+                            &ldquo;{term.usageNote}&rdquo;
                           </p>
                         )}
                         {otherDomains && otherDomains.length > 0 && (
