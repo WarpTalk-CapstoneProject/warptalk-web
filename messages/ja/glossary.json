@@ -78,8 +78,35 @@
     "glossaryDeleted": "用語集を削除しました。",
     "glossaryDeleteFailed": "用語集を削除できませんでした。",
     "termRemoved": "用語を削除しました。",
-    "termRemoveFailed": "用語を削除できませんでした。"
+    "termRemoveFailed": "用語を削除できませんでした。",
+    "customizingTerm": "カスタム用語集フォームに用語「{term}」を入力しました。",
+    "createGlossaryFirstForCustom": "この用語をカスタマイズするには、まず用語集ペアを作成してください。"
   },
+  "tabs": {
+    "custom": "カスタム用語集",
+    "global": "グローバル用語集"
+  },
+  "grouping": {
+    "label": "グループ分け",
+    "byDomain": "分野",
+    "alphabetical": "アルファベット順"
+  },
+  "domains": {
+    "all": "すべての分野"
+  },
+  "globalView": {
+    "bannerTitle": "プラットフォーム用語集",
+    "bannerNotice": "公開された用語はミーティング全体でデフォルトとして適用されます。競合する場合はワークスペースのカスタム用語が優先されます。ワークスペースの用語は厳重に保護され、プラットフォーム管理者に公開されることはありません。",
+    "searchPlaceholder": "用語、翻訳、分野、文脈で検索...",
+    "emptyTitle": "グローバル用語が見つかりません",
+    "emptyDescription": "別のキーワードや分野フィルターで検索してください。",
+    "customizeAction": "カスタマイズ",
+    "loadError": "グローバル用語集を読み込めませんでした。"
+  },
+  "termsCount": "用語",
+  "priorityLabel": "優先度",
+  "contextLabel": "文脈",
+  "multiDomainNotice": "他の分野の定義",
   "validation": {
     "nameMin": "名前は2文字以上で入力してください",
     "sourceLanguageRequired": "話される言語を選択してください",

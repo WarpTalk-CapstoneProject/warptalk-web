@@ -470,10 +470,17 @@ function GlobalGlossaryAdmin() {
       primary: true,
       sortField: "term",
       cell: (term) => (
-        <div className="min-w-0">
+        <div className="min-w-0 py-0.5">
           <span className="block truncate text-xs font-semibold text-ink">{term.term}</span>
           {term.definition ? (
-            <span className="block truncate text-[10px] font-normal text-ink-muted">{term.definition}</span>
+            <span className="block text-[11px] font-normal text-ink-muted leading-tight mt-0.5 line-clamp-2">
+              {term.definition}
+            </span>
+          ) : null}
+          {term.usageNote ? (
+            <span className="block text-[10px] italic text-ink-subtle leading-tight mt-0.5 line-clamp-1">
+              "{term.usageNote}"
+            </span>
           ) : null}
         </div>
       ),
@@ -481,7 +488,7 @@ function GlobalGlossaryAdmin() {
     {
       id: "translation",
       header: t("table.translation"),
-      cell: (term) => <span className="block truncate text-xs font-semibold text-primary">{term.preferredTranslation}</span>,
+      cell: (term) => <span className="block truncate text-xs font-semibold text-ink">{term.preferredTranslation}</span>,
     },
     {
       id: "languages",
@@ -499,8 +506,12 @@ function GlobalGlossaryAdmin() {
     {
       id: "domain",
       header: t("table.domain"),
-      className: "w-[120px]",
-      cell: (term) => <span className="block truncate text-xs text-ink-muted">{term.businessDomain || t("table.noDomain")}</span>,
+      className: "w-[130px]",
+      cell: (term) => (
+        <span className="inline-flex items-center rounded-[4px] border border-hairline bg-surface-2 px-1.5 py-0.5 text-[11px] font-medium text-ink">
+          {term.businessDomain || t("table.noDomain")}
+        </span>
+      ),
     },
     {
       id: "priority",
@@ -624,6 +635,40 @@ function GlobalGlossaryAdmin() {
       />
 
       <AdminStatusTabs list={list} filterKey="status" tabs={statusTabs} label={t("filters.statusLabel")} />
+
+      {domains.length > 0 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 hide-scrollbar">
+          <button
+            type="button"
+            onClick={() => list.setFilter("domain", null)}
+            className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+              !state.filters.domain
+                ? "border-border bg-surface-3 font-semibold text-ink"
+                : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+            }`}
+          >
+            {t("filters.allDomains")}
+            <span className="text-[10px] text-ink-subtle">({totalCount})</span>
+          </button>
+          {domains.map((d) => {
+            const active = state.filters.domain === d;
+            return (
+              <button
+                key={d}
+                type="button"
+                onClick={() => list.setFilter("domain", d)}
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                  active
+                    ? "border-border bg-surface-3 font-semibold text-ink"
+                    : "border-hairline bg-surface-1 text-ink-muted hover:bg-surface-2 hover:text-ink"
+                }`}
+              >
+                {d}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <AdminListToolbar
         list={list}
