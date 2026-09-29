@@ -14,24 +14,24 @@ import {
 describe("workspace-telemetry", () => {
   it("defaults to USD currency with standard rate", () => {
     assert.equal(DEFAULT_CURRENCY_CONFIG.currency, "USD");
-    assert.equal(DEFAULT_CURRENCY_CONFIG.ratePerCredit, 0.0039);
+    assert.equal(DEFAULT_CURRENCY_CONFIG.ratePerCredit, 0.000152);
   });
 
   it("formats credits with USD primary and converted VND secondary", () => {
-    const output = formatCreditWithFiat(1000, DEFAULT_CURRENCY_CONFIG, 25000);
-    // 1,000 * 0.0039 = 3.9 USD; 3.9 * 25,000 = 97,500 VND
-    assert.match(output, /1,000 cr/);
-    assert.match(output, /3\.9 USD/);
-    assert.match(output, /97,500 VND/);
+    const output = formatCreditWithFiat(10000, DEFAULT_CURRENCY_CONFIG, 26300);
+    // 10,000 * 0.000152 = 1.52 USD; 1.52 * 26,300 = 39,976 VND
+    assert.match(output, /10,000 cr/);
+    assert.match(output, /1\.52 USD/);
+    assert.match(output, /39,976 VND/);
   });
 
   it("formats credits with VND primary and converted USD secondary when configured", () => {
-    const vndConfig: CurrencyRateConfig = { currency: "VND", ratePerCredit: 100 };
-    const output = formatCreditWithFiat(1000, vndConfig, 25000);
-    // 1,000 * 100 = 100,000 VND; 100,000 / 25,000 = 4 USD
-    assert.match(output, /1,000 cr/);
-    assert.match(output, /100,000 VND/);
-    assert.match(output, /4 USD/);
+    const vndConfig: CurrencyRateConfig = { currency: "VND", ratePerCredit: 4 };
+    const output = formatCreditWithFiat(10000, vndConfig, 25000);
+    // 10,000 * 4 = 40,000 VND; 40,000 / 25,000 = 1.6 USD
+    assert.match(output, /10,000 cr/);
+    assert.match(output, /40,000 VND/);
+    assert.match(output, /1\.6 USD/);
   });
 
   it("calculates unit economics per meeting accurately in USD", () => {
@@ -40,8 +40,8 @@ describe("workspace-telemetry", () => {
     assert.equal(summary.completedMeetingsCount, 10);
     assert.equal(summary.avgCreditsPerMeeting, 1200);
     assert.equal(summary.currency, "USD");
-    assert.equal(summary.avgCostPerMeeting, 1200 * 0.0039);
-    assert.equal(summary.totalCost, 12000 * 0.0039);
+    assert.equal(summary.avgCostPerMeeting, 1200 * 0.000152);
+    assert.equal(summary.totalCost, 12000 * 0.000152);
   });
 
   it("aggregates daily, monthly and quarterly telemetry buckets", () => {

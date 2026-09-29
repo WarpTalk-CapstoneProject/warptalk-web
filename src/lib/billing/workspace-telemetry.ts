@@ -9,19 +9,21 @@ export interface CurrencyRateConfig {
 }
 
 /**
- * Platform default rates derived from Admin Master pricing config:
- * Default base: 1 credit = 100 VND.
- * Default FX rate: 1 USD ≈ 25,641 VND -> 1 credit ≈ $0.0039 USD.
+ * Platform default rates derived from WarpTalk Admin Master and Database Migrations:
+ * (Ref: 042-27-07-2026-add-billing-pricing-config.sql & 040-26-07-2026-seed-enterprise-subscription-plan.sql)
+ * - Base credit value: 1 credit = 4 VND (`credit_value_vnd = 4`, `overage_price_per_credit = 4.0000`).
+ * - Default FX rate: 1 USD = 26,300 VND (`fx_rate_usd_vnd = 26300`).
+ * - Default USD rate: 4 / 26,300 ≈ $0.000152 USD per credit.
  */
-export const ADMIN_MASTER_DEFAULT_RATES: Record<string, number> = {
-  USD: 0.0039, // $0.0039 per credit (~100 VND / 25,641)
-  VND: 100,    // 1 credit = 100 VND
-  EUR: 0.0036, // €0.0036 per credit
-  JPY: 0.58,   // ¥0.58 per credit
-  GBP: 0.0031, // £0.0031 per credit
-};
+export const DEFAULT_FX_RATE_USD_VND = 26300; // 1 USD = 26,300 VND (from migration 042)
 
-export const DEFAULT_FX_RATE_USD_VND = 25641; // 1 USD ≈ 25,641 VND
+export const ADMIN_MASTER_DEFAULT_RATES: Record<string, number> = {
+  USD: 0.000152, // $0.000152 per credit (4 VND / 26,300)
+  VND: 4,        // 1 credit = 4 VND
+  EUR: 0.000140, // €0.000140 per credit
+  JPY: 0.023,    // ¥0.023 per credit
+  GBP: 0.000120, // £0.000120 per credit
+};
 
 export const DEFAULT_CURRENCY_CONFIG: CurrencyRateConfig = {
   currency: "USD",
