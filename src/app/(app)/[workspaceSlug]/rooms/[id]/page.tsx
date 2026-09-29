@@ -114,6 +114,7 @@ import {
   seekTargetSeconds,
   type SeekSources,
 } from "@/lib/meeting/recording-seek";
+import { buildRecordingMarks, type RecordingMark } from "@/lib/meeting/recording-marks";
 import {
   describeRecordSharing,
   isRecordShared,
@@ -592,6 +593,19 @@ export default function RoomInformationPage() {
     [transcriptSegments],
   );
   const transcriptEntryCount = transcriptRows.length;
+
+  /**
+   * Where each transcript turn falls on the RECORDING's own file-second axis, one mark per turn.
+   *
+   * Built from the exact same `transcriptRows` the transcript renders its timestamps from, and the
+   * exact same `seekSources` `requestSeek` measures against — so a mark on the scrubber and the
+   * transcript line it points at can never disagree about where a turn starts. See
+   * recording-marks.ts for why a turn that cannot be placed is dropped rather than clamped.
+   */
+  const recordingMarks = useMemo(
+    () => buildRecordingMarks(transcriptRows, seekSources),
+    [transcriptRows, seekSources],
+  );
 
   /**
    * Whether this meeting captured any transcript — `undefined` until that is actually known.
@@ -1192,6 +1206,8 @@ export default function RoomInformationPage() {
                 // is the wire it comes back up. See the note on `seekSources` above.
                 onDurationSeconds={setRecordingDurationSeconds}
                 onJumpToMoment={jumpToTranscriptMoment}
+                marks={recordingMarks}
+                onMarkClick={(mark) => jumpToTranscriptMoment(mark.atMs)}
                 seekUnavailableReason={seekUnavailableReason}
                 recordingUnavailableReason={recordingUnavailableReason}
                 recordingFailure={recordingFailure}
@@ -1418,6 +1434,8 @@ function MeetingRecordSection({
   onTabChange,
   expanded,
   onToggleExpanded,
+  marks,
+  onMarkClick,
 }: {
   roomId: string;
   /** WT-480: only the host may change who the record is shared with. */
@@ -1498,6 +1516,8 @@ function MeetingRecordSection({
   onToggleExpanded?: () => void;
   /** WT-703: the languages the summary and minutes pickers may generate this meeting in. */
   generatableLanguages?: readonly string[] | null;
+  marks?: readonly RecordingMark[];
+  onMarkClick?: (mark: RecordingMark) => void;
 }) {
   const t = useTranslations("meetingRoomPage");
   const { busyArtifactId, downloadArtifact } =
@@ -2045,6 +2065,8 @@ function MeetingRecordSection({
             onSelectRendering={endedRecord ? selectRendering : undefined}
             generatableLanguages={generatableLanguages}
             speakerDirectory={speakerDirectory}
+            marks={marks}
+            onMarkClick={onMarkClick}
           />
         ) : (
           transcript
