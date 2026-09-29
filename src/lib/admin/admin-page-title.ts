@@ -30,7 +30,6 @@ export const ADMIN_PAGE_LABEL_KEYS: Readonly<Record<string, string>> = {
   settings: "platformSettings",
   plugins: "plugins",
   "global-glossary": "globalGlossary",
-  "glossary-templates": "glossaryTemplates",
   staff: "staff",
   roles: "roles",
 };
