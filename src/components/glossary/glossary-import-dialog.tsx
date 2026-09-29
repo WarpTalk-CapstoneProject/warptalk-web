@@ -73,6 +73,7 @@ const HEADER_ALIASES: Record<string, keyof ParsedGlossaryRow> = {
   context: "context",
   "usage context": "context",
   "context sentence": "context",
+  // i18n-allow: Vietnamese column aliases supported by spreadsheet importer
   "ngữ cảnh": "context",
   "ngu canh": "context",
   "câu ví dụ": "context",
@@ -431,7 +432,7 @@ export function GlossaryImportDialog({
                 className="flex items-center gap-1 font-medium text-primary underline-offset-2 hover:underline"
               >
                 <Sparkle className="h-3.5 w-3.5" />
-                Xem và tải template mẫu (.xlsx / .csv)
+                View & download sample templates (.xlsx / .csv)
               </button>
             </div>
 

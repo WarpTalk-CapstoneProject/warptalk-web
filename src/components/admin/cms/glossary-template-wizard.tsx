@@ -63,6 +63,7 @@ export function GlossaryTemplateWizard({
       setSourceLanguage("en");
       setTargetLanguage("vi");
       setStatus("published");
+      // i18n-allow: default sample template term
       setSampleTerms([
         {
           term: "pipeline",
@@ -119,21 +120,21 @@ export function GlossaryTemplateWizard({
 
   const handleSubmit = () => {
     if (!name.trim()) {
-      toast.error("Vui lòng nhập tên template");
+      toast.error("Please enter a template name");
       return;
     }
     if (!key.trim()) {
-      toast.error("Vui lòng nhập mã định danh (key)");
+      toast.error("Please enter a template identifier key");
       return;
     }
     if (!templateToEdit && takenKeys.has(key)) {
-      toast.error(`Mã key "${key}" đã tồn tại. Vui lòng chọn key khác.`);
+      toast.error(`Key "${key}" already exists. Please choose a different key.`);
       return;
     }
 
     const validTerms = sampleTerms.filter((t) => t.term.trim() && t.translation.trim());
     if (validTerms.length === 0) {
-      toast.error("Vui lòng nhập ít nhất 1 thuật ngữ mẫu có Term và Translation");
+      toast.error("Please provide at least 1 sample term with Term and Translation");
       return;
     }
 
@@ -150,7 +151,7 @@ export function GlossaryTemplateWizard({
     };
 
     onSave(updated);
-    toast.success(templateToEdit ? "Đã cập nhật template" : "Đã tạo template mới");
+    toast.success(templateToEdit ? "Template updated" : "Template created");
     onOpenChange(false);
   };
 
@@ -161,11 +162,11 @@ export function GlossaryTemplateWizard({
           <div className="flex items-center gap-2">
             <Sparkle className="h-5 w-5 text-primary" weight="fill" />
             <DialogTitle className="text-[17px] font-semibold text-ink">
-              {templateToEdit ? `Chỉnh sửa: ${templateToEdit.name}` : "Tạo Glossary Template mới"}
+              {templateToEdit ? `Edit: ${templateToEdit.name}` : "New Glossary Template"}
             </DialogTitle>
           </div>
           <DialogDescription className="text-[12px] text-ink-muted">
-            Cấu hình bộ thuật ngữ mẫu chuẩn theo lĩnh vực và ngôn ngữ (EN, VI, JA) phục vụ toàn bộ hệ thống.
+            Configure standard glossary templates across domains and languages (EN, VI, JA) for the platform.
           </DialogDescription>
         </DialogHeader>
 
@@ -173,21 +174,21 @@ export function GlossaryTemplateWizard({
           {/* Metadata Section */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <Label className="text-[11.5px] font-semibold">Tên template (Name)</Label>
+              <Label className="text-[11.5px] font-semibold">Template name</Label>
               <Input
                 value={name}
                 onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="VD: IT & Cloud Architecture"
+                placeholder="e.g. IT & Cloud Architecture"
                 className="mt-1 h-8 text-xs border-hairline"
               />
             </div>
             <div>
-              <Label className="text-[11.5px] font-semibold">Mã key định danh</Label>
+              <Label className="text-[11.5px] font-semibold">Identifier key</Label>
               <Input
                 value={key}
                 disabled={!!templateToEdit}
                 onChange={(e) => setKey(e.target.value)}
-                placeholder="VD: it-cloud-architecture"
+                placeholder="e.g. it-cloud-architecture"
                 className="mt-1 h-8 text-xs font-mono border-hairline"
               />
             </div>
@@ -195,7 +196,7 @@ export function GlossaryTemplateWizard({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <Label className="text-[11.5px] font-semibold">Lĩnh vực (Category)</Label>
+              <Label className="text-[11.5px] font-semibold">Category</Label>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as GlossaryTemplateCategory)}
@@ -208,51 +209,51 @@ export function GlossaryTemplateWizard({
               </select>
             </div>
             <div>
-              <Label className="text-[11.5px] font-semibold">Ngôn ngữ nguồn (Source)</Label>
+              <Label className="text-[11.5px] font-semibold">Source language</Label>
               <select
                 value={sourceLanguage}
                 onChange={(e) => setSourceLanguage(e.target.value as GlossaryTemplateLanguage)}
                 className="mt-1 block h-8 w-full rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
               >
                 <option value="en">English (EN)</option>
-                <option value="vi">Tiếng Việt (VI)</option>
-                <option value="ja">日本語 (JA)</option>
+                <option value="vi">Vietnamese (VI)</option>
+                <option value="ja">Japanese (JA)</option>
               </select>
             </div>
             <div>
-              <Label className="text-[11.5px] font-semibold">Ngôn ngữ đích (Target)</Label>
+              <Label className="text-[11.5px] font-semibold">Target language</Label>
               <select
                 value={targetLanguage}
                 onChange={(e) => setTargetLanguage(e.target.value as GlossaryTemplateLanguage)}
                 className="mt-1 block h-8 w-full rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
               >
-                <option value="vi">Tiếng Việt (VI)</option>
+                <option value="vi">Vietnamese (VI)</option>
                 <option value="en">English (EN)</option>
-                <option value="ja">日本語 (JA)</option>
+                <option value="ja">Japanese (JA)</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="sm:col-span-2">
-              <Label className="text-[11.5px] font-semibold">Mô tả ngắn gọn</Label>
+              <Label className="text-[11.5px] font-semibold">Description</Label>
               <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="VD: Bộ thuật ngữ microservices và đám mây cho kỹ sư phần mềm"
+                placeholder="e.g. Microservices and cloud infrastructure terms for software engineers"
                 className="mt-1 h-8 text-xs border-hairline"
               />
             </div>
             <div>
-              <Label className="text-[11.5px] font-semibold">Trạng thái (Status)</Label>
+              <Label className="text-[11.5px] font-semibold">Status</Label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as "published" | "draft" | "archived")}
                 className="mt-1 block h-8 w-full rounded-md border border-hairline bg-surface-1 px-2 text-xs text-ink"
               >
-                <option value="published">Published (Sẵn sàng dùng)</option>
-                <option value="draft">Draft (Bản nháp)</option>
-                <option value="archived">Archived (Lưu trữ)</option>
+                <option value="published">Published</option>
+                <option value="draft">Draft</option>
+                <option value="archived">Archived</option>
               </select>
             </div>
           </div>
@@ -261,7 +262,7 @@ export function GlossaryTemplateWizard({
           <div className="mt-3 flex flex-col gap-2 border-t border-hairline pt-3">
             <div className="flex items-center justify-between">
               <Label className="text-[12px] font-semibold text-ink">
-                Danh sách thuật ngữ mẫu ({sampleTerms.length} dòng)
+                Sample terms ({sampleTerms.length} rows)
               </Label>
               <Button
                 type="button"
@@ -271,7 +272,7 @@ export function GlossaryTemplateWizard({
                 className="h-7 gap-1 px-2.5 text-[11px] shadow-none"
               >
                 <Plus size={13} />
-                Thêm thuật ngữ
+                Add term
               </Button>
             </div>
 
@@ -325,7 +326,7 @@ export function GlossaryTemplateWizard({
                       <Input
                         value={term.context}
                         onChange={(e) => handleTermChange(index, "context", e.target.value)}
-                        placeholder="Context (Ngữ cảnh sử dụng / câu ví dụ)"
+                        placeholder="Context (usage context / example sentence)"
                         className="h-7 text-xs bg-surface-1"
                       />
                     </div>
@@ -357,10 +358,10 @@ export function GlossaryTemplateWizard({
 
         <DialogFooter className="mt-4 border-t border-hairline pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} className="shadow-none">
-            Hủy
+            Cancel
           </Button>
           <Button onClick={handleSubmit} className="shadow-none">
-            {templateToEdit ? "Lưu thay đổi" : "Tạo template"}
+            {templateToEdit ? "Save changes" : "Create template"}
           </Button>
         </DialogFooter>
       </DialogContent>

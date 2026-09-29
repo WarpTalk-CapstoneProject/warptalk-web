@@ -50,9 +50,9 @@ export function GlossaryTemplateGallery({
       link.download = `glossary-template-${template.key}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Đã tải xuống ${template.name} (.xlsx)`);
+      toast.success(`Downloaded ${template.name} (.xlsx)`);
     } catch {
-      toast.error("Không thể tạo file Excel");
+      toast.error("Failed to generate Excel file");
     } finally {
       setIsExporting(false);
     }
@@ -67,11 +67,10 @@ export function GlossaryTemplateGallery({
       link.href = url;
       link.download = `glossary-template-${template.key}.csv`;
       link.click();
-      link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Đã tải xuống ${template.name} (.csv)`);
+      toast.success(`Downloaded ${template.name} (.csv)`);
     } catch {
-      toast.error("Không thể tạo file CSV");
+      toast.error("Failed to generate CSV file");
     }
   };
 
@@ -87,7 +86,7 @@ export function GlossaryTemplateGallery({
       priority: term.priority,
     }));
     onSelectTemplate?.(template, rows);
-    toast.success(`Đã chọn mẫu ${template.name}`);
+    toast.success(`Selected template ${template.name}`);
   };
 
   return (
@@ -102,8 +101,8 @@ export function GlossaryTemplateGallery({
           {[
             { id: "all", label: "All" },
             { id: "en", label: "English (EN)" },
-            { id: "vi", label: "Tiếng Việt (VI)" },
-            { id: "ja", label: "日本語 (JA)" },
+            { id: "vi", label: "Vietnamese (VI)" },
+            { id: "ja", label: "Japanese (JA)" },
           ].map((lang) => (
             <button
               key={lang.id}
@@ -172,10 +171,10 @@ export function GlossaryTemplateGallery({
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline pb-2 mb-2">
             <div>
               <span className="text-[12px] font-semibold text-ink">
-                Xem trước: {activeTemplate.name}
+                Preview: {activeTemplate.name}
               </span>
               <span className="ml-2 text-[11px] text-ink-muted">
-                ({activeTemplate.sampleTerms.length} dòng mẫu, bao gồm cột Context)
+                ({activeTemplate.sampleTerms.length} sample terms, including Context column)
               </span>
             </div>
             <div className="flex items-center gap-2">
@@ -188,7 +187,7 @@ export function GlossaryTemplateGallery({
                 className="h-7 gap-1 px-2.5 text-[11px] shadow-none"
               >
                 <FileXls className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                Tải .xlsx
+                Download .xlsx
               </Button>
               <Button
                 type="button"
@@ -198,7 +197,7 @@ export function GlossaryTemplateGallery({
                 className="h-7 gap-1 px-2.5 text-[11px] shadow-none"
               >
                 <FileCsv className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-                Tải .csv
+                Download .csv
               </Button>
               {onSelectTemplate ? (
                 <Button
@@ -208,7 +207,7 @@ export function GlossaryTemplateGallery({
                   className="h-7 gap-1 px-3 text-[11px] shadow-none"
                 >
                   <Check className="h-3.5 w-3.5" />
-                  Dùng mẫu này
+                  Use this template
                 </Button>
               ) : null}
             </div>
@@ -220,7 +219,7 @@ export function GlossaryTemplateGallery({
                 <tr>
                   <th className="px-2.5 py-1.5 font-medium">Term</th>
                   <th className="px-2.5 py-1.5 font-medium">Translation</th>
-                  <th className="px-2.5 py-1.5 font-medium min-w-[160px]">Context (Ngữ cảnh)</th>
+                  <th className="px-2.5 py-1.5 font-medium min-w-[160px]">Context</th>
                   <th className="px-2.5 py-1.5 font-medium">Field</th>
                   <th className="px-2.5 py-1.5 font-medium">Part of speech</th>
                   <th className="px-2.5 py-1.5 font-medium text-right">Priority</th>

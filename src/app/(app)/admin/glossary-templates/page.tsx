@@ -123,7 +123,7 @@ export default function GlossaryTemplatesAdminPage() {
   const handleDuplicate = (template: GlossaryTemplateDefinition) => {
     const copy = createTemplateCopy(template);
     setTemplates((prev) => [copy, ...prev]);
-    toast.success(`Đã nhân bản "${template.name}"`);
+    toast.success(`Duplicated "${template.name}"`);
   };
 
   const handleArchive = (template: GlossaryTemplateDefinition) => {
@@ -134,12 +134,12 @@ export default function GlossaryTemplatesAdminPage() {
           : t,
       ),
     );
-    toast.success(template.status === "archived" ? "Đã khôi phục template" : "Đã lưu trữ template");
+    toast.success(template.status === "archived" ? "Restored template" : "Archived template");
   };
 
   const handleDelete = (template: GlossaryTemplateDefinition) => {
     setTemplates((prev) => prev.filter((t) => t.key !== template.key));
-    toast.success(`Đã xóa template "${template.name}"`);
+    toast.success(`Deleted template "${template.name}"`);
   };
 
   const handleDownloadXlsx = async (template: GlossaryTemplateDefinition) => {
@@ -151,9 +151,9 @@ export default function GlossaryTemplatesAdminPage() {
       link.download = `glossary-template-${template.key}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Đã tải xuống ${template.name} (.xlsx)`);
+      toast.success(`Downloaded ${template.name} (.xlsx)`);
     } catch {
-      toast.error("Không thể tạo file Excel");
+      toast.error("Failed to generate Excel file");
     }
   };
 
@@ -167,9 +167,9 @@ export default function GlossaryTemplatesAdminPage() {
       link.download = `glossary-template-${template.key}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      toast.success(`Đã tải xuống ${template.name} (.csv)`);
+      toast.success(`Downloaded ${template.name} (.csv)`);
     } catch {
-      toast.error("Không thể tạo file CSV");
+      toast.error("Failed to generate CSV file");
     }
   };
 
@@ -179,7 +179,7 @@ export default function GlossaryTemplatesAdminPage() {
         eyebrow="Configuration & Content"
         eyebrowIcon={<Books size={14} weight="fill" />}
         title="Glossary Templates"
-        description="Quản lý và cấu hình các bộ thuật ngữ mẫu chuẩn theo lĩnh vực và ngôn ngữ (EN, VI, JA) phục vụ toàn bộ hệ thống."
+        description="Manage and configure standardized glossary templates across domains and languages (EN, VI, JA)."
         actions={
           <Button size="sm" onClick={() => { setEditingTemplate(null); setIsWizardOpen(true); }}>
             <Plus size={14} />
@@ -243,15 +243,15 @@ export default function GlossaryTemplatesAdminPage() {
               <CmsSearchInput
                 value={search}
                 onChange={setSearch}
-                placeholder="Tìm theo tên, key, từ vựng..."
+                placeholder="Search by name, key, terms..."
               />
               <CmsSortSelect<SortOption>
                 value={sort}
                 onChange={setSort}
                 options={[
-                  { value: "name", label: "Tên template" },
-                  { value: "terms", label: "Số lượng thuật ngữ" },
-                  { value: "updated", label: "Cập nhật gần nhất" },
+                  { value: "name", label: "Template name" },
+                  { value: "terms", label: "Terms count" },
+                  { value: "updated", label: "Recently updated" },
                 ]}
               />
               <CmsViewToggle view={view} onChange={setView} />
@@ -265,12 +265,12 @@ export default function GlossaryTemplatesAdminPage() {
         {visible.length === 0 ? (
           <CmsEmptyState
             icon={<Books size={24} />}
-            title="Không tìm thấy template nào"
-            description="Thử thay đổi bộ lọc tìm kiếm hoặc tạo một template mới."
+            title="No templates found"
+            description="Try adjusting your search filters or create a new template."
             action={
               <Button size="sm" onClick={() => { setEditingTemplate(null); setIsWizardOpen(true); }}>
                 <Plus size={14} />
-                Tạo template mới
+                New template
               </Button>
             }
           />
@@ -399,7 +399,7 @@ export default function GlossaryTemplatesAdminPage() {
                         size="sm"
                         onClick={() => void handleDownloadXlsx(template)}
                         className="h-7 w-7 p-0 text-emerald-600 dark:text-emerald-400"
-                        title="Tải .xlsx"
+                        title="Download .xlsx"
                       >
                         <FileXls size={15} />
                       </Button>
@@ -408,7 +408,7 @@ export default function GlossaryTemplatesAdminPage() {
                         size="sm"
                         onClick={() => handleDownloadCsv(template)}
                         className="h-7 w-7 p-0 text-sky-600 dark:text-sky-400"
-                        title="Tải .csv"
+                        title="Download .csv"
                       >
                         <FileCsv size={15} />
                       </Button>

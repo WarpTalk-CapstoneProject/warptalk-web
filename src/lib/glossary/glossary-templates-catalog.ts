@@ -1,5 +1,6 @@
 /**
  * Curated Glossary Templates Catalog.
+ * // i18n-allow-file: curated multilingual templates catalog (EN, VI, JA)
  *
  * Provides standardized templates across key domains (IT, Business, Gaming, General)
  * and languages (EN, VI, JA).
