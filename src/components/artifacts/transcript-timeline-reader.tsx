@@ -7,16 +7,17 @@ import {
   DownloadSimple,
   MagnifyingGlass,
   SpinnerGap,
-  Translate,
   X,
 } from "@phosphor-icons/react/dist/ssr";
 import { toast } from "sonner";
 
+import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { TranscriptSpeakerAvatar } from "@/components/rooms/transcript-speaker-avatar";
 import {
   useTranscriptByRoom,
   useTranscriptCleanSentences,
   useTranscriptSegments,
+  useTranscriptTranslations,
 } from "@/hooks/use-transcripts";
 import { formatCitationTime } from "@/lib/meeting/meeting-summary";
 import {
@@ -27,17 +28,16 @@ import {
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   isTranscriptControlMarker,
-  type GroupedSavedTranscriptSegment,
-  type TranscriptSpeakerTurn,
 } from "@/lib/transcript/transcript-display";
-import { speakerColorVar, type TranscriptSpeaker } from "@/lib/transcript/speaker-color";
+import { type TranscriptSpeaker } from "@/lib/transcript/speaker-color";
 import type { LibraryEntry } from "@/lib/meeting/artifact-library";
 import type { TranscriptSegmentDto } from "@/types/transcript";
 import { cn } from "@/lib/utils";
 import { describeAbsence } from "@/lib/meeting/artifact-library";
+import { useAuthStore } from "@/stores/auth-store";
 
 /**
- * Fallback parsed speaker turn when raw segments are not available and we only have markdown body.
+ * Fallback parsed speaker turn when raw database segments are not available and we only have markdown body.
  */
 interface ParsedFallbackTurn {
   key: string;
@@ -48,6 +48,7 @@ interface ParsedFallbackTurn {
 }
 
 const SPEAKER_LINE_REGEX = /^\*\*\[(.+?)(?:\s+\(([^()]*)\))?\]\*\*:\s*(.*)$/;
+// i18n-allow: Regex character class matching Unicode Vietnamese characters in transcript speaker names
 const PLAIN_SPEAKER_REGEX = /^([A-ZÀ-Ỹa-zà-ỹ0-9_.\s]+?):\s*(.*)$/;
 const TIMESTAMP_PREFIX_REGEX = /^\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)$/;
 
@@ -126,12 +127,14 @@ export function TranscriptTimelineReader({
 }) {
   const [viewMode, setViewMode] = useState<"clean" | "verbatim">("clean");
   const [searchQuery, setSearchQuery] = useState("");
+  const viewerId = useAuthStore((state) => state.user?.id);
 
   // Query database segments when room ID is present
   const transcriptQuery = useTranscriptByRoom(roomId);
   const transcriptId = transcriptQuery.data?.id;
 
   const segmentsQuery = useTranscriptSegments(transcriptId);
+  const translationsQuery = useTranscriptTranslations(transcriptId);
   const cleanSentencesQuery = useTranscriptCleanSentences(transcriptId);
 
   const rawSegments = segmentsQuery.data?.items ?? [];
@@ -141,47 +144,13 @@ export function TranscriptTimelineReader({
     [rawSegments],
   );
 
-  const cleanView = useMemo<CleanTranscriptView<TranscriptSegmentDto> | null>(
-    () =>
-      viewMode === "clean" && orderedSegments.length > 0
-        ? buildCleanTranscriptView(orderedSegments, cleanSentencesQuery.data ?? [], {
-            idOf: (segment) => segment.id,
-          })
-        : null,
-    [viewMode, orderedSegments, cleanSentencesQuery.data],
-  );
-
-  const groupedSegments = useMemo(() => {
-    if (orderedSegments.length === 0) return [];
-    const rows = groupSavedTranscriptSegments(cleanView ? cleanView.segments : orderedSegments);
-    return rows;
-  }, [cleanView, orderedSegments]);
-
-  const speakerTurns = useMemo(() => {
-    if (groupedSegments.length === 0) return [];
-    return groupIntoSpeakerTurns(groupedSegments);
-  }, [groupedSegments]);
-
   // Fallback parsed turns if raw database segments are empty
   const fallbackTurns = useMemo(
-    () => (speakerTurns.length === 0 && entry.body ? parseMarkdownTranscript(entry.body) : []),
-    [speakerTurns.length, entry.body],
+    () => (rawSegments.length === 0 && entry.body ? parseMarkdownTranscript(entry.body) : []),
+    [rawSegments.length, entry.body],
   );
 
-  // Search filtering
   const queryLower = searchQuery.trim().toLowerCase();
-
-  const filteredRichTurns = useMemo(() => {
-    if (!queryLower) return speakerTurns;
-    return speakerTurns.filter(
-      (turn) =>
-        turn.speakerName.toLowerCase().includes(queryLower) ||
-        turn.lines.some((l) =>
-          (l.originalText ?? "").toLowerCase().includes(queryLower) ||
-          (l.paragraphs ?? []).some((p) => p.toLowerCase().includes(queryLower)),
-        ),
-    );
-  }, [speakerTurns, queryLower]);
 
   const filteredFallbackTurns = useMemo(() => {
     if (!queryLower) return fallbackTurns;
@@ -191,11 +160,6 @@ export function TranscriptTimelineReader({
         turn.paragraphs.some((p) => p.toLowerCase().includes(queryLower)),
     );
   }, [fallbackTurns, queryLower]);
-
-  const totalEntries =
-    groupedSegments.length > 0
-      ? groupedSegments.length
-      : fallbackTurns.reduce((acc, t) => acc + t.paragraphs.length, 0);
 
   async function copyAllTranscript() {
     if (!entry.body) return;
@@ -235,15 +199,55 @@ export function TranscriptTimelineReader({
     );
   }
 
+  // 1. Primary: If database segments are loaded, directly render the official MeetingTranscriptArtifact component!
+  if (rawSegments.length > 0) {
+    return (
+      <div className="mx-auto w-full max-w-5xl px-4 py-4 sm:px-6">
+        <MeetingTranscriptArtifact
+          segments={orderedSegments}
+          translations={translationsQuery.data?.items ?? []}
+          roomId={roomId}
+          currentUserId={viewerId ?? undefined}
+          isEnded={true}
+          onCopy={(text, label) => {
+            navigator.clipboard.writeText(text);
+            toast.success(`${label} copied to clipboard`);
+          }}
+          meetingTitle={entry.roomTitle}
+          transcriptId={transcriptId}
+          transcriptStatus={transcriptQuery.data?.status}
+          canEdit={entry.hostId === viewerId}
+          onSegmentsChanged={() => {
+            segmentsQuery.refetch();
+          }}
+          transcriptLoading={transcriptQuery.isLoading || segmentsQuery.isLoading}
+          meetingStartedAt={entry.meetingEndedAt}
+          meetingEndedAt={entry.meetingEndedAt}
+          saveTranscript={true}
+        />
+      </div>
+    );
+  }
+
+  // 2. Loading state while segments are in flight
+  if (segmentsQuery.isLoading && !entry.body) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-[12px] text-ink-muted">
+        <SpinnerGap size={16} className="animate-spin" />
+        Loading transcript timeline...
+      </div>
+    );
+  }
+
+  // 3. Fallback: If database segments are absent but exported markdown body exists in cache
   return (
     <div className="flex flex-col">
       {/* Transcript Toolbar */}
       <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-surface-1/95 px-5 py-2.5 backdrop-blur-sm">
-        {/* Left: Badges and View Toggle */}
         <div className="flex items-center gap-2 text-[11px]">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface-2 px-2.5 py-1 font-medium text-ink">
             <ChatCircleText size={13} className="text-emerald-500" />
-            <span>Saved · {totalEntries} {totalEntries === 1 ? "entry" : "entries"}</span>
+            <span>Saved · {fallbackTurns.reduce((acc, t) => acc + t.paragraphs.length, 0)} entries</span>
           </span>
 
           {entry.durationSeconds ? (
@@ -251,39 +255,10 @@ export function TranscriptTimelineReader({
               Duration {Math.floor(entry.durationSeconds / 60)}m
             </span>
           ) : null}
-
-          {/* Clean / Verbatim View Switcher */}
-          <div className="ml-1 inline-flex rounded-lg border border-border bg-surface-2 p-0.5 text-[11px] font-medium">
-            <button
-              type="button"
-              onClick={() => setViewMode("clean")}
-              className={cn(
-                "rounded-md px-2.5 py-1 transition-colors",
-                viewMode === "clean"
-                  ? "bg-surface-1 text-ink shadow-sm"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              Clean
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("verbatim")}
-              className={cn(
-                "rounded-md px-2.5 py-1 transition-colors",
-                viewMode === "verbatim"
-                  ? "bg-surface-1 text-ink shadow-sm"
-                  : "text-ink-muted hover:text-ink",
-              )}
-            >
-              Verbatim
-            </button>
-          </div>
         </div>
 
-        {/* Right: Search Dock and Quick Actions */}
+        {/* Search and Action Buttons */}
         <div className="flex items-center gap-2">
-          {/* Search Box */}
           <div className="relative flex items-center">
             <MagnifyingGlass
               size={13}
@@ -326,67 +301,9 @@ export function TranscriptTimelineReader({
         </div>
       </div>
 
-      {/* Main Timeline View */}
+      {/* Main Timeline Body */}
       <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
-        {segmentsQuery.isLoading && speakerTurns.length === 0 && !entry.body ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-[12px] text-ink-muted">
-            <SpinnerGap size={16} className="animate-spin" />
-            Loading transcript timeline...
-          </div>
-        ) : speakerTurns.length > 0 ? (
-          /* Render Database Segments Timeline */
-          <div className="flex flex-col gap-5">
-            {filteredRichTurns.map((turn) => {
-              const speaker: TranscriptSpeaker = {
-                id: turn.speakerId,
-                name: turn.speakerName,
-              };
-              return (
-                <article
-                  key={turn.key}
-                  className="group relative flex gap-3 rounded-lg border-l-2 border-transparent px-3 py-2 transition-colors hover:border-emerald-500 hover:bg-surface-2/50"
-                >
-                  {/* Timestamp in left gutter */}
-                  <div className="w-12 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-ink-subtle">
-                    {formatCitationTime(turn.startTimeMs)}
-                  </div>
-
-                  {/* Main turn body */}
-                  <div className="min-w-0 flex-1 space-y-1.5">
-                    {/* Speaker Header Row */}
-                    <div className="flex items-center gap-2">
-                      <TranscriptSpeakerAvatar speaker={speaker} />
-                      <span className="text-[12.5px] font-semibold text-ink">
-                        {turn.speakerName}
-                      </span>
-                      {entry.sourceLanguage ? (
-                        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-subtle">
-                          {entry.sourceLanguage.slice(0, 2)}
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {/* Paragraphs */}
-                    <div className="space-y-1 text-[13px] leading-relaxed text-ink/90">
-                      {turn.lines.map((line) => {
-                        const content =
-                          line.paragraphs && line.paragraphs.length > 0
-                            ? line.paragraphs.join(" ")
-                            : line.originalText;
-                        return (
-                          <p key={line.id} className="break-words">
-                            {highlightQuery(content, searchQuery)}
-                          </p>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : fallbackTurns.length > 0 ? (
-          /* Render Markdown Fallback Timeline */
+        {fallbackTurns.length > 0 ? (
           <div className="flex flex-col gap-5">
             {filteredFallbackTurns.map((turn, index) => {
               const speaker: TranscriptSpeaker = {
@@ -398,14 +315,11 @@ export function TranscriptTimelineReader({
                   key={turn.key}
                   className="group relative flex gap-3 rounded-lg border-l-2 border-transparent px-3 py-2 transition-colors hover:border-emerald-500 hover:bg-surface-2/50"
                 >
-                  {/* Timestamp in left gutter */}
                   <div className="w-12 shrink-0 pt-0.5 text-right font-mono text-[11px] tabular-nums text-ink-subtle">
                     {turn.elapsedTime || `${index + 1}`}
                   </div>
 
-                  {/* Main turn body */}
                   <div className="min-w-0 flex-1 space-y-1.5">
-                    {/* Speaker Header Row */}
                     <div className="flex items-center gap-2">
                       <TranscriptSpeakerAvatar speaker={speaker} />
                       <span className="text-[12.5px] font-semibold text-ink">
@@ -418,7 +332,6 @@ export function TranscriptTimelineReader({
                       ) : null}
                     </div>
 
-                    {/* Paragraphs */}
                     <div className="space-y-1 text-[13px] leading-relaxed text-ink/90">
                       {turn.paragraphs.map((p, pIndex) => (
                         <p key={pIndex} className="break-words">

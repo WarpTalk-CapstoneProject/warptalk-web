@@ -9,21 +9,18 @@
  * the choice differently are two products.
  */
 
-import { Undo2 } from "lucide-react";
+import { FileText, Undo2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import type { TranscriptViewMode } from "@/lib/transcript/clean-transcript";
 import { cn } from "@/lib/utils";
 
 /**
- * Clean | Verbatim, as a two-segment switch.
+ * Original transcript toggle button.
  *
- * WORDS, NOT ICONS. The panels around it already carry icon toggles (conversation / document /
- * timeline), and this is a different kind of choice: not how the lines are laid out but WHICH WORDS
- * are shown. An icon for "fillers removed" is a guess the reader has to hover to check.
- *
- * The tooltips say what each mode does, including the one thing that is easy to get wrong about
- * it: switching is for this reader only. Nobody else in the room sees their transcript change.
+ * Clean is the default view: fillers and repetitions are filtered by default.
+ * Instead of displaying dual Clean / Verbatim version tabs side-by-side, this provides
+ * a single focused toggle button when the reader wants to inspect the raw original transcript.
  */
 export function TranscriptViewModeToggle({
   value,
@@ -35,33 +32,26 @@ export function TranscriptViewModeToggle({
   className?: string;
 }) {
   const t = useTranslations("meetingTranscript.cleanView");
-  const options: { key: TranscriptViewMode; label: string; title: string }[] = [
-    { key: "clean", label: t("clean"), title: t("cleanTitle") },
-    { key: "verbatim", label: t("verbatim"), title: t("verbatimTitle") },
-  ];
+  const isOriginal = value === "verbatim";
 
   return (
-    <div
-      role="group"
-      aria-label={t("groupLabel")}
-      className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-md border border-border p-0.5", className)}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isOriginal}
+      title={isOriginal ? t("showCleanTitle") : t("originalTitle")}
+      onClick={() => onChange(isOriginal ? "clean" : "verbatim")}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2 py-1 text-[11px] font-medium transition-colors",
+        isOriginal
+          ? "bg-surface-2 font-semibold text-ink shadow-xs"
+          : "text-muted-foreground hover:bg-surface-2 hover:text-ink",
+        className,
+      )}
     >
-      {options.map((option) => (
-        <button
-          key={option.key}
-          type="button"
-          title={option.title}
-          aria-pressed={value === option.key}
-          onClick={() => onChange(option.key)}
-          className={cn(
-            "rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium leading-4 text-muted-foreground transition-colors hover:text-ink",
-            value === option.key ? "bg-surface-2 text-ink" : "",
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
+      <FileText className="size-3.5" />
+      <span>{t("original")}</span>
+    </button>
   );
 }
 

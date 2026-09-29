@@ -121,6 +121,9 @@
     "cleanTitle": "Fillers and repeated words removed, one sentence per line. Only changes your view.",
     "verbatim": "Verbatim",
     "verbatimTitle": "Exactly what the speech recogniser wrote down. Only changes your view.",
+    "original": "Original",
+    "originalTitle": "View original unfiltered transcript. Only changes your view.",
+    "showCleanTitle": "Return to clean transcript. Only changes your view.",
     "selfRepair": "The speaker corrected themselves. As said: \"{rawText}\""
   }
 }
