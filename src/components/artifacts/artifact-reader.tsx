@@ -3,7 +3,8 @@
 import { ArtifactRecordHeader } from "./artifact-record-header";
 import { TranscriptTimelineReader } from "./transcript-timeline-reader";
 import { SummaryReadingReader } from "./summary-reading-reader";
-import { MinutesReadingReader } from "./minutes-reading-reader";
+import { MinutesPanel } from "@/components/rooms/minutes-panel";
+import { useAuthStore } from "@/stores/auth-store";
 import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeting/artifact-library";
 
 /**
@@ -12,7 +13,7 @@ import type { ArtifactKind, LibraryEntry, MeetingRecordGroup } from "@/lib/meeti
  * Synchronized with the Room ID design language:
  * - Transcript: Timeline layout with speaker avatars, speaker color rings, left timestamps, and clean/verbatim toggle.
  * - Summary: Centered structured prose reading surface with no video player mockup.
- * - Minutes: Official minutes layout with signatory blocks and legal status.
+ * - Minutes: Reuses the complete official MinutesPanel from Room ID with full print, docx/pdf export, share, and A4 document signing features.
  * - Header: Sleek horizontal meta bar with room code, host avatar, duration, and language route.
  */
 export function ArtifactRecordView({
@@ -31,6 +32,9 @@ export function ArtifactRecordView({
   onDrawUpMinutes?: () => void;
   drawingUpMinutes?: boolean;
 }) {
+  const viewerId = useAuthStore((state) => state.user?.id);
+  const isHost = entry.hostId === viewerId;
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-1">
       {/* Top Header & Horizontal Meta Bar */}
@@ -50,7 +54,14 @@ export function ArtifactRecordView({
         ) : entry.kind === "summary" ? (
           <SummaryReadingReader entry={entry} roomId={group.roomId} />
         ) : (
-          <MinutesReadingReader entry={entry} roomId={group.roomId} />
+          <div className="mx-auto w-full max-w-5xl px-4 py-6">
+            <MinutesPanel
+              roomId={group.roomId}
+              canManage={isHost}
+              generatableLanguages={group.entries.find((e) => e.kind === "transcript")?.targetLanguages}
+              onSeek={() => onSelectKind("transcript")}
+            />
+          </div>
         )}
       </div>
     </div>
