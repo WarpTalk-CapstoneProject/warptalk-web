@@ -27,8 +27,9 @@
  */
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
-import { Lock, PlugsConnected, Spinner, Warning } from "@phosphor-icons/react";
+import { ArrowSquareOut, Lock, PlugsConnected, Spinner, Warning } from "@phosphor-icons/react";
 
 import {
   WorkspaceBody,
@@ -102,6 +103,7 @@ export default function WorkspacePluginActivityPage() {
   const t = useTranslations("settingsPluginActivity");
   const locale = useLocale();
   const workspaceId = useWorkspaceStore((state) => state.activeWorkspaceId);
+  const workspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const role = useWorkspaceRole();
   const roleLoaded = useWorkspaceRoleLoaded();
   const isOwnerOrAdmin = role === "owner" || role === "admin";
@@ -327,19 +329,38 @@ export default function WorkspacePluginActivityPage() {
                         ) : null}
                       </td>
                       <td className="px-4 py-3">
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                            TONE_CLASSES[row.outcome.tone],
-                          )}
-                        >
-                          {row.outcome.label}
-                        </span>
-                        {row.outcome.code ? (
-                          <span className="mt-1 block font-mono text-[11px] text-ink-subtle">
-                            {row.outcome.code}
-                          </span>
-                        ) : null}
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                                TONE_CLASSES[row.outcome.tone],
+                              )}
+                            >
+                              {row.outcome.label}
+                            </span>
+                            {row.outcome.code ? (
+                              <span className="font-mono text-[11px] text-ink-subtle">
+                                {row.outcome.code}
+                              </span>
+                            ) : null}
+                          </div>
+                          {row.outcome.hint ? (
+                            <p className="max-w-[280px] text-[11px] leading-4 text-ink-muted">
+                              {row.outcome.hint}
+                            </p>
+                          ) : null}
+                          {(row.outcome.tone === "blocked" || row.outcome.tone === "attention") &&
+                          workspaceSlug ? (
+                            <Link
+                              href={`/${workspaceSlug}/settings/plugins`}
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+                            >
+                              {t("managePlugins")}
+                              <ArrowSquareOut size={12} />
+                            </Link>
+                          ) : null}
+                        </div>
                       </td>
                     </tr>
                   ))}
