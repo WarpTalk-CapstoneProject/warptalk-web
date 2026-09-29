@@ -14,6 +14,7 @@ import {
   groupIntoSpeakerTurns,
   groupSavedTranscriptSegments,
   groupTranscriptSegments,
+  indexGroupBySegmentId,
   isTranscriptControlMarker,
   isTranscriptSystemSegment,
   resolveSegmentTranslation,
@@ -922,4 +923,35 @@ test("splitSegmentsAroundPauseGaps handles two separate pauses in one meeting", 
   assert.deepEqual(blocks.map((b) => b.segments.map((s) => s.id)), [["a"], ["b"], ["c"]]);
   assert.equal(blocks[1].gapBefore?.window.id, "w1");
   assert.equal(blocks[2].gapBefore?.window.id, "w2");
+});
+
+test("every merged segment id resolves to the row that ends up carrying it", () => {
+  // A row's id is the FIRST segment folded into it, so an id that arrived from somewhere else —
+  // a summary citation, a deep link — has no element of its own when it landed mid-utterance.
+  // Looking it up here is what stops the click doing nothing at all.
+  const grouped = groupSavedTranscriptSegments([
+    savedSegment("We should ship", 1),
+    savedSegment("on Friday", 2),
+    savedSegment("Agreed", 3, "Someone Else"),
+  ]);
+
+  const rowBySegmentId = indexGroupBySegmentId(grouped);
+
+  assert.equal(rowBySegmentId.get("seg-1"), "seg-1");
+  assert.equal(rowBySegmentId.get("seg-2"), "seg-1", "the merged id must point at the row");
+  assert.equal(rowBySegmentId.get("seg-3"), "seg-3");
+});
+
+test("an id that is not in the transcript resolves to nothing", () => {
+  // The caller distinguishes this from a hit: reporting it is the difference between a dead
+  // button and a message that says why.
+  const rowBySegmentId = indexGroupBySegmentId(
+    groupSavedTranscriptSegments([savedSegment("Hello", 1)]),
+  );
+
+  assert.equal(rowBySegmentId.get("seg-does-not-exist"), undefined);
+});
+
+test("an empty transcript indexes to an empty map", () => {
+  assert.equal(indexGroupBySegmentId([]).size, 0);
 });

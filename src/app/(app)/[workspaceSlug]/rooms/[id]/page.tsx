@@ -87,7 +87,10 @@ import { TranscriptReadingLayout } from "@/components/rooms/meeting-reading-rail
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MeetingTranscriptArtifact } from "@/components/rooms/meeting-transcript-panel";
 import { MinutesPanel } from "@/components/rooms/minutes-panel";
-import { groupSavedTranscriptSegments } from "@/lib/transcript/transcript-display";
+import {
+  groupSavedTranscriptSegments,
+  indexGroupBySegmentId,
+} from "@/lib/transcript/transcript-display";
 import { findPlayableRecording } from "@/lib/meeting/meeting-artifacts";
 import { canAlignToRecording, seekTargetSeconds } from "@/lib/meeting/recording-seek";
 import {
@@ -337,14 +340,26 @@ export default function RoomInformationPage() {
    * file: what makes the two numbers agree is that they are produced by the SAME grouping, and a
    * count passed back up out of the panel would be a second claim rather than the same one.
    */
-  const transcriptEntryCount = useMemo(
+  const groupedTranscript = useMemo(
     () =>
       groupSavedTranscriptSegments(
         [...transcriptSegments].sort(
           (left, right) => left.sequenceOrder - right.sequenceOrder,
         ),
-      ).length,
+      ),
     [transcriptSegments],
+  );
+  const transcriptEntryCount = groupedTranscript.length;
+
+  /**
+   * Which row on screen holds a given saved segment.
+   *
+   * Off the SAME grouping as the count above, for the same reason: a second, independent notion
+   * of where a segment lives would be a second claim rather than the same one.
+   */
+  const transcriptRowBySegmentId = useMemo(
+    () => indexGroupBySegmentId(groupedTranscript),
+    [groupedTranscript],
   );
 
   /**
@@ -381,13 +396,20 @@ export default function RoomInformationPage() {
       // The tab switch renders the transcript in the same commit, so the node does not
       // exist yet on this frame.
       requestAnimationFrame(() => {
-        const node = document.getElementById(`transcript-segment-${segment.id}`);
-        if (!node) return;
+        // A row's id is the first segment folded into it, so a citation landing mid-utterance
+        // has no element of its own. That case used to return here in silence — indistinguishable
+        // from a dead button, and the failure a reader is least able to diagnose.
+        const rowId = transcriptRowBySegmentId.get(segment.id) ?? segment.id;
+        const node = document.getElementById(`transcript-segment-${rowId}`);
+        if (!node) {
+          toast.error("That moment is not visible in the transcript.");
+          return;
+        }
         node.scrollIntoView({ behavior: "smooth", block: "center" });
-        setHighlightedSegmentId(segment.id);
+        setHighlightedSegmentId(rowId);
       });
     },
-    [transcriptSegments, requestSeek],
+    [transcriptSegments, transcriptRowBySegmentId, requestSeek],
   );
 
   // WT-274: the ONE read of "who is in this room" on this page. The header chip and the

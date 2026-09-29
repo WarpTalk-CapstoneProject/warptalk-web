@@ -426,6 +426,26 @@ export function groupSavedTranscriptSegments(
 }
 
 /**
+ * Every segment id in a grouped transcript, mapped to the id the ROW ends up carrying.
+ *
+ * A row's id is the FIRST segment folded into it, so an id that arrived from anywhere else — a
+ * summary citation, a deep link, a search result — has no element of its own whenever it landed
+ * in the middle of a merged utterance. Resolving it here is what turns "the button does nothing"
+ * into a scroll to the line that actually contains the moment.
+ */
+export function indexGroupBySegmentId(
+  grouped: readonly GroupedSavedTranscriptSegment[],
+): Map<string, string> {
+  const rowBySegmentId = new Map<string, string>();
+  for (const utterance of grouped) {
+    for (const segmentId of utterance.mergedSegmentIds) {
+      rowBySegmentId.set(segmentId, utterance.id);
+    }
+  }
+  return rowBySegmentId;
+}
+
+/**
  * A stretch of the meeting one person held, as the timeline draws it: one dot on the rail, the
  * speaker's name once, and everything they said under it.
  */
