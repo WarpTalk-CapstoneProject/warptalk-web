@@ -34,10 +34,15 @@
   "outcome": {
     "succeeded": "Succeeded",
     "blocked": "Blocked",
+    "blockedHint": "Blocked by policy or confirmation declined. Review permissions in Plugins settings.",
     "awaitingConfirmation": "Awaiting confirmation",
+    "awaitingConfirmationHint": "Action requires user confirmation in WarpBot before proceeding.",
     "needsSetup": "Needs setup",
+    "needsSetupHint": "Plugin connection or configuration missing. Reconnect in Settings > Plugins.",
     "providerError": "Provider error",
+    "providerErrorHint": "Provider returned an error. Check service status or API quota.",
     "failed": "Failed"
   },
-  "formerMember": "Former member"
+  "formerMember": "Former member",
+  "managePlugins": "Manage plugins"
 }
