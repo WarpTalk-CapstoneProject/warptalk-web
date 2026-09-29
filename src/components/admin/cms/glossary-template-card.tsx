@@ -162,10 +162,8 @@ export function GlossaryTemplateCard({
           </Button>
 
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-ink-muted">
-                <DotsThree size={16} weight="bold" />
-              </Button>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-ink-muted" aria-label="More options" />}>
+              <DotsThree size={16} weight="bold" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40">
               {actions.onDuplicate ? (

@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import { AdminPage, AdminPageHeader } from "@/components/admin/admin-page-chrome";
 import { CmsTabBar } from "@/components/admin/cms/cms-editor";
 import {
-  CmsCardGrid,
   CmsEmptyState,
   CmsSearchInput,
   CmsSelectAll,
@@ -265,6 +264,7 @@ export default function GlossaryTemplatesAdminPage() {
       <div className="mt-4">
         {visible.length === 0 ? (
           <CmsEmptyState
+            icon={<Books size={24} />}
             title="Không tìm thấy template nào"
             description="Thử thay đổi bộ lọc tìm kiếm hoặc tạo một template mới."
             action={
@@ -274,8 +274,8 @@ export default function GlossaryTemplatesAdminPage() {
               </Button>
             }
           />
-        ) : view === "grid" ? (
-          <CmsCardGrid>
+        ) : view === "cards" ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {visible.map((template) => (
               <GlossaryTemplateCard
                 key={template.key}
@@ -302,18 +302,22 @@ export default function GlossaryTemplatesAdminPage() {
                 }}
               />
             ))}
-          </CmsCardGrid>
+          </div>
         ) : (
-          <CmsTable>
-            <thead>
-              <tr className="border-b border-hairline bg-surface-2 text-[11px] uppercase tracking-wider text-ink-muted">
+          <CmsTable
+            head={
+              <>
                 <CmsTh className="w-10">
                   <CmsSelectAll
-                    checked={selected.length === visible.length && visible.length > 0}
-                    onChange={(checked) =>
-                      setSelected(checked ? visible.map((t) => t.key) : [])
+                    selected={selected}
+                    visible={visible.map((t) => t.key)}
+                    onToggle={() =>
+                      setSelected(
+                        selected.length === visible.length && visible.length > 0
+                          ? []
+                          : visible.map((t) => t.key),
+                      )
                     }
-                    label="Select all"
                   />
                 </CmsTh>
                 <CmsTh>Template</CmsTh>
@@ -322,9 +326,9 @@ export default function GlossaryTemplatesAdminPage() {
                 <CmsTh>Terms count</CmsTh>
                 <CmsTh>Status</CmsTh>
                 <CmsTh className="text-right">Actions</CmsTh>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-hairline text-[12.5px]">
+              </>
+            }
+          >
               {visible.map((template) => (
                 <tr key={template.key} className="hover:bg-surface-2/60 transition-colors">
                   <CmsTd>
@@ -367,7 +371,7 @@ export default function GlossaryTemplatesAdminPage() {
                   <CmsTd>
                     <GlossaryStatusChips template={template} />
                   </CmsTd>
-                  <CmsTd align="right">
+                  <CmsTd className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         variant="ghost"
@@ -412,7 +416,6 @@ export default function GlossaryTemplatesAdminPage() {
                   </CmsTd>
                 </tr>
               ))}
-            </tbody>
           </CmsTable>
         )}
       </div>
