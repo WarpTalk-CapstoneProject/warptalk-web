@@ -115,6 +115,7 @@ export default function WorkspacePluginActivityPage() {
 
   const [pluginKey, setPluginKey] = useState<string>(ALL);
   const [userId, setUserId] = useState<string>(ALL);
+  const [outcomeFilter, setOutcomeFilter] = useState<string>(ALL);
   const [page, setPage] = useState(0);
 
   const auditsQuery = useWorkspacePluginToolAudits(
@@ -138,6 +139,12 @@ export default function WorkspacePluginActivityPage() {
     () => toPluginActivityRows(auditsQuery.data ?? [], members, plugins, (key) => t(key)),
     [auditsQuery.data, members, plugins, t],
   );
+
+  const filteredRows = useMemo(() => {
+    if (outcomeFilter === ALL) return rows;
+    return rows.filter((r) => r.outcome.tone === outcomeFilter);
+  }, [rows, outcomeFilter]);
+
   const dateTimeFormat = useMemo(
     () =>
       new Intl.DateTimeFormat(locale, {
@@ -172,6 +179,41 @@ export default function WorkspacePluginActivityPage() {
   const pluginSuccessRate = pluginInvocationsCount > 0
     ? Math.round((pluginSuccessCount / pluginInvocationsCount) * 100)
     : 96;
+
+  // Real aggregations from audits data for Section 5 charts
+  const pluginVolumeByPlugin = useMemo(() => {
+    if (!auditsQuery.data || auditsQuery.data.length === 0) return undefined;
+    const counts = new Map<string, number>();
+    for (const item of auditsQuery.data) {
+      const label = plugins.find((p) => p.key === item.pluginKey)?.label || item.pluginKey;
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([label, calls]) => ({ label, calls }))
+      .sort((a, b) => b.calls - a.calls);
+  }, [auditsQuery.data, plugins]);
+
+  const pluginOutcomeHistory = useMemo(() => {
+    if (!auditsQuery.data || auditsQuery.data.length === 0) return undefined;
+    const map = new Map<string, { succeeded: number; blocked: number; failed: number }>();
+    for (const item of auditsQuery.data) {
+      const date = item.createdAt.substring(0, 10);
+      const curr = map.get(date) ?? { succeeded: 0, blocked: 0, failed: 0 };
+      if (item.outcome === "success" || item.status === "succeeded") {
+        curr.succeeded++;
+      } else if (item.outcome === "blocked" || item.outcome === "refused") {
+        curr.blocked++;
+      } else {
+        curr.failed++;
+      }
+      map.set(date, curr);
+    }
+    return Array.from(map.entries()).map(([date, counts]) => ({
+      date,
+      label: date.substring(5),
+      ...counts,
+    }));
+  }, [auditsQuery.data]);
 
   const rawDailyHistory = useMemo(() => {
     const days: { date: string; credits: number; meetings: number }[] = [];
@@ -234,7 +276,7 @@ export default function WorkspacePluginActivityPage() {
     );
   }
 
-  const filtered = pluginKey !== ALL || userId !== ALL;
+  const filtered = pluginKey !== ALL || userId !== ALL || outcomeFilter !== ALL;
   const hasNext = hasNextPluginActivityPage(auditsQuery.data?.length ?? 0, PAGE_SIZE);
   const selectedPlugin = plugins.find((plugin) => plugin.key === pluginKey);
   const selectedMember = members.find((member) => member.userId === userId);
@@ -259,6 +301,8 @@ export default function WorkspacePluginActivityPage() {
           pluginSuccessRate={pluginSuccessRate}
           pluginBlockedCount={pluginBlockedCount}
           rawDailyHistory={rawDailyHistory}
+          pluginVolumeByPlugin={pluginVolumeByPlugin}
+          pluginOutcomeHistory={pluginOutcomeHistory}
         />
 
         {/* 2. WarpBot Plugin Activity Audit Trail & Filters */}
@@ -276,7 +320,7 @@ export default function WorkspacePluginActivityPage() {
                 value={pluginKey}
                 onValueChange={(value) => resetPageAnd(() => setPluginKey(value || ALL))}
               >
-                <SelectTrigger className="h-8 min-w-[150px] border-hairline bg-surface-1 text-xs">
+                <SelectTrigger className="h-8 min-w-[140px] border-hairline bg-surface-1 text-xs">
                   <SelectValue>
                     {(value) =>
                       value === ALL || !value
@@ -296,11 +340,12 @@ export default function WorkspacePluginActivityPage() {
                   ))}
                 </SelectContent>
               </Select>
+
               <Select
                 value={userId}
                 onValueChange={(value) => resetPageAnd(() => setUserId(value || ALL))}
               >
-                <SelectTrigger className="h-8 min-w-[160px] border-hairline bg-surface-1 text-xs">
+                <SelectTrigger className="h-8 min-w-[150px] border-hairline bg-surface-1 text-xs">
                   <SelectValue>
                     {(value) =>
                       value === ALL || !value
@@ -320,6 +365,41 @@ export default function WorkspacePluginActivityPage() {
                   ))}
                 </SelectContent>
               </Select>
+
+              <Select
+                value={outcomeFilter}
+                onValueChange={(value) => resetPageAnd(() => setOutcomeFilter(value || ALL))}
+              >
+                <SelectTrigger className="h-8 min-w-[130px] border-hairline bg-surface-1 text-xs">
+                  <SelectValue>
+                    {(value) => {
+                      if (value === ALL || !value) return "All outcomes";
+                      if (value === "success") return "Succeeded";
+                      if (value === "blocked") return "Blocked";
+                      if (value === "attention") return "Needs setup";
+                      if (value === "failed") return "Failed";
+                      return String(value);
+                    }}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL} className="text-xs">
+                    All outcomes
+                  </SelectItem>
+                  <SelectItem value="success" className="text-xs">
+                    Succeeded
+                  </SelectItem>
+                  <SelectItem value="blocked" className="text-xs">
+                    Blocked
+                  </SelectItem>
+                  <SelectItem value="attention" className="text-xs">
+                    Needs setup
+                  </SelectItem>
+                  <SelectItem value="failed" className="text-xs">
+                    Failed
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -327,7 +407,7 @@ export default function WorkspacePluginActivityPage() {
           <div className="flex h-[192px] items-center justify-center">
             <Spinner className="h-5 w-5 animate-spin text-ink-muted" />
           </div>
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <WorkspaceEmptyState
             icon={<PlugsConnected className="h-6 w-6" weight="duotone" />}
             title={
@@ -364,7 +444,7 @@ export default function WorkspacePluginActivityPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {rows.map((row) => (
+                  {filteredRows.map((row) => (
                     <tr key={row.id} className="align-top">
                       <td
                         className="whitespace-nowrap px-4 py-3 tabular-nums text-ink-muted"
