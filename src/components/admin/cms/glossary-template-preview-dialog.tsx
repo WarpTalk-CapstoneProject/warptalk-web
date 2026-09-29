@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileCsv, FileXls, Copy, Check, X } from "@phosphor-icons/react";
+import { FileCsv, FileXls, Copy, Check } from "@phosphor-icons/react";
 import {
   type GlossaryTemplateDefinition,
   generateTemplateCsv,

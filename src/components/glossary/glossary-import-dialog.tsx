@@ -242,7 +242,7 @@ async function parseWorkbook(file: File): Promise<string[][]> {
  * a static asset, so it cannot drift from HEADER_ALIASES the way a checked-in file would. CSV
  * rather than XLSX because it opens in every spreadsheet app and there is nothing to encode.
  */
-function downloadSampleTemplate(
+export function downloadSampleTemplate(
   sourceLanguage: string | null | undefined,
   targetLanguage: string | null | undefined,
 ) {

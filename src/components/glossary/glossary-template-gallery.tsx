@@ -1,8 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
-import { DownloadSimple, Eye, FileCsv, FileXls, Check, Sparkle } from "@phosphor-icons/react";
+import { Eye, FileCsv, FileXls, Check, Sparkle } from "@phosphor-icons/react";
 import {
   BUILT_IN_GLOSSARY_TEMPLATES,
   generateTemplateCsv,
@@ -26,7 +25,6 @@ export function GlossaryTemplateGallery({
   className,
   defaultLanguage,
 }: GlossaryTemplateGalleryProps) {
-  const t = useTranslations("glossary");
   const [selectedLang, setSelectedLang] = useState<string>(defaultLanguage || "all");
   const [activeTemplate, setActiveTemplate] = useState<GlossaryTemplateDefinition>(
     BUILT_IN_GLOSSARY_TEMPLATES[0]!,

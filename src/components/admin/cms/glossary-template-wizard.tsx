@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Trash, Sparkle, WarningCircle } from "@phosphor-icons/react";
+import { Plus, Trash, Sparkle } from "@phosphor-icons/react";
 import {
   type GlossaryTemplateDefinition,
   type GlossaryTemplateCategory,
