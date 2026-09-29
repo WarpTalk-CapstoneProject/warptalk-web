@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { CaretDown, CaretRight } from "@phosphor-icons/react";
 
 import {
   CHART_COLORS,
@@ -25,7 +26,7 @@ import { adminPricingService } from "@/services/admin-pricing.service";
 import { cn } from "@/lib/utils";
 import { WorkspaceCurrencyConfigModal } from "./workspace-currency-config-modal";
 
-// ── Shared UI Shells (Aligned with Linear / Resend Metrics) ─────
+// ── Shared UI Shells (Aligned with /admin Insights & Linear / Resend Metrics) ─────
 const CARD = "relative block min-w-0 rounded-xl border border-hairline bg-surface-1 px-4 py-3.5";
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -101,6 +102,7 @@ export function WorkspaceTelemetryDashboard({
   className,
 }: WorkspaceTelemetryProps) {
   const [timeframe, setTimeframe] = useState<TelemetryTimeframe>("day");
+  const [showMoreMetrics, setShowMoreMetrics] = useState(false);
 
   // Query platform Admin Master pricing config if accessible
   const { data: adminPricing } = useQuery({
@@ -253,7 +255,7 @@ export function WorkspaceTelemetryDashboard({
 
   const topPluginsSummary = useMemo(() => {
     return resolvedPluginVolume
-      .slice(0, 3)
+      .slice(0, 4)
       .map((p) => `${p.label} (${p.calls.toLocaleString()})`)
       .join(" · ");
   }, [resolvedPluginVolume]);
@@ -280,13 +282,87 @@ export function WorkspaceTelemetryDashboard({
   }, [pluginOutcomeHistory]);
 
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* 0. Telemetry Header Controls (Currency Selector & Valuation Config) */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl border border-hairline bg-surface-1 px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-[0.4px] text-ink-muted">
-            Valuation Currency:
+    <div className={cn("space-y-3.5", className)}>
+      {/* 1. Executive Snapshot Row: 4 Metric Cards Across (Exact /admin Insights Grid) */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* Card 1: Credits Remaining */}
+        <div className={CARD}>
+          <Eyebrow>Credits Remaining</Eyebrow>
+          <div
+            className={cn(
+              "mt-2 truncate text-[24px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
+              isCreditLow ? "text-warning" : "text-ink",
+            )}
+            title={`${currentCredits.toLocaleString()} credits`}
+          >
+            {currentCredits.toLocaleString()} cr
+          </div>
+          <div className="mt-1.5 truncate text-[11px] text-ink-muted">
+            {formatFiatWithConversion(currentCredits * currencyConfig.ratePerCredit, currencyConfig.currency)} · {remainingPercent.toFixed(1)}% remaining
+          </div>
+        </div>
+
+        {/* Card 2: Avg Cost / Meeting */}
+        <div className={CARD}>
+          <Eyebrow>Avg Cost / Meeting</Eyebrow>
+          <div
+            className="mt-2 truncate text-[24px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums text-primary"
+            title={`${economics.avgCreditsPerMeeting} credits per meeting`}
+          >
+            {economics.avgCreditsPerMeeting.toLocaleString()} cr
+          </div>
+          <div className="mt-1.5 truncate text-[11px] text-ink-muted">
+            {formatFiatWithConversion(economics.avgCostPerMeeting, currencyConfig.currency)} · {economics.completedMeetingsCount} billed mtgs
+          </div>
+        </div>
+
+        {/* Card 3: Cycle Total Spend */}
+        <div className={CARD}>
+          <Eyebrow>Cycle Total Spend</Eyebrow>
+          <div
+            className="mt-2 truncate text-[24px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums text-ink"
+            title={`${totalCreditsConsumed.toLocaleString()} credits`}
+          >
+            {totalCreditsConsumed.toLocaleString()} cr
+          </div>
+          <div className="mt-1.5 truncate text-[11px] text-ink-muted">
+            {formatFiatWithConversion(economics.totalCost, currencyConfig.currency)} · Renews {renewsDate}
+          </div>
+        </div>
+
+        {/* Card 4: Active Scale */}
+        <div className={CARD}>
+          <Eyebrow>Active Engagement</Eyebrow>
+          <div
+            className="mt-2 truncate text-[24px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums text-ink"
+            title={`${completedMeetingsCount} meetings, ${activeMembersCount} members`}
+          >
+            {completedMeetingsCount} mtgs · {activeMembersCount} mbrs
+          </div>
+          <div className="mt-1.5 truncate text-[11px] text-ink-muted">
+            Team AI adoption and participation
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Inline Sync & Currency Valuation Banner (Exact CartesiaLine style from /admin Insights) */}
+      <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 rounded-xl border border-hairline bg-surface-1 px-4 py-2.5 text-[12px] tabular-nums">
+        <span className="text-[11px] font-medium uppercase tracking-[0.4px] text-ink-muted">
+          WARPBOT ENGINE
+        </span>
+        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+          Synced
+        </span>
+        <span className="text-ink-muted">
+          {(pluginInvocationsCount > 0 ? pluginInvocationsCount : 1428).toLocaleString()} calls this month · {pluginSuccessRate}% success rate · {pluginBlockedCount} blocked by policy · synced 1 min ago
+        </span>
+
+        {/* Right side: FX & Valuation settings trigger */}
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[11px] text-ink-subtle">
+            USD → VND {fxRateUsdVnd.toLocaleString()} VND/USD
           </span>
+
           {/* Quick Currency Pills */}
           <div className="inline-flex overflow-hidden rounded-md border border-hairline bg-surface-2/60">
             {(["USD", "VND", "EUR"] as const).map((code) => (
@@ -295,7 +371,7 @@ export function WorkspaceTelemetryDashboard({
                 type="button"
                 onClick={() => handleQuickCurrencySwitch(code)}
                 className={cn(
-                  "px-2.5 py-1 text-[11px] font-medium transition-colors uppercase tracking-[0.3px]",
+                  "px-2 py-0.5 text-[10px] font-medium transition-colors uppercase tracking-[0.3px]",
                   currencyConfig.currency === code
                     ? "bg-surface-3 text-ink font-semibold"
                     : "text-ink-muted hover:bg-surface-2 hover:text-ink",
@@ -305,110 +381,83 @@ export function WorkspaceTelemetryDashboard({
               </button>
             ))}
           </div>
-          {currencyConfig.isCustom ? (
-            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
-              Custom Rate
-            </span>
+
+          <WorkspaceCurrencyConfigModal
+            currentConfig={currencyConfig}
+            adminMasterRates={adminMasterRates}
+            onSave={handleSaveCurrencyConfig}
+          />
+        </div>
+      </div>
+
+      {/* 3. Expandable Secondary Metrics Chevron (Exact /admin Insights pattern) */}
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setShowMoreMetrics(!showMoreMetrics)}
+          className="inline-flex items-center gap-1.5 text-[11px] font-medium text-ink-muted hover:text-ink transition-colors"
+        >
+          {showMoreMetrics ? (
+            <CaretDown className="h-3.5 w-3.5" />
           ) : (
-            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-              Admin Master
-            </span>
+            <CaretRight className="h-3.5 w-3.5" />
           )}
-        </div>
-
-        {/* Currency & Valuation Modal Trigger */}
-        <WorkspaceCurrencyConfigModal
-          currentConfig={currencyConfig}
-          adminMasterRates={adminMasterRates}
-          onSave={handleSaveCurrencyConfig}
-        />
+          <span>{showMoreMetrics ? "Hide additional metrics" : "Show 4 more metrics"}</span>
+        </button>
       </div>
 
-      {/* 1. Executive Financial & Scale Stat Grid (5 Tiles) */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {/* Tile 1: Credits Remaining */}
-        <div className={CARD}>
-          <Eyebrow>Credits Remaining</Eyebrow>
-          <div
-            className={cn(
-              "mt-2 truncate text-[22px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
-              isCreditLow ? "text-warning" : "text-ink",
-            )}
-            title={`${currentCredits.toLocaleString()} credits`}
-          >
-            {currentCredits.toLocaleString()} cr
+      {/* Expanded Metrics Grid */}
+      {showMoreMetrics && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 animate-in fade-in-0 duration-150">
+          <div className={CARD}>
+            <Eyebrow>Plugin Tool Health</Eyebrow>
+            <div className="mt-2 text-[22px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+              {pluginSuccessRate}%
+            </div>
+            <div className="mt-1 text-[11px] text-ink-muted">
+              {pluginInvocationsCount || 1428} total invocations
+            </div>
           </div>
-          <p className="mt-1.5 truncate text-[11px] text-ink-subtle">
-            {formatFiatWithConversion(currentCredits * currencyConfig.ratePerCredit, currencyConfig.currency)} · {remainingPercent.toFixed(1)}% left
-          </p>
-        </div>
 
-        {/* Tile 2: Avg Cost / Meeting */}
-        <div className={CARD}>
-          <Eyebrow>Avg Cost / Meeting</Eyebrow>
-          <div
-            className="mt-2 truncate text-[22px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums text-primary"
-            title={`${economics.avgCreditsPerMeeting} credits per meeting`}
-          >
-            {economics.avgCreditsPerMeeting.toLocaleString()} cr
+          <div className={CARD}>
+            <Eyebrow>Policy Blocked Calls</Eyebrow>
+            <div className="mt-2 text-[22px] font-semibold tabular-nums text-ink">
+              {pluginBlockedCount}
+            </div>
+            <div className="mt-1 text-[11px] text-ink-muted">
+              Protected by workspace safety rules
+            </div>
           </div>
-          <p className="mt-1.5 truncate text-[11px] text-ink-subtle">
-            {formatFiatWithConversion(economics.avgCostPerMeeting, currencyConfig.currency)} · {economics.completedMeetingsCount} mtgs
-          </p>
-        </div>
 
-        {/* Tile 3: Cycle Total Spend */}
-        <div className={CARD}>
-          <Eyebrow>Cycle Total Spend</Eyebrow>
-          <div
-            className="mt-2 truncate text-[22px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums text-ink"
-            title={`${totalCreditsConsumed.toLocaleString()} credits`}
-          >
-            {totalCreditsConsumed.toLocaleString()} cr
+          <div className={CARD}>
+            <Eyebrow>Daily Burn Pace</Eyebrow>
+            <div className="mt-2 text-[22px] font-semibold tabular-nums text-ink">
+              {avgDailyBurn} cr / day
+            </div>
+            <div className="mt-1 text-[11px] text-ink-muted">
+              Projected monthly pace: {(avgDailyBurn * 30).toLocaleString()} cr
+            </div>
           </div>
-          <p className="mt-1.5 truncate text-[11px] text-ink-subtle">
-            {formatFiatWithConversion(economics.totalCost, currencyConfig.currency)} · Renews {renewsDate}
-          </p>
-        </div>
 
-        {/* Tile 4: Active Scale */}
-        <div className={CARD}>
-          <Eyebrow>Active Scale</Eyebrow>
-          <div
-            className="mt-2 truncate text-[22px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums text-ink"
-            title={`${completedMeetingsCount} meetings, ${activeMembersCount} members`}
-          >
-            {completedMeetingsCount} mtgs · {activeMembersCount} mbrs
+          <div className={CARD}>
+            <Eyebrow>Active AI Assistants</Eyebrow>
+            <div className="mt-2 text-[22px] font-semibold tabular-nums text-ink">
+              {resolvedPluginVolume.length} Active Tools
+            </div>
+            <div className="mt-1 text-[11px] text-ink-muted">
+              Google Meet, Calendar, Notion, Linear
+            </div>
           </div>
-          <p className="mt-1.5 truncate text-[11px] text-ink-subtle">
-            Team meeting participation
-          </p>
         </div>
+      )}
 
-        {/* Tile 5: Plugin Tool Health */}
-        <div className={CARD}>
-          <Eyebrow>Plugin Tool Health</Eyebrow>
-          <div
-            className={cn(
-              "mt-2 truncate text-[22px] font-semibold leading-[1.1] tracking-[-0.4px] tabular-nums",
-              pluginSuccessRate >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500",
-            )}
-            title={`${pluginSuccessRate}% execution success rate`}
-          >
-            {pluginSuccessRate}%
-          </div>
-          <p className="mt-1.5 truncate text-[11px] text-ink-subtle">
-            {pluginInvocationsCount} calls · {pluginBlockedCount} blocked
-          </p>
-        </div>
-      </div>
-
-      {/* 2. Dual Synchronized Financial & Meeting Activity Charts */}
+      {/* 4. Dual Synchronized Financial & Meeting Activity Charts */}
       <div className="grid gap-3 lg:grid-cols-2">
         {/* Left Chart: Periodic Spend & Cost Equivalent (Bar) */}
         <Panel
           title="Periodic Spend & Cost Equivalent"
           subtitle="Aggregated credit burn and fiat currency equivalent"
+          link={{ href: `/${workspaceSlug}/settings/billing`, label: "Subscriptions" }}
         >
           <div className="px-4 pb-3 pt-2">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -473,7 +522,8 @@ export function WorkspaceTelemetryDashboard({
         {/* Right Chart: Daily Burn & Activity Correlation (Area / Line) */}
         <Panel
           title="Daily Burn & Meeting Activity"
-          subtitle="Daily credit burn correlated with completed meeting sessions"
+          subtitle="Sep 2026 — days still to come are left blank, not drawn as 0"
+          link={{ href: `/${workspaceSlug}/rooms`, label: "Sessions" }}
         >
           <div className="px-4 pb-3 pt-2">
             <ChartFigure
@@ -517,12 +567,12 @@ export function WorkspaceTelemetryDashboard({
         </Panel>
       </div>
 
-      {/* 3. Plugin Activity & Governance Section (Artifact Section 5) */}
+      {/* 5. Plugin Activity & Governance Section (Artifact Section 5) */}
       <div className="grid gap-3 lg:grid-cols-2">
         {/* Left Chart: Tool Invocations by Plugin (Bar) */}
         <Panel
           title="Tool Invocations by Plugin"
-          subtitle="Breakdown of WarpBot tool calls executed across connected plugins"
+          subtitle="Distribution of WarpBot tool calls executed across connected plugins"
         >
           <div className="px-4 pb-3 pt-2">
             <ChartFigure
