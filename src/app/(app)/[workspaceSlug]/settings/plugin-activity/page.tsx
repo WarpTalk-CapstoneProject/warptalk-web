@@ -158,8 +158,6 @@ export default function WorkspacePluginActivityPage() {
     [locale],
   );
 
-  const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
-
   const creditsQuery = useQuery({
     queryKey: ["workspace-credits", workspaceId],
     queryFn: () => billingService.getWorkspaceCredits(workspaceId!),
@@ -167,14 +165,14 @@ export default function WorkspacePluginActivityPage() {
   });
   const creditBalance = creditsQuery.data;
 
-  const pluginInvocationsCount = auditsQuery.data?.length ?? 0;
+  const pluginInvocationsCount = rows.length;
   const pluginBlockedCount = useMemo(
-    () => (auditsQuery.data ?? []).filter((a) => a.outcome === "blocked" || a.outcome === "refused").length,
-    [auditsQuery.data],
+    () => rows.filter((r) => r.outcome.tone === "blocked").length,
+    [rows],
   );
   const pluginSuccessCount = useMemo(
-    () => (auditsQuery.data ?? []).filter((a) => a.outcome === "success" || a.outcome === "completed").length,
-    [auditsQuery.data],
+    () => rows.filter((r) => r.outcome.tone === "success").length,
+    [rows],
   );
   const pluginSuccessRate = pluginInvocationsCount > 0
     ? Math.round((pluginSuccessCount / pluginInvocationsCount) * 100)
@@ -182,26 +180,26 @@ export default function WorkspacePluginActivityPage() {
 
   // Real aggregations from audits data for Section 5 charts
   const pluginVolumeByPlugin = useMemo(() => {
-    if (!auditsQuery.data || auditsQuery.data.length === 0) return undefined;
+    if (!rows || rows.length === 0) return undefined;
     const counts = new Map<string, number>();
-    for (const item of auditsQuery.data) {
-      const label = plugins.find((p) => p.key === item.pluginKey)?.label || item.pluginKey;
+    for (const item of rows) {
+      const label = item.pluginLabel;
       counts.set(label, (counts.get(label) ?? 0) + 1);
     }
     return Array.from(counts.entries())
       .map(([label, calls]) => ({ label, calls }))
       .sort((a, b) => b.calls - a.calls);
-  }, [auditsQuery.data, plugins]);
+  }, [rows]);
 
   const pluginOutcomeHistory = useMemo(() => {
-    if (!auditsQuery.data || auditsQuery.data.length === 0) return undefined;
+    if (!rows || rows.length === 0) return undefined;
     const map = new Map<string, { succeeded: number; blocked: number; failed: number }>();
-    for (const item of auditsQuery.data) {
+    for (const item of rows) {
       const date = item.createdAt.substring(0, 10);
       const curr = map.get(date) ?? { succeeded: 0, blocked: 0, failed: 0 };
-      if (item.outcome === "success" || item.status === "succeeded") {
+      if (item.outcome.tone === "success") {
         curr.succeeded++;
-      } else if (item.outcome === "blocked" || item.outcome === "refused") {
+      } else if (item.outcome.tone === "blocked") {
         curr.blocked++;
       } else {
         curr.failed++;
@@ -213,7 +211,7 @@ export default function WorkspacePluginActivityPage() {
       label: date.substring(5),
       ...counts,
     }));
-  }, [auditsQuery.data]);
+  }, [rows]);
 
   const rawDailyHistory = useMemo(() => {
     const days: { date: string; credits: number; meetings: number }[] = [];
@@ -286,7 +284,7 @@ export default function WorkspacePluginActivityPage() {
       <WorkspaceBody className="space-y-6">
         {/* 1. Executive Telemetry & Business Economics Dashboard */}
         <WorkspaceTelemetryDashboard
-          workspaceSlug={currentWorkspace?.slug}
+          workspaceSlug={workspaceSlug ?? undefined}
           currentCredits={creditBalance?.currentCredits ?? 15000}
           totalCredits={creditBalance?.totalCredits ?? 25000}
           renewsDate={

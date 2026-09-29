@@ -6,7 +6,6 @@ import { SlidersHorizontal, ArrowCounterClockwise, Check } from "@phosphor-icons
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -102,18 +101,22 @@ export function WorkspaceCurrencyConfigModal({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 gap-1.5 px-2.5 text-[11px] font-medium tracking-[0.2px]"
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            <span>Valuation: {currentConfig.currency}</span>
-          </Button>
-        )}
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          trigger ? (
+            <>{trigger}</>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-2.5 text-[11px] font-medium tracking-[0.2px]"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Valuation: {currentConfig.currency}</span>
+            </Button>
+          )
+        }
+      />
 
       <DialogContent className="max-w-md sm:max-w-md">
         <DialogHeader>
@@ -132,7 +135,12 @@ export function WorkspaceCurrencyConfigModal({
             <Label className="text-[11px] font-medium uppercase tracking-[0.4px] text-ink-muted">
               Reporting Currency
             </Label>
-            <Select value={selectedCurrency} onValueChange={handleCurrencyChange}>
+            <Select
+              value={selectedCurrency}
+              onValueChange={(val) => {
+                if (val) handleCurrencyChange(val);
+              }}
+            >
               <SelectTrigger className="w-full h-8 text-xs">
                 <SelectValue placeholder="Select currency" />
               </SelectTrigger>
@@ -242,11 +250,15 @@ export function WorkspaceCurrencyConfigModal({
           </Button>
 
           <div className="flex gap-2">
-            <DialogClose asChild>
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs">
-                Cancel
-              </Button>
-            </DialogClose>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setOpen(false)}
+              className="h-8 text-xs"
+            >
+              Cancel
+            </Button>
             <Button
               type="button"
               variant="default"
