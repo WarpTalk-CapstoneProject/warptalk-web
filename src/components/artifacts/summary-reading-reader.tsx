@@ -28,7 +28,7 @@ export function SummaryReadingReader({
 
   // Load any existing renderings (templates/languages)
   const renderingsQuery = useSummaryRenderings(roomId);
-  const renderings = renderingsQuery.data?.items ?? [];
+  const renderings = renderingsQuery.data ?? [];
 
   const parsedSummary = useMemo(() => {
     if (!entry.body) return null;
