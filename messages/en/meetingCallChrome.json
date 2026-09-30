@@ -6,12 +6,8 @@
     "addOthers": "Add others"
   },
   "captions": {
-    "earlierCaptions": "Earlier captions",
-    "fullTranscript": "Full transcript",
-    "closeHistoryAria": "Close caption history and follow live captions",
-    "backToLive": "Back to live captions",
     "openFullTranscript": "Open full transcript",
-    "liveRegionAria": "Live captions. Scroll up for earlier captions.",
+    "liveRegionAria": "Live captions",
     "emptyState": "Captions will appear here as people speak."
   },
   "stage": {
