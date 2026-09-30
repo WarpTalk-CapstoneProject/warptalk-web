@@ -345,9 +345,14 @@ export interface AssistantPageContextDto {
  * A "plugin" mention's entityId is the plugin's catalog key (e.g. "google_drive") — the same key
  * every install/connect/disconnect call takes. It names a capability the user wants used for this
  * turn, not a record to look up.
+ *
+ * WT-887: "summary" and "transcript" point at one meeting's summary or transcript. Their entityId
+ * is the meeting's ROOM id — the same id a "room" mention carries — and the label is the meeting
+ * title; the AI worker reads the artifact off the room. The worker also accepts "minutes", but has
+ * no tool that reads minutes content, so the web never offers or sends it.
  */
 export interface AssistantMentionDto {
-  entityType: "room" | "document" | "member" | "plugin";
+  entityType: "room" | "document" | "member" | "plugin" | "summary" | "transcript";
   entityId: string;
   label?: string;
 }
