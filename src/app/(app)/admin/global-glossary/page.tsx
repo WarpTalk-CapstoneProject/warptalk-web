@@ -728,7 +728,7 @@ function GlobalGlossaryAdmin() {
 
       {/* Create Term Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
               {t("createDialog.title")}
@@ -874,7 +874,7 @@ function GlobalGlossaryAdmin() {
         open={!!termToEdit}
         onOpenChange={(open) => !open && setTermToEdit(null)}
       >
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
               {t("editDialog.title")}
@@ -970,9 +970,13 @@ function GlobalGlossaryAdmin() {
         if (!open) setBulkImportTab("csv");
         setIsBulkImportOpen(open);
       }}>
-        <DialogContent className="border-hairline bg-surface-1 max-w-2xl">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
+        {/* WT-879. `sm:` prefix, not bare `max-w-2xl`: the base DialogContent sets `sm:max-w-sm`,
+            which beats an unprefixed width at ≥sm and squeezed this dialog to 384px. DialogContent is
+            a grid, so every child below also carries `min-w-0` — without it the unbreakable column
+            list and the textarea size the grid track to their own width and spill past the card. */}
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-2xl">
+          <DialogHeader className="min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <DialogTitle className="font-bold text-base">
                 {t("bulkImportDialog.title")}
               </DialogTitle>
@@ -1011,7 +1015,7 @@ function GlobalGlossaryAdmin() {
           </DialogHeader>
 
           {bulkImportTab === "templates" ? (
-            <div className="py-1">
+            <div className="min-w-0 py-1">
               <GlossaryTemplateGallery
                 onSelectTemplate={(template) => {
                   const header = "Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition,UsageNote,Priority";
@@ -1035,13 +1039,13 @@ function GlobalGlossaryAdmin() {
               />
             </div>
           ) : (
-            <div>
-              <div className="mb-2 flex items-center justify-between text-xs text-ink-muted">
-                <span>Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
+            <div className="min-w-0">
+              <div className="mb-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1 text-xs text-ink-muted">
+                <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">Supported columns: <code>Term, Translation, SourceLanguage, TargetLanguage, BusinessDomain, Definition, UsageNote, Priority</code></span>
                 <button
                   type="button"
                   onClick={() => setBulkImportTab("templates")}
-                  className="flex items-center gap-1 font-medium text-primary hover:underline"
+                  className="flex shrink-0 items-center gap-1 font-medium text-primary hover:underline"
                 >
                   <Sparkle className="h-3.5 w-3.5" />
                   Choose from Template Catalog
@@ -1051,7 +1055,7 @@ function GlobalGlossaryAdmin() {
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
                 placeholder="Term,Translation,SourceLanguage,TargetLanguage,BusinessDomain,Definition&#10;pipeline,CI/CD pipeline,en,vi,DevOps,Automated build and deploy process&#10;cache,memory cache,en,vi,IT Support,Temporary data storage for fast access"
-                className="h-48 w-full rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
+                className="block h-48 w-full min-w-0 resize-y rounded-md border border-hairline bg-surface-2 p-2.5 text-xs font-mono outline-none focus:border-primary"
               />
             </div>
           )}
@@ -1084,7 +1088,7 @@ function GlobalGlossaryAdmin() {
         open={!!auditsTermId}
         onOpenChange={(open) => !open && setAuditsTermId(null)}
       >
-        <DialogContent className="border-hairline bg-surface-1 max-w-lg">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-bold text-base">
               {t("auditDialog.title")}
@@ -1131,7 +1135,7 @@ function GlobalGlossaryAdmin() {
         open={!!termToDelete}
         onOpenChange={(open) => !open && setTermToDelete(null)}
       >
-        <DialogContent className="border-hairline bg-surface-1 max-w-sm">
+        <DialogContent className="border-hairline bg-surface-1 sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-center font-bold text-base">
               {t("deleteDialog.title")}
