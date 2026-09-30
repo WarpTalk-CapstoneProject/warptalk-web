@@ -36,7 +36,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { getDesktopBridge } from "@/lib/desktop/bridge";
+import { getDesktopBridge, readVirtualAudioStatus, type VirtualAudioStatus } from "@/lib/desktop/bridge";
+import {
+  alignHiFiCableFormatViaDesktop,
+  describeHiFiFormat,
+  hifiFormatMismatch,
+  type HiFiAlignOutcome,
+} from "@/lib/desktop/hifi-format";
 import {
   checkVirtualBridge,
   currentBridgeDeviceLabels,
@@ -50,6 +56,28 @@ const BREW_COMMAND = "brew install --cask blackhole-2ch blackhole-16ch";
 const DOWNLOAD_PAGE = "https://existential.audio/blackhole/";
 
 type StepState = "todo" | "active" | "done";
+
+/**
+ * The by-hand version of "Fix audio format", for a desktop build that cannot do it or a fix that
+ * failed. 24-bit / 48000 Hz rather than "any matching pair": it is what the desktop fix sets, what
+ * Meet renders at natively, and naming one exact value is easier to follow than a rule.
+ */
+function HiFiManualSteps() {
+  return (
+    <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-ink-muted">
+      <li>Open Windows Sound settings → More sound settings.</li>
+      <li>
+        Playback tab: <span className="font-medium text-ink">Hi-Fi Cable Input</span> → Properties →
+        Advanced → <span className="font-medium text-ink">24 bit, 48000 Hz</span>.
+      </li>
+      <li>
+        Recording tab: <span className="font-medium text-ink">Hi-Fi Cable Output</span> → Properties
+        → Advanced → the same, <span className="font-medium text-ink">24 bit, 48000 Hz</span>.
+      </li>
+      <li>Click Apply on both, then rejoin the meeting or reload WarpTalk.</li>
+    </ol>
+  );
+}
 
 function StepShell({
   index,
@@ -118,6 +146,7 @@ export function BridgeSetupWizard({
   onReady,
   readyLabel = "Start translating",
   runCheck = checkVirtualBridge,
+  readStatus = readVirtualAudioStatus,
 }: {
   onReady?: () => void;
   /**
@@ -130,6 +159,8 @@ export function BridgeSetupWizard({
   readyLabel?: string;
   /** Injectable so the dev preview can render states a laptop without the devices cannot reach. */
   runCheck?: () => Promise<BridgeCheckResult>;
+  /** Injectable for the same reason: a format mismatch cannot be produced on demand. */
+  readStatus?: () => Promise<VirtualAudioStatus | null>;
 }) {
   const [result, setResult] = useState<BridgeCheckResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -147,6 +178,17 @@ export function BridgeSetupWizard({
   /** Only the desktop app can install drivers; a browser tab has no bridge to ask. */
   const [canInstall, setCanInstall] = useState(false);
   const [installing, setInstalling] = useState(false);
+  /**
+   * The desktop app's device report, read alongside the tone test.
+   *
+   * The tone test can only say "no sound came through Hi-Fi Cable"; it cannot say why. The one
+   * cause the user cannot guess is the cable's two sides being set to different formats, and only
+   * the desktop status knows that — so it is read every time the test runs. Null in a browser or
+   * on a desktop build too old to report it, and then no format notice is shown at all.
+   */
+  const [status, setStatus] = useState<VirtualAudioStatus | null>(null);
+  const [aligning, setAligning] = useState(false);
+  const [alignOutcome, setAlignOutcome] = useState<HiFiAlignOutcome | null>(null);
 
   useEffect(() => {
     setLabels(currentBridgeDeviceLabels());
@@ -155,6 +197,9 @@ export function BridgeSetupWizard({
 
   const check = useCallback(async () => {
     setChecking(true);
+    // Not awaited with the tone test: a status read that hangs must not keep the test from
+    // reporting, and readVirtualAudioStatus already folds failure into null.
+    void readStatus().then(setStatus, () => setStatus(null));
     try {
       const outcome = await runCheck();
       setResult(outcome);
@@ -166,7 +211,7 @@ export function BridgeSetupWizard({
     } finally {
       setChecking(false);
     }
-  }, [runCheck]);
+  }, [runCheck, readStatus]);
 
   const install = useCallback(async () => {
     const bridge = getDesktopBridge();
@@ -177,6 +222,25 @@ export function BridgeSetupWizard({
       if (outcome.started) await check();
     } finally {
       setInstalling(false);
+    }
+  }, [check]);
+
+  /**
+   * Fix the format, then prove it with the same tone test the user would otherwise click.
+   *
+   * `check()` re-reads the status too, so a successful fix clears the notice from what the desktop
+   * reports now rather than from what this component assumes it did. Unsupported and failed
+   * outcomes stay on screen with manual steps and are not retried automatically: what fixes them
+   * is the user in Sound settings, not another IPC call.
+   */
+  const alignFormat = useCallback(async () => {
+    setAligning(true);
+    try {
+      const outcome = await alignHiFiCableFormatViaDesktop();
+      setAlignOutcome(outcome);
+      if (outcome.kind === "result" && outcome.ok) await check();
+    } finally {
+      setAligning(false);
     }
   }, [check]);
 
@@ -193,6 +257,7 @@ export function BridgeSetupWizard({
   const inboundViaDevice = Boolean(result?.probes.find((probe) => probe.leg === "inbound")?.present);
   const speakerToSet =
     labels?.meetSpeaker && (!labels.inboundOptional || inboundViaDevice) ? labels.meetSpeaker : null;
+  const formatMismatch = hifiFormatMismatch(status);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 text-ink">
@@ -209,6 +274,42 @@ export function BridgeSetupWizard({
         title="Install the two audio devices"
         state={devicesReady ? "done" : "active"}
       >
+        {/*
+          Above the install text, not inside the Windows branch: a mismatch usually makes the tone
+          test fail, but the notice has to show whichever branch that lands in — and "install the
+          drivers" is the wrong advice for a cable that is installed and merely misset.
+        */}
+        {formatMismatch && (
+          <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/[0.08] p-3 text-amber-700 dark:text-amber-300">
+            <p>
+              Hi-Fi Cable Input is {describeHiFiFormat(status?.hifiFormat?.input)}, Hi-Fi Cable Output
+              is {describeHiFiFormat(status?.hifiFormat?.output)} — they must match or no sound reaches
+              WarpTalk.
+            </p>
+            <div className="mt-2">
+              <Button type="button" size="sm" onClick={() => void alignFormat()} disabled={aligning || checking}>
+                {aligning ? "Fixing…" : "Fix audio format"}
+              </Button>
+            </div>
+            {alignOutcome?.kind === "unsupported" && (
+              <>
+                <p className="mt-2 text-xs text-ink-muted">
+                  This version of WarpTalk can&apos;t change it for you. Set it by hand:
+                </p>
+                <HiFiManualSteps />
+              </>
+            )}
+            {alignOutcome?.kind === "result" && !alignOutcome.ok && (
+              <>
+                <p className="mt-2 text-xs text-ink-muted">
+                  Couldn&apos;t change it{alignOutcome.error ? `: ${alignOutcome.error}` : "."} Set it
+                  by hand:
+                </p>
+                <HiFiManualSteps />
+              </>
+            )}
+          </div>
+        )}
         {devicesReady && (!isWindows || inboundViaDevice) ? (
           <p>Both devices are installed and working.</p>
         ) : devicesReady ? (
@@ -233,8 +334,8 @@ export function BridgeSetupWizard({
                 Open the VB-Audio download page
               </a>
               , install both, and restart if an installer asks. Then open Windows Sound settings and set
-              Hi-Fi Cable Input and Hi-Fi Cable Output to the same format, 48000 Hz — Hi-Fi Cable passes
-              no sound when its two sides differ.
+              Hi-Fi Cable Input and Hi-Fi Cable Output to the same format: 24-bit, 48000 Hz — Hi-Fi
+              Cable passes no sound when its two sides differ in either bit depth or sample rate.
             </p>
             <p className="text-xs text-ink-subtle">
               Hi-Fi Cable is optional. Without it WarpTalk listens to your whole browser, so sound from
@@ -311,6 +412,17 @@ export function BridgeSetupWizard({
             <li>
               Speakers → <span className="font-medium text-ink">{speakerToSet}</span>. You will hear
               the call through WarpTalk instead, a little quieter while a translation is playing.
+              {/*
+                The two cables have near-identical names in Meet's list, and the wrong pick fails
+                silently: CABLE Input is where WarpTalk's voice goes INTO Meet, so the call loops
+                back into the meeting and WarpTalk hears nothing.
+              */}
+              {isWindows && (
+                <span className="mt-1 block text-xs text-amber-600 dark:text-amber-400">
+                  Not &ldquo;CABLE Input&rdquo; — that is WarpTalk&apos;s voice cable; choosing it sends
+                  the call back into Meet and WarpTalk hears nothing.
+                </span>
+              )}
             </li>
           ) : (
             <li>
