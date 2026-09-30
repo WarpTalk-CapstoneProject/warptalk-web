@@ -29,6 +29,7 @@
 import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 
+import { paceProjectionMessage } from "@/lib/billing/credit-meter-format";
 import { creditUsageLevel, type CreditUsageLevel } from "@/lib/billing/credit-usage-level";
 import {
   cycleElapsedPercent,
@@ -249,10 +250,9 @@ function PaceNote({
   if (projection.kind === "lasts") {
     projectionLine = t("paceLasts");
   } else {
-    const days = Math.floor(projection.daysToEmpty);
-    const early = Math.max(0, daysLeftInCycle(balance, now) - days);
-    projectionLine =
-      early > 0 ? t("paceRunsOut", { days, early }) : t("paceRunsOutAtEnd", { days });
+    // Under one day it reads "within a day", never "in about 0 days" (credit-meter-format).
+    const message = paceProjectionMessage(projection.daysToEmpty, daysLeftInCycle(balance, now));
+    projectionLine = t(message.key, message.values);
   }
 
   return (

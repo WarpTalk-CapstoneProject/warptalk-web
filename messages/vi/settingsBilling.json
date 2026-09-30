@@ -200,6 +200,8 @@
     "paceLasts": "Với tốc độ này, hạn mức đủ dùng đến hết chu kỳ.",
     "paceRunsOut": "Với tốc độ này, credit sẽ hết sau khoảng {days, plural, other {# ngày}}, trước khi chu kỳ kết thúc {early, plural, other {# ngày}}.",
     "paceRunsOutAtEnd": "Với tốc độ này, credit sẽ hết sau khoảng {days, plural, other {# ngày}}, đúng lúc chu kỳ kết thúc.",
+    "paceRunsOutWithinDay": "Với tốc độ này, credit sẽ hết trong vòng một ngày, trước khi chu kỳ kết thúc {early, plural, other {# ngày}}.",
+    "paceRunsOutWithinDayAtEnd": "Với tốc độ này, credit sẽ hết trong vòng một ngày, đúng lúc chu kỳ kết thúc.",
     "overageRunning": "Đang dùng vượt hạn mức: {credits} credit vượt quá hạn mức.",
     "overageRunningNoAmount": "Đang dùng vượt hạn mức.",
     "allowanceUsedStopped": "Hạn mức đã dùng hết. Cuộc họp sẽ dừng cho đến khi bạn thêm credit hoặc chu kỳ gia hạn."
