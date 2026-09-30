@@ -7,7 +7,13 @@ import {
   describeAbsence,
   entryExcerpt,
   entryMatches,
+  entryScope,
+  entryStartedAt,
+  entryTitleMatches,
   groupEntriesByMeeting,
+  isListableEntry,
+  libraryCounts,
+  listLibrary,
   minutesBodyText,
   minutesStatusLabel,
   narrowLibrary,
@@ -566,4 +572,107 @@ test("a group's records read transcript, summary, minutes whatever order they ar
     old?.entries.map((entry) => entry.kind),
     ["transcript", "minutes"],
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// By kind, then by whose (2026-09-30).
+// ---------------------------------------------------------------------------------------------
+
+function personalLibrary() {
+  return buildArtifactLibrary({
+    rooms: [
+      room({
+        id: "hosted",
+        hostId: "me",
+        title: "Họp báo cáo tháng 5",
+        translationRoomCode: "MFJ-BAKI-BBY",
+        artifacts: [
+          artifact({ id: "t-hosted", content: "**[Tú (VI)]**: Chốt ngân sách quý." }),
+          artifact({ id: "s-hosted", type: "summary_export", content: JSON.stringify({ summary: "Budget agreed." }) }),
+        ],
+      }),
+      room({
+        id: "shared",
+        hostId: "someone-else",
+        title: "Test QA",
+        translationRoomCode: "OFX-JTBB-FIM",
+        artifacts: [artifact({ id: "t-shared", content: "**[Kỳ (EN)]**: We have apple." })],
+      }),
+      room({
+        id: "locked",
+        hostId: "someone-else",
+        title: "Nhi5",
+        // HOST_ONLY: the server sends the row without a body.
+        artifacts: [artifact({ id: "t-locked", content: undefined })],
+      }),
+      room({
+        id: "silent",
+        hostId: "me",
+        title: "Cuộc họp quý 3",
+        artifacts: [
+          artifact({
+            id: "t-silent",
+            content: "# WarpTalk Transcription Room - Room: x\nGenerated on: 2026-09-29\n---\n",
+          }),
+          artifact({ id: "s-writing", type: "summary_export", status: "processing", content: undefined }),
+        ],
+      }),
+    ],
+  });
+}
+
+test("only documents the viewer can read are listed; a withheld or empty transcript is not", () => {
+  const entries = personalLibrary();
+  const listable = entries.filter(isListableEntry).map((entry) => entry.id).sort();
+  assert.deepEqual(listable, ["s-hosted", "s-writing", "t-hosted", "t-shared"]);
+});
+
+test("a summary still being written is listed, so the meeting does not look summary-less", () => {
+  const writing = personalLibrary().find((entry) => entry.id === "s-writing")!;
+  assert.equal(writing.absence, "generating");
+  assert.ok(isListableEntry(writing));
+});
+
+test("Yours is what the viewer hosted; Shared with you is everything else they can read", () => {
+  const entries = personalLibrary();
+  const ids = (scope: "all" | "mine" | "shared") =>
+    listLibrary(entries, { kind: "transcript", scope, viewerId: "me" }).map((entry) => entry.id);
+  assert.deepEqual(ids("all").sort(), ["t-hosted", "t-shared"]);
+  assert.deepEqual(ids("mine"), ["t-hosted"]);
+  assert.deepEqual(ids("shared"), ["t-shared"]);
+  assert.equal(entryScope(entries.find((entry) => entry.id === "t-shared")!, null), "shared");
+});
+
+test("the tab counts ignore what cannot be read, and are taken per kind and per scope", () => {
+  const counts = libraryCounts(personalLibrary(), "transcript", "me");
+  assert.deepEqual(counts.byKind, { transcript: 2, summary: 2, minutes: 0 });
+  assert.deepEqual(counts.byScope, { all: 2, mine: 1, shared: 1 });
+});
+
+test("search matches the meeting title and room code, folded, and never the body", () => {
+  const entries = personalLibrary();
+  const hosted = entries.find((entry) => entry.id === "t-hosted")!;
+  assert.ok(entryTitleMatches(hosted, "bao cao"));
+  assert.ok(entryTitleMatches(hosted, "mfj-baki"));
+  assert.ok(!entryTitleMatches(hosted, "ngân sách"), "a word only the transcript says is not a title match");
+  assert.deepEqual(
+    listLibrary(entries, { kind: "transcript", scope: "all", query: "apple", viewerId: "me" }),
+    [],
+  );
+});
+
+test("minutes also match their own number", () => {
+  const [entry] = buildArtifactLibrary({ rooms: [], minutes: [minutesItem()] });
+  assert.ok(entryTitleMatches(entry, "bb-2026-0007"));
+});
+
+test("the raw stored content is kept beside the flattened body, for the document built from it", () => {
+  const summary = personalLibrary().find((entry) => entry.id === "s-hosted")!;
+  assert.equal(summary.body, "Budget agreed.");
+  assert.equal(summary.rawBody, JSON.stringify({ summary: "Budget agreed." }));
+});
+
+test("the meeting's start is its end minus its length", () => {
+  const entry = personalLibrary().find((item) => item.id === "t-hosted")!;
+  assert.equal(entryStartedAt(entry), "2026-09-01T09:00:00.000Z");
 });
