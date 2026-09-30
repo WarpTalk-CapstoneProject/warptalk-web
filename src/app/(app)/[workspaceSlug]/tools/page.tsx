@@ -24,7 +24,6 @@ import {
   Plus,
   PuzzlePiece,
   ShieldCheck,
-  SlidersHorizontal,
   TerminalWindow,
   Translate,
   Users,
@@ -35,8 +34,6 @@ import { toast } from "sonner";
 
 import {
   WARPBOT_TOOLS_CATALOG,
-  type ToolCategory,
-  type WarpBotToolItem,
 } from "@/lib/assistant/warpbot-tools-catalog";
 import { useAssistantWidgetStore } from "@/stores/assistant-widget-store";
 
@@ -54,8 +51,6 @@ function renderToolGlyph(iconName: string, className = "size-4 text-ink-muted") 
       return <CalendarBlank className={className} weight="duotone" />;
     case "Info":
       return <Info className={className} weight="duotone" />;
-    case "FileCheck":
-      return <FileCheck className={className} weight="duotone" />;
     case "ChatsCircle":
       return <ChatsCircle className={className} weight="duotone" />;
     case "Translate":
@@ -290,13 +285,13 @@ export default function WarpBotCustomizePage() {
             <PuzzlePiece className="mx-auto size-10 text-[#757572]" weight="duotone" />
             <h3 className="mt-3 text-[16px] font-semibold text-white">Remote Model Context Protocol (MCP) Connectors</h3>
             <p className="mt-1 text-[13.5px] text-[#949491] max-w-md mx-auto">
-              WarpBot kết nối trực tiếp với các remote MCP server để thực thi tools và đồng bộ ngữ cảnh.
+              WarpBot connects directly to external MCP servers to execute custom tools and synchronize remote context.
             </p>
             <Link
               href={`/${workspaceSlug}/settings/plugins`}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-[#383835] bg-[#222220] px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-[#2d2d2a]"
             >
-              Quản lý Plugins & Connectors
+              Manage Plugins & Connectors
             </Link>
           </div>
         )}
@@ -374,7 +369,7 @@ export default function WarpBotCustomizePage() {
                         {tool.parametersSummary.length > 0 && (
                           <div className="rounded-lg border border-[#252523] bg-[#131312] p-2.5">
                             <span className="text-[11px] font-semibold text-[#7e7e7a] uppercase tracking-wider">
-                              Tham số (Inputs)
+                              Inputs & Parameters
                             </span>
                             <ul className="mt-1 space-y-0.5">
                               {tool.parametersSummary.map((param, idx) => (
@@ -390,7 +385,7 @@ export default function WarpBotCustomizePage() {
                         {/* Sample Prompts */}
                         <div>
                           <span className="text-[11px] font-semibold text-[#7e7e7a] uppercase tracking-wider">
-                            Câu lệnh gợi ý (Sample Prompts)
+                            Sample Prompts
                           </span>
                           <div className="mt-1.5 space-y-1.5">
                             {tool.samplePrompts.map((prompt, pIdx) => {
@@ -435,7 +430,7 @@ export default function WarpBotCustomizePage() {
               })
             ) : (
               <div className="py-16 text-center text-[#7a7a76]">
-                <p className="text-[14px]">Không tìm thấy công cụ nào phù hợp với bộ lọc.</p>
+                <p className="text-[14px]">No tools found matching your current filter.</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -444,7 +439,7 @@ export default function WarpBotCustomizePage() {
                   }}
                   className="mt-3 text-[13px] text-primary hover:underline"
                 >
-                  Xóa bộ lọc tìm kiếm
+                  Clear search filter
                 </button>
               </div>
             )}

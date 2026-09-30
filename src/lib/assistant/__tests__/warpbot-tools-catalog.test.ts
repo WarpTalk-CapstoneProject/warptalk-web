@@ -55,7 +55,7 @@ describe("WarpBot Tools Catalog Data & Functions", () => {
     const queryGlossary = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { searchQuery: "glossary" });
     assert.ok(queryGlossary.some((t) => t.id === "search_terminology"));
 
-    const queryRevenue = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { searchQuery: "doanh thu" });
+    const queryRevenue = filterWarpBotTools(WARPBOT_TOOLS_CATALOG, { searchQuery: "revenue" });
     assert.ok(queryRevenue.some((t) => t.id === "get_platform_analytics"));
   });
 
