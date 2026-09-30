@@ -68,6 +68,10 @@ import { UserChip } from "@/components/user/user-chip";
 import { cn } from "@/lib/utils";
 import { releaseArtifactIfPermitted } from "@/lib/meeting/artifact-consent";
 import { openArtifactDownload } from "@/lib/ui/download-artifact";
+import {
+  downloadSavedSummaryDocx,
+  downloadSavedTranscriptDocx,
+} from "@/lib/documents/download-saved-record";
 import { readScheduleFocus, schedulesPath } from "@/lib/workspace/workspace-routes";
 import { translationRoomService } from "@/services/translation-room.service";
 import { useAuthStore } from "@/stores/auth-store";
@@ -448,7 +452,22 @@ export default function CalendarPage() {
         ? await releaseArtifactIfPermitted(artifact.id)
         : false;
       const { data } = await translationRoomService.artifactDownload(artifact.id);
-      openArtifactDownload(data);
+      // A transcript or summary leaves as the same .docx the Recap and the Artifacts reader hand
+      // over, built from the text the server returned — never as the raw .md/.txt export. Anything
+      // else (a recording, a debug log) is the server's file as it is.
+      const saved = {
+        body: data.content,
+        meetingTitle: dialogMeeting?.title,
+        startedAt: dialogMeeting?.startedAt ?? null,
+        hostName: dialogMeeting?.hostName ?? null,
+      };
+      if (artifact.type === "transcript_export" && data.content != null) {
+        await downloadSavedTranscriptDocx(saved);
+      } else if (artifact.type === "summary_export" && data.content != null) {
+        await downloadSavedSummaryDocx(saved);
+      } else {
+        openArtifactDownload(data);
+      }
       if (released) await meetings.refetch();
     } catch (error) {
       toast.error(getErrorMessage(error, t("toasts.downloadFailed")));
