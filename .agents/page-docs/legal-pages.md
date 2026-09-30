@@ -9,6 +9,36 @@
 
 ## Latest Changes
 
+### 2026-09-30 Aligned with current Vietnamese law (follow-up review)
+
+Checked the first version against current law and against comparable products, then amended all
+three locales (paragraph counts kept in sync; `terms.sections.law` gained one paragraph):
+
+- **Privacy — legal basis:** Decree 13/2023/ND-CP was replaced on 2026-01-01 by the Law on Personal
+  Data Protection No. 91/2025/QH15 and its guiding Decree 356/2025/ND-CP; `scope` now cites those.
+- **Privacy — voice data:** voice samples/profiles are biometric data, i.e. *sensitive* personal data
+  under Decree 356. `voice` now says so, and requires separate explicit consent after the user is
+  told the data is sensitive. `use` lists processing without consent only where the law allows
+  (contract, legal obligation, protecting life/health/property).
+- **Privacy — breaches:** `security` names the risks of online processing and the 72-hour
+  notification to affected users for incidents involving biometric data.
+- **Privacy — rights:** `rights` warns that withdrawing consent/deleting data may disable features.
+- **Terms — consumer protection (Law 19/2023/QH15, Art. 25):** a standard-form contract may not
+  limit liability owed to consumers under law, change terms or prices unilaterally without a right
+  to terminate, or auto-renew without prior notice. So: the liability cap now applies only to
+  business use and consumers keep their statutory rights (`liability`); renewal reminder
+  (`payment.1`); refunds "except where required by law, including consumer rights" (`payment.3`);
+  cancel without penalty on a price change (`payment.4`); terminate with pro-rata refund on a
+  material Terms change (`changes.1`); consumer complaint/lawsuit rights preserved (`law.1`);
+  ambiguous terms read in the consumer's favour and the Vietnamese version prevails (`law.3`).
+
+Sources consulted (via web search; several primary-text sites were blocked by the sandbox proxy):
+Law 91/2025/QH15 and Decree 356/2025/ND-CP (luatvietnam.vn, thuvienphapluat.vn summaries,
+vietnam-briefing.com); Law 19/2023/QH15 Art. 23/25 (moit.gov.vn, pbgdpl.camau.gov.vn); Zoom's and
+Otter.ai's published positions on AI training and retention for comparison.
+
+Still not legal advice — have a qualified reviewer sign off before relying on the documents.
+
 ### 2026-09-30 Published documents replace the placeholder (WT-835, WT-836, WT-841)
 
 - **What changed:** the two routes used to render `LegalPlaceholder`, a short "not published yet"
@@ -52,9 +82,10 @@
   permission, no impersonation); acceptable use; content ownership and licence (no training of
   general-purpose models); plans, Stripe payments, auto-renewal, credits, refunds, 30-day price
   notice; third-party integrations; IP; suspension/termination; disclaimers; liability cap
-  (greater of 12 months' fees or 1,000,000 VND); indemnity; changes (30-day notice for material
-  changes); Vietnamese law, 30-day negotiation then Vietnamese courts; contact.
-- **Privacy:** scope (Decree 13/2023/ND-CP, GDPR where applicable); WarpTalk vs Workspace Owner
+  for business use only (greater of 12 months' fees or 1,000,000 VND), consumers keep statutory rights; indemnity; changes (30-day notice for material
+  changes); Vietnamese law, 30-day negotiation then Vietnamese courts, consumer-favourable interpretation,
+  Vietnamese version prevails; contact.
+- **Privacy:** scope (Law 91/2025/QH15 + Decree 356/2025/ND-CP, GDPR where applicable); WarpTalk vs Workspace Owner
   roles; data collected (account incl. Google/Microsoft sign-in, workspace, meeting content, voice
   samples, generated content, usage/device, sessions, Stripe, connected integrations); purposes
   and legal bases; AI processing by speech/translation/LLM/voice providers, no training, live

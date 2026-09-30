@@ -96,10 +96,10 @@
         "heading": "10. Gói dịch vụ, thanh toán và tín dụng",
         "body": [
           "Một số tính năng yêu cầu gói trả phí hoặc tín dụng sử dụng. Giá, lượng sử dụng đi kèm và giới hạn của gói được hiển thị trong Dịch vụ tại thời điểm mua. Thanh toán được xử lý bởi nhà cung cấp dịch vụ thanh toán Stripe; chúng tôi không lưu trữ đầy đủ thông tin thẻ của bạn.",
-          "Gói thuê bao tự động gia hạn vào cuối mỗi chu kỳ thanh toán theo mức giá hiện hành cho đến khi bị hủy. Bạn có thể hủy bất cứ lúc nào trong phần cài đặt thanh toán của không gian làm việc; việc hủy có hiệu lực vào cuối chu kỳ thanh toán hiện tại và bạn vẫn được sử dụng đến thời điểm đó.",
+          "Gói thuê bao tự động gia hạn vào cuối mỗi chu kỳ thanh toán theo mức giá hiện hành cho đến khi bị hủy. Chúng tôi sẽ thông báo cho bạn trước khi gói thuê bao được gia hạn. Bạn có thể hủy bất cứ lúc nào trong phần cài đặt thanh toán của không gian làm việc; việc hủy có hiệu lực vào cuối chu kỳ thanh toán hiện tại và bạn vẫn được sử dụng đến thời điểm đó.",
           "Tín dụng sử dụng (ví dụ: số phút dịch) được trừ dần khi bạn sử dụng các tính năng liên quan, gắn với không gian làm việc đã mua, không thể chuyển nhượng hoặc quy đổi thành tiền mặt. Tín dụng chưa sử dụng có thể hết hạn theo thông tin được nêu tại thời điểm mua.",
-          "Trừ trường hợp pháp luật yêu cầu hoặc có quy định rõ ràng khác, các khoản thanh toán không được hoàn lại. Giá chưa bao gồm các loại thuế áp dụng, bạn có trách nhiệm thanh toán các loại thuế đó. Nếu thanh toán không thành công, chúng tôi có thể giới hạn các tính năng trả phí cho đến khi vấn đề được giải quyết.",
-          "Chúng tôi có thể thay đổi giá với thông báo trước ít nhất 30 ngày. Mức giá mới có hiệu lực từ đầu chu kỳ thanh toán tiếp theo của bạn."
+          "Trừ trường hợp pháp luật yêu cầu — bao gồm các quyền của bạn với tư cách người tiêu dùng — hoặc có quy định rõ ràng khác, các khoản thanh toán không được hoàn lại. Giá chưa bao gồm các loại thuế áp dụng, bạn có trách nhiệm thanh toán các loại thuế đó. Nếu thanh toán không thành công, chúng tôi có thể giới hạn các tính năng trả phí cho đến khi vấn đề được giải quyết.",
+          "Chúng tôi có thể thay đổi giá với thông báo trước ít nhất 30 ngày. Mức giá mới có hiệu lực từ đầu chu kỳ thanh toán tiếp theo của bạn. Nếu không chấp nhận mức giá mới, bạn có thể hủy gói trước khi mức giá đó có hiệu lực mà không phải chịu bất kỳ khoản phạt nào."
         ]
       },
       "thirdParty": {
@@ -135,8 +135,8 @@
         "heading": "15. Giới hạn trách nhiệm",
         "body": [
           "Trong phạm vi tối đa pháp luật cho phép, WarpTalk không chịu trách nhiệm đối với bất kỳ thiệt hại gián tiếp, ngẫu nhiên, đặc biệt, hệ quả hoặc mang tính trừng phạt nào, hay bất kỳ tổn thất nào về lợi nhuận, doanh thu, dữ liệu, uy tín hoặc cơ hội kinh doanh phát sinh từ hoặc liên quan đến Dịch vụ hoặc Điều khoản này.",
-          "Trong phạm vi tối đa pháp luật cho phép, tổng trách nhiệm của WarpTalk đối với mọi khiếu nại phát sinh từ hoặc liên quan đến Dịch vụ hoặc Điều khoản này được giới hạn ở mức cao hơn giữa tổng số tiền bạn đã thanh toán cho WarpTalk để sử dụng Dịch vụ trong 12 tháng trước sự kiện dẫn đến khiếu nại, hoặc 1.000.000 VND.",
-          "Các giới hạn này không áp dụng đối với trách nhiệm không thể bị giới hạn theo pháp luật, bao gồm trách nhiệm đối với thiệt hại về tính mạng hoặc sức khỏe do lỗi bất cẩn, hoặc đối với hành vi gian lận."
+          "Nếu bạn sử dụng Dịch vụ cho mục đích kinh doanh, trong phạm vi tối đa pháp luật cho phép, tổng trách nhiệm của WarpTalk đối với mọi khiếu nại phát sinh từ hoặc liên quan đến Dịch vụ hoặc Điều khoản này được giới hạn ở mức cao hơn giữa tổng số tiền bạn đã thanh toán cho WarpTalk để sử dụng Dịch vụ trong 12 tháng trước sự kiện dẫn đến khiếu nại, hoặc 1.000.000 VND.",
+          "Nếu bạn là người tiêu dùng, không nội dung nào trong Điều khoản này giới hạn hoặc loại trừ trách nhiệm của WarpTalk đối với bạn theo Luật Bảo vệ quyền lợi người tiêu dùng hoặc pháp luật khác. Các giới hạn này cũng không áp dụng đối với trách nhiệm không thể bị giới hạn theo pháp luật, bao gồm trách nhiệm đối với thiệt hại về tính mạng hoặc sức khỏe do lỗi bất cẩn, hoặc đối với hành vi gian lận."
         ]
       },
       "indemnity": {
@@ -149,15 +149,16 @@
         "heading": "17. Thay đổi điều khoản",
         "body": [
           "Chúng tôi có thể cập nhật Điều khoản này theo thời gian. Chúng tôi sẽ đăng phiên bản cập nhật trên trang này và thay đổi ngày hiệu lực ở trên. Nếu thay đổi là quan trọng, chúng tôi sẽ thông báo cho bạn qua email hoặc trong Dịch vụ ít nhất 30 ngày trước khi thay đổi có hiệu lực.",
-          "Nếu bạn tiếp tục sử dụng Dịch vụ sau khi Điều khoản cập nhật có hiệu lực, bạn được xem là đã chấp nhận Điều khoản đó. Nếu không đồng ý, bạn phải ngừng sử dụng Dịch vụ và có thể xóa tài khoản."
+          "Nếu không đồng ý với thay đổi, bạn có thể ngừng sử dụng Dịch vụ và chấm dứt Điều khoản này trước khi thay đổi có hiệu lực; nếu bạn đã trả trước cho một chu kỳ chưa kết thúc, chúng tôi sẽ hoàn lại phần chưa sử dụng. Nếu bạn tiếp tục sử dụng Dịch vụ sau khi Điều khoản cập nhật có hiệu lực, bạn được xem là đã chấp nhận Điều khoản đó."
         ]
       },
       "law": {
         "heading": "18. Luật áp dụng và giải quyết tranh chấp",
         "body": [
           "Điều khoản này được điều chỉnh bởi pháp luật nước Cộng hòa Xã hội Chủ nghĩa Việt Nam.",
-          "Khi phát sinh tranh chấp, vui lòng liên hệ với chúng tôi trước qua {email} để hai bên cùng cố gắng giải quyết một cách thiện chí. Nếu tranh chấp không được giải quyết bằng thương lượng trong vòng 30 ngày, tranh chấp sẽ được đưa ra Tòa án có thẩm quyền tại Việt Nam, trừ khi pháp luật bắt buộc về bảo vệ quyền lợi người tiêu dùng cho phép bạn khởi kiện ở nơi khác.",
-          "Nếu bất kỳ điều khoản nào của Điều khoản này bị xác định là không thể thi hành, các điều khoản còn lại vẫn giữ nguyên hiệu lực. Việc chúng tôi không thực thi một điều khoản không có nghĩa là từ bỏ điều khoản đó. Bạn không được chuyển nhượng Điều khoản này khi chưa có sự đồng ý của chúng tôi; chúng tôi có thể chuyển nhượng Điều khoản trong trường hợp sáp nhập, mua lại hoặc bán tài sản."
+          "Khi phát sinh tranh chấp, vui lòng liên hệ với chúng tôi trước qua {email} để hai bên cùng cố gắng giải quyết một cách thiện chí. Nếu tranh chấp không được giải quyết bằng thương lượng trong vòng 30 ngày, tranh chấp sẽ được đưa ra Tòa án có thẩm quyền tại Việt Nam. Không nội dung nào trong Điều khoản này hạn chế quyền của bạn với tư cách người tiêu dùng trong việc khiếu nại đến cơ quan bảo vệ quyền lợi người tiêu dùng hoặc khởi kiện theo quy định của pháp luật.",
+          "Nếu bất kỳ điều khoản nào của Điều khoản này bị xác định là không thể thi hành, các điều khoản còn lại vẫn giữ nguyên hiệu lực. Việc chúng tôi không thực thi một điều khoản không có nghĩa là từ bỏ điều khoản đó. Bạn không được chuyển nhượng Điều khoản này khi chưa có sự đồng ý của chúng tôi; chúng tôi có thể chuyển nhượng Điều khoản trong trường hợp sáp nhập, mua lại hoặc bán tài sản.",
+          "Nếu một điều khoản trong Điều khoản này có thể được hiểu theo nhiều cách khác nhau, điều khoản đó sẽ được giải thích theo hướng có lợi nhất cho bạn với tư cách người tiêu dùng. Điều khoản này được công bố bằng tiếng Việt, tiếng Anh và tiếng Nhật; nếu có sự khác biệt giữa các phiên bản, phiên bản tiếng Việt được ưu tiên áp dụng."
         ]
       },
       "contact": {
@@ -176,7 +177,7 @@
         "heading": "1. Chúng tôi là ai và phạm vi của chính sách",
         "body": [
           "WarpTalk (\"WarpTalk\", \"chúng tôi\") cung cấp nền tảng họp trực tuyến đa ngôn ngữ theo thời gian thực thông qua trang web, ứng dụng web, ứng dụng máy tính và các dịch vụ liên quan (\"Dịch vụ\"). Chính sách này mô tả cách chúng tôi xử lý dữ liệu cá nhân khi bạn truy cập trang web, tạo tài khoản, tham gia không gian làm việc hoặc cuộc họp, hay sử dụng Dịch vụ dưới hình thức khác.",
-          "Chúng tôi xử lý dữ liệu cá nhân theo quy định pháp luật về bảo vệ dữ liệu, bao gồm Nghị định số 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân của Việt Nam và, khi áp dụng đối với bạn, các quy định khác như Quy định chung về bảo vệ dữ liệu của Liên minh châu Âu (GDPR)."
+          "Chúng tôi xử lý dữ liệu cá nhân theo quy định pháp luật về bảo vệ dữ liệu, bao gồm Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 và Nghị định số 356/2025/NĐ-CP hướng dẫn thi hành Luật, và, khi áp dụng đối với bạn, các quy định khác như Quy định chung về bảo vệ dữ liệu của Liên minh châu Âu (GDPR)."
         ]
       },
       "roles": {
@@ -217,7 +218,7 @@
           "- bảo đảm an toàn cho Dịch vụ, ngăn chặn gian lận và lạm dụng, và thực thi Điều khoản sử dụng;",
           "- theo dõi hiệu năng, khắc phục sự cố và cải thiện Dịch vụ dựa trên dữ liệu sử dụng và chẩn đoán;",
           "- tuân thủ các nghĩa vụ pháp lý của chúng tôi.",
-          "Chúng tôi xử lý dữ liệu cá nhân dựa trên sự đồng ý của bạn (ví dụ: đối với hồ sơ giọng nói), việc thực hiện hợp đồng giữa chúng tôi và bạn, lợi ích hợp pháp của chúng tôi trong việc vận hành và bảo mật Dịch vụ, và việc tuân thủ nghĩa vụ pháp lý. Khi xử lý dựa trên sự đồng ý, bạn có thể rút lại sự đồng ý bất cứ lúc nào; việc này không ảnh hưởng đến hoạt động xử lý đã được thực hiện trước đó."
+          "Chúng tôi xử lý dữ liệu cá nhân khi có sự đồng ý của bạn, hoặc không cần sự đồng ý trong các trường hợp pháp luật cho phép — chẳng hạn để thực hiện hợp đồng giữa chúng tôi và bạn, để thực hiện nghĩa vụ pháp lý, hoặc để bảo vệ tính mạng, sức khỏe, tài sản. Đối với dữ liệu cá nhân nhạy cảm, như hồ sơ giọng nói, chúng tôi luôn xin sự đồng ý riêng và rõ ràng của bạn. Khi xử lý dựa trên sự đồng ý, bạn có thể rút lại sự đồng ý bất cứ lúc nào; việc này không ảnh hưởng đến hoạt động xử lý đã được thực hiện trước đó."
         ]
       },
       "ai": {
@@ -231,7 +232,7 @@
       "voice": {
         "heading": "6. Hồ sơ giọng nói",
         "body": [
-          "Hồ sơ giọng nói chỉ được tạo khi bạn chủ động tạo và đưa ra sự đồng ý rõ ràng. Chúng tôi chỉ sử dụng mẫu giọng nói và hồ sơ giọng nói của bạn để tạo giọng nói đã dịch bằng giọng của bạn trong Dịch vụ, theo yêu cầu của bạn.",
+          "Mẫu giọng nói và hồ sơ giọng nói là dữ liệu sinh trắc học, thuộc nhóm dữ liệu cá nhân nhạy cảm theo pháp luật Việt Nam. Hồ sơ giọng nói chỉ được tạo khi bạn chủ động tạo và đưa ra sự đồng ý riêng, rõ ràng sau khi đã được thông báo rằng đây là dữ liệu nhạy cảm. Chúng tôi chỉ sử dụng mẫu giọng nói và hồ sơ giọng nói của bạn để tạo giọng nói đã dịch bằng giọng của bạn trong Dịch vụ, theo yêu cầu của bạn, và bảo vệ chúng bằng các biện pháp bảo mật tăng cường.",
           "Bạn có thể nghe lại, thay thế hoặc xóa hồ sơ giọng nói bất cứ lúc nào tại trang Hồ sơ giọng nói. Khi bạn xóa, chúng tôi sẽ xóa mẫu giọng nói và hồ sơ giọng nói, đồng thời yêu cầu nhà cung cấp dịch vụ giọng nói xóa các bản sao họ lưu giữ, trong vòng 30 ngày.",
           "Chúng tôi không sử dụng giọng nói của bạn để nhận diện bạn (ví dụ: sinh trắc học giọng nói hoặc xác thực), và không bán hay chia sẻ hồ sơ giọng nói của bạn cho bất kỳ ai ngoài nhà cung cấp tạo giọng nói cho bạn."
         ]
@@ -269,7 +270,7 @@
         "heading": "10. Bảo mật",
         "body": [
           "Chúng tôi áp dụng các biện pháp kỹ thuật và tổ chức để bảo vệ dữ liệu cá nhân, bao gồm mã hóa khi truyền tải (TLS), kiểm soát truy cập theo vai trò và nguyên tắc đặc quyền tối thiểu, mã băm mật khẩu, quản lý phiên cho phép bạn đăng xuất khỏi các thiết bị khác, và nhật ký kiểm tra đối với các thao tác nhạy cảm.",
-          "Không có hệ thống nào an toàn tuyệt đối. Nếu xảy ra sự cố vi phạm dữ liệu cá nhân ảnh hưởng đến bạn, chúng tôi sẽ thông báo cho bạn và cơ quan có thẩm quyền theo quy định của pháp luật."
+          "Không có hệ thống nào an toàn tuyệt đối. Việc xử lý dữ liệu cá nhân trên môi trường mạng tiềm ẩn các rủi ro như bị truy cập trái phép, mất mát hoặc bị tiết lộ. Nếu xảy ra sự cố vi phạm dữ liệu cá nhân, chúng tôi sẽ thông báo cho cơ quan có thẩm quyền theo quy định của pháp luật và thông báo cho người dùng bị ảnh hưởng — trong vòng 72 giờ kể từ khi phát hiện đối với sự cố liên quan đến dữ liệu sinh trắc học như hồ sơ giọng nói."
         ]
       },
       "rights": {
@@ -283,7 +284,7 @@
           "- rút lại sự đồng ý, hoặc hạn chế hay phản đối việc xử lý dữ liệu;",
           "- nhận dữ liệu của mình ở định dạng có thể chuyển giao;",
           "- khiếu nại đến cơ quan có thẩm quyền về bảo vệ dữ liệu cá nhân.",
-          "Bạn có thể cập nhật hồ sơ, quản lý phiên đăng nhập, xóa hồ sơ giọng nói và xóa tài khoản trực tiếp trong Dịch vụ. Với các yêu cầu khác, vui lòng liên hệ với chúng tôi qua {email}. Chúng tôi sẽ phản hồi trong thời hạn pháp luật quy định và có thể cần xác minh danh tính của bạn trước. Các yêu cầu liên quan đến nội dung trong không gian làm việc thuộc sở hữu của một tổ chức có thể được chuyển đến tổ chức đó."
+          "Bạn có thể cập nhật hồ sơ, quản lý phiên đăng nhập, xóa hồ sơ giọng nói và xóa tài khoản trực tiếp trong Dịch vụ. Với các yêu cầu khác, vui lòng liên hệ với chúng tôi qua {email}. Chúng tôi sẽ phản hồi trong thời hạn pháp luật quy định và có thể cần xác minh danh tính của bạn trước. Việc rút lại sự đồng ý hoặc xóa dữ liệu có thể khiến một số tính năng, như giọng nói đã dịch, không còn hoạt động. Các yêu cầu liên quan đến nội dung trong không gian làm việc thuộc sở hữu của một tổ chức có thể được chuyển đến tổ chức đó."
         ]
       },
       "cookies": {

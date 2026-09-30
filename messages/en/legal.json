@@ -96,10 +96,10 @@
         "heading": "10. Plans, payment and credits",
         "body": [
           "Some features require a paid plan or usage credits. Prices, included usage and plan limits are shown in the Service at the time of purchase. Payments are processed by our payment provider, Stripe; we do not store your full card details.",
-          "Subscriptions renew automatically at the end of each billing period at the then-current price until cancelled. You can cancel at any time from the workspace billing settings; cancellation takes effect at the end of the current billing period, and you keep access until then.",
+          "Subscriptions renew automatically at the end of each billing period at the then-current price until cancelled. We will notify you before a subscription renews. You can cancel at any time from the workspace billing settings; cancellation takes effect at the end of the current billing period, and you keep access until then.",
           "Usage credits (for example, translation minutes) are consumed as you use the relevant features, are tied to the workspace that purchased them, and are not transferable or redeemable for cash. Unused credits may expire as stated at the time of purchase.",
-          "Except where required by law or expressly stated otherwise, payments are non-refundable. Prices exclude applicable taxes, which you are responsible for paying. If a payment fails, we may limit paid features until it is resolved.",
-          "We may change prices with at least 30 days' notice. A price change takes effect at the start of your next billing period."
+          "Except where required by law — including your rights as a consumer — or expressly stated otherwise, payments are non-refundable. Prices exclude applicable taxes, which you are responsible for paying. If a payment fails, we may limit paid features until it is resolved.",
+          "We may change prices with at least 30 days' notice. A price change takes effect at the start of your next billing period. If you do not accept the new price, you may cancel before it takes effect without any penalty."
         ]
       },
       "thirdParty": {
@@ -135,8 +135,8 @@
         "heading": "15. Limitation of liability",
         "body": [
           "To the maximum extent permitted by law, WarpTalk will not be liable for any indirect, incidental, special, consequential or punitive damages, or for any loss of profits, revenue, data, goodwill or business opportunity, arising out of or related to the Service or these Terms.",
-          "To the maximum extent permitted by law, WarpTalk's total liability for all claims arising out of or related to the Service or these Terms is limited to the greater of the amounts you paid to WarpTalk for the Service in the 12 months before the event giving rise to the claim, or 1,000,000 VND.",
-          "These limitations do not apply to liability that cannot be limited by law, including liability for death or personal injury caused by negligence, or for fraud."
+          "If you use the Service for business purposes, to the maximum extent permitted by law, WarpTalk's total liability for all claims arising out of or related to the Service or these Terms is limited to the greater of the amounts you paid to WarpTalk for the Service in the 12 months before the event giving rise to the claim, or 1,000,000 VND.",
+          "If you are a consumer, nothing in these Terms limits or excludes WarpTalk's liability to you under the Law on Protection of Consumer Rights or other law. These limitations also do not apply to liability that cannot be limited by law, including liability for death or personal injury caused by negligence, or for fraud."
         ]
       },
       "indemnity": {
@@ -149,15 +149,16 @@
         "heading": "17. Changes to these terms",
         "body": [
           "We may update these Terms from time to time. We will post the updated version on this page and change the effective date above. If a change is material, we will give you at least 30 days' notice by email or in the Service before it takes effect.",
-          "If you continue to use the Service after the updated Terms take effect, you accept them. If you do not agree, you must stop using the Service and may delete your account."
+          "If you do not agree with a change, you may stop using the Service and terminate these Terms before it takes effect; if you have prepaid for a period that has not yet ended, we will refund the unused portion. If you continue to use the Service after the updated Terms take effect, you accept them."
         ]
       },
       "law": {
         "heading": "18. Governing law and disputes",
         "body": [
           "These Terms are governed by the laws of the Socialist Republic of Vietnam.",
-          "If a dispute arises, please contact us first at {email} so that we can try to resolve it informally. If it cannot be resolved by negotiation within 30 days, it will be submitted to the competent court of Vietnam, unless mandatory consumer protection law gives you the right to bring it elsewhere.",
-          "If any provision of these Terms is found unenforceable, the remaining provisions stay in full effect. Our failure to enforce a provision is not a waiver of it. You may not assign these Terms without our consent; we may assign them in connection with a merger, acquisition or sale of assets."
+          "If a dispute arises, please contact us first at {email} so that we can try to resolve it informally. If it cannot be resolved by negotiation within 30 days, it will be submitted to the competent court of Vietnam. Nothing in these Terms limits your right as a consumer to complain to a consumer protection authority or to bring a lawsuit as permitted by law.",
+          "If any provision of these Terms is found unenforceable, the remaining provisions stay in full effect. Our failure to enforce a provision is not a waiver of it. You may not assign these Terms without our consent; we may assign them in connection with a merger, acquisition or sale of assets.",
+          "If a provision of these Terms can be understood in more than one way, it will be interpreted in the way most favourable to you as a consumer. These Terms are published in Vietnamese, English and Japanese; if the versions differ, the Vietnamese version prevails."
         ]
       },
       "contact": {
@@ -176,7 +177,7 @@
         "heading": "1. Who we are and what this policy covers",
         "body": [
           "WarpTalk (\"WarpTalk\", \"we\", \"us\") provides a real-time multilingual meeting platform through our website, web application, desktop application and related services (the \"Service\"). This policy describes how we process personal data when you visit our website, create an account, join a workspace or meeting, or otherwise use the Service.",
-          "We process personal data in accordance with applicable data protection law, including Vietnam's Decree No. 13/2023/ND-CP on personal data protection and, where it applies to you, other laws such as the EU General Data Protection Regulation."
+          "We process personal data in accordance with applicable data protection law, including Vietnam's Law on Personal Data Protection No. 91/2025/QH15 and Decree No. 356/2025/ND-CP guiding it, and, where it applies to you, other laws such as the EU General Data Protection Regulation."
         ]
       },
       "roles": {
@@ -217,7 +218,7 @@
           "- keep the Service secure, prevent fraud and abuse, and enforce our Terms of Use;",
           "- monitor performance, fix problems and improve the Service using usage and diagnostic data;",
           "- comply with our legal obligations.",
-          "We process personal data on the basis of your consent (for example, for voice profiles), the performance of our contract with you, our legitimate interests in operating and securing the Service, and compliance with legal obligations. Where we rely on consent, you can withdraw it at any time; this does not affect processing already carried out."
+          "We process personal data with your consent, or without consent where the law allows it — for example, to perform our contract with you, to comply with a legal obligation, or to protect life, health or property. For sensitive personal data, such as voice profiles, we always ask for your separate, explicit consent. Where we rely on consent, you can withdraw it at any time; this does not affect processing already carried out."
         ]
       },
       "ai": {
@@ -231,7 +232,7 @@
       "voice": {
         "heading": "6. Voice profiles",
         "body": [
-          "A voice profile is created only when you choose to create one and give your explicit consent. We use your voice samples and the resulting voice profile only to generate translated speech in your voice within the Service, as you direct.",
+          "Voice samples and voice profiles are biometric data, which is sensitive personal data under Vietnamese law. A voice profile is created only when you choose to create one and give separate, explicit consent after being told that this data is sensitive. We use your voice samples and the resulting voice profile only to generate translated speech in your voice within the Service, as you direct, and we protect them with enhanced security measures.",
           "You can play back, replace or delete your voice profile at any time from the Voice Profiles page. When you delete it, we delete the voice samples and the voice profile, and ask our voice provider to delete the copies it holds, within 30 days.",
           "We do not use your voice to identify you (for example, for voice biometrics or authentication), and we do not sell or share your voice profile with anyone except the provider that generates speech for you."
         ]
@@ -269,7 +270,7 @@
         "heading": "10. Security",
         "body": [
           "We use technical and organisational measures to protect personal data, including encryption in transit (TLS), access controls based on roles and least privilege, hashed passwords, session management that lets you sign out other devices, and audit logs of sensitive actions.",
-          "No system is completely secure. If a personal data breach affects you, we will notify you and the competent authorities as required by law."
+          "No system is completely secure. Processing personal data online carries risks such as unauthorised access, loss or disclosure. If a personal data breach occurs, we will notify the competent authority as required by law, and will notify affected users — within 72 hours of discovery where the incident involves biometric data such as voice profiles."
         ]
       },
       "rights": {
@@ -283,7 +284,7 @@
           "- withdraw your consent, or restrict or object to processing;",
           "- receive your data in a portable format;",
           "- lodge a complaint with a data protection authority.",
-          "You can update your profile, manage sessions, delete voice profiles and delete your account directly in the Service. For other requests, contact us at {email}. We will respond within the time required by law, and may need to verify your identity first. Requests about content in a workspace owned by an organisation may be forwarded to that organisation."
+          "You can update your profile, manage sessions, delete voice profiles and delete your account directly in the Service. For other requests, contact us at {email}. We will respond within the time required by law, and may need to verify your identity first. Withdrawing consent or deleting data may mean that some features, such as translated voice, no longer work. Requests about content in a workspace owned by an organisation may be forwarded to that organisation."
         ]
       },
       "cookies": {
