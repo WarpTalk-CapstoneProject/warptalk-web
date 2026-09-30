@@ -1046,12 +1046,13 @@ const footerNavigation: Array<{ key: string; href: string }> = [
   { key: "navTestimonials", href: "#" },
   { key: "navFaq", href: "#" },
 ];
-const footerCompanyKeys = [
-  "companyBlog",
-  "companyAbout",
-  "companyTerms",
-  "companyPrivacy",
-] as const;
+/** WT-841: Terms and Privacy go to their pages; Blog and About have no page yet. */
+const footerCompany: Array<{ key: string; href: string }> = [
+  { key: "companyBlog", href: "#" },
+  { key: "companyAbout", href: "#" },
+  { key: "companyTerms", href: "/terms" },
+  { key: "companyPrivacy", href: "/privacy" },
+];
 
 const footerSocialIcons = [
   {
@@ -1206,9 +1207,9 @@ function LandingFooter() {
               </div>
               <div className="footer-col">
                 <h3 className="footer-col-title">{t("companyTitle")}</h3>
-                {footerCompanyKeys.map((key) => (
-                  <a href="#" key={key}>
-                    {t(key)}
+                {footerCompany.map((item) => (
+                  <a href={item.href} key={item.key}>
+                    {t(item.key)}
                   </a>
                 ))}
               </div>
