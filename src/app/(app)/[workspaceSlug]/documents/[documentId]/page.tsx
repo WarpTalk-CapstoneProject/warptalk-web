@@ -9,6 +9,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { useParams, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -59,6 +60,7 @@ interface PageProps {
 
 export default function DocumentDetailPage({ params }: PageProps) {
   const { documentId } = use(params);
+  const t = useTranslations("documents.detail");
   const router = useRouter();
   const routeParams = useParams<{ workspaceSlug: string }>();
   const workspaceSlug = routeParams.workspaceSlug;
@@ -74,10 +76,10 @@ export default function DocumentDetailPage({ params }: PageProps) {
   // Graceful Failure: If document is deleted, archived, or not found, warn user and redirect back to list
   useEffect(() => {
     if (documentQuery.isError) {
-      toast.error("Document no longer exists or has been hidden.");
+      toast.error(t("notFoundError"));
       router.push(`/${workspaceSlug}/documents`);
     }
-  }, [documentQuery.isError, router, workspaceSlug]);
+  }, [documentQuery.isError, router, workspaceSlug, t]);
 
   // Custom Document Access Policy Hook
   const {
@@ -161,12 +163,12 @@ export default function DocumentDetailPage({ params }: PageProps) {
         () => downloadMutation.mutateAsync(doc.id),
         doc.fileName,
       );
-      if (result === "picker") toast.success("File saved successfully!");
-      if (result === "download") toast.success("Downloading file...");
+      if (result === "picker") toast.success(t("toasts.downloadSaved"));
+      if (result === "download") toast.success(t("toasts.downloadStarted"));
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to download document.";
+          ?.error || t("toasts.downloadFailed");
       toast.error(errorMsg);
     }
   };
@@ -181,14 +183,12 @@ export default function DocumentDetailPage({ params }: PageProps) {
       await approveMutation.mutateAsync({ docId: documentId, approve, reason });
       setIsRejectDialogOpen(false);
       toast.success(
-        approve
-          ? "Document approved for ingestion."
-          : "Document rejected. The uploader can see your reason.",
+        approve ? t("toasts.approved") : t("toasts.rejected"),
       );
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Action failed.";
+          ?.error || t("toasts.approveActionFailed");
       toast.error(errorMsg);
     }
   };
@@ -196,11 +196,11 @@ export default function DocumentDetailPage({ params }: PageProps) {
   const handleUploadRevision = async (file: File, note: string) => {
     try {
       await reuploadMutation.mutateAsync({ file, note: note || undefined });
-      toast.success("Corrected version submitted for approval.");
+      toast.success(t("toasts.revisionSubmitted"));
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to upload the corrected version.";
+          ?.error || t("toasts.revisionFailed");
       toast.error(errorMsg);
     }
   };
@@ -215,7 +215,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to change who can see this document.";
+          ?.error || t("toasts.visibilityChangeFailed");
       toast.error(errorMsg);
     }
   };
@@ -224,14 +224,12 @@ export default function DocumentDetailPage({ params }: PageProps) {
     try {
       await patchMetadataMutation.mutateAsync({ isAiAllowed: allowed });
       toast.success(
-        allowed
-          ? "AI indexing enabled. The document will be re-indexed."
-          : "AI indexing disabled. Existing AI copies of this document are being deleted.",
+        allowed ? t("toasts.aiIndexingEnabled") : t("toasts.aiIndexingDisabled"),
       );
     } catch (err: unknown) {
       const errorMsg =
         (err as { response?: { data?: { error?: string } } })?.response?.data
-          ?.error || "Failed to change AI indexing.";
+          ?.error || t("toasts.aiIndexingFailed");
       toast.error(errorMsg);
     }
   };
@@ -261,11 +259,10 @@ export default function DocumentDetailPage({ params }: PageProps) {
               <ShieldWarning className="h-6 w-6" />
             </div>
             <CardTitle className="text-lg font-bold">
-              Document Not Found
+              {t("notFound.title")}
             </CardTitle>
             <CardDescription className="text-xs">
-              The requested document does not exist or has been deleted from
-              this workspace.
+              {t("notFound.description")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -273,7 +270,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
               onClick={() => router.push(`/${workspaceSlug}/documents`)}
               className="inline-flex h-9 items-center justify-center rounded-md bg-primary text-xs font-semibold text-white px-4 hover:bg-primary-hover transition"
             >
-              Back to Documents
+              {t("notFound.backToDocuments")}
             </button>
           </CardContent>
         </Card>
@@ -294,7 +291,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
           className="flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink w-fit transition"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Back to Library</span>
+          <span>{t("backToLibrary")}</span>
         </button>
         {/* An 18px title, not 24px bold, and the raw UUID is gone: "ID: abb02cc4-6593-…" under the
             name was the second-largest thing on the page and is not something anyone reads — the
@@ -316,23 +313,23 @@ export default function DocumentDetailPage({ params }: PageProps) {
                   onClick={() => handleApprove(true)}
                   disabled={approveMutation.isPending}
                   className="inline-flex h-[28px] items-center gap-1.5 rounded-full bg-foreground px-3.5 text-[13px] font-medium text-background shadow-sm transition hover:opacity-90 disabled:opacity-50"
-                  title="Approve document"
+                  title={t("approveTitle")}
                 >
                   {approveMutation.isPending ? (
                     <Spinner className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Check className="h-3.5 w-3.5" />
                   )}
-                  <span>Approve</span>
+                  <span>{t("approve")}</span>
                 </button>
                 <button
                   onClick={() => setIsRejectDialogOpen(true)}
                   disabled={approveMutation.isPending}
                   className="inline-flex h-[28px] items-center gap-1.5 rounded-full border border-destructive/30 bg-surface-1 px-3 text-[13px] font-medium text-destructive shadow-sm transition hover:bg-destructive/10 disabled:opacity-50"
-                  title="Reject document"
+                  title={t("rejectTitle")}
                 >
                   <X className="h-3.5 w-3.5" />
-                  <span>Reject</span>
+                  <span>{t("reject")}</span>
                 </button>
                 <div className="mx-1 h-4 w-[1px] bg-border" />
               </>
@@ -351,7 +348,7 @@ export default function DocumentDetailPage({ params }: PageProps) {
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              <span>Download</span>
+              <span>{t("download")}</span>
             </button>
           </div>
         </div>

@@ -6,12 +6,8 @@
     "addOthers": "Mời thêm người"
   },
   "captions": {
-    "earlierCaptions": "Phụ đề trước đó",
-    "fullTranscript": "Bản ghi đầy đủ",
-    "closeHistoryAria": "Đóng lịch sử phụ đề và quay lại phụ đề trực tiếp",
-    "backToLive": "Quay lại phụ đề trực tiếp",
     "openFullTranscript": "Xem toàn bộ bản ghi",
-    "liveRegionAria": "Phụ đề trực tiếp. Cuộn lên để xem phụ đề trước đó.",
+    "liveRegionAria": "Phụ đề trực tiếp",
     "emptyState": "Phụ đề sẽ hiện ở đây khi có người nói."
   },
   "stage": {

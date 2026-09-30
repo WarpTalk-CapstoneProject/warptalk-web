@@ -253,6 +253,16 @@ interface TranslationRoomStoreState {
   reset: () => void;
 }
 
+/**
+ * WT-862. Hub events name a participant by the id in the caller's token, while roster entries
+ * carry whatever casing the server serialised a Guid with. They agree today, but a live update
+ * that silently matched nobody was indistinguishable from a live update that never arrived — the
+ * badge simply stayed wrong — so the comparison does not depend on that agreement.
+ */
+export function sameUserId(a: string | null | undefined, b: string | null | undefined): boolean {
+  return Boolean(a && b && a.toLowerCase() === b.toLowerCase());
+}
+
 const initialState = {
   translationRoomState: null,
   participants: [],
@@ -303,14 +313,14 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
   updateParticipantMute: (userId, isMuted) =>
     set((s) => ({
       participants: s.participants.map((p) =>
-        p.userId === userId ? { ...p, isMuted } : p
+        sameUserId(p.userId, userId) ? { ...p, isMuted } : p
       ),
     })),
 
   updateParticipantSpeakLanguage: (userId, speakLanguage) =>
     set((s) => ({
       participants: s.participants.map((p) =>
-        p.userId === userId ? { ...p, speakLanguage } : p
+        sameUserId(p.userId, userId) ? { ...p, speakLanguage } : p
       ),
     })),
 
@@ -324,7 +334,7 @@ export const useTranslationRoomStore = create<TranslationRoomStoreState>()((set,
   updateParticipantListenLanguage: (userId, listenLanguage) =>
     set((s) => ({
       participants: s.participants.map((p) =>
-        p.userId === userId ? { ...p, listenLanguage } : p
+        sameUserId(p.userId, userId) ? { ...p, listenLanguage } : p
       ),
     })),
 
