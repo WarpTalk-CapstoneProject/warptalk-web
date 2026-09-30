@@ -22,9 +22,18 @@ This document tracks project-wide code quality checks that affect local developm
   - card lifecycle
   - plugin mention behavior
 
+- CI (`.github/workflows/ci.yml`) runs `npm audit --omit=dev --audit-level=high` before lint; any high or critical advisory in a runtime dependency fails every PR, whatever the PR changes.
+
+### 2026-09-30 Dependency security bump
+
+- New advisories turned the audit step red on all branches: `next` 16.3.4 (critical, GHSA-vcvr-r3jv-pc5j, RCE in `next/og` ImageResponse) and `axios` 1.18.1 (high, a batch of prototype-pollution/ReDoS/SSRF advisories).
+- Bumped to the patched versions, still pinned exactly: `next` 16.3.8, `axios` 1.20.0. `eslint-config-next` stays at 16.2.12 (dev-only, not audited).
+- Verified locally: `npm audit --omit=dev --audit-level=high` reports 0 vulnerabilities; lint (0 errors), typecheck, `test:contracts`, `npm run build` and `test:routes` against the standalone server all pass.
+
 ## Files Affected
 
 - `eslint.config.mjs`
+- `package.json`, `package-lock.json` (dependency security bump)
 
 ## Important Notes
 
