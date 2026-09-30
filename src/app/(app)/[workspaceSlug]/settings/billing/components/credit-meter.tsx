@@ -106,6 +106,9 @@ export function CreditMeter({
   const now = useNow();
   const { level, look } = creditLook(balance);
 
+  // NOT the cycle's grant. `totalCredits` is remaining + used this cycle (backend CreditMapper),
+  // so a top-up or a carried-over balance raises it too. The copy says "available this cycle"
+  // and "of this cycle's credits" for that reason — nothing here may call it "granted". WT-878.
   const total = Number(balance.totalCredits);
   // The server's own figure, not `total - current`: only one of them stays right after a
   // mid-cycle top-up raises the total.
@@ -113,7 +116,7 @@ export function CreditMeter({
   const left = Math.max(0, Number(balance.currentCredits) || 0);
   const drawable = level !== "unknown";
 
-  // Clamped: an overage cycle has spent more than it was granted, and the bar ends at its end.
+  // Clamped: an overage cycle has spent more than this cycle held, and the bar ends at its end.
   const usedPercent = drawable ? Math.min(100, (used / total) * 100) : 0;
   const usedLabel = Math.min(100, Math.floor((used / total) * 100 * 10) / 10);
   const elapsed = drawable ? cycleElapsedPercent(balance, now) : null;
