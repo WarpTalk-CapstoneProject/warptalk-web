@@ -43,6 +43,7 @@ import {
   hifiFormatMismatch,
   type HiFiAlignOutcome,
 } from "@/lib/desktop/hifi-format";
+import { canCaptureBrowserLoopback, selectBridgeInboundSource } from "@/lib/desktop/bridge-tiers";
 import {
   checkVirtualBridge,
   currentBridgeDeviceLabels,
@@ -147,6 +148,8 @@ export function BridgeSetupWizard({
   readyLabel = "Start translating",
   runCheck = checkVirtualBridge,
   readStatus = readVirtualAudioStatus,
+  loopbackFailed = false,
+  browserCaptureAnswer = null,
 }: {
   onReady?: () => void;
   /**
@@ -161,6 +164,15 @@ export function BridgeSetupWizard({
   runCheck?: () => Promise<BridgeCheckResult>;
   /** Injectable for the same reason: a format mismatch cannot be produced on demand. */
   readStatus?: () => Promise<VirtualAudioStatus | null>;
+  /**
+   * WT-898. The two inputs to the inbound decision only the running meeting knows: listening to
+   * the browser already failed in this room, and what the host said when asked. Without them the
+   * wizard would tell a user whose capture fell back to Hi-Fi Cable to leave Meet's speakers alone
+   * — exactly the setting that keeps the cable silent. The defaults are "nothing has happened
+   * yet", which is also the right answer for the dev preview.
+   */
+  loopbackFailed?: boolean;
+  browserCaptureAnswer?: boolean | null;
 }) {
   const [result, setResult] = useState<BridgeCheckResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -252,11 +264,24 @@ export function BridgeSetupWizard({
   const devicesReady = result?.ready === true;
   const ready = devicesReady && meetConfirmed;
   const isWindows = labels?.platform === "windows";
-  // Whether the far side arrives on its own cable. On Windows without Hi-Fi Cable it does not, and
-  // telling the user to point Meet's speaker at a device that is not there would silence the call.
   const inboundViaDevice = Boolean(result?.probes.find((probe) => probe.leg === "inbound")?.present);
-  const speakerToSet =
-    labels?.meetSpeaker && (!labels.inboundOptional || inboundViaDevice) ? labels.meetSpeaker : null;
+  // WT-898: the same decision the meeting makes, so the Speakers line names the path the far side
+  // actually comes in on. Loopback first — Meet keeps its speakers and nothing needs changing —
+  // and the cable only where loopback cannot run here, was declined, or already failed. Before
+  // this an installed Hi-Fi Cable always won, and the wizard sent people into the one Meet setting
+  // most of them get wrong, for a path WarpTalk did not need.
+  const loopbackCapable = canCaptureBrowserLoopback(status);
+  const inboundPath = selectBridgeInboundSource({
+    loopbackCapable,
+    loopbackFailed,
+    hasInboundDevice: inboundViaDevice,
+    consentAnswer: browserCaptureAnswer,
+    // Which window gets captured is picked in the meeting, not here; it never changes the path.
+    hasLoopbackSource: true,
+  }).path;
+  // Anything but loopback names the cable: on the device path that is the setting that makes it
+  // carry, and where there is no path at all the cable is the only way in — step 1 says to get it.
+  const speakerToSet = labels?.meetSpeaker && inboundPath !== "loopback" ? labels.meetSpeaker : null;
   const formatMismatch = hifiFormatMismatch(status);
 
   return (
@@ -271,7 +296,7 @@ export function BridgeSetupWizard({
 
       <StepShell
         index={1}
-        title="Install the two audio devices"
+        title={isWindows ? "Install the audio driver" : "Install the two audio devices"}
         state={devicesReady ? "done" : "active"}
       >
         {/*
@@ -310,36 +335,47 @@ export function BridgeSetupWizard({
             )}
           </div>
         )}
-        {devicesReady && (!isWindows || inboundViaDevice) ? (
+        {/*
+          WT-898: on Windows the second cable is the fallback, not the plan. WarpTalk listens to the
+          browser itself wherever Windows allows it, so the copy asks for Hi-Fi Cable only where
+          that path is not there — and says why, rather than listing a driver nobody needs.
+        */}
+        {devicesReady && !isWindows ? (
           <p>Both devices are installed and working.</p>
+        ) : devicesReady && inboundPath === "loopback" ? (
+          <p>
+            VB-CABLE is installed and working. WarpTalk listens to Meet straight from your browser, so
+            nothing else is needed.
+          </p>
+        ) : devicesReady && inboundViaDevice ? (
+          <p>VB-CABLE and Hi-Fi Cable are installed and working.</p>
         ) : devicesReady ? (
           <p>
-            VB-CABLE is installed and working. Hi-Fi Cable is not, so WarpTalk will listen to your whole
-            browser instead and other tabs may be translated too. Install Hi-Fi Cable from the{" "}
+            VB-CABLE is installed and working.{" "}
+            {loopbackCapable
+              ? "WarpTalk is not listening to your browser in this meeting"
+              : "This version of Windows does not let WarpTalk listen to your browser directly"}
+            , so the other side reaches WarpTalk only through Hi-Fi Cable. Install it from the{" "}
             <a className="underline hover:text-ink" href={WINDOWS_CABLES_DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
               VB-Audio download page
-            </a>{" "}
-            to hear only Google Meet.
+            </a>
+            .
           </p>
         ) : isWindows ? (
           <>
             <p className="mb-3">
-              WarpTalk uses two free drivers from VB-Audio, both on the same page:{" "}
+              WarpTalk uses one free driver from VB-Audio:{" "}
               <span className="font-medium text-ink">VB-CABLE</span> carries your translated voice into
-              the meeting, and <span className="font-medium text-ink">Hi-Fi Cable</span> carries the
-              meeting back to WarpTalk.
+              the meeting. <span className="font-medium text-ink">Hi-Fi Cable</span>, on the same page,
+              is only needed when WarpTalk can&apos;t listen to your browser directly (older Windows).
             </p>
-            <p className="mb-2 text-xs text-ink-subtle">
+            <p className="text-xs text-ink-subtle">
               <a className="underline hover:text-ink" href={WINDOWS_CABLES_DOWNLOAD_PAGE} target="_blank" rel="noreferrer">
                 Open the VB-Audio download page
               </a>
-              , install both, and restart if an installer asks. Then open Windows Sound settings and set
-              Hi-Fi Cable Input and Hi-Fi Cable Output to the same format: 24-bit, 48000 Hz — Hi-Fi
-              Cable passes no sound when its two sides differ in either bit depth or sample rate.
-            </p>
-            <p className="text-xs text-ink-subtle">
-              Hi-Fi Cable is optional. Without it WarpTalk listens to your whole browser, so sound from
-              other tabs gets translated too.
+              , install VB-CABLE, and restart if the installer asks. If you install Hi-Fi Cable too, set
+              its Input and Output to the same format in Windows Sound settings — 24-bit, 48000 Hz — or
+              it passes no sound.
             </p>
           </>
         ) : (
@@ -404,9 +440,10 @@ export function BridgeSetupWizard({
             Microphone → <span className="font-medium text-ink">{labels?.meetMicrophone ?? "…"}</span>
           </li>
           {/*
-            Only where a second virtual device carries the far side. On Windows without Hi-Fi Cable,
-            process loopback reads the browser's own output instead, so there is nothing to change
-            here — and pointing Meet's speaker at a missing device would only make the call inaudible.
+            Only where a second virtual device carries the far side (WT-898: the same decision the
+            meeting makes). Where WarpTalk listens to the browser there is nothing to change here —
+            and pointing Meet's speaker at the cable would take the call out of the host's ears for
+            a path nobody is reading.
           */}
           {speakerToSet ? (
             <li>
@@ -428,6 +465,15 @@ export function BridgeSetupWizard({
             <li>
               Speakers → <span className="font-medium text-ink">leave as they are</span>, so you
               can still hear the call. WarpTalk listens to the browser directly.
+              {/*
+                Process loopback takes the whole browser process tree, not one tab: a video playing
+                in another tab lands in the meeting's transcript as if the far side had said it. One
+                line here, while the call is being set up, is cheaper than that surprise.
+              */}
+              <span className="mt-1 block text-xs text-ink-subtle">
+                WarpTalk hears everything this browser plays — pause other tabs with sound during
+                the call.
+              </span>
             </li>
           )}
           {/*
@@ -454,7 +500,7 @@ export function BridgeSetupWizard({
             onChange={(event) => setMeetConfirmed(event.target.checked)}
           />
           <span>
-            I&apos;ve set both in Meet.
+            {speakerToSet ? "I've set both in Meet." : "I've set the microphone in Meet."}
             <span className="block text-xs text-ink-subtle">
               WarpTalk can&apos;t check this one — what Meet has selected lives inside Google&apos;s
               page, out of reach. This is the one step you confirm yourself.
