@@ -5,7 +5,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { translationRoomService } from "@/services/translation-room.service";
 import type { UpdateSeriesRequest } from "@/types/translationRoom";
 
-const SERIES_KEY = ["translationRoomSeries"] as const;
+/** Every series query sits under this — exported so a room edit can refresh the series it is in. */
+export const SERIES_ROOT_KEY = ["translationRoomSeries"] as const;
+const SERIES_KEY = SERIES_ROOT_KEY;
 
 export const seriesKey = (seriesId: string) => [...SERIES_KEY, seriesId] as const;
 

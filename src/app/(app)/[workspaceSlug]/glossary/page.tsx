@@ -30,7 +30,7 @@
  *   is the disambiguation the global list cannot do.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -70,7 +70,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getErrorMessage } from "@/lib/api/errors";
-import { getLanguageName, languagesInScope } from "@/lib/language/languages";
+import { getLanguageName, meetingLanguagesForPolicy } from "@/lib/language/languages";
 import { useWorkspaceRole } from "@/hooks/use-workspace-role";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import {
@@ -81,6 +81,7 @@ import {
   useDeleteGlossaryTerm,
   useGlossariesByWorkspace,
   useGlossaryTerms,
+  useWorkspaceSettings,
 } from "@/hooks/use-workspace";
 // Called directly, not through a hook: the terms go into the glossary that was created a line
 // earlier, and a hook bound to an id can only be bound to one the component already had.
@@ -231,7 +232,45 @@ export default function WorkspaceGlossaryPage() {
     });
   }, [termsQuery.data]);
 
-  const languageOptions = useMemo(() => languagesInScope("meeting"), []);
+  // WT-875 — the languages a NEW glossary may be created in are the workspace's allowed target
+  // languages (Settings → Allowed Target Translation Languages), not the whole meeting scope. The
+  // hierarchy is L1 workspace ⊇ L2 meeting ⊇ L3 artifact: creating something new is bounded by
+  // the workspace's CURRENT policy, while reading what already exists is never filtered — so the
+  // glossary pills and footer below keep naming a glossary's languages through `getLanguageName`
+  // even after the policy has dropped one of them.
+  //
+  // Same read and same fallback as the voice page and the create-room picker: an empty or absent
+  // policy means unrestricted (see `isLanguageAllowedByPolicy`), and a failed read leaves the
+  // policy unknown, which the app reads the same way.
+  const settingsQuery = useWorkspaceSettings(workspaceId ?? "");
+  const allowedTargetLanguages = settingsQuery.data?.allowedTargetLanguages;
+  // Settled, not merely successful. Until then the unrestricted fallback would briefly offer
+  // languages the workspace forbids, so the pickers wait instead.
+  const languagePolicyReady = settingsQuery.isFetched;
+  const languageOptions = useMemo(
+    () => meetingLanguagesForPolicy(allowedTargetLanguages),
+    [allowedTargetLanguages],
+  );
+  // English when the workspace allows it, otherwise the first language it does allow. A default
+  // outside the option list renders as an empty select that nonetheless passes validation.
+  const defaultGlossaryLanguage = languageOptions.some(
+    (language) => language.code === DEFAULT_GLOSSARY_LANGUAGE,
+  )
+    ? DEFAULT_GLOSSARY_LANGUAGE
+    : (languageOptions[0]?.code ?? DEFAULT_GLOSSARY_LANGUAGE);
+
+  // The form's defaults are fixed at mount, before the policy has loaded, and `reset()` after a
+  // create returns to them. So whenever the dialog is open, a language the policy does not allow
+  // is snapped to the default — including when the policy changes while the dialog is open.
+  useEffect(() => {
+    if (!glossaryDialogOpen || !languagePolicyReady) return;
+    const allowed = new Set(languageOptions.map((language) => language.code));
+    for (const field of ["sourceLanguage", "targetLanguage"] as const) {
+      if (!allowed.has(glossaryForm.getValues(field))) {
+        glossaryForm.setValue(field, defaultGlossaryLanguage);
+      }
+    }
+  }, [glossaryDialogOpen, languagePolicyReady, languageOptions, defaultGlossaryLanguage, glossaryForm]);
 
   /**
    * Grouped by initial letter, alphabetical within each group.
@@ -850,6 +889,7 @@ export default function WorkspaceGlossaryPage() {
             />
             <div className="grid grid-cols-2 gap-2">
               <Select
+                disabled={!languagePolicyReady}
                 value={glossaryForm.watch("sourceLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("sourceLanguage", value ?? "")
@@ -867,6 +907,7 @@ export default function WorkspaceGlossaryPage() {
                 </SelectContent>
               </Select>
               <Select
+                disabled={!languagePolicyReady}
                 value={glossaryForm.watch("targetLanguage")}
                 onValueChange={(value: string | null) =>
                   glossaryForm.setValue("targetLanguage", value ?? "")
@@ -902,7 +943,10 @@ export default function WorkspaceGlossaryPage() {
             />
 
             <DialogFooter>
-              <WorkspacePrimaryButton type="submit" disabled={createGlossary.isPending}>
+              <WorkspacePrimaryButton
+                type="submit"
+                disabled={createGlossary.isPending || !languagePolicyReady}
+              >
                 {createGlossary.isPending
                   ? t("dialogs.newGlossary.creating")
                   : t("dialogs.newGlossary.create")}

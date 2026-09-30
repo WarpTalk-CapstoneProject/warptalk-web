@@ -16,6 +16,7 @@ import { parseSummarySections } from "@/lib/meeting/meeting-summary";
 import { describeAbsence } from "@/lib/meeting/artifact-library";
 import type { LibraryEntry } from "@/lib/meeting/artifact-library";
 import { useSummaryRenderings } from "@/hooks/use-summary-renderings";
+import { downloadSavedSummaryDocx } from "@/lib/documents/download-saved-record";
 
 export function SummaryReadingReader({
   entry,
@@ -25,6 +26,7 @@ export function SummaryReadingReader({
   roomId: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   // Load any existing renderings (templates/languages)
   const renderingsQuery = useSummaryRenderings(roomId);
@@ -60,16 +62,26 @@ export function SummaryReadingReader({
     }
   }
 
-  function downloadSummary() {
-    if (!entry.body) return;
-    const blob = new Blob([entry.body], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `summary-${roomId}.md`;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    toast.success("Summary downloaded");
+  /** The same .docx the Recap rail downloads, built from the summary shown here. */
+  async function downloadSummary() {
+    if (!entry.body || downloading) return;
+    setDownloading(true);
+    try {
+      const ended = Date.parse(entry.meetingEndedAt);
+      await downloadSavedSummaryDocx({
+        body: entry.body,
+        meetingTitle: entry.roomTitle,
+        // The entry carries the end and the length; the document is dated by the start.
+        startedAt: Number.isNaN(ended)
+          ? null
+          : new Date(ended - Math.max(0, entry.durationSeconds || 0) * 1000).toISOString(),
+        hostName: entry.hostName,
+      });
+    } catch {
+      toast.error("Could not download summary");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   if (entry.absence) {
@@ -116,8 +128,10 @@ export function SummaryReadingReader({
           </button>
           <button
             type="button"
-            onClick={downloadSummary}
-            className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+            onClick={() => void downloadSummary()}
+            disabled={downloading}
+            title="Download summary (.docx)"
+            className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-2.5 py-1 text-[11px] font-medium text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink disabled:opacity-60"
           >
             <DownloadSimple size={13} />
             <span>Download</span>
