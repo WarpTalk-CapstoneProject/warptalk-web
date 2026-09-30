@@ -15,6 +15,7 @@ import {
 import { inboundNoSignalHint, type InboundHealth } from "@/lib/audio/bridge-inbound-health";
 import { currentBridgeDeviceLabels } from "@/lib/audio/virtual-bridge-check";
 import { openInSystemBrowser } from "@/lib/desktop/bridge";
+import type { BridgeInboundPath } from "@/lib/desktop/bridge-tiers";
 import type { TranslationRoomDto } from "@/types/translationRoom";
 import { MeetingExitControl } from "./meeting-top-bar";
 
@@ -26,8 +27,7 @@ export function ExternalBridgeWidget({
   microphoneEnabled,
   translationStarted,
   bridgeOutboundReady,
-  bridgeInboundLoopback,
-  hasInboundDevice,
+  inboundPath,
   inboundHealth,
   idleDisconnected,
   onRejoin,
@@ -44,13 +44,18 @@ export function ExternalBridgeWidget({
   microphoneEnabled: boolean;
   translationStarted: boolean;
   bridgeOutboundReady: boolean;
-  bridgeInboundLoopback: boolean;
   /**
-   * The virtual speaker Meet plays into was found. The inbound row used to key on the OUTBOUND
-   * device, so a machine with the virtual microphone but no virtual speaker reported "Meet audio
-   * to WarpTalk" as ready while nothing from Meet could reach WarpTalk at all.
+   * Where the far side comes in, as the meeting decided it (selectBridgeInboundSource): listening
+   * to the browser, the virtual speaker Meet plays into, or nothing.
+   *
+   * One value rather than the two booleans it replaces. Those were "is there a device" and "can
+   * loopback run", and the row picked between them itself — device first — so after WT-898 made
+   * loopback the first choice, and a failed loopback fall back to the cable, the row would have
+   * named whichever mechanism the widget guessed rather than the one actually carrying the call.
+   * The inbound row also used to key on the OUTBOUND device once, reporting "ready" on a machine
+   * where nothing from Meet could reach WarpTalk at all; null here is that case, said plainly.
    */
-  hasInboundDevice: boolean;
+  inboundPath: BridgeInboundPath | null;
   /** Whether sound is actually arriving from Meet; see lib/audio/bridge-inbound-health. */
   inboundHealth: InboundHealth;
   /**
@@ -87,7 +92,7 @@ export function ExternalBridgeWidget({
   // The inbound row answers two questions in one line: is there a way in at all, and is anything
   // coming through it. The second only has an answer while a capture is running; before that the
   // row names the mechanism, as it always did.
-  const inboundAvailable = hasInboundDevice || bridgeInboundLoopback;
+  const inboundAvailable = inboundPath !== null;
   const inboundNoSignal = inboundAvailable && inboundHealth === "no-signal";
   const inboundDetail = !inboundAvailable
     ? "Not set up"
@@ -97,7 +102,7 @@ export function ExternalBridgeWidget({
         ? "Quiet"
         : inboundHealth === "no-signal"
           ? "No sound from Meet"
-          : bridgeInboundLoopback && !hasInboundDevice
+          : inboundPath === "loopback"
             ? "Meet window capture"
             : "Virtual speaker";
 
