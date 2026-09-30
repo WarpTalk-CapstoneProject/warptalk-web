@@ -159,7 +159,13 @@ export function MeetingExitControl({
             </Button>
             <Button
               variant="destructive"
+              // Single-flight: one press ends the meeting. The button stays live while LiveKit
+              // tears the room down otherwise, and every further press sent another end
+              // (prod: six in under a second). Re-enabled when the request fails.
+              disabled={endForAll.isPending}
+              aria-busy={endForAll.isPending}
               onClick={async () => {
+                if (endForAll.isPending) return;
                 try {
                   await endForAll.mutateAsync();
                   onExit("end");
@@ -168,7 +174,7 @@ export function MeetingExitControl({
                 }
               }}
             >
-              End for Everyone
+              {endForAll.isPending ? "Ending…" : "End for Everyone"}
             </Button>
           </DialogFooter>
         </DialogContent>

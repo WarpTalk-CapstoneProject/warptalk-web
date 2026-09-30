@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowSquareOut, CalendarBlank, Check, Copy, VideoCamera } from "@phosphor-icons/react";
 
@@ -10,6 +10,8 @@ import {
   formatMeetingWhen,
   type MeetingLinkRef,
 } from "@/lib/assistant/meeting-links";
+import { roomDetailPath } from "@/lib/workspace/workspace-routes";
+import { useWorkspaceStore } from "@/stores/workspace-store";
 import { cn } from "@/lib/utils";
 
 /**
@@ -131,9 +133,20 @@ function GoogleMeetCard({ link }: { link: MeetingLinkRef }) {
 }
 
 function WarpTalkRoomCard({ link, openOutside }: { link: MeetingLinkRef; openOutside: boolean }) {
+  const activeWorkspaceSlug = useWorkspaceStore((state) => state.activeWorkspaceSlug);
   const bridge = link.roomType === "EXTERNAL_BRIDGE";
   const openClass =
     "inline-flex items-center gap-1.5 rounded-lg bg-ink px-2.5 py-1.5 text-[12px] font-medium text-surface-1 transition-opacity hover:opacity-90";
+
+  const resolvedHref = useMemo(() => {
+    if (activeWorkspaceSlug && link.id) {
+      if (link.url.startsWith(`/${activeWorkspaceSlug}/rooms/`)) {
+        return link.url;
+      }
+      return roomDetailPath(activeWorkspaceSlug, link.id);
+    }
+    return link.url;
+  }, [link.url, link.id, activeWorkspaceSlug]);
 
   return (
     <div
@@ -154,19 +167,19 @@ function WarpTalkRoomCard({ link, openOutside }: { link: MeetingLinkRef; openOut
       {link.code && !bridge ? <CodeBox label="Room code" value={link.code} /> : null}
       <div className="flex flex-wrap gap-1.5">
         {openOutside ? (
-          <a href={link.url} target="_blank" rel="noopener noreferrer" className={openClass}>
+          <a href={resolvedHref} target="_blank" rel="noopener noreferrer" className={openClass}>
             Open room
             <NewTabHint />
           </a>
         ) : (
-          <Link href={link.url} className={openClass}>
+          <Link href={resolvedHref} className={openClass}>
             Open room
           </Link>
         )}
         <CopyButton
           // Resolved on click, not on render: the origin is the browser's, and reading it while
           // rendering would differ between the server and the client.
-          value={() => `${window.location.origin}${link.url}`}
+          value={() => `${window.location.origin}${resolvedHref}`}
           label="Copy link"
           className={BUTTON}
           withIcon

@@ -521,6 +521,8 @@ export function PersistentMeetingSession({
   // rooms list. A ref, not state: the broadcast handler is installed once per connection and
   // must read the current value, not the one closed over at subscribe time.
   const endedByMeRef = useRef(false);
+  // handleExit single-flight: set while a leave/end is in flight, cleared when it settles.
+  const exitInFlightRef = useRef(false);
   // Imperative handle onto the LiveKit local participant, published by <LocalMediaController>
   // (a child of <LiveKitRoom>, because this component RENDERS the provider and so cannot read
   // it). Anything that must actually change what is being published — the host's ForceMuted
@@ -3085,6 +3087,10 @@ export function PersistentMeetingSession({
   }
 
   async function handleExit(action: "leave" | "end") {
+    // Single-flight: an exit already under way owns the redirect and the toast; a second call
+    // (another press, or the end dialog racing the leave menu) is ignored until it settles.
+    if (exitInFlightRef.current) return;
+    exitInFlightRef.current = true;
     try {
       if (action === "end") {
         // Claim the end BEFORE the mutation: TranslationRoomService publishes RoomEnded to
@@ -3121,6 +3127,8 @@ export function PersistentMeetingSession({
       toast.error(
         error instanceof Error ? error.message : "Could not leave the room.",
       );
+    } finally {
+      exitInFlightRef.current = false;
     }
   }
 
