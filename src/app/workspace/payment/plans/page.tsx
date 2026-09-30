@@ -48,7 +48,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createHubConnection } from "@/lib/realtime/signalr";
 import { buildFeatureList, getPlanDescription } from "@/lib/utils";
-import { checkoutCurrency } from "@/lib/billing/plan-pricing";
+import { checkoutCurrency, yearlySavingPercent } from "@/lib/billing/plan-pricing";
 import { billingService } from "@/services/billing.service";
 import { useAuthStore } from "@/stores/auth-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
@@ -279,7 +279,7 @@ export default function PaymentPlansPage() {
                 value="yearly"
                 className="rounded-full text-sm px-6 data-[state=active]:bg-surface-1 data-[state=active]:text-ink data-[state=active]:shadow-sm"
               >
-                Yearly (Save 20%)
+                Yearly (Save {yearlySavingPercent()}%)
               </TabsTrigger>
             </TabsList>
           </Tabs>

@@ -97,3 +97,16 @@ export function readBillingInterval(
 ): BillingInterval {
   return params?.get("billingCycle")?.trim().toLowerCase() === "yearly" ? "yearly" : "monthly";
 }
+
+/**
+ * The yearly discount as the whole percent a buyer reads on the "Yearly" tab — 21 today.
+ *
+ * Derived from `YEARLY_PRICE_MULTIPLIER` rather than written beside it. The two plans pages each
+ * carried their own literal ("save 21%" on one, "Save 20%" on the Stripe cancel page), and the
+ * second one was simply wrong: it promised a discount the checkout did not give. Rounded, because
+ * `1 - 0.79` is 0.20999… in floating point.
+ */
+export function yearlySavingPercent(multiplier: number = YEARLY_PRICE_MULTIPLIER): number {
+  if (!Number.isFinite(multiplier) || multiplier <= 0 || multiplier >= 1) return 0;
+  return Math.round((1 - multiplier) * 100);
+}
