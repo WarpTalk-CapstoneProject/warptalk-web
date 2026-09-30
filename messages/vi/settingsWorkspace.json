@@ -30,7 +30,8 @@
     "defaultLanguage": {
       "label": "Ngôn ngữ mặc định",
       "description": "Ngôn ngữ nói mặc định cho phòng dịch mới.",
-      "placeholder": "Chọn ngôn ngữ"
+      "placeholder": "Chọn ngôn ngữ",
+      "outOfPolicy": "{language} không nằm trong các ngôn ngữ được phép của không gian làm việc này. Hãy chọn một ngôn ngữ được phép, hoặc chọn {language} trong danh sách bên dưới."
     },
     "timezone": {
       "label": "Múi giờ",
@@ -70,6 +71,14 @@
     "allowedTargetLanguages": {
       "label": "Ngôn ngữ đích được phép dịch",
       "description": "Các ngôn ngữ khả dụng để dịch trực tiếp trong phòng họp.",
+      "allowAll": {
+        "label": "Cho phép mọi ngôn ngữ",
+        "description": "Mọi ngôn ngữ WarpTalk hỗ trợ đều khả dụng trong các cuộc họp của không gian làm việc này. Tắt đi để chỉ cho phép danh sách bạn chọn."
+      },
+      "restrictedHint": "Cuộc họp chỉ được dùng những ngôn ngữ đã chọn ở trên. Phải giữ ít nhất một ngôn ngữ — muốn mở cho mọi ngôn ngữ thì bật lại \"Cho phép mọi ngôn ngữ\".",
+      "lastLanguageBlocked": "Phải giữ ít nhất một ngôn ngữ. Nếu muốn cho phép mọi ngôn ngữ, hãy bật \"Cho phép mọi ngôn ngữ\" — để danh sách trống sẽ cho phép tất cả mà không nói ra điều đó.",
+      "seededFromDefault": "{language} được chọn sẵn để mở đầu danh sách, vì danh sách giới hạn không được để trống.",
+      "defaultLanguageMoved": "{removed} không còn được phép, nên Ngôn ngữ mặc định của không gian làm việc đã chuyển sang {language}.",
       "ceiling": {
         "plan": "Gói của bạn cho phép {ceiling} ngôn ngữ đích mỗi cuộc họp. Bạn có thể cho phép nhiều hơn ở đây — một cuộc họp đơn giản là không thể dùng quá {ceiling} ngôn ngữ cùng lúc.",
         "platformDefault": "Cho đến khi không gian làm việc này có gói đang hoạt động, nó bị giới hạn ở {ceiling} ngôn ngữ đích mỗi cuộc họp. Bạn có thể cho phép nhiều hơn ở đây — một cuộc họp đơn giản là không thể dùng quá {ceiling} ngôn ngữ cùng lúc.",
